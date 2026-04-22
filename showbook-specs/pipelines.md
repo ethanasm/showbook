@@ -44,9 +44,11 @@ When a user adds a show via the structured form. The chat-mode Add uses an LLM t
 │  STEP 2: Kind-specific enrichment                       │
 │                                                         │
 │  IF kind = concert AND date is past:                    │
-│    → Match headliner to setlist.fm artist (by name)     │
-│    → Store setlistfm_mbid on Performer                  │
-│    → Search setlists by MBID + exact date               │
+│    → Check if Performer already has setlistfm_mbid       │
+│      (TM provides MusicBrainz IDs — skip search if so)  │
+│    → If no MBID: search setlist.fm artist by name        │
+│    → Store setlistfm_mbid on Performer                   │
+│    → Search setlists by MBID + date (dd-MM-yyyy format)  │
 │    → Found? Auto-fill setlist, tour_name                 │
 │    → Not found? "No setlist found. We'll check again."  │
 │      → Schedule retry job (see §3)                      │
@@ -273,7 +275,11 @@ WHERE type = 'setlist'
   AND attempts < 14:
 
   → Look up Performer's setlistfm_mbid
-  → GET /search/setlists?artistMbid={mbid}&date={show.date}
+  → If no MBID: try setlist.fm artist search by name, store MBID on Performer
+  → If still no MBID: skip (can't look up setlist without it)
+  → Convert show.date to dd-MM-yyyy format (setlist.fm uses this, not ISO)
+  → GET /search/setlists?artistMbid={mbid}&date={dd-MM-yyyy}
+    (with headers: x-api-key, Accept: application/json)
   → Found?
     YES → Update show: setlist, tour_name
           Delete from enrichment_queue

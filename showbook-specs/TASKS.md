@@ -59,16 +59,21 @@ T04 Design ────┤                                                      
 
 ## Wave 1 — No dependencies (all parallel)
 
-### T01: Scaffold Nx workspace
+### T01: Scaffold Nx workspace + Docker
 **Depends on:** nothing
-**Read:** `infrastructure.md → Monorepo Structure`
+**Read:** `infrastructure.md → Monorepo Structure`, `infrastructure.md → Docker Setup`
 **Build:**
 - `npx create-nx-workspace showbook --preset=ts --pm=pnpm`
 - Create all directories: `apps/web`, `apps/mobile` (placeholder), `packages/db`, `packages/api`, `packages/jobs`, `packages/shared`
 - Install core deps per package (see infrastructure.md)
 - Configure `nx.json` with project graph
-- `apps/web`: scaffold Next.js 15 with App Router
-**Verify:** `npx nx dev web` starts Next.js on localhost:3000 with no errors.
+- `apps/web`: scaffold Next.js 15 with App Router, **port 3001**
+- Create `apps/web/Dockerfile` — Node 20 base, install pnpm, copy workspace, `nx dev web --hostname 0.0.0.0`, expose 3001
+- Create `docker-compose.yml` from `infrastructure.md → Docker Setup` (two services: postgres on 5433, web on 3001 with volume mounts for hot reload)
+- Create `.env.local` template with all required env vars (see infrastructure.md)
+- **Port check:** Verify 5433 and 3001 are free: `lsof -i :5433 -i :3001`. If taken, adjust ports in docker-compose.yml.
+- `docker compose up -d`
+**Verify:** `docker compose ps` shows both containers healthy. `http://localhost:3001` loads the Next.js default page.
 
 ### T02: Drizzle schemas
 **Depends on:** nothing (can write schema files without the monorepo running)
@@ -126,13 +131,13 @@ React components in `apps/web/components/design-system/`:
 
 ## Wave 2 — Depends on scaffold + schemas
 
-### T06: Local Postgres + migrations
+### T06: Postgres migrations
 **Depends on:** T01, T02
 **Build:**
-- `createdb showbook`
-- `packages/db/client.ts` — exports configured Drizzle client
-- Run `npx drizzle-kit migrate`
-**Verify:** `psql showbook -c '\dt'` lists all expected tables. All columns, types, and constraints match `schema.md`.
+- Verify Docker Postgres is running: `docker compose exec showbook-db pg_isready -U showbook`
+- `packages/db/client.ts` — exports configured Drizzle client. Inside the web container, uses `postgresql://showbook:showbook_dev@postgres:5432/showbook` (Docker internal). From host, uses `localhost:5433`.
+- Run migrations from host: `DATABASE_URL=postgresql://showbook:showbook_dev@localhost:5433/showbook npx drizzle-kit migrate`
+**Verify:** `docker compose exec showbook-db psql -U showbook -c '\dt'` lists all expected tables. All columns, types, and constraints match `schema.md`.
 
 ### T07: Google OAuth with Auth.js
 **Depends on:** T01, T06
@@ -399,16 +404,17 @@ React components in `apps/web/components/design-system/`:
 
 ## Wave 5 — Infrastructure + Mobile
 
-### T30: Caddy + Cloudflare Tunnel
+### T30: Cloudflare Tunnel setup
 **Depends on:** T18 (needs the app running to verify)
-**Read:** `infrastructure.md → Self-Hosting Setup`
+**Read:** `cloudflare-tunnel-setup.md`, `infrastructure.md → External Access`
 **Build:**
-- `Caddyfile` in project root
-- Install + configure Caddy
-- Install + configure `cloudflared`
-- DNS record in Cloudflare
-- Document the startup sequence
-**Verify:** `https://showbook.yourdomain.com` loads the app from a different device.
+- Cloudflared runs on the host (not Docker) — installed via `brew install cloudflared`
+- Create tunnel: `cloudflared tunnel login && cloudflared tunnel create home-tunnel`
+- Create `~/.cloudflared/config.yml` routing `showbook.ethanasm.me` → `http://localhost:3001`
+- Add CNAME DNS record in Cloudflare: `showbook` → `{tunnel-id}.cfargotunnel.com`
+- Install as system service: `sudo cloudflared service install`
+- Document setup in project `RUNNING.md`
+**Verify:** `https://showbook.ethanasm.me` loads the app from a phone on cellular (not WiFi).
 
 ### T31: Expo mobile scaffold
 **Depends on:** T14, T30 (needs API + tunnel URL)
@@ -416,7 +422,7 @@ React components in `apps/web/components/design-system/`:
 **Build:**
 - Scaffold Expo app in `apps/mobile/`
 - Expo Router with tab bar (6 tabs)
-- tRPC client pointed at Tunnel URL
+- tRPC client pointed at `https://showbook.ethanasm.me/api/trpc`
 - Auth via Expo AuthSession (Google OAuth)
 - Build mobile versions of: Home, Shows list, Add (form only)
 **Verify:** App builds with `npx expo start`. Connects to backend. Shows list renders same data as web.
@@ -444,3 +450,36 @@ React components in `apps/web/components/design-system/`:
 | 5 | T30, T31, T32 | 3 agents (sequential chain) |
 
 **Critical path:** T01 → T06 → T07 → T14 → T19 (Add flow). Everything else can happen around this spine.
+
+---
+
+## Docker
+
+Two containers: `showbook-db` (Postgres on 5433) and `showbook-web` (Next.js on 3001). Ports 5432 and 3000 are used by vacation-price-tracker — never use them.
+
+```bash
+docker compose up -d                    # start both
+docker compose exec showbook-db pg_isready -U showbook  # check Postgres
+curl http://localhost:3001              # check Next.js
+```
+
+Migrations run from the host via the exposed port:
+```bash
+DATABASE_URL=postgresql://showbook:showbook_dev@localhost:5433/showbook npx drizzle-kit migrate
+```
+
+Inside the web container, `DATABASE_URL` uses the Docker service name: `postgresql://showbook:showbook_dev@postgres:5432/showbook`
+
+Cloudflared is NOT in Docker — it's a host-level system service (see T30).
+
+---
+
+## Acceptance Criteria
+
+See `LAUNCH.md` for the full acceptance checklist. The project is done when all boxes are checked, all Playwright tests pass, and all commits are pushed to main.
+
+---
+
+## Continuous Execution
+
+The lead agent should execute all 5 waves sequentially without waiting for human review between waves. Commit after each task (`T{XX}: description`), push after each wave. If a task fails verification, fix it before moving to the next dependent task. After all 32 tasks, run the full acceptance test suite from LAUNCH.md and report status.

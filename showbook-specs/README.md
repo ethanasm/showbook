@@ -14,11 +14,11 @@ Technical specifications for the Showbook data layer: entity schemas, external d
 
 | File | What it covers |
 |------|---------------|
-| [`schema.md`](./schema.md) | All entity definitions, field types, relationships, join tables, state machine |
-| [`data-sources.md`](./data-sources.md) | Ticketmaster, setlist.fm, manual entry, LLM extraction — what each provides, auth, limits |
-| [`pipelines.md`](./pipelines.md) | Add-flow enrichment sequence, Discover feed ingestion, delayed enrichment retries |
-| [`decisions.md`](./decisions.md) | Resolved design decisions + remaining open questions |
-| [`infrastructure.md`](./infrastructure.md) | Stack (TypeScript/Nx), service architecture, costs, offline strategy, Drizzle migration path |
+| [`schema.md`](schema.md) | All entity definitions, field types, relationships, join tables, state machine |
+| [`data-sources.md`](data-sources.md) | Ticketmaster, setlist.fm, manual entry, LLM extraction — what each provides, auth, limits |
+| [`pipelines.md`](pipelines.md) | Add-flow enrichment sequence, Discover feed ingestion, delayed enrichment retries |
+| [`decisions.md`](decisions.md) | Resolved design decisions + remaining open questions |
+| [`infrastructure.md`](infrastructure.md) | Stack (TypeScript/Nx), service architecture, costs, offline strategy, Drizzle migration path |
 
 ### Build Tasks
 
@@ -28,6 +28,7 @@ Implementation tasks structured for parallel execution by Claude Code agent team
 |------|-----------|
 | [`phases/TASKS.md`](./phases/TASKS.md) | Master task list — 32 tasks across 5 waves, dependency DAG, parallelism summary |
 | [`phases/VERIFICATION.md`](./phases/VERIFICATION.md) | Playwright testing strategy, screenshot conventions, data integrity checks, visual checklist |
+| [`phases/LAUNCH.md`](./phases/LAUNCH.md) | Agent team launch guide — CLAUDE.md template, the full prompt, acceptance criteria, monitoring tips |
 
 ## Key Decisions (quick reference)
 

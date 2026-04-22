@@ -1,6 +1,6 @@
 # Showbook — Infrastructure & Stack
 
-Stack, deployment architecture, and service mapping. Self-hosted on desktop.
+Self-hosted on desktop. Two Docker containers (Postgres + Next.js). Accessible at `showbook.ethanasm.me`.
 
 ---
 
@@ -9,110 +9,219 @@ Stack, deployment architecture, and service mapping. Self-hosted on desktop.
 | Layer | Choice | Why |
 |-------|--------|-----|
 | **Language** | TypeScript | Shared with frontend. One language, one toolchain |
-| **Web framework** | Next.js 15 (App Router) | Server components, API routes, middleware |
-| **Mobile** | Expo (React Native) | Write mobile apps in React/TypeScript. Expo adds a build system, file-based routing (like Next.js), and pre-built wrappers for native APIs — camera, SQLite for offline, push notifications — without needing Xcode/Android Studio for most work |
-| **Database** | PostgreSQL (local) | Runs on your desktop alongside the app. Free, fast (no network round-trip), full control |
-| **ORM** | Drizzle ORM | Type-safe, SQL-like API. Schema in TypeScript → generates migrations. Lightweight, no magic |
-| **Auth** | Auth.js (NextAuth v5) | Google OAuth adapter built-in. Sessions stored in local Postgres |
-| **Background jobs** | pg-boss | Job queue backed by the Postgres you already have. Handles scheduling, retries, concurrency. No Redis, no separate service, no external dependency |
-| **Media storage** | Cloudflare R2 | Zero egress, S3-compatible. Only paid external dependency |
-| **LLM** | Groq API | Fast inference on open-source models (Llama 3). Much cheaper than proprietary APIs. OpenAI-compatible SDK |
-| **API layer** | tRPC | End-to-end type safety between Next.js server and client. No schema generation |
-| **Monorepo** | Nx | Build orchestration, caching, `nx affected` for incremental builds. Already familiar from work |
-| **Hosting** | Self-hosted on desktop | Next.js runs as a persistent Node.js process. Caddy as reverse proxy |
-| **External access** | Cloudflare Tunnel | Exposes your desktop to the internet without port-forwarding or firewall changes. Free |
+| **Web framework** | Next.js 15 (App Router) | Server components, API routes, middleware. Serves pages + tRPC API + pg-boss jobs — all one process, one container |
+| **Mobile** | Expo (React Native) | Mobile apps in React/TypeScript. Build tools, file-based routing, native API wrappers without Xcode/Android Studio |
+| **Database** | PostgreSQL (Docker, port 5433) | Own container, independent from other projects |
+| **ORM** | Drizzle ORM | Type-safe, SQL-like API. Schema in TypeScript → generates migrations |
+| **Auth** | Auth.js (NextAuth v5) | Google OAuth built-in. Sessions in Postgres |
+| **Background jobs** | pg-boss | Job queue backed by Postgres. Runs inside the Next.js process |
+| **Media storage** | Cloudflare R2 | Zero egress fees, S3-compatible |
+| **LLM** | Groq API | Fast inference on Llama 3. OpenAI-compatible SDK. Effectively free |
+| **API layer** | tRPC | End-to-end type safety between server and client |
+| **Monorepo** | Nx | Build orchestration, caching, `nx affected` |
+| **External access** | Cloudflare Tunnel | `showbook.ethanasm.me` → localhost:3001. Shared tunnel with vacation tracker |
 
 ---
 
-## Self-Hosting Setup
+## Docker Setup
 
-Your desktop runs everything: Next.js, Postgres, and pg-boss workers (inside the Next.js process). Cloudflare Tunnel dials out from your desktop to Cloudflare's edge — your mobile app and any browser hit `showbook.yourdomain.com`, which routes through Cloudflare → tunnel → Caddy → Next.js. Your desktop never needs an open inbound port.
+Two containers. That's it.
+
+```yaml
+name: showbook
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: showbook-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: showbook
+      POSTGRES_USER: showbook
+      POSTGRES_PASSWORD: showbook_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - showbook_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U showbook" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  web:
+    build:
+      context: showbook-specs
+      dockerfile: apps/web/Dockerfile
+    container_name: showbook-web
+    restart: unless-stopped
+    env_file: .env.local
+    environment:
+      DATABASE_URL: postgresql://showbook:showbook_dev@postgres:5432/showbook
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./apps:/app/apps
+      - ./packages:/app/packages
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  showbook_pgdata:
+```
+
+The `web` container runs Next.js which serves everything: pages, tRPC API, and pg-boss background jobs. No separate API or worker container — it's all one process. Volume mounts give hot reload.
+
+The `DATABASE_URL` inside the container uses `postgres` (the Docker service name) not `localhost`, since containers talk to each other via Docker's internal network. The host-exposed port 5433 is only for running migrations and psql from outside Docker.
+
+### .env.local
+
+```bash
+PORT=3001
+NEXTAUTH_URL=https://showbook.ethanasm.me
+NEXTAUTH_SECRET=generate-a-random-string
+
+GOOGLE_CLIENT_ID=your-client-id
+GOOGLE_CLIENT_SECRET=your-client-secret
+
+TICKETMASTER_API_KEY=your-tm-key
+SETLISTFM_API_KEY=your-setlistfm-key
+GROQ_API_KEY=your-groq-key
+
+R2_ACCOUNT_ID=your-cloudflare-account-id
+R2_ACCESS_KEY_ID=your-r2-access-key
+R2_SECRET_ACCESS_KEY=your-r2-secret
+R2_BUCKET_NAME=showbook
+R2_PUBLIC_URL=https://media.ethanasm.me
+```
+
+Note: `DATABASE_URL` is set in `docker-compose.yml` under `environment`, not in `.env.local`, because the container needs the Docker-internal hostname (`postgres`) not `localhost`.
+
+### Port map (all projects, no conflicts)
+
+| Port | Service | Project |
+|------|---------|---------|
+| 3000 | web | vacation-price-tracker |
+| **3001** | web | **showbook** |
+| 5432 | postgres | vacation-price-tracker |
+| **5433** | postgres | **showbook** |
+| 6379 | redis | vacation-price-tracker |
+| 7233 | temporal | vacation-price-tracker |
+| 8000 | api | vacation-price-tracker |
+| 8080 | temporal-ui | vacation-price-tracker |
+
+### Workflow
+
+```bash
+# Start everything
+docker compose up -d
+
+# Run migrations (from host, via exposed port 5433)
+DATABASE_URL=postgresql://showbook:showbook_dev@localhost:5433/showbook npx drizzle-kit migrate
+
+# Verify
+docker compose logs web       # Next.js output
+docker compose exec showbook-db pg_isready -U showbook
+
+# Rebuild after code changes (if hot reload misses something)
+docker compose up -d --build web
+```
+
+### Dockerfile (apps/web/Dockerfile)
+
+The agent will create this, but the key requirements:
+- Node 20 base image
+- Install pnpm, copy workspace, install deps
+- Run `npx nx build web` for production build
+- Or run `npx nx dev web` with `--hostname 0.0.0.0` for development with hot reload
+- Expose port 3001
+
+---
+
+## External Access
+
+Cloudflared runs on the host as a system service (not in Docker). One tunnel, shared across all projects. Config at `~/.cloudflared/config.yml` routes by hostname:
+
+```yaml
+ingress:
+  - hostname: showbook.ethanasm.me
+    service: http://localhost:3001
+  - hostname: vactrack.ethanasm.me
+    service: http://localhost:3000
+  - service: http_status:404
+```
+
+Full setup instructions in `cloudflare-tunnel-setup.md`.
+
+---
+
+## Architecture
 
 ```
 Internet
    │
+   │  https://showbook.ethanasm.me
    ▼
-Cloudflare Edge (showbook.yourdomain.com)
+Cloudflare Edge (TLS)
    │
-   │ Cloudflare Tunnel (cloudflared daemon on desktop)
-   │
+   │  Tunnel (cloudflared, host system service)
    ▼
 Your Desktop
-   ├── Caddy        — reverse proxy, auto TLS via Let's Encrypt
-   ├── Next.js      — web app + tRPC API + pg-boss job scheduler
-   └── PostgreSQL   — local, port not exposed externally
+   │
+   ├── showbook docker compose
+   │   ├── showbook-db   (postgres, port 5433)
+   │   └── showbook-web  (next.js + trpc + pg-boss, port 3001)
+   │
+   └── vacation-price-tracker docker compose (independent)
+       └── db:5432, redis, temporal, api:8000, web:3000
 ```
 
-**If your desktop is off, the app is down.** For a personal tracker that's fine. If you ever want uptime guarantees, migrate to a cheap VPS (Hetzner CX22 is ~€4/mo) — the stack is identical.
+External services:
 
-**Caddy** handles HTTPS with Let's Encrypt automatically. One config file, cert renewal is built in. Compared to nginx + certbot, there's essentially nothing to configure.
+```
+showbook-web ──→ Cloudflare R2 (photos)
+             ──→ Ticketmaster API (events, venues, performers)
+             ──→ setlist.fm API (setlists)
+             ──→ Google OAuth (auth)
+             ──→ Google Geocoding (venue lat/lng)
+             ──→ Groq API (chat-mode add, playbill OCR)
+```
+
+Expo mobile → `showbook.ethanasm.me` → same tunnel → same container.
 
 ---
 
 ## Background Jobs (pg-boss)
 
-pg-boss creates a jobs table in your existing Postgres database and uses it as a queue. You import it into Next.js, register job handlers, and schedule them — no separate process, no Redis, no external service.
-
-All jobs run daily:
+Runs inside the Next.js process in the `showbook-web` container. Uses a jobs table in Postgres.
 
 | Job | Schedule | What it does |
 |-----|----------|-------------|
-| `discover/ingest` | Daily, 2:00 AM | Collect unique venues + regions across all users → fetch TM events → upsert Announcements → prune expired |
-| `shows/nightly` | Daily, 3:00 AM | Transition ticketed → past → delete expired watching → queue setlist enrichment |
-| `enrichment/setlist-retry` | Daily, 4:00 AM | For each queued enrichment: fetch setlist.fm, update show if found, increment attempts |
-| `notifications/digest` | Per user `digest_time` | Collect new announcements + upcoming shows → send email/push |
+| `discover/ingest` | Daily, 2:00 AM | Fetch TM events for followed venues + regions → upsert Announcements → prune expired |
+| `shows/nightly` | Daily, 3:00 AM | ticketed → past, delete expired watching, queue setlist enrichment |
+| `enrichment/setlist-retry` | Daily, 4:00 AM | Fetch setlist.fm for queued concerts |
+| `notifications/digest` | Per user `digest_time` | New announcements + upcoming shows → email |
 
-**Event-driven** (triggered immediately on write, not scheduled):
-
-| Event | Job |
-|-------|-----|
-| Show created | Run enrichment pipeline |
-| Venue created | Geocode lat/lng if missing |
-| Performer created | Fetch TM attraction image |
+Event-driven (triggered on write, not scheduled):
+- Show created → run enrichment pipeline
+- Venue created → geocode if no lat/lng
+- Performer created → fetch TM image
 
 ---
 
 ## LLM: Groq
 
-**What Groq is:** An inference API that runs open-source models (Llama 3, Mixtral) on custom ASIC hardware. Much faster cold starts and lower cost than proprietary APIs. Uses the OpenAI SDK format — swap the base URL and you're done.
-
-**We use it for two things:**
-
-**1. Chat-mode Add** — parsing free-text into structured fields
-
-- Input: *"I saw Radiohead at MSG last night, second row"*
-- Output: `{ headliner: "Radiohead", venue_hint: "MSG", date_hint: "last night", seat_hint: "second row", kind: "concert" }`
-- Model: `llama-3.3-70b-versatile`
-- Cost: effectively $0 at personal use volume
-
-**2. Playbill cast extraction** — vision model reading a photo
-
-- Input: photo of playbill cast page
-- Output: `[{ actor: "Cynthia Erivo", role: "Elphaba" }, ...]`
-- Model: `llama-3.2-11b-vision-preview`
-- Tradeoff: quality is lower than GPT-4o or Claude for complex layouts. If a playbill has two-column small print or decorative fonts, extraction may need user correction. Acceptable — the user confirms before saving anyway.
+**Chat-mode Add:** `llama-3.3-70b-versatile` parses free text into structured fields.
+**Playbill cast extraction:** `meta-llama/llama-4-scout-17b-16e-instruct` (Llama 4 Scout) reads photos, extracts cast. Native multimodal — better quality than the older preview models. User confirms before saving.
 
 ```typescript
 import Groq from 'groq-sdk';
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// Text extraction
 const result = await groq.chat.completions.create({
   model: 'llama-3.3-70b-versatile',
   messages: [{ role: 'user', content: prompt }],
-  response_format: { type: 'json_object' },
-});
-
-// Vision (playbill OCR)
-const result = await groq.chat.completions.create({
-  model: 'llama-3.2-11b-vision-preview',
-  messages: [{
-    role: 'user',
-    content: [
-      { type: 'image_url', image_url: { url: base64DataUrl } },
-      { type: 'text', text: 'Extract the cast list...' }
-    ]
-  }],
   response_format: { type: 'json_object' },
 });
 ```
@@ -125,94 +234,30 @@ const result = await groq.chat.completions.create({
 showbook/
 ├── apps/
 │   ├── web/                    # Next.js 15 (App Router)
+│   │   ├── Dockerfile
 │   │   └── app/
-│   │       ├── (auth)/         # Google OAuth flow
-│   │       ├── (app)/          # Authenticated shell
+│   │       ├── (auth)/
+│   │       ├── (app)/
 │   │       │   ├── home/
 │   │       │   ├── discover/
 │   │       │   ├── shows/
 │   │       │   ├── map/
 │   │       │   ├── add/
 │   │       │   └── preferences/
-│   │       └── api/
-│   │           └── trpc/       # tRPC HTTP handler
+│   │       └── api/trpc/
 │   │
 │   └── mobile/                 # Expo (React Native)
-│       ├── app/                # Expo Router (file-based, mirrors web routes)
-│       ├── components/
-│       └── lib/
-│           └── offline/        # expo-sqlite cache + sync logic
 │
 ├── packages/
 │   ├── db/                     # Drizzle schema, migrations, queries
-│   │   ├── schema/
-│   │   │   ├── shows.ts
-│   │   │   ├── venues.ts
-│   │   │   ├── performers.ts
-│   │   │   ├── announcements.ts
-│   │   │   ├── users.ts
-│   │   │   └── relations.ts
-│   │   ├── migrations/
-│   │   └── queries/            # Typed query helpers
-│   │
 │   ├── api/                    # tRPC routers
-│   │   ├── routers/
-│   │   │   ├── shows.ts
-│   │   │   ├── discover.ts
-│   │   │   ├── venues.ts
-│   │   │   └── performers.ts
-│   │   └── trpc.ts
-│   │
 │   ├── jobs/                   # pg-boss job handlers
-│   │   ├── discover-ingest.ts
-│   │   ├── shows-nightly.ts
-│   │   ├── setlist-retry.ts
-│   │   └── notifications.ts
-│   │
-│   └── shared/
-│       ├── types/
-│       ├── constants/          # Kind enum, state enum, palette tokens
-│       └── utils/              # Date helpers, formatting
+│   └── shared/                 # Types, constants, utils
 │
-├── Caddyfile
+├── docker-compose.yml
 ├── nx.json
-├── project.json
 ├── package.json
 └── tsconfig.base.json
-```
-
----
-
-## Service Architecture
-
-```
-                    ┌─────────────────────────┐
-                    │   Cloudflare Edge        │
-                    │   showbook.yourdomain    │
-                    └────────────┬────────────┘
-                                 │ Cloudflare Tunnel
-                    ┌────────────▼────────────────────────────┐
-                    │   Your Desktop                           │
-                    │                                          │
-                    │  Caddy (443) → Next.js (3000)            │
-                    │                    │                     │
-                    │              ┌─────┴──────┐              │
-                    │              │ PostgreSQL  │              │
-                    │              │ (local)     │              │
-                    │              └─────────────┘              │
-                    └──────────────────────────────────────────┘
-                                 │
-              ┌──────────────────┼──────────────────┐
-              ▼                  ▼                   ▼
-    ┌──────────────┐   ┌──────────────────┐  ┌──────────────┐
-    │ Cloudflare   │   │ External APIs    │  │ Groq API     │
-    │ R2 (photos)  │   │ · Ticketmaster   │  │ · Chat Add   │
-    │              │   │ · setlist.fm     │  │ · Playbill   │
-    └──────────────┘   │ · Google OAuth   │  └──────────────┘
-                       │ · Google Geocode │
-                       └──────────────────┘
-
-    Expo mobile app → Cloudflare Tunnel URL → same Next.js server
 ```
 
 ---
@@ -221,46 +266,36 @@ showbook/
 
 | Service | Cost |
 |---------|------|
-| PostgreSQL (local) | $0 |
-| Next.js (self-hosted) | $0 |
-| Caddy | $0 |
+| PostgreSQL (Docker) | $0 |
+| Next.js (Docker) | $0 |
 | Cloudflare Tunnel | $0 |
-| Cloudflare R2 | $0 (free: 10GB storage, 10M reads/mo) |
-| Expo EAS (mobile builds) | $0 (free: 30 builds/mo) |
-| Ticketmaster API | $0 |
-| setlist.fm API | $0 |
-| Google OAuth | $0 |
-| Google Geocoding | $0 (free $200/mo credit, we use ~$0.01) |
-| Groq API | $0 (free: 14,400 req/day — enormous for personal use) |
-| Domain | ~$12/yr |
-| Electricity | ~$5–15/mo (desktop running 24/7) |
+| Cloudflare R2 | $0 (free: 10GB, 10M reads/mo) |
+| Expo EAS | $0 (free: 30 builds/mo) |
+| Ticketmaster / setlist.fm / Google / Groq | $0 (all free tier) |
+| Domain (ethanasm.me) | already owned |
+| Electricity | ~$5–15/mo |
 | **Total** | **~$5–15/mo** |
 
 ---
 
 ## Offline Strategy (Mobile)
 
-Per D19, Add flow is blocked until online. Read-only browsing works offline via expo-sqlite local cache.
+Add flow blocked until online. Read-only browsing works offline via expo-sqlite.
 
 | Feature | Offline |
 |---------|---------|
-| Shows list | ✅ Reads from SQLite cache, synced on app open |
-| Show detail | ✅ Cached locally |
+| Shows list | ✅ SQLite cache |
+| Show detail | ✅ Cached |
 | Map | ✅ Venue pins cached |
-| Discover feed | ❌ Requires connectivity |
+| Discover | ❌ Requires connectivity |
 | Add show | ❌ Blocked |
-| Preferences | ✅ Local cache, writes sync when online |
+| Preferences | ✅ Local cache |
 
 ---
 
 ## Schema → Drizzle
 
-Every entity in `schema.md` maps directly to a Drizzle table definition:
-
 ```typescript
-// packages/db/schema/shows.ts
-import { pgTable, uuid, text, date, decimal, jsonb, timestamp, pgEnum } from 'drizzle-orm/pg-core';
-
 export const kindEnum = pgEnum('kind', ['concert', 'theatre', 'comedy', 'festival']);
 export const stateEnum = pgEnum('state', ['past', 'ticketed', 'watching']);
 
@@ -283,4 +318,4 @@ export const shows = pgTable('shows', {
 });
 ```
 
-`drizzle-kit generate` → SQL migration files. `drizzle-kit migrate` → applies to local Postgres.
+`drizzle-kit generate` → SQL migrations. Migrate via host: `DATABASE_URL=postgresql://showbook:showbook_dev@localhost:5433/showbook npx drizzle-kit migrate`
