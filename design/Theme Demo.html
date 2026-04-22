@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Showbook · Theme Demo — B+C</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@300..600&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="hifi/sb-tokens.jsx"></script>
+<script type="text/babel" src="hifi/shared-data.jsx"></script>
+<script type="text/babel" src="hifi/design-canvas.jsx"></script>
+<script type="text/babel" src="hifi/theme-demo.jsx"></script>
+</head>
+<body style="margin:0; overflow:hidden">
+<div id="root"></div>
+<script type="text/babel">
+const { DesignCanvas, DCSection, DCArtboard } = window;
+
+// Phone bezel
+function Phone({children}) {
+  return <div style={{width:'100%', height:'100%', overflow:'hidden'}}>{children}</div>;
+}
+// Web chrome
+function Web({children, width, height, url, title}) {
+  return (
+    <div style={{width:'100%', height:'100%', display:'flex', flexDirection:'column', overflow:'hidden', background:'#0C0C0C'}}>
+      <div style={{height:38, background:'#1C1C1C', borderBottom:'1px solid rgba(255,255,255,.1)', display:'flex', alignItems:'center', padding:'0 14px', gap:8, flexShrink:0}}>
+        <div style={{display:'flex', gap:6}}>
+          <div style={{width:10, height:10, borderRadius:999, background:'rgba(255,255,255,.15)'}}/>
+          <div style={{width:10, height:10, borderRadius:999, background:'rgba(255,255,255,.15)'}}/>
+          <div style={{width:10, height:10, borderRadius:999, background:'rgba(255,255,255,.15)'}}/>
+        </div>
+        <div style={{flex:1, display:'flex', justifyContent:'center'}}>
+          <div style={{background:'rgba(255,255,255,.06)', borderRadius:4, padding:'4px 28px', fontFamily:'"Geist Mono", monospace', fontSize:11, color:'rgba(255,255,255,.45)'}}>{url}</div>
+        </div>
+      </div>
+      <div style={{flex:1, overflow:'hidden'}}>{children}</div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <DesignCanvas
+      title="Showbook · Theme + Accent Demo"
+      subtitle="Option B+C: auto dark/light + Marquee palette. Kind colors: Stage Blue (concert), Curtain Crimson (theatre), Quirky Amethyst (comedy), Outdoor Teal (festival). Accent: Marquee Gold (#FFBE0B) on CTAs, active nav, tix badges, links."
+    >
+      <DCSection id="mobile" title="Mobile Home — light vs dark" subtitle="Same page, two modes. Coral on: tab bar active, CTA circle, tix chip, 'see all' links. Kind colors unchanged.">
+        <DCArtboard id="m-light" label="Mobile · Light" width={390} height={844}>
+          <Phone><window.HomeMobileThemed mode="light"/></Phone>
+        </DCArtboard>
+        <DCArtboard id="m-dark" label="Mobile · Dark" width={390} height={844}>
+          <Phone><window.HomeMobileThemed mode="dark"/></Phone>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="web" title="Web Home — light vs dark" subtitle="Sidebar CTA, active nav indicator, avatar, tix chip, and 'see all' links all use coral. Kind colors (concert orange, theatre pink, comedy gold, festival mint) are preserved.">
+        <DCArtboard id="w-dark" label="Web · Dark (current default)" width={1440} height={900}>
+          <Web width={1440} height={900} url="showbook.app" title="showbook">
+            <window.HomeWebThemed mode="dark"/>
+          </Web>
+        </DCArtboard>
+        <DCArtboard id="w-light" label="Web · Light" width={1440} height={900}>
+          <Web width={1440} height={900} url="showbook.app" title="showbook">
+            <window.HomeWebThemed mode="light"/>
+          </Web>
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

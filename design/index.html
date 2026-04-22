@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Entertainment Tracker — Wireframes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&family=Kalam:wght@300;400;700&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;padding:0;background:#f0eee9;overflow:hidden;}
+  /* Wireframe vocabulary — kept minimal so structure reads first */
+  .wf{font-family:'Inter',system-ui,sans-serif;color:#2a2520;}
+  .wf-mono{font-family:'JetBrains Mono',monospace;}
+  .wf-hand{font-family:'Kalam',cursive;}
+  .wf-script{font-family:'Caveat',cursive;}
+  .wf-box{border:1.25px solid #2a2520;background:#fff;}
+  .wf-soft{border:1.25px dashed #8a827a;background:#fafaf7;}
+  .wf-fill{background:#2a2520;color:#f3f1ec;}
+  .wf-tint{background:#ece9e2;}
+  .wf-tint2{background:#e2ded4;}
+  .wf-tint3{background:#d4cec1;}
+  .wf-ph{background:repeating-linear-gradient(135deg,#ece9e2 0 6px,#e2ded4 6px 12px);color:#6b645a;}
+  .wf-line{height:1.25px;background:#2a2520;}
+  .wf-dot{height:1.25px;background-image:linear-gradient(to right,#2a2520 50%,transparent 0);background-size:6px 1.25px;background-repeat:repeat-x;}
+  .wf-pill{border:1.25px solid #2a2520;border-radius:999px;padding:3px 9px;font-size:10px;font-family:'JetBrains Mono',monospace;display:inline-flex;align-items:center;gap:4px;background:#fff;}
+  .wf-chip{border:1.25px solid #2a2520;padding:2px 6px;font-size:10px;font-family:'JetBrains Mono',monospace;background:#fff;display:inline-block;}
+  .wf-btn{border:1.25px solid #2a2520;padding:6px 12px;font-size:11px;font-family:'JetBrains Mono',monospace;background:#fff;display:inline-flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.04em;}
+  .wf-btn.primary{background:#2a2520;color:#f3f1ec;}
+  .wf-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#6b645a;}
+  .wf-num{font-family:'Inter',sans-serif;font-feature-settings:'tnum';font-variant-numeric:tabular-nums;}
+  .wf-ann{font-family:'Caveat',cursive;color:#c96442;font-size:14px;line-height:1.1;}
+  .wf-scribble{color:#c96442;}
+  .scroll-hide::-webkit-scrollbar{display:none}
+  .scroll-hide{scrollbar-width:none;-ms-overflow-style:none;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="wf-primitives.jsx"></script>
+<script type="text/babel" src="views/data-plan.jsx"></script>
+<script type="text/babel" src="views/home.jsx"></script>
+<script type="text/babel" src="views/history.jsx"></script>
+<script type="text/babel" src="views/show-detail.jsx"></script>
+<script type="text/babel" src="views/upcoming.jsx"></script>
+<script type="text/babel" src="views/add-flow.jsx"></script>
+<script type="text/babel" src="views/stats.jsx"></script>
+<script type="text/babel" src="views/artist.jsx"></script>
+<script type="text/babel" src="views/map.jsx"></script>
+<script type="text/babel">
+  const { DesignCanvas, DCSection, DCArtboard, DCPostIt } = window;
+  const W = 1280, H = 820, PHONE_W = 390, PHONE_H = 780;
+  function App(){
+    return (
+      <DesignCanvas>
+        <DCSection id="intro" title="Entertainment Tracker · Refined Wireframes" subtitle="Concerts · Festivals · Theatre · Comedy — for you + friends. Refined views + a data-provenance plan so the user never types cast, setlists, or tour names.">
+          <DCArtboard id="legend" label="Legend & system" width={780} height={340}>{window.LegendArtboard && <window.LegendArtboard/>}</DCArtboard>
+          <DCArtboard id="dataplan" label="Data plan · what's auto-fetched vs typed" width={980} height={720}>{window.DataPlanArtboard && <window.DataPlanArtboard/>}</DCArtboard>
+        </DCSection>
+
+        <DCSection id="home" title="01 · Home / Dashboard" subtitle="Refined: split columns (past · future) + tracking sidebar. Merged best of V1, V4, V5.">
+          {window.HomeVariants && window.HomeVariants.map(v => (
+            <DCArtboard key={v.id} id={v.id} label={v.label} width={W} height={H}>{v.render()}</DCArtboard>
+          ))}
+        </DCSection>
+
+        <DCSection id="history" title="02 · History — Archive" subtitle="Refined: year rails for nav, dense ledger in the middle, map as geographic filter.">
+          {window.HistoryVariants && window.HistoryVariants.map(v => (
+            <DCArtboard key={v.id} id={v.id} label={v.label} width={W} height={H}>{v.render()}</DCArtboard>
+          ))}
+        </DCSection>
+
+        <DCSection id="detail" title="03 · Single Show Detail" subtitle="Per-kind variants: Concert (setlist.fm), Comedy (tour + material), Theatre (cast on the night from Playbill). All data auto-fetched.">
+          {window.DetailVariants && window.DetailVariants.map(v => (
+            <DCArtboard key={v.id} id={v.id} label={v.label} width={W} height={H}>{v.render()}</DCArtboard>
+          ))}
+        </DCSection>
+
+        <DCSection id="upcoming" title="04 · Upcoming / Calendar" subtitle="Merged: chronological radar + venue lens sidebar. Import helpers (gmail scan, URL paste, PDF) as secondary.">
+          {window.UpcomingVariants && window.UpcomingVariants.map(v => (
+            <DCArtboard key={v.id} id={v.id} label={v.label} width={W} height={H}>{v.render()}</DCArtboard>
+          ))}
+        </DCSection>
+
+        <DCSection id="add" title="05 · Add-a-show Flow" subtitle="Two modes: structured form + conversational. Photos in, rating/+1s/notes out.">
+          {window.AddVariants && window.AddVariants.map(v => (
+            <DCArtboard key={v.id} id={v.id} label={v.label} width={W} height={H}>{v.render()}</DCArtboard>
+          ))}
+        </DCSection>
+
+        <DCSection id="stats" title="06 · Stats / Year in Review" subtitle="Refined: shows-per-year stacked by type, most-attended venues & artists, day-of-week rhythm.">
+          {window.StatsVariants && window.StatsVariants.map(v => (
+            <DCArtboard key={v.id} id={v.id} label={v.label} width={W} height={H}>{v.render()}</DCArtboard>
+          ))}
+        </DCSection>
+
+        <DCSection id="artist" title="07 · Artist Page" subtitle="Per-type layouts: Concert (tours + setlists + map), Comedy (specials + material), Theatre (production + cast-on-the-night).">
+          {window.ArtistVariants && window.ArtistVariants.map(v => (
+            <DCArtboard key={v.id} id={v.id} label={v.label} width={W} height={H}>{v.render()}</DCArtboard>
+          ))}
+        </DCSection>
+
+        <DCSection id="map" title="08 · Map View" subtitle="Refined: full-bleed map, selected venue → inspector with all shows there.">
+          {window.MapVariants && window.MapVariants.map(v => (
+            <DCArtboard key={v.id} id={v.id} label={v.label} width={W} height={H}>{v.render()}</DCArtboard>
+          ))}
+        </DCSection>
+
+
+      </DesignCanvas>
+    );
+  }
+  // defer until all view scripts have registered their variants
+  setTimeout(() => ReactDOM.createRoot(document.getElementById('root')).render(<App/>), 50);
+</script>
+</body>
+</html>

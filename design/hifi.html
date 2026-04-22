@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Showbook · hi-fi</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+  html, body { margin:0; padding:0; background:#E6E2DA; font-family: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  body { min-height:100vh; }
+  * { box-sizing:border-box; }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<!-- Shared scaffolding -->
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="browser-window.jsx"></script>
+<script type="text/babel" src="hifi/sb-tokens.jsx"></script>
+<script type="text/babel" src="hifi/shared-data.jsx"></script>
+<script type="text/babel" src="hifi/history-data.jsx"></script>
+<script type="text/babel" src="hifi/show-detail-data.jsx"></script>
+<script type="text/babel" src="hifi/map-data.jsx"></script>
+<script type="text/babel" src="hifi/map-shared.jsx"></script>
+
+<!-- Home -->
+<script type="text/babel" src="hifi/home-editorial.jsx"></script>
+<script type="text/babel" src="hifi/home-mono.jsx"></script>
+<script type="text/babel" src="hifi/home-mono-v2.jsx"></script>
+<script type="text/babel" src="hifi/home-stub.jsx"></script>
+<script type="text/babel" src="hifi/web-home.jsx"></script>
+
+<!-- Add -->
+<script type="text/babel" src="hifi/add-mobile.jsx"></script>
+<script type="text/babel" src="hifi/add-web.jsx"></script>
+<script type="text/babel" src="hifi/add-chat.jsx"></script>
+
+<!-- History -->
+<script type="text/babel" src="hifi/history-mobile.jsx"></script>
+<script type="text/babel" src="hifi/history-web.jsx"></script>
+
+<!-- Show detail -->
+<script type="text/babel" src="hifi/show-detail-mobile.jsx"></script>
+<script type="text/babel" src="hifi/show-detail-web.jsx"></script>
+
+<!-- Artist -->
+<script type="text/babel" src="hifi/artist-data.jsx"></script>
+<script type="text/babel" src="hifi/artist-mobile.jsx"></script>
+<script type="text/babel" src="hifi/artist-web.jsx"></script>
+
+<!-- Map -->
+<script type="text/babel" src="hifi/map-mobile.jsx"></script>
+<script type="text/babel" src="hifi/map-web.jsx"></script>
+
+<!-- Stats / Year-in-Review -->
+<script type="text/babel" src="hifi/stats-data.jsx"></script>
+<script type="text/babel" src="hifi/stats-mobile.jsx"></script>
+<script type="text/babel" src="hifi/stats-web.jsx"></script>
+
+<!-- Upcoming -->
+<script type="text/babel" src="hifi/upcoming-data.jsx"></script>
+<script type="text/babel" src="hifi/upcoming-mobile.jsx"></script>
+<script type="text/babel" src="hifi/upcoming-web.jsx"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { DesignCanvas, DCSection, DCArtboard } = window;
+const { IOSDevice, ChromeWindow } = window;
+
+// Stage wrappers
+function Phone({children, dark=false}) {
+  return (
+    <IOSDevice width={390} height={844} dark={dark}>
+      <div style={{height:'100%', width:'100%', overflow:'hidden'}}>{children}</div>
+    </IOSDevice>
+  );
+}
+
+function Web({children, url='showbook.app', title='showbook', width=1440, height=900}) {
+  return (
+    <ChromeWindow width={width} height={height} url={url} tabs={[{title}]}>
+      {children}
+    </ChromeWindow>
+  );
+}
+
+// — Show-detail variant wrappers —
+const { ShowDetailMobile, ShowDetailWeb, SD_PAYLOADS } = window;
+const DetailMobile = ({v}) => <Phone><ShowDetailMobile payload={SD_PAYLOADS[v]}/></Phone>;
+const DetailWeb    = ({v}) => {
+  const s = SD_PAYLOADS[v];
+  return (
+    <Web
+      width={1440} height={900}
+      url={`showbook.app/archive/${s.date.y}/${v}`}
+      title={`showbook · ${s.headliner.toLowerCase()}`}
+    >
+      <ShowDetailWeb payload={s}/>
+    </Web>
+  );
+};
+
+// — Artist variant wrappers —
+const { ArtistMobile, ArtistWeb, ARTIST_PAYLOADS } = window;
+const ArtistM = ({v}) => <Phone><ArtistMobile payload={ARTIST_PAYLOADS[v]}/></Phone>;
+const ArtistW = ({v}) => {
+  const a = ARTIST_PAYLOADS[v];
+  const slug = a.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  const seg = v === 'theatre' ? 'productions' : v === 'comedy' ? 'comedians' : 'artists';
+  return (
+    <Web
+      width={1440} height={900}
+      url={`showbook.app/${seg}/${slug}`}
+      title={`showbook · ${a.name.toLowerCase()}`}
+    >
+      <ArtistWeb payload={a}/>
+    </Web>
+  );
+};
+
+function App() {
+  return (
+    <DesignCanvas
+      title="Showbook · hi-fi"
+      subtitle="Mono direction · Geist / Geist Mono · near-black web + warm-off-white mobile · per-kind accents"
+    >
+      {/* ── 01 · Home ─────────────────────────────────────── */}
+      <DCSection id="home" title="01 · Home" subtitle="Mobile + full web dashboard.">
+        <DCArtboard id="home-mobile-v2" label="Mobile · Mono v2" width={390} height={844}>
+          <Phone><window.HomeMonoRefined/></Phone>
+        </DCArtboard>
+        <DCArtboard id="home-web" label="Web · Dark dashboard · 1440×900" width={1440} height={900}>
+          <Web width={1440} height={900} url="showbook.app" title="showbook · home">
+            <window.WebHome/>
+          </Web>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ── 02 · Add a show ───────────────────────────────── */}
+      <DCSection id="add" title="02 · Add a show" subtitle="Structured form (mobile + web) + conversational chat mode.">
+        <DCArtboard id="add-mobile" label="Mobile · Structured" width={390} height={844}>
+          <Phone><window.AddMobile/></Phone>
+        </DCArtboard>
+        <DCArtboard id="add-chat-mobile" label="Mobile · Chat" width={390} height={844}>
+          <Phone><window.AddChatMobile/></Phone>
+        </DCArtboard>
+        <DCArtboard id="add-web" label="Web · Structured" width={1440} height={900}>
+          <Web width={1440} height={900} url="showbook.app/add" title="showbook · add">
+            <window.AddWeb/>
+          </Web>
+        </DCArtboard>
+        <DCArtboard id="add-chat-web" label="Web · Chat" width={1440} height={900}>
+          <Web width={1440} height={900} url="showbook.app/add?mode=chat" title="showbook · add · chat">
+            <window.AddChatWeb/>
+          </Web>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ── 03 · History / Archive ────────────────────────── */}
+      <DCSection id="history" title="03 · History · Archive" subtitle="Dense ledger reaching back years. Year rails + top venues + top artists.">
+        <DCArtboard id="history-mobile" label="Mobile · Archive" width={390} height={844}>
+          <Phone><window.MobileHistory/></Phone>
+        </DCArtboard>
+        <DCArtboard id="history-web" label="Web · Archive · 1440×900" width={1440} height={900}>
+          <Web width={1440} height={900} url="showbook.app/archive" title="showbook · archive">
+            <window.WebHistory/>
+          </Web>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ── 05 · Upcoming · Calendar ──────────────────────── */}
+      <DCSection id="upcoming" title="05 · Upcoming · Calendar" subtitle="Chronological queue + month calendar. Venue lens, import helpers, on-sale watcher. Filters do the work — discovery tools tucked away.">
+        <DCArtboard id="up-mobile" label="Mobile · Upcoming" width={390} height={844}>
+          <Phone><window.UpcomingMobile/></Phone>
+        </DCArtboard>
+        <DCArtboard id="up-web" label="Web · Upcoming · 1440×900" width={1440} height={900}>
+          <Web width={1440} height={900} url="showbook.app/upcoming" title="showbook · upcoming">
+            <window.UpcomingWeb/>
+          </Web>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ── 06 · Stats · Year-in-Review ────────────────────── */}
+      <DCSection id="stats" title="06 · Stats · Year-in-Review" subtitle="The Ledger · 87 shows across 8 years · leaderboards, rhythm, superlatives.">
+        <DCArtboard id="stats-mobile" label="Mobile · The Ledger" width={390} height={844}>
+          <Phone><window.MobileStats/></Phone>
+        </DCArtboard>
+        <DCArtboard id="stats-web" label="Web · The Ledger · 1440×1400" width={1440} height={1400}>
+          <Web width={1440} height={1400} url="showbook.app/stats" title="showbook · stats">
+            <window.WebStats/>
+          </Web>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ── 05 · Map view ─────────────────────────────────── */}
+      <DCSection id="map" title="05 · Map · geographic view" subtitle="Full-bleed NYC map + venue inspector. Dot size = # of shows at that venue. Tap a pin to see all visits there.">
+        <DCArtboard id="map-mobile" label="Mobile · Map · Bottom sheet" width={390} height={844}>
+          <Phone><window.MobileMap/></Phone>
+        </DCArtboard>
+        <DCArtboard id="map-web" label="Web · Map · 1440×900" width={1440} height={900}>
+          <Web width={1440} height={900} url="showbook.app/map" title="showbook · map">
+            <window.MapWeb/>
+          </Web>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ── 05 · Artist — per-kind ────────────────────────── */}
+      <DCSection id="artist" title="05 · Artist · per-kind" subtitle="Same shell, different data model per kind: concert = tours+setlists+map, comedy = specials+material context, theatre = production+cast on your night.">
+        <DCArtboard id="artist-concert-m" label="Concert · Mobile · Fontaines D.C." width={390} height={844}>
+          <ArtistM v="concert"/>
+        </DCArtboard>
+        <DCArtboard id="artist-concert-w" label="Concert · Web" width={1440} height={900}>
+          <ArtistW v="concert"/>
+        </DCArtboard>
+        <DCArtboard id="artist-comedy-m" label="Comedy · Mobile · John Mulaney" width={390} height={844}>
+          <ArtistM v="comedy"/>
+        </DCArtboard>
+        <DCArtboard id="artist-comedy-w" label="Comedy · Web" width={1440} height={900}>
+          <ArtistW v="comedy"/>
+        </DCArtboard>
+        <DCArtboard id="artist-theatre-m" label="Theatre · Mobile · Hadestown" width={390} height={844}>
+          <ArtistM v="theatre"/>
+        </DCArtboard>
+        <DCArtboard id="artist-theatre-w" label="Theatre · Web" width={1440} height={900}>
+          <ArtistW v="theatre"/>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ── 04 · Show detail — per-kind ───────────────────── */}
+      <DCSection id="detail" title="04 · Show detail · per-kind" subtitle="One detail layout adapts per kind. Source-of-truth fields (setlist.fm, Playbill, Wikipedia) are badged — the user never types them.">
+        <DCArtboard id="detail-concert-m" label="Concert · Mobile · Fontaines D.C." width={390} height={844}>
+          <DetailMobile v="concert"/>
+        </DCArtboard>
+        <DCArtboard id="detail-concert-w" label="Concert · Web" width={1440} height={900}>
+          <DetailWeb v="concert"/>
+        </DCArtboard>
+        <DCArtboard id="detail-comedy-m" label="Comedy · Mobile · John Mulaney" width={390} height={844}>
+          <DetailMobile v="comedy"/>
+        </DCArtboard>
+        <DCArtboard id="detail-comedy-w" label="Comedy · Web" width={1440} height={900}>
+          <DetailWeb v="comedy"/>
+        </DCArtboard>
+        <DCArtboard id="detail-theatre-m" label="Theatre · Mobile · Hadestown" width={390} height={844}>
+          <DetailMobile v="theatre"/>
+        </DCArtboard>
+        <DCArtboard id="detail-theatre-w" label="Theatre · Web" width={1440} height={900}>
+          <DetailWeb v="theatre"/>
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+setTimeout(() => {
+  ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+}, 50);
+</script>
+</body>
+</html>

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Showbook · v2</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  html, body { margin:0; padding:0; background:#E6E2DA; font-family:"Geist", ui-sans-serif, system-ui, sans-serif; }
+  body { min-height:100vh; }
+  * { box-sizing:border-box; }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<!-- Scaffolding -->
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="browser-window.jsx"></script>
+<script type="text/babel" src="hifi/sb-tokens.jsx"></script>
+<script type="text/babel" src="hifi/shared-data.jsx"></script>
+
+<!-- v2 shell + new pages -->
+<script type="text/babel" src="hifi/v2-shell.jsx"></script>
+<script type="text/babel" src="hifi/v2-home.jsx"></script>
+<script type="text/babel" src="hifi/v2-shows.jsx"></script>
+
+<!-- Existing Add flows (kept as-is: mobile form, mobile chat, web form, web chat) -->
+<script type="text/babel" src="hifi/add-mobile.jsx"></script>
+<script type="text/babel" src="hifi/add-web.jsx"></script>
+<script type="text/babel" src="hifi/add-chat.jsx"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { DesignCanvas, DCSection, DCArtboard } = window;
+const { IOSDevice, ChromeWindow } = window;
+
+function Phone({children}) {
+  return (
+    <IOSDevice width={390} height={844}>
+      <div style={{height:'100%', width:'100%', overflow:'hidden'}}>{children}</div>
+    </IOSDevice>
+  );
+}
+function Web({children, url='showbook.app', title='showbook', width=1440, height=900}) {
+  return (
+    <ChromeWindow width={width} height={height} url={url} tabs={[{title}]}>
+      {children}
+    </ChromeWindow>
+  );
+}
+
+function App() {
+  return (
+    <DesignCanvas
+      title="Showbook · v2"
+      subtitle="Consolidation pass · sidebar collapses to Home / Shows / Map / Artists / Add · slim Home + unified Shows (list · calendar · stats)"
+    >
+      {/* 01 · Home — slim */}
+      <DCSection id="home" title="01 · Home — slim" subtitle="Only what Home can do: Next up + Recent 5. Rhythm/map/most-seen moved to Shows → Stats. Sidebar collapsed to 4 items.">
+        <DCArtboard id="home-m" label="Mobile · slim Home" width={390} height={844}>
+          <Phone><window.HomeV2Mobile/></Phone>
+        </DCArtboard>
+        <DCArtboard id="home-w" label="Web · slim Home · 1440×900" width={1440} height={900}>
+          <Web width={1440} height={900} url="showbook.app" title="showbook">
+            <window.HomeV2Web/>
+          </Web>
+        </DCArtboard>
+      </DCSection>
+
+      {/* 02 · Shows — unified (List / Calendar / Stats) */}
+      <DCSection id="shows" title="02 · Shows — unified" subtitle="Replaces Archive + Upcoming + Stats. One page, three modes. Segmented control is live — click to switch.">
+        <DCArtboard id="shows-list-w" label="Web · List mode" width={1440} height={900}>
+          <Web width={1440} height={900} url="showbook.app/shows" title="showbook · shows">
+            <window.ShowsV2Web initialMode="list"/>
+          </Web>
+        </DCArtboard>
+        <DCArtboard id="shows-cal-w" label="Web · Calendar mode" width={1440} height={900}>
+          <Web width={1440} height={900} url="showbook.app/shows?mode=calendar" title="showbook · calendar">
+            <window.ShowsV2Web initialMode="calendar"/>
+          </Web>
+        </DCArtboard>
+        <DCArtboard id="shows-stats-w" label="Web · Stats mode" width={1440} height={1100}>
+          <Web width={1440} height={1100} url="showbook.app/shows?mode=stats" title="showbook · stats">
+            <window.ShowsV2Web initialMode="stats"/>
+          </Web>
+        </DCArtboard>
+        <DCArtboard id="shows-list-m" label="Mobile · List" width={390} height={844}>
+          <Phone><window.ShowsV2Mobile initialMode="list"/></Phone>
+        </DCArtboard>
+        <DCArtboard id="shows-cal-m" label="Mobile · Calendar" width={390} height={844}>
+          <Phone><window.ShowsV2Mobile initialMode="calendar"/></Phone>
+        </DCArtboard>
+        <DCArtboard id="shows-stats-m" label="Mobile · Stats" width={390} height={844}>
+          <Phone><window.ShowsV2Mobile initialMode="stats"/></Phone>
+        </DCArtboard>
+      </DCSection>
+
+      {/* 03 · Add — both forms + both chats, both surfaces */}
+      <DCSection id="add" title="03 · Add a show" subtitle="Structured form + conversational chat, mobile + web. Per your call, all four are kept.">
+        <DCArtboard id="add-form-m" label="Mobile · Form" width={390} height={844}>
+          <Phone><window.AddMobile/></Phone>
+        </DCArtboard>
+        <DCArtboard id="add-chat-m" label="Mobile · Chat" width={390} height={844}>
+          <Phone><window.AddChatMobile/></Phone>
+        </DCArtboard>
+        <DCArtboard id="add-form-w" label="Web · Form" width={1440} height={900}>
+          <Web width={1440} height={900} url="showbook.app/add" title="showbook · add">
+            <window.AddWeb/>
+          </Web>
+        </DCArtboard>
+        <DCArtboard id="add-chat-w" label="Web · Chat" width={1440} height={900}>
+          <Web width={1440} height={900} url="showbook.app/add?mode=chat" title="showbook · add · chat">
+            <window.AddChatWeb/>
+          </Web>
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+setTimeout(() => {
+  ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+}, 50);
+</script>
+</body>
+</html>
