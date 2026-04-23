@@ -1,4 +1,7 @@
 import PgBoss from 'pg-boss';
+import { runDiscoverIngest } from './discover-ingest';
+import { runSetlistRetry } from './setlist-retry';
+import { runShowsNightly } from './shows-nightly';
 
 // Job names
 export const JOBS = {
@@ -8,18 +11,29 @@ export const JOBS = {
   NOTIFICATIONS_DIGEST: 'notifications/digest',
 } as const;
 
-// Stub handlers (actual logic implemented in Wave 4)
 async function showsNightlyHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
     console.log(`[${JOBS.SHOWS_NIGHTLY}] Running nightly state transitions...`, job.id);
-    // T25: actual implementation
+    const result = await runShowsNightly();
+    console.log(
+      `[${JOBS.SHOWS_NIGHTLY}] Done: ${result.transitioned} transitioned, ${result.queued} queued for enrichment, ${result.deleted} deleted`
+    );
   }
 }
 
 async function setlistRetryHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
-    console.log(`[${JOBS.SETLIST_RETRY}] Running setlist enrichment retry...`, job.id);
-    // T26: actual implementation
+    console.log(`[${JOBS.SETLIST_RETRY}] Starting setlist enrichment retry...`, job.id);
+    try {
+      const result = await runSetlistRetry();
+      console.log(
+        `[${JOBS.SETLIST_RETRY}] Complete: ${result.processed} processed, ` +
+        `${result.enriched} enriched, ${result.failed} failed, ${result.givenUp} given up`,
+      );
+    } catch (error) {
+      console.error(`[${JOBS.SETLIST_RETRY}] Fatal error:`, error);
+      throw error;
+    }
   }
 }
 
