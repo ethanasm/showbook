@@ -8,6 +8,7 @@
     "@showbook/db": "workspace:*",
     "@showbook/shared": "workspace:*",
     "@trpc/server": "^11.0.0",
+    "drizzle-orm": "^0.39.0",
     "groq-sdk": "^1.1.2"
   },
   "devDependencies": {
