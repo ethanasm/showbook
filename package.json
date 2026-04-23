@@ -12,6 +12,7 @@
     "test:e2e": "pnpm --filter web playwright test"
   },
   "devDependencies": {
+    "@types/node": "^22.19.17",
     "nx": "^20.4.0",
     "typescript": "^5.7.0"
   }
