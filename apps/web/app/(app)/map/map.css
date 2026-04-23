@@ -1,0 +1,276 @@
+/* ---------------------------------------------------------------------------
+   Map page — full-bleed layout
+   --------------------------------------------------------------------------- */
+
+.map-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex: 1;
+}
+
+.map-leaflet {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+/* Override Leaflet's default background */
+.map-leaflet .leaflet-container {
+  background: var(--bg);
+}
+
+/* ---------------------------------------------------------------------------
+   Loading / empty states
+   --------------------------------------------------------------------------- */
+
+.map-loading,
+.map-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
+  font-size: 15px;
+  text-align: center;
+  padding: 24px;
+}
+
+/* ---------------------------------------------------------------------------
+   Venue Inspector Panel — desktop (right side slide-in)
+   --------------------------------------------------------------------------- */
+
+.venue-inspector {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 360px;
+  height: 100%;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  animation: slideInRight 0.2s ease-out;
+  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Inspector header
+   --------------------------------------------------------------------------- */
+
+.venue-inspector__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.venue-inspector__name {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.venue-inspector__city {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 4px 0 0;
+}
+
+.venue-inspector__close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.venue-inspector__close:hover {
+  color: var(--text-primary);
+}
+
+/* ---------------------------------------------------------------------------
+   Inspector stats
+   --------------------------------------------------------------------------- */
+
+.venue-inspector__stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.venue-inspector__show-count {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--marquee-gold);
+}
+
+.venue-inspector__kind-breakdown {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* ---------------------------------------------------------------------------
+   Follow button
+   --------------------------------------------------------------------------- */
+
+.venue-inspector__follow-btn {
+  margin: 16px 20px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  font-family: inherit;
+}
+
+.venue-inspector__follow-btn:hover {
+  background: var(--border);
+}
+
+.venue-inspector__follow-btn--following {
+  background: var(--marquee-gold);
+  color: #0c0c0c;
+  border-color: var(--marquee-gold);
+}
+
+.venue-inspector__follow-btn--following:hover {
+  opacity: 0.85;
+}
+
+.venue-inspector__follow-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------------------------
+   Show list in inspector
+   --------------------------------------------------------------------------- */
+
+.venue-inspector__shows {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.venue-inspector__show-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  gap: 12px;
+  transition: background 0.1s;
+}
+
+.venue-inspector__show-row:hover {
+  background: var(--surface-raised);
+}
+
+.venue-inspector__show-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.venue-inspector__show-headliner {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.venue-inspector__show-date {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ---------------------------------------------------------------------------
+   Mobile — bottom sheet style
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 768px) {
+  .venue-inspector {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 50%;
+    max-height: 60vh;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    animation: slideInBottom 0.2s ease-out;
+  }
+
+  @keyframes slideInBottom {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Leaflet popup overrides for dark theme
+   --------------------------------------------------------------------------- */
+
+.leaflet-popup-content-wrapper {
+  background: var(--surface-raised) !important;
+  color: var(--text-primary) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+  font-family: var(--font-geist-sans, "Geist Sans", sans-serif) !important;
+}
+
+.leaflet-popup-content {
+  margin: 10px 14px !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+}
+
+.leaflet-popup-tip {
+  background: var(--surface-raised) !important;
+}
+
+.leaflet-popup-close-button {
+  color: var(--text-secondary) !important;
+}
+
+.leaflet-popup-close-button:hover {
+  color: var(--text-primary) !important;
+}
