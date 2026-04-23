@@ -32,3 +32,6 @@ Thumbs.db
 
 # Nx
 .nx/
+
+# SSL certs
+certs/*.pem

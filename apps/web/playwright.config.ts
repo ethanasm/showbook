@@ -4,7 +4,8 @@ export default defineConfig({
   testDir: './tests',
   outputDir: './test-results',
   use: {
-    baseURL: 'http://localhost:3001',
+    baseURL: 'https://localhost:3001',
+    ignoreHTTPSErrors: true,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
   },

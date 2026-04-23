@@ -14,4 +14,4 @@ RUN pnpm install --no-frozen-lockfile
 COPY . .
 
 EXPOSE 3001
-CMD ["pnpm", "dev"]
+CMD ["node", "apps/web/server.mjs"]

@@ -34,6 +34,13 @@ services:
     volumes:
       - ./apps:/app/apps
       - ./packages:/app/packages
+      - ./certs:/app/certs:ro
+      - /app/node_modules
+      - /app/apps/web/node_modules
+      - /app/packages/db/node_modules
+      - /app/packages/api/node_modules
+      - /app/packages/jobs/node_modules
+      - /app/packages/shared/node_modules
     depends_on:
       postgres:
         condition: service_healthy
