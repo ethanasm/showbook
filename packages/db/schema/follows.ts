@@ -1,4 +1,4 @@
-import { pgTable, primaryKey, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { users } from './users';
 import { venues } from './venues';
 import { performers } from './performers';
@@ -6,7 +6,7 @@ import { performers } from './performers';
 export const userVenueFollows = pgTable(
   'user_venue_follows',
   {
-    userId: uuid('user_id')
+    userId: text('user_id')
       .notNull()
       .references(() => users.id),
     venueId: uuid('venue_id')
@@ -20,7 +20,7 @@ export const userVenueFollows = pgTable(
 export const userPerformerFollows = pgTable(
   'user_performer_follows',
   {
-    userId: uuid('user_id')
+    userId: text('user_id')
       .notNull()
       .references(() => users.id),
     performerId: uuid('performer_id')

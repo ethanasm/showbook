@@ -10,7 +10,7 @@ import { users } from './users';
 
 export const userRegions = pgTable('user_regions', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id')
+  userId: text('user_id')
     .notNull()
     .references(() => users.id),
   cityName: text('city_name').notNull(),

@@ -52,7 +52,7 @@ export function HeroCard({ show }: HeroCardProps) {
       />
       <div className="hero-card__body">
         <div className="hero-card__countdown">
-          Next up &middot; {countdownText(show.date)}
+          Next up · {countdownText(show.date)}
         </div>
         <div className="hero-card__headliner">{show.headliner}</div>
         <div className="hero-card__detail">

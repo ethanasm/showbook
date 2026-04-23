@@ -34,7 +34,7 @@ export const shows = pgTable(
   'shows',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    userId: uuid('user_id')
+    userId: text('user_id')
       .notNull()
       .references(() => users.id),
     kind: kindEnum('kind').notNull(),

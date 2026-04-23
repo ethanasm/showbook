@@ -718,14 +718,38 @@ export default function AddPage() {
         />
       </div>
 
-      {/* TM search results */}
+      {/* Manual entry shortcut for past shows */}
       {debouncedQuery.length >= 2 && (
         <div>
+          <button
+            type="button"
+            style={{
+              ...s.card,
+              border: "1px solid var(--marquee-gold)",
+              marginBottom: 12,
+              textAlign: "left" as const,
+              cursor: "pointer",
+            }}
+            onClick={() => {
+              setHeadliner({ name: headlinerName, tmAttractionId: undefined, imageUrl: undefined });
+              setTmEnriched(false);
+              setSelectedTmEvent(null);
+              setStep(2);
+            }}
+          >
+            <div style={s.cardTitle}>Use &quot;{headlinerName}&quot;</div>
+            <div style={s.cardMeta}>Enter venue, date, and details manually</div>
+          </button>
+
+          {/* TM search results */}
           {tmSearch.isLoading && (
-            <div style={s.searchLoading}>Searching Ticketmaster...</div>
+            <div style={s.searchLoading}>Searching upcoming events...</div>
           )}
           {tmSearch.data && tmSearch.data.length > 0 && (
             <div>
+              <div style={{ fontSize: "0.7rem", color: "var(--foreground-muted)", marginBottom: 8, fontFamily: "var(--font-geist-mono), monospace" }}>
+                Upcoming events from Ticketmaster
+              </div>
               {tmSearch.data.map((result) => (
                 <div
                   key={result.tmEventId}
@@ -755,18 +779,8 @@ export default function AddPage() {
             </div>
           )}
           {tmSearch.data && tmSearch.data.length === 0 && (
-            <div style={s.searchLoading}>No events found</div>
+            <div style={s.searchLoading}>No upcoming events found</div>
           )}
-          <button
-            type="button"
-            style={s.notListed}
-            onClick={() => {
-              setTmEnriched(false);
-              setSelectedTmEvent(null);
-            }}
-          >
-            Not listed? Enter details manually
-          </button>
         </div>
       )}
     </div>

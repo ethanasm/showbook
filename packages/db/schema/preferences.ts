@@ -1,4 +1,4 @@
-import { boolean, pgEnum, pgTable, time, uuid } from 'drizzle-orm/pg-core';
+import { boolean, pgEnum, pgTable, text, time } from 'drizzle-orm/pg-core';
 import { users } from './users';
 
 export const digestFrequencyEnum = pgEnum('digest_frequency', [
@@ -10,7 +10,7 @@ export const digestFrequencyEnum = pgEnum('digest_frequency', [
 export const themeEnum = pgEnum('theme', ['system', 'light', 'dark']);
 
 export const userPreferences = pgTable('user_preferences', {
-  userId: uuid('user_id')
+  userId: text('user_id')
     .primaryKey()
     .references(() => users.id),
   theme: themeEnum('theme').default('system'),

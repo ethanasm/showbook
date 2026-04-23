@@ -45,8 +45,8 @@ export function ShowRow({ show, onClick }: ShowRowProps) {
       <div className="show-row__content">
         <div className="show-row__headliner">{show.headliner}</div>
         <div className="show-row__meta">
-          {show.venue} &middot; {show.date}
-          {show.seat ? ` &middot; ${show.seat}` : ""}
+          {show.venue} · {show.date}
+          {show.seat ? ` · ${show.seat}` : ""}
         </div>
       </div>
       <div className="show-row__right">
