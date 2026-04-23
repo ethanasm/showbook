@@ -6,19 +6,21 @@
     "dev": "next dev --port 3001",
     "build": "next build",
     "start": "next start --port 3001",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@showbook/api": "workspace:*",
+    "@showbook/db": "workspace:*",
+    "@showbook/jobs": "workspace:*",
+    "@showbook/shared": "workspace:*",
+    "geist": "^1.4.1",
     "next": "^15.3.1",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "geist": "^1.4.1",
-    "@showbook/db": "workspace:*",
-    "@showbook/api": "workspace:*",
-    "@showbook/shared": "workspace:*",
-    "@showbook/jobs": "workspace:*"
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@types/node": "^22.0.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",

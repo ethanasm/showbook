@@ -19,6 +19,10 @@ dist/
 test-results/
 playwright-report/
 
+# Playwright
+apps/web/test-results/
+apps/web/playwright-report/
+
 # Docker
 showbook_pgdata/
 
