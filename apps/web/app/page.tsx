@@ -1,23 +1,12 @@
-export default function Home() {
-  return (
-    <main
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: "100vh",
-      }}
-    >
-      <h1
-        style={{
-          fontSize: "3rem",
-          fontWeight: 700,
-          letterSpacing: "-0.02em",
-          color: "var(--marquee-gold)",
-        }}
-      >
-        Showbook
-      </h1>
-    </main>
-  );
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
+
+export default async function RootPage() {
+  const session = await auth();
+
+  if (session) {
+    redirect("/home");
+  } else {
+    redirect("/signin");
+  }
 }
