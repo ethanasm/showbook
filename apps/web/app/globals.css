@@ -1,15 +1,20 @@
 :root {
-  --background: #0C0C0C;
-  --foreground: #FAFAF8;
+  /* Dark mode defaults */
+  --bg: #0C0C0C;
+  --surface: #1A1A1A;
+  --surface-raised: #242424;
+  --border: #2E2E2E;
+  --text-primary: #FAFAF8;
+  --text-secondary: #A0A0A0;
   --marquee-gold: #FFD166;
-}
+  --kind-concert: #3A86FF;
+  --kind-theatre: #E63946;
+  --kind-comedy: #9D4EDD;
+  --kind-festival: #2A9D8F;
 
-@media (prefers-color-scheme: light) {
-  :root {
-    --background: #FAFAF8;
-    --foreground: #0C0C0C;
-    --marquee-gold: #E5A800;
-  }
+  /* Legacy aliases */
+  --background: var(--bg);
+  --foreground: var(--text-primary);
 }
 
 * {
@@ -25,8 +30,8 @@ body {
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
+  color: var(--text-primary);
+  background: var(--bg);
   -webkit-font-smoothing: antialiased;
 }
 

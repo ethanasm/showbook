@@ -11,7 +11,11 @@
     "jsx": "preserve",
     "incremental": true,
     "allowJs": true,
-    "noEmit": true
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    }
   },
   "include": [
     "next-env.d.ts",
