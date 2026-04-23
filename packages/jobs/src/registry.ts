@@ -1,5 +1,6 @@
 import PgBoss from 'pg-boss';
 import { runDiscoverIngest } from './discover-ingest';
+import { runNotificationDigest } from './notifications';
 import { runSetlistRetry } from './setlist-retry';
 import { runShowsNightly } from './shows-nightly';
 
@@ -40,14 +41,31 @@ async function setlistRetryHandler(jobs: PgBoss.Job[]) {
 async function discoverIngestHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
     console.log(`[${JOBS.DISCOVER_INGEST}] Running discovery ingestion...`, job.id);
-    // T27: actual implementation
+    try {
+      const result = await runDiscoverIngest();
+      console.log(
+        `[${JOBS.DISCOVER_INGEST}] Complete: ${result.phase1Events} venue events, ` +
+        `${result.phase2Events} region events, ${result.pruned} pruned`,
+      );
+    } catch (error) {
+      console.error(`[${JOBS.DISCOVER_INGEST}] Fatal error:`, error);
+      throw error;
+    }
   }
 }
 
 async function notificationsDigestHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
     console.log(`[${JOBS.NOTIFICATIONS_DIGEST}] Running notification digest...`, job.id);
-    // T28: actual implementation
+    try {
+      const result = await runNotificationDigest();
+      console.log(
+        `[${JOBS.NOTIFICATIONS_DIGEST}] Complete: ${result.sent} sent, ${result.skipped} skipped`,
+      );
+    } catch (error) {
+      console.error(`[${JOBS.NOTIFICATIONS_DIGEST}] Fatal error:`, error);
+      throw error;
+    }
   }
 }
 
@@ -62,7 +80,8 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   await boss.schedule(JOBS.SHOWS_NIGHTLY, '0 3 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.SETLIST_RETRY, '0 4 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.DISCOVER_INGEST, '0 2 * * *', {}, { tz: 'America/New_York' });
-  // Notifications are per-user, handled differently in T28
+  // Digest runs hourly; each run checks which users have digestTime matching the current hour
+  await boss.schedule(JOBS.NOTIFICATIONS_DIGEST, '0 * * * *', {}, { tz: 'America/New_York' });
 
   console.log('All jobs registered and scheduled');
 }
