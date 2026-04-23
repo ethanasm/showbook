@@ -1,0 +1,36 @@
+:root {
+  --background: #0C0C0C;
+  --foreground: #FAFAF8;
+  --marquee-gold: #FFD166;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --background: #FAFAF8;
+    --foreground: #0C0C0C;
+    --marquee-gold: #E5A800;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}

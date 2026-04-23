@@ -1,1 +1,30 @@
 .idea/
+
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Build
+dist/
+*.tsbuildinfo
+
+# Environment
+.env.local
+.env*.local
+
+# Testing
+test-results/
+playwright-report/
+
+# Docker
+showbook_pgdata/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Nx
+.nx/

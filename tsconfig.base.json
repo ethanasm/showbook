@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "incremental": true,
+    "baseUrl": ".",
+    "paths": {
+      "@showbook/db": ["packages/db/src"],
+      "@showbook/db/*": ["packages/db/src/*"],
+      "@showbook/api": ["packages/api/src"],
+      "@showbook/api/*": ["packages/api/src/*"],
+      "@showbook/jobs": ["packages/jobs/src"],
+      "@showbook/jobs/*": ["packages/jobs/src/*"],
+      "@showbook/shared": ["packages/shared/src"],
+      "@showbook/shared/*": ["packages/shared/src/*"]
+    }
+  },
+  "exclude": ["node_modules", "dist", ".next"]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "@showbook/db",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "drizzle-kit": "drizzle-kit"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.39.0",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.30.0",
+    "typescript": "^5.7.0"
+  }
+}

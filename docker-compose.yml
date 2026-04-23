@@ -1,0 +1,42 @@
+name: showbook
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: showbook-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: showbook
+      POSTGRES_USER: showbook
+      POSTGRES_PASSWORD: showbook_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - showbook_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U showbook"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: showbook-web
+    restart: unless-stopped
+    env_file: .env.local
+    environment:
+      DATABASE_URL: postgresql://showbook:showbook_dev@postgres:5432/showbook
+      PORT: "3001"
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./apps:/app/apps
+      - ./packages:/app/packages
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  showbook_pgdata:
