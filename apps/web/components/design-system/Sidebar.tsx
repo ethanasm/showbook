@@ -7,7 +7,7 @@ interface SidebarProps {
   onNavigate?: (item: string) => void;
 }
 
-const NAV_ITEMS = [
+export const NAV_ITEMS = [
   { id: "home", label: "Home", icon: HomeIcon },
   { id: "discover", label: "Discover", icon: DiscoverIcon },
   { id: "shows", label: "Shows", icon: ShowsIcon },
