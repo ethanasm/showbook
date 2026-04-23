@@ -1,12 +1,13 @@
 import sharp from 'sharp';
 
 export interface ProcessedImage {
-  thumb: Buffer; // 200px wide
-  card: Buffer; // 600px wide
-  full: Buffer; // original resolution
+  thumb: Buffer;
+  card: Buffer;
+  full: Buffer;
 }
 
 export async function processImage(input: Buffer): Promise<ProcessedImage> {
+
   const thumb = await sharp(input)
     .resize(200, null, { fit: 'inside', withoutEnlargement: true })
     .webp({ quality: 80 })

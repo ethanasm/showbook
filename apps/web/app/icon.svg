@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="7" fill="#0C0C0C"/>
+  <g transform="translate(5, 6)">
+    <!-- Ticket stub shape -->
+    <path d="M2 2 Q2 0 4 0 L18 0 Q20 0 20 2 L20 7 Q18 7 18 9 Q18 11 20 11 L20 16 Q20 18 18 18 L4 18 Q2 18 2 16 L2 11 Q4 11 4 9 Q4 7 2 7 Z" fill="none" stroke="#FFD166" stroke-width="1.6"/>
+    <!-- Star/sparkle in center -->
+    <path d="M11 6 L11.8 8.2 L14 9 L11.8 9.8 L11 12 L10.2 9.8 L8 9 L10.2 8.2 Z" fill="#FFD166"/>
+    <!-- Perforation line -->
+    <line x1="7" y1="0.5" x2="7" y2="17.5" stroke="#FFD166" stroke-width="0.8" stroke-dasharray="1.5 1.5" opacity="0.5"/>
+  </g>
+</svg>
