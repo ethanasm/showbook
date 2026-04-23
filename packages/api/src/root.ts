@@ -1,0 +1,18 @@
+import { router } from './trpc';
+import { showsRouter } from './routers/shows';
+import { venuesRouter } from './routers/venues';
+import { performersRouter } from './routers/performers';
+import { discoverRouter } from './routers/discover';
+import { enrichmentRouter } from './routers/enrichment';
+import { preferencesRouter } from './routers/preferences';
+
+export const appRouter = router({
+  shows: showsRouter,
+  venues: venuesRouter,
+  performers: performersRouter,
+  discover: discoverRouter,
+  enrichment: enrichmentRouter,
+  preferences: preferencesRouter,
+});
+
+export type AppRouter = typeof appRouter;
