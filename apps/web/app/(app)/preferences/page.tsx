@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
+import { MapPin, Check, Plus } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useTheme } from "@/components/design-system/ThemeProvider";
 import { SegmentedControl } from "@/components/design-system/SegmentedControl";
@@ -25,7 +27,7 @@ function Toggle({
       onClick={() => onChange(!checked)}
       style={{
         ...toggleStyles.track,
-        background: checked ? "var(--marquee-gold)" : "var(--surface-raised)",
+        background: checked ? "var(--accent)" : "rgba(128,128,128,.3)",
         opacity: disabled ? 0.5 : 1,
         cursor: disabled ? "not-allowed" : "pointer",
       }}
@@ -33,7 +35,8 @@ function Toggle({
       <span
         style={{
           ...toggleStyles.thumb,
-          transform: checked ? "translateX(18px)" : "translateX(2px)",
+          transform: checked ? "translateX(16px)" : "translateX(0px)",
+          background: checked ? "var(--accent-text)" : "rgba(255,255,255,.7)",
         }}
       />
     </button>
@@ -43,47 +46,216 @@ function Toggle({
 const toggleStyles = {
   track: {
     position: "relative" as const,
-    width: 44,
-    height: 26,
-    borderRadius: 13,
-    border: "1px solid var(--border)",
-    padding: 0,
-    transition: "background 0.2s ease",
+    width: 36,
+    height: 20,
+    borderRadius: 10,
+    border: "none",
+    padding: 2,
+    transition: "background 0.15s ease",
     flexShrink: 0,
+    display: "flex",
+    alignItems: "center" as const,
   },
   thumb: {
     display: "block",
-    position: "absolute" as const,
-    top: 3,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    background: "#FFFFFF",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-    transition: "transform 0.2s ease",
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    transition: "all 0.15s ease",
   },
 };
+
+// ── Section Header ────────────────────────────────────────
+
+function SectionHead({
+  label,
+  sub,
+}: {
+  label: string;
+  sub?: string;
+}) {
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div
+        style={{
+          fontFamily: "var(--font-geist-mono)",
+          fontSize: 11,
+          color: "var(--ink)",
+          letterSpacing: ".1em",
+          textTransform: "uppercase",
+          fontWeight: 500,
+        }}
+      >
+        {label}
+      </div>
+      {sub && (
+        <div
+          style={{
+            fontFamily: "var(--font-geist-mono)",
+            fontSize: 10.5,
+            color: "var(--faint)",
+            marginTop: 3,
+            letterSpacing: ".04em",
+          }}
+        >
+          {sub}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Setting Row ────────────────────────────────────────────
 
 function SettingRow({
   label,
   description,
+  last,
   children,
 }: {
   label: string;
   description?: string;
+  last?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <div style={styles.settingRow}>
-      <div style={styles.settingInfo}>
-        <span style={styles.settingLabel}>{label}</span>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 16,
+        padding: "14px 0",
+        borderBottom: last ? "none" : "1px solid var(--rule)",
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontFamily: "var(--font-geist-sans)",
+            fontSize: 14,
+            fontWeight: 500,
+            color: "var(--ink)",
+            letterSpacing: -0.15,
+          }}
+        >
+          {label}
+        </div>
         {description && (
-          <span style={styles.settingDescription}>{description}</span>
+          <div
+            style={{
+              fontFamily: "var(--font-geist-mono)",
+              fontSize: 10.5,
+              color: "var(--muted)",
+              marginTop: 3,
+              letterSpacing: ".04em",
+            }}
+          >
+            {description}
+          </div>
         )}
       </div>
-      <div style={styles.settingControl}>{children}</div>
+      <div style={{ flexShrink: 0 }}>{children}</div>
+    </div>
+  );
+}
+
+// ── Region Chip ───────────────────────────────────────────
+
+function RegionChip({
+  name,
+  radius,
+  active,
+  onToggle,
+  onRemove,
+  disabled,
+}: {
+  name: string;
+  radius: number;
+  active: boolean;
+  onToggle: () => void;
+  onRemove: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        padding: "10px 14px",
+        border: active
+          ? "1.5px solid var(--accent)"
+          : "1px solid var(--rule-strong)",
+        background: active ? "var(--accent-faded)" : "transparent",
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.5 : 1,
+      }}
+      onClick={() => !disabled && onToggle()}
+    >
+      <MapPin
+        size={14}
+        color={active ? "var(--accent)" : "var(--faint)"}
+      />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontFamily: "var(--font-geist-sans)",
+            fontSize: 13,
+            fontWeight: active ? 600 : 500,
+            color: "var(--ink)",
+            letterSpacing: -0.1,
+          }}
+        >
+          {name}
+        </div>
+        <div
+          style={{
+            fontFamily: "var(--font-geist-mono)",
+            fontSize: 10,
+            color: "var(--faint)",
+            marginTop: 2,
+          }}
+        >
+          {radius}mi radius
+        </div>
+      </div>
+      {active && <Check size={14} color="var(--accent)" />}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!disabled) onRemove();
+        }}
+        disabled={disabled}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 24,
+          height: 24,
+          border: "none",
+          background: "transparent",
+          color: "var(--faint)",
+          cursor: disabled ? "not-allowed" : "pointer",
+          padding: 0,
+        }}
+        aria-label={`Remove ${name}`}
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
     </div>
   );
 }
@@ -95,6 +267,7 @@ function AddRegionForm({ onAdd }: { onAdd: () => void }) {
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
   const [radius, setRadius] = useState("25");
+  const [expanded, setExpanded] = useState(false);
 
   const addRegion = trpc.preferences.addRegion.useMutation({
     onSuccess: () => {
@@ -102,6 +275,7 @@ function AddRegionForm({ onAdd }: { onAdd: () => void }) {
       setLatitude("");
       setLongitude("");
       setRadius("25");
+      setExpanded(false);
       onAdd();
     },
   });
@@ -113,75 +287,169 @@ function AddRegionForm({ onAdd }: { onAdd: () => void }) {
     radius !== "" &&
     !addRegion.isPending;
 
+  if (!expanded) {
+    return (
+      <div
+        onClick={() => setExpanded(true)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          fontFamily: "var(--font-geist-mono)",
+          fontSize: 10.5,
+          color: "var(--accent)",
+          letterSpacing: ".04em",
+          cursor: "pointer",
+          marginTop: 12,
+        }}
+      >
+        <Plus size={11} color="var(--accent)" /> Add a region
+      </div>
+    );
+  }
+
   return (
-    <div style={styles.addRegionForm}>
-      <div style={styles.addRegionGrid}>
-        <div style={styles.inputGroup}>
-          <label style={styles.inputLabel}>City</label>
+    <div style={{ marginTop: 16 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 12,
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <label style={formStyles.inputLabel}>City</label>
           <input
             type="text"
             value={cityName}
             onChange={(e) => setCityName(e.target.value)}
             placeholder="e.g. Nashville"
-            style={styles.input}
+            style={formStyles.input}
           />
         </div>
-        <div style={styles.inputGroup}>
-          <label style={styles.inputLabel}>Latitude</label>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <label style={formStyles.inputLabel}>Latitude</label>
           <input
             type="number"
             value={latitude}
             onChange={(e) => setLatitude(e.target.value)}
             placeholder="36.1627"
             step="any"
-            style={styles.input}
+            style={formStyles.input}
           />
         </div>
-        <div style={styles.inputGroup}>
-          <label style={styles.inputLabel}>Longitude</label>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <label style={formStyles.inputLabel}>Longitude</label>
           <input
             type="number"
             value={longitude}
             onChange={(e) => setLongitude(e.target.value)}
             placeholder="-86.7816"
             step="any"
-            style={styles.input}
+            style={formStyles.input}
           />
         </div>
-        <div style={styles.inputGroup}>
-          <label style={styles.inputLabel}>Radius (miles)</label>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <label style={formStyles.inputLabel}>Radius (miles)</label>
           <input
             type="number"
             value={radius}
             onChange={(e) => setRadius(e.target.value)}
             min="1"
             max="200"
-            style={styles.input}
+            style={formStyles.input}
           />
         </div>
       </div>
-      <button
-        type="button"
-        disabled={!canSubmit}
-        onClick={() =>
-          addRegion.mutate({
-            cityName: cityName.trim(),
-            latitude: parseFloat(latitude),
-            longitude: parseFloat(longitude),
-            radiusMiles: parseInt(radius, 10),
-          })
-        }
-        style={{
-          ...styles.addButton,
-          opacity: canSubmit ? 1 : 0.4,
-          cursor: canSubmit ? "pointer" : "not-allowed",
-        }}
-      >
-        {addRegion.isPending ? "Adding..." : "Add Region"}
-      </button>
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button
+          type="button"
+          disabled={!canSubmit}
+          onClick={() =>
+            addRegion.mutate({
+              cityName: cityName.trim(),
+              latitude: parseFloat(latitude),
+              longitude: parseFloat(longitude),
+              radiusMiles: parseInt(radius, 10),
+            })
+          }
+          style={{
+            ...formStyles.addButton,
+            opacity: canSubmit ? 1 : 0.4,
+            cursor: canSubmit ? "pointer" : "not-allowed",
+          }}
+        >
+          {addRegion.isPending ? "Adding..." : "Add Region"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          style={formStyles.cancelButton}
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
+
+const formStyles: Record<string, React.CSSProperties> = {
+  inputLabel: {
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: "0.7rem",
+    fontWeight: 500,
+    color: "var(--muted)",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+  input: {
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: "0.85rem",
+    color: "var(--ink)",
+    background: "var(--surface2)",
+    border: "1px solid var(--rule)",
+    borderRadius: 0,
+    padding: "8px 12px",
+    outline: "none",
+    width: "100%",
+  },
+  addButton: {
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    color: "var(--accent-text)",
+    background: "var(--accent)",
+    border: "none",
+    borderRadius: 0,
+    padding: "8px 16px",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    transition: "opacity 0.15s ease",
+  },
+  cancelButton: {
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: "0.75rem",
+    fontWeight: 500,
+    color: "var(--muted)",
+    background: "transparent",
+    border: "1px solid var(--rule-strong)",
+    borderRadius: 0,
+    padding: "8px 16px",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    cursor: "pointer",
+    transition: "opacity 0.15s ease",
+  },
+};
+
+// ── Data Source Row ────────────────────────────────────────
+
+const DATA_SOURCES = [
+  { name: "setlist.fm", desc: "Setlists, tour info, song data", connected: true },
+  { name: "Ticketmaster", desc: "Venue, date, seat, pricing", connected: true },
+  { name: "Playbill", desc: "Theatre cast on the night", connected: true },
+  { name: "Wikipedia", desc: "Material context, album info", connected: false },
+] as const;
 
 // ── Main Page ──────────────────────────────────────────────
 
@@ -206,6 +474,7 @@ function displayToDigest(display: string): string {
 
 export default function PreferencesPage() {
   const { theme: currentTheme, setTheme } = useTheme();
+  const { data: session } = useSession();
 
   const prefsQuery = trpc.preferences.get.useQuery();
   const venuesQuery = trpc.venues.followed.useQuery();
@@ -234,190 +503,316 @@ export default function PreferencesPage() {
   const prefs = prefsQuery.data?.preferences;
   const regions = prefsQuery.data?.regions ?? [];
   const venues = venuesQuery.data ?? [];
+  const userEmail = session?.user?.email ?? "";
 
   return (
     <div style={styles.container}>
-      <h1 style={styles.pageTitle}>Preferences</h1>
+      {/* Header */}
+      <div style={styles.header}>
+        <div style={styles.headerLabel}>Settings</div>
+        <h1 style={styles.pageTitle}>Preferences</h1>
+      </div>
 
-      {/* ── Appearance ───────────────────────────────── */}
-      <section style={styles.card}>
-        <h2 style={styles.sectionTitle}>Appearance</h2>
+      <div style={styles.content}>
+        <div style={styles.contentInner}>
 
-        <SettingRow label="Theme">
-          <SegmentedControl
-            options={THEME_OPTIONS}
-            selected={themeToDisplay(currentTheme)}
-            onChange={(value) => {
-              const t = displayToTheme(value);
-              setTheme(t);
-              updatePrefs.mutate({ theme: t });
-            }}
-          />
-        </SettingRow>
-
-        <SettingRow
-          label="Compact mode"
-          description="Use smaller spacing in show lists"
-        >
-          <Toggle
-            checked={prefs?.compactMode ?? false}
-            onChange={(value) => updatePrefs.mutate({ compactMode: value })}
-            disabled={updatePrefs.isPending}
-          />
-        </SettingRow>
-      </section>
-
-      {/* ── Notifications ────────────────────────────── */}
-      <section style={styles.card}>
-        <h2 style={styles.sectionTitle}>Notifications</h2>
-
-        <SettingRow label="Email notifications">
-          <Toggle
-            checked={prefs?.emailNotifications ?? false}
-            onChange={(value) =>
-              updatePrefs.mutate({ emailNotifications: value })
-            }
-            disabled={updatePrefs.isPending}
-          />
-        </SettingRow>
-
-        <SettingRow label="Push notifications">
-          <Toggle
-            checked={prefs?.pushNotifications ?? false}
-            onChange={(value) =>
-              updatePrefs.mutate({ pushNotifications: value })
-            }
-            disabled={updatePrefs.isPending}
-          />
-        </SettingRow>
-
-        <SettingRow
-          label="Show-day reminder"
-          description="Get notified on the day of a show"
-        >
-          <Toggle
-            checked={prefs?.showDayReminder ?? false}
-            onChange={(value) => updatePrefs.mutate({ showDayReminder: value })}
-            disabled={updatePrefs.isPending}
-          />
-        </SettingRow>
-
-        <SettingRow label="Digest frequency">
-          <SegmentedControl
-            options={DIGEST_OPTIONS}
-            selected={digestToDisplay(prefs?.digestFrequency ?? "off")}
-            onChange={(value) =>
-              updatePrefs.mutate({
-                digestFrequency: displayToDigest(value) as
-                  | "daily"
-                  | "weekly"
-                  | "off",
-              })
-            }
-          />
-        </SettingRow>
-
-        <SettingRow label="Digest time">
-          <input
-            type="time"
-            value={prefs?.digestTime ?? "09:00"}
-            onChange={(e) =>
-              updatePrefs.mutate({ digestTime: e.target.value })
-            }
-            style={styles.timeInput}
-          />
-        </SettingRow>
-      </section>
-
-      {/* ── Regions ──────────────────────────────────── */}
-      <section style={styles.card}>
-        <h2 style={styles.sectionTitle}>Regions</h2>
-
-        {regions.length > 0 ? (
-          <div style={styles.listContainer}>
-            {regions.map((region) => (
-              <div key={region.id} style={styles.listItem}>
-                <div style={styles.listItemInfo}>
-                  <span style={styles.listItemName}>{region.cityName}</span>
-                  <span style={styles.listItemMeta}>
-                    {region.radiusMiles} miles
-                  </span>
-                </div>
-                <div style={styles.listItemActions}>
-                  <Toggle
-                    checked={region.active}
-                    onChange={() =>
-                      toggleRegion.mutate({ regionId: region.id })
-                    }
-                    disabled={toggleRegion.isPending}
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      removeRegion.mutate({ regionId: region.id })
-                    }
-                    disabled={removeRegion.isPending}
-                    style={styles.removeButton}
-                    aria-label={`Remove ${region.cityName}`}
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ))}
+          {/* ── Account ─────────────────────────────── */}
+          <SectionHead label="Account" sub="your login" />
+          <div style={styles.card}>
+            <SettingRow label="Email" description="for digests and account recovery" last>
+              <span style={styles.emailDisplay}>{userEmail}</span>
+            </SettingRow>
           </div>
-        ) : (
-          <p style={styles.emptyText}>No regions configured</p>
-        )}
 
-        <div style={styles.formDivider} />
-        <h3 style={styles.subSectionTitle}>Add Region</h3>
-        <AddRegionForm onAdd={() => prefsQuery.refetch()} />
-      </section>
+          {/* ── Appearance ───────────────────────────── */}
+          <SectionHead label="Appearance" sub="theme and display" />
+          <div style={styles.card}>
+            <SettingRow label="Theme" description="applies to all pages">
+              <SegmentedControl
+                options={THEME_OPTIONS}
+                selected={themeToDisplay(currentTheme)}
+                onChange={(value) => {
+                  const t = displayToTheme(value);
+                  setTheme(t);
+                  updatePrefs.mutate({ theme: t });
+                }}
+              />
+            </SettingRow>
 
-      {/* ── Followed Venues ──────────────────────────── */}
-      <section style={styles.card}>
-        <h2 style={styles.sectionTitle}>Followed Venues</h2>
+            <SettingRow
+              label="Compact mode"
+              description="denser rows in list views"
+              last
+            >
+              <Toggle
+                checked={prefs?.compactMode ?? false}
+                onChange={(value) => updatePrefs.mutate({ compactMode: value })}
+                disabled={updatePrefs.isPending}
+              />
+            </SettingRow>
+          </div>
 
-        {venues.length > 0 ? (
-          <div style={styles.listContainer}>
-            {venues.map((venue: { id: string; name: string; city?: string }) => (
-              <div key={venue.id} style={styles.listItem}>
-                <div style={styles.listItemInfo}>
-                  <span style={styles.listItemName}>{venue.name}</span>
-                  {venue.city && (
-                    <span style={styles.listItemMeta}>{venue.city}</span>
-                  )}
+          {/* ── Notifications ────────────────────────── */}
+          <SectionHead label="Notifications" sub="how and when we reach you" />
+          <div style={styles.card}>
+            <SettingRow
+              label="Discover digest"
+              description="summary of new announcements from followed venues"
+            >
+              <SegmentedControl
+                options={DIGEST_OPTIONS}
+                selected={digestToDisplay(prefs?.digestFrequency ?? "off")}
+                onChange={(value) =>
+                  updatePrefs.mutate({
+                    digestFrequency: displayToDigest(value) as
+                      | "daily"
+                      | "weekly"
+                      | "off",
+                  })
+                }
+              />
+            </SettingRow>
+
+            <SettingRow label="Digest time" description="when to send the email">
+              <input
+                type="time"
+                value={prefs?.digestTime ?? "09:00"}
+                onChange={(e) =>
+                  updatePrefs.mutate({ digestTime: e.target.value })
+                }
+                style={styles.timeInput}
+              />
+            </SettingRow>
+
+            <SettingRow
+              label="Email notifications"
+              description="new shows, on-sale alerts, venue updates"
+            >
+              <Toggle
+                checked={prefs?.emailNotifications ?? false}
+                onChange={(value) =>
+                  updatePrefs.mutate({ emailNotifications: value })
+                }
+                disabled={updatePrefs.isPending}
+              />
+            </SettingRow>
+
+            <SettingRow
+              label="Push notifications"
+              description="mobile app alerts"
+            >
+              <Toggle
+                checked={prefs?.pushNotifications ?? false}
+                onChange={(value) =>
+                  updatePrefs.mutate({ pushNotifications: value })
+                }
+                disabled={updatePrefs.isPending}
+              />
+            </SettingRow>
+
+            <SettingRow
+              label="Show-day reminder"
+              description="morning of the show - doors, seat, venue"
+              last
+            >
+              <Toggle
+                checked={prefs?.showDayReminder ?? false}
+                onChange={(value) =>
+                  updatePrefs.mutate({ showDayReminder: value })
+                }
+                disabled={updatePrefs.isPending}
+              />
+            </SettingRow>
+          </div>
+
+          {/* ── Regions ──────────────────────────────── */}
+          <SectionHead label="Regions" sub="where to look for nearby shows" />
+          <div style={{ ...styles.card, padding: "16px 20px" }}>
+            {regions.length > 0 ? (
+              <>
+                <div style={styles.regionGrid}>
+                  {regions.map((region) => (
+                    <RegionChip
+                      key={region.id}
+                      name={region.cityName}
+                      radius={region.radiusMiles}
+                      active={region.active}
+                      onToggle={() =>
+                        toggleRegion.mutate({ regionId: region.id })
+                      }
+                      onRemove={() =>
+                        removeRegion.mutate({ regionId: region.id })
+                      }
+                      disabled={
+                        toggleRegion.isPending || removeRegion.isPending
+                      }
+                    />
+                  ))}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => unfollowVenue.mutate({ venueId: venue.id })}
-                  disabled={unfollowVenue.isPending}
-                  style={styles.unfollowButton}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginTop: 12,
+                  }}
                 >
-                  {unfollowVenue.isPending ? "..." : "Unfollow"}
-                </button>
-              </div>
+                  <AddRegionForm onAdd={() => prefsQuery.refetch()} />
+                  <div
+                    style={{
+                      fontFamily: "var(--font-geist-mono)",
+                      fontSize: 10.5,
+                      color: "var(--faint)",
+                      letterSpacing: ".04em",
+                    }}
+                  >
+                    active regions appear in Discover
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={styles.emptyText}>No regions configured</p>
+                <AddRegionForm onAdd={() => prefsQuery.refetch()} />
+              </>
+            )}
+          </div>
+
+          {/* ── Followed Venues ──────────────────────── */}
+          <SectionHead
+            label="Followed venues"
+            sub="announcements from these venues appear in Discover"
+          />
+          <div style={styles.card}>
+            {venues.length > 0 ? (
+              <>
+                {venues.map(
+                  (
+                    venue: { id: string; name: string; city?: string },
+                    i: number
+                  ) => (
+                    <div
+                      key={venue.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        padding: "12px 0",
+                        borderBottom:
+                          i < venues.length - 1
+                            ? "1px solid var(--rule)"
+                            : "none",
+                      }}
+                    >
+                      <MapPin size={14} color="var(--faint)" />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontFamily: "var(--font-geist-sans)",
+                            fontSize: 13.5,
+                            fontWeight: 500,
+                            color: "var(--ink)",
+                            letterSpacing: -0.15,
+                          }}
+                        >
+                          {venue.name}
+                        </div>
+                        {venue.city && (
+                          <div
+                            style={{
+                              fontFamily: "var(--font-geist-mono)",
+                              fontSize: 10,
+                              color: "var(--faint)",
+                              marginTop: 2,
+                            }}
+                          >
+                            {venue.city.toLowerCase()}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          unfollowVenue.mutate({ venueId: venue.id })
+                        }
+                        disabled={unfollowVenue.isPending}
+                        style={styles.unfollowButton}
+                      >
+                        {unfollowVenue.isPending ? "..." : "Unfollow"}
+                      </button>
+                    </div>
+                  )
+                )}
+              </>
+            ) : (
+              <p style={styles.emptyText}>
+                You&apos;re not following any venues yet
+              </p>
+            )}
+            <div
+              style={{
+                padding: "12px 0",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontFamily: "var(--font-geist-mono)",
+                fontSize: 10.5,
+                color: "var(--accent)",
+                letterSpacing: ".04em",
+                cursor: "pointer",
+              }}
+            >
+              <Plus size={11} color="var(--accent)" /> Follow a venue
+            </div>
+          </div>
+
+          {/* ── Data Sources ─────────────────────────── */}
+          <SectionHead label="Data sources" sub="auto-enrichment for show details" />
+          <div style={styles.card}>
+            {DATA_SOURCES.map((source, i) => (
+              <SettingRow
+                key={source.name}
+                label={source.name}
+                description={source.desc}
+                last={i === DATA_SOURCES.length - 1}
+              >
+                {source.connected ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <Check size={12} color="var(--accent)" />
+                    <span
+                      style={{
+                        fontFamily: "var(--font-geist-mono)",
+                        fontSize: 10.5,
+                        color: "var(--accent)",
+                        fontWeight: 500,
+                      }}
+                    >
+                      Connected
+                    </span>
+                  </div>
+                ) : (
+                  <span
+                    style={{
+                      fontFamily: "var(--font-geist-mono)",
+                      fontSize: 10.5,
+                      color: "var(--faint)",
+                    }}
+                  >
+                    Disconnected
+                  </span>
+                )}
+              </SettingRow>
             ))}
           </div>
-        ) : (
-          <p style={styles.emptyText}>
-            You&apos;re not following any venues yet
-          </p>
-        )}
-      </section>
+
+        </div>
+      </div>
     </div>
   );
 }
@@ -426,206 +821,88 @@ export default function PreferencesPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    maxWidth: 700,
-    margin: "0 auto",
-    padding: "24px 16px 64px",
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
+  },
+  header: {
+    padding: "16px 36px",
+    borderBottom: "1px solid var(--rule)",
+  },
+  headerLabel: {
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: 10.5,
+    color: "var(--muted)",
+    letterSpacing: ".1em",
+    textTransform: "uppercase",
   },
   pageTitle: {
     fontFamily: "var(--font-geist-sans)",
-    fontWeight: 800,
-    fontSize: "1.5rem",
-    color: "var(--text-primary)",
-    letterSpacing: "-0.02em",
-    marginBottom: 24,
+    fontWeight: 600,
+    fontSize: 26,
+    color: "var(--ink)",
+    letterSpacing: -0.9,
+    marginTop: 4,
+  },
+  content: {
+    flex: 1,
+    overflow: "auto",
+    padding: "28px 36px 60px",
+  },
+  contentInner: {
+    maxWidth: 720,
   },
   card: {
     background: "var(--surface)",
-    border: "1px solid var(--border)",
-    borderRadius: 12,
-    padding: "20px 24px",
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: "0.7rem",
-    fontWeight: 600,
-    color: "var(--text-secondary)",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 16,
-  },
-  settingRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 16,
-    padding: "12px 0",
-    borderBottom: "1px solid var(--border)",
-  },
-  settingInfo: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-    minWidth: 0,
-  },
-  settingLabel: {
-    fontFamily: "var(--font-geist-sans)",
-    fontSize: "0.9rem",
-    fontWeight: 500,
-    color: "var(--text-primary)",
-  },
-  settingDescription: {
-    fontFamily: "var(--font-geist-sans)",
-    fontSize: "0.78rem",
-    color: "var(--text-secondary)",
-  },
-  settingControl: {
-    flexShrink: 0,
-  },
-  listContainer: {
-    display: "flex",
-    flexDirection: "column",
-  },
-  listItem: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    padding: "12px 0",
-    borderBottom: "1px solid var(--border)",
-  },
-  listItemInfo: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-    minWidth: 0,
-  },
-  listItemName: {
-    fontFamily: "var(--font-geist-sans)",
-    fontSize: "0.9rem",
-    fontWeight: 500,
-    color: "var(--text-primary)",
-  },
-  listItemMeta: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: "0.75rem",
-    color: "var(--text-secondary)",
-  },
-  listItemActions: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    flexShrink: 0,
-  },
-  removeButton: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    border: "1px solid var(--border)",
-    background: "transparent",
-    color: "var(--text-secondary)",
-    cursor: "pointer",
-    transition: "all 0.15s ease",
-  },
-  unfollowButton: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: "0.75rem",
-    fontWeight: 500,
-    color: "var(--text-secondary)",
-    background: "transparent",
-    border: "1px solid var(--border)",
-    borderRadius: 6,
-    padding: "6px 12px",
-    cursor: "pointer",
-    transition: "all 0.15s ease",
-    flexShrink: 0,
-  },
-  formDivider: {
-    height: 1,
-    background: "var(--border)",
-    margin: "16px 0",
-  },
-  subSectionTitle: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: "0.7rem",
-    fontWeight: 600,
-    color: "var(--text-secondary)",
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    marginBottom: 12,
-  },
-  addRegionForm: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-  },
-  addRegionGrid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 12,
-  },
-  inputGroup: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-  },
-  inputLabel: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: "0.7rem",
-    fontWeight: 500,
-    color: "var(--text-secondary)",
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-  },
-  input: {
-    fontFamily: "var(--font-geist-sans)",
-    fontSize: "0.85rem",
-    color: "var(--text-primary)",
-    background: "var(--surface-raised)",
-    border: "1px solid var(--border)",
-    borderRadius: 8,
-    padding: "8px 12px",
-    outline: "none",
-    width: "100%",
-  },
-  timeInput: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: "0.85rem",
-    color: "var(--text-primary)",
-    background: "var(--surface-raised)",
-    border: "1px solid var(--border)",
-    borderRadius: 8,
-    padding: "6px 12px",
-    outline: "none",
-    colorScheme: "dark",
-  },
-  addButton: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: "0.8rem",
-    fontWeight: 600,
-    color: "#0C0C0C",
-    background: "var(--marquee-gold)",
-    border: "none",
-    borderRadius: 8,
-    padding: "10px 20px",
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    alignSelf: "flex-start",
-    transition: "opacity 0.15s ease",
+    padding: "4px 20px 4px",
+    marginBottom: 36,
   },
   loading: {
-    color: "var(--text-secondary)",
+    color: "var(--muted)",
     fontFamily: "var(--font-geist-sans)",
     textAlign: "center",
     padding: "48px 0",
   },
   emptyText: {
-    color: "var(--text-secondary)",
+    color: "var(--faint)",
     fontFamily: "var(--font-geist-sans)",
     fontSize: "0.85rem",
     padding: "8px 0",
+  },
+  emailDisplay: {
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: 12,
+    color: "var(--muted)",
+  },
+  regionGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    gap: 10,
+  },
+  unfollowButton: {
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: 10,
+    fontWeight: 500,
+    color: "var(--muted)",
+    background: "transparent",
+    border: "1px solid var(--rule-strong)",
+    borderRadius: 0,
+    padding: "5px 10px",
+    cursor: "pointer",
+    letterSpacing: ".06em",
+    textTransform: "uppercase",
+    transition: "all 0.15s ease",
+    flexShrink: 0,
+  },
+  timeInput: {
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: 13,
+    color: "var(--accent)",
+    background: "transparent",
+    border: "none",
+    padding: "4px 0",
+    outline: "none",
+    fontWeight: 500,
   },
 };
