@@ -12,10 +12,20 @@ import {
   Sidebar,
 } from "@/components/design-system";
 
-function futureDate(daysFromNow: number): string {
+function futureDate(daysFromNow: number): {
+  month: string;
+  day: string;
+  year: string;
+  dow: string;
+} {
   const d = new Date();
   d.setDate(d.getDate() + daysFromNow);
-  return d.toISOString().split("T")[0];
+  return {
+    month: d.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
+    day: String(d.getDate()),
+    year: String(d.getFullYear()),
+    dow: d.toLocaleDateString("en-US", { weekday: "short" }),
+  };
 }
 
 function DevContent() {
@@ -134,8 +144,11 @@ function DevContent() {
                 kind: "concert",
                 state: "past",
                 headliner: "Radiohead",
+                support: ["Caribou"],
                 venue: "Madison Square Garden",
-                date: "2025-11-15",
+                neighborhood: "Midtown",
+                date: { month: "NOV", day: "15", year: "2025", dow: "Sat" },
+                paid: 185,
               }}
             />
             <ShowRow
@@ -144,8 +157,10 @@ function DevContent() {
                 state: "ticketed",
                 headliner: "Hamilton",
                 venue: "Richard Rodgers Theatre",
+                neighborhood: "Times Square",
                 date: futureDate(12),
                 seat: "Orch C-114",
+                paid: 250,
               }}
             />
             <ShowRow
@@ -154,6 +169,7 @@ function DevContent() {
                 state: "watching",
                 headliner: "John Mulaney",
                 venue: "Beacon Theatre",
+                neighborhood: "Upper West Side",
                 date: futureDate(30),
               }}
             />
@@ -165,10 +181,15 @@ function DevContent() {
           <HeroCard
             show={{
               headliner: "Hamilton",
+              support: ["Leslie Odom Jr.", "Daveed Diggs"],
               venue: "Richard Rodgers Theatre",
-              date: futureDate(12),
-              seat: "Orch C-114",
+              city: "New York, NY",
+              seat: "ORCH C-114",
+              paid: 250,
               kind: "theatre",
+              date: futureDate(12),
+              countdown: "in 12 days",
+              hasTix: true,
             }}
           />
         </Section>

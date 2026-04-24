@@ -75,6 +75,35 @@ function formatDateShort(dateStr: string): string {
   });
 }
 
+function toDateParts(dateStr: string): {
+  month: string;
+  day: string;
+  year: string;
+  dow: string;
+} {
+  const d = new Date(dateStr + "T00:00:00");
+  return {
+    month: d.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
+    day: String(d.getDate()),
+    year: String(d.getFullYear()),
+    dow: d.toLocaleDateString("en-US", { weekday: "short" }),
+  };
+}
+
+function getSupport(show: ShowData): string[] {
+  return show.showPerformers
+    .filter((sp) => sp.role === "support")
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((sp) => sp.performer.name);
+}
+
+function getNeighborhood(show: ShowData): string | undefined {
+  const parts: string[] = [];
+  if (show.venue.city) parts.push(show.venue.city);
+  if (show.venue.stateRegion) parts.push(show.venue.stateRegion);
+  return parts.length > 0 ? parts.join(", ") : undefined;
+}
+
 function getYear(dateStr: string): number {
   return new Date(dateStr + "T00:00:00").getFullYear();
 }
@@ -361,9 +390,12 @@ export default function ShowsPage() {
                     kind: show.kind,
                     state: show.state,
                     headliner: getHeadliner(show),
+                    support: getSupport(show),
                     venue: show.venue.name,
-                    date: formatDate(show.date),
+                    neighborhood: getNeighborhood(show),
+                    date: toDateParts(show.date),
                     seat: show.seat ?? undefined,
+                    paid: show.pricePaid ? parseFloat(show.pricePaid) : undefined,
                   }}
                 />
               ))
@@ -624,10 +656,14 @@ export default function ShowsPage() {
                     kind: show.kind,
                     state: show.state,
                     headliner: getHeadliner(show),
+                    support: getSupport(show),
                     venue: show.venue.name,
-                    date: formatDateShort(show.date),
+                    neighborhood: getNeighborhood(show),
+                    date: toDateParts(show.date),
                     seat: show.seat ?? undefined,
+                    paid: show.pricePaid ? parseFloat(show.pricePaid) : undefined,
                   }}
+                  selected={expandedShowId === show.id}
                   onClick={() => handleRowClick(show.id)}
                 />
                 {expandedShowId === show.id && renderDetailPanel(show)}

@@ -19,14 +19,46 @@ function getHeadliner(
   return showPerformers[0]?.performer.name ?? "Unknown Artist";
 }
 
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+function getSupport(
+  showPerformers: {
+    role: string;
+    sortOrder: number;
+    performer: { name: string };
+  }[]
+): string[] {
+  return showPerformers
+    .filter((sp) => sp.role === "support")
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((sp) => sp.performer.name);
+}
+
+function toDateParts(dateStr: string): {
+  month: string;
+  day: string;
+  year: string;
+  dow: string;
+} {
+  const d = new Date(dateStr);
+  return {
+    month: d.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
+    day: String(d.getDate()),
+    year: String(d.getFullYear()),
+    dow: d.toLocaleDateString("en-US", { weekday: "short" }),
+  };
+}
+
+function countdownText(dateStr: string): string {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr);
+  target.setHours(0, 0, 0, 0);
+  const days = Math.ceil(
+    (target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+  );
+  if (days < 0) return `${Math.abs(days)} days ago`;
+  if (days === 0) return "tonight";
+  if (days === 1) return "tomorrow";
+  return `in ${days} days`;
 }
 
 export default function HomePage() {
@@ -70,10 +102,19 @@ export default function HomePage() {
           <HeroCard
             show={{
               headliner: getHeadliner(heroShow.showPerformers),
+              support: getSupport(heroShow.showPerformers),
               venue: heroShow.venue.name,
-              date: heroShow.date,
-              seat: heroShow.seat ?? undefined,
+              city: [heroShow.venue.city, heroShow.venue.stateRegion]
+                .filter(Boolean)
+                .join(", "),
+              seat: heroShow.seat ?? "",
+              paid: heroShow.pricePaid
+                ? parseFloat(heroShow.pricePaid)
+                : 0,
               kind: heroShow.kind,
+              date: toDateParts(heroShow.date),
+              countdown: countdownText(heroShow.date),
+              hasTix: heroShow.state === "ticketed",
             }}
           />
         ) : (
@@ -97,9 +138,19 @@ export default function HomePage() {
                   kind: show.kind,
                   state: show.state,
                   headliner: getHeadliner(show.showPerformers),
+                  support: show.showPerformers
+                    .filter((sp) => sp.role === "support")
+                    .sort((a, b) => a.sortOrder - b.sortOrder)
+                    .map((sp) => sp.performer.name),
                   venue: show.venue.name,
-                  date: formatDate(show.date),
+                  neighborhood: [show.venue.city, show.venue.stateRegion]
+                    .filter(Boolean)
+                    .join(", ") || undefined,
+                  date: toDateParts(show.date),
                   seat: show.seat ?? undefined,
+                  paid: show.pricePaid
+                    ? parseFloat(show.pricePaid)
+                    : undefined,
                 }}
               />
             ))}
