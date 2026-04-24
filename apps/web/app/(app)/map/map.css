@@ -1,31 +1,377 @@
 /* ---------------------------------------------------------------------------
-   Map page — full-bleed layout
+   Map page — rebuilt to match map-web.jsx spec
    --------------------------------------------------------------------------- */
 
-.map-container {
-  position: relative;
+/* ── Page wrapper (column: topbar + filterbar + body) ───────────────────── */
+
+.map-page {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
   min-height: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Top bar ────────────────────────────────────────────────────────────── */
+
+.map-topbar {
+  padding: 14px 32px;
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--rule);
+}
+
+.map-topbar__subtitle {
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.map-topbar__title {
+  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.7px;
+  margin-top: 3px;
+}
+
+.map-topbar__actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.map-topbar__btn-outline {
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+  color: var(--ink);
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.map-topbar__btn-outline:hover {
+  border-color: var(--ink);
+}
+
+.map-topbar__btn-solid {
+  padding: 8px 12px;
+  background: var(--ink);
+  border: none;
+  color: var(--bg);
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.map-topbar__btn-solid:hover {
+  opacity: 0.85;
+}
+
+/* ── Filter bar ─────────────────────────────────────────────────────────── */
+
+.map-filterbar {
+  padding: 14px 32px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.map-filterbar__viewing {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.map-filterbar__viewing-label {
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 9.5px;
+  color: var(--faint);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.map-filterbar__viewing-text {
+  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
+  font-size: 13px;
+  color: var(--muted);
+  letter-spacing: -0.1px;
+}
+
+/* Year toggle group */
+
+.map-filterbar__years {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--rule-strong);
+  background: var(--bg);
+}
+
+.map-filterbar__year-btn {
+  padding: 9px 16px;
+  border: none;
+  border-right: 1px solid var(--rule-strong);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -0.2px;
+  cursor: pointer;
+  font-feature-settings: "tnum";
+}
+
+.map-filterbar__year-btn:last-child {
+  border-right: none;
+}
+
+.map-filterbar__year-btn--active {
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+/* Kind chip buttons */
+
+.map-filterbar__kinds {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.map-filterbar__kind-btn {
+  padding: 6px 11px;
+  border: 1px solid var(--rule-strong);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.map-filterbar__kind-btn--active-all {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+
+.map-filterbar__kind-btn--active-concert {
+  border-color: var(--kind-concert);
+  color: var(--kind-concert);
+}
+
+.map-filterbar__kind-btn--active-theatre {
+  border-color: var(--kind-theatre);
+  color: var(--kind-theatre);
+}
+
+.map-filterbar__kind-btn--active-comedy {
+  border-color: var(--kind-comedy);
+  color: var(--kind-comedy);
+}
+
+.map-filterbar__kind-btn--active-festival {
+  border-color: var(--kind-festival);
+  color: var(--kind-festival);
+}
+
+.map-filterbar__spacer {
   flex: 1;
 }
 
-.map-leaflet {
+.map-filterbar__counts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+/* ── Body: map + inspector row ──────────────────────────────────────────── */
+
+.map-body {
   flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* ── Map area ───────────────────────────────────────────────────────────── */
+
+.map-area {
+  position: relative;
+  flex: 1;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.map-leaflet {
   width: 100%;
   height: 100%;
   z-index: 0;
 }
 
-/* Override Leaflet's default background */
-.map-leaflet .leaflet-container {
-  background: var(--bg);
+/* Override Leaflet's default background for dark tiles */
+.map-leaflet .leaflet-container,
+.leaflet-container {
+  background: #1a1a2e !important;
 }
 
-/* ---------------------------------------------------------------------------
-   Loading / empty states
-   --------------------------------------------------------------------------- */
+/* ── Map overlays ───────────────────────────────────────────────────────── */
+
+/* Legend — bottom-left */
+.map-overlay-legend {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  padding: 12px 14px;
+  min-width: 220px;
+  z-index: 1000;
+}
+
+.map-overlay-legend__title {
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 9.5px;
+  color: var(--faint);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.map-overlay-legend__dots {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.map-overlay-legend__dot-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.map-overlay-legend__dot {
+  border-radius: 999px;
+  background: var(--kind-concert);
+  opacity: 0.85;
+}
+
+.map-overlay-legend__dot-label {
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+/* View toggle — bottom-right */
+.map-overlay-viewtoggle {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  display: flex;
+  z-index: 1000;
+}
+
+.map-overlay-viewtoggle__btn {
+  padding: 8px 14px;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--rule-strong);
+  color: var(--muted);
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.map-overlay-viewtoggle__btn:last-child {
+  border-right: none;
+}
+
+.map-overlay-viewtoggle__btn--active {
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 500;
+}
+
+/* Stats summary — top-right */
+.map-overlay-stats {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  padding: 10px 14px;
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  z-index: 1000;
+}
+
+.map-overlay-stats__value {
+  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
+  font-size: 20px;
+  color: var(--ink);
+  font-weight: 500;
+  letter-spacing: -0.6px;
+  font-feature-settings: "tnum";
+  line-height: 1;
+}
+
+.map-overlay-stats__label {
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 9.5px;
+  color: var(--muted);
+  margin-top: 4px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.map-overlay-stats__divider {
+  width: 1px;
+  height: 24px;
+  background: var(--rule);
+}
+
+/* ── Loading / empty states ─────────────────────────────────────────────── */
 
 .map-loading,
 .map-empty {
@@ -35,31 +381,25 @@
   justify-content: center;
   height: 100%;
   gap: 8px;
-  color: var(--text-secondary);
+  color: var(--muted);
   font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
   font-size: 15px;
   text-align: center;
   padding: 24px;
 }
 
-/* ---------------------------------------------------------------------------
-   Venue Inspector Panel — desktop (right side slide-in)
-   --------------------------------------------------------------------------- */
+/* ── Inspector panel ────────────────────────────────────────────────────── */
 
 .venue-inspector {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 360px;
-  height: 100%;
+  width: 400px;
   background: var(--surface);
-  border-left: 1px solid var(--border);
-  z-index: 1000;
+  border-left: 1px solid var(--rule);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  animation: slideInRight 0.2s ease-out;
+  min-height: 0;
+  flex-shrink: 0;
   font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
+  animation: slideInRight 0.2s ease-out;
 }
 
 @keyframes slideInRight {
@@ -71,187 +411,317 @@
   }
 }
 
-/* ---------------------------------------------------------------------------
-   Inspector header
-   --------------------------------------------------------------------------- */
-
+/* Inspector header */
 .venue-inspector__header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.venue-inspector__header-top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  padding: 20px;
-  border-bottom: 1px solid var(--border);
+}
+
+.venue-inspector__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 10px;
+  color: var(--faint);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 500;
+  margin-bottom: 10px;
 }
 
 .venue-inspector__name {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text-primary);
+  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
+  font-size: 30px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -1.1px;
+  line-height: 1;
   margin: 0;
-  line-height: 1.3;
 }
 
-.venue-inspector__city {
-  font-size: 14px;
-  color: var(--text-secondary);
-  margin: 4px 0 0;
+.venue-inspector__neighborhood {
+  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 8px;
+  letter-spacing: -0.1px;
+}
+
+.venue-inspector__coords {
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 10.5px;
+  color: var(--faint);
+  margin-top: 4px;
+  letter-spacing: 0.04em;
 }
 
 .venue-inspector__close {
   background: none;
   border: none;
-  font-size: 24px;
-  color: var(--text-secondary);
+  font-size: 20px;
+  color: var(--muted);
   cursor: pointer;
   padding: 0 4px;
   line-height: 1;
   flex-shrink: 0;
+  align-self: flex-start;
 }
 
 .venue-inspector__close:hover {
-  color: var(--text-primary);
+  color: var(--ink);
 }
 
-/* ---------------------------------------------------------------------------
-   Inspector stats
-   --------------------------------------------------------------------------- */
-
+/* Stats strip */
 .venue-inspector__stats {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  border-bottom: 1px solid var(--rule);
 }
 
-.venue-inspector__show-count {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--marquee-gold);
+.venue-inspector__stat {
+  padding: 16px 18px;
 }
 
-.venue-inspector__kind-breakdown {
-  font-size: 13px;
-  color: var(--text-secondary);
+.venue-inspector__stat + .venue-inspector__stat {
+  border-left: 1px solid var(--rule);
 }
 
-/* ---------------------------------------------------------------------------
-   Follow button
-   --------------------------------------------------------------------------- */
-
-.venue-inspector__follow-btn {
-  margin: 16px 20px;
-  padding: 10px 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-raised);
-  color: var(--text-primary);
-  font-size: 14px;
+.venue-inspector__stat-value {
+  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
+  font-size: 22px;
   font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-  font-family: inherit;
+  color: var(--ink);
+  letter-spacing: -0.7px;
+  font-feature-settings: "tnum";
+  line-height: 1;
 }
 
-.venue-inspector__follow-btn:hover {
-  background: var(--border);
+.venue-inspector__stat-label {
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 6px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.venue-inspector__follow-btn--following {
-  background: var(--marquee-gold);
-  color: #0c0c0c;
-  border-color: var(--marquee-gold);
+.venue-inspector__stat-sub {
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 9.5px;
+  color: var(--faint);
+  margin-top: 2px;
+  letter-spacing: 0.02em;
 }
 
-.venue-inspector__follow-btn--following:hover {
-  opacity: 0.85;
+/* Kind mix */
+.venue-inspector__kindmix {
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
-.venue-inspector__follow-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.venue-inspector__kindmix-label {
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 10px;
+  color: var(--faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-/* ---------------------------------------------------------------------------
-   Show list in inspector
-   --------------------------------------------------------------------------- */
+.venue-inspector__kindmix-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
 
-.venue-inspector__shows {
+/* Visits list */
+.venue-inspector__visits-header {
+  padding: 12px 24px 8px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.venue-inspector__visits-title {
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 11px;
+  color: var(--ink);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.venue-inspector__visits-count {
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.venue-inspector__visits-list {
   flex: 1;
   overflow-y: auto;
-  padding: 8px 0;
 }
 
-.venue-inspector__show-row {
-  display: flex;
+.venue-inspector__visit-row {
+  display: grid;
+  grid-template-columns: 62px 1fr auto;
+  column-gap: 14px;
+  padding: 12px 24px;
+  border-top: 1px solid var(--rule);
   align-items: center;
-  justify-content: space-between;
-  padding: 10px 20px;
-  gap: 12px;
-  transition: background 0.1s;
 }
 
-.venue-inspector__show-row:hover {
-  background: var(--surface-raised);
+.venue-inspector__visit-date-display {
+  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
+  font-size: 15px;
+  color: var(--ink);
+  font-weight: 500;
+  letter-spacing: -0.3px;
+  line-height: 1;
+  font-feature-settings: "tnum";
 }
 
-.venue-inspector__show-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.venue-inspector__visit-date-year {
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 10px;
+  color: var(--faint);
+  margin-top: 3px;
+  letter-spacing: 0.04em;
+}
+
+.venue-inspector__visit-info {
   min-width: 0;
 }
 
-.venue-inspector__show-headliner {
-  font-size: 14px;
+.venue-inspector__visit-artist {
+  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
+  font-size: 13.5px;
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--ink);
+  letter-spacing: -0.2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.venue-inspector__show-date {
-  font-size: 12px;
-  color: var(--text-secondary);
+.venue-inspector__visit-seat {
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+  letter-spacing: 0.02em;
 }
 
-/* ---------------------------------------------------------------------------
-   Mobile — bottom sheet style
-   --------------------------------------------------------------------------- */
-
-@media (max-width: 768px) {
-  .venue-inspector {
-    top: auto;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    width: 100%;
-    height: 50%;
-    max-height: 60vh;
-    border-left: none;
-    border-top: 1px solid var(--border);
-    border-radius: 16px 16px 0 0;
-    animation: slideInBottom 0.2s ease-out;
-  }
-
-  @keyframes slideInBottom {
-    from {
-      transform: translateY(100%);
-    }
-    to {
-      transform: translateY(0);
-    }
-  }
+.venue-inspector__visit-price {
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+  font-feature-settings: "tnum";
 }
 
-/* ---------------------------------------------------------------------------
-   Leaflet popup overrides for dark theme
-   --------------------------------------------------------------------------- */
+/* CTA buttons */
+.venue-inspector__cta {
+  padding: 14px 24px;
+  border-top: 1px solid var(--rule-strong);
+  display: flex;
+  gap: 10px;
+}
+
+.venue-inspector__cta-follow {
+  padding: 10px 12px;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
+  font-size: 12.5px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.venue-inspector__cta-follow:hover {
+  background: var(--accent-faded);
+}
+
+.venue-inspector__cta-follow--following {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+.venue-inspector__cta-follow--following:hover {
+  opacity: 0.85;
+}
+
+.venue-inspector__cta-follow:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.venue-inspector__cta-outline {
+  flex: 1;
+  padding: 10px 12px;
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+  color: var(--ink);
+  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
+  font-size: 12.5px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.venue-inspector__cta-outline:hover {
+  border-color: var(--ink);
+}
+
+.venue-inspector__cta-solid {
+  flex: 1;
+  padding: 10px 12px;
+  background: var(--ink);
+  color: var(--bg);
+  border: none;
+  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
+  font-size: 12.5px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.venue-inspector__cta-solid:hover {
+  opacity: 0.85;
+}
+
+/* ── Leaflet popup overrides ────────────────────────────────────────────── */
 
 .leaflet-popup-content-wrapper {
-  background: var(--surface-raised) !important;
-  color: var(--text-primary) !important;
+  background: var(--surface2) !important;
+  color: var(--ink) !important;
   border-radius: 8px !important;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
   font-family: var(--font-geist-sans, "Geist Sans", sans-serif) !important;
@@ -264,13 +734,85 @@
 }
 
 .leaflet-popup-tip {
-  background: var(--surface-raised) !important;
+  background: var(--surface2) !important;
 }
 
 .leaflet-popup-close-button {
-  color: var(--text-secondary) !important;
+  color: var(--muted) !important;
 }
 
 .leaflet-popup-close-button:hover {
-  color: var(--text-primary) !important;
+  color: var(--ink) !important;
+}
+
+/* Circle marker count labels — strip default Leaflet tooltip chrome */
+.map-circle-count {
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-weight: 600;
+  text-align: center;
+  pointer-events: none;
+}
+
+.map-circle-count.leaflet-tooltip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  white-space: nowrap;
+}
+
+.map-circle-count.leaflet-tooltip::before {
+  display: none !important;
+}
+
+/* ── Mobile — bottom sheet ──────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .map-page {
+    overflow: hidden;
+  }
+
+  .map-topbar {
+    padding: 10px 16px;
+  }
+
+  .map-topbar__title {
+    font-size: 18px;
+  }
+
+  .map-filterbar {
+    padding: 10px 16px;
+    gap: 12px;
+    overflow-x: auto;
+  }
+
+  .map-body {
+    flex-direction: column;
+  }
+
+  .venue-inspector {
+    position: absolute;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 50%;
+    max-height: 60vh;
+    border-left: none;
+    border-top: 1px solid var(--rule);
+    border-radius: 16px 16px 0 0;
+    z-index: 1000;
+    animation: slideInBottom 0.2s ease-out;
+  }
+
+  @keyframes slideInBottom {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
 }
