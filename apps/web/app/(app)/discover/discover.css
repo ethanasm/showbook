@@ -1,42 +1,551 @@
 /* ── Discover Page ─────────────────────────────────────── */
 
 .discover-page {
-  padding: 24px 32px;
-  max-width: 1200px;
-  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
 }
 
-/* Header */
+/* ── Header ──────────────────────────────────────────── */
+
 .discover-header {
+  padding: 16px 36px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 32px;
-  gap: 16px;
-  flex-wrap: wrap;
+  border-bottom: 1px solid var(--rule);
 }
 
-.discover-title {
+.discover-header__subtitle {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.discover-header__title {
   font-family: var(--font-geist-sans), sans-serif;
-  font-weight: 800;
-  font-size: 1.5rem;
-  color: var(--text-primary);
-  letter-spacing: -0.02em;
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.9px;
+  margin-top: 4px;
 }
 
-/* ── Empty / Loading States ───────────────────────────── */
+.discover-header__location {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.discover-header__location-sep {
+  color: var(--faint);
+}
+
+/* ── Tabs Bar ────────────────────────────────────────── */
+
+.discover-tabs-bar {
+  padding: 11px 36px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+}
+
+.discover-tabs {
+  display: flex;
+  border: 1px solid var(--rule-strong);
+}
+
+.discover-tab {
+  border: none;
+  cursor: pointer;
+  border-right: 1px solid var(--rule-strong);
+  background: transparent;
+  color: var(--ink);
+  padding: 8px 16px;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.12s, color 0.12s;
+}
+
+.discover-tab:last-child {
+  border-right: none;
+}
+
+.discover-tab--active {
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.discover-tab__count {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+.discover-tab--active .discover-tab__count {
+  color: var(--bg);
+  opacity: 0.7;
+}
+
+.discover-tab:not(.discover-tab--active) .discover-tab__count {
+  color: var(--faint);
+}
+
+.discover-tabs-bar__spacer {
+  flex: 1;
+}
+
+/* ── Main Layout ─────────────────────────────────────── */
+
+.discover-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ── Left Rail ───────────────────────────────────────── */
+
+.discover-rail {
+  width: 240px;
+  border-right: 1px solid var(--rule);
+  padding: 16px 0;
+  overflow: auto;
+  flex-shrink: 0;
+  background: var(--bg);
+}
+
+.discover-rail__title {
+  padding: 0 18px 10px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  color: var(--faint);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.discover-rail__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  width: 100%;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.discover-rail__item:hover {
+  background: var(--surface);
+}
+
+.discover-rail__item--active {
+  background: var(--surface);
+  border-left-color: var(--accent);
+}
+
+.discover-rail__item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.discover-rail__item-name {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.discover-rail__item--active .discover-rail__item-name {
+  font-weight: 600;
+}
+
+.discover-rail__item-nbhd {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  color: var(--faint);
+  margin-top: 2px;
+  letter-spacing: 0.04em;
+}
+
+.discover-rail__item-count {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 400;
+  font-feature-settings: "tnum";
+}
+
+.discover-rail__item--active .discover-rail__item-count {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.discover-rail__follow {
+  padding: 14px 18px 4px;
+  border-top: 1px solid var(--rule);
+  margin-top: 10px;
+}
+
+.discover-rail__follow-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.discover-rail__follow-link:hover {
+  color: var(--ink);
+}
+
+/* ── Feed Area ───────────────────────────────────────── */
+
+.discover-feed {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 20px 28px 36px;
+}
+
+/* ── Column Headers ──────────────────────────────────── */
+
+.discover-col-headers {
+  display: grid;
+  grid-template-columns: 72px 100px 1fr 120px 110px 200px;
+  column-gap: 16px;
+  padding: 0 12px 10px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  color: var(--faint);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--rule);
+}
+
+/* ── Venue Group ─────────────────────────────────────── */
+
+.discover-venue-group {
+  margin-top: 18px;
+}
+
+.discover-venue-group__header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 0 12px 8px;
+}
+
+.discover-venue-group__name {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.3px;
+}
+
+.discover-venue-group__meta {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  color: var(--faint);
+  letter-spacing: 0.04em;
+}
+
+.discover-venue-group__rule {
+  flex: 1;
+  border: none;
+  border-bottom: 1px dashed var(--rule);
+  margin-bottom: 3px;
+}
+
+.discover-venue-group__link {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.discover-venue-group__link:hover {
+  color: var(--accent);
+}
+
+/* ── Announcement Row ────────────────────────────────── */
+
+.discover-row {
+  display: grid;
+  grid-template-columns: 72px 100px 1fr 120px 110px 200px;
+  column-gap: 16px;
+  padding: 12px;
+  align-items: center;
+  border-bottom: 1px solid var(--rule);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.discover-row:hover {
+  background: rgba(245, 245, 243, 0.04);
+}
+
+.discover-row--watched {
+  background: var(--accent-faded);
+}
+
+.discover-row--watched:hover {
+  background: var(--accent-faded);
+}
+
+/* Kind-colored left border */
+.discover-row--concert  { border-left: 2px solid var(--kind-concert); }
+.discover-row--theatre  { border-left: 2px solid var(--kind-theatre); }
+.discover-row--comedy   { border-left: 2px solid var(--kind-comedy); }
+.discover-row--festival { border-left: 2px solid var(--kind-festival); }
+
+/* Date column */
+.discover-row__date-main {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 15px;
+  color: var(--ink);
+  font-weight: 500;
+  letter-spacing: -0.3px;
+  line-height: 1;
+  font-feature-settings: "tnum";
+}
+
+.discover-row__date-sub {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  color: var(--faint);
+  margin-top: 3px;
+  letter-spacing: 0.04em;
+}
+
+/* Kind column */
+.discover-row__kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.discover-row__kind--concert  { color: var(--kind-concert); }
+.discover-row__kind--theatre  { color: var(--kind-theatre); }
+.discover-row__kind--comedy   { color: var(--kind-comedy); }
+.discover-row__kind--festival { color: var(--kind-festival); }
+
+/* Headliner column */
+.discover-row__headliner-cell {
+  min-width: 0;
+}
+
+.discover-row__headliner {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.25px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.discover-row__support {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.discover-row__reason {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  color: var(--faint);
+  margin-top: 3px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* On Sale column */
+.discover-row__onsale {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  font-feature-settings: "tnum";
+}
+
+.discover-row__onsale--active {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* Status badge */
+.discover-row__status-badge {
+  display: inline-block;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  padding: 3px 7px;
+}
+
+.discover-row__status-badge--announced {
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+}
+
+.discover-row__status-badge--on_sale {
+  color: var(--bg);
+  border: none;
+}
+
+.discover-row__status-badge--on_sale.discover-row__status-badge--concert  { background: var(--kind-concert); }
+.discover-row__status-badge--on_sale.discover-row__status-badge--theatre  { background: var(--kind-theatre); }
+.discover-row__status-badge--on_sale.discover-row__status-badge--comedy   { background: var(--kind-comedy); }
+.discover-row__status-badge--on_sale.discover-row__status-badge--festival { background: var(--kind-festival); }
+
+.discover-row__status-badge--sold_out {
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+}
+
+/* Actions column */
+.discover-row__actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.discover-watch-btn {
+  padding: 6px 10px;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 11.5px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+
+.discover-watch-btn:hover {
+  border-color: var(--ink);
+}
+
+.discover-watch-btn--watching {
+  background: var(--accent);
+  color: var(--accent-text);
+  border: none;
+}
+
+.discover-watch-btn--watching:hover {
+  opacity: 0.9;
+}
+
+.discover-watch-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.discover-tix-btn {
+  padding: 6px 10px;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 11.5px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+
+.discover-tix-btn:hover {
+  border-color: var(--ink);
+}
+
+/* ── Footer ──────────────────────────────────────────── */
+
+.discover-footer {
+  margin-top: 22px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.discover-footer__right {
+  color: var(--faint);
+}
+
+/* ── Empty / Loading States ──────────────────────────── */
 
 .discover-empty {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 200px;
+  flex: 1;
 }
 
 .discover-empty__text {
   font-family: var(--font-geist-mono), monospace;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
+  font-size: 13px;
+  color: var(--muted);
   text-align: center;
 }
 
@@ -50,7 +559,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--text-secondary);
+  background: var(--muted);
   animation: discover-pulse 1.2s ease-in-out infinite;
 }
 
@@ -75,313 +584,158 @@
   }
 }
 
-/* ── Feed Layout ──────────────────────────────────────── */
+/* ── Mobile: Venue Filter Chips ──────────────────────── */
 
-.feed-layout {
-  display: flex;
-  gap: 24px;
-}
-
-.feed-content {
-  flex: 1;
-  min-width: 0;
-}
-
-/* ── Venue Filter Rail (desktop) ──────────────────────── */
-
-.venue-filter-rail {
-  width: 200px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.venue-filter-rail__title {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 0.65rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  padding: 0 12px;
-  margin-bottom: 8px;
-}
-
-.venue-filter-rail__item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-family: var(--font-geist-sans), sans-serif;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.venue-filter-rail__item:hover {
-  background: var(--surface-raised);
-  color: var(--text-primary);
-}
-
-.venue-filter-rail__item--active {
-  color: var(--marquee-gold);
-  background: color-mix(in srgb, var(--marquee-gold) 10%, transparent);
-}
-
-.venue-filter-rail__item--active:hover {
-  background: color-mix(in srgb, var(--marquee-gold) 15%, transparent);
-  color: var(--marquee-gold);
-}
-
-/* ── Venue Filter Chips (mobile) ──────────────────────── */
-
-.venue-filter-chips {
+.discover-chips {
   display: none;
 }
 
-/* ── Venue Group ──────────────────────────────────────── */
-
-.venue-group {
-  margin-bottom: 28px;
-}
-
-.venue-group__header {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  padding-bottom: 10px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.venue-group__city {
-  font-weight: 400;
-  opacity: 0.6;
-  font-size: 0.65rem;
-}
-
-.venue-group__cards {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* ── Announcement Card ────────────────────────────────── */
-
-.announcement-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px;
-  transition: background 0.15s ease;
-}
-
-.announcement-card:hover {
-  background: var(--surface-raised);
-}
-
-.announcement-card__top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.announcement-card__headliner {
-  font-family: var(--font-geist-sans), sans-serif;
-  font-weight: 700;
-  font-size: 1rem;
-  color: var(--text-primary);
-  line-height: 1.3;
-}
-
-.announcement-card__support {
-  font-family: var(--font-geist-sans), sans-serif;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  margin-top: 2px;
-  line-height: 1.4;
-}
-
-.announcement-card__bottom {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 12px;
-  gap: 12px;
-}
-
-.announcement-card__date {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-}
-
-/* ── On-Sale Badge ────────────────────────────────────── */
-
-.on-sale-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 0.6rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  line-height: 1.6;
-}
-
-.on-sale-badge--announced {
-  color: var(--text-secondary);
-  background: color-mix(in srgb, var(--text-secondary) 12%, transparent);
-}
-
-.on-sale-badge--on_sale {
-  color: #22c55e;
-  background: color-mix(in srgb, #22c55e 12%, transparent);
-}
-
-.on-sale-badge--sold_out {
-  color: #ef4444;
-  background: color-mix(in srgb, #ef4444 12%, transparent);
-}
-
-/* ── Watch Button ─────────────────────────────────────── */
-
-.watch-btn {
-  padding: 6px 16px;
-  border-radius: 999px;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-secondary);
-}
-
-.watch-btn:hover {
-  border-color: var(--text-primary);
-  color: var(--text-primary);
-}
-
-.watch-btn--watching {
-  border-color: var(--marquee-gold);
-  background: var(--marquee-gold);
-  color: #0c0c0c;
-}
-
-.watch-btn--watching:hover {
-  background: color-mix(in srgb, var(--marquee-gold) 85%, transparent);
-  border-color: var(--marquee-gold);
-  color: #0c0c0c;
-}
-
-.watch-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ── Responsive ───────────────────────────────────────── */
+/* ── Responsive ──────────────────────────────────────── */
 
 @media (max-width: 767px) {
-  .discover-page {
-    padding: 16px;
-  }
-
   .discover-header {
-    margin-bottom: 20px;
+    padding: 16px 20px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
   }
 
-  .discover-title {
-    font-size: 1.25rem;
+  .discover-header__location {
+    margin-top: 4px;
+  }
+
+  .discover-tabs-bar {
+    padding: 11px 20px;
+    flex-wrap: wrap;
+    gap: 10px;
   }
 
   /* Hide desktop rail, show mobile chips */
-  .venue-filter-rail {
+  .discover-rail {
     display: none;
   }
 
-  .venue-filter-chips {
+  .discover-chips {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     overflow-x: auto;
-    padding-bottom: 12px;
-    margin-bottom: 8px;
+    padding: 8px 14px 10px;
+    border-bottom: 1px solid var(--rule);
+    flex-shrink: 0;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
 
-  .venue-filter-chips::-webkit-scrollbar {
+  .discover-chips::-webkit-scrollbar {
     display: none;
   }
 
-  .venue-chip {
+  .discover-chip {
     flex-shrink: 0;
-    padding: 6px 14px;
-    border-radius: 999px;
-    font-family: var(--font-geist-mono), monospace;
-    font-size: 0.7rem;
-    font-weight: 500;
-    letter-spacing: 0.02em;
-    border: 1px solid var(--border);
+    padding: 6px 10px;
     background: transparent;
-    color: var(--text-secondary);
+    color: var(--ink);
+    border: 1px solid var(--rule-strong);
+    font-family: var(--font-geist-sans), sans-serif;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: -0.1px;
     cursor: pointer;
-    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     white-space: nowrap;
+    transition: all 0.12s;
   }
 
-  .venue-chip:hover {
-    color: var(--text-primary);
-    border-color: var(--text-primary);
+  .discover-chip--active {
+    background: var(--ink);
+    color: var(--bg);
+    border-color: var(--ink);
+    font-weight: 600;
   }
 
-  .venue-chip--active {
-    background: color-mix(in srgb, var(--marquee-gold) 15%, transparent);
-    border-color: var(--marquee-gold);
-    color: var(--marquee-gold);
+  .discover-chip__count {
+    font-family: var(--font-geist-mono), monospace;
+    font-size: 9.5px;
+    font-weight: 400;
   }
 
-  .feed-layout {
+  .discover-chip--active .discover-chip__count {
+    color: var(--bg);
+    opacity: 0.7;
+  }
+
+  .discover-chip:not(.discover-chip--active) .discover-chip__count {
+    color: var(--faint);
+  }
+
+  /* Feed: switch to mobile 3-col layout */
+  .discover-feed {
+    padding: 0;
+  }
+
+  .discover-col-headers {
+    display: none;
+  }
+
+  .discover-row {
+    display: grid;
+    grid-template-columns: 54px 1fr auto;
+    column-gap: 12px;
+    padding: 12px 20px;
+    border-bottom: none;
+    border-top: 1px solid var(--rule);
+  }
+
+  .discover-row__kind {
+    font-size: 9.5px;
+  }
+
+  .discover-row__date-main {
+    font-size: 18px;
+    letter-spacing: -0.4px;
+  }
+
+  .discover-row__date-sub {
+    font-size: 9px;
+  }
+
+  /* Hide desktop-only columns on mobile */
+  .discover-row__onsale-cell,
+  .discover-row__status-cell {
+    display: none;
+  }
+
+  .discover-row__actions {
     flex-direction: column;
-    gap: 0;
+    align-items: flex-end;
+    gap: 6px;
   }
-}
 
-/* Desktop chip styles (hidden but define for completeness) */
-@media (min-width: 768px) {
-  .venue-chip {
-    padding: 6px 14px;
-    border-radius: 999px;
-    font-family: var(--font-geist-mono), monospace;
-    font-size: 0.7rem;
-    font-weight: 500;
-    letter-spacing: 0.02em;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-    white-space: nowrap;
+  .discover-venue-group__header {
+    padding: 14px 20px 6px;
+    border-top: 1px solid var(--rule);
+  }
+
+  .discover-venue-group__rule {
+    display: none;
+  }
+
+  .discover-venue-group__link {
+    display: none;
+  }
+
+  .discover-footer {
+    margin: 0;
+    border: none;
+    border-top: 1px solid var(--rule);
+    padding: 14px 20px 18px;
+    justify-content: center;
+    font-size: 9.5px;
+  }
+
+  .discover-footer__right {
+    display: none;
   }
 }
