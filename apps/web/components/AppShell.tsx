@@ -1,14 +1,12 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { Sidebar, NAV_ITEMS } from "@/components/design-system/Sidebar";
+import { Sidebar, NAV_ITEMS, BOTTOM_NAV_ITEMS } from "@/components/design-system/Sidebar";
 import { ThemeProvider } from "@/components/design-system/ThemeProvider";
 import type { ReactNode } from "react";
 
 function pathnameToNavId(pathname: string): string {
-  // pathname is e.g. "/home", "/discover", "/shows/123"
   const segment = pathname.split("/")[1] ?? "home";
-  // Check if the segment matches any nav item id
   const match = NAV_ITEMS.find((item) => item.id === segment);
   return match ? match.id : "home";
 }
@@ -34,21 +32,38 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <main className="app-shell__content">{children}</main>
         <nav className="app-shell__bottom-bar">
-          {NAV_ITEMS.map((item) => (
-            <button
-              key={item.id}
-              className={`bottom-bar__item ${
-                activeId === item.id ? "bottom-bar__item--active" : ""
-              }`}
-              onClick={() => handleNavigate(item.id)}
-              type="button"
-            >
-              <span className="bottom-bar__icon">
-                <item.icon />
-              </span>
-              <span className="bottom-bar__label">{item.label}</span>
-            </button>
-          ))}
+          {BOTTOM_NAV_ITEMS.map((item) => {
+            const isActive = activeId === item.id;
+            if ("isAddButton" in item && item.isAddButton) {
+              return (
+                <button
+                  key={item.id}
+                  className="bottom-bar__item bottom-bar__item--add"
+                  onClick={() => handleNavigate(item.id)}
+                  type="button"
+                  aria-label="Add a show"
+                >
+                  <span className="bottom-bar__add-circle">
+                    <item.icon size={20} strokeWidth={2.5} />
+                  </span>
+                  <span className="bottom-bar__label">{item.label}</span>
+                </button>
+              );
+            }
+            return (
+              <button
+                key={item.id}
+                className={`bottom-bar__item ${isActive ? "bottom-bar__item--active" : ""}`}
+                onClick={() => handleNavigate(item.id)}
+                type="button"
+              >
+                <span className="bottom-bar__icon">
+                  <item.icon size={18} />
+                </span>
+                <span className="bottom-bar__label">{item.label}</span>
+              </button>
+            );
+          })}
         </nav>
       </div>
     </ThemeProvider>
