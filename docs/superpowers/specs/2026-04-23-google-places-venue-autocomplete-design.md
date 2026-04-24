@@ -64,6 +64,22 @@ The existing `VenueSearchModal` searches only the local DB (`venues.search` tRPC
 
 **Why a new mutation:** The current `venues.follow` takes a `venueId` (UUID), but when following a Google Places result the venue may not exist in the DB yet. The new mutation accepts the full place data, creates-or-matches the venue, and follows it in one call.
 
+## Client: Preferences page "Followed venues" section
+
+The Preferences page at `/preferences` shows a list of followed venues with unfollow buttons and a "Follow a venue" link at the bottom. The link currently has no `onClick` handler.
+
+**New behavior:**
+- Clicking "Follow a venue" opens the same `VenueSearchModal` (shared component) with Google Places autocomplete
+- On follow: calls `venues.followByPlace`, then refetches `venues.followed` to update the list
+- Modal styled to match Preferences page (same light card-based design, not Discover's dark theme) — the shared modal component adapts via its existing CSS class structure
+
+## Shared component: `VenueSearchModal`
+
+The modal should be extracted into a shared component importable from both Discover and Preferences. It accepts:
+- `onClose: () => void`
+- `onFollowed: () => void`
+- `variant?: "discover" | "preferences"` — controls theme/styling adaptation
+
 ## What's NOT in scope
 
 - No changes to the venue DB schema (googlePlaceId column already exists)
