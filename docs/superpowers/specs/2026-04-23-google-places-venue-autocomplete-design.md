@@ -1,6 +1,6 @@
 # Google Places Venue Autocomplete
 
-Server-side Google Places autocomplete for the Add a Show venue field.
+Server-side Google Places autocomplete for venue selection across two surfaces: the Add a Show page and the Discover page's "Follow a venue" modal.
 
 ## Decision
 
@@ -50,6 +50,19 @@ Google Place Details → VenueData:
 - `location.latitude` → `lat`
 - `location.longitude` → `lng`
 - `id` → `googlePlaceId`
+
+## Client: Discover page "Follow a venue" modal
+
+The existing `VenueSearchModal` searches only the local DB (`venues.search` tRPC procedure). This limits users to following venues they've already been to.
+
+**New behavior:**
+- The modal searches Google Places instead of (or in addition to) the local DB
+- Flow: user types → debounce → `searchPlaces` → dropdown of Google results
+- User clicks "Follow" on a result → `placeDetails` fetches full data → `matchOrCreateVenue` creates the venue if it doesn't exist → `venues.follow` follows it
+- This requires a new mutation `venues.followByPlace` that accepts Google Place data, runs it through `matchOrCreateVenue`, and then follows the resulting venue
+- Styled with existing `discover-modal__*` CSS classes (dark theme appropriate)
+
+**Why a new mutation:** The current `venues.follow` takes a `venueId` (UUID), but when following a Google Places result the venue may not exist in the DB yet. The new mutation accepts the full place data, creates-or-matches the venue, and follows it in one call.
 
 ## What's NOT in scope
 
