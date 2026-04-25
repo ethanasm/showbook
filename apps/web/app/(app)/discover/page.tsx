@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { type ShowKind } from "@/components/design-system";
 import {
@@ -13,6 +13,8 @@ import {
   Check,
   ArrowUpRight,
   Plus,
+  Search,
+  X,
 } from "lucide-react";
 import "./discover.css";
 
@@ -255,6 +257,104 @@ function AnnouncementRow({
 }
 
 // ---------------------------------------------------------------------------
+// Venue Search Modal
+// ---------------------------------------------------------------------------
+
+function VenueSearchModal({
+  onClose,
+  onFollowed,
+}: {
+  onClose: () => void;
+  onFollowed: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const searchResults = trpc.venues.search.useQuery(
+    { query },
+    { enabled: query.length >= 2 },
+  );
+
+  const followMutation = trpc.venues.follow.useMutation({
+    onSuccess: () => {
+      onFollowed();
+      onClose();
+    },
+  });
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const venues = searchResults.data ?? [];
+
+  return (
+    <div className="discover-modal-overlay" onClick={onClose}>
+      <div
+        className="discover-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="discover-modal__header">
+          <div className="discover-modal__title">Follow a venue</div>
+          <button
+            type="button"
+            className="discover-modal__close"
+            onClick={onClose}
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="discover-modal__search">
+          <Search size={13} color="var(--muted)" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search venues..."
+            className="discover-modal__input"
+          />
+        </div>
+
+        <div className="discover-modal__results">
+          {query.length < 2 && (
+            <div className="discover-modal__hint">
+              Type at least 2 characters to search
+            </div>
+          )}
+          {query.length >= 2 && searchResults.isLoading && (
+            <div className="discover-modal__hint">Searching...</div>
+          )}
+          {query.length >= 2 && !searchResults.isLoading && venues.length === 0 && (
+            <div className="discover-modal__hint">No venues found</div>
+          )}
+          {venues.map((venue) => (
+            <button
+              key={venue.id}
+              type="button"
+              className="discover-modal__result"
+              onClick={() => followMutation.mutate({ venueId: venue.id })}
+              disabled={followMutation.isPending}
+            >
+              <div className="discover-modal__result-body">
+                <div className="discover-modal__result-name">{venue.name}</div>
+                <div className="discover-modal__result-meta">
+                  {[venue.city, venue.stateRegion].filter(Boolean).join(", ")}
+                </div>
+              </div>
+              <div className="discover-modal__result-action">
+                <Plus size={12} />
+                Follow
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Venue Rail (left sidebar filter)
 // ---------------------------------------------------------------------------
 
@@ -265,6 +365,7 @@ function VenueRail({
   tabLabel,
   totalCount,
   showFollowLink,
+  onFollowVenue,
 }: {
   venues: {
     id: string;
@@ -277,6 +378,7 @@ function VenueRail({
   tabLabel: string;
   totalCount: number;
   showFollowLink: boolean;
+  onFollowVenue?: () => void;
 }) {
   return (
     <aside className="discover-rail">
@@ -318,7 +420,7 @@ function VenueRail({
 
       {showFollowLink && (
         <div className="discover-rail__follow">
-          <button type="button" className="discover-rail__follow-link">
+          <button type="button" className="discover-rail__follow-link" onClick={onFollowVenue}>
             <Plus size={11} />
             Follow another venue
           </button>
@@ -379,6 +481,7 @@ function FeedSection({
   watchedIds,
   onToggleWatch,
   activeTab,
+  onVenueFollowed,
 }: {
   items: Announcement[] | undefined;
   isLoading: boolean;
@@ -386,8 +489,10 @@ function FeedSection({
   watchedIds: Set<string>;
   onToggleWatch: (id: string, watching: boolean) => void;
   activeTab: string;
+  onVenueFollowed: () => void;
 }) {
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
+  const [showFollowModal, setShowFollowModal] = useState(false);
 
   // Extract unique venues with counts and neighborhoods
   const venueList = useMemo(() => {
@@ -439,6 +544,22 @@ function FeedSection({
   const tabLabel = isFollowed ? "Followed venues" : "Nearby venues";
   const showAllGrouped = selectedVenueId === null;
 
+  function handleFollowVenue() {
+    setShowFollowModal(true);
+  }
+
+  function handleVenueFollowed() {
+    setShowFollowModal(false);
+    onVenueFollowed();
+  }
+
+  const followModal = showFollowModal && (
+    <VenueSearchModal
+      onClose={() => setShowFollowModal(false)}
+      onFollowed={handleVenueFollowed}
+    />
+  );
+
   if (isLoading) {
     return (
       <div className="discover-main">
@@ -449,6 +570,7 @@ function FeedSection({
           tabLabel={tabLabel}
           totalCount={0}
           showFollowLink={isFollowed}
+          onFollowVenue={handleFollowVenue}
         />
         <div className="discover-empty">
           <div className="discover-loading">
@@ -457,6 +579,7 @@ function FeedSection({
             <div className="discover-loading__dot" />
           </div>
         </div>
+        {followModal}
       </div>
     );
   }
@@ -471,10 +594,12 @@ function FeedSection({
           tabLabel={tabLabel}
           totalCount={0}
           showFollowLink={isFollowed}
+          onFollowVenue={handleFollowVenue}
         />
         <div className="discover-empty">
           <p className="discover-empty__text">{emptyMessage}</p>
         </div>
+        {followModal}
       </div>
     );
   }
@@ -489,6 +614,7 @@ function FeedSection({
         tabLabel={tabLabel}
         totalCount={totalCount}
         showFollowLink={isFollowed}
+        onFollowVenue={handleFollowVenue}
       />
 
       {/* Mobile Chips */}
@@ -557,6 +683,7 @@ function FeedSection({
           </span>
         </div>
       </div>
+      {followModal}
     </div>
   );
 }
@@ -574,6 +701,8 @@ export default function DiscoverPage() {
   const [activeTab, setActiveTab] = useState<string>("Followed");
   const [watchedIds, setWatchedIds] = useState<Set<string>>(new Set());
 
+  const utils = trpc.useUtils();
+
   const followedFeed = trpc.discover.followedFeed.useQuery(
     { limit: 50 },
     { enabled: activeTab === "Followed" },
@@ -583,6 +712,11 @@ export default function DiscoverPage() {
     { limit: 50 },
     { enabled: activeTab === "Near You" },
   );
+
+  function handleVenueFollowed() {
+    utils.discover.followedFeed.invalidate();
+    utils.venues.followed.invalidate();
+  }
 
   function handleToggleWatch(announcementId: string, watching: boolean) {
     setWatchedIds((prev) => {
@@ -659,6 +793,7 @@ export default function DiscoverPage() {
           watchedIds={watchedIds}
           onToggleWatch={handleToggleWatch}
           activeTab={activeTab}
+          onVenueFollowed={handleVenueFollowed}
         />
       )}
 
@@ -666,10 +801,11 @@ export default function DiscoverPage() {
         <FeedSection
           items={nearbyItems}
           isLoading={nearbyFeed.isLoading}
-          emptyMessage="Add a region in Preferences to see nearby shows"
+          emptyMessage={nearbyFeed.data?.hasRegions ? "No announcements near you right now" : "Add a region in Preferences to see nearby shows"}
           watchedIds={watchedIds}
           onToggleWatch={handleToggleWatch}
           activeTab={activeTab}
+          onVenueFollowed={handleVenueFollowed}
         />
       )}
     </div>

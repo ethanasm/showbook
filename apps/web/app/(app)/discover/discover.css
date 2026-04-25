@@ -584,6 +584,158 @@
   }
 }
 
+/* ── Venue Search Modal ─────────────────────────────── */
+
+.discover-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  backdrop-filter: blur(4px);
+}
+
+.discover-modal {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 440px;
+  max-height: 480px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.discover-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.discover-modal__title {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.3px;
+}
+
+.discover-modal__close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.discover-modal__close:hover {
+  color: var(--ink);
+}
+
+.discover-modal__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.discover-modal__input {
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+}
+
+.discover-modal__input::placeholder {
+  color: var(--faint);
+}
+
+.discover-modal__results {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+.discover-modal__hint {
+  padding: 24px 20px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+.discover-modal__result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.discover-modal__result:hover {
+  background: var(--surface2);
+}
+
+.discover-modal__result:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.discover-modal__result-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.discover-modal__result-name {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.2px;
+}
+
+.discover-modal__result-meta {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  margin-top: 2px;
+  letter-spacing: 0.04em;
+}
+
+.discover-modal__result-action {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.discover-modal__result:hover .discover-modal__result-action {
+  color: var(--ink);
+}
+
 /* ── Mobile: Venue Filter Chips ──────────────────────── */
 
 .discover-chips {

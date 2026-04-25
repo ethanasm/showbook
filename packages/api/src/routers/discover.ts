@@ -100,7 +100,7 @@ export const discoverRouter = router({
         );
 
       if (regions.length === 0) {
-        return { items: [], nextCursor: undefined };
+        return { items: [], nextCursor: undefined, hasRegions: false };
       }
 
       // Get followed venue IDs to exclude
@@ -167,6 +167,7 @@ export const discoverRouter = router({
           venue: r.venue,
         })),
         nextCursor,
+        hasRegions: true,
       };
     }),
 

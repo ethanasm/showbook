@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { MapPin, Check, Plus } from "lucide-react";
+import { MapPin, Check, Plus, Search, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useTheme } from "@/components/design-system/ThemeProvider";
 import { SegmentedControl } from "@/components/design-system/SegmentedControl";
@@ -472,6 +472,55 @@ function displayToDigest(display: string): string {
   return display.toLowerCase();
 }
 
+function VenueFollowModal({ onClose, onFollowed }: { onClose: () => void; onFollowed: () => void }) {
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const searchResults = trpc.venues.search.useQuery({ query }, { enabled: query.length >= 2 });
+  const followMutation = trpc.venues.follow.useMutation({ onSuccess: onFollowed });
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const results = searchResults.data ?? [];
+
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 1000,
+      display: "flex", alignItems: "center", justifyContent: "center",
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: "var(--surface)", border: "1px solid var(--rule-strong)",
+        width: 420, maxHeight: "70vh", display: "flex", flexDirection: "column",
+      }}>
+        <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--rule)" }}>
+          <span style={{ fontFamily: "var(--font-geist-mono)", fontSize: 12, color: "var(--ink)", letterSpacing: ".08em", textTransform: "uppercase", fontWeight: 500 }}>Follow a venue</span>
+          <button type="button" onClick={onClose} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer" }}><X size={14} /></button>
+        </div>
+        <div style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid var(--rule)" }}>
+          <Search size={13} color="var(--muted)" />
+          <input ref={inputRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search venues..."
+            style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--ink)", fontFamily: "var(--font-geist-sans)", fontSize: 14 }} />
+        </div>
+        <div style={{ overflow: "auto", maxHeight: 300 }}>
+          {query.length < 2 && <div style={{ padding: "20px", color: "var(--faint)", fontFamily: "var(--font-geist-mono)", fontSize: 11, textAlign: "center" }}>Type at least 2 characters</div>}
+          {searchResults.isLoading && <div style={{ padding: "20px", color: "var(--muted)", fontFamily: "var(--font-geist-mono)", fontSize: 11, textAlign: "center" }}>Searching...</div>}
+          {results.map((v) => (
+            <button key={v.id} type="button" onClick={() => followMutation.mutate({ venueId: v.id })} style={{
+              display: "block", width: "100%", padding: "12px 20px", background: "none", border: "none", borderBottom: "1px solid var(--rule)",
+              textAlign: "left", cursor: "pointer",
+            }}>
+              <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 14, color: "var(--ink)", fontWeight: 500 }}>{v.name}</div>
+              <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--muted)", marginTop: 2 }}>{v.city}{v.stateRegion ? `, ${v.stateRegion}` : ""}</div>
+            </button>
+          ))}
+          {query.length >= 2 && !searchResults.isLoading && results.length === 0 && (
+            <div style={{ padding: "20px", color: "var(--faint)", fontFamily: "var(--font-geist-mono)", fontSize: 11, textAlign: "center" }}>No venues found</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PreferencesPage() {
   const { theme: currentTheme, setTheme } = useTheme();
   const { data: session } = useSession();
@@ -491,6 +540,7 @@ export default function PreferencesPage() {
   const unfollowVenue = trpc.venues.unfollow.useMutation({
     onSuccess: () => venuesQuery.refetch(),
   });
+  const [showFollowModal, setShowFollowModal] = useState(false);
 
   if (prefsQuery.isLoading || venuesQuery.isLoading) {
     return (
@@ -750,6 +800,7 @@ export default function PreferencesPage() {
               </p>
             )}
             <div
+              onClick={() => setShowFollowModal(true)}
               style={{
                 padding: "12px 0",
                 display: "flex",
@@ -765,6 +816,13 @@ export default function PreferencesPage() {
               <Plus size={11} color="var(--accent)" /> Follow a venue
             </div>
           </div>
+
+          {showFollowModal && (
+            <VenueFollowModal
+              onClose={() => setShowFollowModal(false)}
+              onFollowed={() => { venuesQuery.refetch(); setShowFollowModal(false); }}
+            />
+          )}
 
           {/* ── Data Sources ─────────────────────────── */}
           <SectionHead label="Data sources" sub="auto-enrichment for show details" />

@@ -13,7 +13,6 @@ import {
   Calendar,
   ArrowDownUp,
   ChevronRight,
-  ArrowUpRight,
   MoreHorizontal,
   Ticket,
   Music,
@@ -21,6 +20,7 @@ import {
   Laugh,
   Tent,
   Square,
+  Trash2,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -652,24 +652,7 @@ export default function ShowsPage() {
             </button>
           )}
           <button
-            style={{
-              padding: "8px 14px",
-              background: "transparent",
-              border: "1px solid var(--rule-strong)",
-              color: "var(--ink)",
-              fontFamily: "var(--font-geist-sans), sans-serif",
-              fontSize: 12.5,
-              fontWeight: 500,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              cursor: "pointer",
-            }}
-          >
-            <ArrowUpRight size={13} /> Full detail
-          </button>
-          <button
-            onClick={() => handleDelete(show.id)}
+            onClick={() => alert("Edit coming soon")}
             style={{
               padding: "8px 14px",
               background: "transparent",
@@ -685,6 +668,24 @@ export default function ShowsPage() {
             }}
           >
             <MoreHorizontal size={13} /> Edit
+          </button>
+          <button
+            onClick={() => handleDelete(show.id)}
+            style={{
+              padding: "8px 14px",
+              background: "transparent",
+              border: "1px solid var(--rule-strong)",
+              color: "#E63946",
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 12.5,
+              fontWeight: 500,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              cursor: "pointer",
+            }}
+          >
+            <Trash2 size={13} /> Delete
           </button>
         </div>
       </div>
@@ -1306,7 +1307,7 @@ export default function ShowsPage() {
             {topArtists.map(([name, { count, kind }]) => (
               <div key={name} style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 130px 30px",
+                gridTemplateColumns: "1fr 80px 30px",
                 columnGap: 14,
                 alignItems: "center",
                 padding: "11px 0",
@@ -1369,7 +1370,7 @@ export default function ShowsPage() {
             {topVenues.map(([name, { count, neighborhood }]) => (
               <div key={name} style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 130px 30px",
+                gridTemplateColumns: "1fr 80px 30px",
                 columnGap: 14,
                 alignItems: "center",
                 padding: "11px 0",

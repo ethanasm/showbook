@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   MapContainer,
   TileLayer,
@@ -194,7 +195,41 @@ function MapViewChanger({
 // Top Bar
 // ---------------------------------------------------------------------------
 
-function TopBar() {
+function downloadBlob(content: string, filename: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function TopBar({ venues }: { venues: VenueGroup[] }) {
+  const [showExport, setShowExport] = useState(false);
+
+  const exportCSV = useCallback(() => {
+    const headers = ["Date", "Kind", "Headliner", "Venue", "City", "Neighborhood", "Seat", "Price Paid", "State"];
+    const rows = venues.flatMap((g) =>
+      g.shows.map((s) => [s.date, s.kind, s.headliner, g.name, g.city, g.neighborhood ?? "", s.seat ?? "", s.pricePaid ?? "", s.state])
+    );
+    const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
+    downloadBlob(csv, "showbook-export.csv", "text/csv");
+    setShowExport(false);
+  }, [venues]);
+
+  const exportJSON = useCallback(() => {
+    const data = venues.flatMap((g) =>
+      g.shows.map((s) => ({
+        date: s.date, kind: s.kind, headliner: s.headliner, venue: g.name, city: g.city,
+        neighborhood: g.neighborhood, latitude: g.latitude, longitude: g.longitude,
+        seat: s.seat, pricePaid: s.pricePaid, state: s.state,
+      }))
+    );
+    downloadBlob(JSON.stringify(data, null, 2), "showbook-export.json", "application/json");
+    setShowExport(false);
+  }, [venues]);
+
   return (
     <div className="map-topbar">
       <div>
@@ -202,10 +237,34 @@ function TopBar() {
         <div className="map-topbar__title">Where you've been</div>
       </div>
       <div className="map-topbar__actions">
-        <button className="map-topbar__btn-outline" type="button">
-          <ArrowUpRight size={12} />
-          Export
-        </button>
+        <div style={{ position: "relative" }}>
+          <button className="map-topbar__btn-outline" type="button" onClick={() => setShowExport((v) => !v)}>
+            <ArrowUpRight size={12} />
+            Export
+          </button>
+          {showExport && (
+            <div style={{
+              position: "absolute", top: "100%", right: 0, marginTop: 4,
+              background: "var(--surface)", border: "1px solid var(--rule-strong)",
+              zIndex: 10, minWidth: 160,
+            }}>
+              <button type="button" onClick={exportCSV} style={{
+                display: "block", width: "100%", padding: "10px 14px", background: "none", border: "none",
+                color: "var(--ink)", fontFamily: "var(--font-geist-mono)", fontSize: 11,
+                textAlign: "left", cursor: "pointer", borderBottom: "1px solid var(--rule)",
+              }}>
+                Export as CSV
+              </button>
+              <button type="button" onClick={exportJSON} style={{
+                display: "block", width: "100%", padding: "10px 14px", background: "none", border: "none",
+                color: "var(--ink)", fontFamily: "var(--font-geist-mono)", fontSize: 11,
+                textAlign: "left", cursor: "pointer",
+              }}>
+                Export as JSON
+              </button>
+            </div>
+          )}
+        </div>
         <button className="map-topbar__btn-solid" type="button">
           <Plus size={12} />
           Add a show
@@ -382,6 +441,7 @@ function VenueInspector({
   venue: VenueGroup;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const utils = trpc.useUtils();
   const { data: followedVenues } = trpc.venues.followed.useQuery();
 
@@ -549,11 +609,33 @@ function VenueInspector({
           <Plus size={13} />
           {isMutating ? "..." : isFollowed ? "Following" : "Follow"}
         </button>
-        <button className="venue-inspector__cta-outline" type="button">
+        <button
+          className="venue-inspector__cta-outline"
+          type="button"
+          onClick={() => {
+            const params = new URLSearchParams({
+              timeframe: "watching",
+              venueName: venue.name,
+              venueCity: venue.city,
+            });
+            router.push(`/add?${params.toString()}`);
+          }}
+        >
           <Eye size={13} />
           Watch upcoming
         </button>
-        <button className="venue-inspector__cta-solid" type="button">
+        <button
+          className="venue-inspector__cta-solid"
+          type="button"
+          onClick={() => {
+            const params = new URLSearchParams({
+              timeframe: "past",
+              venueName: venue.name,
+              venueCity: venue.city,
+            });
+            router.push(`/add?${params.toString()}`);
+          }}
+        >
           <Plus size={13} />
           Log a visit
         </button>
@@ -693,7 +775,7 @@ export default function MapView() {
 
   return (
     <div className="map-page">
-      <TopBar />
+      <TopBar venues={filteredVenues} />
       <FilterBar
         year={yearFilter}
         setYear={setYearFilter}

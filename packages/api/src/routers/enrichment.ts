@@ -44,6 +44,11 @@ export const enrichmentRouter = router({
           date: event.dates.start.localDate,
           venueName: venue?.name ?? null,
           venueCity: venue?.city?.name ?? null,
+          venueState: venue?.state?.stateCode ?? null,
+          venueCountry: venue?.country?.countryCode ?? null,
+          venueTmId: venue?.id ?? null,
+          venueLat: venue?.location?.latitude ? parseFloat(venue.location.latitude) : null,
+          venueLng: venue?.location?.longitude ? parseFloat(venue.location.longitude) : null,
           kind: inferKind(event.classifications),
           performers: attractions.map((attraction) => ({
             name: attraction.name,
@@ -99,6 +104,43 @@ export const enrichmentRouter = router({
     )
     .mutation(async ({ input }) => {
       return parseShowInput(input.freeText);
+    }),
+
+  // ---------------------------------------------------------------------------
+  // geocodeVenue — lat/lng lookup for manually entered venues
+  // ---------------------------------------------------------------------------
+  geocodeVenue: protectedProcedure
+    .input(
+      z.object({
+        venueName: z.string().min(1),
+        city: z.string().min(1),
+      }),
+    )
+    .query(async ({ input }) => {
+      const headers = { 'User-Agent': 'Showbook/1.0' };
+      const queries = [
+        `${input.venueName}, ${input.city}`,
+        `${input.venueName.replace(/^The /i, '')}, ${input.city}`,
+        `${input.venueName} ${input.city.split(',')[0]}`,
+      ];
+
+      for (const query of queries) {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
+        try {
+          const res = await fetch(url, { headers });
+          if (!res.ok) continue;
+          const results = await res.json() as Array<{ lat: string; lon: string }>;
+          if (results.length > 0) {
+            return {
+              lat: parseFloat(results[0].lat),
+              lng: parseFloat(results[0].lon),
+            };
+          }
+        } catch {
+          continue;
+        }
+      }
+      return null;
     }),
 
   // ---------------------------------------------------------------------------

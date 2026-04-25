@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { type ShowKind } from "@/components/design-system";
 
@@ -106,6 +106,7 @@ const sans = "var(--font-geist-sans), sans-serif";
 
 export default function AddPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // Mode toggle
   const [mode, setMode] = useState<Mode>("Form");
@@ -157,6 +158,23 @@ export default function AddPage() {
   const [performerSearchInput, setPerformerSearchInput] = useState("");
 
   const utils = trpc.useUtils();
+
+  // Pre-fill from query params (e.g. navigating from Map page)
+  useEffect(() => {
+    const tf = searchParams.get("timeframe");
+    if (tf === "past" || tf === "upcoming" || tf === "watching") {
+      setTimeframe(tf);
+    }
+    const venueName = searchParams.get("venueName");
+    const venueCity = searchParams.get("venueCity");
+    if (venueName) {
+      setVenue((v) => ({
+        ...v,
+        name: venueName,
+        city: venueCity ?? v.city,
+      }));
+    }
+  }, [searchParams]);
 
   // TM search
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { HeroCard } from "@/components/design-system/HeroCard";
 import type { ShowKind } from "@/components/design-system/KindBadge";
@@ -124,6 +125,7 @@ const SANS = "var(--font-geist-sans), sans-serif";
 // ── Component ────────────────────────────────────────────────────────────
 
 export default function HomePage() {
+  const router = useRouter();
   const { data: shows, isLoading } = trpc.shows.list.useQuery({});
 
   // Split shows into upcoming and past
@@ -363,6 +365,7 @@ export default function HomePage() {
             <div style={{ flex: 1 }} />
             {upcoming.length > 0 && (
               <div
+                onClick={() => router.push("/shows")}
                 style={{
                   fontFamily: MONO,
                   fontSize: 10.5,
@@ -605,6 +608,7 @@ export default function HomePage() {
             </div>
             <div style={{ flex: 1 }} />
             <div
+              onClick={() => router.push("/shows")}
               style={{
                 fontFamily: MONO,
                 fontSize: 10.5,
@@ -670,6 +674,7 @@ export default function HomePage() {
                 return (
                   <div
                     key={s.id}
+                    onClick={() => router.push("/shows")}
                     style={{
                       display: "grid",
                       gridTemplateColumns:

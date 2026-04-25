@@ -52,6 +52,7 @@ const STORAGE_KEY = "showbook-theme";
 function applyVars(resolved: "dark" | "light") {
   const vars = resolved === "dark" ? DARK_VARS : LIGHT_VARS;
   const root = document.documentElement;
+  root.setAttribute("data-theme", resolved);
   for (const [key, value] of Object.entries(vars)) {
     root.style.setProperty(key, value);
   }
