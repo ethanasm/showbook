@@ -476,7 +476,9 @@ function VenueFollowModal({ onClose, onFollowed }: { onClose: () => void; onFoll
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const searchResults = trpc.venues.search.useQuery({ query }, { enabled: query.length >= 2 });
-  const followMutation = trpc.venues.follow.useMutation({ onSuccess: onFollowed });
+  const followMutation = trpc.venues.follow.useMutation({
+    onSuccess: () => { setQuery(""); onFollowed(); },
+  });
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
@@ -503,10 +505,13 @@ function VenueFollowModal({ onClose, onFollowed }: { onClose: () => void; onFoll
         <div style={{ overflow: "auto", maxHeight: 300 }}>
           {query.length < 2 && <div style={{ padding: "20px", color: "var(--faint)", fontFamily: "var(--font-geist-mono)", fontSize: 11, textAlign: "center" }}>Type at least 2 characters</div>}
           {searchResults.isLoading && <div style={{ padding: "20px", color: "var(--muted)", fontFamily: "var(--font-geist-mono)", fontSize: 11, textAlign: "center" }}>Searching...</div>}
+          {followMutation.isError && (
+            <div style={{ padding: "10px 20px", color: "#E63946", fontFamily: "var(--font-geist-mono)", fontSize: 11 }}>Failed to follow venue</div>
+          )}
           {results.map((v) => (
-            <button key={v.id} type="button" onClick={() => followMutation.mutate({ venueId: v.id })} style={{
+            <button key={v.id} type="button" disabled={followMutation.isPending} onClick={() => followMutation.mutate({ venueId: v.id })} style={{
               display: "block", width: "100%", padding: "12px 20px", background: "none", border: "none", borderBottom: "1px solid var(--rule)",
-              textAlign: "left", cursor: "pointer",
+              textAlign: "left", cursor: followMutation.isPending ? "wait" : "pointer", opacity: followMutation.isPending ? 0.5 : 1,
             }}>
               <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 14, color: "var(--ink)", fontWeight: 500 }}>{v.name}</div>
               <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--muted)", marginTop: 2 }}>{v.city}{v.stateRegion ? `, ${v.stateRegion}` : ""}</div>

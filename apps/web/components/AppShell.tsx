@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar, NAV_ITEMS, BOTTOM_NAV_ITEMS } from "@/components/design-system/Sidebar";
 import { ThemeProvider } from "@/components/design-system/ThemeProvider";
+import { trpc } from "@/lib/trpc";
 import type { ReactNode } from "react";
 
 function pathnameToNavId(pathname: string): string {
@@ -20,6 +21,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const activeId = pathnameToNavId(pathname);
 
+  const showsQuery = trpc.shows.list.useQuery({}, { select: (d) => d.length });
+  const performersQuery = trpc.performers.list.useQuery(undefined, { select: (d) => d.length });
+
+  const counts: Partial<Record<string, number>> = {};
+  if (showsQuery.data !== undefined) counts.shows = showsQuery.data;
+  if (performersQuery.data !== undefined) counts.artists = performersQuery.data;
+
   const handleNavigate = (id: string) => {
     router.push(navIdToPath(id));
   };
@@ -28,7 +36,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <ThemeProvider>
       <div className="app-shell">
         <div className="app-shell__sidebar">
-          <Sidebar active={activeId} onNavigate={handleNavigate} />
+          <Sidebar active={activeId} onNavigate={handleNavigate} counts={counts} />
         </div>
         <main className="app-shell__content">{children}</main>
         <nav className="app-shell__bottom-bar">

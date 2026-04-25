@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   MapContainer,
@@ -207,13 +207,25 @@ function downloadBlob(content: string, filename: string, mimeType: string) {
 
 function TopBar({ venues }: { venues: VenueGroup[] }) {
   const [showExport, setShowExport] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showExport) return;
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setShowExport(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showExport]);
+
+  const escapeCSV = (val: string) => `"${val.replace(/"/g, '""')}"`;
 
   const exportCSV = useCallback(() => {
     const headers = ["Date", "Kind", "Headliner", "Venue", "City", "Neighborhood", "Seat", "Price Paid", "State"];
     const rows = venues.flatMap((g) =>
       g.shows.map((s) => [s.date, s.kind, s.headliner, g.name, g.city, g.neighborhood ?? "", s.seat ?? "", s.pricePaid ?? "", s.state])
     );
-    const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
+    const csv = [headers, ...rows].map((r) => r.map((c) => escapeCSV(c)).join(",")).join("\n");
     downloadBlob(csv, "showbook-export.csv", "text/csv");
     setShowExport(false);
   }, [venues]);
@@ -237,7 +249,7 @@ function TopBar({ venues }: { venues: VenueGroup[] }) {
         <div className="map-topbar__title">Where you've been</div>
       </div>
       <div className="map-topbar__actions">
-        <div style={{ position: "relative" }}>
+        <div ref={dropdownRef} style={{ position: "relative" }}>
           <button className="map-topbar__btn-outline" type="button" onClick={() => setShowExport((v) => !v)}>
             <ArrowUpRight size={12} />
             Export

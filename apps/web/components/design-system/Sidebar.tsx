@@ -26,10 +26,10 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { id: "home", label: "Home", icon: Home, section: "navigate" },
-  { id: "discover", label: "Discover", icon: Eye, count: 10, section: "navigate" },
-  { id: "shows", label: "Shows", icon: Archive, count: 94, section: "navigate" },
+  { id: "discover", label: "Discover", icon: Eye, section: "navigate" },
+  { id: "shows", label: "Shows", icon: Archive, section: "navigate" },
   { id: "map", label: "Map", icon: Map, section: "navigate" },
-  { id: "artists", label: "Artists", icon: Music, count: 22, section: "navigate" },
+  { id: "artists", label: "Artists", icon: Music, section: "navigate" },
   { id: "preferences", label: "Preferences", icon: Settings, section: "settings", small: true },
 ];
 
