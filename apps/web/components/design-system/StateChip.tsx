@@ -14,5 +14,10 @@ const LABELS: Record<"ticketed" | "watching", string> = {
 };
 
 export function StateChip({ state }: StateChipProps) {
-  return <span className="state-chip">{LABELS[state]}</span>;
+  const className =
+    state === "ticketed"
+      ? "state-chip state-chip--ticketed"
+      : "state-chip state-chip--watching";
+
+  return <span className={className}>{LABELS[state]}</span>;
 }

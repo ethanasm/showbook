@@ -45,7 +45,21 @@ export async function matchOrCreateVenue(
     }
   }
 
-  // 2. Exact name+city match (case-insensitive)
+  // 2. Google Place ID match
+  if (input.googlePlaceId) {
+    const [existing] = await db
+      .select()
+      .from(venues)
+      .where(eq(venues.googlePlaceId, input.googlePlaceId))
+      .limit(1);
+
+    if (existing) {
+      const updated = await maybeUpdate(existing, input);
+      return { venue: updated, created: false };
+    }
+  }
+
+  // 3. Exact name+city match (case-insensitive)
   const nameCityMatches = await db
     .select()
     .from(venues)

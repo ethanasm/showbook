@@ -1,9 +1,31 @@
 import { z } from 'zod';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, desc, count, max, min } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc';
-import { performers, userPerformerFollows } from '@showbook/db';
+import { performers, userPerformerFollows, shows, showPerformers } from '@showbook/db';
 
 export const performersRouter = router({
+  list: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+
+    const rows = await ctx.db
+      .select({
+        id: performers.id,
+        name: performers.name,
+        imageUrl: performers.imageUrl,
+        showCount: count(shows.id),
+        lastSeen: max(shows.date),
+        firstSeen: min(shows.date),
+      })
+      .from(showPerformers)
+      .innerJoin(performers, eq(showPerformers.performerId, performers.id))
+      .innerJoin(shows, eq(showPerformers.showId, shows.id))
+      .where(eq(shows.userId, userId))
+      .groupBy(performers.id, performers.name, performers.imageUrl)
+      .orderBy(desc(max(shows.date)));
+
+    return rows;
+  }),
+
   search: protectedProcedure
     .input(z.object({ query: z.string().min(1) }))
     .query(async ({ ctx, input }) => {

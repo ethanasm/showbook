@@ -1,23 +1,80 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
+import {
+  MapContainer,
+  TileLayer,
+  CircleMarker,
+  Tooltip,
+  useMap,
+} from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
-import markerIcon from "leaflet/dist/images/marker-icon.png";
-import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import { trpc } from "@/lib/trpc";
-import { KindBadge, type ShowKind } from "@/components/design-system/KindBadge";
+import { type ShowKind } from "@/components/design-system/KindBadge";
+import {
+  ArrowUpRight,
+  Plus,
+  Filter,
+  MapPin,
+  Eye,
+  X,
+  Music,
+  Theater,
+  Laugh,
+  Tent,
+} from "lucide-react";
 import "./map.css";
 
-// Fix Leaflet default marker icon in Next.js
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x.src,
-  iconUrl: markerIcon.src,
-  shadowUrl: markerShadow.src,
-});
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const KIND_COLORS: Record<string, string> = {
+  concert: "var(--kind-concert)",
+  theatre: "var(--kind-theatre)",
+  comedy: "var(--kind-comedy)",
+  festival: "var(--kind-festival)",
+};
+
+// Raw hex needed for CircleMarker (Leaflet doesn't support CSS vars)
+const KIND_COLORS_HEX: Record<string, string> = {
+  concert: "#3A86FF",
+  theatre: "#E63946",
+  comedy: "#9D4EDD",
+  festival: "#2A9D8F",
+};
+
+const KIND_LABELS: Record<string, string> = {
+  concert: "Concert",
+  theatre: "Theatre",
+  comedy: "Comedy",
+  festival: "Festival",
+};
+
+const KIND_ICONS: Record<string, typeof Music> = {
+  concert: Music,
+  theatre: Theater,
+  comedy: Laugh,
+  festival: Tent,
+};
+
+const YEARS = ["All-time", "2026", "2025", "2024", "2023"] as const;
+
+const KINDS = [
+  { k: "all", label: "All kinds" },
+  { k: "concert", label: "Concert" },
+  { k: "theatre", label: "Theatre" },
+  { k: "comedy", label: "Comedy" },
+  { k: "festival", label: "Festival" },
+] as const;
+
+const VIEW_PRESETS: { label: string; center: [number, number]; zoom: number }[] = [
+  { label: "NYC", center: [40.7128, -74.006], zoom: 12 },
+  { label: "Northeast", center: [41.0, -74.0], zoom: 7 },
+  { label: "World", center: [30.0, -20.0], zoom: 3 },
+];
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,12 +86,15 @@ interface VenueShowData {
   state: string;
   date: string;
   headliner: string;
+  seat: string | null;
+  pricePaid: string | null;
 }
 
 interface VenueGroup {
   venueId: string;
   name: string;
   city: string;
+  neighborhood: string | null;
   latitude: number;
   longitude: number;
   shows: VenueShowData[];
@@ -61,28 +121,36 @@ function getHeadliner(
   return showPerformers[0]?.performer.name ?? "Unknown Artist";
 }
 
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr + "T00:00:00");
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+function dotRadius(count: number): number {
+  return Math.max(4, Math.min(18, 3 + count * 1.2));
 }
 
-const KIND_LABELS: Record<string, string> = {
-  concert: "concert",
-  theatre: "theatre",
-  comedy: "comedy",
-  festival: "festival",
-};
+function getMostCommonKind(breakdown: Record<string, number>): string {
+  let maxKind = "concert";
+  let maxCount = 0;
+  for (const [kind, count] of Object.entries(breakdown)) {
+    if (count > maxCount) {
+      maxCount = count;
+      maxKind = kind;
+    }
+  }
+  return maxKind;
+}
+
+function formatDateParts(dateStr: string) {
+  const d = new Date(dateStr + "T00:00:00");
+  const month = d.toLocaleDateString("en-US", { month: "short" });
+  const day = d.getDate();
+  const year = d.getFullYear();
+  return { month, day, year };
+}
 
 function pluralize(count: number, singular: string): string {
   return count === 1 ? `${count} ${singular}` : `${count} ${singular}s`;
 }
 
 // ---------------------------------------------------------------------------
-// FitBounds component - adjusts map to fit all markers
+// FitBounds component
 // ---------------------------------------------------------------------------
 
 function FitBounds({ venues }: { venues: VenueGroup[] }) {
@@ -104,6 +172,277 @@ function FitBounds({ venues }: { venues: VenueGroup[] }) {
 }
 
 // ---------------------------------------------------------------------------
+// MapViewChanger — used by view presets
+// ---------------------------------------------------------------------------
+
+function MapViewChanger({
+  center,
+  zoom,
+}: {
+  center: [number, number];
+  zoom: number;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    map.setView(center, zoom);
+  }, [center, zoom, map]);
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Top Bar
+// ---------------------------------------------------------------------------
+
+function downloadBlob(content: string, filename: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function TopBar({ venues }: { venues: VenueGroup[] }) {
+  const [showExport, setShowExport] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showExport) return;
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setShowExport(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showExport]);
+
+  const escapeCSV = (val: string) => `"${val.replace(/"/g, '""')}"`;
+
+  const exportCSV = useCallback(() => {
+    const headers = ["Date", "Kind", "Headliner", "Venue", "City", "Neighborhood", "Seat", "Price Paid", "State"];
+    const rows = venues.flatMap((g) =>
+      g.shows.map((s) => [s.date, s.kind, s.headliner, g.name, g.city, g.neighborhood ?? "", s.seat ?? "", s.pricePaid ?? "", s.state])
+    );
+    const csv = [headers, ...rows].map((r) => r.map((c) => escapeCSV(c)).join(",")).join("\n");
+    downloadBlob(csv, "showbook-export.csv", "text/csv");
+    setShowExport(false);
+  }, [venues]);
+
+  const exportJSON = useCallback(() => {
+    const data = venues.flatMap((g) =>
+      g.shows.map((s) => ({
+        date: s.date, kind: s.kind, headliner: s.headliner, venue: g.name, city: g.city,
+        neighborhood: g.neighborhood, latitude: g.latitude, longitude: g.longitude,
+        seat: s.seat, pricePaid: s.pricePaid, state: s.state,
+      }))
+    );
+    downloadBlob(JSON.stringify(data, null, 2), "showbook-export.json", "application/json");
+    setShowExport(false);
+  }, [venues]);
+
+  return (
+    <div className="map-topbar">
+      <div>
+        <div className="map-topbar__subtitle">Map &middot; geographic view</div>
+        <div className="map-topbar__title">Where you've been</div>
+      </div>
+      <div className="map-topbar__actions">
+        <div ref={dropdownRef} style={{ position: "relative" }}>
+          <button className="map-topbar__btn-outline" type="button" onClick={() => setShowExport((v) => !v)}>
+            <ArrowUpRight size={12} />
+            Export
+          </button>
+          {showExport && (
+            <div style={{
+              position: "absolute", top: "100%", right: 0, marginTop: 4,
+              background: "var(--surface)", border: "1px solid var(--rule-strong)",
+              zIndex: 10, minWidth: 160,
+            }}>
+              <button type="button" onClick={exportCSV} style={{
+                display: "block", width: "100%", padding: "10px 14px", background: "none", border: "none",
+                color: "var(--ink)", fontFamily: "var(--font-geist-mono)", fontSize: 11,
+                textAlign: "left", cursor: "pointer", borderBottom: "1px solid var(--rule)",
+              }}>
+                Export as CSV
+              </button>
+              <button type="button" onClick={exportJSON} style={{
+                display: "block", width: "100%", padding: "10px 14px", background: "none", border: "none",
+                color: "var(--ink)", fontFamily: "var(--font-geist-mono)", fontSize: 11,
+                textAlign: "left", cursor: "pointer",
+              }}>
+                Export as JSON
+              </button>
+            </div>
+          )}
+        </div>
+        <button className="map-topbar__btn-solid" type="button">
+          <Plus size={12} />
+          Add a show
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Filter Bar
+// ---------------------------------------------------------------------------
+
+function FilterBar({
+  year,
+  setYear,
+  kind,
+  setKind,
+  venueCount,
+  showCount,
+}: {
+  year: string;
+  setYear: (y: string) => void;
+  kind: string;
+  setKind: (k: string) => void;
+  venueCount: number;
+  showCount: number;
+}) {
+  return (
+    <div className="map-filterbar">
+      <div className="map-filterbar__viewing">
+        <div className="map-filterbar__viewing-label">Viewing</div>
+        <div className="map-filterbar__viewing-text">
+          All shows on the map
+        </div>
+      </div>
+
+      <div className="map-filterbar__years">
+        {YEARS.map((y) => (
+          <button
+            key={y}
+            className={`map-filterbar__year-btn ${
+              y === year ? "map-filterbar__year-btn--active" : ""
+            }`}
+            onClick={() => setYear(y)}
+            type="button"
+          >
+            {y}
+          </button>
+        ))}
+      </div>
+
+      <div className="map-filterbar__kinds">
+        {KINDS.map(({ k, label }) => {
+          const active = k === kind;
+          const KindIcon = k !== "all" ? KIND_ICONS[k] : null;
+          let activeClass = "";
+          if (active) {
+            activeClass =
+              k === "all"
+                ? "map-filterbar__kind-btn--active-all"
+                : `map-filterbar__kind-btn--active-${k}`;
+          }
+          return (
+            <button
+              key={k}
+              className={`map-filterbar__kind-btn ${activeClass}`}
+              onClick={() => setKind(k)}
+              type="button"
+            >
+              {KindIcon && <KindIcon size={12} />}
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="map-filterbar__spacer" />
+
+      <div className="map-filterbar__counts">
+        <Filter size={12} />
+        <span>
+          {venueCount} venues &middot; {showCount} shows
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Map Overlays
+// ---------------------------------------------------------------------------
+
+function MapLegend() {
+  const sizes = [1, 3, 6, 12];
+  return (
+    <div className="map-overlay-legend">
+      <div className="map-overlay-legend__title">
+        dot size &middot; # of shows
+      </div>
+      <div className="map-overlay-legend__dots">
+        {sizes.map((n) => {
+          const d = dotRadius(n) * 2;
+          return (
+            <div key={n} className="map-overlay-legend__dot-item">
+              <div
+                className="map-overlay-legend__dot"
+                style={{ width: d, height: d }}
+              />
+              <div className="map-overlay-legend__dot-label">{n}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ViewToggle({
+  activeView,
+  setActiveView,
+}: {
+  activeView: number;
+  setActiveView: (i: number) => void;
+}) {
+  return (
+    <div className="map-overlay-viewtoggle">
+      {VIEW_PRESETS.map((v, i) => (
+        <button
+          key={v.label}
+          className={`map-overlay-viewtoggle__btn ${
+            i === activeView ? "map-overlay-viewtoggle__btn--active" : ""
+          }`}
+          onClick={() => setActiveView(i)}
+          type="button"
+        >
+          {v.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function StatsOverlay({
+  venueCount,
+  showCount,
+}: {
+  venueCount: number;
+  showCount: number;
+}) {
+  return (
+    <div className="map-overlay-stats">
+      <div>
+        <div className="map-overlay-stats__value">{venueCount}</div>
+        <div className="map-overlay-stats__label">venues</div>
+      </div>
+      <div className="map-overlay-stats__divider" />
+      <div>
+        <div className="map-overlay-stats__value">{showCount}</div>
+        <div className="map-overlay-stats__label">shows</div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Venue Inspector Panel
 // ---------------------------------------------------------------------------
 
@@ -114,6 +453,7 @@ function VenueInspector({
   venue: VenueGroup;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const utils = trpc.useUtils();
   const { data: followedVenues } = trpc.venues.followed.useQuery();
 
@@ -138,65 +478,179 @@ function VenueInspector({
     }
   }, [isFollowed, venue.venueId, followMutation, unfollowMutation]);
 
-  const kindSummary = Object.entries(venue.kindBreakdown)
-    .map(([kind, count]) => pluralize(count, KIND_LABELS[kind] ?? kind))
-    .join(", ");
-
   const isMutating = followMutation.isPending || unfollowMutation.isPending;
+
+  const uniqueArtists = useMemo(() => {
+    const set = new Set(venue.shows.map((s) => s.headliner));
+    return set.size;
+  }, [venue.shows]);
+
+  const totalSpent = useMemo(() => {
+    return venue.shows.reduce((sum, s) => {
+      return sum + (s.pricePaid ? parseFloat(s.pricePaid) : 0);
+    }, 0);
+  }, [venue.shows]);
+
+  const firstYear = useMemo(() => {
+    if (venue.shows.length === 0) return "";
+    const sorted = [...venue.shows].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+    return new Date(sorted[0].date + "T00:00:00").getFullYear().toString();
+  }, [venue.shows]);
 
   return (
     <div className="venue-inspector">
+      {/* Header */}
       <div className="venue-inspector__header">
-        <div>
-          <h2 className="venue-inspector__name">{venue.name}</h2>
-          <p className="venue-inspector__city">{venue.city}</p>
-        </div>
-        <button
-          className="venue-inspector__close"
-          onClick={onClose}
-          type="button"
-          aria-label="Close panel"
-        >
-          &times;
-        </button>
-      </div>
-
-      <div className="venue-inspector__stats">
-        <span className="venue-inspector__show-count">
-          {pluralize(venue.shows.length, "show")}
-        </span>
-        <span className="venue-inspector__kind-breakdown">{kindSummary}</span>
-      </div>
-
-      <button
-        className={`venue-inspector__follow-btn ${
-          isFollowed ? "venue-inspector__follow-btn--following" : ""
-        }`}
-        onClick={handleFollowToggle}
-        disabled={isMutating}
-        type="button"
-      >
-        {isMutating
-          ? "..."
-          : isFollowed
-            ? "Following"
-            : "Follow Venue"}
-      </button>
-
-      <div className="venue-inspector__shows">
-        {venue.shows.map((show) => (
-          <div key={show.id} className="venue-inspector__show-row">
-            <div className="venue-inspector__show-info">
-              <span className="venue-inspector__show-headliner">
-                {show.headliner}
-              </span>
-              <span className="venue-inspector__show-date">
-                {formatDate(show.date)}
-              </span>
-            </div>
-            <KindBadge kind={show.kind} />
+        <div className="venue-inspector__header-top">
+          <div className="venue-inspector__label">
+            <MapPin size={11} />
+            Selected venue
           </div>
-        ))}
+          <button
+            className="venue-inspector__close"
+            onClick={onClose}
+            type="button"
+            aria-label="Close panel"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <h2 className="venue-inspector__name">{venue.name}</h2>
+        <div className="venue-inspector__neighborhood">
+          {venue.neighborhood
+            ? `${venue.neighborhood} · ${venue.city}`
+            : venue.city}
+        </div>
+        <div className="venue-inspector__coords">
+          {venue.latitude.toFixed(4)}&deg; N &middot;{" "}
+          {Math.abs(venue.longitude).toFixed(4)}&deg;{" "}
+          {venue.longitude >= 0 ? "E" : "W"}
+        </div>
+      </div>
+
+      {/* Stats strip */}
+      <div className="venue-inspector__stats">
+        <div className="venue-inspector__stat">
+          <div className="venue-inspector__stat-value">
+            {venue.shows.length}
+          </div>
+          <div className="venue-inspector__stat-label">Shows</div>
+          <div className="venue-inspector__stat-sub">since {firstYear}</div>
+        </div>
+        <div className="venue-inspector__stat">
+          <div className="venue-inspector__stat-value">{uniqueArtists}</div>
+          <div className="venue-inspector__stat-label">Artists</div>
+          <div className="venue-inspector__stat-sub">unique</div>
+        </div>
+        <div className="venue-inspector__stat">
+          <div className="venue-inspector__stat-value">
+            ${Math.round(totalSpent).toLocaleString()}
+          </div>
+          <div className="venue-inspector__stat-label">Spent</div>
+          <div className="venue-inspector__stat-sub">lifetime</div>
+        </div>
+      </div>
+
+      {/* Kind mix */}
+      <div className="venue-inspector__kindmix">
+        <div className="venue-inspector__kindmix-label">Kind mix</div>
+        {Object.entries(venue.kindBreakdown).map(([k, count]) => {
+          const KindIcon = KIND_ICONS[k];
+          const color = KIND_COLORS[k] ?? "var(--muted)";
+          return (
+            <div
+              key={k}
+              className="venue-inspector__kindmix-chip"
+              style={{ color }}
+            >
+              {KindIcon && <KindIcon size={12} />}
+              {KIND_LABELS[k] ?? k} &middot; {count}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* All visits header */}
+      <div className="venue-inspector__visits-header">
+        <div className="venue-inspector__visits-title">All visits</div>
+        <div className="venue-inspector__visits-count">
+          {venue.shows.length} &middot; newest first
+        </div>
+      </div>
+
+      {/* Visits list */}
+      <div className="venue-inspector__visits-list">
+        {venue.shows.map((show) => {
+          const { month, day, year } = formatDateParts(show.date);
+          return (
+            <div key={show.id} className="venue-inspector__visit-row">
+              <div>
+                <div className="venue-inspector__visit-date-display">
+                  {month} {day}
+                </div>
+                <div className="venue-inspector__visit-date-year">{year}</div>
+              </div>
+              <div className="venue-inspector__visit-info">
+                <div className="venue-inspector__visit-artist">
+                  {show.headliner}
+                </div>
+                <div className="venue-inspector__visit-seat">
+                  {show.seat ? show.seat.toLowerCase() : "general"}
+                </div>
+              </div>
+              <div className="venue-inspector__visit-price">
+                {show.pricePaid ? `$${parseFloat(show.pricePaid).toFixed(0)}` : "--"}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* CTA buttons */}
+      <div className="venue-inspector__cta">
+        <button
+          className={`venue-inspector__cta-follow ${
+            isFollowed ? "venue-inspector__cta-follow--following" : ""
+          }`}
+          onClick={handleFollowToggle}
+          disabled={isMutating}
+          type="button"
+        >
+          <Plus size={13} />
+          {isMutating ? "..." : isFollowed ? "Following" : "Follow"}
+        </button>
+        <button
+          className="venue-inspector__cta-outline"
+          type="button"
+          onClick={() => {
+            const params = new URLSearchParams({
+              timeframe: "watching",
+              venueName: venue.name,
+              venueCity: venue.city,
+            });
+            router.push(`/add?${params.toString()}`);
+          }}
+        >
+          <Eye size={13} />
+          Watch upcoming
+        </button>
+        <button
+          className="venue-inspector__cta-solid"
+          type="button"
+          onClick={() => {
+            const params = new URLSearchParams({
+              timeframe: "past",
+              venueName: venue.name,
+              venueCity: venue.city,
+            });
+            router.push(`/add?${params.toString()}`);
+          }}
+        >
+          <Plus size={13} />
+          Log a visit
+        </button>
       </div>
     </div>
   );
@@ -208,9 +662,13 @@ function VenueInspector({
 
 export default function MapView() {
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
+  const [yearFilter, setYearFilter] = useState("All-time");
+  const [kindFilter, setKindFilter] = useState("all");
+  const [activeView, setActiveView] = useState<number | null>(null);
 
   const { data: shows, isLoading } = trpc.shows.list.useQuery({});
 
+  // Build venue groups from shows
   const venueGroups = useMemo(() => {
     if (!shows) return [];
 
@@ -227,6 +685,8 @@ export default function MapView() {
         state: show.state,
         date: show.date,
         headliner: getHeadliner(show.showPerformers),
+        seat: show.seat,
+        pricePaid: show.pricePaid,
       };
 
       if (existing) {
@@ -238,6 +698,7 @@ export default function MapView() {
           venueId: venue.id,
           name: venue.name,
           city: venue.city,
+          neighborhood: venue.neighborhood ?? null,
           latitude: venue.latitude,
           longitude: venue.longitude,
           shows: [showData],
@@ -249,19 +710,63 @@ export default function MapView() {
     return Array.from(grouped.values());
   }, [shows]);
 
+  // Apply filters
+  const filteredVenues = useMemo(() => {
+    return venueGroups
+      .map((venue) => {
+        let filtered = venue.shows;
+
+        // Year filter
+        if (yearFilter !== "All-time") {
+          const yr = parseInt(yearFilter);
+          filtered = filtered.filter((s) => {
+            const showYear = new Date(s.date + "T00:00:00").getFullYear();
+            return showYear === yr;
+          });
+        }
+
+        // Kind filter
+        if (kindFilter !== "all") {
+          filtered = filtered.filter((s) => s.kind === kindFilter);
+        }
+
+        if (filtered.length === 0) return null;
+
+        // Rebuild kindBreakdown for filtered shows
+        const kindBreakdown: Record<string, number> = {};
+        for (const s of filtered) {
+          kindBreakdown[s.kind] = (kindBreakdown[s.kind] ?? 0) + 1;
+        }
+
+        return {
+          ...venue,
+          shows: filtered,
+          kindBreakdown,
+        };
+      })
+      .filter(Boolean) as VenueGroup[];
+  }, [venueGroups, yearFilter, kindFilter]);
+
+  const totalShowCount = useMemo(
+    () => filteredVenues.reduce((sum, v) => sum + v.shows.length, 0),
+    [filteredVenues]
+  );
+
   const selectedVenue = useMemo(
-    () => venueGroups.find((v) => v.venueId === selectedVenueId) ?? null,
-    [venueGroups, selectedVenueId]
+    () => filteredVenues.find((v) => v.venueId === selectedVenueId) ?? null,
+    [filteredVenues, selectedVenueId]
   );
 
   const defaultCenter: [number, number] = useMemo(() => {
-    if (venueGroups.length === 0) return [40.7128, -74.006];
+    if (filteredVenues.length === 0) return [40.7128, -74.006];
     const avgLat =
-      venueGroups.reduce((sum, v) => sum + v.latitude, 0) / venueGroups.length;
+      filteredVenues.reduce((sum, v) => sum + v.latitude, 0) /
+      filteredVenues.length;
     const avgLng =
-      venueGroups.reduce((sum, v) => sum + v.longitude, 0) / venueGroups.length;
+      filteredVenues.reduce((sum, v) => sum + v.longitude, 0) /
+      filteredVenues.length;
     return [avgLat, avgLng];
-  }, [venueGroups]);
+  }, [filteredVenues]);
 
   if (isLoading) {
     return (
@@ -281,41 +786,102 @@ export default function MapView() {
   }
 
   return (
-    <div className="map-container">
-      <MapContainer
-        center={defaultCenter}
-        zoom={12}
-        className="map-leaflet"
-        zoomControl={true}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        <FitBounds venues={venueGroups} />
-        {venueGroups.map((venue) => (
-          <Marker
-            key={venue.venueId}
-            position={[venue.latitude, venue.longitude]}
-            eventHandlers={{
-              click: () => setSelectedVenueId(venue.venueId),
-            }}
-          >
-            <Popup>
-              <strong>{venue.name}</strong>
-              <br />
-              {pluralize(venue.shows.length, "show")}
-            </Popup>
-          </Marker>
-        ))}
-      </MapContainer>
+    <div className="map-page">
+      <TopBar venues={filteredVenues} />
+      <FilterBar
+        year={yearFilter}
+        setYear={setYearFilter}
+        kind={kindFilter}
+        setKind={setKindFilter}
+        venueCount={filteredVenues.length}
+        showCount={totalShowCount}
+      />
 
-      {selectedVenue && (
-        <VenueInspector
-          venue={selectedVenue}
-          onClose={() => setSelectedVenueId(null)}
-        />
-      )}
+      <div className="map-body">
+        {/* Map area */}
+        <div className="map-area">
+          <MapContainer
+            center={defaultCenter}
+            zoom={12}
+            className="map-leaflet"
+            zoomControl={true}
+          >
+            <TileLayer
+              attribution="&copy; OpenStreetMap contributors &copy; CARTO"
+              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            />
+            {activeView !== null ? (
+              <MapViewChanger
+                center={VIEW_PRESETS[activeView].center}
+                zoom={VIEW_PRESETS[activeView].zoom}
+              />
+            ) : (
+              <FitBounds venues={filteredVenues} />
+            )}
+            {filteredVenues.map((venue) => {
+              const count = venue.shows.length;
+              const r = dotRadius(count);
+              const dominantKind = getMostCommonKind(venue.kindBreakdown);
+              const color = KIND_COLORS_HEX[dominantKind] ?? "#3A86FF";
+              const isSelected = venue.venueId === selectedVenueId;
+
+              return (
+                <CircleMarker
+                  key={venue.venueId}
+                  center={[venue.latitude, venue.longitude]}
+                  radius={r}
+                  pathOptions={{
+                    fillColor: color,
+                    fillOpacity: isSelected ? 1.0 : 0.85,
+                    color: isSelected ? "#F5F5F3" : color,
+                    weight: isSelected ? 1.5 : 0,
+                    opacity: 1,
+                  }}
+                  eventHandlers={{
+                    click: () => setSelectedVenueId(venue.venueId),
+                  }}
+                >
+                  {count >= 4 && (
+                    <Tooltip
+                      permanent
+                      direction="center"
+                      className="map-circle-count"
+                    >
+                      <span
+                        style={{
+                          fontSize: r > 10 ? 10 : 9,
+                          fontWeight: 600,
+                          color: "#0C0C0C",
+                          fontFamily:
+                            'var(--font-geist-mono, "Geist Mono", monospace)',
+                        }}
+                      >
+                        {count}
+                      </span>
+                    </Tooltip>
+                  )}
+                </CircleMarker>
+              );
+            })}
+          </MapContainer>
+
+          {/* Overlays */}
+          <MapLegend />
+          <ViewToggle activeView={activeView ?? -1} setActiveView={setActiveView} />
+          <StatsOverlay
+            venueCount={filteredVenues.length}
+            showCount={totalShowCount}
+          />
+        </div>
+
+        {/* Inspector panel */}
+        {selectedVenue && (
+          <VenueInspector
+            venue={selectedVenue}
+            onClose={() => setSelectedVenueId(null)}
+          />
+        )}
+      </div>
     </div>
   );
 }

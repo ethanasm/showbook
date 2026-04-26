@@ -11,6 +11,10 @@ import {
   parseShowInput,
   extractCast as groqExtractCast,
 } from '../groq';
+import {
+  autocomplete as placesAutocomplete,
+  getPlaceDetails,
+} from '../google-places';
 
 export const enrichmentRouter = router({
   // ---------------------------------------------------------------------------
@@ -44,6 +48,11 @@ export const enrichmentRouter = router({
           date: event.dates.start.localDate,
           venueName: venue?.name ?? null,
           venueCity: venue?.city?.name ?? null,
+          venueState: venue?.state?.stateCode ?? null,
+          venueCountry: venue?.country?.countryCode ?? null,
+          venueTmId: venue?.id ?? null,
+          venueLat: venue?.location?.latitude ? parseFloat(venue.location.latitude) : null,
+          venueLng: venue?.location?.longitude ? parseFloat(venue.location.longitude) : null,
           kind: inferKind(event.classifications),
           performers: attractions.map((attraction) => ({
             name: attraction.name,
@@ -102,6 +111,43 @@ export const enrichmentRouter = router({
     }),
 
   // ---------------------------------------------------------------------------
+  // geocodeVenue — lat/lng lookup for manually entered venues
+  // ---------------------------------------------------------------------------
+  geocodeVenue: protectedProcedure
+    .input(
+      z.object({
+        venueName: z.string().min(1),
+        city: z.string().min(1),
+      }),
+    )
+    .query(async ({ input }) => {
+      const headers = { 'User-Agent': 'Showbook/1.0' };
+      const queries = [
+        `${input.venueName}, ${input.city}`,
+        `${input.venueName.replace(/^The /i, '')}, ${input.city}`,
+        `${input.venueName} ${input.city.split(',')[0]}`,
+      ];
+
+      for (const query of queries) {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
+        try {
+          const res = await fetch(url, { headers });
+          if (!res.ok) continue;
+          const results = await res.json() as Array<{ lat: string; lon: string }>;
+          if (results.length > 0) {
+            return {
+              lat: parseFloat(results[0].lat),
+              lng: parseFloat(results[0].lon),
+            };
+          }
+        } catch {
+          continue;
+        }
+      }
+      return null;
+    }),
+
+  // ---------------------------------------------------------------------------
   // extractCast — playbill image → cast list
   // ---------------------------------------------------------------------------
   extractCast: protectedProcedure
@@ -113,5 +159,26 @@ export const enrichmentRouter = router({
     .mutation(async ({ input }) => {
       const cast = await groqExtractCast(input.imageBase64);
       return { cast };
+    }),
+
+  searchPlaces: protectedProcedure
+    .input(z.object({
+      query: z.string().min(2),
+      types: z.enum(['venue', 'city']).default('venue'),
+    }))
+    .query(async ({ input }) => {
+      const typeMap = {
+        venue: ['establishment'],
+        city: ['locality', 'administrative_area_level_1'],
+      };
+      return placesAutocomplete(input.query, typeMap[input.types]);
+    }),
+
+  placeDetails: protectedProcedure
+    .input(z.object({ placeId: z.string().min(1) }))
+    .query(async ({ input }) => {
+      const details = await getPlaceDetails(input.placeId);
+      if (!details) throw new TRPCError({ code: 'NOT_FOUND', message: 'Place not found' });
+      return details;
     }),
 });

@@ -2,69 +2,266 @@
 
 import "./design-system.css";
 import type { ShowKind } from "./KindBadge";
+import {
+  Music,
+  Clapperboard,
+  Laugh,
+  Tent,
+  MapPin,
+  Ticket,
+  Clock,
+  Check,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-interface HeroShow {
+export interface HeroShow {
   headliner: string;
+  support: string[];
   venue: string;
-  date: string;
-  seat?: string;
+  city: string;
+  seat: string;
+  paid: number;
   kind: ShowKind;
+  date: { month: string; day: string; year: string; dow: string };
+  countdown: string;
+  hasTix: boolean;
 }
 
 interface HeroCardProps {
   show: HeroShow;
 }
 
-const KIND_GRADIENTS: Record<ShowKind, string> = {
-  concert:
-    "linear-gradient(135deg, var(--kind-concert) 0%, color-mix(in srgb, var(--kind-concert) 60%, #0C0C0C) 100%)",
-  theatre:
-    "linear-gradient(135deg, var(--kind-theatre) 0%, color-mix(in srgb, var(--kind-theatre) 60%, #0C0C0C) 100%)",
-  comedy:
-    "linear-gradient(135deg, var(--kind-comedy) 0%, color-mix(in srgb, var(--kind-comedy) 60%, #0C0C0C) 100%)",
-  festival:
-    "linear-gradient(135deg, var(--kind-festival) 0%, color-mix(in srgb, var(--kind-festival) 60%, #0C0C0C) 100%)",
+const KIND_ICONS: Record<ShowKind, LucideIcon> = {
+  concert: Music,
+  theatre: Clapperboard,
+  comedy: Laugh,
+  festival: Tent,
 };
 
-function daysUntil(dateStr: string): number {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const target = new Date(dateStr);
-  target.setHours(0, 0, 0, 0);
-  const diff = target.getTime() - now.getTime();
-  return Math.ceil(diff / (1000 * 60 * 60 * 24));
-}
-
-function countdownText(dateStr: string): string {
-  const days = daysUntil(dateStr);
-  if (days < 0) return `${Math.abs(days)} days ago`;
-  if (days === 0) return "Today";
-  if (days === 1) return "Tomorrow";
-  return `in ${days} days`;
-}
+const KIND_LABELS: Record<ShowKind, string> = {
+  concert: "Concert",
+  theatre: "Theatre",
+  comedy: "Comedy",
+  festival: "Festival",
+};
 
 export function HeroCard({ show }: HeroCardProps) {
+  const KindIcon = KIND_ICONS[show.kind];
+  const kindColor = `var(--kind-${show.kind})`;
+
   return (
-    <div className="hero-card">
-      <div
-        className="hero-card__bg"
-        style={{ background: KIND_GRADIENTS[show.kind] }}
-      />
-      <div className="hero-card__body">
-        <div className="hero-card__countdown">
-          Next up · {countdownText(show.date)}
-        </div>
-        <div className="hero-card__headliner">{show.headliner}</div>
-        <div className="hero-card__detail">
-          {show.venue}
-          <br />
-          {show.date}
-          {show.seat && (
-            <>
-              <br />
-              Seat {show.seat}
-            </>
+    <div
+      style={{
+        padding: "28px 32px",
+        background: "var(--surface)",
+        borderLeft: `3px solid ${kindColor}`,
+        display: "grid",
+        gridTemplateColumns: "1fr auto",
+        gap: 32,
+        alignItems: "center",
+      }}
+    >
+      {/* Left side */}
+      <div style={{ minWidth: 0 }}>
+        {/* Kind badge + Ticketed chip row */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            marginBottom: 14,
+          }}
+        >
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 7,
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 10.5,
+              color: kindColor,
+              letterSpacing: ".1em",
+              textTransform: "uppercase",
+              fontWeight: 500,
+            }}
+          >
+            <KindIcon size={13} color={kindColor} />
+            {KIND_LABELS[show.kind]}
+          </span>
+          {show.hasTix && (
+            <span
+              style={{
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: 10.5,
+                color: "var(--ink)",
+                padding: "3px 8px",
+                border: "1px solid var(--accent)",
+                letterSpacing: ".06em",
+                textTransform: "uppercase",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+              }}
+            >
+              <Check size={11} color="var(--accent)" /> Ticketed
+            </span>
           )}
+        </div>
+
+        {/* Headliner */}
+        <div
+          style={{
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 52,
+            fontWeight: 600,
+            letterSpacing: -2,
+            color: "var(--ink)",
+            lineHeight: 0.95,
+          }}
+        >
+          {show.headliner}
+        </div>
+
+        {/* Support artists */}
+        {show.support.length > 0 && (
+          <div
+            style={{
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 16,
+              color: "var(--muted)",
+              marginTop: 8,
+              letterSpacing: -0.2,
+            }}
+          >
+            with {show.support.join(", ")}
+          </div>
+        )}
+
+        {/* Meta row */}
+        <div
+          style={{
+            display: "flex",
+            gap: 32,
+            marginTop: 22,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 13,
+            color: "var(--ink)",
+          }}
+        >
+          {/* Venue */}
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+            <MapPin size={14} color="var(--muted)" />
+            <div>
+              <div>{show.venue}</div>
+              <div
+                style={{
+                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontSize: 11,
+                  color: "var(--muted)",
+                  marginTop: 2,
+                }}
+              >
+                {show.city}
+              </div>
+            </div>
+          </div>
+
+          {/* Seat */}
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+            <Ticket size={14} color="var(--muted)" />
+            <div>
+              <div>{show.seat}</div>
+              <div
+                style={{
+                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontSize: 11,
+                  color: "var(--muted)",
+                  marginTop: 2,
+                }}
+              >
+                ${show.paid} &middot; paid
+              </div>
+            </div>
+          </div>
+
+          {/* Doors / Show time */}
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+            <Clock size={14} color="var(--muted)" />
+            <div>
+              <div>doors 7:00 pm</div>
+              <div
+                style={{
+                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontSize: 11,
+                  color: "var(--muted)",
+                  marginTop: 2,
+                }}
+              >
+                show 8:00 pm
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Right side — date column */}
+      <div
+        style={{
+          textAlign: "center",
+          paddingLeft: 32,
+          borderLeft: "1px solid var(--rule)",
+          minWidth: 180,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 11,
+            color: kindColor,
+            letterSpacing: ".12em",
+            textTransform: "uppercase",
+            fontWeight: 500,
+          }}
+        >
+          {show.date.dow}
+        </div>
+        <div
+          style={{
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 120,
+            fontWeight: 500,
+            color: "var(--ink)",
+            letterSpacing: -5,
+            lineHeight: 0.85,
+            fontFeatureSettings: '"tnum"',
+            marginTop: 4,
+          }}
+        >
+          {show.date.day}
+        </div>
+        <div
+          style={{
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 12,
+            color: "var(--ink)",
+            letterSpacing: ".14em",
+            marginTop: 4,
+            textTransform: "uppercase",
+            fontWeight: 500,
+          }}
+        >
+          {show.date.month}
+        </div>
+        <div
+          style={{
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 10.5,
+            color: "var(--muted)",
+            marginTop: 10,
+            letterSpacing: ".06em",
+          }}
+        >
+          {show.countdown}
         </div>
       </div>
     </div>

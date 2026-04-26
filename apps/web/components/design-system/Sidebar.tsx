@@ -1,115 +1,161 @@
 "use client";
 
 import "./design-system.css";
+import {
+  Home,
+  Eye,
+  Archive,
+  Map,
+  Music,
+  Plus,
+  Search,
+  Settings,
+  MoreHorizontal,
+} from "lucide-react";
+import type { ComponentType } from "react";
+
+export interface NavItem {
+  id: string;
+  label: string;
+  icon: ComponentType<{ size?: number; className?: string }>;
+  count?: number;
+  section: "navigate" | "settings";
+  /** smaller font for settings items */
+  small?: boolean;
+}
+
+export const NAV_ITEMS: NavItem[] = [
+  { id: "home", label: "Home", icon: Home, section: "navigate" },
+  { id: "discover", label: "Discover", icon: Eye, section: "navigate" },
+  { id: "shows", label: "Shows", icon: Archive, section: "navigate" },
+  { id: "map", label: "Map", icon: Map, section: "navigate" },
+  { id: "artists", label: "Artists", icon: Music, section: "navigate" },
+  { id: "preferences", label: "Preferences", icon: Settings, section: "settings", small: true },
+];
+
+/** Items shown in mobile bottom tab bar */
+export const BOTTOM_NAV_ITEMS = [
+  { id: "home", label: "Home", icon: Home },
+  { id: "shows", label: "Shows", icon: Archive },
+  { id: "add", label: "Add", icon: Plus, isAddButton: true },
+  { id: "map", label: "Map", icon: Map },
+  { id: "me", label: "Me", icon: Settings },
+] as const;
 
 interface SidebarProps {
   active?: string;
-  onNavigate?: (item: string) => void;
+  onNavigate?: (id: string) => void;
+  counts?: Partial<Record<string, number>>;
+  userName?: string;
+  userInitials?: string;
+  syncStatus?: string;
 }
 
-export const NAV_ITEMS = [
-  { id: "home", label: "Home", icon: HomeIcon },
-  { id: "discover", label: "Discover", icon: DiscoverIcon },
-  { id: "shows", label: "Shows", icon: ShowsIcon },
-  { id: "map", label: "Map", icon: MapIcon },
-  { id: "add", label: "Add", icon: AddIcon },
-  { id: "preferences", label: "Preferences", icon: PreferencesIcon },
-] as const;
+export function Sidebar({
+  active = "home",
+  onNavigate,
+  counts,
+  userName = "Ethan Smith",
+  userInitials = "ES",
+  syncStatus = "synced 2m ago",
+}: SidebarProps) {
+  const navItems = NAV_ITEMS.filter((i) => i.section === "navigate");
+  const settingsItems = NAV_ITEMS.filter((i) => i.section === "settings");
 
-export function Sidebar({ active = "home", onNavigate }: SidebarProps) {
+  function getCount(item: NavItem): number | undefined {
+    if (counts && item.id in counts) return counts[item.id];
+    return item.count;
+  }
+
   return (
     <aside className="sidebar">
-      <div className="sidebar__title">Showbook</div>
+      {/* Logo */}
+      <div className="sidebar__header">
+        <span className="sidebar__logo">showbook</span>
+        <span className="sidebar__version">v2 &middot; 2026.04</span>
+      </div>
+
+      {/* Add a show button */}
+      <div className="sidebar__add-section">
+        <button
+          className="sidebar__add-btn"
+          onClick={() => onNavigate?.("add")}
+          type="button"
+        >
+          <Plus size={14} strokeWidth={2.5} />
+          <span>Add a show</span>
+        </button>
+      </div>
+
+      {/* Search box */}
+      <div className="sidebar__search-section">
+        <div className="sidebar__search">
+          <Search size={13} className="sidebar__search-icon" />
+          <span className="sidebar__search-text">search...</span>
+          <kbd className="sidebar__search-kbd">&thinsp;&#8984;K&thinsp;</kbd>
+        </div>
+      </div>
+
+      {/* Navigate section */}
+      <div className="sidebar__section-label">Navigate</div>
       <nav className="sidebar__nav">
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item.id}
-            className={`sidebar__item ${
-              active === item.id ? "sidebar__item--active" : ""
-            }`}
-            onClick={() => onNavigate?.(item.id)}
-            type="button"
-          >
-            <span className="sidebar__icon">
-              <item.icon />
-            </span>
-            {item.label}
-          </button>
-        ))}
+        {navItems.map((item) => {
+          const isActive = active === item.id;
+          const count = getCount(item);
+          return (
+            <button
+              key={item.id}
+              className={`sidebar__item ${isActive ? "sidebar__item--active" : ""}`}
+              onClick={() => onNavigate?.(item.id)}
+              type="button"
+            >
+              <span className="sidebar__icon">
+                <item.icon size={15} />
+              </span>
+              <span className="sidebar__label">{item.label}</span>
+              {count !== undefined && (
+                <span className="sidebar__count">{count}</span>
+              )}
+            </button>
+          );
+        })}
       </nav>
+
+      {/* Settings section */}
+      <div className="sidebar__section-label">Settings</div>
+      <nav className="sidebar__nav">
+        {settingsItems.map((item) => {
+          const isActive = active === item.id;
+          return (
+            <button
+              key={item.id}
+              className={`sidebar__item ${isActive ? "sidebar__item--active" : ""} ${item.small ? "sidebar__item--small" : ""}`}
+              onClick={() => onNavigate?.(item.id)}
+              type="button"
+            >
+              <span className="sidebar__icon">
+                <item.icon size={15} />
+              </span>
+              <span className="sidebar__label">{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Spacer pushes user profile to bottom */}
+      <div className="sidebar__spacer" />
+
+      {/* User profile */}
+      <div className="sidebar__user">
+        <div className="sidebar__user-avatar">{userInitials}</div>
+        <div className="sidebar__user-info">
+          <div className="sidebar__user-name">{userName}</div>
+          <div className="sidebar__user-sync">{syncStatus}</div>
+        </div>
+        <button className="sidebar__user-more" type="button" aria-label="More options">
+          <MoreHorizontal size={14} />
+        </button>
+      </div>
     </aside>
-  );
-}
-
-/* ── Inline SVG icons ───────────────────────────────────── */
-
-function HomeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <path d="M3 12l9-8 9 8" strokeLinecap="round" strokeLinejoin="round" />
-      <path
-        d="M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function DiscoverIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <circle cx="12" cy="12" r="9" />
-      <polygon
-        points="16.24,7.76 14.12,14.12 7.76,16.24 9.88,9.88"
-        fill="currentColor"
-        stroke="none"
-      />
-    </svg>
-  );
-}
-
-function ShowsIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <line x1="4" y1="6" x2="20" y2="6" strokeLinecap="round" />
-      <line x1="4" y1="12" x2="20" y2="12" strokeLinecap="round" />
-      <line x1="4" y1="18" x2="20" y2="18" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function MapIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <path
-        d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="12" cy="9" r="2.5" />
-    </svg>
-  );
-}
-
-function AddIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <line x1="12" y1="5" x2="12" y2="19" strokeLinecap="round" />
-      <line x1="5" y1="12" x2="19" y2="12" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function PreferencesIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <circle cx="12" cy="12" r="3" />
-      <path
-        d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1.08-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1.08 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }

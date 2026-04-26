@@ -1,12 +1,21 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
+import { type ShowKind } from "@/components/design-system";
 import {
-  SegmentedControl,
-  KindBadge,
-  type ShowKind,
-} from "@/components/design-system";
+  Music,
+  Clapperboard,
+  Laugh,
+  Tent,
+  MapPin,
+  Eye,
+  Check,
+  ArrowUpRight,
+  Plus,
+  Search,
+  X,
+} from "lucide-react";
 import "./discover.css";
 
 // ---------------------------------------------------------------------------
@@ -27,43 +36,71 @@ type Announcement = {
     id: string;
     name: string;
     city: string;
+    neighborhood?: string;
   };
+  reason?: string;
+};
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const KIND_ICONS: Record<
+  ShowKind,
+  React.ComponentType<{ size?: number; className?: string }>
+> = {
+  concert: Music,
+  theatre: Clapperboard,
+  comedy: Laugh,
+  festival: Tent,
+};
+
+const KIND_LABELS: Record<ShowKind, string> = {
+  concert: "Concert",
+  theatre: "Theatre",
+  comedy: "Comedy",
+  festival: "Festival",
+};
+
+const REASON_LABELS: Record<string, string> = {
+  "followed-venue": "followed venue",
+  nearby: "near you",
+  "tracked-artist": "tracked artist",
+};
+
+const ON_SALE_STATUS_LABELS: Record<string, string> = {
+  announced: "announced",
+  on_sale: "on sale",
+  sold_out: "sold out",
 };
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatShowDate(dateStr: string): string {
+function formatShowDateShort(dateStr: string): {
+  month: string;
+  day: string;
+  year: string;
+  dow: string;
+} {
   const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  const month = d
+    .toLocaleDateString("en-US", { month: "short" })
+    .toUpperCase();
+  const day = String(d.getDate());
+  const year = String(d.getFullYear());
+  const dow = d.toLocaleDateString("en-US", { weekday: "short" }).toLowerCase();
+  return { month, day, year, dow };
 }
 
-const ON_SALE_LABELS: Record<string, string> = {
-  announced: "Announced",
-  on_sale: "On Sale",
-  sold_out: "Sold Out",
-};
-
-// ---------------------------------------------------------------------------
-// On-Sale Status Badge
-// ---------------------------------------------------------------------------
-
-function OnSaleBadge({
-  status,
-}: {
-  status: "announced" | "on_sale" | "sold_out";
-}) {
-  return (
-    <span className={`on-sale-badge on-sale-badge--${status}`}>
-      {ON_SALE_LABELS[status]}
-    </span>
-  );
+function formatOnSaleDate(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -91,7 +128,8 @@ function WatchButton({
 
   const isPending = watchMutation.isPending || unwatchMutation.isPending;
 
-  function handleClick() {
+  function handleClick(e: React.MouseEvent) {
+    e.stopPropagation();
     if (isPending) return;
 
     // Optimistic toggle
@@ -107,116 +145,366 @@ function WatchButton({
   return (
     <button
       type="button"
-      className={`watch-btn ${isWatching ? "watch-btn--watching" : ""}`}
+      className={`discover-watch-btn ${isWatching ? "discover-watch-btn--watching" : ""}`}
       onClick={handleClick}
       disabled={isPending}
     >
-      {isWatching ? "Watching" : "Watch"}
+      {isWatching ? (
+        <>
+          <Check size={11} />
+          Watching
+        </>
+      ) : (
+        <>
+          <Eye size={11} />
+          Watch
+        </>
+      )}
     </button>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Announcement Card
+// Announcement Row
 // ---------------------------------------------------------------------------
 
-function AnnouncementCard({
+function AnnouncementRow({
   announcement,
   isWatching,
   onToggleWatch,
+  showReason,
 }: {
   announcement: Announcement;
   isWatching: boolean;
   onToggleWatch: (id: string, watching: boolean) => void;
+  showReason: boolean;
 }) {
+  const date = formatShowDateShort(announcement.showDate);
+  const KindIcon = KIND_ICONS[announcement.kind];
+  const isOnSale = announcement.onSaleStatus === "on_sale";
+  const reasonText =
+    announcement.reason && REASON_LABELS[announcement.reason]
+      ? REASON_LABELS[announcement.reason]
+      : announcement.reason || null;
+
   return (
-    <div className="announcement-card">
-      <div className="announcement-card__top">
-        <KindBadge kind={announcement.kind} />
-        <OnSaleBadge status={announcement.onSaleStatus} />
-      </div>
-      <div className="announcement-card__headliner">
-        {announcement.headliner}
-      </div>
-      {announcement.support && announcement.support.length > 0 && (
-        <div className="announcement-card__support">
-          {announcement.support.join(", ")}
+    <div
+      className={`discover-row discover-row--${announcement.kind} ${isWatching ? "discover-row--watched" : ""}`}
+    >
+      {/* Date */}
+      <div>
+        <div className="discover-row__date-main">
+          {date.month} {date.day}
         </div>
-      )}
-      <div className="announcement-card__bottom">
-        <span className="announcement-card__date">
-          {formatShowDate(announcement.showDate)}
+        <div className="discover-row__date-sub">
+          {date.year} &middot; {date.dow}
+        </div>
+      </div>
+
+      {/* Kind */}
+      <div
+        className={`discover-row__kind discover-row__kind--${announcement.kind}`}
+      >
+        <KindIcon size={12} />
+        {KIND_LABELS[announcement.kind]}
+      </div>
+
+      {/* Headliner */}
+      <div className="discover-row__headliner-cell">
+        <div className="discover-row__headliner">{announcement.headliner}</div>
+        {announcement.support && announcement.support.length > 0 && (
+          <div className="discover-row__support">
+            + {announcement.support.join(", ")}
+          </div>
+        )}
+        {showReason && reasonText && (
+          <div className="discover-row__reason">{reasonText}</div>
+        )}
+      </div>
+
+      {/* On Sale */}
+      <div className="discover-row__onsale-cell">
+        <div
+          className={`discover-row__onsale ${isOnSale ? "discover-row__onsale--active" : ""}`}
+        >
+          {formatOnSaleDate(announcement.onSaleDate)}
+        </div>
+      </div>
+
+      {/* Status */}
+      <div className="discover-row__status-cell">
+        <span
+          className={`discover-row__status-badge discover-row__status-badge--${announcement.onSaleStatus} discover-row__status-badge--${announcement.kind}`}
+        >
+          {ON_SALE_STATUS_LABELS[announcement.onSaleStatus]}
         </span>
+      </div>
+
+      {/* Actions */}
+      <div className="discover-row__actions">
         <WatchButton
           announcementId={announcement.id}
           isWatching={isWatching}
           onToggle={onToggleWatch}
         />
+        <button type="button" className="discover-tix-btn">
+          <ArrowUpRight size={11} />
+          Tix
+        </button>
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Venue Filter (desktop rail + mobile chips)
+// Venue Search Modal
 // ---------------------------------------------------------------------------
 
-function VenueFilter({
+function VenueSearchModal({
+  onClose,
+  onFollowed,
+}: {
+  onClose: () => void;
+  onFollowed: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const searchResults = trpc.venues.search.useQuery(
+    { query },
+    { enabled: query.length >= 2 },
+  );
+
+  const placesResults = trpc.enrichment.searchPlaces.useQuery(
+    { query, types: "venue" },
+    { enabled: query.length >= 2 },
+  );
+
+  const followMutation = trpc.venues.follow.useMutation({
+    onSuccess: () => {
+      onFollowed();
+      onClose();
+    },
+  });
+
+  const createAndFollow = trpc.venues.createFromPlace.useMutation({
+    onSuccess: (venue) => {
+      followMutation.mutate({ venueId: venue.id });
+    },
+  });
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const localVenues = searchResults.data ?? [];
+  const places = placesResults.data ?? [];
+  const localIds = new Set(localVenues.map((v) => v.googlePlaceId).filter(Boolean));
+  const filteredPlaces = places.filter((p) => !localIds.has(p.placeId));
+  const isPending = followMutation.isPending || createAndFollow.isPending;
+
+  return (
+    <div className="discover-modal-overlay" onClick={onClose}>
+      <div
+        className="discover-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="discover-modal__header">
+          <div className="discover-modal__title">Follow a venue</div>
+          <button
+            type="button"
+            className="discover-modal__close"
+            onClick={onClose}
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="discover-modal__search">
+          <Search size={13} color="var(--muted)" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search venues..."
+            className="discover-modal__input"
+          />
+        </div>
+
+        <div className="discover-modal__results">
+          {query.length < 2 && (
+            <div className="discover-modal__hint">
+              Type at least 2 characters to search
+            </div>
+          )}
+          {query.length >= 2 && searchResults.isLoading && (
+            <div className="discover-modal__hint">Searching...</div>
+          )}
+          {localVenues.map((venue) => (
+            <button
+              key={venue.id}
+              type="button"
+              className="discover-modal__result"
+              onClick={() => followMutation.mutate({ venueId: venue.id })}
+              disabled={isPending}
+            >
+              <div className="discover-modal__result-body">
+                <div className="discover-modal__result-name">{venue.name}</div>
+                <div className="discover-modal__result-meta">
+                  {[venue.city, venue.stateRegion].filter(Boolean).join(", ")}
+                </div>
+              </div>
+              <div className="discover-modal__result-action">
+                <Plus size={12} />
+                Follow
+              </div>
+            </button>
+          ))}
+          {filteredPlaces.length > 0 && localVenues.length > 0 && (
+            <div className="discover-modal__hint" style={{ borderBottom: "1px solid var(--rule)" }}>
+              From Google Places
+            </div>
+          )}
+          {filteredPlaces.map((place) => (
+            <button
+              key={place.placeId}
+              type="button"
+              className="discover-modal__result"
+              onClick={() => createAndFollow.mutate({ placeId: place.placeId })}
+              disabled={isPending}
+            >
+              <div className="discover-modal__result-body">
+                <div className="discover-modal__result-name">{place.displayName}</div>
+                <div className="discover-modal__result-meta">{place.formattedAddress}</div>
+              </div>
+              <div className="discover-modal__result-action">
+                <Plus size={12} />
+                Follow
+              </div>
+            </button>
+          ))}
+          {query.length >= 2 && !searchResults.isLoading && localVenues.length === 0 && filteredPlaces.length === 0 && (
+            <div className="discover-modal__hint">No venues found</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Venue Rail (left sidebar filter)
+// ---------------------------------------------------------------------------
+
+function VenueRail({
   venues,
   selected,
   onSelect,
+  tabLabel,
+  totalCount,
+  showFollowLink,
+  onFollowVenue,
 }: {
-  venues: { id: string; name: string }[];
+  venues: {
+    id: string;
+    name: string;
+    neighborhood?: string;
+    count: number;
+  }[];
   selected: string | null;
   onSelect: (venueId: string | null) => void;
+  tabLabel: string;
+  totalCount: number;
+  showFollowLink: boolean;
+  onFollowVenue?: () => void;
 }) {
-  if (venues.length === 0) return null;
-
   return (
-    <>
-      {/* Desktop: sidebar rail */}
-      <aside className="venue-filter-rail">
-        <div className="venue-filter-rail__title">Venues</div>
-        <button
-          type="button"
-          className={`venue-filter-rail__item ${selected === null ? "venue-filter-rail__item--active" : ""}`}
-          onClick={() => onSelect(null)}
-        >
-          All
-        </button>
-        {venues.map((v) => (
-          <button
-            key={v.id}
-            type="button"
-            className={`venue-filter-rail__item ${selected === v.id ? "venue-filter-rail__item--active" : ""}`}
-            onClick={() => onSelect(selected === v.id ? null : v.id)}
-          >
-            {v.name}
-          </button>
-        ))}
-      </aside>
+    <aside className="discover-rail">
+      <div className="discover-rail__title">{tabLabel}</div>
 
-      {/* Mobile: horizontal chip row */}
-      <div className="venue-filter-chips">
+      {/* "All" item */}
+      <button
+        type="button"
+        className={`discover-rail__item ${selected === null ? "discover-rail__item--active" : ""}`}
+        onClick={() => onSelect(null)}
+      >
+        <div className="discover-rail__item-body">
+          <div className="discover-rail__item-name">
+            {tabLabel === "Followed venues" ? "All followed" : "All nearby"}
+          </div>
+        </div>
+        <div className="discover-rail__item-count">{totalCount}</div>
+      </button>
+
+      {/* Per-venue items */}
+      {venues.map((v) => (
         <button
+          key={v.id}
           type="button"
-          className={`venue-chip ${selected === null ? "venue-chip--active" : ""}`}
-          onClick={() => onSelect(null)}
+          className={`discover-rail__item ${selected === v.id ? "discover-rail__item--active" : ""}`}
+          onClick={() => onSelect(selected === v.id ? null : v.id)}
         >
-          All
+          <div className="discover-rail__item-body">
+            <div className="discover-rail__item-name">{v.name}</div>
+            {v.neighborhood && (
+              <div className="discover-rail__item-nbhd">
+                {v.neighborhood.toLowerCase()}
+              </div>
+            )}
+          </div>
+          <div className="discover-rail__item-count">{v.count}</div>
         </button>
-        {venues.map((v) => (
-          <button
-            key={v.id}
-            type="button"
-            className={`venue-chip ${selected === v.id ? "venue-chip--active" : ""}`}
-            onClick={() => onSelect(selected === v.id ? null : v.id)}
-          >
-            {v.name}
+      ))}
+
+      {showFollowLink && (
+        <div className="discover-rail__follow">
+          <button type="button" className="discover-rail__follow-link" onClick={onFollowVenue}>
+            <Plus size={11} />
+            Follow another venue
           </button>
-        ))}
-      </div>
-    </>
+        </div>
+      )}
+    </aside>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mobile Venue Chips
+// ---------------------------------------------------------------------------
+
+function VenueChips({
+  venues,
+  selected,
+  onSelect,
+  totalCount,
+}: {
+  venues: { id: string; name: string; count: number }[];
+  selected: string | null;
+  onSelect: (venueId: string | null) => void;
+  totalCount: number;
+}) {
+  return (
+    <div className="discover-chips">
+      <button
+        type="button"
+        className={`discover-chip ${selected === null ? "discover-chip--active" : ""}`}
+        onClick={() => onSelect(null)}
+      >
+        All
+        <span className="discover-chip__count">{totalCount}</span>
+      </button>
+      {venues.map((v) => (
+        <button
+          key={v.id}
+          type="button"
+          className={`discover-chip ${selected === v.id ? "discover-chip--active" : ""}`}
+          onClick={() => onSelect(selected === v.id ? null : v.id)}
+        >
+          {v.name}
+          <span className="discover-chip__count">{v.count}</span>
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -230,25 +518,37 @@ function FeedSection({
   emptyMessage,
   watchedIds,
   onToggleWatch,
-  showVenueFilter,
+  activeTab,
+  onVenueFollowed,
 }: {
   items: Announcement[] | undefined;
   isLoading: boolean;
   emptyMessage: string;
   watchedIds: Set<string>;
   onToggleWatch: (id: string, watching: boolean) => void;
-  showVenueFilter: boolean;
+  activeTab: string;
+  onVenueFollowed: () => void;
 }) {
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
+  const [showFollowModal, setShowFollowModal] = useState(false);
 
-  // Extract unique venues
-  const uniqueVenues = useMemo(() => {
+  // Extract unique venues with counts and neighborhoods
+  const venueList = useMemo(() => {
     if (!items) return [];
-    const seen = new Map<string, { id: string; name: string }>();
+    const seen = new Map<
+      string,
+      { id: string; name: string; neighborhood?: string; count: number }
+    >();
     for (const item of items) {
       if (!seen.has(item.venue.id)) {
-        seen.set(item.venue.id, { id: item.venue.id, name: item.venue.name });
+        seen.set(item.venue.id, {
+          id: item.venue.id,
+          name: item.venue.name,
+          neighborhood: item.venue.neighborhood || item.venue.city,
+          count: 0,
+        });
       }
+      seen.get(item.venue.id)!.count++;
     }
     return Array.from(seen.values());
   }, [items]);
@@ -260,71 +560,168 @@ function FeedSection({
     return items.filter((item) => item.venue.id === selectedVenueId);
   }, [items, selectedVenueId]);
 
-  // Group by venue
-  const groupedByVenue = useMemo(() => {
-    const groups = new Map<
-      string,
-      { venue: { id: string; name: string; city: string }; items: Announcement[] }
-    >();
-    for (const item of filteredItems) {
-      const key = item.venue.id;
-      if (!groups.has(key)) {
-        groups.set(key, { venue: item.venue, items: [] });
-      }
-      groups.get(key)!.items.push(item);
+  // Group by venue (when "All" is selected)
+  const groups = useMemo(() => {
+    if (selectedVenueId) {
+      const v = venueList.find((v) => v.id === selectedVenueId) || {
+        id: selectedVenueId,
+        name: "",
+        neighborhood: "",
+        count: 0,
+      };
+      return [{ venue: v, items: filteredItems }];
     }
-    return Array.from(groups.values());
-  }, [filteredItems]);
+    return venueList.map((v) => ({
+      venue: v,
+      items: filteredItems.filter((item) => item.venue.id === v.id),
+    }));
+  }, [filteredItems, venueList, selectedVenueId]);
+
+  const totalCount = items?.length ?? 0;
+  const isFollowed = activeTab === "Followed";
+  const tabLabel = isFollowed ? "Followed venues" : "Nearby venues";
+  const showAllGrouped = selectedVenueId === null;
+
+  function handleFollowVenue() {
+    setShowFollowModal(true);
+  }
+
+  function handleVenueFollowed() {
+    setShowFollowModal(false);
+    onVenueFollowed();
+  }
+
+  const followModal = showFollowModal && (
+    <VenueSearchModal
+      onClose={() => setShowFollowModal(false)}
+      onFollowed={handleVenueFollowed}
+    />
+  );
 
   if (isLoading) {
     return (
-      <div className="discover-empty">
-        <div className="discover-loading">
-          <div className="discover-loading__dot" />
-          <div className="discover-loading__dot" />
-          <div className="discover-loading__dot" />
+      <div className="discover-main">
+        <VenueRail
+          venues={[]}
+          selected={null}
+          onSelect={setSelectedVenueId}
+          tabLabel={tabLabel}
+          totalCount={0}
+          showFollowLink={isFollowed}
+          onFollowVenue={handleFollowVenue}
+        />
+        <div className="discover-empty">
+          <div className="discover-loading">
+            <div className="discover-loading__dot" />
+            <div className="discover-loading__dot" />
+            <div className="discover-loading__dot" />
+          </div>
         </div>
+        {followModal}
       </div>
     );
   }
 
   if (!items || items.length === 0) {
     return (
-      <div className="discover-empty">
-        <p className="discover-empty__text">{emptyMessage}</p>
+      <div className="discover-main">
+        <VenueRail
+          venues={[]}
+          selected={null}
+          onSelect={setSelectedVenueId}
+          tabLabel={tabLabel}
+          totalCount={0}
+          showFollowLink={isFollowed}
+          onFollowVenue={handleFollowVenue}
+        />
+        <div className="discover-empty">
+          <p className="discover-empty__text">{emptyMessage}</p>
+        </div>
+        {followModal}
       </div>
     );
   }
 
   return (
-    <div className="feed-layout">
-      {showVenueFilter && (
-        <VenueFilter
-          venues={uniqueVenues}
-          selected={selectedVenueId}
-          onSelect={setSelectedVenueId}
-        />
-      )}
-      <div className="feed-content">
-        {groupedByVenue.map((group) => (
-          <section key={group.venue.id} className="venue-group">
-            <h3 className="venue-group__header">
-              {group.venue.name}
-              <span className="venue-group__city">{group.venue.city}</span>
-            </h3>
-            <div className="venue-group__cards">
-              {group.items.map((item) => (
-                <AnnouncementCard
-                  key={item.id}
-                  announcement={item}
-                  isWatching={watchedIds.has(item.id)}
-                  onToggleWatch={onToggleWatch}
-                />
-              ))}
-            </div>
-          </section>
+    <div className="discover-main">
+      {/* Left Rail (desktop) */}
+      <VenueRail
+        venues={venueList}
+        selected={selectedVenueId}
+        onSelect={setSelectedVenueId}
+        tabLabel={tabLabel}
+        totalCount={totalCount}
+        showFollowLink={isFollowed}
+        onFollowVenue={handleFollowVenue}
+      />
+
+      {/* Mobile Chips */}
+      <VenueChips
+        venues={venueList}
+        selected={selectedVenueId}
+        onSelect={setSelectedVenueId}
+        totalCount={totalCount}
+      />
+
+      {/* Feed */}
+      <div className="discover-feed">
+        {/* Column headers */}
+        <div className="discover-col-headers">
+          <div>Show date</div>
+          <div>Kind</div>
+          <div>Headliner</div>
+          <div>On sale</div>
+          <div>Status</div>
+          <div />
+        </div>
+
+        {/* Grouped rows */}
+        {groups.map((group) => (
+          <div key={group.venue.id || "flat"} className="discover-venue-group">
+            {/* Venue header (only when "All" is selected) */}
+            {showAllGrouped && (
+              <div className="discover-venue-group__header">
+                <span className="discover-venue-group__name">
+                  {group.venue.name}
+                </span>
+                <span className="discover-venue-group__meta">
+                  {group.venue.neighborhood
+                    ? group.venue.neighborhood.toLowerCase() + " · "
+                    : ""}
+                  {group.items.length} upcoming
+                </span>
+                <div className="discover-venue-group__rule" />
+                <span className="discover-venue-group__link">
+                  venue page &rarr;
+                </span>
+              </div>
+            )}
+
+            {/* Announcement rows */}
+            {group.items.map((item) => (
+              <AnnouncementRow
+                key={item.id}
+                announcement={item}
+                isWatching={watchedIds.has(item.id)}
+                onToggleWatch={onToggleWatch}
+                showReason={showAllGrouped}
+              />
+            ))}
+          </div>
         ))}
+
+        {/* Footer */}
+        <div className="discover-footer">
+          <span>
+            past items fall off silently after show date &middot; no dismiss
+            needed
+          </span>
+          <span className="discover-footer__right">
+            daily digest &middot; 08:00 &middot; email
+          </span>
+        </div>
       </div>
+      {followModal}
     </div>
   );
 }
@@ -333,11 +730,16 @@ function FeedSection({
 // Main Page
 // ---------------------------------------------------------------------------
 
-const TABS = ["Followed", "Near You"] as const;
+const TABS = [
+  { key: "Followed", label: "Followed venues" },
+  { key: "Near You", label: "Near you" },
+] as const;
 
 export default function DiscoverPage() {
   const [activeTab, setActiveTab] = useState<string>("Followed");
   const [watchedIds, setWatchedIds] = useState<Set<string>>(new Set());
+
+  const utils = trpc.useUtils();
 
   const followedFeed = trpc.discover.followedFeed.useQuery(
     { limit: 50 },
@@ -348,6 +750,11 @@ export default function DiscoverPage() {
     { limit: 50 },
     { enabled: activeTab === "Near You" },
   );
+
+  function handleVenueFollowed() {
+    utils.discover.followedFeed.invalidate();
+    utils.venues.followed.invalidate();
+  }
 
   function handleToggleWatch(announcementId: string, watching: boolean) {
     setWatchedIds((prev) => {
@@ -361,36 +768,82 @@ export default function DiscoverPage() {
     });
   }
 
+  const followedItems = followedFeed.data?.items as
+    | Announcement[]
+    | undefined;
+  const nearbyItems = nearbyFeed.data?.items as Announcement[] | undefined;
+  const currentItems =
+    activeTab === "Followed" ? followedItems : nearbyItems;
+  const currentCount = currentItems?.length ?? 0;
+
+  // Counts for tabs
+  const followedCount = followedItems?.length ?? 0;
+  const nearbyCount = nearbyItems?.length ?? 0;
+  const tabCounts: Record<string, number> = {
+    Followed: followedCount,
+    "Near You": nearbyCount,
+  };
+
   return (
     <div className="discover-page">
+      {/* Header */}
       <header className="discover-header">
-        <h1 className="discover-title">Discover</h1>
-        <SegmentedControl
-          options={[...TABS]}
-          selected={activeTab}
-          onChange={setActiveTab}
-        />
+        <div>
+          <div className="discover-header__subtitle">
+            {currentCount} announcements &middot; daily 8am digest
+          </div>
+          <h1 className="discover-header__title">Discover</h1>
+        </div>
+        <div className="discover-header__location">
+          <MapPin size={12} />
+          nyc &middot; 30mi radius
+          <span className="discover-header__location-sep">&middot;</span>
+          3 regions
+        </div>
       </header>
 
+      {/* Tabs */}
+      <div className="discover-tabs-bar">
+        <div className="discover-tabs">
+          {TABS.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              className={`discover-tab ${activeTab === key ? "discover-tab--active" : ""}`}
+              onClick={() => setActiveTab(key)}
+            >
+              <span>{label}</span>
+              <span className="discover-tab__count">
+                ({tabCounts[key]})
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="discover-tabs-bar__spacer" />
+      </div>
+
+      {/* Feed sections */}
       {activeTab === "Followed" && (
         <FeedSection
-          items={followedFeed.data?.items as Announcement[] | undefined}
+          items={followedItems}
           isLoading={followedFeed.isLoading}
           emptyMessage="No announcements from followed venues"
           watchedIds={watchedIds}
           onToggleWatch={handleToggleWatch}
-          showVenueFilter={true}
+          activeTab={activeTab}
+          onVenueFollowed={handleVenueFollowed}
         />
       )}
 
       {activeTab === "Near You" && (
         <FeedSection
-          items={nearbyFeed.data?.items as Announcement[] | undefined}
+          items={nearbyItems}
           isLoading={nearbyFeed.isLoading}
-          emptyMessage="Add a region in Preferences to see nearby shows"
+          emptyMessage={nearbyFeed.data?.hasRegions ? "No announcements near you right now" : "Add a region in Preferences to see nearby shows"}
           watchedIds={watchedIds}
           onToggleWatch={handleToggleWatch}
-          showVenueFilter={false}
+          activeTab={activeTab}
+          onVenueFollowed={handleVenueFollowed}
         />
       )}
     </div>
