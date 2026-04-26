@@ -417,4 +417,26 @@ export const showsRouter = router({
 
       return { success: true };
     }),
+
+  deleteAll: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      const userId = ctx.session.user.id;
+
+      const userShows = await ctx.db
+        .select({ id: shows.id })
+        .from(shows)
+        .where(eq(shows.userId, userId));
+
+      if (userShows.length === 0) return { deleted: 0 };
+
+      const showIds = userShows.map((s) => s.id);
+
+      await ctx.db
+        .delete(showPerformers)
+        .where(sql`${showPerformers.showId} IN (${sql.join(showIds.map(id => sql`${id}`), sql`, `)})`);
+
+      await ctx.db.delete(shows).where(eq(shows.userId, userId));
+
+      return { deleted: showIds.length };
+    }),
 });

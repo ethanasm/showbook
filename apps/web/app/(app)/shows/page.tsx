@@ -227,6 +227,7 @@ export default function ShowsPage() {
 
   const updateState = trpc.shows.updateState.useMutation();
   const deleteShow = trpc.shows.delete.useMutation();
+  const deleteAllShows = trpc.shows.deleteAll.useMutation();
   const createShow = trpc.shows.create.useMutation();
   const utils = trpc.useUtils();
 
@@ -328,6 +329,15 @@ export default function ShowsPage() {
     await deleteShow.mutateAsync({ showId });
     setExpandedShowId(null);
     utils.shows.list.invalidate();
+    utils.performers.list.invalidate();
+  }
+
+  async function handleDeleteAll() {
+    if (!confirm(`Delete all ${totalShows} shows? This cannot be undone.`)) return;
+    await deleteAllShows.mutateAsync();
+    setExpandedShowId(null);
+    utils.shows.list.invalidate();
+    utils.performers.list.invalidate();
   }
 
   // ---------------------------------------------------------------------------
@@ -540,6 +550,30 @@ export default function ShowsPage() {
             <Mail size={14} />
             <span>Import from Gmail</span>
           </button>
+          {totalShows > 0 && (
+            <button
+              onClick={handleDeleteAll}
+              disabled={deleteAllShows.isPending}
+              style={{
+                border: "1px solid var(--kind-theatre)",
+                cursor: deleteAllShows.isPending ? "not-allowed" : "pointer",
+                background: "transparent",
+                color: "var(--kind-theatre)",
+                padding: "10px 16px",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 13,
+                fontWeight: 500,
+                letterSpacing: -0.2,
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
+                opacity: deleteAllShows.isPending ? 0.5 : 1,
+              }}
+            >
+              <Trash2 size={14} />
+              <span>{deleteAllShows.isPending ? "Deleting..." : "Delete All"}</span>
+            </button>
+          )}
           <div style={{ display: "flex", alignItems: "stretch", border: "1px solid var(--rule-strong)" }}>
             {modes.map(({ k, l, Ic, count }, i) => {
               const active = k === viewMode;
@@ -744,8 +778,11 @@ export default function ShowsPage() {
           <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 6 }}>
             Venue
           </div>
-          <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 14, fontWeight: 500, color: "var(--ink)" }}>
+          <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 14, fontWeight: 500, color: "var(--ink)", display: "flex", alignItems: "center", gap: 6 }}>
             {show.venue.name}
+            {(show.venue.latitude == null || show.venue.longitude == null) && (
+              <span title="No coordinates — won't appear on map" style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--kind-theatre)", flexShrink: 0, opacity: 0.7 }} />
+            )}
           </div>
           {neighborhood && (
             <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", marginTop: 3 }}>
