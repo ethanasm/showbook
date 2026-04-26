@@ -13,6 +13,7 @@ import {
   parseShowInput,
   extractCast as groqExtractCast,
   extractShowFromEmail,
+  extractShowFromPdfText,
 } from '../groq';
 import {
   autocomplete as placesAutocomplete,
@@ -24,6 +25,7 @@ import {
   buildTicketSearchQuery,
   buildBulkScanQueries,
 } from '../gmail';
+import { geocodeVenue } from '../geocode';
 
 function mapEventToResult(event: TMEvent) {
   const venue = event._embedded?.venues?.[0];
@@ -79,8 +81,9 @@ export const enrichmentRouter = router({
   fetchTMEventByUrl: protectedProcedure
     .input(z.object({ url: z.string().min(1) }))
     .mutation(async ({ input }) => {
-      const match = input.url.match(/\/event\/([A-Za-z0-9]+)/);
-      const eventId = match ? match[1] : input.url.trim();
+      const pathMatch = input.url.match(/\/event\/([A-Za-z0-9]+)/);
+      const queryMatch = input.url.match(/[?&]eventId=([A-Za-z0-9]+)/);
+      const eventId = pathMatch?.[1] ?? queryMatch?.[1] ?? input.url.trim();
       if (!eventId) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Could not parse event ID from URL' });
       }
@@ -149,30 +152,7 @@ export const enrichmentRouter = router({
       }),
     )
     .query(async ({ input }) => {
-      const headers = { 'User-Agent': 'Showbook/1.0' };
-      const queries = [
-        `${input.venueName}, ${input.city}`,
-        `${input.venueName.replace(/^The /i, '')}, ${input.city}`,
-        `${input.venueName} ${input.city.split(',')[0]}`,
-      ];
-
-      for (const query of queries) {
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
-        try {
-          const res = await fetch(url, { headers });
-          if (!res.ok) continue;
-          const results = await res.json() as Array<{ lat: string; lon: string }>;
-          if (results.length > 0) {
-            return {
-              lat: parseFloat(results[0].lat),
-              lng: parseFloat(results[0].lon),
-            };
-          }
-        } catch {
-          continue;
-        }
-      }
-      return null;
+      return geocodeVenue(input.venueName, input.city);
     }),
 
   // ---------------------------------------------------------------------------
@@ -208,6 +188,23 @@ export const enrichmentRouter = router({
       const details = await getPlaceDetails(input.placeId);
       if (!details) throw new TRPCError({ code: 'NOT_FOUND', message: 'Place not found' });
       return details;
+    }),
+
+  // ---------------------------------------------------------------------------
+  // extractFromPdf — PDF ticket image(s) → structured show data
+  // ---------------------------------------------------------------------------
+  extractFromPdf: protectedProcedure
+    .input(z.object({ fileBase64: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const { PDFParse } = await import('pdf-parse');
+      const buffer = Buffer.from(input.fileBase64, 'base64');
+      const pdf = new PDFParse({ data: buffer });
+      const result = await pdf.getText();
+      await pdf.destroy();
+      if (!result.text.trim()) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Could not extract text from PDF' });
+      }
+      return extractShowFromPdfText(result.text);
     }),
 
   // ---------------------------------------------------------------------------

@@ -188,6 +188,46 @@ export async function validateAndDedupTickets<T extends ExtractedTicketInfo>(
 // extractCast — playbill image → principal cast list
 // ---------------------------------------------------------------------------
 
+export async function extractShowFromPdfText(
+  pdfText: string,
+): Promise<ExtractedTicketInfo> {
+  const result = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [
+      {
+        role: 'system',
+        content:
+          'You are a structured data extractor for a LIVE ENTERTAINMENT tracker. ' +
+          'Given text extracted from a PDF ticket or receipt, extract ALL available details.\n\n' +
+          'Return ONLY a JSON object with these fields:\n' +
+          '- headliner (string): the main performer, artist, or show name\n' +
+          '- venue_name (string or null): the venue name\n' +
+          '- venue_city (string or null): the city\n' +
+          '- date (string or null): the event date in YYYY-MM-DD format\n' +
+          '- seat (string or null): section, row, and seat info combined\n' +
+          '- price (string or null): total price paid as a decimal string\n' +
+          '- kind_hint (one of: concert, theatre, comedy, festival, or null)\n' +
+          '- confidence (one of: high, medium, low)\n\n' +
+          'Extract EVERY field you can find. Do not leave fields null if the information is anywhere in the text.',
+      },
+      {
+        role: 'user',
+        content: pdfText.slice(0, 8000),
+      },
+    ],
+    response_format: { type: 'json_object' },
+  });
+
+  const raw = result.choices[0]?.message?.content;
+  if (!raw) throw new Error('No response from Groq');
+
+  try {
+    return JSON.parse(raw) as ExtractedTicketInfo;
+  } catch {
+    throw new Error(`Failed to parse Groq response: ${raw.slice(0, 200)}`);
+  }
+}
+
 export async function extractCast(
   imageBase64: string,
 ): Promise<CastMember[]> {

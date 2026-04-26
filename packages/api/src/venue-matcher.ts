@@ -1,6 +1,7 @@
 import { db } from '@showbook/db';
 import { venues } from '@showbook/db';
 import { eq, and, sql } from 'drizzle-orm';
+import { geocodeVenue } from './geocode';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -82,17 +83,34 @@ export async function matchOrCreateVenue(
     };
   }
 
-  // 3. Create new venue
+  // 4. Create new venue — geocode if no coordinates provided
+  let lat = input.lat ?? null;
+  let lng = input.lng ?? null;
+  let stateRegion = input.stateRegion ?? null;
+  let country = input.country ?? 'US';
+
+  if (lat == null && input.name && input.city) {
+    try {
+      const geo = await geocodeVenue(input.name, input.city);
+      if (geo) {
+        lat = geo.lat;
+        lng = geo.lng;
+        if (!stateRegion && geo.stateRegion) stateRegion = geo.stateRegion;
+        if (geo.country) country = geo.country;
+      }
+    } catch { /* geocoding failed; save without coordinates */ }
+  }
+
   const [created] = await db
     .insert(venues)
     .values({
       name: input.name,
       city: input.city,
-      stateRegion: input.stateRegion ?? null,
-      country: input.country ?? 'US',
+      stateRegion,
+      country,
       ticketmasterVenueId: input.tmVenueId ?? null,
-      latitude: input.lat ?? null,
-      longitude: input.lng ?? null,
+      latitude: lat,
+      longitude: lng,
       googlePlaceId: input.googlePlaceId ?? null,
     })
     .returning();
@@ -122,6 +140,17 @@ async function maybeUpdate(
   }
   if (input.lng != null && existing.longitude == null) {
     updates.longitude = input.lng;
+  }
+  if (existing.latitude == null && input.lat == null) {
+    try {
+      const geo = await geocodeVenue(existing.name, existing.city);
+      if (geo) {
+        updates.latitude = geo.lat;
+        updates.longitude = geo.lng;
+        if (!existing.stateRegion && geo.stateRegion) updates.stateRegion = geo.stateRegion;
+        if (!existing.country && geo.country) updates.country = geo.country;
+      }
+    } catch { /* geocoding failed */ }
   }
   if (input.googlePlaceId && !existing.googlePlaceId) {
     updates.googlePlaceId = input.googlePlaceId;

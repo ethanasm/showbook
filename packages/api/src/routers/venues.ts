@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, and, asc, desc, gte, sql } from 'drizzle-orm';
+import { eq, and, asc, desc, gte, sql, isNotNull } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
 import {
@@ -10,6 +10,7 @@ import {
 } from '@showbook/db';
 import { getPlaceDetails } from '../google-places';
 import { matchOrCreateVenue } from '../venue-matcher';
+import { geocodeVenue } from '../geocode';
 
 export const venuesRouter = router({
   search: protectedProcedure
@@ -80,10 +81,6 @@ export const venuesRouter = router({
     return follows.map((f) => f.venue);
   }),
 
-  /**
-   * Full detail for a single venue, plus per-user follow state and stats
-   * (count of the user's shows there, and count of upcoming announcements).
-   */
   detail: protectedProcedure
     .input(z.object({ venueId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
@@ -136,10 +133,6 @@ export const venuesRouter = router({
       };
     }),
 
-  /**
-   * All upcoming announcements at a venue (regardless of whether the user
-   * follows it or has it nearby). Returns ascending by show date.
-   */
   upcomingAnnouncements: protectedProcedure
     .input(
       z.object({
@@ -162,9 +155,6 @@ export const venuesRouter = router({
         .limit(input.limit);
     }),
 
-  /**
-   * The current user's shows at this venue (any state), newest first.
-   */
   userShows: protectedProcedure
     .input(z.object({ venueId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
@@ -182,4 +172,48 @@ export const venuesRouter = router({
         },
       });
     }),
+
+  backfillCoordinates: protectedProcedure.mutation(async ({ ctx }) => {
+    const incomplete = await ctx.db
+      .select()
+      .from(venues)
+      .where(
+        and(
+          isNotNull(venues.city),
+          sql`${venues.city} != 'Unknown'`,
+          sql`(${venues.latitude} IS NULL OR ${venues.stateRegion} IS NULL OR ${venues.stateRegion} = '')`,
+        ),
+      );
+
+    let geocoded = 0;
+    let failed = 0;
+
+    for (const venue of incomplete) {
+      try {
+        const geo = await geocodeVenue(venue.name, venue.city);
+        if (geo) {
+          const updates: Record<string, unknown> = {};
+          if (venue.latitude == null) {
+            updates.latitude = geo.lat;
+            updates.longitude = geo.lng;
+          }
+          if (!venue.stateRegion && geo.stateRegion) updates.stateRegion = geo.stateRegion;
+          if ((!venue.country || venue.country === 'US') && geo.country) updates.country = geo.country;
+          if (Object.keys(updates).length > 0) {
+            await ctx.db
+              .update(venues)
+              .set(updates)
+              .where(eq(venues.id, venue.id));
+          }
+          geocoded++;
+        } else {
+          failed++;
+        }
+      } catch {
+        failed++;
+      }
+    }
+
+    return { total: incomplete.length, geocoded, failed };
+  }),
 });
