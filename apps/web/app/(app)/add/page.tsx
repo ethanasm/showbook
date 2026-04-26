@@ -1412,25 +1412,6 @@ export default function AddPage() {
         </button>
         <button
           type="button"
-          onClick={() => {
-            // Save draft is a placeholder for now
-          }}
-          style={{
-            padding: "9px 14px",
-            border: `1px solid var(--rule-strong)`,
-            background: "transparent",
-            color: "var(--ink)",
-            fontFamily: mono,
-            fontSize: 11,
-            letterSpacing: ".06em",
-            textTransform: "uppercase",
-            cursor: "pointer",
-          }}
-        >
-          Save draft
-        </button>
-        <button
-          type="button"
           onClick={handleFormSave}
           disabled={!canSave || createShow.isPending}
           style={{
