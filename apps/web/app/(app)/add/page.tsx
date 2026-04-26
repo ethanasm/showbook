@@ -109,6 +109,9 @@ export default function AddPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const editId = searchParams.get("editId");
+  const isEditMode = !!editId;
+
   // Mode toggle
   const [mode, setMode] = useState<Mode>("Form");
 
@@ -234,6 +237,88 @@ export default function AddPage() {
       router.push("/shows");
     },
   });
+  const updateShow = trpc.shows.update.useMutation({
+    onSuccess: () => {
+      router.push("/shows");
+    },
+  });
+
+  // Fetch existing show for edit mode
+  const editQuery = trpc.shows.detail.useQuery(
+    { showId: editId! },
+    { enabled: isEditMode },
+  );
+  const [editPrefilled, setEditPrefilled] = useState(false);
+
+  useEffect(() => {
+    if (!editQuery.data || editPrefilled) return;
+    const s = editQuery.data;
+
+    setKind(s.kind as ShowKind);
+    setDate(s.date);
+    if (s.endDate) setEndDate(s.endDate);
+    if (s.seat) setSeat(s.seat);
+    if (s.pricePaid) setPricePaid(s.pricePaid);
+    if (s.tourName) setTourName(s.tourName);
+    if (s.setlist) setSetlist(s.setlist);
+
+    // Headliner
+    const headlinerPerf = s.showPerformers.find(
+      (sp: { role: string; sortOrder: number }) => sp.role === "headliner" && sp.sortOrder === 0,
+    );
+    if (headlinerPerf) {
+      setHeadlinerName(headlinerPerf.performer.name);
+      setHeadliner({
+        name: headlinerPerf.performer.name,
+        tmAttractionId: undefined,
+        imageUrl: headlinerPerf.performer.imageUrl ?? undefined,
+      });
+    }
+
+    // Venue
+    setVenue({
+      name: s.venue.name,
+      city: s.venue.city,
+      stateRegion: s.venue.stateRegion ?? undefined,
+      country: s.venue.country ?? undefined,
+      tmVenueId: s.venue.ticketmasterVenueId ?? undefined,
+      googlePlaceId: s.venue.googlePlaceId ?? undefined,
+      lat: s.venue.latitude ?? undefined,
+      lng: s.venue.longitude ?? undefined,
+    });
+    setVenueQuery(s.venue.name);
+
+    // Other performers
+    const otherPerfs = s.showPerformers
+      .filter((sp: { role: string; sortOrder: number }) => !(sp.role === "headliner" && sp.sortOrder === 0))
+      .sort((a: { sortOrder: number }, b: { sortOrder: number }) => a.sortOrder - b.sortOrder)
+      .map((sp: { role: string; characterName: string | null; sortOrder: number; performer: { name: string; imageUrl: string | null } }) => ({
+        name: sp.performer.name,
+        role: sp.role as "headliner" | "support" | "cast",
+        characterName: sp.characterName ?? undefined,
+        sortOrder: sp.sortOrder,
+        imageUrl: sp.performer.imageUrl ?? undefined,
+      }));
+    setPerformers(otherPerfs);
+
+    // Cast members for theatre
+    if (s.kind === "theatre") {
+      const cast = s.showPerformers
+        .filter((sp: { role: string }) => sp.role === "cast")
+        .map((sp: { characterName: string | null; performer: { name: string } }) => ({
+          actor: sp.performer.name,
+          role: sp.characterName ?? "",
+        }));
+      if (cast.length > 0) setCastMembers(cast);
+    }
+
+    // Timeframe
+    if (s.state === "past") setTimeframe("past");
+    else if (s.state === "ticketed") setTimeframe("upcoming");
+    else setTimeframe("watching");
+
+    setEditPrefilled(true);
+  }, [editQuery.data, editPrefilled]);
 
   // Gmail
   const scanGmailForShow = trpc.enrichment.scanGmailForShow.useMutation();
@@ -545,7 +630,7 @@ export default function AddPage() {
         }
       }
 
-      await createShow.mutateAsync({
+      const payload = {
         kind,
         headliner,
         venue: venueToSave,
@@ -556,9 +641,15 @@ export default function AddPage() {
         tourName: tourName || undefined,
         setlist: setlist ?? undefined,
         performers: allPerformers.length > 0 ? allPerformers : undefined,
-      });
+      };
+
+      if (isEditMode && editId) {
+        await updateShow.mutateAsync({ showId: editId, ...payload });
+      } else {
+        await createShow.mutateAsync(payload);
+      }
     } catch {
-      // Error is surfaced via createShow.isError in the UI
+      // Error is surfaced via mutation isError in the UI
     }
   }, [
     kind,
@@ -574,6 +665,9 @@ export default function AddPage() {
     festivalHeadliners,
     openerName,
     createShow,
+    updateShow,
+    isEditMode,
+    editId,
     utils,
   ]);
 
@@ -681,7 +775,7 @@ export default function AddPage() {
             letterSpacing: ".08em",
             textTransform: "uppercase",
           }}>
-            New record · draft
+            {isEditMode ? "Editing record" : "New record · draft"}
           </div>
           <div style={{
             fontFamily: sans,
@@ -691,38 +785,40 @@ export default function AddPage() {
             letterSpacing: -1,
             marginTop: 4,
           }}>
-            Add a show
+            {isEditMode ? "Edit show" : "Add a show"}
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        {/* Mode Tabs */}
-        <div style={{ display: "inline-flex", border: `1px solid var(--rule-strong)` }}>
-          {(["Form", "Chat"] as Mode[]).map((m, i) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              style={{
-                padding: "7px 14px",
-                background: mode === m ? "var(--ink)" : "transparent",
-                color: mode === m ? "var(--bg)" : "var(--muted)",
-                fontFamily: mono,
-                fontSize: 11,
-                letterSpacing: ".06em",
-                textTransform: "uppercase",
-                fontWeight: 500,
-                border: "none",
-                borderLeft: i === 0 ? "none" : `1px solid var(--rule-strong)`,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              {m === "Form" ? "FORM" : "CONVERSATIONAL"}
-            </button>
-          ))}
-        </div>
+        {/* Mode Tabs — hidden in edit mode */}
+        {!isEditMode && (
+          <div style={{ display: "inline-flex", border: `1px solid var(--rule-strong)` }}>
+            {(["Form", "Chat"] as Mode[]).map((m, i) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                style={{
+                  padding: "7px 14px",
+                  background: mode === m ? "var(--ink)" : "transparent",
+                  color: mode === m ? "var(--bg)" : "var(--muted)",
+                  fontFamily: mono,
+                  fontSize: 11,
+                  letterSpacing: ".06em",
+                  textTransform: "uppercase",
+                  fontWeight: 500,
+                  border: "none",
+                  borderLeft: i === 0 ? "none" : `1px solid var(--rule-strong)`,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                {m === "Form" ? "FORM" : "CONVERSATIONAL"}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {mode === "Chat" ? renderChatMode() : renderFormFields()}
@@ -731,50 +827,52 @@ export default function AddPage() {
 
   const renderFormFields = () => (
     <>
-      {/* ── Timeframe ── */}
-      <div style={{ marginBottom: 26 }}>
-        <FieldLabel>Timeframe</FieldLabel>
-        <div style={{ display: "flex", gap: 6 }}>
-          {TIMEFRAME_CONFIG.map((tf) => {
-            const active = timeframe === tf.key;
-            return (
-              <button
-                key={tf.key}
-                type="button"
-                onClick={() => setTimeframe(tf.key)}
-                style={{
-                  flex: 1,
-                  padding: "12px 14px",
-                  background: active ? "var(--surface)" : "transparent",
-                  border: `1px solid ${active ? "var(--rule-strong)" : "var(--rule)"}`,
-                  borderLeft: active ? "2px solid var(--ink)" : "2px solid transparent",
-                  cursor: "pointer",
-                  textAlign: "left",
-                }}
-              >
-                <div style={{
-                  fontFamily: sans,
-                  fontSize: 14,
-                  fontWeight: active ? 600 : 500,
-                  color: active ? "var(--ink)" : "var(--muted)",
-                  letterSpacing: -0.2,
-                }}>
-                  {tf.label}
-                </div>
-                <div style={{
-                  fontFamily: mono,
-                  fontSize: 10,
-                  color: "var(--faint)",
-                  letterSpacing: ".04em",
-                  marginTop: 3,
-                }}>
-                  {tf.sub}
-                </div>
-              </button>
-            );
-          })}
+      {/* ── Timeframe (hidden in edit mode) ── */}
+      {!isEditMode && (
+        <div style={{ marginBottom: 26 }}>
+          <FieldLabel>Timeframe</FieldLabel>
+          <div style={{ display: "flex", gap: 6 }}>
+            {TIMEFRAME_CONFIG.map((tf) => {
+              const active = timeframe === tf.key;
+              return (
+                <button
+                  key={tf.key}
+                  type="button"
+                  onClick={() => setTimeframe(tf.key)}
+                  style={{
+                    flex: 1,
+                    padding: "12px 14px",
+                    background: active ? "var(--surface)" : "transparent",
+                    border: `1px solid ${active ? "var(--rule-strong)" : "var(--rule)"}`,
+                    borderLeft: active ? "2px solid var(--ink)" : "2px solid transparent",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <div style={{
+                    fontFamily: sans,
+                    fontSize: 14,
+                    fontWeight: active ? 600 : 500,
+                    color: active ? "var(--ink)" : "var(--muted)",
+                    letterSpacing: -0.2,
+                  }}>
+                    {tf.label}
+                  </div>
+                  <div style={{
+                    fontFamily: mono,
+                    fontSize: 10,
+                    color: "var(--faint)",
+                    letterSpacing: ".04em",
+                    marginTop: 3,
+                  }}>
+                    {tf.sub}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Kind ── */}
       <div style={{ marginBottom: 26 }}>
@@ -1423,8 +1521,8 @@ export default function AddPage() {
         </div>
       )}
 
-      {/* ── Import From ── */}
-      <div style={{ marginBottom: 26 }}>
+      {/* ── Import From (hidden in edit mode) ── */}
+      {!isEditMode && <div style={{ marginBottom: 26 }}>
         <FieldLabel hint="start from a source">Import from</FieldLabel>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
           {IMPORT_SOURCES.map((src) => (
@@ -1612,7 +1710,7 @@ export default function AddPage() {
             ))}
           </div>
         )}
-      </div>
+      </div>}
 
       {/* ── Commit Bar ── */}
       <div style={{
@@ -1630,7 +1728,10 @@ export default function AddPage() {
           letterSpacing: ".04em",
           flex: 1,
         }}>
-          {autoFilledCount} fields auto-filled · {createShow.isError ? "1 error" : "0 errors"}
+          {isEditMode
+            ? (updateShow.isError ? "1 error" : "0 errors")
+            : <>{autoFilledCount} fields auto-filled · {createShow.isError ? "1 error" : "0 errors"}</>
+          }
         </div>
         <button
           type="button"
@@ -1652,7 +1753,7 @@ export default function AddPage() {
         <button
           type="button"
           onClick={handleFormSave}
-          disabled={!canSave || createShow.isPending}
+          disabled={!canSave || createShow.isPending || updateShow.isPending}
           style={{
             padding: "9px 16px",
             background: canSave ? "var(--ink)" : "var(--surface2)",
@@ -1667,14 +1768,16 @@ export default function AddPage() {
             gap: 6,
             cursor: canSave ? "pointer" : "not-allowed",
             border: "none",
-            opacity: createShow.isPending ? 0.6 : 1,
+            opacity: (createShow.isPending || updateShow.isPending) ? 0.6 : 1,
           }}
         >
-          {createShow.isPending ? "Saving..." : "✓ Save to history"}
+          {(createShow.isPending || updateShow.isPending)
+            ? "Saving..."
+            : isEditMode ? "Save changes" : "✓ Save to history"}
         </button>
       </div>
 
-      {createShow.isError && (
+      {(createShow.isError || updateShow.isError) && (
         <div style={{ color: "#E63946", fontSize: 12, fontFamily: mono, marginTop: 8 }}>
           Failed to save show. Please try again.
         </div>
@@ -1895,7 +1998,7 @@ export default function AddPage() {
             letterSpacing: ".08em",
             textTransform: "uppercase",
           }}>
-            Live preview
+            {isEditMode ? "Preview" : "Live preview"}
           </div>
           <div style={{
             fontFamily: mono,
@@ -1904,7 +2007,7 @@ export default function AddPage() {
             letterSpacing: ".02em",
             marginTop: 3,
           }}>
-            what the archive row will look like
+            {isEditMode ? "updated record preview" : "what the archive row will look like"}
           </div>
         </div>
 
@@ -2030,8 +2133,8 @@ export default function AddPage() {
           </div>
         </div>
 
-        {/* ── Provenance Log ── */}
-        <div>
+        {/* ── Provenance Log (hidden in edit mode) ── */}
+        {!isEditMode && <div>
           <div style={{
             fontFamily: mono,
             fontSize: 10.5,
@@ -2100,12 +2203,30 @@ export default function AddPage() {
             we never ask you to type cast, setlists, or tour names — these are
             fetched from sources when you pick an artist + date.
           </div>
-        </div>
+        </div>}
       </div>
     );
   };
 
   // ── Main Render ────────────────────────────────────────────
+
+  if (isEditMode && editQuery.isLoading) {
+    return (
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "100vh",
+        background: "var(--bg)",
+        color: "var(--muted)",
+        fontFamily: mono,
+        fontSize: 12,
+        letterSpacing: ".06em",
+      }}>
+        Loading show...
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -2138,9 +2259,15 @@ export default function AddPage() {
         }}>
           <span style={{ cursor: "pointer" }} onClick={() => router.push("/home")}>home</span>
           <span style={{ color: "var(--faint)" }}>&gt;</span>
-          <span style={{ color: "var(--ink)", fontWeight: 500 }}>add a show</span>
-          <span style={{ color: "var(--faint)" }}>·</span>
-          <span style={{ color: "var(--faint)" }}>draft · autosaved 2s ago</span>
+          <span style={{ cursor: "pointer" }} onClick={() => router.push("/shows")}>shows</span>
+          <span style={{ color: "var(--faint)" }}>&gt;</span>
+          <span style={{ color: "var(--ink)", fontWeight: 500 }}>{isEditMode ? "edit" : "add a show"}</span>
+          {!isEditMode && (
+            <>
+              <span style={{ color: "var(--faint)" }}>·</span>
+              <span style={{ color: "var(--faint)" }}>draft · autosaved 2s ago</span>
+            </>
+          )}
         </div>
         <div style={{
           display: "flex",

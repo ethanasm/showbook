@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import {
   ShowRow,
@@ -173,6 +174,7 @@ const STATE_TRANSITIONS: Record<string, { label: string; target: ShowState }> =
 // ---------------------------------------------------------------------------
 
 export default function ShowsPage() {
+  const router = useRouter();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedYear, setSelectedYear] = useState<string>("All");
   const [selectedKind, setSelectedKind] = useState<ShowKind | null>(null);
@@ -823,7 +825,7 @@ export default function ShowsPage() {
             </button>
           )}
           <button
-            onClick={() => alert("Edit coming soon")}
+            onClick={() => router.push(`/add?editId=${show.id}`)}
             style={{
               padding: "8px 14px",
               background: "transparent",

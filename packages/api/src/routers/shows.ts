@@ -274,6 +274,123 @@ export const showsRouter = router({
       return updated;
     }),
 
+  update: protectedProcedure
+    .input(
+      z.object({
+        showId: z.string().uuid(),
+        kind: z.enum(['concert', 'theatre', 'comedy', 'festival']),
+        headliner: z.object({
+          name: z.string().min(1),
+          tmAttractionId: z.string().optional(),
+          setlistfmMbid: z.string().optional(),
+          imageUrl: z.string().optional(),
+        }),
+        venue: venueInputSchema,
+        date: z.string(),
+        endDate: z.string().optional(),
+        seat: z.string().optional(),
+        pricePaid: z.string().optional(),
+        tourName: z.string().optional(),
+        setlist: z.array(z.string()).optional(),
+        performers: z.array(performerInputSchema).optional(),
+        sourceRefs: z.any().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      const [existing] = await ctx.db
+        .select()
+        .from(shows)
+        .where(and(eq(shows.id, input.showId), eq(shows.userId, userId)))
+        .limit(1);
+
+      if (!existing) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+      }
+
+      const showDate = new Date(input.date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      let state: 'past' | 'ticketed' | 'watching';
+      if (showDate < today) {
+        state = 'past';
+      } else if (input.seat || input.pricePaid) {
+        state = 'ticketed';
+      } else {
+        state = 'watching';
+      }
+
+      const venueResult = await matchOrCreateVenue(input.venue as VenueInput);
+
+      await ctx.db
+        .update(shows)
+        .set({
+          kind: input.kind,
+          state,
+          venueId: venueResult.venue.id,
+          date: input.date,
+          endDate: input.endDate ?? null,
+          seat: input.seat ?? null,
+          pricePaid: input.pricePaid ?? null,
+          tourName: input.tourName ?? null,
+          setlist: input.setlist ?? null,
+          sourceRefs: input.sourceRefs ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(shows.id, input.showId));
+
+      // Replace all performers
+      await ctx.db
+        .delete(showPerformers)
+        .where(eq(showPerformers.showId, input.showId));
+
+      const headlinerResult = await matchOrCreatePerformer({
+        name: input.headliner.name,
+        tmAttractionId: input.headliner.tmAttractionId,
+        setlistfmMbid: input.headliner.setlistfmMbid,
+        imageUrl: input.headliner.imageUrl,
+      });
+
+      await ctx.db.insert(showPerformers).values({
+        showId: input.showId,
+        performerId: headlinerResult.performer.id,
+        role: 'headliner',
+        characterName: null,
+        sortOrder: 0,
+      });
+
+      if (input.performers?.length) {
+        for (const p of input.performers) {
+          const result = await matchOrCreatePerformer({
+            name: p.name,
+            tmAttractionId: p.tmAttractionId,
+            setlistfmMbid: p.setlistfmMbid,
+            imageUrl: p.imageUrl,
+          });
+
+          await ctx.db.insert(showPerformers).values({
+            showId: input.showId,
+            performerId: result.performer.id,
+            role: p.role,
+            characterName: p.characterName ?? null,
+            sortOrder: p.sortOrder,
+          });
+        }
+      }
+
+      return ctx.db.query.shows.findFirst({
+        where: eq(shows.id, input.showId),
+        with: {
+          venue: true,
+          showPerformers: {
+            with: { performer: true },
+          },
+        },
+      });
+    }),
+
   delete: protectedProcedure
     .input(z.object({ showId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
