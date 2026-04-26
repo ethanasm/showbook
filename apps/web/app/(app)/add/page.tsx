@@ -125,6 +125,8 @@ export default function AddPage() {
   const [endDate, setEndDate] = useState("");
   const [tmEnriched, setTmEnriched] = useState(false);
   const [selectedTmEvent, setSelectedTmEvent] = useState<TMResult | null>(null);
+  const [importUrlOpen, setImportUrlOpen] = useState(false);
+  const [importUrlValue, setImportUrlValue] = useState("");
 
   // Kind-specific enrichment
   const [setlist, setSetlist] = useState<string[] | null>(null);
@@ -204,6 +206,8 @@ export default function AddPage() {
     { headliner: debouncedQuery },
     { enabled: debouncedQuery.length >= 2 },
   );
+
+  const fetchTMEvent = trpc.enrichment.fetchTMEventByUrl.useMutation();
 
   // Places venue search
   const venueSearch = trpc.enrichment.searchPlaces.useQuery(
@@ -313,6 +317,18 @@ export default function AddPage() {
     },
     [],
   );
+
+  const handleImportFromUrl = useCallback(async () => {
+    if (!importUrlValue.trim()) return;
+    try {
+      const result = await fetchTMEvent.mutateAsync({ url: importUrlValue.trim() });
+      handleSelectTmResult(result);
+      setImportUrlOpen(false);
+      setImportUrlValue("");
+    } catch {
+      // Error state surfaced via fetchTMEvent.isError in the UI
+    }
+  }, [importUrlValue, fetchTMEvent, handleSelectTmResult]);
 
   const handlePlaybillUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1414,10 +1430,16 @@ export default function AddPage() {
           {IMPORT_SOURCES.map((src) => (
             <div
               key={src.tag}
-              onClick={src.tag === "mail" ? handleGmailImportClick : undefined}
+              onClick={
+                src.tag === "mail" ? handleGmailImportClick
+                : src.tag === "url" ? () => setImportUrlOpen((v) => !v)
+                : undefined
+              }
               style={{
                 padding: "12px 14px",
-                background: src.tag === "mail" && gmailScanning ? "var(--ink)" : "var(--surface)",
+                background: src.tag === "mail" && gmailScanning ? "var(--ink)"
+                  : src.tag === "url" && importUrlOpen ? "var(--ink)"
+                  : "var(--surface)",
                 border: `1px solid var(--rule-strong)`,
                 display: "flex",
                 flexDirection: "column",
@@ -1429,10 +1451,10 @@ export default function AddPage() {
                 <div style={{
                   fontFamily: mono,
                   fontSize: 9.5,
-                  color: src.tag === "mail" && gmailScanning ? "var(--bg)" : "var(--muted)",
+                  color: (src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) ? "var(--bg)" : "var(--muted)",
                   letterSpacing: ".1em",
                   padding: "2px 5px",
-                  border: `1px solid ${src.tag === "mail" && gmailScanning ? "var(--bg)" : "var(--rule-strong)"}`,
+                  border: `1px solid ${(src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) ? "var(--bg)" : "var(--rule-strong)"}`,
                   textTransform: "uppercase",
                 }}>
                   {src.tag}
@@ -1441,16 +1463,16 @@ export default function AddPage() {
                   fontFamily: sans,
                   fontSize: 13,
                   fontWeight: 500,
-                  color: src.tag === "mail" && gmailScanning ? "var(--bg)" : "var(--ink)",
+                  color: (src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) ? "var(--bg)" : "var(--ink)",
                   letterSpacing: -0.1,
                 }}>
-                  {src.tag === "mail" && gmailScanning ? "Scanning..." : src.label}
+                  {src.tag === "mail" && gmailScanning ? "Scanning..." : src.tag === "url" && fetchTMEvent.isPending ? "Importing..." : src.label}
                 </div>
               </div>
               <div style={{
                 fontFamily: mono,
                 fontSize: 10,
-                color: src.tag === "mail" && gmailScanning ? "var(--bg)" : "var(--faint)",
+                color: (src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) ? "var(--bg)" : "var(--faint)",
                 letterSpacing: ".04em",
               }}>
                 {src.sub}
@@ -1458,6 +1480,67 @@ export default function AddPage() {
             </div>
           ))}
         </div>
+
+        {/* URL import input */}
+        {importUrlOpen && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{
+              padding: "10px 14px",
+              background: "var(--surface)",
+              border: "1px solid var(--rule-strong)",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+            }}>
+              <input
+                type="text"
+                placeholder="https://www.ticketmaster.com/.../event/..."
+                value={importUrlValue}
+                onChange={(e) => setImportUrlValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); handleImportFromUrl(); }
+                  if (e.key === "Escape") { setImportUrlOpen(false); setImportUrlValue(""); }
+                }}
+                autoFocus
+                style={{
+                  flex: 1,
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  fontFamily: mono,
+                  fontSize: 13,
+                  color: "var(--ink)",
+                  letterSpacing: -0.1,
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleImportFromUrl}
+                disabled={fetchTMEvent.isPending || !importUrlValue.trim()}
+                style={{
+                  padding: "6px 12px",
+                  background: importUrlValue.trim() ? "var(--ink)" : "var(--surface2)",
+                  color: importUrlValue.trim() ? "var(--bg)" : "var(--faint)",
+                  fontFamily: mono,
+                  fontSize: 10.5,
+                  letterSpacing: ".06em",
+                  textTransform: "uppercase" as const,
+                  border: "none",
+                  cursor: importUrlValue.trim() ? "pointer" : "not-allowed",
+                }}
+              >
+                {fetchTMEvent.isPending ? "Loading..." : "Import"}
+              </button>
+            </div>
+            {fetchTMEvent.isError && (
+              <div style={{ fontFamily: mono, fontSize: 10.5, color: "#E63946", marginTop: 6 }}>
+                {fetchTMEvent.error?.message?.includes("not found")
+                  ? "Event not found. Check the URL and try again."
+                  : "Failed to import. Check the URL and try again."}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Gmail results dropdown */}
         {gmailShowResults && (
