@@ -208,6 +208,18 @@ export async function getVenue(tmVenueId: string): Promise<TMVenue | null> {
   }
 }
 
+export async function getEvent(tmEventId: string): Promise<TMEvent | null> {
+  try {
+    const url = buildUrl(`/events/${tmEventId}.json`, {});
+    return await tmFetch<TMEvent>(url);
+  } catch (err) {
+    if (err instanceof TMError && err.status === 404) {
+      return null;
+    }
+    throw err;
+  }
+}
+
 export async function getAttraction(
   tmAttractionId: string,
 ): Promise<TMAttraction | null> {

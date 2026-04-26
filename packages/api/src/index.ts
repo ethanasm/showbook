@@ -6,6 +6,7 @@ export type { ArtistSearchResult, SetlistResult } from './setlistfm';
 // Data-source clients & matchers
 export {
   searchEvents,
+  getEvent,
   inferKind,
   selectBestImage,
   type TMEvent,

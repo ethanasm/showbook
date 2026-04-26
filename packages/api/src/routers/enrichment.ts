@@ -3,8 +3,10 @@ import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
 import {
   searchEvents,
+  getEvent,
   inferKind,
   selectBestImage,
+  type TMEvent,
 } from '../ticketmaster';
 import { searchArtist, searchSetlist } from '../setlistfm';
 import {
@@ -22,6 +24,29 @@ import {
   buildTicketSearchQuery,
   buildBulkScanQueries,
 } from '../gmail';
+
+function mapEventToResult(event: TMEvent) {
+  const venue = event._embedded?.venues?.[0];
+  const attractions = event._embedded?.attractions ?? [];
+  return {
+    tmEventId: event.id,
+    name: event.name,
+    date: event.dates.start.localDate,
+    venueName: venue?.name ?? null,
+    venueCity: venue?.city?.name ?? null,
+    venueState: venue?.state?.stateCode ?? null,
+    venueCountry: venue?.country?.countryCode ?? null,
+    venueTmId: venue?.id ?? null,
+    venueLat: venue?.location?.latitude ? parseFloat(venue.location.latitude) : null,
+    venueLng: venue?.location?.longitude ? parseFloat(venue.location.longitude) : null,
+    kind: inferKind(event.classifications),
+    performers: attractions.map((attraction) => ({
+      name: attraction.name,
+      tmAttractionId: attraction.id,
+      imageUrl: selectBestImage(attraction.images),
+    })),
+  };
+}
 
 export const enrichmentRouter = router({
   // ---------------------------------------------------------------------------
@@ -45,29 +70,25 @@ export const enrichmentRouter = router({
         size: 5,
       });
 
-      return events.map((event) => {
-        const venue = event._embedded?.venues?.[0];
-        const attractions = event._embedded?.attractions ?? [];
+      return events.map(mapEventToResult);
+    }),
 
-        return {
-          tmEventId: event.id,
-          name: event.name,
-          date: event.dates.start.localDate,
-          venueName: venue?.name ?? null,
-          venueCity: venue?.city?.name ?? null,
-          venueState: venue?.state?.stateCode ?? null,
-          venueCountry: venue?.country?.countryCode ?? null,
-          venueTmId: venue?.id ?? null,
-          venueLat: venue?.location?.latitude ? parseFloat(venue.location.latitude) : null,
-          venueLng: venue?.location?.longitude ? parseFloat(venue.location.longitude) : null,
-          kind: inferKind(event.classifications),
-          performers: attractions.map((attraction) => ({
-            name: attraction.name,
-            tmAttractionId: attraction.id,
-            imageUrl: selectBestImage(attraction.images),
-          })),
-        };
-      });
+  // ---------------------------------------------------------------------------
+  // fetchTMEventByUrl — fetch a single TM event from a URL or event ID
+  // ---------------------------------------------------------------------------
+  fetchTMEventByUrl: protectedProcedure
+    .input(z.object({ url: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const match = input.url.match(/\/event\/([A-Za-z0-9]+)/);
+      const eventId = match ? match[1] : input.url.trim();
+      if (!eventId) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Could not parse event ID from URL' });
+      }
+      const event = await getEvent(eventId);
+      if (!event) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Event not found on Ticketmaster' });
+      }
+      return mapEventToResult(event);
     }),
 
   // ---------------------------------------------------------------------------
