@@ -201,7 +201,6 @@ export default function VenueDetailPage() {
   }
 
   const locationLine = [
-    venue.neighborhood,
     venue.city,
     venue.stateRegion,
     venue.country,
