@@ -11,7 +11,7 @@ Personal entertainment tracker for live shows — concerts, theatre, comedy, fes
 - **API:** tRPC
 - **Background Jobs:** pg-boss
 - **LLM:** Groq (chat-mode Add, playbill cast extraction)
-- **Data Sources:** Ticketmaster Discovery API, setlist.fm
+- **Data Sources:** Ticketmaster Discovery API, setlist.fm, Google Places
 - **Auth:** Google OAuth (Auth.js)
 - **Media:** Cloudflare R2
 - **Monorepo:** Nx + pnpm
@@ -44,6 +44,7 @@ open http://localhost:3001
 | `TICKETMASTER_API_KEY` | Ticketmaster Discovery API key |
 | `SETLISTFM_API_KEY` | setlist.fm API key |
 | `GROQ_API_KEY` | Groq API key |
+| `GOOGLE_PLACES_API_KEY` | Google Places API key (venue search) |
 | `R2_ACCOUNT_ID` | Cloudflare account ID |
 | `R2_ACCESS_KEY_ID` | R2 access key |
 | `R2_SECRET_ACCESS_KEY` | R2 secret key |
