@@ -17,6 +17,17 @@ export interface CastMember {
   role: string;
 }
 
+export interface ExtractedTicketInfo {
+  headliner: string;
+  venue_name: string | null;
+  venue_city: string | null;
+  date: string | null;
+  seat: string | null;
+  price: string | null;
+  kind_hint: 'concert' | 'theatre' | 'comedy' | 'festival' | null;
+  confidence: 'high' | 'medium' | 'low';
+}
+
 // ---------------------------------------------------------------------------
 // Client
 // ---------------------------------------------------------------------------
@@ -57,6 +68,52 @@ export async function parseShowInput(
     throw new Error(
       `Failed to parse Groq response as JSON: ${content.slice(0, 200)}`,
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// extractShowFromEmail — ticket confirmation email → structured show data
+// ---------------------------------------------------------------------------
+
+export async function extractShowFromEmail(
+  emailSubject: string,
+  emailBody: string,
+  emailFrom: string,
+): Promise<ExtractedTicketInfo | null> {
+  const result = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [
+      {
+        role: 'system',
+        content:
+          'You are a structured data extractor. Given a ticket confirmation email, extract the event details. Return ONLY a JSON object with these fields:\n' +
+          '- headliner (string): the main performer, artist, or show name\n' +
+          '- venue_name (string or null): the venue where the event takes place\n' +
+          '- venue_city (string or null): the city of the venue\n' +
+          '- date (string or null): the event date in YYYY-MM-DD format\n' +
+          '- seat (string or null): section, row, and seat info combined\n' +
+          '- price (string or null): total price paid as a decimal string\n' +
+          '- kind_hint (one of: concert, theatre, comedy, festival, or null)\n' +
+          '- confidence (one of: high, medium, low): how confident you are this is a real ticket confirmation\n\n' +
+          'If this is NOT a ticket confirmation (e.g. marketing email, newsletter, shipping notification), return {"confidence": "low", "headliner": ""} with all other fields null.',
+      },
+      {
+        role: 'user',
+        content: `Subject: ${emailSubject}\nFrom: ${emailFrom}\n\n${emailBody.slice(0, 4000)}`,
+      },
+    ],
+    response_format: { type: 'json_object' },
+  });
+
+  const content = result.choices[0]?.message?.content;
+  if (!content) return null;
+
+  try {
+    const parsed = JSON.parse(content) as ExtractedTicketInfo;
+    if (!parsed.headliner || parsed.confidence === 'low') return null;
+    return parsed;
+  } catch {
+    return null;
   }
 }
 

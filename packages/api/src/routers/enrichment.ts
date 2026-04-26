@@ -10,11 +10,18 @@ import { searchArtist, searchSetlist } from '../setlistfm';
 import {
   parseShowInput,
   extractCast as groqExtractCast,
+  extractShowFromEmail,
 } from '../groq';
 import {
   autocomplete as placesAutocomplete,
   getPlaceDetails,
 } from '../google-places';
+import {
+  searchMessages,
+  getMessageBody,
+  buildTicketSearchQuery,
+  buildBulkScanQueries,
+} from '../gmail';
 
 export const enrichmentRouter = router({
   // ---------------------------------------------------------------------------
@@ -180,5 +187,111 @@ export const enrichmentRouter = router({
       const details = await getPlaceDetails(input.placeId);
       if (!details) throw new TRPCError({ code: 'NOT_FOUND', message: 'Place not found' });
       return details;
+    }),
+
+  // ---------------------------------------------------------------------------
+  // scanGmailForShow — search Gmail for a specific show's tickets
+  // ---------------------------------------------------------------------------
+  scanGmailForShow: protectedProcedure
+    .input(
+      z.object({
+        accessToken: z.string().min(1),
+        headliner: z.string().min(1),
+        venue: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const query = buildTicketSearchQuery({
+        headliner: input.headliner,
+        venue: input.venue,
+      });
+      const { messages } = await searchMessages(input.accessToken, query, 5);
+
+      const results: Array<{
+        headliner: string;
+        venue_name: string | null;
+        venue_city: string | null;
+        date: string | null;
+        seat: string | null;
+        price: string | null;
+        kind_hint: 'concert' | 'theatre' | 'comedy' | 'festival' | null;
+        confidence: 'high' | 'medium' | 'low';
+      }> = [];
+
+      for (const msg of messages) {
+        const detail = await getMessageBody(input.accessToken, msg.id);
+        const extracted = await extractShowFromEmail(
+          detail.subject,
+          detail.body,
+          detail.from,
+        );
+        if (extracted) results.push(extracted);
+      }
+
+      return results;
+    }),
+
+  // ---------------------------------------------------------------------------
+  // bulkScanGmail — scan all ticket emails with pagination
+  // ---------------------------------------------------------------------------
+  bulkScanGmail: protectedProcedure
+    .input(
+      z.object({
+        accessToken: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const { accessToken } = input;
+      const queries = buildBulkScanQueries();
+
+      // Fetch ALL pages from Gmail for each query
+      const seen = new Set<string>();
+      const allMessages: Array<{ id: string }> = [];
+
+      for (const query of queries) {
+        let pageToken: string | undefined;
+        do {
+          const result = await searchMessages(accessToken, query, 100, pageToken);
+          for (const msg of result.messages) {
+            if (!seen.has(msg.id)) {
+              seen.add(msg.id);
+              allMessages.push(msg);
+            }
+          }
+          pageToken = result.nextPageToken;
+        } while (pageToken);
+      }
+
+      // Parse each message with LLM, dedup by show content
+      const tickets: Array<{
+        gmailMessageId: string;
+        headliner: string;
+        venue_name: string | null;
+        venue_city: string | null;
+        date: string | null;
+        seat: string | null;
+        price: string | null;
+        kind_hint: 'concert' | 'theatre' | 'comedy' | 'festival' | null;
+        confidence: 'high' | 'medium' | 'low';
+      }> = [];
+
+      const seenShows = new Set<string>();
+      for (const msg of allMessages) {
+        const detail = await getMessageBody(accessToken, msg.id);
+        const extracted = await extractShowFromEmail(
+          detail.subject,
+          detail.body,
+          detail.from,
+        );
+        if (extracted) {
+          const showKey = `${extracted.headliner.toLowerCase()}|${extracted.date ?? ''}|${(extracted.venue_name ?? '').toLowerCase()}`;
+          if (!seenShows.has(showKey)) {
+            seenShows.add(showKey);
+            tickets.push({ ...extracted, gmailMessageId: msg.id });
+          }
+        }
+      }
+
+      return { tickets };
     }),
 });

@@ -14,3 +14,4 @@ export {
 } from './ticketmaster';
 export { matchOrCreateVenue } from './venue-matcher';
 export { matchOrCreatePerformer } from './performer-matcher';
+export type { ExtractedTicketInfo } from './groq';

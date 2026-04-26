@@ -158,6 +158,22 @@ export default function AddPage() {
   } | null>(null);
   const [chatConfirmed, setChatConfirmed] = useState(false);
 
+  // Gmail scan state
+  const [gmailScanning, setGmailScanning] = useState(false);
+  const [gmailResults, setGmailResults] = useState<
+    Array<{
+      headliner: string;
+      venue_name: string | null;
+      venue_city: string | null;
+      date: string | null;
+      seat: string | null;
+      price: string | null;
+      kind_hint: "concert" | "theatre" | "comedy" | "festival" | null;
+      confidence: "high" | "medium" | "low";
+    }>
+  >([]);
+  const [gmailShowResults, setGmailShowResults] = useState(false);
+
   // Performer search
   const [performerSearchInput, setPerformerSearchInput] = useState("");
 
@@ -214,6 +230,9 @@ export default function AddPage() {
       router.push("/shows");
     },
   });
+
+  // Gmail
+  const scanGmailForShow = trpc.enrichment.scanGmailForShow.useMutation();
 
   // Count auto-filled fields
   const autoFilledCount = useMemo(() => {
@@ -322,6 +341,71 @@ export default function AddPage() {
       reader.readAsDataURL(file);
     },
     [extractCast],
+  );
+
+  const handleGmailImportClick = useCallback(() => {
+    if (!headlinerName || headlinerName.length < 2) {
+      setGmailShowResults(false);
+      return;
+    }
+    setGmailScanning(true);
+    setGmailShowResults(true);
+
+    const popup = window.open("/api/gmail", "gmail-auth", "width=500,height=600,popup=yes");
+
+    const handler = async (e: MessageEvent) => {
+      if (e.data?.type === "gmail-auth" && e.data.accessToken) {
+        window.removeEventListener("message", handler);
+        try {
+          const results = await scanGmailForShow.mutateAsync({
+            accessToken: e.data.accessToken,
+            headliner: headlinerName,
+            venue: venue.name || undefined,
+          });
+          setGmailResults(results);
+        } catch {
+          setGmailResults([]);
+        } finally {
+          setGmailScanning(false);
+        }
+      }
+      if (e.data?.type === "gmail-auth-error") {
+        window.removeEventListener("message", handler);
+        setGmailScanning(false);
+        setGmailResults([]);
+      }
+    };
+    window.addEventListener("message", handler);
+
+    const checkClosed = setInterval(() => {
+      if (popup?.closed) {
+        clearInterval(checkClosed);
+        window.removeEventListener("message", handler);
+        setGmailScanning(false);
+      }
+    }, 500);
+  }, [headlinerName, venue.name, scanGmailForShow]);
+
+  const handleSelectGmailResult = useCallback(
+    (result: (typeof gmailResults)[number]) => {
+      if (result.headliner) {
+        setHeadlinerName(result.headliner);
+        setHeadliner({ name: result.headliner });
+      }
+      if (result.venue_name) {
+        setVenue((prev) => ({
+          ...prev,
+          name: result.venue_name ?? prev.name,
+          city: result.venue_city ?? prev.city,
+        }));
+      }
+      if (result.date) setDate(result.date);
+      if (result.seat) setSeat(result.seat);
+      if (result.price) setPricePaid(result.price);
+      if (result.kind_hint) setKind(result.kind_hint);
+      setGmailShowResults(false);
+    },
+    [],
   );
 
   // Update setlist when query resolves
@@ -1330,9 +1414,10 @@ export default function AddPage() {
           {IMPORT_SOURCES.map((src) => (
             <div
               key={src.tag}
+              onClick={src.tag === "mail" ? handleGmailImportClick : undefined}
               style={{
                 padding: "12px 14px",
-                background: "var(--surface)",
+                background: src.tag === "mail" && gmailScanning ? "var(--ink)" : "var(--surface)",
                 border: `1px solid var(--rule-strong)`,
                 display: "flex",
                 flexDirection: "column",
@@ -1344,10 +1429,10 @@ export default function AddPage() {
                 <div style={{
                   fontFamily: mono,
                   fontSize: 9.5,
-                  color: "var(--muted)",
+                  color: src.tag === "mail" && gmailScanning ? "var(--bg)" : "var(--muted)",
                   letterSpacing: ".1em",
                   padding: "2px 5px",
-                  border: `1px solid var(--rule-strong)`,
+                  border: `1px solid ${src.tag === "mail" && gmailScanning ? "var(--bg)" : "var(--rule-strong)"}`,
                   textTransform: "uppercase",
                 }}>
                   {src.tag}
@@ -1356,16 +1441,16 @@ export default function AddPage() {
                   fontFamily: sans,
                   fontSize: 13,
                   fontWeight: 500,
-                  color: "var(--ink)",
+                  color: src.tag === "mail" && gmailScanning ? "var(--bg)" : "var(--ink)",
                   letterSpacing: -0.1,
                 }}>
-                  {src.label}
+                  {src.tag === "mail" && gmailScanning ? "Scanning..." : src.label}
                 </div>
               </div>
               <div style={{
                 fontFamily: mono,
                 fontSize: 10,
-                color: "var(--faint)",
+                color: src.tag === "mail" && gmailScanning ? "var(--bg)" : "var(--faint)",
                 letterSpacing: ".04em",
               }}>
                 {src.sub}
@@ -1373,6 +1458,77 @@ export default function AddPage() {
             </div>
           ))}
         </div>
+
+        {/* Gmail results dropdown */}
+        {gmailShowResults && (
+          <div style={{
+            marginTop: 8,
+            border: "1px solid var(--rule-strong)",
+            background: "var(--surface)",
+          }}>
+            {gmailScanning && (
+              <div style={{
+                padding: "14px 16px",
+                fontFamily: mono,
+                fontSize: 11,
+                color: "var(--muted)",
+                letterSpacing: ".04em",
+              }}>
+                Scanning Gmail for &ldquo;{headlinerName}&rdquo;...
+              </div>
+            )}
+            {!gmailScanning && gmailResults.length === 0 && (
+              <div style={{
+                padding: "14px 16px",
+                fontFamily: mono,
+                fontSize: 11,
+                color: "var(--faint)",
+                letterSpacing: ".04em",
+              }}>
+                No ticket emails found
+              </div>
+            )}
+            {gmailResults.map((result, i) => (
+              <div
+                key={i}
+                onClick={() => handleSelectGmailResult(result)}
+                style={{
+                  padding: "10px 16px",
+                  cursor: "pointer",
+                  borderTop: i > 0 ? "1px solid var(--rule)" : "none",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 3,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              >
+                <div style={{
+                  fontFamily: sans,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: "var(--ink)",
+                  letterSpacing: -0.1,
+                }}>
+                  {result.headliner}
+                </div>
+                <div style={{
+                  fontFamily: mono,
+                  fontSize: 10.5,
+                  color: "var(--muted)",
+                  letterSpacing: ".04em",
+                  display: "flex",
+                  gap: 12,
+                }}>
+                  {result.venue_name && <span>{result.venue_name}</span>}
+                  {result.date && <span>{result.date}</span>}
+                  {result.seat && <span>{result.seat}</span>}
+                  {result.price && <span>${result.price}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Commit Bar ── */}

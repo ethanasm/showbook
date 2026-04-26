@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import {
   ShowRow,
@@ -21,6 +21,10 @@ import {
   Tent,
   Square,
   Trash2,
+  Mail,
+  X,
+  Check,
+  Loader2,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -184,6 +188,28 @@ export default function ShowsPage() {
   const [transitionSeat, setTransitionSeat] = useState("");
   const [transitionPrice, setTransitionPrice] = useState("");
 
+  // Gmail bulk scan state
+  const [gmailModalOpen, setGmailModalOpen] = useState(false);
+  const [gmailBulkLoading, setGmailBulkLoading] = useState(false);
+  const [gmailBulkResults, setGmailBulkResults] = useState<
+    Array<{
+      gmailMessageId: string;
+      headliner: string;
+      venue_name: string | null;
+      venue_city: string | null;
+      date: string | null;
+      seat: string | null;
+      price: string | null;
+      kind_hint: "concert" | "theatre" | "comedy" | "festival" | null;
+      confidence: "high" | "medium" | "low";
+    }>
+  >([]);
+  const [gmailBulkSelected, setGmailBulkSelected] = useState<Set<string>>(new Set());
+  const [gmailAdding, setGmailAdding] = useState(false);
+  const [gmailAddedCount, setGmailAddedCount] = useState(0);
+  const [gmailAccessToken, setGmailAccessToken] = useState<string | null>(null);
+  const [gmailError, setGmailError] = useState<string | null>(null);
+
   // Fetch shows
   const yearFilter = selectedYear === "All" ? undefined :
     selectedYear === "older" ? undefined :
@@ -199,7 +225,11 @@ export default function ShowsPage() {
 
   const updateState = trpc.shows.updateState.useMutation();
   const deleteShow = trpc.shows.delete.useMutation();
+  const createShow = trpc.shows.create.useMutation();
   const utils = trpc.useUtils();
+
+  // Gmail
+  const bulkScanGmail = trpc.enrichment.bulkScanGmail.useMutation();
 
   const shows = (allShows ?? []) as ShowData[];
 
@@ -299,6 +329,125 @@ export default function ShowsPage() {
   }
 
   // ---------------------------------------------------------------------------
+  // Gmail bulk scan helpers
+  // ---------------------------------------------------------------------------
+
+  const isDuplicate = useCallback(
+    (ticket: { headliner: string; date: string | null }) => {
+      if (!allShowsUnfiltered) return false;
+      const existingShows = allShowsUnfiltered as ShowData[];
+      return existingShows.some((show) => {
+        const headlinerMatch = show.showPerformers.some(
+          (sp) =>
+            sp.role === "headliner" &&
+            sp.performer.name.toLowerCase() === ticket.headliner.toLowerCase(),
+        );
+        const dateMatch = ticket.date != null && show.date === ticket.date;
+        return headlinerMatch && dateMatch;
+      });
+    },
+    [allShowsUnfiltered],
+  );
+
+  const startGmailScan = useCallback(async (token: string) => {
+    setGmailBulkLoading(true);
+    try {
+      const result = await bulkScanGmail.mutateAsync({ accessToken: token });
+      setGmailBulkResults(result.tickets);
+
+      const initialSelected = new Set<string>();
+      for (const t of result.tickets) {
+        if (!isDuplicate(t)) {
+          initialSelected.add(t.gmailMessageId);
+        }
+      }
+      setGmailBulkSelected(initialSelected);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Scan failed";
+      console.error("Gmail scan failed:", err);
+      setGmailError(msg);
+    } finally {
+      setGmailBulkLoading(false);
+    }
+  }, [bulkScanGmail, isDuplicate]);
+
+  const handleOpenGmailModal = useCallback(() => {
+    setGmailModalOpen(true);
+    setGmailBulkResults([]);
+    setGmailBulkSelected(new Set());
+    setGmailAddedCount(0);
+    setGmailAccessToken(null);
+    setGmailError(null);
+
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === "gmail-auth" && e.data.accessToken) {
+        window.removeEventListener("message", handler);
+        setGmailAccessToken(e.data.accessToken);
+        startGmailScan(e.data.accessToken);
+      }
+      if (e.data?.type === "gmail-auth-error") {
+        window.removeEventListener("message", handler);
+      }
+    };
+    window.addEventListener("message", handler);
+
+    const popup = window.open("/api/gmail", "gmail-auth", "width=500,height=600,popup=yes");
+
+    if (popup) {
+      const checkClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkClosed);
+          window.removeEventListener("message", handler);
+        }
+      }, 500);
+    }
+  }, [startGmailScan]);
+
+  const handleToggleGmailResult = useCallback((messageId: string) => {
+    setGmailBulkSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(messageId)) {
+        next.delete(messageId);
+      } else {
+        next.add(messageId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleAddSelectedGmail = useCallback(async () => {
+    setGmailAdding(true);
+    setGmailAddedCount(0);
+    const selected = gmailBulkResults.filter((t) =>
+      gmailBulkSelected.has(t.gmailMessageId),
+    );
+
+    for (const ticket of selected) {
+      try {
+        await createShow.mutateAsync({
+          kind: ticket.kind_hint ?? "concert",
+          headliner: { name: ticket.headliner },
+          venue: {
+            name: ticket.venue_name ?? "Unknown Venue",
+            city: ticket.venue_city ?? "Unknown",
+          },
+          date: ticket.date ?? new Date().toISOString().split("T")[0],
+          seat: ticket.seat ?? undefined,
+          pricePaid: ticket.price ?? undefined,
+          sourceRefs: { gmail: true },
+        });
+        setGmailAddedCount((prev) => prev + 1);
+      } catch {
+        // skip failed individual adds
+      }
+    }
+
+    setGmailAdding(false);
+    setGmailModalOpen(false);
+    utils.shows.list.invalidate();
+  }, [gmailBulkResults, gmailBulkSelected, createShow, utils]);
+
+  // ---------------------------------------------------------------------------
   // Render: Loading / Error
   // ---------------------------------------------------------------------------
 
@@ -368,44 +517,66 @@ export default function ShowsPage() {
             Shows
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "stretch", border: "1px solid var(--rule-strong)" }}>
-          {modes.map(({ k, l, Ic, count }, i) => {
-            const active = k === viewMode;
-            return (
-              <button
-                key={k}
-                onClick={() => setViewMode(k)}
-                style={{
-                  border: "none",
-                  cursor: "pointer",
-                  borderRight: i === modes.length - 1 ? "none" : "1px solid var(--rule-strong)",
-                  background: active ? "var(--ink)" : "transparent",
-                  color: active ? "var(--bg)" : "var(--ink)",
-                  padding: "10px 18px",
-                  fontFamily: "var(--font-geist-sans), sans-serif",
-                  fontSize: 14,
-                  fontWeight: active ? 600 : 500,
-                  letterSpacing: -0.2,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <Ic size={14} />
-                <span>{l}</span>
-                <span style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10.5,
-                  color: active ? "var(--bg)" : "var(--faint)",
-                  opacity: active ? 0.7 : 1,
-                  letterSpacing: ".04em",
-                  fontWeight: 400,
-                }}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button
+            onClick={handleOpenGmailModal}
+            style={{
+              border: "1px solid var(--rule-strong)",
+              cursor: "pointer",
+              background: "transparent",
+              color: "var(--ink)",
+              padding: "10px 16px",
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 13,
+              fontWeight: 500,
+              letterSpacing: -0.2,
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+            }}
+          >
+            <Mail size={14} />
+            <span>Import from Gmail</span>
+          </button>
+          <div style={{ display: "flex", alignItems: "stretch", border: "1px solid var(--rule-strong)" }}>
+            {modes.map(({ k, l, Ic, count }, i) => {
+              const active = k === viewMode;
+              return (
+                <button
+                  key={k}
+                  onClick={() => setViewMode(k)}
+                  style={{
+                    border: "none",
+                    cursor: "pointer",
+                    borderRight: i === modes.length - 1 ? "none" : "1px solid var(--rule-strong)",
+                    background: active ? "var(--ink)" : "transparent",
+                    color: active ? "var(--bg)" : "var(--ink)",
+                    padding: "10px 18px",
+                    fontFamily: "var(--font-geist-sans), sans-serif",
+                    fontSize: 14,
+                    fontWeight: active ? 600 : 500,
+                    letterSpacing: -0.2,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Ic size={14} />
+                  <span>{l}</span>
+                  <span style={{
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 10.5,
+                    color: active ? "var(--bg)" : "var(--faint)",
+                    opacity: active ? 0.7 : 1,
+                    letterSpacing: ".04em",
+                    fontWeight: 400,
+                  }}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
@@ -1581,6 +1752,261 @@ export default function ShowsPage() {
       {viewMode === "list" && renderList()}
       {viewMode === "calendar" && renderCalendar()}
       {viewMode === "stats" && renderStats()}
+
+      {/* Gmail bulk scan modal */}
+      {gmailModalOpen && (
+        <div
+          onClick={() => setGmailModalOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 200,
+            backdropFilter: "blur(4px)",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "var(--bg)",
+              border: "1px solid var(--rule)",
+              width: "100%",
+              maxWidth: 640,
+              maxHeight: "80vh",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            {/* Modal header */}
+            <div style={{
+              padding: "16px 20px",
+              borderBottom: "1px solid var(--rule)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}>
+              <div>
+                <div style={{
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 17,
+                  fontWeight: 600,
+                  color: "var(--ink)",
+                  letterSpacing: -0.3,
+                }}>
+                  Import from Gmail
+                </div>
+                <div style={{
+                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontSize: 10.5,
+                  color: "var(--muted)",
+                  letterSpacing: ".04em",
+                  marginTop: 2,
+                }}>
+                  {gmailBulkLoading
+                    ? "Scanning ticket emails..."
+                    : gmailError
+                      ? gmailError
+                      : gmailBulkResults.length > 0
+                        ? `${gmailBulkResults.length} ticket${gmailBulkResults.length !== 1 ? "s" : ""} found · ${gmailBulkSelected.size} selected`
+                        : gmailAccessToken
+                          ? "No tickets found"
+                          : "Waiting for Gmail authorization..."}
+                </div>
+              </div>
+              <button
+                onClick={() => setGmailModalOpen(false)}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  cursor: "pointer",
+                  color: "var(--muted)",
+                  padding: 4,
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Loading indicator */}
+            {gmailBulkLoading && (
+              <div style={{
+                padding: "16px 20px",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                borderBottom: gmailBulkResults.length > 0 ? "1px solid var(--rule)" : "none",
+              }}>
+                <Loader2
+                  size={14}
+                  color="var(--muted)"
+                  style={{ animation: "spin 1s linear infinite" }}
+                />
+                <span style={{
+                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontSize: 11,
+                  color: "var(--muted)",
+                  letterSpacing: ".04em",
+                }}>
+                  Scanning all ticket emails...
+                </span>
+                <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+              </div>
+            )}
+
+            {/* Results list */}
+            {gmailBulkResults.length > 0 && (
+              <div style={{
+                flex: 1,
+                overflowY: "auto",
+                minHeight: 0,
+              }}>
+                {gmailBulkResults.map((ticket, i) => {
+                  const dup = isDuplicate(ticket);
+                  const selected = gmailBulkSelected.has(ticket.gmailMessageId);
+                  return (
+                    <div
+                      key={ticket.gmailMessageId}
+                      onClick={() => handleToggleGmailResult(ticket.gmailMessageId)}
+                      style={{
+                        padding: "12px 20px",
+                        borderTop: i > 0 ? "1px solid var(--rule)" : "none",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 14,
+                        cursor: "pointer",
+                        opacity: dup ? 0.5 : 1,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "var(--surface)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "transparent";
+                      }}
+                    >
+                      {/* Checkbox */}
+                      <div style={{
+                        width: 18,
+                        height: 18,
+                        border: `1px solid ${selected ? "var(--ink)" : "var(--rule-strong)"}`,
+                        background: selected ? "var(--ink)" : "transparent",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}>
+                        {selected && <Check size={12} color="var(--bg)" />}
+                      </div>
+
+                      {/* Details */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                        }}>
+                          <span style={{
+                            fontFamily: "var(--font-geist-sans), sans-serif",
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: "var(--ink)",
+                            letterSpacing: -0.1,
+                          }}>
+                            {ticket.headliner}
+                          </span>
+                          {dup && (
+                            <span style={{
+                              fontFamily: "var(--font-geist-mono), monospace",
+                              fontSize: 9,
+                              color: "var(--muted)",
+                              letterSpacing: ".06em",
+                              textTransform: "uppercase",
+                              padding: "1px 5px",
+                              border: "1px solid var(--rule-strong)",
+                            }}>
+                              Already added
+                            </span>
+                          )}
+                          {ticket.kind_hint && (
+                            <span style={{
+                              fontFamily: "var(--font-geist-mono), monospace",
+                              fontSize: 9,
+                              color: "var(--faint)",
+                              letterSpacing: ".06em",
+                              textTransform: "uppercase",
+                            }}>
+                              {ticket.kind_hint}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{
+                          fontFamily: "var(--font-geist-mono), monospace",
+                          fontSize: 10.5,
+                          color: "var(--muted)",
+                          letterSpacing: ".04em",
+                          marginTop: 2,
+                          display: "flex",
+                          gap: 12,
+                        }}>
+                          {ticket.venue_name && <span>{ticket.venue_name}</span>}
+                          {ticket.venue_city && <span>{ticket.venue_city}</span>}
+                          {ticket.date && <span>{ticket.date}</span>}
+                          {ticket.seat && <span>{ticket.seat}</span>}
+                          {ticket.price && <span>${ticket.price}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Footer */}
+            {gmailBulkResults.length > 0 && (
+              <div style={{
+                padding: "12px 20px",
+                borderTop: "1px solid var(--rule)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                gap: 10,
+              }}>
+                {gmailAddedCount > 0 && !gmailAdding && (
+                  <span style={{
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 11,
+                    color: "var(--kind-concert)",
+                    letterSpacing: ".04em",
+                  }}>
+                    {gmailAddedCount} added
+                  </span>
+                )}
+                <button
+                  onClick={handleAddSelectedGmail}
+                  disabled={gmailBulkSelected.size === 0 || gmailAdding}
+                  style={{
+                    padding: "8px 16px",
+                    border: "none",
+                    background: gmailBulkSelected.size > 0 && !gmailAdding ? "var(--ink)" : "var(--rule)",
+                    color: gmailBulkSelected.size > 0 && !gmailAdding ? "var(--bg)" : "var(--muted)",
+                    fontFamily: "var(--font-geist-sans), sans-serif",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: gmailBulkSelected.size > 0 && !gmailAdding ? "pointer" : "default",
+                    letterSpacing: -0.1,
+                  }}
+                >
+                  {gmailAdding
+                    ? `Adding... ${gmailAddedCount}/${gmailBulkSelected.size}`
+                    : `Add selected (${gmailBulkSelected.size})`}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* State transition modal */}
       {transitionShow && (

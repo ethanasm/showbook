@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, and, sql, desc, count, max, min } from 'drizzle-orm';
+import { eq, and, ne, sql, desc, count, max, min } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc';
 import { performers, userPerformerFollows, shows, showPerformers } from '@showbook/db';
 
@@ -19,7 +19,7 @@ export const performersRouter = router({
       .from(showPerformers)
       .innerJoin(performers, eq(showPerformers.performerId, performers.id))
       .innerJoin(shows, eq(showPerformers.showId, shows.id))
-      .where(eq(shows.userId, userId))
+      .where(and(eq(shows.userId, userId), ne(shows.kind, 'theatre')))
       .groupBy(performers.id, performers.name, performers.imageUrl)
       .orderBy(desc(max(shows.date)));
 
