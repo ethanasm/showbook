@@ -525,7 +525,8 @@ export default function AddPage() {
   }, []);
 
   // Determine if form can save
-  const canSave = kind !== null && headliner.name.length > 0 && venue.name.length > 0 && venue.city.length > 0 && date.length > 0;
+  const hasValidVenue = venue.name.length > 0 && venue.city.length > 0 && (venue.googlePlaceId != null || venue.tmVenueId != null);
+  const canSave = kind !== null && headliner.name.length > 0 && hasValidVenue && date.length > 0;
 
   // Provenance statuses derived from state
   const provenanceStatuses = useMemo(() => {
