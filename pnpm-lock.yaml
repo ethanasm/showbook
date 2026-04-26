@@ -119,9 +119,6 @@ importers:
       groq-sdk:
         specifier: ^1.1.2
         version: 1.1.2
-      sharp:
-        specifier: ^0.34.5
-        version: 0.34.5
       superjson:
         specifier: ^2.2.6
         version: 2.2.6
@@ -2740,7 +2737,8 @@ snapshots:
   '@esbuild/win32-x64@0.19.12':
     optional: true
 
-  '@img/colour@1.1.0': {}
+  '@img/colour@1.1.0':
+    optional: true
 
   '@img/sharp-darwin-arm64@0.34.5':
     optionalDependencies:
@@ -3427,7 +3425,8 @@ snapshots:
 
   delayed-stream@1.0.0: {}
 
-  detect-libc@2.1.2: {}
+  detect-libc@2.1.2:
+    optional: true
 
   diff-sequences@29.6.3: {}
 
@@ -4002,6 +4001,7 @@ snapshots:
       '@img/sharp-win32-arm64': 0.34.5
       '@img/sharp-win32-ia32': 0.34.5
       '@img/sharp-win32-x64': 0.34.5
+    optional: true
 
   shell-quote@1.8.3: {}
 

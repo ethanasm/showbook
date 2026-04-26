@@ -12,7 +12,6 @@
     "@trpc/server": "^11.0.0",
     "drizzle-orm": "^0.39.0",
     "groq-sdk": "^1.1.2",
-    "sharp": "^0.34.5",
     "superjson": "^2.2.6",
     "zod": "^4.3.6"
   },
