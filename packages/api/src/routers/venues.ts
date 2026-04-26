@@ -56,7 +56,6 @@ export const venuesRouter = router({
         city: details.city,
         stateRegion: details.stateRegion ?? undefined,
         country: details.country,
-        neighborhood: details.neighborhood ?? undefined,
         lat: details.latitude,
         lng: details.longitude,
         googlePlaceId: details.googlePlaceId,

@@ -12,6 +12,7 @@ export interface Show {
   seat?: string | null;
   pricePaid?: string | null;
   tourName?: string | null;
+  productionName?: string | null;
   setlist?: string[] | null;
   photos?: string[] | null;
   sourceRefs?: Record<string, string> | null;

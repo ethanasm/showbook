@@ -1,7 +1,6 @@
 export interface Venue {
   id: string;
   name: string;
-  neighborhood?: string | null;
   city: string;
   stateRegion?: string | null;
   country: string;

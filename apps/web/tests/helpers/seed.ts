@@ -9,7 +9,6 @@ export interface TestDataSet {
     country: string;
     latitude: number;
     longitude: number;
-    neighborhood?: string;
   }>;
   performers: Array<{
     name: string;
@@ -28,14 +27,14 @@ export interface TestDataSet {
 
 export const TEST_DATA: TestDataSet = {
   venues: [
-    { name: 'Madison Square Garden', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7505, longitude: -73.9934, neighborhood: 'Midtown' },
-    { name: 'Radio City Music Hall', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7600, longitude: -73.9800, neighborhood: 'Midtown' },
+    { name: 'Madison Square Garden', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7505, longitude: -73.9934 },
+    { name: 'Radio City Music Hall', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7600, longitude: -73.9800 },
     { name: 'Brooklyn Steel', city: 'Brooklyn', stateRegion: 'NY', country: 'US', latitude: 40.7122, longitude: -73.9413 },
-    { name: 'Gershwin Theatre', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7621, longitude: -73.9854, neighborhood: 'Broadway' },
-    { name: 'The Comedy Cellar', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7304, longitude: -74.0005, neighborhood: 'Greenwich Village' },
+    { name: 'Gershwin Theatre', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7621, longitude: -73.9854 },
+    { name: 'The Comedy Cellar', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7304, longitude: -74.0005 },
     { name: 'Randalls Island Park', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7932, longitude: -73.9212 },
-    { name: 'The Beacon Theatre', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7785, longitude: -73.9810, neighborhood: 'Upper West Side' },
-    { name: 'Irving Plaza', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7349, longitude: -73.9883, neighborhood: 'Union Square' },
+    { name: 'The Beacon Theatre', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7785, longitude: -73.9810 },
+    { name: 'Irving Plaza', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7349, longitude: -73.9883 },
   ],
   performers: [
     { name: 'Radiohead', ticketmasterAttractionId: 'K8vZ91713wV' },

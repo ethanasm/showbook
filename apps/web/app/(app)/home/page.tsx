@@ -34,20 +34,26 @@ const KIND_LABELS: Record<ShowKind, string> = {
 };
 
 function getHeadliner(
-  showPerformers: {
-    role: string;
-    sortOrder: number;
-    performer: { name: string };
-  }[]
+  show: {
+    kind?: string;
+    productionName?: string | null;
+    showPerformers: {
+      role: string;
+      sortOrder: number;
+      performer: { name: string };
+    }[];
+  }
 ): string {
-  const headliner = showPerformers.find(
+  if (show.kind === "theatre" && show.productionName) {
+    return show.productionName;
+  }
+  const headliner = show.showPerformers.find(
     (sp) => sp.role === "headliner" && sp.sortOrder === 1
   );
   if (headliner) return headliner.performer.name;
-  // fallback: try sortOrder 0 (create uses 0)
-  const fallback = showPerformers.find((sp) => sp.role === "headliner");
+  const fallback = show.showPerformers.find((sp) => sp.role === "headliner");
   if (fallback) return fallback.performer.name;
-  return showPerformers[0]?.performer.name ?? "Unknown Artist";
+  return show.showPerformers[0]?.performer.name ?? "Unknown Artist";
 }
 
 function getSupport(
@@ -387,7 +393,7 @@ export default function HomePage() {
           {heroShow ? (
             <HeroCard
               show={{
-                headliner: getHeadliner(heroShow.showPerformers),
+                headliner: getHeadliner(heroShow),
                 support: getSupport(heroShow.showPerformers),
                 venue: heroShow.venue.name,
                 city: [heroShow.venue.city, heroShow.venue.stateRegion]
@@ -520,7 +526,7 @@ export default function HomePage() {
                         textOverflow: "ellipsis",
                       }}
                     >
-                      {getHeadliner(u.showPerformers)}
+                      {getHeadliner(u)}
                     </div>
 
                     {/* Venue */}
@@ -659,7 +665,7 @@ export default function HomePage() {
                 const kindColor = `var(--kind-${kind})`;
                 const KindIcon = KIND_ICONS[kind];
                 const dateParts = toDateParts(s.date);
-                const headliner = getHeadliner(s.showPerformers);
+                const headliner = getHeadliner(s);
                 const support = getSupport(s.showPerformers);
                 const paidDisplay = s.pricePaid
                   ? `$${parseFloat(s.pricePaid)}`

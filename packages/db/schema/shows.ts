@@ -47,6 +47,7 @@ export const shows = pgTable(
     seat: text('seat'),
     pricePaid: decimal('price_paid', { precision: 10, scale: 2 }),
     tourName: text('tour_name'),
+    productionName: text('production_name'),
     setlist: text('setlist').array(),
     photos: text('photos').array(),
     sourceRefs: jsonb('source_refs'),

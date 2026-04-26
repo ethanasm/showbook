@@ -43,6 +43,7 @@ interface ShowData {
   seat: string | null;
   pricePaid: string | null;
   tourName: string | null;
+  productionName: string | null;
   setlist: string[] | null;
   photos: string[] | null;
   venue: {
@@ -51,6 +52,8 @@ interface ShowData {
     city: string;
     stateRegion?: string | null;
     country?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
   };
   showPerformers: {
     role: string;
@@ -92,6 +95,9 @@ const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "Ju
 // ---------------------------------------------------------------------------
 
 function getHeadliner(show: ShowData): string {
+  if (show.kind === "theatre" && show.productionName) {
+    return show.productionName;
+  }
   const headliner = show.showPerformers.find(
     (sp) => sp.role === "headliner" && sp.sortOrder === 0
   );

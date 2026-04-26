@@ -11,7 +11,6 @@ export interface VenueInput {
   city: string;
   stateRegion?: string;
   country?: string;
-  neighborhood?: string;
   tmVenueId?: string;
   lat?: number;
   lng?: number;
@@ -91,7 +90,6 @@ export async function matchOrCreateVenue(
       city: input.city,
       stateRegion: input.stateRegion ?? null,
       country: input.country ?? 'US',
-      neighborhood: input.neighborhood ?? null,
       ticketmasterVenueId: input.tmVenueId ?? null,
       latitude: input.lat ?? null,
       longitude: input.lng ?? null,
@@ -130,9 +128,6 @@ async function maybeUpdate(
   }
   if (input.stateRegion && !existing.stateRegion) {
     updates.stateRegion = input.stateRegion;
-  }
-  if (input.neighborhood && !existing.neighborhood) {
-    updates.neighborhood = input.neighborhood;
   }
 
   if (Object.keys(updates).length === 0) {

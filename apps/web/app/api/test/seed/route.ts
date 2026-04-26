@@ -16,14 +16,14 @@ import {
 const TEST_EMAIL = 'test@showbook.dev';
 
 const VENUES = [
-  { name: 'Madison Square Garden', neighborhood: 'Midtown', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7505, longitude: -73.9934 },
-  { name: 'Radio City Music Hall', neighborhood: 'Midtown', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.76, longitude: -73.98 },
-  { name: 'Brooklyn Steel', neighborhood: 'Williamsburg', city: 'Brooklyn', stateRegion: 'NY', country: 'US', latitude: 40.7122, longitude: -73.9413 },
-  { name: 'Gershwin Theatre', neighborhood: 'Broadway', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7621, longitude: -73.9854 },
-  { name: 'The Comedy Cellar', neighborhood: 'Greenwich Village', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7304, longitude: -74.0005 },
-  { name: 'Randalls Island Park', neighborhood: null, city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7932, longitude: -73.9212 },
-  { name: 'The Beacon Theatre', neighborhood: 'Upper West Side', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7785, longitude: -73.981 },
-  { name: 'Irving Plaza', neighborhood: 'Union Square', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7349, longitude: -73.9883 },
+  { name: 'Madison Square Garden', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7505, longitude: -73.9934 },
+  { name: 'Radio City Music Hall', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.76, longitude: -73.98 },
+  { name: 'Brooklyn Steel', city: 'Brooklyn', stateRegion: 'NY', country: 'US', latitude: 40.7122, longitude: -73.9413 },
+  { name: 'Gershwin Theatre', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7621, longitude: -73.9854 },
+  { name: 'The Comedy Cellar', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7304, longitude: -74.0005 },
+  { name: 'Randalls Island Park', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7932, longitude: -73.9212 },
+  { name: 'The Beacon Theatre', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7785, longitude: -73.981 },
+  { name: 'Irving Plaza', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7349, longitude: -73.9883 },
 ] as const;
 
 const PERFORMERS = [
@@ -55,6 +55,7 @@ interface ShowSeed {
   seat?: string;
   pricePaid?: string;
   tourName?: string;
+  productionName?: string;
 }
 
 const SHOWS: ShowSeed[] = [
@@ -66,8 +67,8 @@ const SHOWS: ShowSeed[] = [
   { kind: 'concert', state: 'past', headliner: 'Phoebe Bridgers', venueName: 'Radio City Music Hall', date: '2025-01-18', seat: 'ORCH · F14', pricePaid: '120.00' },
 
   // Past theatre (2)
-  { kind: 'theatre', state: 'past', headliner: 'Cynthia Erivo', support: ['Kristin Chenoweth'], venueName: 'Gershwin Theatre', date: '2024-07-20', seat: 'ORCH L · 14', pricePaid: '250.00' },
-  { kind: 'theatre', state: 'past', headliner: 'Lin-Manuel Miranda', venueName: 'Radio City Music Hall', date: '2024-12-28', seat: 'MEZZ · A8', pricePaid: '350.00' },
+  { kind: 'theatre', state: 'past', headliner: 'Wicked', productionName: 'Wicked', venueName: 'Gershwin Theatre', date: '2024-07-20', seat: 'ORCH L · 14', pricePaid: '250.00' },
+  { kind: 'theatre', state: 'past', headliner: 'Hamilton', productionName: 'Hamilton', venueName: 'Radio City Music Hall', date: '2024-12-28', seat: 'MEZZ · A8', pricePaid: '350.00' },
 
   // Past comedy (2)
   { kind: 'comedy', state: 'past', headliner: 'John Mulaney', support: ['Sam Morril'], venueName: 'The Beacon Theatre', date: '2024-10-15', seat: 'ORCH · J18', pricePaid: '85.00' },
@@ -84,7 +85,7 @@ const SHOWS: ShowSeed[] = [
   // Ticketed (4)
   { kind: 'concert', state: 'ticketed', headliner: 'Taylor Swift', venueName: 'Madison Square Garden', date: '2026-06-20', seat: 'FLOOR A · 8', pricePaid: '450.00' },
   { kind: 'concert', state: 'ticketed', headliner: 'Radiohead', venueName: 'The Beacon Theatre', date: '2026-07-15', seat: 'ORCH · C5', pricePaid: '195.00' },
-  { kind: 'theatre', state: 'ticketed', headliner: 'Cynthia Erivo', venueName: 'Gershwin Theatre', date: '2026-05-10', seat: 'FRONT MEZZ · B12', pricePaid: '275.00' },
+  { kind: 'theatre', state: 'ticketed', headliner: 'Wicked', productionName: 'Wicked', venueName: 'Gershwin Theatre', date: '2026-05-10', seat: 'FRONT MEZZ · B12', pricePaid: '275.00' },
   { kind: 'comedy', state: 'ticketed', headliner: 'John Mulaney', venueName: 'Radio City Music Hall', date: '2026-08-01', seat: 'ORCH · G22', pricePaid: '110.00' },
 
   // Watching (3)
@@ -151,6 +152,9 @@ export async function GET() {
       const venueId = venueMap.get(s.venueName);
       if (!venueId) continue;
 
+      const productionName =
+        s.kind === 'theatre' ? s.productionName ?? s.headliner : s.productionName ?? null;
+
       const [show] = await db.insert(shows).values({
         userId: user.id,
         kind: s.kind,
@@ -161,20 +165,23 @@ export async function GET() {
         seat: s.seat ?? null,
         pricePaid: s.pricePaid ?? null,
         tourName: s.tourName ?? null,
+        productionName,
       }).returning();
 
       if (!show) continue;
       showCount++;
 
-      // Headliner
-      const headlinerId = performerMap.get(s.headliner);
-      if (headlinerId) {
-        await db.insert(showPerformers).values({
-          showId: show.id,
-          performerId: headlinerId,
-          role: 'headliner',
-          sortOrder: 0,
-        }).onConflictDoNothing();
+      // Headliner — skipped for theatre (production goes on shows.productionName)
+      if (s.kind !== 'theatre') {
+        const headlinerId = performerMap.get(s.headliner);
+        if (headlinerId) {
+          await db.insert(showPerformers).values({
+            showId: show.id,
+            performerId: headlinerId,
+            role: 'headliner',
+            sortOrder: 0,
+          }).onConflictDoNothing();
+        }
       }
 
       // Support acts
@@ -185,7 +192,7 @@ export async function GET() {
             await db.insert(showPerformers).values({
               showId: show.id,
               performerId: supportId,
-              role: 'support',
+              role: s.kind === 'theatre' ? 'cast' : 'support',
               sortOrder: i + 1,
             }).onConflictDoNothing();
           }

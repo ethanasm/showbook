@@ -36,7 +36,6 @@ type Announcement = {
     id: string;
     name: string;
     city: string;
-    neighborhood?: string;
   };
   reason?: string;
 };
@@ -408,7 +407,7 @@ function VenueRail({
   venues: {
     id: string;
     name: string;
-    neighborhood?: string;
+    label?: string;
     count: number;
   }[];
   selected: string | null;
@@ -446,9 +445,9 @@ function VenueRail({
         >
           <div className="discover-rail__item-body">
             <div className="discover-rail__item-name">{v.name}</div>
-            {v.neighborhood && (
+            {v.label && (
               <div className="discover-rail__item-nbhd">
-                {v.neighborhood.toLowerCase()}
+                {v.label.toLowerCase()}
               </div>
             )}
           </div>
@@ -537,14 +536,14 @@ function FeedSection({
     if (!items) return [];
     const seen = new Map<
       string,
-      { id: string; name: string; neighborhood?: string; count: number }
+      { id: string; name: string; label?: string; count: number }
     >();
     for (const item of items) {
       if (!seen.has(item.venue.id)) {
         seen.set(item.venue.id, {
           id: item.venue.id,
           name: item.venue.name,
-          neighborhood: item.venue.neighborhood || item.venue.city,
+          label: item.venue.city,
           count: 0,
         });
       }
@@ -566,7 +565,7 @@ function FeedSection({
       const v = venueList.find((v) => v.id === selectedVenueId) || {
         id: selectedVenueId,
         name: "",
-        neighborhood: "",
+        label: "",
         count: 0,
       };
       return [{ venue: v, items: filteredItems }];
@@ -685,8 +684,8 @@ function FeedSection({
                   {group.venue.name}
                 </span>
                 <span className="discover-venue-group__meta">
-                  {group.venue.neighborhood
-                    ? group.venue.neighborhood.toLowerCase() + " · "
+                  {group.venue.label
+                    ? group.venue.label.toLowerCase() + " · "
                     : ""}
                   {group.items.length} upcoming
                 </span>

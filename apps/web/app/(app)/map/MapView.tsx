@@ -94,7 +94,6 @@ interface VenueGroup {
   venueId: string;
   name: string;
   city: string;
-  neighborhood: string | null;
   latitude: number;
   longitude: number;
   shows: VenueShowData[];
@@ -105,20 +104,25 @@ interface VenueGroup {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getHeadliner(
+function getHeadliner(show: {
+  kind?: string;
+  productionName?: string | null;
   showPerformers: {
     role: string;
     sortOrder: number;
     performer: { name: string };
-  }[]
-): string {
-  const headliner = showPerformers.find(
+  }[];
+}): string {
+  if (show.kind === "theatre" && show.productionName) {
+    return show.productionName;
+  }
+  const headliner = show.showPerformers.find(
     (sp) => sp.role === "headliner" && sp.sortOrder === 0
   );
   if (headliner) return headliner.performer.name;
-  const fallback = showPerformers.find((sp) => sp.role === "headliner");
+  const fallback = show.showPerformers.find((sp) => sp.role === "headliner");
   if (fallback) return fallback.performer.name;
-  return showPerformers[0]?.performer.name ?? "Unknown Artist";
+  return show.showPerformers[0]?.performer.name ?? "Unknown Artist";
 }
 
 function dotRadius(count: number): number {
@@ -221,9 +225,9 @@ function TopBar({ venues }: { venues: VenueGroup[] }) {
   const escapeCSV = (val: string) => `"${val.replace(/"/g, '""')}"`;
 
   const exportCSV = useCallback(() => {
-    const headers = ["Date", "Kind", "Headliner", "Venue", "City", "Neighborhood", "Seat", "Price Paid", "State"];
+    const headers = ["Date", "Kind", "Headliner", "Venue", "City", "Seat", "Price Paid", "State"];
     const rows = venues.flatMap((g) =>
-      g.shows.map((s) => [s.date, s.kind, s.headliner, g.name, g.city, g.neighborhood ?? "", s.seat ?? "", s.pricePaid ?? "", s.state])
+      g.shows.map((s) => [s.date, s.kind, s.headliner, g.name, g.city, s.seat ?? "", s.pricePaid ?? "", s.state])
     );
     const csv = [headers, ...rows].map((r) => r.map((c) => escapeCSV(c)).join(",")).join("\n");
     downloadBlob(csv, "showbook-export.csv", "text/csv");
@@ -234,7 +238,7 @@ function TopBar({ venues }: { venues: VenueGroup[] }) {
     const data = venues.flatMap((g) =>
       g.shows.map((s) => ({
         date: s.date, kind: s.kind, headliner: s.headliner, venue: g.name, city: g.city,
-        neighborhood: g.neighborhood, latitude: g.latitude, longitude: g.longitude,
+        latitude: g.latitude, longitude: g.longitude,
         seat: s.seat, pricePaid: s.pricePaid, state: s.state,
       }))
     );
@@ -518,11 +522,7 @@ function VenueInspector({
           </button>
         </div>
         <h2 className="venue-inspector__name">{venue.name}</h2>
-        <div className="venue-inspector__neighborhood">
-          {venue.neighborhood
-            ? `${venue.neighborhood} · ${venue.city}`
-            : venue.city}
-        </div>
+        <div className="venue-inspector__neighborhood">{venue.city}</div>
         <div className="venue-inspector__coords">
           {venue.latitude.toFixed(4)}&deg; N &middot;{" "}
           {Math.abs(venue.longitude).toFixed(4)}&deg;{" "}
@@ -684,7 +684,7 @@ export default function MapView() {
         kind: show.kind as ShowKind,
         state: show.state,
         date: show.date,
-        headliner: getHeadliner(show.showPerformers),
+        headliner: getHeadliner(show),
         seat: show.seat,
         pricePaid: show.pricePaid,
       };
@@ -698,7 +698,6 @@ export default function MapView() {
           venueId: venue.id,
           name: venue.name,
           city: venue.city,
-          neighborhood: venue.neighborhood ?? null,
           latitude: venue.latitude,
           longitude: venue.longitude,
           shows: [showData],

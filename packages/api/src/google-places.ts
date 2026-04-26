@@ -12,7 +12,6 @@ export interface PlaceSuggestion {
 
 export interface PlaceDetails {
   name: string;
-  neighborhood: string | null;
   city: string;
   stateRegion: string | null;
   country: string;
@@ -83,11 +82,8 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
     return comp?.longText ?? comp?.shortText ?? null;
   };
 
-  const neighborhood = find('neighborhood') ?? find('sublocality_level_1') ?? find('sublocality');
-
   return {
     name: data.displayName?.text ?? '',
-    neighborhood,
     city: find('locality') ?? find('administrative_area_level_2') ?? '',
     stateRegion: find('administrative_area_level_1'),
     country: find('country') ?? 'US',

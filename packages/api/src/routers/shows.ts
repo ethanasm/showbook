@@ -18,7 +18,6 @@ const venueInputSchema = z.object({
   city: z.string().min(1),
   stateRegion: z.string().optional(),
   country: z.string().optional(),
-  neighborhood: z.string().optional(),
   tmVenueId: z.string().optional(),
   lat: z.number().optional(),
   lng: z.number().optional(),
@@ -124,6 +123,7 @@ export const showsRouter = router({
         seat: z.string().optional(),
         pricePaid: z.string().optional(), // decimal as string
         tourName: z.string().optional(),
+        productionName: z.string().optional(),
         setlist: z.array(z.string()).optional(),
         performers: z.array(performerInputSchema).optional(),
         sourceRefs: z.any().optional(),
@@ -149,6 +149,13 @@ export const showsRouter = router({
       // Match or create venue
       const venueResult = await matchOrCreateVenue(input.venue as VenueInput);
 
+      // For theatre, the "headliner" name is the production title — store
+      // it on the show row rather than in the performers table.
+      const productionName =
+        input.kind === 'theatre'
+          ? input.productionName ?? input.headliner.name
+          : input.productionName ?? null;
+
       // Create the show
       const [show] = await ctx.db
         .insert(shows)
@@ -162,29 +169,30 @@ export const showsRouter = router({
           seat: input.seat ?? null,
           pricePaid: input.pricePaid ?? null,
           tourName: input.tourName ?? null,
+          productionName,
           setlist: input.setlist ?? null,
           photos: null,
           sourceRefs: input.sourceRefs ?? null,
         })
         .returning();
 
-      // Match or create headliner performer
-      const headlinerResult = await matchOrCreatePerformer({
-        name: input.headliner.name,
-        tmAttractionId: input.headliner.tmAttractionId,
-        setlistfmMbid: input.headliner.setlistfmMbid,
-        imageUrl: input.headliner.imageUrl,
-      });
+      if (input.kind !== 'theatre') {
+        const headlinerResult = await matchOrCreatePerformer({
+          name: input.headliner.name,
+          tmAttractionId: input.headliner.tmAttractionId,
+          setlistfmMbid: input.headliner.setlistfmMbid,
+          imageUrl: input.headliner.imageUrl,
+        });
 
-      await ctx.db.insert(showPerformers).values({
-        showId: show.id,
-        performerId: headlinerResult.performer.id,
-        role: 'headliner',
-        characterName: null,
-        sortOrder: 0,
-      });
+        await ctx.db.insert(showPerformers).values({
+          showId: show.id,
+          performerId: headlinerResult.performer.id,
+          role: 'headliner',
+          characterName: null,
+          sortOrder: 0,
+        });
+      }
 
-      // Match or create additional performers
       if (input.performers?.length) {
         for (const p of input.performers) {
           const result = await matchOrCreatePerformer({
@@ -291,6 +299,7 @@ export const showsRouter = router({
         seat: z.string().optional(),
         pricePaid: z.string().optional(),
         tourName: z.string().optional(),
+        productionName: z.string().optional(),
         setlist: z.array(z.string()).optional(),
         performers: z.array(performerInputSchema).optional(),
         sourceRefs: z.any().optional(),
@@ -324,6 +333,11 @@ export const showsRouter = router({
 
       const venueResult = await matchOrCreateVenue(input.venue as VenueInput);
 
+      const productionName =
+        input.kind === 'theatre'
+          ? input.productionName ?? input.headliner.name
+          : input.productionName ?? null;
+
       await ctx.db
         .update(shows)
         .set({
@@ -335,6 +349,7 @@ export const showsRouter = router({
           seat: input.seat ?? null,
           pricePaid: input.pricePaid ?? null,
           tourName: input.tourName ?? null,
+          productionName,
           setlist: input.setlist ?? null,
           sourceRefs: input.sourceRefs ?? null,
           updatedAt: new Date(),
@@ -346,20 +361,22 @@ export const showsRouter = router({
         .delete(showPerformers)
         .where(eq(showPerformers.showId, input.showId));
 
-      const headlinerResult = await matchOrCreatePerformer({
-        name: input.headliner.name,
-        tmAttractionId: input.headliner.tmAttractionId,
-        setlistfmMbid: input.headliner.setlistfmMbid,
-        imageUrl: input.headliner.imageUrl,
-      });
+      if (input.kind !== 'theatre') {
+        const headlinerResult = await matchOrCreatePerformer({
+          name: input.headliner.name,
+          tmAttractionId: input.headliner.tmAttractionId,
+          setlistfmMbid: input.headliner.setlistfmMbid,
+          imageUrl: input.headliner.imageUrl,
+        });
 
-      await ctx.db.insert(showPerformers).values({
-        showId: input.showId,
-        performerId: headlinerResult.performer.id,
-        role: 'headliner',
-        characterName: null,
-        sortOrder: 0,
-      });
+        await ctx.db.insert(showPerformers).values({
+          showId: input.showId,
+          performerId: headlinerResult.performer.id,
+          role: 'headliner',
+          characterName: null,
+          sortOrder: 0,
+        });
+      }
 
       if (input.performers?.length) {
         for (const p of input.performers) {

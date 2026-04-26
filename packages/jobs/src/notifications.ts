@@ -140,6 +140,16 @@ function buildReminderHtml(
 async function getHeadlinerForShow(
   showId: string
 ): Promise<string | null> {
+  const [showRow] = await db
+    .select({ kind: shows.kind, productionName: shows.productionName })
+    .from(shows)
+    .where(eq(shows.id, showId))
+    .limit(1);
+
+  if (showRow?.kind === 'theatre') {
+    return showRow.productionName ?? null;
+  }
+
   const rows = await db
     .select({ name: performers.name })
     .from(showPerformers)
@@ -189,7 +199,7 @@ export async function runNotificationDigest(): Promise<{
       emailNotifications: userPreferences.emailNotifications,
       showDayReminder: userPreferences.showDayReminder,
       email: users.email,
-      displayName: users.displayName,
+      displayName: users.name,
     })
     .from(userPreferences)
     .innerJoin(users, eq(userPreferences.userId, users.id))
@@ -311,7 +321,7 @@ export async function runNotificationDigest(): Promise<{
 
       // ── 2d. Build and send digest email ────────────────────────────
       const html = buildDigestHtml(
-        user.displayName,
+        user.displayName ?? 'there',
         newAnnouncements,
         upcomingShows,
         todayShows
@@ -326,6 +336,11 @@ export async function runNotificationDigest(): Promise<{
         console.log(
           `[notifications/digest] Would send digest to ${user.email} (${newAnnouncements.length} announcements, ${upcomingShows.length} upcoming, ${todayShows.length} today)`
         );
+        skipped++;
+        continue;
+      }
+
+      if (!user.email) {
         skipped++;
         continue;
       }
@@ -361,7 +376,7 @@ export async function runNotificationDigest(): Promise<{
       showDayReminder: userPreferences.showDayReminder,
       emailNotifications: userPreferences.emailNotifications,
       email: users.email,
-      displayName: users.displayName,
+      displayName: users.name,
     })
     .from(userPreferences)
     .innerJoin(users, eq(userPreferences.userId, users.id))
@@ -425,7 +440,12 @@ export async function runNotificationDigest(): Promise<{
         continue;
       }
 
-      const html = buildReminderHtml(user.displayName, todayShows);
+      if (!user.email) {
+        skipped++;
+        continue;
+      }
+
+      const html = buildReminderHtml(user.displayName ?? 'there', todayShows);
       await resend.emails.send({
         from: FROM_ADDRESS,
         to: user.email,

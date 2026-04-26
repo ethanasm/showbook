@@ -10,7 +10,6 @@ import {
 export const venues = pgTable('venues', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: text('name').notNull(),
-  neighborhood: text('neighborhood'),
   city: text('city').notNull(),
   stateRegion: text('state_region'),
   country: text('country').notNull(),
