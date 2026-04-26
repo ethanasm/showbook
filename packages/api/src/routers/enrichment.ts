@@ -262,6 +262,8 @@ export const enrichmentRouter = router({
         } while (pageToken);
       }
 
+      console.log(`[gmail] Found ${allMessages.length} emails to process`);
+
       // Parse each message with LLM, dedup by show content
       const tickets: Array<{
         gmailMessageId: string;
@@ -275,23 +277,72 @@ export const enrichmentRouter = router({
         confidence: 'high' | 'medium' | 'low';
       }> = [];
 
-      const seenShows = new Set<string>();
-      for (const msg of allMessages) {
-        const detail = await getMessageBody(accessToken, msg.id);
-        const extracted = await extractShowFromEmail(
-          detail.subject,
-          detail.body,
-          detail.from,
+      const BATCH_SIZE = 8;
+      type TicketWithId = typeof tickets[number];
+      const allExtracted: TicketWithId[] = [];
+
+      for (let i = 0; i < allMessages.length; i += BATCH_SIZE) {
+        console.log(`[gmail] Processing ${i + 1}-${Math.min(i + BATCH_SIZE, allMessages.length)} of ${allMessages.length} (${allExtracted.length} tickets found)`);
+        const batch = allMessages.slice(i, i + BATCH_SIZE);
+        const results = await Promise.all(
+          batch.map(async (msg) => {
+            const detail = await getMessageBody(accessToken, msg.id);
+            const extracted = await extractShowFromEmail(
+              detail.subject,
+              detail.body,
+              detail.from,
+            );
+            if (extracted && (!extracted.date || !extracted.venue_name)) {
+              console.log(`[gmail] INCOMPLETE: "${extracted.headliner}" missing ${!extracted.date ? 'date' : ''} ${!extracted.venue_name ? 'venue' : ''}`);
+              console.log(`[gmail]   Subject: ${detail.subject}`);
+              console.log(`[gmail]   Body (first 500): ${detail.body.slice(0, 500)}`);
+            }
+            return extracted ? { ...extracted, gmailMessageId: msg.id } : null;
+          }),
         );
-        if (extracted) {
-          const showKey = `${extracted.headliner.toLowerCase()}|${extracted.date ?? ''}|${(extracted.venue_name ?? '').toLowerCase()}`;
-          if (!seenShows.has(showKey)) {
-            seenShows.add(showKey);
-            tickets.push({ ...extracted, gmailMessageId: msg.id });
-          }
+        for (const result of results) {
+          if (result) allExtracted.push(result);
         }
       }
 
-      return { tickets };
+      // Deterministic merge: group by headliner, combine best fields
+      const mergeMap = new Map<string, TicketWithId>();
+      const headlinerKey = (t: TicketWithId) => t.headliner.toLowerCase().trim();
+
+      for (const ticket of allExtracted) {
+        const key = headlinerKey(ticket);
+        const existing = mergeMap.get(key);
+        if (!existing) {
+          mergeMap.set(key, { ...ticket });
+        } else {
+          // If both have dates and they differ, this is a different show — keep separate
+          if (existing.date && ticket.date && existing.date !== ticket.date) {
+            const datedKey = `${key}|${ticket.date}`;
+            const existingDated = mergeMap.get(datedKey);
+            if (!existingDated) {
+              mergeMap.set(datedKey, { ...ticket });
+            } else {
+              if (!existingDated.venue_name && ticket.venue_name) existingDated.venue_name = ticket.venue_name;
+              if (!existingDated.venue_city && ticket.venue_city) existingDated.venue_city = ticket.venue_city;
+              if (!existingDated.seat && ticket.seat) existingDated.seat = ticket.seat;
+              if (!existingDated.price && ticket.price) existingDated.price = ticket.price;
+              if (!existingDated.kind_hint && ticket.kind_hint) existingDated.kind_hint = ticket.kind_hint;
+            }
+            continue;
+          }
+          // Merge fields into existing
+          if (!existing.venue_name && ticket.venue_name) existing.venue_name = ticket.venue_name;
+          if (!existing.venue_city && ticket.venue_city) existing.venue_city = ticket.venue_city;
+          if (!existing.date && ticket.date) existing.date = ticket.date;
+          if (!existing.seat && ticket.seat) existing.seat = ticket.seat;
+          if (!existing.price && ticket.price) existing.price = ticket.price;
+          if (!existing.kind_hint && ticket.kind_hint) existing.kind_hint = ticket.kind_hint;
+        }
+      }
+
+      const merged = Array.from(mergeMap.values());
+      console.log(`[gmail] Done — ${allExtracted.length} extracted, ${merged.length} after merge`);
+
+      return { tickets: merged };
     }),
 });

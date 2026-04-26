@@ -29,6 +29,7 @@ services:
     environment:
       DATABASE_URL: postgresql://showbook:showbook_dev@postgres:5432/showbook
       PORT: "3001"
+      NODE_OPTIONS: "--max-old-space-size=4096"
     ports:
       - "3001:3001"
     volumes:

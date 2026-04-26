@@ -162,17 +162,26 @@ export function buildTicketSearchQuery(options: {
   return parts.join(' ');
 }
 
+const BULK_EXCLUSIONS =
+  '-subject:(museum OR shipping OR shipped OR tracking OR poster OR merch OR ' +
+  'merchandise OR "bus pass" OR shuttle OR parking OR camping OR flight OR hotel) ' +
+  '-from:(museum OR gallery OR ups OR fedex OR usps OR airbnb OR hotels OR airline OR events@mail.stubhub.com OR livemusic@frontgatetickets.com)';
+
 export function buildBulkScanQueries(): string[] {
   return [
-    // High-precision: known ticket platforms by sender
+    // High-priority: known purchase confirmation senders
+    'from:(customer_support@email.ticketmaster.com OR guestservices@axs.com OR order-support@frontgatetickets.com)',
+    // Known ticket platforms by sender
     'subject:(ticket OR tickets OR confirmation OR order) ' +
     'from:(ticketmaster OR axs OR eventbrite OR stubhub OR seatgeek OR ' +
-    '"live nation" OR vividseats OR telecharge OR "seat geek" OR dice OR ' +
-    'aeg OR msg)',
-    // High-recall: broader subject search, exclude promotions
-    'subject:(ticket OR tickets OR "order confirmation" OR "your order" OR ' +
-    '"event confirmation" OR "your tickets" OR "booking confirmation") ' +
-    '-category:promotions',
+    '"live nation" OR vividseats OR telecharge OR dice OR aeg OR msg OR ' +
+    '"see tickets" OR seetickets OR fever OR universe OR ' +
+    'tixr OR seated OR lyte OR "front gate" OR frontgate OR etix OR ' +
+    'tock OR songkick) ' +
+    BULK_EXCLUSIONS,
+    // Broader: ticket/order confirmations from any sender
+    'subject:(tickets OR "order confirmation" OR "e-ticket" OR "booking confirmation") ' +
+    '-category:promotions ' + BULK_EXCLUSIONS,
   ];
 }
 
@@ -189,62 +198,58 @@ function stripHtml(html: string): string {
   return html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|tr|h[1-6]|li|td)>/gi, '\n')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&#\d+;/g, '')
-    .replace(/\s+/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n /g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
-function extractBody(payload: {
+interface MimePart {
   mimeType: string;
   body?: { data?: string };
-  parts?: Array<{
-    mimeType: string;
-    body?: { data?: string };
-    parts?: Array<{
-      mimeType: string;
-      body?: { data?: string };
-    }>;
-  }>;
-}): string {
-  // Direct body (non-multipart)
-  if (payload.body?.data && !payload.parts) {
-    const decoded = decodeBase64Url(payload.body.data);
-    if (payload.mimeType === 'text/html') return stripHtml(decoded);
-    return decoded;
-  }
+  parts?: MimePart[];
+}
 
-  if (!payload.parts) return '';
+function extractBody(payload: MimePart): string {
+  // Collect all text content recursively
+  const texts: string[] = [];
+  const htmls: string[] = [];
 
-  // Prefer text/plain
-  const plainPart = payload.parts.find((p) => p.mimeType === 'text/plain');
-  if (plainPart?.body?.data) {
-    return decodeBase64Url(plainPart.body.data);
-  }
-
-  // Fall back to text/html
-  const htmlPart = payload.parts.find((p) => p.mimeType === 'text/html');
-  if (htmlPart?.body?.data) {
-    return stripHtml(decodeBase64Url(htmlPart.body.data));
-  }
-
-  // Check nested parts (multipart/alternative inside multipart/mixed)
-  for (const part of payload.parts) {
-    if (part.parts) {
-      const nestedPlain = part.parts.find((p) => p.mimeType === 'text/plain');
-      if (nestedPlain?.body?.data) {
-        return decodeBase64Url(nestedPlain.body.data);
+  function walk(part: MimePart) {
+    if (part.body?.data) {
+      const decoded = decodeBase64Url(part.body.data);
+      if (part.mimeType === 'text/plain') {
+        texts.push(decoded);
+      } else if (part.mimeType === 'text/html') {
+        htmls.push(stripHtml(decoded));
       }
-      const nestedHtml = part.parts.find((p) => p.mimeType === 'text/html');
-      if (nestedHtml?.body?.data) {
-        return stripHtml(decodeBase64Url(nestedHtml.body.data));
+    }
+    if (part.parts) {
+      for (const child of part.parts) {
+        walk(child);
       }
     }
   }
 
-  return '';
+  walk(payload);
+
+  // Pick the longest plain text if it's substantial, otherwise longest HTML
+  const bestPlain = texts.sort((a, b) => b.length - a.length)[0] ?? '';
+  const bestHtml = htmls.sort((a, b) => b.length - a.length)[0] ?? '';
+
+  if (bestPlain.length >= bestHtml.length && bestPlain.length > 100) {
+    return bestPlain;
+  }
+  if (bestHtml.length > 0) {
+    return bestHtml;
+  }
+  return bestPlain;
 }

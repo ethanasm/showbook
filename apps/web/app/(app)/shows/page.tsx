@@ -204,7 +204,7 @@ export default function ShowsPage() {
       confidence: "high" | "medium" | "low";
     }>
   >([]);
-  const [gmailBulkSelected, setGmailBulkSelected] = useState<Set<string>>(new Set());
+  const [gmailBulkSelected, setGmailBulkSelected] = useState<Set<number>>(new Set());
   const [gmailAdding, setGmailAdding] = useState(false);
   const [gmailAddedCount, setGmailAddedCount] = useState(0);
   const [gmailAccessToken, setGmailAccessToken] = useState<string | null>(null);
@@ -355,12 +355,12 @@ export default function ShowsPage() {
       const result = await bulkScanGmail.mutateAsync({ accessToken: token });
       setGmailBulkResults(result.tickets);
 
-      const initialSelected = new Set<string>();
-      for (const t of result.tickets) {
+      const initialSelected = new Set<number>();
+      result.tickets.forEach((t, i) => {
         if (!isDuplicate(t)) {
-          initialSelected.add(t.gmailMessageId);
+          initialSelected.add(i);
         }
-      }
+      });
       setGmailBulkSelected(initialSelected);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Scan failed";
@@ -403,13 +403,13 @@ export default function ShowsPage() {
     }
   }, [startGmailScan]);
 
-  const handleToggleGmailResult = useCallback((messageId: string) => {
+  const handleToggleGmailResult = useCallback((index: number) => {
     setGmailBulkSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(messageId)) {
-        next.delete(messageId);
+      if (next.has(index)) {
+        next.delete(index);
       } else {
-        next.add(messageId);
+        next.add(index);
       }
       return next;
     });
@@ -418,8 +418,8 @@ export default function ShowsPage() {
   const handleAddSelectedGmail = useCallback(async () => {
     setGmailAdding(true);
     setGmailAddedCount(0);
-    const selected = gmailBulkResults.filter((t) =>
-      gmailBulkSelected.has(t.gmailMessageId),
+    const selected = gmailBulkResults.filter((_, i) =>
+      gmailBulkSelected.has(i),
     );
 
     for (const ticket of selected) {
@@ -1865,11 +1865,11 @@ export default function ShowsPage() {
               }}>
                 {gmailBulkResults.map((ticket, i) => {
                   const dup = isDuplicate(ticket);
-                  const selected = gmailBulkSelected.has(ticket.gmailMessageId);
+                  const selected = gmailBulkSelected.has(i);
                   return (
                     <div
-                      key={ticket.gmailMessageId}
-                      onClick={() => handleToggleGmailResult(ticket.gmailMessageId)}
+                      key={`${ticket.gmailMessageId}-${i}`}
+                      onClick={() => handleToggleGmailResult(i)}
                       style={{
                         padding: "12px 20px",
                         borderTop: i > 0 ? "1px solid var(--rule)" : "none",
