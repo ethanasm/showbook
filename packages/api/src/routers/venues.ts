@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { eq, and, sql } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc';
 import { venues, userVenueFollows } from '@showbook/db';
+import { getPlaceDetails } from '../google-places';
+import { matchOrCreateVenue } from '../venue-matcher';
 
 export const venuesRouter = router({
   search: protectedProcedure
@@ -42,6 +44,24 @@ export const venuesRouter = router({
         );
 
       return { success: true };
+    }),
+
+  createFromPlace: protectedProcedure
+    .input(z.object({ placeId: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const details = await getPlaceDetails(input.placeId);
+      if (!details) throw new Error('Place not found');
+      const result = await matchOrCreateVenue({
+        name: details.name,
+        city: details.city,
+        stateRegion: details.stateRegion ?? undefined,
+        country: details.country,
+        neighborhood: details.neighborhood ?? undefined,
+        lat: details.latitude,
+        lng: details.longitude,
+        googlePlaceId: details.googlePlaceId,
+      });
+      return result.venue;
     }),
 
   followed: protectedProcedure.query(async ({ ctx }) => {

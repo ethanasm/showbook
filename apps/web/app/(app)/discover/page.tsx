@@ -275,6 +275,11 @@ function VenueSearchModal({
     { enabled: query.length >= 2 },
   );
 
+  const placesResults = trpc.enrichment.searchPlaces.useQuery(
+    { query, types: "venue" },
+    { enabled: query.length >= 2 },
+  );
+
   const followMutation = trpc.venues.follow.useMutation({
     onSuccess: () => {
       onFollowed();
@@ -282,11 +287,21 @@ function VenueSearchModal({
     },
   });
 
+  const createAndFollow = trpc.venues.createFromPlace.useMutation({
+    onSuccess: (venue) => {
+      followMutation.mutate({ venueId: venue.id });
+    },
+  });
+
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
-  const venues = searchResults.data ?? [];
+  const localVenues = searchResults.data ?? [];
+  const places = placesResults.data ?? [];
+  const localIds = new Set(localVenues.map((v) => v.googlePlaceId).filter(Boolean));
+  const filteredPlaces = places.filter((p) => !localIds.has(p.placeId));
+  const isPending = followMutation.isPending || createAndFollow.isPending;
 
   return (
     <div className="discover-modal-overlay" onClick={onClose}>
@@ -325,16 +340,13 @@ function VenueSearchModal({
           {query.length >= 2 && searchResults.isLoading && (
             <div className="discover-modal__hint">Searching...</div>
           )}
-          {query.length >= 2 && !searchResults.isLoading && venues.length === 0 && (
-            <div className="discover-modal__hint">No venues found</div>
-          )}
-          {venues.map((venue) => (
+          {localVenues.map((venue) => (
             <button
               key={venue.id}
               type="button"
               className="discover-modal__result"
               onClick={() => followMutation.mutate({ venueId: venue.id })}
-              disabled={followMutation.isPending}
+              disabled={isPending}
             >
               <div className="discover-modal__result-body">
                 <div className="discover-modal__result-name">{venue.name}</div>
@@ -348,6 +360,32 @@ function VenueSearchModal({
               </div>
             </button>
           ))}
+          {filteredPlaces.length > 0 && localVenues.length > 0 && (
+            <div className="discover-modal__hint" style={{ borderBottom: "1px solid var(--rule)" }}>
+              From Google Places
+            </div>
+          )}
+          {filteredPlaces.map((place) => (
+            <button
+              key={place.placeId}
+              type="button"
+              className="discover-modal__result"
+              onClick={() => createAndFollow.mutate({ placeId: place.placeId })}
+              disabled={isPending}
+            >
+              <div className="discover-modal__result-body">
+                <div className="discover-modal__result-name">{place.displayName}</div>
+                <div className="discover-modal__result-meta">{place.formattedAddress}</div>
+              </div>
+              <div className="discover-modal__result-action">
+                <Plus size={12} />
+                Follow
+              </div>
+            </button>
+          ))}
+          {query.length >= 2 && !searchResults.isLoading && localVenues.length === 0 && filteredPlaces.length === 0 && (
+            <div className="discover-modal__hint">No venues found</div>
+          )}
         </div>
       </div>
     </div>

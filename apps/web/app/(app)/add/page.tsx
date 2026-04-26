@@ -16,6 +16,7 @@ interface VenueData {
   stateRegion?: string;
   country?: string;
   tmVenueId?: string;
+  googlePlaceId?: string;
   lat?: number;
   lng?: number;
 }
@@ -117,6 +118,9 @@ export default function AddPage() {
   const [headlinerName, setHeadlinerName] = useState("");
   const [headliner, setHeadliner] = useState<HeadlinerData>({ name: "" });
   const [venue, setVenue] = useState<VenueData>({ name: "", city: "" });
+  const [venueQuery, setVenueQuery] = useState("");
+  const [debouncedVenueQuery, setDebouncedVenueQuery] = useState("");
+  const venueSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [date, setDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [tmEnriched, setTmEnriched] = useState(false);
@@ -183,6 +187,12 @@ export default function AddPage() {
   const tmSearch = trpc.enrichment.searchTM.useQuery(
     { headliner: debouncedQuery },
     { enabled: debouncedQuery.length >= 2 },
+  );
+
+  // Places venue search
+  const venueSearch = trpc.enrichment.searchPlaces.useQuery(
+    { query: debouncedVenueQuery, types: "venue" },
+    { enabled: debouncedVenueQuery.length >= 2 && !tmEnriched },
   );
 
   // Setlist fetch
@@ -466,6 +476,36 @@ export default function AddPage() {
     createShow,
     utils,
   ]);
+
+  const handleVenueInput = useCallback((value: string) => {
+    setVenueQuery(value);
+    setVenue((v) => ({ ...v, name: value, city: v.city }));
+    if (venueSearchTimerRef.current) clearTimeout(venueSearchTimerRef.current);
+    if (value.length >= 2) {
+      venueSearchTimerRef.current = setTimeout(() => setDebouncedVenueQuery(value), 400);
+    } else {
+      setDebouncedVenueQuery("");
+    }
+  }, []);
+
+  const handleSelectPlace = useCallback(async (placeId: string) => {
+    try {
+      const details = await utils.enrichment.placeDetails.fetch({ placeId });
+      if (details) {
+        setVenue({
+          name: details.name,
+          city: details.city,
+          stateRegion: details.stateRegion ?? undefined,
+          country: details.country,
+          lat: details.latitude,
+          lng: details.longitude,
+          googlePlaceId: details.googlePlaceId,
+        });
+        setVenueQuery(details.name);
+        setDebouncedVenueQuery("");
+      }
+    } catch { /* place details failed, user can enter manually */ }
+  }, [utils]);
 
   const handleAddPerformer = useCallback(() => {
     if (!performerSearchInput.trim()) return;
@@ -915,8 +955,8 @@ export default function AddPage() {
 
       {/* ── Venue + Date + Cost ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 130px", columnGap: 14, marginBottom: 26 }}>
-        <div>
-          <FieldLabel hint={tmEnriched ? "auto · from ticket" : undefined}>Venue</FieldLabel>
+        <div style={{ position: "relative" }}>
+          <FieldLabel hint={tmEnriched ? "auto · from ticket" : venue.googlePlaceId ? "auto · google places" : undefined}>Venue</FieldLabel>
           <div style={{
             padding: "10px 14px",
             background: "var(--surface)",
@@ -928,16 +968,13 @@ export default function AddPage() {
             <span style={{ color: "var(--muted)", fontSize: 14 }}>📍</span>
             <input
               type="text"
-              placeholder="Venue name"
-              value={venue.name ? `${venue.name}${venue.city ? ` · ${venue.city}` : ""}` : ""}
+              placeholder="Search for a venue..."
+              value={tmEnriched ? `${venue.name}${venue.city ? ` · ${venue.city}` : ""}` : venueQuery}
               onChange={(e) => {
-                const parts = e.target.value.split(" · ");
-                setVenue((v) => ({
-                  ...v,
-                  name: parts[0] ?? "",
-                  city: parts[1] ?? v.city,
-                }));
+                if (tmEnriched) return;
+                handleVenueInput(e.target.value);
               }}
+              readOnly={tmEnriched}
               style={{
                 flex: 1,
                 background: "transparent",
@@ -950,6 +987,42 @@ export default function AddPage() {
               }}
             />
           </div>
+          {debouncedVenueQuery.length >= 2 && !tmEnriched && (
+            <div style={{
+              position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20,
+              background: "var(--surface)", border: "1px solid var(--rule-strong)", borderTop: "none",
+              maxHeight: 240, overflow: "auto",
+            }}>
+              {venueSearch.isLoading && (
+                <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--muted)" }}>
+                  Searching venues...
+                </div>
+              )}
+              {venueSearch.data?.map((place) => (
+                <button
+                  key={place.placeId}
+                  type="button"
+                  onClick={() => handleSelectPlace(place.placeId)}
+                  style={{
+                    width: "100%", padding: "10px 16px", background: "transparent",
+                    border: "none", borderBottom: "1px solid var(--rule)", cursor: "pointer", textAlign: "left",
+                  }}
+                >
+                  <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>
+                    {place.displayName}
+                  </div>
+                  <div style={{ fontFamily: mono, fontSize: 10, color: "var(--muted)", marginTop: 2 }}>
+                    {place.formattedAddress}
+                  </div>
+                </button>
+              ))}
+              {venueSearch.data && venueSearch.data.length === 0 && (
+                <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--faint)" }}>
+                  No venues found
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div>
           <FieldLabel>Date</FieldLabel>

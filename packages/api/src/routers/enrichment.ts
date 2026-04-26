@@ -11,6 +11,10 @@ import {
   parseShowInput,
   extractCast as groqExtractCast,
 } from '../groq';
+import {
+  autocomplete as placesAutocomplete,
+  getPlaceDetails,
+} from '../google-places';
 
 export const enrichmentRouter = router({
   // ---------------------------------------------------------------------------
@@ -155,5 +159,26 @@ export const enrichmentRouter = router({
     .mutation(async ({ input }) => {
       const cast = await groqExtractCast(input.imageBase64);
       return { cast };
+    }),
+
+  searchPlaces: protectedProcedure
+    .input(z.object({
+      query: z.string().min(2),
+      types: z.enum(['venue', 'city']).default('venue'),
+    }))
+    .query(async ({ input }) => {
+      const typeMap = {
+        venue: ['establishment'],
+        city: ['locality', 'administrative_area_level_1'],
+      };
+      return placesAutocomplete(input.query, typeMap[input.types]);
+    }),
+
+  placeDetails: protectedProcedure
+    .input(z.object({ placeId: z.string().min(1) }))
+    .query(async ({ input }) => {
+      const details = await getPlaceDetails(input.placeId);
+      if (!details) throw new TRPCError({ code: 'NOT_FOUND', message: 'Place not found' });
+      return details;
     }),
 });

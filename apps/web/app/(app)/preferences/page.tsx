@@ -263,14 +263,24 @@ function RegionChip({
 // ── Add Region Form ────────────────────────────────────────
 
 function AddRegionForm({ onAdd }: { onAdd: () => void }) {
+  const [cityQuery, setCityQuery] = useState("");
   const [cityName, setCityName] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
   const [radius, setRadius] = useState("25");
   const [expanded, setExpanded] = useState(false);
+  const [debouncedCity, setDebouncedCity] = useState("");
+  const cityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const utils = trpc.useUtils();
+
+  const citySearch = trpc.enrichment.searchPlaces.useQuery(
+    { query: debouncedCity, types: "city" },
+    { enabled: debouncedCity.length >= 2 },
+  );
 
   const addRegion = trpc.preferences.addRegion.useMutation({
     onSuccess: () => {
+      setCityQuery("");
       setCityName("");
       setLatitude("");
       setLongitude("");
@@ -280,12 +290,33 @@ function AddRegionForm({ onAdd }: { onAdd: () => void }) {
     },
   });
 
-  const canSubmit =
-    cityName.trim() !== "" &&
-    latitude !== "" &&
-    longitude !== "" &&
-    radius !== "" &&
-    !addRegion.isPending;
+  const handleCityInput = (value: string) => {
+    setCityQuery(value);
+    setCityName("");
+    setLatitude("");
+    setLongitude("");
+    if (cityTimerRef.current) clearTimeout(cityTimerRef.current);
+    if (value.length >= 2) {
+      cityTimerRef.current = setTimeout(() => setDebouncedCity(value), 400);
+    } else {
+      setDebouncedCity("");
+    }
+  };
+
+  const handleSelectCity = async (placeId: string) => {
+    try {
+      const details = await utils.enrichment.placeDetails.fetch({ placeId });
+      if (details) {
+        setCityName(details.city || details.name);
+        setCityQuery(details.city || details.name);
+        setLatitude(String(details.latitude));
+        setLongitude(String(details.longitude));
+        setDebouncedCity("");
+      }
+    } catch { /* ignore */ }
+  };
+
+  const canSubmit = cityName.trim() !== "" && latitude !== "" && longitude !== "" && radius !== "" && !addRegion.isPending;
 
   if (!expanded) {
     return (
@@ -310,44 +341,36 @@ function AddRegionForm({ onAdd }: { onAdd: () => void }) {
 
   return (
     <div style={{ marginTop: 16 }}>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 12,
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, position: "relative" }}>
           <label style={formStyles.inputLabel}>City</label>
           <input
             type="text"
-            value={cityName}
-            onChange={(e) => setCityName(e.target.value)}
+            value={cityQuery}
+            onChange={(e) => handleCityInput(e.target.value)}
             placeholder="e.g. Nashville"
             style={formStyles.input}
           />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <label style={formStyles.inputLabel}>Latitude</label>
-          <input
-            type="number"
-            value={latitude}
-            onChange={(e) => setLatitude(e.target.value)}
-            placeholder="36.1627"
-            step="any"
-            style={formStyles.input}
-          />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <label style={formStyles.inputLabel}>Longitude</label>
-          <input
-            type="number"
-            value={longitude}
-            onChange={(e) => setLongitude(e.target.value)}
-            placeholder="-86.7816"
-            step="any"
-            style={formStyles.input}
-          />
+          {debouncedCity.length >= 2 && (
+            <div style={{
+              position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20,
+              background: "var(--surface)", border: "1px solid var(--rule-strong)",
+              maxHeight: 200, overflow: "auto",
+            }}>
+              {citySearch.isLoading && (
+                <div style={{ padding: "8px 12px", fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--muted)" }}>Searching...</div>
+              )}
+              {citySearch.data?.map((p) => (
+                <button key={p.placeId} type="button" onClick={() => handleSelectCity(p.placeId)} style={{
+                  display: "block", width: "100%", padding: "8px 12px", background: "none", border: "none",
+                  borderBottom: "1px solid var(--rule)", textAlign: "left", cursor: "pointer",
+                }}>
+                  <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 13, color: "var(--ink)" }}>{p.displayName}</div>
+                  <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10, color: "var(--muted)" }}>{p.formattedAddress}</div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <label style={formStyles.inputLabel}>Radius (miles)</label>
@@ -476,13 +499,22 @@ function VenueFollowModal({ onClose, onFollowed }: { onClose: () => void; onFoll
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const searchResults = trpc.venues.search.useQuery({ query }, { enabled: query.length >= 2 });
+  const placesResults = trpc.enrichment.searchPlaces.useQuery({ query, types: "venue" }, { enabled: query.length >= 2 });
   const followMutation = trpc.venues.follow.useMutation({
     onSuccess: () => { setQuery(""); onFollowed(); },
+  });
+  const createAndFollow = trpc.venues.createFromPlace.useMutation({
+    onSuccess: (venue) => { followMutation.mutate({ venueId: venue.id }); },
   });
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  const results = searchResults.data ?? [];
+  const localVenues = searchResults.data ?? [];
+  const places = placesResults.data ?? [];
+  const localIds = new Set(localVenues.map((v) => v.googlePlaceId).filter(Boolean));
+  const filteredPlaces = places.filter((p) => !localIds.has(p.placeId));
+  const isPending = followMutation.isPending || createAndFollow.isPending;
+  const mono = "var(--font-geist-mono)";
 
   return (
     <div onClick={onClose} style={{
@@ -494,7 +526,7 @@ function VenueFollowModal({ onClose, onFollowed }: { onClose: () => void; onFoll
         width: 420, maxHeight: "70vh", display: "flex", flexDirection: "column",
       }}>
         <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--rule)" }}>
-          <span style={{ fontFamily: "var(--font-geist-mono)", fontSize: 12, color: "var(--ink)", letterSpacing: ".08em", textTransform: "uppercase", fontWeight: 500 }}>Follow a venue</span>
+          <span style={{ fontFamily: mono, fontSize: 12, color: "var(--ink)", letterSpacing: ".08em", textTransform: "uppercase", fontWeight: 500 }}>Follow a venue</span>
           <button type="button" onClick={onClose} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer" }}><X size={14} /></button>
         </div>
         <div style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid var(--rule)" }}>
@@ -503,22 +535,34 @@ function VenueFollowModal({ onClose, onFollowed }: { onClose: () => void; onFoll
             style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--ink)", fontFamily: "var(--font-geist-sans)", fontSize: 14 }} />
         </div>
         <div style={{ overflow: "auto", maxHeight: 300 }}>
-          {query.length < 2 && <div style={{ padding: "20px", color: "var(--faint)", fontFamily: "var(--font-geist-mono)", fontSize: 11, textAlign: "center" }}>Type at least 2 characters</div>}
-          {searchResults.isLoading && <div style={{ padding: "20px", color: "var(--muted)", fontFamily: "var(--font-geist-mono)", fontSize: 11, textAlign: "center" }}>Searching...</div>}
-          {followMutation.isError && (
-            <div style={{ padding: "10px 20px", color: "#E63946", fontFamily: "var(--font-geist-mono)", fontSize: 11 }}>Failed to follow venue</div>
+          {query.length < 2 && <div style={{ padding: "20px", color: "var(--faint)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>Type at least 2 characters</div>}
+          {searchResults.isLoading && <div style={{ padding: "20px", color: "var(--muted)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>Searching...</div>}
+          {(followMutation.isError || createAndFollow.isError) && (
+            <div style={{ padding: "10px 20px", color: "#E63946", fontFamily: mono, fontSize: 11 }}>Failed to follow venue</div>
           )}
-          {results.map((v) => (
-            <button key={v.id} type="button" disabled={followMutation.isPending} onClick={() => followMutation.mutate({ venueId: v.id })} style={{
+          {localVenues.map((v) => (
+            <button key={v.id} type="button" disabled={isPending} onClick={() => followMutation.mutate({ venueId: v.id })} style={{
               display: "block", width: "100%", padding: "12px 20px", background: "none", border: "none", borderBottom: "1px solid var(--rule)",
-              textAlign: "left", cursor: followMutation.isPending ? "wait" : "pointer", opacity: followMutation.isPending ? 0.5 : 1,
+              textAlign: "left", cursor: isPending ? "wait" : "pointer", opacity: isPending ? 0.5 : 1,
             }}>
               <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 14, color: "var(--ink)", fontWeight: 500 }}>{v.name}</div>
-              <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--muted)", marginTop: 2 }}>{v.city}{v.stateRegion ? `, ${v.stateRegion}` : ""}</div>
+              <div style={{ fontFamily: mono, fontSize: 10.5, color: "var(--muted)", marginTop: 2 }}>{v.city}{v.stateRegion ? `, ${v.stateRegion}` : ""}</div>
             </button>
           ))}
-          {query.length >= 2 && !searchResults.isLoading && results.length === 0 && (
-            <div style={{ padding: "20px", color: "var(--faint)", fontFamily: "var(--font-geist-mono)", fontSize: 11, textAlign: "center" }}>No venues found</div>
+          {filteredPlaces.length > 0 && localVenues.length > 0 && (
+            <div style={{ padding: "10px 20px", color: "var(--faint)", fontFamily: mono, fontSize: 10, letterSpacing: ".06em", textTransform: "uppercase", borderBottom: "1px solid var(--rule)" }}>Google Places</div>
+          )}
+          {filteredPlaces.map((p) => (
+            <button key={p.placeId} type="button" disabled={isPending} onClick={() => createAndFollow.mutate({ placeId: p.placeId })} style={{
+              display: "block", width: "100%", padding: "12px 20px", background: "none", border: "none", borderBottom: "1px solid var(--rule)",
+              textAlign: "left", cursor: isPending ? "wait" : "pointer", opacity: isPending ? 0.5 : 1,
+            }}>
+              <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 14, color: "var(--ink)", fontWeight: 500 }}>{p.displayName}</div>
+              <div style={{ fontFamily: mono, fontSize: 10.5, color: "var(--muted)", marginTop: 2 }}>{p.formattedAddress}</div>
+            </button>
+          ))}
+          {query.length >= 2 && !searchResults.isLoading && localVenues.length === 0 && filteredPlaces.length === 0 && (
+            <div style={{ padding: "20px", color: "var(--faint)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>No venues found</div>
           )}
         </div>
       </div>
