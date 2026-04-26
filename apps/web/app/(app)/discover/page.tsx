@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
+import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { type ShowKind } from "@/components/design-system";
 import {
@@ -679,11 +680,14 @@ function FeedSection({
         {groups.map((group) => (
           <div key={group.venue.id || "flat"} className="discover-venue-group">
             {/* Venue header (only when "All" is selected) */}
-            {showAllGrouped && (
+            {showAllGrouped && group.venue.id && (
               <div className="discover-venue-group__header">
-                <span className="discover-venue-group__name">
+                <Link
+                  href={`/venues/${group.venue.id}`}
+                  className="discover-venue-group__name discover-venue-group__name--link"
+                >
                   {group.venue.name}
-                </span>
+                </Link>
                 <span className="discover-venue-group__meta">
                   {group.venue.neighborhood
                     ? group.venue.neighborhood.toLowerCase() + " · "
@@ -691,9 +695,12 @@ function FeedSection({
                   {group.items.length} upcoming
                 </span>
                 <div className="discover-venue-group__rule" />
-                <span className="discover-venue-group__link">
+                <Link
+                  href={`/venues/${group.venue.id}`}
+                  className="discover-venue-group__link"
+                >
                   venue page &rarr;
-                </span>
+                </Link>
               </div>
             )}
 
