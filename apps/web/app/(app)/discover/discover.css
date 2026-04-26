@@ -272,6 +272,16 @@
   letter-spacing: -0.3px;
 }
 
+.discover-venue-group__name--link {
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.12s;
+}
+
+.discover-venue-group__name--link:hover {
+  color: var(--accent);
+}
+
 .discover-venue-group__meta {
   font-family: var(--font-geist-mono), monospace;
   font-size: 10px;
