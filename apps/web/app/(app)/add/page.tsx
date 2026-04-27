@@ -266,17 +266,22 @@ export default function AddPage() {
     if (s.tourName) setTourName(s.tourName);
     if (s.setlist) setSetlist(s.setlist);
 
-    // Headliner
-    const headlinerPerf = s.showPerformers.find(
-      (sp: { role: string; sortOrder: number }) => sp.role === "headliner" && sp.sortOrder === 0,
-    );
-    if (headlinerPerf) {
-      setHeadlinerName(headlinerPerf.performer.name);
-      setHeadliner({
-        name: headlinerPerf.performer.name,
-        tmAttractionId: undefined,
-        imageUrl: headlinerPerf.performer.imageUrl ?? undefined,
-      });
+    // Headliner — theatre uses productionName, others use performer
+    if (s.kind === "theatre" && s.productionName) {
+      setHeadlinerName(s.productionName);
+      setHeadliner({ name: s.productionName });
+    } else {
+      const headlinerPerf = s.showPerformers.find(
+        (sp: { role: string; sortOrder: number }) => sp.role === "headliner" && sp.sortOrder === 0,
+      );
+      if (headlinerPerf) {
+        setHeadlinerName(headlinerPerf.performer.name);
+        setHeadliner({
+          name: headlinerPerf.performer.name,
+          tmAttractionId: undefined,
+          imageUrl: headlinerPerf.performer.imageUrl ?? undefined,
+        });
+      }
     }
 
     // Venue
