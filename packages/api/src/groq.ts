@@ -21,6 +21,7 @@ export interface ExtractedTicketInfo {
   headliner: string;
   venue_name: string | null;
   venue_city: string | null;
+  venue_state: string | null;
   date: string | null;
   seat: string | null;
   price: string | null;
@@ -95,6 +96,7 @@ export async function extractShowFromEmail(
           '- headliner (string): the main performer, artist, or show name. Extract the ARTIST name, not the tour name.\n' +
           '- venue_name (string or null): the venue name. Look carefully — it is usually near the date and address. Examples: "Fox Theater", "Madison Square Garden", "The Fillmore".\n' +
           '- venue_city (string or null): the city. Often appears after the venue name or in the address line.\n' +
+          '- venue_state (string or null): the full state or region name (e.g. "California", "New York", "Texas"), never abbreviations\n' +
           '- date (string or null): the event date in YYYY-MM-DD format. Look for dates in ANY format (e.g. "Sun · Aug 16, 2026", "March 15, 2025", "03/15/2025") and convert to YYYY-MM-DD.\n' +
           '- seat (string or null): section, row, and seat info combined\n' +
           '- price (string or null): total price paid as a decimal string\n' +
@@ -203,6 +205,7 @@ export async function extractShowFromPdfText(
           '- headliner (string): the main performer, artist, or show name\n' +
           '- venue_name (string or null): the venue name\n' +
           '- venue_city (string or null): the city\n' +
+          '- venue_state (string or null): the full state or region name (e.g. "California", "New York", "Texas"), never abbreviations\n' +
           '- date (string or null): the event date in YYYY-MM-DD format\n' +
           '- seat (string or null): section, row, and seat info combined\n' +
           '- price (string or null): total price paid as a decimal string\n' +

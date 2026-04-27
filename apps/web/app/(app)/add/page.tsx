@@ -130,6 +130,9 @@ export default function AddPage() {
   const [selectedTmEvent, setSelectedTmEvent] = useState<TMResult | null>(null);
   const [importUrlOpen, setImportUrlOpen] = useState(false);
   const [importUrlValue, setImportUrlValue] = useState("");
+  const [pdfImporting, setPdfImporting] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   // Kind-specific enrichment
   const [setlist, setSetlist] = useState<string[] | null>(null);
@@ -232,6 +235,7 @@ export default function AddPage() {
   // Mutations
   const parseChat = trpc.enrichment.parseChat.useMutation();
   const extractCast = trpc.enrichment.extractCast.useMutation();
+  const extractFromPdf = trpc.enrichment.extractFromPdf.useMutation();
   const createShow = trpc.shows.create.useMutation({
     onSuccess: () => {
       router.push("/shows");
@@ -414,6 +418,50 @@ export default function AddPage() {
       // Error state surfaced via fetchTMEvent.isError in the UI
     }
   }, [importUrlValue, fetchTMEvent, handleSelectTmResult]);
+
+  const handlePdfImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPdfImporting(true);
+    setPdfError(null);
+
+    try {
+      const reader = new FileReader();
+      const fileBase64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          resolve(dataUrl.split(",")[1]!);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const result = await extractFromPdf.mutateAsync({ fileBase64 });
+
+      if (result.headliner) {
+        setHeadlinerName(result.headliner);
+        setHeadliner({ name: result.headliner });
+      }
+      if (result.venue_name) {
+        setVenue((prev) => ({
+          ...prev,
+          name: result.venue_name ?? prev.name,
+          city: result.venue_city ?? prev.city,
+          stateRegion: result.venue_state ?? prev.stateRegion,
+        }));
+        setVenueQuery(result.venue_name);
+      }
+      if (result.date) setDate(result.date);
+      if (result.seat) setSeat(result.seat);
+      if (result.price) setPricePaid(result.price);
+      if (result.kind_hint) setKind(result.kind_hint);
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : "Failed to extract from PDF");
+    } finally {
+      setPdfImporting(false);
+      if (pdfInputRef.current) pdfInputRef.current.value = "";
+    }
+  }, [extractFromPdf]);
 
   const handlePlaybillUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -719,7 +767,7 @@ export default function AddPage() {
   }, []);
 
   // Determine if form can save
-  const hasValidVenue = venue.name.length > 0 && venue.city.length > 0 && (venue.googlePlaceId != null || venue.tmVenueId != null);
+  const hasValidVenue = venue.name.length > 0 && venue.city.length > 0;
   const canSave = kind !== null && headliner.name.length > 0 && hasValidVenue && date.length > 0;
 
   // Provenance statuses derived from state
@@ -728,12 +776,12 @@ export default function AddPage() {
       {
         source: "setlist.fm",
         what: setlist ? `${setlist.length} songs${tourName ? ` · ${tourName}` : ""}` : "tour, setlist",
-        status: setlistQuery.isLoading ? "pending" : setlist ? "ok" : isPastConcert ? "pending" : "skipped",
+        status: setlistQuery.isLoading ? "pending" : setlist ? "ok" : setlistQuery.isFetched ? "skipped" : isPastConcert ? "pending" : "skipped",
       },
       {
         source: "ticketmaster",
         what: "venue, date, seat, price",
-        status: tmEnriched ? "ok" : debouncedQuery.length >= 2 ? (tmSearch.isLoading ? "pending" : "skipped") : "pending",
+        status: tmEnriched ? "ok" : debouncedQuery.length >= 2 ? (tmSearch.isLoading ? "pending" : "skipped") : (venue.name && date ? "skipped" : "pending"),
       },
       {
         source: "playbill",
@@ -751,7 +799,7 @@ export default function AddPage() {
         status: "pending",
       },
     ];
-  }, [setlist, tourName, setlistQuery.isLoading, isPastConcert, tmEnriched, debouncedQuery, tmSearch.isLoading, castMembers, kind, headliner]);
+  }, [setlist, tourName, setlistQuery.isLoading, setlistQuery.isFetched, isPastConcert, tmEnriched, debouncedQuery, tmSearch.isLoading, castMembers, kind, headliner, venue.name, date]);
 
   // Kind color helper
   const kindColor = (k: ShowKind) => `var(--kind-${k})`;
@@ -1531,12 +1579,14 @@ export default function AddPage() {
               onClick={
                 src.tag === "mail" ? handleGmailImportClick
                 : src.tag === "url" ? () => setImportUrlOpen((v) => !v)
+                : src.tag === "pdf" ? () => pdfInputRef.current?.click()
                 : undefined
               }
               style={{
                 padding: "12px 14px",
                 background: src.tag === "mail" && gmailScanning ? "var(--ink)"
                   : src.tag === "url" && importUrlOpen ? "var(--ink)"
+                  : src.tag === "pdf" && pdfImporting ? "var(--ink)"
                   : "var(--surface)",
                 border: `1px solid var(--rule-strong)`,
                 display: "flex",
@@ -1549,10 +1599,10 @@ export default function AddPage() {
                 <div style={{
                   fontFamily: mono,
                   fontSize: 9.5,
-                  color: (src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) ? "var(--bg)" : "var(--muted)",
+                  color: (src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--muted)",
                   letterSpacing: ".1em",
                   padding: "2px 5px",
-                  border: `1px solid ${(src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) ? "var(--bg)" : "var(--rule-strong)"}`,
+                  border: `1px solid ${(src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--rule-strong)"}`,
                   textTransform: "uppercase",
                 }}>
                   {src.tag}
@@ -1561,16 +1611,16 @@ export default function AddPage() {
                   fontFamily: sans,
                   fontSize: 13,
                   fontWeight: 500,
-                  color: (src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) ? "var(--bg)" : "var(--ink)",
+                  color: (src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--ink)",
                   letterSpacing: -0.1,
                 }}>
-                  {src.tag === "mail" && gmailScanning ? "Scanning..." : src.tag === "url" && fetchTMEvent.isPending ? "Importing..." : src.label}
+                  {src.tag === "mail" && gmailScanning ? "Scanning..." : src.tag === "url" && fetchTMEvent.isPending ? "Importing..." : src.tag === "pdf" && pdfImporting ? "Extracting..." : src.label}
                 </div>
               </div>
               <div style={{
                 fontFamily: mono,
                 fontSize: 10,
-                color: (src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) ? "var(--bg)" : "var(--faint)",
+                color: (src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--faint)",
                 letterSpacing: ".04em",
               }}>
                 {src.sub}
@@ -1578,6 +1628,20 @@ export default function AddPage() {
             </div>
           ))}
         </div>
+
+        {/* Hidden PDF file input */}
+        <input
+          ref={pdfInputRef}
+          type="file"
+          accept=".pdf"
+          onChange={handlePdfImport}
+          style={{ display: "none" }}
+        />
+        {pdfError && (
+          <div style={{ fontFamily: mono, fontSize: 10.5, color: "#E63946", marginTop: 6 }}>
+            {pdfError}
+          </div>
+        )}
 
         {/* URL import input */}
         {importUrlOpen && (
@@ -1730,7 +1794,15 @@ export default function AddPage() {
         }}>
           {isEditMode
             ? (updateShow.isError ? "1 error" : "0 errors")
-            : <>{autoFilledCount} fields auto-filled · {createShow.isError ? "1 error" : "0 errors"}</>
+            : !canSave
+              ? <>missing: {[
+                  !kind && "kind",
+                  !headliner.name && "headliner",
+                  !venue.name && "venue",
+                  venue.name && !venue.city && "venue city",
+                  !date && "date",
+                ].filter(Boolean).join(", ")}</>
+              : <>{autoFilledCount} fields auto-filled · {createShow.isError ? "1 error" : "0 errors"}</>
           }
         </div>
         <button
