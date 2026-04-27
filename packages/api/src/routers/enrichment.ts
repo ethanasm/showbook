@@ -196,11 +196,9 @@ export const enrichmentRouter = router({
   extractFromPdf: protectedProcedure
     .input(z.object({ fileBase64: z.string().min(1) }))
     .mutation(async ({ input }) => {
-      const { PDFParse } = await import('pdf-parse');
+      const pdfParse = (await import('pdf-parse')).default;
       const buffer = Buffer.from(input.fileBase64, 'base64');
-      const pdf = new PDFParse({ data: buffer });
-      const result = await pdf.getText();
-      await pdf.destroy();
+      const result = await pdfParse(buffer);
       if (!result.text.trim()) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Could not extract text from PDF' });
       }
