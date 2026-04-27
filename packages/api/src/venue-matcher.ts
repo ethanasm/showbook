@@ -89,6 +89,8 @@ export async function matchOrCreateVenue(
   let stateRegion = input.stateRegion ?? null;
   let country = input.country ?? 'US';
 
+  let googlePlaceId = input.googlePlaceId ?? null;
+
   if (lat == null && input.name && input.city) {
     try {
       const geo = await geocodeVenue(input.name, input.city);
@@ -97,6 +99,7 @@ export async function matchOrCreateVenue(
         lng = geo.lng;
         if (!stateRegion && geo.stateRegion) stateRegion = geo.stateRegion;
         if (geo.country) country = geo.country;
+        if (!googlePlaceId && geo.googlePlaceId) googlePlaceId = geo.googlePlaceId;
       }
     } catch { /* geocoding failed; save without coordinates */ }
   }
@@ -111,7 +114,7 @@ export async function matchOrCreateVenue(
       ticketmasterVenueId: input.tmVenueId ?? null,
       latitude: lat,
       longitude: lng,
-      googlePlaceId: input.googlePlaceId ?? null,
+      googlePlaceId,
     })
     .returning();
 
@@ -149,6 +152,7 @@ async function maybeUpdate(
         updates.longitude = geo.lng;
         if (!existing.stateRegion && geo.stateRegion) updates.stateRegion = geo.stateRegion;
         if (!existing.country && geo.country) updates.country = geo.country;
+        if (!existing.googlePlaceId && geo.googlePlaceId) updates.googlePlaceId = geo.googlePlaceId;
       }
     } catch { /* geocoding failed */ }
   }

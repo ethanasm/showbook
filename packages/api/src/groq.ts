@@ -80,6 +80,7 @@ export async function extractShowFromEmail(
   emailSubject: string,
   emailBody: string,
   emailFrom: string,
+  emailDate?: string,
   retries = 3,
 ): Promise<ExtractedTicketInfo | null> {
   let result;
@@ -103,6 +104,10 @@ export async function extractShowFromEmail(
           '- kind_hint (one of: concert, theatre, comedy, festival, or null)\n' +
           '- confidence (one of: high, medium, low): how confident you are this is a ticket for a live entertainment event\n\n' +
           'IMPORTANT: Extract EVERY field you can find. Do not leave fields null if the information is anywhere in the email. Scan the ENTIRE email body carefully.\n\n' +
+          'DATE YEAR: The email Date header tells you WHEN the email was sent. Ticket confirmation emails are sent BEFORE the event. ' +
+          'The event date should be on or after the email send date, typically within 0-12 months. ' +
+          'If the email body shows a date without a year (e.g. "March 15" or "Sat, Aug 16"), use the email Date header to determine the correct year. ' +
+          'The event year should NEVER be before the year the email was sent.\n\n' +
           'ONLY extract tickets for: concerts, music festivals, theatre/broadway shows, comedy shows, and other live performances with artists/performers.\n\n' +
           'Return {"confidence": "low", "headliner": ""} with all other fields null for ANY of these:\n' +
           '- Museum, gallery, or exhibition tickets\n' +
@@ -114,7 +119,7 @@ export async function extractShowFromEmail(
       },
       {
         role: 'user',
-        content: `Subject: ${emailSubject}\nFrom: ${emailFrom}\n\n${emailBody.slice(0, 8000)}`,
+        content: `Subject: ${emailSubject}\nFrom: ${emailFrom}\nDate: ${emailDate ?? 'unknown'}\n\n${emailBody.slice(0, 8000)}`,
       },
     ],
     response_format: { type: 'json_object' },

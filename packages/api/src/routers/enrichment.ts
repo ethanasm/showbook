@@ -27,6 +27,40 @@ import {
 } from '../gmail';
 import { geocodeVenue } from '../geocode';
 
+function correctExtractedYear(
+  extractedDate: string | null,
+  emailDateHeader: string,
+): string | null {
+  if (!extractedDate || !emailDateHeader) return extractedDate;
+  const emailSent = new Date(emailDateHeader);
+  if (isNaN(emailSent.getTime())) return extractedDate;
+
+  const match = extractedDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return extractedDate;
+
+  const [, yearStr, month, day] = match;
+  const extractedYear = parseInt(yearStr, 10);
+  const emailYear = emailSent.getFullYear();
+
+  // Event should be on or after the email was sent, within ~13 months
+  if (extractedYear === emailYear || extractedYear === emailYear + 1) {
+    return extractedDate;
+  }
+
+  // Year is wrong — pick emailYear or emailYear+1 based on which makes the
+  // event date fall on or after the email sent date
+  const candidateSame = new Date(`${emailYear}-${month}-${day}T00:00:00`);
+  const candidateNext = new Date(`${emailYear + 1}-${month}-${day}T00:00:00`);
+
+  const correctedYear =
+    candidateSame >= emailSent ? emailYear : emailYear + 1;
+
+  // Sanity check: don't "correct" to more than 13 months after email
+  if (candidateNext < emailSent) return extractedDate;
+
+  return `${correctedYear}-${month}-${day}`;
+}
+
 function mapEventToResult(event: TMEvent) {
   const venue = event._embedded?.venues?.[0];
   const attractions = event._embedded?.attractions ?? [];
@@ -240,8 +274,12 @@ export const enrichmentRouter = router({
           detail.subject,
           detail.body,
           detail.from,
+          detail.date,
         );
-        if (extracted) results.push(extracted);
+        if (extracted) {
+          extracted.date = correctExtractedYear(extracted.date, detail.date);
+          results.push(extracted);
+        }
       }
 
       return results;
@@ -307,7 +345,11 @@ export const enrichmentRouter = router({
               detail.subject,
               detail.body,
               detail.from,
+              detail.date,
             );
+            if (extracted) {
+              extracted.date = correctExtractedYear(extracted.date, detail.date);
+            }
             if (extracted && (!extracted.date || !extracted.venue_name)) {
               console.log(`[gmail] INCOMPLETE: "${extracted.headliner}" missing ${!extracted.date ? 'date' : ''} ${!extracted.venue_name ? 'venue' : ''}`);
               console.log(`[gmail]   Subject: ${detail.subject}`);
@@ -321,9 +363,25 @@ export const enrichmentRouter = router({
         }
       }
 
-      // Deterministic merge: group by headliner, combine best fields
+      // Deterministic merge: group by headliner + month-day, combine best fields
       const mergeMap = new Map<string, TicketWithId>();
       const headlinerKey = (t: TicketWithId) => t.headliner.toLowerCase().trim();
+      const monthDay = (date: string) => date.slice(5); // "MM-DD" from "YYYY-MM-DD"
+
+      function isDifferentShow(dateA: string, dateB: string): boolean {
+        // Same month-day with different year = same show (year was likely wrong)
+        // Different month-day = genuinely different show
+        return monthDay(dateA) !== monthDay(dateB);
+      }
+
+      function mergeInto(target: TicketWithId, source: TicketWithId) {
+        if (!target.venue_name && source.venue_name) target.venue_name = source.venue_name;
+        if (!target.venue_city && source.venue_city) target.venue_city = source.venue_city;
+        if (!target.date && source.date) target.date = source.date;
+        if (!target.seat && source.seat) target.seat = source.seat;
+        if (!target.price && source.price) target.price = source.price;
+        if (!target.kind_hint && source.kind_hint) target.kind_hint = source.kind_hint;
+      }
 
       for (const ticket of allExtracted) {
         const key = headlinerKey(ticket);
@@ -331,28 +389,17 @@ export const enrichmentRouter = router({
         if (!existing) {
           mergeMap.set(key, { ...ticket });
         } else {
-          // If both have dates and they differ, this is a different show — keep separate
-          if (existing.date && ticket.date && existing.date !== ticket.date) {
-            const datedKey = `${key}|${ticket.date}`;
+          if (existing.date && ticket.date && isDifferentShow(existing.date, ticket.date)) {
+            const datedKey = `${key}|${monthDay(ticket.date)}`;
             const existingDated = mergeMap.get(datedKey);
             if (!existingDated) {
               mergeMap.set(datedKey, { ...ticket });
             } else {
-              if (!existingDated.venue_name && ticket.venue_name) existingDated.venue_name = ticket.venue_name;
-              if (!existingDated.venue_city && ticket.venue_city) existingDated.venue_city = ticket.venue_city;
-              if (!existingDated.seat && ticket.seat) existingDated.seat = ticket.seat;
-              if (!existingDated.price && ticket.price) existingDated.price = ticket.price;
-              if (!existingDated.kind_hint && ticket.kind_hint) existingDated.kind_hint = ticket.kind_hint;
+              mergeInto(existingDated, ticket);
             }
             continue;
           }
-          // Merge fields into existing
-          if (!existing.venue_name && ticket.venue_name) existing.venue_name = ticket.venue_name;
-          if (!existing.venue_city && ticket.venue_city) existing.venue_city = ticket.venue_city;
-          if (!existing.date && ticket.date) existing.date = ticket.date;
-          if (!existing.seat && ticket.seat) existing.seat = ticket.seat;
-          if (!existing.price && ticket.price) existing.price = ticket.price;
-          if (!existing.kind_hint && ticket.kind_hint) existing.kind_hint = ticket.kind_hint;
+          mergeInto(existing, ticket);
         }
       }
 
