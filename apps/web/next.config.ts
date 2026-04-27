@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
     "@showbook/shared",
     "@showbook/jobs",
   ],
-  serverExternalPackages: ["sharp", "pg-boss"],
+  serverExternalPackages: ["sharp", "pg-boss", "pdf-parse"],
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.externals.push("sharp");
