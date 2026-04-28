@@ -138,7 +138,10 @@ test.describe('Venue detail pages', () => {
       await page.goto(href!);
       await page.waitForTimeout(2000);
 
-      const yourShows = page.locator('text=Your shows');
+      // The venue detail page now renders both an exact "Your shows" header
+      // and a "Your shows · N" count chip. Disambiguate to avoid strict-mode
+      // violation by selecting the exact match.
+      const yourShows = page.getByText('Your shows', { exact: true });
       await expect(yourShows).toBeVisible();
 
       await page.screenshot({
@@ -148,7 +151,10 @@ test.describe('Venue detail pages', () => {
     }
   });
 
-  test('venue detail has breadcrumb back to discover', async ({ page }) => {
+  test('venue detail has breadcrumb back to venues list', async ({ page }) => {
+    // Commit 15e1efa changed the venue detail breadcrumb from /discover
+    // to /venues ("Shows ← venues / venue-name"). The test is updated to
+    // match the current implementation.
     await page.goto('/discover');
     await page.waitForTimeout(3000);
 
@@ -158,12 +164,12 @@ test.describe('Venue detail pages', () => {
       await page.goto(href!);
       await page.waitForTimeout(2000);
 
-      const breadcrumb = page.locator('a[href="/discover"]');
+      const breadcrumb = page.locator('a[href="/venues"]');
       await expect(breadcrumb).toBeVisible();
-      await expect(breadcrumb).toContainText('discover');
+      await expect(breadcrumb).toContainText(/venues/i);
 
       await breadcrumb.click();
-      await page.waitForURL('**/discover');
+      await page.waitForURL('**/venues');
     }
   });
 

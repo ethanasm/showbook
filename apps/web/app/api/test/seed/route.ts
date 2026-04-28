@@ -103,12 +103,19 @@ export async function GET() {
   }
 
   try {
-    const user = await db.query.users.findFirst({
+    // Auto-create the test user if missing so tests can call /api/test/seed
+    // before /api/test/login. Login is idempotent, so the order no longer
+    // matters in test setup.
+    let user = await db.query.users.findFirst({
       where: eq(users.email, TEST_EMAIL),
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'Run /api/test/login first to create test user' }, { status: 400 });
+      const [created] = await db
+        .insert(users)
+        .values({ email: TEST_EMAIL, name: 'Test User' })
+        .returning();
+      user = created!;
     }
 
     // Clean existing test user data in FK order. Announcements must be

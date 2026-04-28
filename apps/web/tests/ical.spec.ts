@@ -14,7 +14,9 @@ test.describe('iCal export', () => {
   test('show detail "Add to calendar" downloads a valid .ics', async ({ page }) => {
     await page.goto('/shows');
     await page.waitForSelector('.show-row', { timeout: 10000 });
-    await page.locator('.show-row', { hasText: 'Radiohead' }).first().click();
+    // The seed has two Radiohead shows; only the MSG past show matches the
+    // SUMMARY assertion below.
+    await page.locator('.show-row', { hasText: 'Radiohead' }).filter({ hasText: 'Madison Square Garden' }).first().click();
     await page.waitForURL(/\/shows\/[0-9a-f-]+/);
 
     const downloadPromise = page.waitForEvent('download');
