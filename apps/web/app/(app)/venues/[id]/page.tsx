@@ -353,6 +353,34 @@ export default function VenueDetailPage() {
               {locationLine}
             </div>
           )}
+          <div style={{ display: "inline-flex", gap: 8, marginTop: 10 }}>
+            <span
+              style={{
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: 10,
+                letterSpacing: ".06em",
+                textTransform: "uppercase",
+                padding: "3px 8px",
+                border: `1px solid ${venue.ticketmasterVenueId ? "var(--accent)" : "var(--faint)"}`,
+                color: venue.ticketmasterVenueId ? "var(--accent)" : "var(--faint)",
+              }}
+            >
+              {venue.ticketmasterVenueId ? "TM linked" : "No TM ID"}
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: 10,
+                letterSpacing: ".06em",
+                textTransform: "uppercase",
+                padding: "3px 8px",
+                border: `1px solid ${venue.googlePlaceId ? "var(--kind-concert)" : "var(--faint)"}`,
+                color: venue.googlePlaceId ? "var(--kind-concert)" : "var(--faint)",
+              }}
+            >
+              {venue.googlePlaceId ? "Places linked" : "No Place ID"}
+            </span>
+          </div>
         </div>
 
         {/* Follow button */}

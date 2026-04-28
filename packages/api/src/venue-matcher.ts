@@ -106,14 +106,8 @@ export async function matchOrCreateVenue(
   }
 
   if (!tmVenueId && input.name && input.city) {
-    try {
-      const tmResults = await searchVenues({ keyword: `${input.name}`, size: 3 });
-      const cityLower = input.city.toLowerCase().split(',')[0].trim();
-      const match = tmResults.find(
-        (v) => v.city?.name?.toLowerCase() === cityLower,
-      );
-      if (match) tmVenueId = match.id;
-    } catch { /* TM lookup failed; continue without */ }
+    const found = await findTmVenueId(input.name, input.city, stateRegion);
+    if (found) tmVenueId = found;
   }
 
   const [created] = await db
@@ -137,10 +131,52 @@ export async function matchOrCreateVenue(
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * If the incoming input has fields that the existing venue row is missing,
- * update the row and return the refreshed version. Otherwise return as-is.
- */
+const US_STATE_CODES: Record<string, string> = {
+  alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA',
+  colorado: 'CO', connecticut: 'CT', delaware: 'DE', florida: 'FL', georgia: 'GA',
+  hawaii: 'HI', idaho: 'ID', illinois: 'IL', indiana: 'IN', iowa: 'IA',
+  kansas: 'KS', kentucky: 'KY', louisiana: 'LA', maine: 'ME', maryland: 'MD',
+  massachusetts: 'MA', michigan: 'MI', minnesota: 'MN', mississippi: 'MS', missouri: 'MO',
+  montana: 'MT', nebraska: 'NE', nevada: 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
+  'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND',
+  ohio: 'OH', oklahoma: 'OK', oregon: 'OR', pennsylvania: 'PA', 'rhode island': 'RI',
+  'south carolina': 'SC', 'south dakota': 'SD', tennessee: 'TN', texas: 'TX', utah: 'UT',
+  vermont: 'VT', virginia: 'VA', washington: 'WA', 'west virginia': 'WV',
+  wisconsin: 'WI', wyoming: 'WY', 'district of columbia': 'DC',
+  ontario: 'ON', quebec: 'QC', 'british columbia': 'BC', alberta: 'AB',
+  manitoba: 'MB', saskatchewan: 'SK', 'nova scotia': 'NS', 'new brunswick': 'NB',
+  'prince edward island': 'PE', 'newfoundland and labrador': 'NL',
+};
+
+function toStateCode(stateRegion: string | undefined | null): string | undefined {
+  if (!stateRegion) return undefined;
+  if (stateRegion.length === 2) return stateRegion.toUpperCase();
+  return US_STATE_CODES[stateRegion.toLowerCase()];
+}
+
+export async function findTmVenueId(
+  name: string,
+  city: string,
+  stateRegion?: string | null,
+): Promise<string | null> {
+  try {
+    const tmResults = await searchVenues({
+      keyword: name,
+      stateCode: toStateCode(stateRegion),
+      size: 10,
+    });
+    const cityLower = city.toLowerCase().split(',')[0].trim();
+    const match = tmResults.find((v) => {
+      const tmCity = v.city?.name?.toLowerCase() ?? '';
+      return tmCity.includes(cityLower) || cityLower.includes(tmCity);
+    });
+    return match?.id ?? null;
+  } catch (err) {
+    console.warn('[venue-matcher] TM venue lookup failed:', err);
+    return null;
+  }
+}
+
 async function maybeUpdate(
   existing: typeof venues.$inferSelect,
   input: VenueInput,
@@ -173,6 +209,11 @@ async function maybeUpdate(
   }
   if (input.stateRegion && !existing.stateRegion) {
     updates.stateRegion = input.stateRegion;
+  }
+
+  if (!existing.ticketmasterVenueId && !input.tmVenueId) {
+    const tmId = await findTmVenueId(existing.name, existing.city, existing.stateRegion);
+    if (tmId) updates.ticketmasterVenueId = tmId;
   }
 
   if (Object.keys(updates).length === 0) {

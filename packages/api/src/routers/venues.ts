@@ -9,7 +9,7 @@ import {
   shows,
 } from '@showbook/db';
 import { getPlaceDetails } from '../google-places';
-import { matchOrCreateVenue } from '../venue-matcher';
+import { matchOrCreateVenue, findTmVenueId } from '../venue-matcher';
 import { geocodeVenue } from '../geocode';
 
 export const venuesRouter = router({
@@ -227,5 +227,38 @@ export const venuesRouter = router({
     }
 
     return { total: incomplete.length, geocoded, failed };
+  }),
+
+  backfillTicketmaster: protectedProcedure.mutation(async ({ ctx }) => {
+    const missing = await ctx.db
+      .select()
+      .from(venues)
+      .where(
+        and(
+          sql`${venues.ticketmasterVenueId} IS NULL`,
+          isNotNull(venues.city),
+          sql`${venues.city} != 'Unknown'`,
+        ),
+      );
+
+    let matched = 0;
+    let failed = 0;
+
+    for (const venue of missing) {
+      try {
+        const tmId = await findTmVenueId(venue.name, venue.city, venue.stateRegion);
+        if (tmId) {
+          await ctx.db
+            .update(venues)
+            .set({ ticketmasterVenueId: tmId })
+            .where(eq(venues.id, venue.id));
+          matched++;
+        }
+      } catch {
+        failed++;
+      }
+    }
+
+    return { total: missing.length, matched, failed };
   }),
 });
