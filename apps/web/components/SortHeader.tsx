@@ -18,7 +18,7 @@ export function SortHeader<T extends string>({
   label: string;
   sort: SortConfig<T>;
   onToggle: (field: T) => void;
-  align?: "right";
+  align?: "right" | "center";
 }) {
   const active = sort.field === field;
   const Arrow = sort.dir === "asc" ? ArrowUp : ArrowDown;
@@ -36,14 +36,14 @@ export function SortHeader<T extends string>({
         display: "inline-flex",
         alignItems: "center",
         gap: 4,
-        justifyContent: align === "right" ? "flex-end" : "flex-start",
+        justifyContent: align === "right" ? "flex-end" : align === "center" ? "center" : "flex-start",
         width: "100%",
         fontFamily: "inherit",
         fontSize: "inherit",
         letterSpacing: "inherit",
         textTransform: "inherit",
         color: active ? "var(--ink)" : "var(--faint)",
-        textAlign: align === "right" ? "right" : "left",
+        textAlign: align ?? "left",
       }}
     >
       <span>{label}</span>

@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
-import { MapPin, Search } from "lucide-react";
+import { MapPin, Search, Eye } from "lucide-react";
 import { SortHeader, type SortConfig } from "@/components/SortHeader";
 
 type SortField = "name" | "state" | "city" | "past" | "future";
@@ -229,8 +229,8 @@ export default function VenuesListPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "2fr 1fr 1fr 80px 80px 60px 60px",
-                columnGap: 16,
+                gridTemplateColumns: "minmax(120px,2fr) minmax(80px,1fr) minmax(80px,1fr) 70px 70px 50px 50px 32px",
+                columnGap: 20,
                 padding: "10px 20px",
                 borderBottom: "1px solid var(--rule)",
                 fontFamily: "var(--font-geist-mono), monospace",
@@ -263,17 +263,20 @@ export default function VenuesListPage() {
                 label="Past"
                 sort={sort}
                 onToggle={toggleSort}
-                align="right"
+                align="center"
               />
               <SortHeader<SortField>
                 field="future"
                 label="Future"
                 sort={sort}
                 onToggle={toggleSort}
-                align="right"
+                align="center"
               />
-              <div>TM</div>
-              <div>GP</div>
+              <div style={{ textAlign: "center" }}>TM</div>
+              <div style={{ textAlign: "center" }}>GP</div>
+              <div style={{ textAlign: "center" }}>
+                <Eye size={10} />
+              </div>
             </div>
 
             {filtered.map((v) => (
@@ -282,8 +285,8 @@ export default function VenuesListPage() {
                 href={`/venues/${v.id}`}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "2fr 1fr 1fr 80px 80px 60px 60px",
-                  columnGap: 16,
+                  gridTemplateColumns: "minmax(120px,2fr) minmax(80px,1fr) minmax(80px,1fr) 70px 70px 50px 50px 32px",
+                  columnGap: 20,
                   padding: "12px 20px",
                   borderBottom: "1px solid var(--rule)",
                   alignItems: "center",
@@ -343,7 +346,7 @@ export default function VenuesListPage() {
                 </div>
                 <div
                   style={{
-                    textAlign: "right",
+                    textAlign: "center",
                     fontFamily: "var(--font-geist-mono), monospace",
                     fontSize: 12,
                     fontWeight: 500,
@@ -355,7 +358,7 @@ export default function VenuesListPage() {
                 </div>
                 <div
                   style={{
-                    textAlign: "right",
+                    textAlign: "center",
                     fontFamily: "var(--font-geist-mono), monospace",
                     fontSize: 12,
                     fontWeight: 500,
@@ -385,6 +388,16 @@ export default function VenuesListPage() {
                       : "No Google Places ID"
                   }
                 />
+                <span
+                  title={v.isFollowed ? "Following" : "Not following"}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {v.isFollowed && <Eye size={13} color="var(--accent)" />}
+                </span>
               </Link>
             ))}
 
