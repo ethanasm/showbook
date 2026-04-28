@@ -16,10 +16,10 @@ import {
 const TEST_EMAIL = 'test@showbook.dev';
 
 const VENUES = [
-  { name: 'Madison Square Garden', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7505, longitude: -73.9934 },
-  { name: 'Radio City Music Hall', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.76, longitude: -73.98 },
+  { name: 'Madison Square Garden', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7505, longitude: -73.9934, ticketmasterVenueId: 'KovZpZA7AAEA', googlePlaceId: 'ChIJhRwB-yFawokR5Phil-QQ3zM' },
+  { name: 'Radio City Music Hall', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.76, longitude: -73.98, googlePlaceId: 'ChIJpVoj4WdZwokR9lNbEqR_3iA' },
   { name: 'Brooklyn Steel', city: 'Brooklyn', stateRegion: 'NY', country: 'US', latitude: 40.7122, longitude: -73.9413 },
-  { name: 'Gershwin Theatre', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7621, longitude: -73.9854 },
+  { name: 'Gershwin Theatre', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7621, longitude: -73.9854, ticketmasterVenueId: 'KovZpZAFkF7A' },
   { name: 'The Comedy Cellar', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7304, longitude: -74.0005 },
   { name: 'Randalls Island Park', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7932, longitude: -73.9212 },
   { name: 'The Beacon Theatre', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7785, longitude: -73.981 },

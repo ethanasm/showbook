@@ -11,10 +11,12 @@ import {
   type ShowState,
 } from "@/components/design-system";
 import {
+  SortHeader,
+  type SortConfig as SortConfigBase,
+} from "@/components/SortHeader";
+import {
   Archive,
   Calendar,
-  ArrowUp,
-  ArrowDown,
   ArrowDownUp,
   ChevronRight,
   MoreHorizontal,
@@ -46,10 +48,7 @@ type SortField =
   | "paid"
   | "state";
 
-interface SortConfig {
-  field: SortField;
-  dir: "asc" | "desc";
-}
+type SortConfig = SortConfigBase<SortField>;
 
 const KIND_ORDER: Record<ShowKind, number> = {
   concert: 0,
@@ -167,55 +166,6 @@ const KIND_LABELS: Record<ShowKind, string> = {
 };
 
 const ALL_KINDS: ShowKind[] = ["concert", "theatre", "comedy", "festival"];
-
-function SortHeader({
-  field,
-  label,
-  sort,
-  onToggle,
-  align,
-}: {
-  field: SortField;
-  label: string;
-  sort: SortConfig;
-  onToggle: (field: SortField) => void;
-  align?: "right";
-}) {
-  const active = sort.field === field;
-  const Arrow = sort.dir === "asc" ? ArrowUp : ArrowDown;
-  return (
-    <button
-      type="button"
-      onClick={() => onToggle(field)}
-      data-testid={`sort-header-${field}`}
-      data-sort-active={active ? sort.dir : undefined}
-      style={{
-        background: "none",
-        border: "none",
-        padding: 0,
-        cursor: "pointer",
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-        justifyContent: align === "right" ? "flex-end" : "flex-start",
-        width: "100%",
-        fontFamily: "inherit",
-        fontSize: "inherit",
-        letterSpacing: "inherit",
-        textTransform: "inherit",
-        color: active ? "var(--ink)" : "var(--faint)",
-        textAlign: align === "right" ? "right" : "left",
-      }}
-    >
-      <span>{label}</span>
-      {active ? (
-        <Arrow size={10} />
-      ) : (
-        <span style={{ width: 10, height: 10, display: "inline-block" }} />
-      )}
-    </button>
-  );
-}
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];

@@ -13,6 +13,36 @@ import { matchOrCreateVenue, findTmVenueId } from '../venue-matcher';
 import { geocodeVenue } from '../geocode';
 
 export const venuesRouter = router({
+  list: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const today = new Date().toISOString().slice(0, 10);
+
+    const rows = await ctx.db
+      .select({
+        id: venues.id,
+        name: venues.name,
+        city: venues.city,
+        stateRegion: venues.stateRegion,
+        country: venues.country,
+        googlePlaceId: venues.googlePlaceId,
+        ticketmasterVenueId: venues.ticketmasterVenueId,
+        pastShowsCount: sql<number>`count(case when ${shows.date} < ${today} then 1 end)::int`,
+        futureShowsCount: sql<number>`count(case when ${shows.date} >= ${today} then 1 end)::int`,
+      })
+      .from(venues)
+      .innerJoin(shows, eq(shows.venueId, venues.id))
+      .where(eq(shows.userId, userId))
+      .groupBy(venues.id);
+
+    const followed = await ctx.db
+      .select({ venueId: userVenueFollows.venueId })
+      .from(userVenueFollows)
+      .where(eq(userVenueFollows.userId, userId));
+    const followedSet = new Set(followed.map((f) => f.venueId));
+
+    return rows.map((r) => ({ ...r, isFollowed: followedSet.has(r.id) }));
+  }),
+
   search: protectedProcedure
     .input(z.object({ query: z.string().min(1) }))
     .query(async ({ ctx, input }) => {

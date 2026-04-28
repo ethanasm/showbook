@@ -24,10 +24,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const showsQuery = trpc.shows.list.useQuery({}, { select: (d) => d.length });
   const performersQuery = trpc.performers.list.useQuery(undefined, { select: (d) => d.length });
+  const venuesQuery = trpc.venues.list.useQuery(undefined, { select: (d) => d.length });
 
   const counts: Partial<Record<string, number>> = {};
   if (showsQuery.data !== undefined) counts.shows = showsQuery.data;
   if (performersQuery.data !== undefined) counts.artists = performersQuery.data;
+  if (venuesQuery.data !== undefined) counts.venues = venuesQuery.data;
 
   const handleNavigate = (id: string) => {
     router.push(navIdToPath(id));

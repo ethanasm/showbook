@@ -6,6 +6,7 @@ import {
   Eye,
   Archive,
   Map,
+  MapPin,
   Music,
   Plus,
   Search,
@@ -29,6 +30,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "discover", label: "Discover", icon: Eye, section: "navigate" },
   { id: "shows", label: "Shows", icon: Archive, section: "navigate" },
   { id: "map", label: "Map", icon: Map, section: "navigate" },
+  { id: "venues", label: "Venues", icon: MapPin, section: "navigate" },
   { id: "artists", label: "Artists", icon: Music, section: "navigate" },
   { id: "preferences", label: "Preferences", icon: Settings, section: "settings", small: true },
 ];
