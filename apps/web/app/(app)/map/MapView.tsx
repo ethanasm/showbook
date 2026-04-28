@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   MapContainer,
@@ -521,7 +522,11 @@ function VenueInspector({
             <X size={16} />
           </button>
         </div>
-        <h2 className="venue-inspector__name">{venue.name}</h2>
+        <h2 className="venue-inspector__name">
+          <Link href={`/venues/${venue.venueId}`} className="venue-inspector__name-link">
+            {venue.name}
+          </Link>
+        </h2>
         <div className="venue-inspector__neighborhood">{venue.city}</div>
         <div className="venue-inspector__coords">
           {venue.latitude.toFixed(4)}&deg; N &middot;{" "}

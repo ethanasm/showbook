@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import "./design-system.css";
 import { StateChip, type ShowState } from "./StateChip";
 import type { ShowKind } from "./KindBadge";
@@ -17,6 +18,7 @@ export interface Show {
   headliner: string;
   support?: string[];
   venue: string;
+  venueId?: string;
   neighborhood?: string;
   date: { month: string; day: string; year: string; dow: string };
   seat?: string;
@@ -109,7 +111,17 @@ export function ShowRow({ show, selected, onClick }: ShowRowProps) {
 
       {/* 5. Venue + neighborhood */}
       <div className="show-row__venue-cell">
-        <div className="show-row__venue">{show.venue}</div>
+        {show.venueId ? (
+          <Link
+            href={`/venues/${show.venueId}`}
+            className="show-row__venue show-row__venue--link"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {show.venue}
+          </Link>
+        ) : (
+          <div className="show-row__venue">{show.venue}</div>
+        )}
         {show.neighborhood && (
           <div className="show-row__neighborhood">{show.neighborhood}</div>
         )}

@@ -200,6 +200,15 @@
   text-overflow: ellipsis;
 }
 
+a.show-row__venue--link {
+  display: block;
+  text-decoration: none;
+}
+
+a.show-row__venue--link:hover {
+  text-decoration: underline;
+}
+
 .show-row__neighborhood {
   font-family: var(--font-geist-mono), monospace;
   font-size: 10.5px;

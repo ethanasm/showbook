@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import {
@@ -785,7 +786,14 @@ export default function ShowsPage() {
             Venue
           </div>
           <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 14, fontWeight: 500, color: "var(--ink)", display: "flex", alignItems: "center", gap: 6 }}>
-            {show.venue.name}
+            <Link
+              href={`/venues/${show.venue.id}`}
+              style={{ color: "inherit", textDecoration: "none" }}
+              onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+              onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+            >
+              {show.venue.name}
+            </Link>
             {(show.venue.latitude == null || show.venue.longitude == null) && (
               <span title="No coordinates — won't appear on map" style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--kind-theatre)", flexShrink: 0, opacity: 0.7 }} />
             )}
@@ -978,6 +986,7 @@ export default function ShowsPage() {
                   headliner: getHeadliner(show),
                   support: getSupport(show),
                   venue: show.venue.name,
+                  venueId: show.venue.id,
                   neighborhood: getNeighborhood(show),
                   date: toDateParts(show.date),
                   seat: show.seat ?? undefined,
