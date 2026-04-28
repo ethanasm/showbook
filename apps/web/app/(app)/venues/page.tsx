@@ -229,7 +229,7 @@ export default function VenuesListPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1.5fr 110px 120px 80px 80px 70px 70px",
+                gridTemplateColumns: "2fr 1fr 1fr 80px 80px 60px 60px",
                 columnGap: 16,
                 padding: "10px 20px",
                 borderBottom: "1px solid var(--rule)",
@@ -282,7 +282,7 @@ export default function VenuesListPage() {
                 href={`/venues/${v.id}`}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1.5fr 110px 120px 80px 80px 70px 70px",
+                  gridTemplateColumns: "2fr 1fr 1fr 80px 80px 60px 60px",
                   columnGap: 16,
                   padding: "12px 20px",
                   borderBottom: "1px solid var(--rule)",
