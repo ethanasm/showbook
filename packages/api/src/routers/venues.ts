@@ -36,6 +36,18 @@ export const venuesRouter = router({
       return { success: true };
     }),
 
+  rename: protectedProcedure
+    .input(z.object({ venueId: z.string().uuid(), name: z.string().min(1).max(300) }))
+    .mutation(async ({ ctx, input }) => {
+      const [updated] = await ctx.db
+        .update(venues)
+        .set({ name: input.name.trim() })
+        .where(eq(venues.id, input.venueId))
+        .returning();
+      if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Venue not found' });
+      return updated;
+    }),
+
   unfollow: protectedProcedure
     .input(z.object({ venueId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {

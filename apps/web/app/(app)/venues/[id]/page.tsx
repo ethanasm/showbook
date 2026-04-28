@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
@@ -10,12 +10,18 @@ import {
   Laugh,
   Tent,
   MapPin,
-  ChevronRight,
   ArrowUpRight,
   Plus,
   Check,
+  MoreHorizontal,
+  Trash2,
+  Ticket,
 } from "lucide-react";
-import type { ShowKind } from "@/components/design-system";
+import {
+  ShowRow as ShowRowComponent,
+  type ShowKind,
+  type ShowState,
+} from "@/components/design-system";
 
 type Performer = {
   id: string;
@@ -30,15 +36,17 @@ type ShowPerformer = {
   performer: Performer;
 };
 
-type ShowRow = {
+type ShowData = {
   id: string;
   kind: ShowKind;
-  state: "past" | "ticketed" | "watching";
+  state: ShowState;
   date: string;
   endDate: string | null;
   seat: string | null;
   pricePaid: string | null;
+  ticketCount: number;
   tourName: string | null;
+  productionName: string | null;
   showPerformers: ShowPerformer[];
 };
 
@@ -95,7 +103,10 @@ function formatOnSaleDate(value: Date | string | null): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function getHeadliner(show: ShowRow): string {
+function getHeadliner(show: ShowData): string {
+  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
+    return show.productionName;
+  }
   const hl = show.showPerformers.find(
     (sp) => sp.role === "headliner" && sp.sortOrder === 0,
   );
@@ -106,7 +117,18 @@ function getHeadliner(show: ShowRow): string {
   );
 }
 
-function getSupport(show: ShowRow): string[] {
+function daysUntil(dateStr: string): number {
+  const now = new Date();
+  const d = new Date(dateStr + "T00:00:00");
+  return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+const STATE_TRANSITIONS: Record<string, { label: string; target: ShowState }> = {
+  watching: { label: "Got tickets", target: "ticketed" },
+  ticketed: { label: "Mark as attended", target: "past" },
+};
+
+function getSupport(show: ShowData): string[] {
   return show.showPerformers
     .filter((sp) => sp.role === "support")
     .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -149,8 +171,33 @@ export default function VenueDetailPage() {
     },
   });
 
+  const renameMutation = trpc.venues.rename.useMutation({
+    onSuccess: () => {
+      utils.venues.detail.invalidate();
+    },
+  });
+
+  const updateState = trpc.shows.updateState.useMutation({
+    onSuccess: () => {
+      utils.venues.userShows.invalidate();
+      utils.venues.detail.invalidate();
+      utils.shows.list.invalidate();
+    },
+  });
+
+  const deleteShow = trpc.shows.delete.useMutation({
+    onSuccess: () => {
+      setExpandedShowId(null);
+      utils.venues.userShows.invalidate();
+      utils.venues.detail.invalidate();
+      utils.shows.list.invalidate();
+    },
+  });
+
+  const [expandedShowId, setExpandedShowId] = useState<string | null>(null);
+
   const venue = detailQuery.data;
-  const userShows = (userShowsQuery.data ?? []) as ShowRow[];
+  const userShows = (userShowsQuery.data ?? []) as ShowData[];
   const upcoming = announcementsQuery.data ?? [];
 
   const stats = useMemo(() => {
@@ -170,6 +217,24 @@ export default function VenueDetailPage() {
     } else {
       followMutation.mutate({ venueId: venue.id });
     }
+  }
+
+  function handleRowClick(showId: string) {
+    setExpandedShowId((prev) => (prev === showId ? null : showId));
+  }
+
+  async function handleDelete(showId: string) {
+    if (!confirm("Delete this show? This cannot be undone.")) return;
+    await deleteShow.mutateAsync({ showId });
+  }
+
+  async function handleStateTransition(show: ShowData) {
+    const transition = STATE_TRANSITIONS[show.state];
+    if (!transition) return;
+    await updateState.mutateAsync({
+      showId: show.id,
+      newState: transition.target,
+    });
   }
 
   if (detailQuery.isLoading) {
@@ -224,13 +289,6 @@ export default function VenueDetailPage() {
           letterSpacing: ".04em",
         }}
       >
-        <Link
-          href="/discover"
-          style={{ color: "var(--faint)", textDecoration: "none" }}
-        >
-          discover
-        </Link>
-        <ChevronRight size={11} color="var(--faint)" />
         <span style={{ color: "var(--ink)" }}>{venue.name.toLowerCase()}</span>
       </div>
 
@@ -260,19 +318,10 @@ export default function VenueDetailPage() {
           >
             <MapPin size={12} /> Venue
           </div>
-          <div
-            style={{
-              fontFamily: "var(--font-geist-sans), sans-serif",
-              fontSize: 48,
-              fontWeight: 600,
-              color: "var(--ink)",
-              letterSpacing: -1.6,
-              lineHeight: 0.98,
-              marginTop: 10,
-            }}
-          >
-            {venue.name}
-          </div>
+          <EditableName
+            value={venue.name}
+            onSave={(name) => renameMutation.mutate({ venueId: venue.id, name })}
+          />
           {locationLine && (
             <div
               style={{
@@ -516,119 +565,58 @@ export default function VenueDetailPage() {
             </CardMessage>
           ) : (
             <div style={{ background: "var(--surface)" }}>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "110px 110px 1fr 1.2fr 90px",
-                  columnGap: 16,
-                  padding: "10px 16px",
-                  borderBottom: "1px solid var(--rule)",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 9.5,
-                  color: "var(--faint)",
-                  letterSpacing: ".12em",
-                  textTransform: "uppercase",
-                }}
-              >
+              {/* Column headers */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "14px 80px 110px 1.2fr 1fr 110px 64px 88px",
+                columnGap: 16,
+                padding: "10px 20px 10px 10px",
+                borderBottom: "1px solid var(--rule)",
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: 9.5,
+                color: "var(--faint)",
+                letterSpacing: ".12em",
+                textTransform: "uppercase",
+              }}>
+                <div />
                 <div>Date</div>
                 <div>Kind</div>
-                <div>Headliner</div>
-                <div>Tour</div>
-                <div style={{ textAlign: "right" }}>Seat</div>
+                <div>Headline</div>
+                <div>Venue</div>
+                <div>Seat</div>
+                <div style={{ textAlign: "right" }}>Paid</div>
+                <div style={{ textAlign: "right" }}>State</div>
               </div>
-              {userShows.map((s) => {
-                const KindIcon = KIND_ICONS[s.kind];
-                const support = getSupport(s);
-                return (
-                  <div
-                    key={s.id}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "110px 110px 1fr 1.2fr 90px",
-                      columnGap: 16,
-                      padding: "12px 16px",
-                      borderBottom: "1px solid var(--rule)",
-                      alignItems: "baseline",
-                      borderLeft: `2px solid var(--kind-${s.kind})`,
+              {userShows.map((s) => (
+                <div key={s.id}>
+                  <ShowRowComponent
+                    show={{
+                      kind: s.kind,
+                      state: s.state,
+                      headliner: getHeadliner(s),
+                      support: getSupport(s),
+                      venue: venue.name,
+                      venueId: venue.id,
+                      date: formatDateParts(s.date),
+                      seat: s.seat ?? undefined,
+                      paid: s.pricePaid ? parseFloat(s.pricePaid) : undefined,
+                      ticketCount: s.ticketCount,
                     }}
-                  >
-                    <div
-                      style={{
-                        fontFamily: "var(--font-geist-mono), monospace",
-                        fontSize: 11,
-                        color: "var(--muted)",
-                        letterSpacing: ".02em",
-                      }}
-                    >
-                      {formatDateLong(s.date)}
-                    </div>
-                    <div
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 6,
-                        fontFamily: "var(--font-geist-mono), monospace",
-                        fontSize: 10.5,
-                        color: `var(--kind-${s.kind})`,
-                        letterSpacing: ".06em",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      <KindIcon size={12} />
-                      {KIND_LABELS[s.kind]}
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontFamily: "var(--font-geist-sans), sans-serif",
-                          fontSize: 14,
-                          fontWeight: 500,
-                          color: "var(--ink)",
-                          letterSpacing: -0.2,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        {getHeadliner(s)}
-                      </div>
-                      {support.length > 0 && (
-                        <div
-                          style={{
-                            fontFamily: "var(--font-geist-mono), monospace",
-                            fontSize: 10.5,
-                            color: "var(--muted)",
-                            marginTop: 2,
-                          }}
-                        >
-                          + {support.join(", ")}
-                        </div>
-                      )}
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: "var(--font-geist-sans), sans-serif",
-                        fontSize: 13,
-                        color: "var(--ink)",
-                        fontStyle: s.tourName ? "italic" : "normal",
-                        letterSpacing: -0.1,
-                      }}
-                    >
-                      {s.tourName ?? "—"}
-                    </div>
-                    <div
-                      style={{
-                        textAlign: "right",
-                        fontFamily: "var(--font-geist-mono), monospace",
-                        fontSize: 11,
-                        color: "var(--muted)",
-                      }}
-                    >
-                      {s.seat ?? "—"}
-                    </div>
-                  </div>
-                );
-              })}
+                    selected={expandedShowId === s.id}
+                    onClick={() => handleRowClick(s.id)}
+                  />
+                  {expandedShowId === s.id && (
+                    <ShowDetailPanel
+                      show={s}
+                      venueName={venue.name}
+                      venueId={venue.id}
+                      onEdit={() => router.push(`/add?editId=${s.id}`)}
+                      onDelete={() => handleDelete(s.id)}
+                      onStateTransition={() => handleStateTransition(s)}
+                    />
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </section>
@@ -657,6 +645,180 @@ export default function VenueDetailPage() {
             </Link>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ShowDetailPanel({
+  show,
+  venueName,
+  venueId,
+  onEdit,
+  onDelete,
+  onStateTransition,
+}: {
+  show: ShowData;
+  venueName: string;
+  venueId: string;
+  onEdit: () => void;
+  onDelete: () => void;
+  onStateTransition: () => void;
+}) {
+  const support = getSupport(show);
+  const dateParts = formatDateParts(show.date);
+  const days = daysUntil(show.date);
+  const countdown = show.state !== "past" && days > 0 ? `in ${days} day${days !== 1 ? "s" : ""}` : null;
+  const transition = STATE_TRANSITIONS[show.state];
+
+  return (
+    <div style={{
+      background: "var(--surface2)",
+      borderBottom: "1px solid var(--rule)",
+      padding: "20px 24px 20px 34px",
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr 1fr 1fr",
+      gap: 24,
+    }}>
+      {/* Column 1: Details */}
+      <div>
+        <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 6 }}>
+          Details
+        </div>
+        <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 20, fontWeight: 600, color: "var(--ink)", letterSpacing: -0.5, lineHeight: 1.1 }}>
+          {getHeadliner(show)}
+        </div>
+        {support.length > 0 && (
+          <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 12.5, color: "var(--muted)", marginTop: 5 }}>
+            with {support.join(", ")}
+          </div>
+        )}
+        {show.tourName && (
+          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", marginTop: 8, letterSpacing: ".04em" }}>
+            {show.tourName}
+          </div>
+        )}
+      </div>
+
+      {/* Column 2: Venue */}
+      <div>
+        <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 6 }}>
+          Venue
+        </div>
+        <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 14, fontWeight: 500, color: "var(--ink)" }}>
+          {venueName}
+        </div>
+        {show.seat && (
+          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", marginTop: 6 }}>
+            <span style={{ color: "var(--faint)" }}>seat</span> {show.seat}
+          </div>
+        )}
+      </div>
+
+      {/* Column 3: Date */}
+      <div>
+        <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 6 }}>
+          Date
+        </div>
+        <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 14, fontWeight: 500, color: "var(--ink)", fontFeatureSettings: '"tnum"' }}>
+          {dateParts.dow}, {dateParts.month} {dateParts.day}, {dateParts.year}
+        </div>
+        {countdown && (
+          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--accent)", marginTop: 4 }}>
+            {countdown}
+          </div>
+        )}
+        {show.pricePaid && (
+          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", marginTop: 6 }}>
+            <span style={{ color: "var(--faint)" }}>paid</span> ${parseFloat(show.pricePaid).toFixed(0)}
+            {show.ticketCount > 1 && (
+              <span style={{ color: "var(--faint)" }}> · ${(parseFloat(show.pricePaid) / show.ticketCount).toFixed(0)}/ea × {show.ticketCount}</span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Column 4: Actions */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
+        <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 2 }}>
+          Actions
+        </div>
+        {show.state === "watching" && (
+          <button
+            onClick={onStateTransition}
+            style={{
+              padding: "8px 14px",
+              background: "var(--accent)",
+              color: "var(--accent-text)",
+              border: "none",
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 12.5,
+              fontWeight: 500,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              cursor: "pointer",
+            }}
+          >
+            <Ticket size={13} /> Buy tickets
+          </button>
+        )}
+        {transition && show.state === "ticketed" && (
+          <button
+            onClick={onStateTransition}
+            style={{
+              padding: "8px 14px",
+              background: "var(--accent)",
+              color: "var(--accent-text)",
+              border: "none",
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 12.5,
+              fontWeight: 500,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              cursor: "pointer",
+            }}
+          >
+            {transition.label}
+          </button>
+        )}
+        <button
+          onClick={onEdit}
+          style={{
+            padding: "8px 14px",
+            background: "transparent",
+            border: "1px solid var(--rule-strong)",
+            color: "var(--ink)",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 12.5,
+            fontWeight: 500,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            cursor: "pointer",
+          }}
+        >
+          <MoreHorizontal size={13} /> Edit
+        </button>
+        <button
+          onClick={onDelete}
+          style={{
+            padding: "8px 14px",
+            background: "transparent",
+            border: "1px solid var(--rule-strong)",
+            color: "#E63946",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 12.5,
+            fontWeight: 500,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            cursor: "pointer",
+          }}
+        >
+          <Trash2 size={13} /> Delete
+        </button>
       </div>
     </div>
   );
@@ -744,6 +906,86 @@ function CardMessage({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
+    </div>
+  );
+}
+
+function EditableName({
+  value,
+  onSave,
+}: {
+  value: string;
+  onSave: (name: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  function commit() {
+    const trimmed = draft.trim();
+    setEditing(false);
+    if (trimmed && trimmed !== value) {
+      onSave(trimmed);
+    } else {
+      setDraft(value);
+    }
+  }
+
+  const sharedStyle: React.CSSProperties = {
+    fontFamily: "var(--font-geist-sans), sans-serif",
+    fontSize: 48,
+    fontWeight: 600,
+    color: "var(--ink)",
+    letterSpacing: -1.6,
+    lineHeight: 0.98,
+    marginTop: 10,
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") {
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+        style={{
+          ...sharedStyle,
+          width: "100%",
+          background: "transparent",
+          border: "none",
+          borderBottom: "2px solid var(--accent)",
+          outline: "none",
+          padding: 0,
+        }}
+      />
+    );
+  }
+
+  return (
+    <div
+      onDoubleClick={() => setEditing(true)}
+      style={{ ...sharedStyle, cursor: "text" }}
+      title="Double-click to edit"
+    >
+      {value}
     </div>
   );
 }

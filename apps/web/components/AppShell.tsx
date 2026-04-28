@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
 function pathnameToNavId(pathname: string): string {
   const segment = pathname.split("/")[1] ?? "home";
   const match = NAV_ITEMS.find((item) => item.id === segment);
-  return match ? match.id : "home";
+  return match ? match.id : "";
 }
 
 function navIdToPath(id: string): string {
