@@ -264,7 +264,7 @@ export default function AddPage() {
     const s = editQuery.data;
 
     setKind(s.kind as ShowKind);
-    setDate(s.date);
+    setDate(s.date ?? "");
     if (s.endDate) setEndDate(s.endDate);
     if (s.seat) setSeat(s.seat);
     if (s.pricePaid) setPricePaid(s.pricePaid);

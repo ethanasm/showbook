@@ -21,6 +21,7 @@ export const onSaleStatusEnum = pgEnum('on_sale_status', [
 export const announcementSourceEnum = pgEnum('announcement_source', [
   'ticketmaster',
   'manual',
+  'scraped',
 ]);
 
 export const announcements = pgTable('announcements', {
@@ -34,7 +35,11 @@ export const announcements = pgTable('announcements', {
     () => performers.id
   ),
   support: text('support').array(),
+  productionName: text('production_name'),
   showDate: date('show_date').notNull(),
+  runStartDate: date('run_start_date'),
+  runEndDate: date('run_end_date'),
+  performanceDates: date('performance_dates').array(),
   onSaleDate: timestamp('on_sale_date'),
   onSaleStatus: onSaleStatusEnum('on_sale_status').notNull(),
   source: announcementSourceEnum('source').notNull(),

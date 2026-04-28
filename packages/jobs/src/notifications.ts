@@ -8,9 +8,10 @@ import {
   performers,
   announcements,
   userVenueFollows,
+  userPerformerFollows,
   venues,
 } from '@showbook/db';
-import { and, eq, gte, lte, sql, ne, inArray } from 'drizzle-orm';
+import { and, eq, gte, lte, sql, ne, inArray, or, asc } from 'drizzle-orm';
 
 const FROM_ADDRESS = 'Showbook <digest@ethanasm.me>';
 
@@ -224,37 +225,10 @@ export async function runNotificationDigest(): Promise<{
     }
 
     try {
-      // ── 2a. New announcements at followed venues (since yesterday) ──
-      const followedVenueIds = await db
-        .select({ venueId: userVenueFollows.venueId })
-        .from(userVenueFollows)
-        .where(eq(userVenueFollows.userId, user.userId));
-
-      let newAnnouncements: Announcement[] = [];
-
-      if (followedVenueIds.length > 0) {
-        const venueIds = followedVenueIds.map((f) => f.venueId);
-        const announcementRows = await db
-          .select({
-            headliner: announcements.headliner,
-            showDate: announcements.showDate,
-            venueName: venues.name,
-          })
-          .from(announcements)
-          .innerJoin(venues, eq(announcements.venueId, venues.id))
-          .where(
-            and(
-              inArray(announcements.venueId, venueIds),
-              gte(announcements.discoveredAt, new Date(yesterdayStr + 'T00:00:00'))
-            )
-          );
-
-        newAnnouncements = announcementRows.map((r) => ({
-          headliner: r.headliner,
-          venueName: r.venueName,
-          showDate: r.showDate,
-        }));
-      }
+      // New-announcement discovery moved to runWeeklyDiscoveryDigest, which
+      // fires once per ingestion run on Monday morning. The hourly digest
+      // here only covers the user's own ticketed shows.
+      const newAnnouncements: Announcement[] = [];
 
       // ── 2b. Upcoming ticketed shows in next 7 days ─────────────────
       const upcomingRows = await db
@@ -278,6 +252,9 @@ export async function runNotificationDigest(): Promise<{
 
       const upcomingShows: UpcomingShow[] = [];
       for (const row of upcomingRows) {
+        // gte(shows.date, todayStr) above filters out NULL dates, but TS
+        // can't narrow drizzle's column types — guard explicitly.
+        if (row.date === null) continue;
         const headliner = await getHeadlinerForShow(row.id);
         const showDate = new Date(row.date + 'T00:00:00');
         const daysUntil = Math.round(
@@ -465,6 +442,263 @@ export async function runNotificationDigest(): Promise<{
       skipped++;
     }
   }
+
+  return { sent, skipped };
+}
+
+// ===========================================================================
+// Weekly discovery digest — chained immediately after runDiscoverIngest
+// ===========================================================================
+
+interface DigestAnnouncement {
+  headliner: string;
+  venueName: string;
+  /** Single date OR run window like "Aug 1 – Dec 15 (90 dates)". */
+  whenLabel: string;
+  /** Either 'venue' (followed venue) or 'artist' (followed artist) — drives sectioning. */
+  reason: 'venue' | 'artist';
+  /** Unix ms for sorting the email. */
+  showDateMs: number;
+  onSaleSoon: boolean;
+}
+
+const WEEKLY_DIGEST_CAP = 50;
+
+function whenLabel(row: {
+  showDate: string;
+  runStartDate: string | null;
+  runEndDate: string | null;
+  performanceDates: string[] | null;
+}): string {
+  const start = row.runStartDate ?? row.showDate;
+  const end = row.runEndDate ?? row.showDate;
+  const count = row.performanceDates?.length ?? 1;
+  if (start === end) return formatDate(start);
+  return `${formatDate(start)} – ${formatDate(end)} (${count} dates)`;
+}
+
+function buildWeeklyDigestHtml(
+  displayName: string,
+  byVenue: DigestAnnouncement[],
+  byArtist: DigestAnnouncement[],
+  onSaleSoon: DigestAnnouncement[],
+  totalCount: number,
+  truncated: boolean,
+): string {
+  function section(title: string, items: DigestAnnouncement[]): string {
+    if (items.length === 0) return '';
+    const lis = items
+      .map(
+        (a) =>
+          `<li><strong>${escapeHtml(a.headliner)}</strong> at ${escapeHtml(a.venueName)} &mdash; ${escapeHtml(a.whenLabel)}</li>`,
+      )
+      .join('\n');
+    return `<h2 style="font-size: 16px; margin-top: 24px;">${title}</h2>\n<ul>${lis}</ul>`;
+  }
+
+  const sections = [
+    section('At venues you follow', byVenue),
+    section('By artists you follow', byArtist),
+    section('On sale this week', onSaleSoon),
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const moreLine = truncated
+    ? `<p><a href="https://showbook.local/discover">View all ${totalCount} new shows in Showbook &rarr;</a></p>`
+    : '';
+
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
+  <h1 style="font-size: 22px; margin-bottom: 8px;">${totalCount} new show${totalCount === 1 ? '' : 's'} you might want</h1>
+  <p style="color: #666;">Hi ${escapeHtml(displayName)} — here's what we found this week at the venues and artists you follow.</p>
+  ${sections}
+  ${moreLine}
+  <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 24px 0;">
+  <p style="font-size: 12px; color: #888;">We check for new shows once a week. To stop these emails, change your preferences in Showbook.</p>
+</body>
+</html>`.trim();
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * For each user with email_notifications=true, collect announcements newly
+ * discovered during this ingestion run that match their followed venues or
+ * artists. Send exactly one email per user with non-empty content.
+ *
+ * Called immediately after runDiscoverIngest from the job handler.
+ */
+export async function runWeeklyDiscoveryDigest(args: {
+  ingestionRunStart: Date;
+}): Promise<{ sent: number; skipped: number }> {
+  const resend = getResend();
+  let sent = 0;
+  let skipped = 0;
+
+  const todayStr = new Date().toISOString().split('T')[0]!;
+  const sevenDaysOut = new Date();
+  sevenDaysOut.setDate(sevenDaysOut.getDate() + 7);
+  const sevenDaysOutStr = sevenDaysOut.toISOString().split('T')[0]!;
+
+  // Fetch all the new announcements from this run once, then bucket per user.
+  const newAnnouncements = await db
+    .select({
+      id: announcements.id,
+      headliner: announcements.headliner,
+      venueId: announcements.venueId,
+      venueName: venues.name,
+      headlinerPerformerId: announcements.headlinerPerformerId,
+      showDate: announcements.showDate,
+      runStartDate: announcements.runStartDate,
+      runEndDate: announcements.runEndDate,
+      performanceDates: announcements.performanceDates,
+      onSaleDate: announcements.onSaleDate,
+    })
+    .from(announcements)
+    .innerJoin(venues, eq(announcements.venueId, venues.id))
+    .where(gte(announcements.discoveredAt, args.ingestionRunStart))
+    .orderBy(asc(announcements.showDate));
+
+  if (newAnnouncements.length === 0) {
+    return { sent: 0, skipped: 0 };
+  }
+
+  const eligibleUsers = await db
+    .select({
+      userId: userPreferences.userId,
+      emailNotifications: userPreferences.emailNotifications,
+      email: users.email,
+      displayName: users.name,
+    })
+    .from(userPreferences)
+    .innerJoin(users, eq(userPreferences.userId, users.id))
+    .where(eq(userPreferences.emailNotifications, true));
+
+  for (const user of eligibleUsers) {
+    if (!user.email) {
+      skipped++;
+      continue;
+    }
+    try {
+      const venueRows = await db
+        .select({ venueId: userVenueFollows.venueId })
+        .from(userVenueFollows)
+        .where(eq(userVenueFollows.userId, user.userId));
+      const performerRows = await db
+        .select({ performerId: userPerformerFollows.performerId })
+        .from(userPerformerFollows)
+        .where(eq(userPerformerFollows.userId, user.userId));
+
+      const followedVenueIds = new Set(venueRows.map((r) => r.venueId));
+      const followedPerformerIds = new Set(
+        performerRows.map((r) => r.performerId),
+      );
+
+      if (followedVenueIds.size === 0 && followedPerformerIds.size === 0) {
+        skipped++;
+        continue;
+      }
+
+      const matched: DigestAnnouncement[] = [];
+      for (const a of newAnnouncements) {
+        const matchVenue = followedVenueIds.has(a.venueId);
+        const matchArtist =
+          a.headlinerPerformerId !== null &&
+          followedPerformerIds.has(a.headlinerPerformerId);
+        if (!matchVenue && !matchArtist) continue;
+
+        const showDateMs = new Date(a.showDate + 'T00:00:00').getTime();
+        const onSaleSoon =
+          a.onSaleDate !== null &&
+          a.onSaleDate >= new Date(todayStr + 'T00:00:00') &&
+          a.onSaleDate <= new Date(sevenDaysOutStr + 'T23:59:59');
+
+        matched.push({
+          headliner: a.headliner,
+          venueName: a.venueName,
+          whenLabel: whenLabel(a),
+          // Venue match wins over artist match in the bucketing — most
+          // specific to "where I'd see it."
+          reason: matchVenue ? 'venue' : 'artist',
+          showDateMs,
+          onSaleSoon,
+        });
+      }
+
+      if (matched.length === 0) {
+        skipped++;
+        continue;
+      }
+
+      // Sort by show date ascending, dedup by (headliner, venue, when) so a
+      // run announcement matching both venue+artist follows isn't doubled.
+      const seen = new Set<string>();
+      const sorted = matched
+        .sort((a, b) => a.showDateMs - b.showDateMs)
+        .filter((a) => {
+          const key = `${a.headliner}::${a.venueName}::${a.whenLabel}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+      const totalCount = sorted.length;
+      const capped = sorted.slice(0, WEEKLY_DIGEST_CAP);
+      const truncated = sorted.length > WEEKLY_DIGEST_CAP;
+
+      const byVenue = capped.filter((a) => a.reason === 'venue');
+      const byArtist = capped.filter((a) => a.reason === 'artist');
+      const onSaleSoon = capped.filter((a) => a.onSaleSoon);
+
+      const html = buildWeeklyDigestHtml(
+        user.displayName ?? 'there',
+        byVenue,
+        byArtist,
+        onSaleSoon,
+        totalCount,
+        truncated,
+      );
+
+      if (!resend) {
+        console.log(
+          `[notifications/weekly-digest] Would send to ${user.email} (${totalCount} matches, ${capped.length} in body)`,
+        );
+        skipped++;
+        continue;
+      }
+
+      await resend.emails.send({
+        from: FROM_ADDRESS,
+        to: user.email,
+        subject: `${totalCount} new show${totalCount === 1 ? '' : 's'} you might want`,
+        html,
+      });
+      sent++;
+      console.log(
+        `[notifications/weekly-digest] Sent to ${user.email} (${totalCount} matches)`,
+      );
+    } catch (err) {
+      console.error(
+        `[notifications/weekly-digest] Failed for user ${user.userId}:`,
+        err,
+      );
+      skipped++;
+    }
+  }
+
+  // Quiet unused imports — kept for future use in this file.
+  void sql;
+  void or;
 
   return { sent, skipped };
 }

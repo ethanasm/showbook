@@ -13,7 +13,7 @@ const RESULT_LIMIT = 8;
 
 export type GlobalShowResult = {
   id: string;
-  date: string;
+  date: string | null;
   kind: 'concert' | 'theatre' | 'comedy' | 'festival';
   state: 'past' | 'ticketed' | 'watching';
   title: string;
@@ -83,10 +83,14 @@ export const searchRouter = router({
             });
 
       const showResults: GlobalShowResult[] = showRows
-        .sort(
-          (a, b) =>
-            new Date(b.date).getTime() - new Date(a.date).getTime(),
-        )
+        .sort((a, b) => {
+          // Dateless rows (state='watching' with no committed performance
+          // date) sort to the top so they're surfaced for date-picking.
+          if (a.date === null && b.date === null) return 0;
+          if (a.date === null) return -1;
+          if (b.date === null) return 1;
+          return new Date(b.date).getTime() - new Date(a.date).getTime();
+        })
         .map((s) => {
           const headlinerSP =
             s.showPerformers.find(

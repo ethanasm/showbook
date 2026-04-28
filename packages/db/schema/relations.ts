@@ -8,6 +8,7 @@ import { userVenueFollows, userPerformerFollows } from './follows';
 import { userRegions } from './regions';
 import { enrichmentQueue } from './enrichment';
 import { userPreferences } from './preferences';
+import { venueScrapeRuns } from './scrape-runs';
 
 // ── User relations ──────────────────────────────────────────────────
 export const usersRelations = relations(users, ({ many, one }) => ({
@@ -23,7 +24,18 @@ export const venuesRelations = relations(venues, ({ many }) => ({
   shows: many(shows),
   announcements: many(announcements),
   followers: many(userVenueFollows),
+  scrapeRuns: many(venueScrapeRuns),
 }));
+
+export const venueScrapeRunsRelations = relations(
+  venueScrapeRuns,
+  ({ one }) => ({
+    venue: one(venues, {
+      fields: [venueScrapeRuns.venueId],
+      references: [venues.id],
+    }),
+  })
+);
 
 // ── Performer relations ─────────────────────────────────────────────
 export const performersRelations = relations(performers, ({ many }) => ({

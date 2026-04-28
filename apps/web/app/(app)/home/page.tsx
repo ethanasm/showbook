@@ -106,12 +106,13 @@ function getSupportPerformers(
     .map((sp) => ({ id: sp.performer.id, name: sp.performer.name }));
 }
 
-function toDateParts(dateStr: string): {
+function toDateParts(dateStr: string | null): {
   month: string;
   day: string;
   year: string;
   dow: string;
 } {
+  if (!dateStr) return { month: "TBD", day: "—", year: "", dow: "" };
   const d = new Date(dateStr);
   return {
     month: d.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
@@ -121,7 +122,8 @@ function toDateParts(dateStr: string): {
   };
 }
 
-function countdownText(dateStr: string): string {
+function countdownText(dateStr: string | null): string {
+  if (!dateStr) return "date TBD";
   const now = new Date();
   now.setHours(0, 0, 0, 0);
   const target = new Date(dateStr);
@@ -155,7 +157,8 @@ function formatTopBarDate(): string {
   return `${dow} · ${day} ${month} · ${year}`;
 }
 
-function formatMiniDate(dateStr: string): string {
+function formatMiniDate(dateStr: string | null): string {
+  if (!dateStr) return "TBD";
   const parts = toDateParts(dateStr);
   return `${parts.month} ${parts.day}`;
 }
@@ -172,8 +175,8 @@ export default function HomePage() {
   const { data: shows, isLoading } = trpc.shows.list.useQuery({});
 
   // Split shows into upcoming and past
-  const { upcoming, past, stats } = useMemo(() => {
-    if (!shows) return { upcoming: [], past: [], stats: null };
+  const { upcoming, dateTbd, past, stats } = useMemo(() => {
+    if (!shows) return { upcoming: [], dateTbd: [], past: [], stats: null };
 
     const now = new Date();
     now.setHours(0, 0, 0, 0);
@@ -182,22 +185,33 @@ export default function HomePage() {
       .filter(
         (s) =>
           (s.state === "ticketed" || s.state === "watching") &&
+          s.date !== null &&
           new Date(s.date) >= now
       )
       .sort(
-        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+        (a, b) => new Date(a.date!).getTime() - new Date(b.date!).getTime()
       );
+
+    // Watching shows from a multi-night run that haven't had a date picked
+    // yet — surface them in their own rail so the user can pick a date.
+    const dateTbdShows = shows
+      .filter((s) => s.state === "watching" && s.date === null)
+      .sort((a, b) => {
+        const aHl = a.showPerformers?.[0]?.performer?.name ?? a.productionName ?? "";
+        const bHl = b.showPerformers?.[0]?.performer?.name ?? b.productionName ?? "";
+        return aHl.localeCompare(bHl);
+      });
 
     const pastShows = shows
-      .filter((s) => s.state === "past")
+      .filter((s) => s.state === "past" && s.date !== null)
       .sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        (a, b) => new Date(b.date!).getTime() - new Date(a.date!).getTime()
       );
 
-    // Compute stats
+    // Compute stats — exclude dateless watching rows since they have no year.
     const currentYear = new Date().getFullYear();
     const thisYearShows = shows.filter(
-      (s) => new Date(s.date).getFullYear() === currentYear
+      (s) => s.date !== null && new Date(s.date).getFullYear() === currentYear
     );
     const totalSpent = thisYearShows.reduce((sum, s) => {
       return sum + (s.pricePaid ? parseFloat(s.pricePaid) : 0);
@@ -216,6 +230,7 @@ export default function HomePage() {
 
     return {
       upcoming: upcomingShows,
+      dateTbd: dateTbdShows,
       past: pastShows,
       stats: {
         shows: showCount,
