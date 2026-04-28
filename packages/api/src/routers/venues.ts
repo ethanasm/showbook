@@ -11,6 +11,9 @@ import {
 import { getPlaceDetails } from '../google-places';
 import { matchOrCreateVenue, findTmVenueId } from '../venue-matcher';
 import { geocodeVenue } from '../geocode';
+import { enqueueIngestVenue } from '../job-queue';
+import { scrapeConfigSchema, parseScrapeConfig } from '../scrape-config';
+import { venueScrapeRuns } from '@showbook/db';
 
 export const venuesRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -62,6 +65,13 @@ export const venuesRouter = router({
         .insert(userVenueFollows)
         .values({ userId, venueId: input.venueId })
         .onConflictDoNothing();
+
+      // Fire-and-forget: pull this venue's upcoming events from Ticketmaster
+      // immediately, so the Discover feed populates within seconds rather
+      // than waiting for the next weekly ingestion. Errors are logged and
+      // swallowed inside enqueueIngestVenue — the user-facing follow
+      // succeeds even if the queue is briefly unreachable.
+      void enqueueIngestVenue(input.venueId);
 
       return { success: true };
     }),
@@ -172,6 +182,78 @@ export const venuesRouter = router({
         isFollowed: Boolean(followRow),
         userShowCount,
         upcomingCount,
+      };
+    }),
+
+  /**
+   * Save a scrape config (URL + frequency) on a venue. Replaces any existing
+   * config. Pass `null` to remove. Visible to anyone who follows the venue.
+   * Note: the system prompt is built server-side at scrape time using the
+   * venue's name/city/kind history — users do not supply prompt text.
+   */
+  saveScrapeConfig: protectedProcedure
+    .input(
+      z.object({
+        venueId: z.string().uuid(),
+        config: z
+          .object({
+            url: z.string().url(),
+            frequencyDays: z
+              .number()
+              .int()
+              .min(1)
+              .max(30)
+              .optional()
+              .default(7),
+          })
+          .nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.config === null) {
+        await ctx.db
+          .update(venues)
+          .set({ scrapeConfig: null })
+          .where(eq(venues.id, input.venueId));
+        return { success: true };
+      }
+      const config = scrapeConfigSchema.parse({
+        type: 'llm',
+        url: input.config.url,
+        frequencyDays: input.config.frequencyDays,
+      });
+      await ctx.db
+        .update(venues)
+        .set({ scrapeConfig: config })
+        .where(eq(venues.id, input.venueId));
+      return { success: true };
+    }),
+
+  /**
+   * Read the parsed scrape config + the most recent scrape run for a venue.
+   * Used by the venue detail page to render the "Scrape config" section
+   * with last-run status.
+   */
+  scrapeStatus: protectedProcedure
+    .input(z.object({ venueId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const [venue] = await ctx.db
+        .select({ scrapeConfig: venues.scrapeConfig })
+        .from(venues)
+        .where(eq(venues.id, input.venueId))
+        .limit(1);
+      if (!venue) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Venue not found' });
+      }
+      const [lastRun] = await ctx.db
+        .select()
+        .from(venueScrapeRuns)
+        .where(eq(venueScrapeRuns.venueId, input.venueId))
+        .orderBy(desc(venueScrapeRuns.startedAt))
+        .limit(1);
+      return {
+        config: parseScrapeConfig(venue.scrapeConfig),
+        lastRun: lastRun ?? null,
       };
     }),
 

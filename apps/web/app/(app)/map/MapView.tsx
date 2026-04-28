@@ -725,6 +725,9 @@ export default function MapView() {
     for (const show of shows) {
       const venue = show.venue;
       if (!venue || venue.latitude == null || venue.longitude == null) continue;
+      // Watching shows from a multi-night run can have no committed date yet
+      // — nothing to plot until the user picks a performance.
+      if (!show.date) continue;
 
       const existing = grouped.get(venue.id);
       const showData: VenueShowData = {

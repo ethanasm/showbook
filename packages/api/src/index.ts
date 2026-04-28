@@ -22,3 +22,8 @@ export {
   getMessageBody,
   buildBulkScanQueries,
 } from './gmail';
+export {
+  scrapeConfigSchema,
+  parseScrapeConfig,
+  type ScrapeConfig,
+} from './scrape-config';

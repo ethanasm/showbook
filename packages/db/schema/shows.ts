@@ -42,7 +42,11 @@ export const shows = pgTable(
     venueId: uuid('venue_id')
       .notNull()
       .references(() => venues.id),
-    date: date('date').notNull(),
+    // Nullable: state='watching' AND date IS NULL means "intent without a
+    // committed performance date" — typically a multi-night theatre run the
+    // user wants to see but hasn't picked a night for yet. Once the user
+    // picks a date or buys tickets, this is set. Not "missing data."
+    date: date('date'),
     endDate: date('end_date'),
     seat: text('seat'),
     pricePaid: decimal('price_paid', { precision: 10, scale: 2 }),

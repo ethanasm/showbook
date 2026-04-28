@@ -48,6 +48,14 @@ export async function runSetlistRetry(): Promise<{
         continue;
       }
 
+      if (!show.date) {
+        // Dateless watching shows can't have setlists looked up — skip and
+        // remove from the queue. They'll be re-queued if/when a date is set.
+        await db.delete(enrichmentQueue).where(eq(enrichmentQueue.id, item.id));
+        counts.failed++;
+        continue;
+      }
+
       // 2b. Look up the headliner performer
       const [headlinerRow] = await db
         .select({

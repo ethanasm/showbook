@@ -23,6 +23,15 @@ export async function GET(
 
   if (!show) return new NextResponse('Not Found', { status: 404 });
 
+  // Watching shows from a multi-night run can have no committed date yet —
+  // there's nothing to put on the calendar until the user picks one.
+  if (!show.date) {
+    return new NextResponse(
+      'No calendar export available — pick a date for this show first.',
+      { status: 409 },
+    );
+  }
+
   const headlinerSP =
     show.showPerformers.find(
       (sp) => sp.role === 'headliner' && sp.sortOrder === 0,

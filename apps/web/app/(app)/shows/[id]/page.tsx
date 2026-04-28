@@ -49,7 +49,8 @@ const ROLE_LABEL: Record<string, string> = {
   cast: "Cast",
 };
 
-function formatDateLong(dateStr: string): string {
+function formatDateLong(dateStr: string | null): string {
+  if (!dateStr) return "Date TBD";
   const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString("en-US", {
     weekday: "long",
@@ -59,7 +60,8 @@ function formatDateLong(dateStr: string): string {
   });
 }
 
-function daysUntil(dateStr: string): number {
+function daysUntil(dateStr: string | null): number {
+  if (!dateStr) return 0;
   const now = new Date();
   const d = new Date(dateStr + "T00:00:00");
   return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -287,6 +289,11 @@ export default function ShowDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Date TBD banner for watching shows from a multi-night run */}
+      {show.state === "watching" && !show.date && (
+        <PickDateBanner showId={show.id} />
+      )}
 
       {/* Stat strip */}
       <div
@@ -680,3 +687,68 @@ function CenteredMessage({
     </div>
   );
 }
+
+// ── Pick-a-date banner for watching shows from a multi-night run ─────────
+
+function PickDateBanner({ showId }: { showId: string }) {
+  const utils = trpc.useUtils();
+  const linkQuery = trpc.shows.announcementLink.useQuery(
+    { showId },
+    { enabled: Boolean(showId) },
+  );
+  const pickDate = trpc.discover.pickDate.useMutation({
+    onSuccess: () => {
+      utils.shows.detail.invalidate({ showId });
+      utils.shows.list.invalidate();
+    },
+  });
+
+  const dates = linkQuery.data?.performanceDates ?? null;
+
+  return (
+    <div
+      style={{
+        margin: '12px 36px 0',
+        padding: '14px 18px',
+        background: 'var(--surface)',
+        border: '1px solid var(--accent)',
+        fontFamily: 'var(--font-geist-sans), sans-serif',
+        fontSize: 13,
+        color: 'var(--ink)',
+      }}
+    >
+      <div style={{ marginBottom: 8 }}>
+        <strong>Date TBD.</strong> You're watching this run without a specific
+        performance picked yet.
+      </div>
+      {dates && dates.length > 0 ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {dates.map((d) => (
+            <button
+              key={d}
+              type='button'
+              onClick={() => pickDate.mutate({ showId, performanceDate: d })}
+              disabled={pickDate.isPending}
+              style={{
+                fontFamily: 'var(--font-geist-mono), monospace',
+                fontSize: 11,
+                padding: '4px 8px',
+                border: '1px solid var(--rule)',
+                background: 'var(--surface2)',
+                color: 'var(--ink)',
+                cursor: pickDate.isPending ? 'default' : 'pointer',
+              }}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div style={{ color: 'var(--muted)', fontSize: 12 }}>
+          No specific performance dates available — pick one when you decide.
+        </div>
+      )}
+    </div>
+  );
+}
+

@@ -15,8 +15,11 @@ test.describe('Show detail page', () => {
     await page.goto('/shows');
     await page.waitForSelector('.show-row', { timeout: 10000 });
 
-    // Click the row that contains "Radiohead" (one of the seeded past concerts).
-    const radioheadRow = page.locator('.show-row', { hasText: 'Radiohead' }).first();
+    // Click the row that contains "Radiohead" at MSG. The seed has two
+    // Radiohead shows (MSG past, Beacon future); target the MSG one
+    // specifically since this test asserts on the Madison Square Garden
+    // venue link.
+    const radioheadRow = page.locator('.show-row', { hasText: 'Radiohead' }).filter({ hasText: 'Madison Square Garden' }).first();
     await expect(radioheadRow).toBeVisible();
     await radioheadRow.click();
 
@@ -37,7 +40,10 @@ test.describe('Show detail page', () => {
   test('renders setlist when present', async ({ page }) => {
     await page.goto('/shows');
     await page.waitForSelector('.show-row', { timeout: 10000 });
-    await page.locator('.show-row', { hasText: 'Radiohead' }).first().click();
+    // The seed has TWO Radiohead shows (MSG 2024 past, Beacon 2026 future).
+    // The first three tests below need the past MSG one (it has the seeded
+    // setlist + Madison venue link). Target it specifically.
+    await page.locator('.show-row', { hasText: 'Radiohead' }).filter({ hasText: 'Madison Square Garden' }).first().click();
     await page.waitForURL(/\/shows\/[0-9a-f-]+/);
 
     // The Radiohead seeded concert has a 10-song setlist.
@@ -59,7 +65,10 @@ test.describe('Show detail page', () => {
   test('headliner link navigates to /artists/[id]', async ({ page }) => {
     await page.goto('/shows');
     await page.waitForSelector('.show-row', { timeout: 10000 });
-    await page.locator('.show-row', { hasText: 'Radiohead' }).first().click();
+    // The seed has TWO Radiohead shows (MSG 2024 past, Beacon 2026 future).
+    // The first three tests below need the past MSG one (it has the seeded
+    // setlist + Madison venue link). Target it specifically.
+    await page.locator('.show-row', { hasText: 'Radiohead' }).filter({ hasText: 'Madison Square Garden' }).first().click();
     await page.waitForURL(/\/shows\/[0-9a-f-]+/);
 
     await page.getByRole('link', { name: 'Radiohead' }).first().click();
@@ -70,7 +79,10 @@ test.describe('Show detail page', () => {
   test('venue link navigates to /venues/[id]', async ({ page }) => {
     await page.goto('/shows');
     await page.waitForSelector('.show-row', { timeout: 10000 });
-    await page.locator('.show-row', { hasText: 'Radiohead' }).first().click();
+    // The seed has TWO Radiohead shows (MSG 2024 past, Beacon 2026 future).
+    // The first three tests below need the past MSG one (it has the seeded
+    // setlist + Madison venue link). Target it specifically.
+    await page.locator('.show-row', { hasText: 'Radiohead' }).filter({ hasText: 'Madison Square Garden' }).first().click();
     await page.waitForURL(/\/shows\/[0-9a-f-]+/);
 
     await page.getByRole('link', { name: /Madison Square Garden/i }).first().click();
@@ -81,7 +93,10 @@ test.describe('Show detail page', () => {
   test('Edit button routes to /add?editId=', async ({ page }) => {
     await page.goto('/shows');
     await page.waitForSelector('.show-row', { timeout: 10000 });
-    await page.locator('.show-row', { hasText: 'Radiohead' }).first().click();
+    // The seed has TWO Radiohead shows (MSG 2024 past, Beacon 2026 future).
+    // The first three tests below need the past MSG one (it has the seeded
+    // setlist + Madison venue link). Target it specifically.
+    await page.locator('.show-row', { hasText: 'Radiohead' }).filter({ hasText: 'Madison Square Garden' }).first().click();
     await page.waitForURL(/\/shows\/[0-9a-f-]+/);
 
     await page.getByRole('button', { name: /Edit/i }).click();

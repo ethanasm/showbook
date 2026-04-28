@@ -3,6 +3,9 @@ import { eq, and, ne, sql, desc, count, max, min } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
 import { performers, userPerformerFollows, shows, showPerformers } from '@showbook/db';
+import { enqueueIngestPerformer } from '../job-queue';
+import { searchAttractions, selectBestImage } from '../ticketmaster';
+import { matchOrCreatePerformer } from '../performer-matcher';
 
 export const performersRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -37,6 +40,55 @@ export const performersRouter = router({
         .limit(20);
     }),
 
+  /**
+   * Search Ticketmaster for attractions (artists/performers/productions) not
+   * yet in our local DB, so users can follow artists they haven't seen
+   * before. Returns lightweight cards; followAttraction below does the
+   * actual match-or-create + follow.
+   */
+  searchExternal: protectedProcedure
+    .input(z.object({ query: z.string().min(1) }))
+    .query(async ({ input }) => {
+      try {
+        const attractions = await searchAttractions(input.query);
+        return attractions.slice(0, 10).map((a) => ({
+          tmAttractionId: a.id,
+          name: a.name,
+          imageUrl: selectBestImage(a.images),
+        }));
+      } catch (err) {
+        console.error('[performers.searchExternal] failed:', err);
+        return [];
+      }
+    }),
+
+  /**
+   * Resolve a TM attraction into a local performer (creating the row if
+   * needed) and follow it. Triggers on-follow ingestion as a side effect.
+   */
+  followAttraction: protectedProcedure
+    .input(
+      z.object({
+        tmAttractionId: z.string().min(1),
+        name: z.string().min(1),
+        imageUrl: z.string().url().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const { performer } = await matchOrCreatePerformer({
+        name: input.name,
+        tmAttractionId: input.tmAttractionId,
+        imageUrl: input.imageUrl,
+      });
+      await ctx.db
+        .insert(userPerformerFollows)
+        .values({ userId, performerId: performer.id })
+        .onConflictDoNothing();
+      void enqueueIngestPerformer(performer.id);
+      return { performerId: performer.id };
+    }),
+
   follow: protectedProcedure
     .input(z.object({ performerId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
@@ -46,6 +98,9 @@ export const performersRouter = router({
         .insert(userPerformerFollows)
         .values({ userId, performerId: input.performerId })
         .onConflictDoNothing();
+
+      // Fire-and-forget Phase 3 ingestion for this performer.
+      void enqueueIngestPerformer(input.performerId);
 
       return { success: true };
     }),

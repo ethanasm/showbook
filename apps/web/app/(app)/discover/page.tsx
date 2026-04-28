@@ -31,7 +31,11 @@ type Announcement = {
   headliner: string;
   headlinerPerformerId: string | null;
   support: string[] | null;
+  productionName: string | null;
   showDate: string;
+  runStartDate: string | null;
+  runEndDate: string | null;
+  performanceDates: string[] | null;
   onSaleDate: string | null;
   onSaleStatus: "announced" | "on_sale" | "sold_out";
   source: string;
@@ -42,6 +46,22 @@ type Announcement = {
   };
   reason?: string;
 };
+
+function isRun(a: Announcement): boolean {
+  return (
+    !!a.runStartDate &&
+    !!a.runEndDate &&
+    a.runStartDate !== a.runEndDate
+  );
+}
+
+function formatRunRange(start: string, end: string): string {
+  const fmt = (s: string) => {
+    const d = new Date(s + "T00:00:00");
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+  return `${fmt(start)} – ${fmt(end)}`;
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -184,6 +204,12 @@ function AnnouncementRow({
   const date = formatShowDateShort(announcement.showDate);
   const KindIcon = KIND_ICONS[announcement.kind];
   const isOnSale = announcement.onSaleStatus === "on_sale";
+  const runMode = isRun(announcement);
+  const runDateLabel =
+    runMode && announcement.runStartDate && announcement.runEndDate
+      ? formatRunRange(announcement.runStartDate, announcement.runEndDate)
+      : null;
+  const performanceCount = announcement.performanceDates?.length ?? 0;
   const reasonText =
     announcement.reason && REASON_LABELS[announcement.reason]
       ? REASON_LABELS[announcement.reason]
@@ -191,16 +217,29 @@ function AnnouncementRow({
 
   return (
     <div
-      className={`discover-row discover-row--${announcement.kind} ${isWatching ? "discover-row--watched" : ""}`}
+      className={`discover-row discover-row--${announcement.kind} ${isWatching ? "discover-row--watched" : ""} ${runMode ? "discover-row--run" : ""}`}
     >
       {/* Date */}
       <div>
-        <div className="discover-row__date-main">
-          {date.month} {date.day}
-        </div>
-        <div className="discover-row__date-sub">
-          {date.year} &middot; {date.dow}
-        </div>
+        {runMode && runDateLabel ? (
+          <>
+            <div className="discover-row__date-main" title={`${performanceCount} dates`}>
+              {runDateLabel}
+            </div>
+            <div className="discover-row__date-sub">
+              {performanceCount} dates
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="discover-row__date-main">
+              {date.month} {date.day}
+            </div>
+            <div className="discover-row__date-sub">
+              {date.year} &middot; {date.dow}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Kind */}
@@ -762,12 +801,14 @@ function FeedSection({
 
 const TABS = [
   { key: "Followed", label: "Followed venues" },
+  { key: "Artists", label: "Followed artists" },
   { key: "Near You", label: "Near you" },
 ] as const;
 
 export default function DiscoverPage() {
   const [activeTab, setActiveTab] = useState<string>("Followed");
   const [watchedIds, setWatchedIds] = useState<Set<string>>(new Set());
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
 
@@ -780,6 +821,30 @@ export default function DiscoverPage() {
     { limit: 50 },
     { enabled: activeTab === "Near You" },
   );
+
+  const followedArtistsFeed = trpc.discover.followedArtistsFeed.useQuery(
+    { limit: 50 },
+    { enabled: activeTab === "Artists" },
+  );
+
+  const refreshNow = trpc.discover.refreshNow.useMutation({
+    onSuccess: (data) => {
+      setRefreshMessage(
+        `Looking for new shows at ${data.enqueuedVenues} venue${data.enqueuedVenues === 1 ? "" : "s"} and ${data.enqueuedPerformers} artist${data.enqueuedPerformers === 1 ? "" : "s"}…`,
+      );
+      // Invalidate after a short delay so the targeted ingestion has time to land.
+      setTimeout(() => {
+        utils.discover.followedFeed.invalidate();
+        utils.discover.followedArtistsFeed.invalidate();
+        utils.discover.nearbyFeed.invalidate();
+        setRefreshMessage(null);
+      }, 8000);
+    },
+    onError: (err) => {
+      setRefreshMessage(err.message);
+      setTimeout(() => setRefreshMessage(null), 6000);
+    },
+  });
 
   function handleVenueFollowed() {
     utils.discover.followedFeed.invalidate();
@@ -802,15 +867,24 @@ export default function DiscoverPage() {
     | Announcement[]
     | undefined;
   const nearbyItems = nearbyFeed.data?.items as Announcement[] | undefined;
+  const artistItems = followedArtistsFeed.data?.items as
+    | Announcement[]
+    | undefined;
   const currentItems =
-    activeTab === "Followed" ? followedItems : nearbyItems;
+    activeTab === "Followed"
+      ? followedItems
+      : activeTab === "Artists"
+        ? artistItems
+        : nearbyItems;
   const currentCount = currentItems?.length ?? 0;
 
   // Counts for tabs
   const followedCount = followedItems?.length ?? 0;
   const nearbyCount = nearbyItems?.length ?? 0;
+  const artistsCount = artistItems?.length ?? 0;
   const tabCounts: Record<string, number> = {
     Followed: followedCount,
+    Artists: artistsCount,
     "Near You": nearbyCount,
   };
 
@@ -820,17 +894,44 @@ export default function DiscoverPage() {
       <header className="discover-header">
         <div>
           <div className="discover-header__subtitle">
-            {currentCount} announcements &middot; daily 8am digest
+            {currentCount} announcements &middot; weekly Monday digest
           </div>
           <h1 className="discover-header__title">Discover</h1>
         </div>
-        <div className="discover-header__location">
-          <MapPin size={12} />
-          nyc &middot; 30mi radius
-          <span className="discover-header__location-sep">&middot;</span>
-          3 regions
+        <div className="discover-header__actions">
+          <button
+            type="button"
+            className="discover-refresh-btn"
+            onClick={() => refreshNow.mutate()}
+            disabled={refreshNow.isPending}
+            title="Pull the latest events from Ticketmaster + scraped venues for everything you follow"
+            style={{
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 11,
+              padding: "6px 10px",
+              border: "1px solid var(--rule)",
+              background: "transparent",
+              color: refreshNow.isPending ? "var(--muted)" : "var(--ink)",
+              cursor: refreshNow.isPending ? "default" : "pointer",
+            }}
+          >
+            {refreshNow.isPending ? "Refreshing…" : "Refresh"}
+          </button>
         </div>
       </header>
+      {refreshMessage && (
+        <div
+          role="status"
+          style={{
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 11,
+            color: "var(--muted)",
+            margin: "0 0 12px",
+          }}
+        >
+          {refreshMessage}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="discover-tabs-bar">
@@ -858,6 +959,18 @@ export default function DiscoverPage() {
           items={followedItems}
           isLoading={followedFeed.isLoading}
           emptyMessage="No announcements from followed venues"
+          watchedIds={watchedIds}
+          onToggleWatch={handleToggleWatch}
+          activeTab={activeTab}
+          onVenueFollowed={handleVenueFollowed}
+        />
+      )}
+
+      {activeTab === "Artists" && (
+        <FeedSection
+          items={artistItems}
+          isLoading={followedArtistsFeed.isLoading}
+          emptyMessage="No upcoming shows from artists you follow yet. Follow an artist on their detail page to see their upcoming tour dates here."
           watchedIds={watchedIds}
           onToggleWatch={handleToggleWatch}
           activeTab={activeTab}
