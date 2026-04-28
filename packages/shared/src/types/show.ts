@@ -11,6 +11,7 @@ export interface Show {
   endDate?: string | null;
   seat?: string | null;
   pricePaid?: string | null;
+  ticketCount: number;
   tourName?: string | null;
   productionName?: string | null;
   setlist?: string[] | null;

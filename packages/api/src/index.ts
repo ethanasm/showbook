@@ -15,4 +15,10 @@ export {
 } from './ticketmaster';
 export { matchOrCreateVenue } from './venue-matcher';
 export { matchOrCreatePerformer } from './performer-matcher';
+export { extractShowFromEmail } from './groq';
 export type { ExtractedTicketInfo } from './groq';
+export {
+  searchMessages,
+  getMessageBody,
+  buildBulkScanQueries,
+} from './gmail';

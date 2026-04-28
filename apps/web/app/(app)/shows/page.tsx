@@ -43,6 +43,7 @@ interface ShowData {
   endDate: string | null;
   seat: string | null;
   pricePaid: string | null;
+  ticketCount: number;
   tourName: string | null;
   productionName: string | null;
   setlist: string[] | null;
@@ -96,7 +97,7 @@ const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "Ju
 // ---------------------------------------------------------------------------
 
 function getHeadliner(show: ShowData): string {
-  if (show.kind === "theatre" && show.productionName) {
+  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
     return show.productionName;
   }
   const headliner = show.showPerformers.find(
@@ -196,6 +197,7 @@ export default function ShowsPage() {
   const [transitionShow, setTransitionShow] = useState<ShowData | null>(null);
   const [transitionSeat, setTransitionSeat] = useState("");
   const [transitionPrice, setTransitionPrice] = useState("");
+  const [transitionTicketCount, setTransitionTicketCount] = useState("1");
 
   // Gmail bulk scan state
   const [gmailModalOpen, setGmailModalOpen] = useState(false);
@@ -204,11 +206,13 @@ export default function ShowsPage() {
     Array<{
       gmailMessageId: string;
       headliner: string;
+      production_name: string | null;
       venue_name: string | null;
       venue_city: string | null;
       date: string | null;
       seat: string | null;
       price: string | null;
+      ticket_count: number | null;
       kind_hint: "concert" | "theatre" | "comedy" | "festival" | null;
       confidence: "high" | "medium" | "low";
     }>
@@ -239,7 +243,7 @@ export default function ShowsPage() {
   const utils = trpc.useUtils();
 
   // Gmail
-  const bulkScanGmail = trpc.enrichment.bulkScanGmail.useMutation();
+  const [gmailProgress, setGmailProgress] = useState<{ phase: string; processed: number; total: number; found: number } | null>(null);
 
   const shows = (allShows ?? []) as ShowData[];
 
@@ -324,10 +328,12 @@ export default function ShowsPage() {
       newState: transition.target,
       seat: transitionSeat || undefined,
       pricePaid: transitionPrice || undefined,
+      ticketCount: parseInt(transitionTicketCount) || 1,
     });
     setTransitionShow(null);
     setTransitionSeat("");
     setTransitionPrice("");
+    setTransitionTicketCount("1");
     utils.shows.list.invalidate();
   }
 
@@ -370,15 +376,49 @@ export default function ShowsPage() {
 
   const startGmailScan = useCallback(async (token: string) => {
     setGmailBulkLoading(true);
+    setGmailProgress(null);
     try {
-      const result = await bulkScanGmail.mutateAsync({ accessToken: token });
-      setGmailBulkResults(result.tickets);
+      const res = await fetch("/api/gmail/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessToken: token }),
+      });
+      if (!res.ok || !res.body) throw new Error("Scan request failed");
 
-      const initialSelected = new Set<number>();
-      result.tickets.forEach((t, i) => {
-        if (!isDuplicate(t)) {
-          initialSelected.add(i);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalTickets: typeof gmailBulkResults = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        let eventType = "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            eventType = line.slice(7);
+          } else if (line.startsWith("data: ")) {
+            const data = JSON.parse(line.slice(6));
+            if (eventType === "progress") {
+              setGmailProgress(data);
+            } else if (eventType === "done") {
+              finalTickets = data.tickets;
+            } else if (eventType === "error") {
+              throw new Error(data.message);
+            }
+          }
         }
+      }
+
+      setGmailBulkResults(finalTickets);
+      const initialSelected = new Set<number>();
+      finalTickets.forEach((t: typeof finalTickets[number], i: number) => {
+        if (!isDuplicate(t)) initialSelected.add(i);
       });
       setGmailBulkSelected(initialSelected);
     } catch (err) {
@@ -387,8 +427,9 @@ export default function ShowsPage() {
       setGmailError(msg);
     } finally {
       setGmailBulkLoading(false);
+      setGmailProgress(null);
     }
-  }, [bulkScanGmail, isDuplicate]);
+  }, [isDuplicate]);
 
   const handleOpenGmailModal = useCallback(() => {
     setGmailModalOpen(true);
@@ -397,6 +438,7 @@ export default function ShowsPage() {
     setGmailAddedCount(0);
     setGmailAccessToken(null);
     setGmailError(null);
+    setGmailProgress(null);
 
     const handler = (e: MessageEvent) => {
       if (e.data?.type === "gmail-auth" && e.data.accessToken) {
@@ -453,6 +495,8 @@ export default function ShowsPage() {
           date: ticket.date ?? new Date().toISOString().split("T")[0],
           seat: ticket.seat ?? undefined,
           pricePaid: ticket.price ?? undefined,
+          ticketCount: ticket.ticket_count ?? 1,
+          productionName: ticket.production_name ?? undefined,
           sourceRefs: { gmail: true },
         });
         setGmailAddedCount((prev) => prev + 1);
@@ -826,6 +870,9 @@ export default function ShowsPage() {
           {show.pricePaid && (
             <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", marginTop: 6 }}>
               <span style={{ color: "var(--faint)" }}>paid</span> ${parseFloat(show.pricePaid).toFixed(0)}
+              {show.ticketCount > 1 && (
+                <span style={{ color: "var(--faint)" }}> · ${(parseFloat(show.pricePaid) / show.ticketCount).toFixed(0)}/ea × {show.ticketCount}</span>
+              )}
             </div>
           )}
         </div>
@@ -991,7 +1038,9 @@ export default function ShowsPage() {
                   date: toDateParts(show.date),
                   seat: show.seat ?? undefined,
                   paid: show.pricePaid ? parseFloat(show.pricePaid) : undefined,
+                  ticketCount: show.ticketCount,
                 }}
+                missingCoords={show.venue.latitude == null || show.venue.longitude == null}
                 selected={expandedShowId === show.id}
                 onClick={() => handleRowClick(show.id)}
               />
@@ -1860,7 +1909,9 @@ export default function ShowsPage() {
                   marginTop: 2,
                 }}>
                   {gmailBulkLoading
-                    ? "Scanning ticket emails..."
+                    ? gmailProgress?.phase === "processing"
+                      ? `Processing ${gmailProgress.processed} of ${gmailProgress.total} emails · ${gmailProgress.found} tickets found`
+                      : "Searching Gmail for ticket emails..."
                     : gmailError
                       ? gmailError
                       : gmailBulkResults.length > 0
@@ -1904,8 +1955,27 @@ export default function ShowsPage() {
                   color: "var(--muted)",
                   letterSpacing: ".04em",
                 }}>
-                  Scanning all ticket emails...
+                  {gmailProgress?.phase === "processing"
+                    ? `Processing ${gmailProgress.processed} of ${gmailProgress.total} · ${gmailProgress.found} found`
+                    : "Searching Gmail..."}
                 </span>
+                {gmailProgress?.phase === "processing" && gmailProgress.total > 0 && (
+                  <div style={{
+                    flex: 1,
+                    height: 3,
+                    background: "var(--rule)",
+                    borderRadius: 2,
+                    overflow: "hidden",
+                  }}>
+                    <div style={{
+                      width: `${Math.round((gmailProgress.processed / gmailProgress.total) * 100)}%`,
+                      height: "100%",
+                      background: "var(--accent)",
+                      borderRadius: 2,
+                      transition: "width 0.3s ease",
+                    }} />
+                  </div>
+                )}
                 <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
               </div>
             )}
@@ -1968,7 +2038,7 @@ export default function ShowsPage() {
                             color: "var(--ink)",
                             letterSpacing: -0.1,
                           }}>
-                            {ticket.headliner}
+                            {ticket.production_name ?? ticket.headliner}
                           </span>
                           {dup && (
                             <span style={{
@@ -2008,7 +2078,7 @@ export default function ShowsPage() {
                           {ticket.venue_city && <span>{ticket.venue_city}</span>}
                           {ticket.date && <span>{ticket.date}</span>}
                           {ticket.seat && <span>{ticket.seat}</span>}
-                          {ticket.price && <span>${ticket.price}</span>}
+                          {ticket.price && <span>${ticket.price}{ticket.ticket_count && ticket.ticket_count > 1 ? ` (${ticket.ticket_count} tix)` : ""}</span>}
                         </div>
                       </div>
                     </div>
@@ -2135,7 +2205,7 @@ export default function ShowsPage() {
                 textTransform: "uppercase",
                 letterSpacing: "0.04em",
               }}>
-                Price paid
+                Total cost
               </label>
               <input
                 value={transitionPrice}
@@ -2143,6 +2213,36 @@ export default function ShowsPage() {
                 placeholder="e.g., 85.00"
                 type="number"
                 step="0.01"
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 6,
+                  border: "1px solid var(--rule)",
+                  background: "var(--bg)",
+                  color: "var(--ink)",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: "0.9rem",
+                  outline: "none",
+                }}
+              />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <label style={{
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: "0.7rem",
+                fontWeight: 600,
+                color: "var(--muted)",
+                textTransform: "uppercase",
+                letterSpacing: "0.04em",
+              }}>
+                Tickets
+              </label>
+              <input
+                value={transitionTicketCount}
+                onChange={(e) => setTransitionTicketCount(e.target.value)}
+                placeholder="1"
+                type="number"
+                min="1"
+                step="1"
                 style={{
                   padding: "10px 12px",
                   borderRadius: 6,

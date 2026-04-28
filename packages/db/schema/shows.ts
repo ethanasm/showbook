@@ -46,6 +46,7 @@ export const shows = pgTable(
     endDate: date('end_date'),
     seat: text('seat'),
     pricePaid: decimal('price_paid', { precision: 10, scale: 2 }),
+    ticketCount: integer('ticket_count').notNull().default(1),
     tourName: text('tour_name'),
     productionName: text('production_name'),
     setlist: text('setlist').array(),

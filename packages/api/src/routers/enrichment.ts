@@ -259,11 +259,13 @@ export const enrichmentRouter = router({
 
       const results: Array<{
         headliner: string;
+        production_name: string | null;
         venue_name: string | null;
         venue_city: string | null;
         date: string | null;
         seat: string | null;
         price: string | null;
+        ticket_count: number | null;
         kind_hint: 'concert' | 'theatre' | 'comedy' | 'festival' | null;
         confidence: 'high' | 'medium' | 'low';
       }> = [];
@@ -322,11 +324,13 @@ export const enrichmentRouter = router({
       const tickets: Array<{
         gmailMessageId: string;
         headliner: string;
+        production_name: string | null;
         venue_name: string | null;
         venue_city: string | null;
         date: string | null;
         seat: string | null;
         price: string | null;
+        ticket_count: number | null;
         kind_hint: 'concert' | 'theatre' | 'comedy' | 'festival' | null;
         confidence: 'high' | 'medium' | 'low';
       }> = [];
@@ -375,11 +379,13 @@ export const enrichmentRouter = router({
       }
 
       function mergeInto(target: TicketWithId, source: TicketWithId) {
+        if (!target.production_name && source.production_name) target.production_name = source.production_name;
         if (!target.venue_name && source.venue_name) target.venue_name = source.venue_name;
         if (!target.venue_city && source.venue_city) target.venue_city = source.venue_city;
         if (!target.date && source.date) target.date = source.date;
         if (!target.seat && source.seat) target.seat = source.seat;
         if (!target.price && source.price) target.price = source.price;
+        if (target.ticket_count == null && source.ticket_count != null) target.ticket_count = source.ticket_count;
         if (!target.kind_hint && source.kind_hint) target.kind_hint = source.kind_hint;
       }
 
@@ -407,5 +413,60 @@ export const enrichmentRouter = router({
       console.log(`[gmail] Done — ${allExtracted.length} extracted, ${merged.length} after merge`);
 
       return { tickets: merged };
+    }),
+
+  // ---------------------------------------------------------------------------
+  // gmailCollectMessages — fetch all ticket email IDs (fast step)
+  // ---------------------------------------------------------------------------
+  gmailCollectMessages: protectedProcedure
+    .input(z.object({ accessToken: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const queries = buildBulkScanQueries();
+      const seen = new Set<string>();
+      const messageIds: string[] = [];
+
+      for (const query of queries) {
+        let pageToken: string | undefined;
+        do {
+          const result = await searchMessages(input.accessToken, query, 100, pageToken);
+          for (const msg of result.messages) {
+            if (!seen.has(msg.id)) {
+              seen.add(msg.id);
+              messageIds.push(msg.id);
+            }
+          }
+          pageToken = result.nextPageToken;
+        } while (pageToken);
+      }
+
+      return { messageIds, total: messageIds.length };
+    }),
+
+  // ---------------------------------------------------------------------------
+  // gmailProcessBatch — process a batch of message IDs with LLM (slow step)
+  // ---------------------------------------------------------------------------
+  gmailProcessBatch: protectedProcedure
+    .input(z.object({
+      accessToken: z.string().min(1),
+      messageIds: z.array(z.string()),
+    }))
+    .mutation(async ({ input }) => {
+      const results = await Promise.all(
+        input.messageIds.map(async (msgId) => {
+          const detail = await getMessageBody(input.accessToken, msgId);
+          const extracted = await extractShowFromEmail(
+            detail.subject,
+            detail.body,
+            detail.from,
+            detail.date,
+          );
+          if (extracted) {
+            extracted.date = correctExtractedYear(extracted.date, detail.date);
+          }
+          return extracted ? { ...extracted, gmailMessageId: msgId } : null;
+        }),
+      );
+
+      return { tickets: results.filter((r): r is NonNullable<typeof r> => r !== null) };
     }),
 });

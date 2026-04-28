@@ -170,14 +170,14 @@ const BULK_EXCLUSIONS =
 export function buildBulkScanQueries(): string[] {
   return [
     // High-priority: known purchase confirmation senders
-    'from:(customer_support@email.ticketmaster.com OR guestservices@axs.com OR order-support@frontgatetickets.com)',
+    'from:(customer_support@email.ticketmaster.com OR guestservices@axs.com OR order-support@frontgatetickets.com OR no-reply@e.todaytix.com)',
     // Known ticket platforms by sender
     'subject:(ticket OR tickets OR confirmation OR order) ' +
     'from:(ticketmaster OR axs OR eventbrite OR stubhub OR seatgeek OR ' +
     '"live nation" OR vividseats OR telecharge OR dice OR aeg OR msg OR ' +
     '"see tickets" OR seetickets OR fever OR universe OR ' +
     'tixr OR seated OR lyte OR "front gate" OR frontgate OR etix OR ' +
-    'tock OR songkick) ' +
+    'tock OR songkick OR todaytix) ' +
     BULK_EXCLUSIONS,
     // Broader: ticket/order confirmations from any sender
     'subject:(tickets OR "order confirmation" OR "e-ticket" OR "booking confirmation") ' +

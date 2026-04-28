@@ -54,28 +54,29 @@ interface ShowSeed {
   endDate?: string;
   seat?: string;
   pricePaid?: string;
+  ticketCount?: number;
   tourName?: string;
   productionName?: string;
 }
 
 const SHOWS: ShowSeed[] = [
   // Past concerts (5)
-  { kind: 'concert', state: 'past', headliner: 'Radiohead', support: ['LCD Soundsystem'], venueName: 'Madison Square Garden', date: '2024-06-15', seat: 'FLOOR B · 12', pricePaid: '185.00', tourName: 'In Rainbows Anniversary' },
+  { kind: 'concert', state: 'past', headliner: 'Radiohead', support: ['LCD Soundsystem'], venueName: 'Madison Square Garden', date: '2024-06-15', seat: 'FLOOR B · 12', pricePaid: '370.00', ticketCount: 2, tourName: 'In Rainbows Anniversary' },
   { kind: 'concert', state: 'past', headliner: 'LCD Soundsystem', venueName: 'Brooklyn Steel', date: '2024-08-22', seat: 'GA', pricePaid: '75.00' },
   { kind: 'concert', state: 'past', headliner: 'The National', venueName: 'The Beacon Theatre', date: '2024-09-10', seat: 'MEZZ · H22', pricePaid: '95.00' },
   { kind: 'concert', state: 'past', headliner: 'Japanese Breakfast', support: ['Phoebe Bridgers'], venueName: 'Irving Plaza', date: '2024-11-03', seat: 'GA', pricePaid: '45.00' },
   { kind: 'concert', state: 'past', headliner: 'Phoebe Bridgers', venueName: 'Radio City Music Hall', date: '2025-01-18', seat: 'ORCH · F14', pricePaid: '120.00' },
 
   // Past theatre (2)
-  { kind: 'theatre', state: 'past', headliner: 'Wicked', productionName: 'Wicked', venueName: 'Gershwin Theatre', date: '2024-07-20', seat: 'ORCH L · 14', pricePaid: '250.00' },
-  { kind: 'theatre', state: 'past', headliner: 'Hamilton', productionName: 'Hamilton', venueName: 'Radio City Music Hall', date: '2024-12-28', seat: 'MEZZ · A8', pricePaid: '350.00' },
+  { kind: 'theatre', state: 'past', headliner: 'Wicked', productionName: 'Wicked', venueName: 'Gershwin Theatre', date: '2024-07-20', seat: 'ORCH L · 14', pricePaid: '500.00', ticketCount: 2 },
+  { kind: 'theatre', state: 'past', headliner: 'Hamilton', productionName: 'Hamilton', venueName: 'Radio City Music Hall', date: '2024-12-28', seat: 'MEZZ · A8', pricePaid: '700.00', ticketCount: 2 },
 
   // Past comedy (2)
   { kind: 'comedy', state: 'past', headliner: 'John Mulaney', support: ['Sam Morril'], venueName: 'The Beacon Theatre', date: '2024-10-15', seat: 'ORCH · J18', pricePaid: '85.00' },
   { kind: 'comedy', state: 'past', headliner: 'Dave Chappelle', support: ['Mark Normand'], venueName: 'Madison Square Garden', date: '2025-02-14', seat: 'SEC 108 · R5', pricePaid: '150.00' },
 
   // Past festival (1)
-  { kind: 'festival', state: 'past', headliner: 'Radiohead', support: ['LCD Soundsystem', 'Japanese Breakfast'], venueName: 'Randalls Island Park', date: '2024-06-07', endDate: '2024-06-09', seat: 'GA 3-DAY', pricePaid: '375.00' },
+  { kind: 'festival', state: 'past', headliner: 'Radiohead', support: ['LCD Soundsystem', 'Japanese Breakfast'], venueName: 'Randalls Island Park', date: '2024-06-07', endDate: '2024-06-09', seat: 'GA 3-DAY', pricePaid: '375.00', productionName: 'Governors Ball' },
 
   // Extra past for repeat stats (3)
   { kind: 'concert', state: 'past', headliner: 'Massive Attack', venueName: 'Brooklyn Steel', date: '2023-11-20', seat: 'GA', pricePaid: '65.00' },
@@ -83,7 +84,7 @@ const SHOWS: ShowSeed[] = [
   { kind: 'concert', state: 'past', headliner: 'Metallica', venueName: 'Madison Square Garden', date: '2023-12-01', seat: 'SEC 224 · R12', pricePaid: '175.00' },
 
   // Ticketed (4)
-  { kind: 'concert', state: 'ticketed', headliner: 'Taylor Swift', venueName: 'Madison Square Garden', date: '2026-06-20', seat: 'FLOOR A · 8', pricePaid: '450.00' },
+  { kind: 'concert', state: 'ticketed', headliner: 'Taylor Swift', venueName: 'Madison Square Garden', date: '2026-06-20', seat: 'FLOOR A · 8', pricePaid: '900.00', ticketCount: 2 },
   { kind: 'concert', state: 'ticketed', headliner: 'Radiohead', venueName: 'The Beacon Theatre', date: '2026-07-15', seat: 'ORCH · C5', pricePaid: '195.00' },
   { kind: 'theatre', state: 'ticketed', headliner: 'Wicked', productionName: 'Wicked', venueName: 'Gershwin Theatre', date: '2026-05-10', seat: 'FRONT MEZZ · B12', pricePaid: '275.00' },
   { kind: 'comedy', state: 'ticketed', headliner: 'John Mulaney', venueName: 'Radio City Music Hall', date: '2026-08-01', seat: 'ORCH · G22', pricePaid: '110.00' },
@@ -91,7 +92,7 @@ const SHOWS: ShowSeed[] = [
   // Watching (3)
   { kind: 'concert', state: 'watching', headliner: 'Massive Attack', venueName: 'Brooklyn Steel', date: '2026-09-12' },
   { kind: 'concert', state: 'watching', headliner: 'Metallica', venueName: 'Madison Square Garden', date: '2026-10-05' },
-  { kind: 'festival', state: 'watching', headliner: 'The National', support: ['Japanese Breakfast', 'Phoebe Bridgers'], venueName: 'Randalls Island Park', date: '2026-06-05', endDate: '2026-06-07' },
+  { kind: 'festival', state: 'watching', headliner: 'The National', support: ['Japanese Breakfast', 'Phoebe Bridgers'], venueName: 'Randalls Island Park', date: '2026-06-05', endDate: '2026-06-07', productionName: 'Panorama Festival' },
 ];
 
 export async function GET() {
@@ -164,6 +165,7 @@ export async function GET() {
         endDate: s.endDate ?? null,
         seat: s.seat ?? null,
         pricePaid: s.pricePaid ?? null,
+        ticketCount: s.ticketCount ?? 1,
         tourName: s.tourName ?? null,
         productionName,
       }).returning();

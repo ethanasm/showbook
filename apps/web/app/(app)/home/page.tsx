@@ -44,7 +44,7 @@ function getHeadliner(
     }[];
   }
 ): string {
-  if (show.kind === "theatre" && show.productionName) {
+  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
     return show.productionName;
   }
   const headliner = show.showPerformers.find(

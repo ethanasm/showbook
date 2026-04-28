@@ -141,10 +141,12 @@ export default function AddPage() {
   const [castMembers, setCastMembers] = useState<CastMember[]>([]);
   const [openerName, setOpenerName] = useState("");
   const [festivalHeadliners, setFestivalHeadliners] = useState("");
+  const [productionName, setProductionName] = useState("");
 
   // Personal data
   const [seat, setSeat] = useState("");
   const [pricePaid, setPricePaid] = useState("");
+  const [ticketCount, setTicketCount] = useState("1");
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<
@@ -171,11 +173,13 @@ export default function AddPage() {
   const [gmailResults, setGmailResults] = useState<
     Array<{
       headliner: string;
+      production_name: string | null;
       venue_name: string | null;
       venue_city: string | null;
       date: string | null;
       seat: string | null;
       price: string | null;
+      ticket_count: number | null;
       kind_hint: "concert" | "theatre" | "comedy" | "festival" | null;
       confidence: "high" | "medium" | "low";
     }>
@@ -263,25 +267,22 @@ export default function AddPage() {
     if (s.endDate) setEndDate(s.endDate);
     if (s.seat) setSeat(s.seat);
     if (s.pricePaid) setPricePaid(s.pricePaid);
+    if (s.ticketCount) setTicketCount(String(s.ticketCount));
     if (s.tourName) setTourName(s.tourName);
     if (s.setlist) setSetlist(s.setlist);
 
-    // Headliner — theatre uses productionName, others use performer
-    if (s.kind === "theatre" && s.productionName) {
-      setHeadlinerName(s.productionName);
-      setHeadliner({ name: s.productionName });
-    } else {
-      const headlinerPerf = s.showPerformers.find(
-        (sp: { role: string; sortOrder: number }) => sp.role === "headliner" && sp.sortOrder === 0,
-      );
-      if (headlinerPerf) {
-        setHeadlinerName(headlinerPerf.performer.name);
-        setHeadliner({
-          name: headlinerPerf.performer.name,
-          tmAttractionId: undefined,
-          imageUrl: headlinerPerf.performer.imageUrl ?? undefined,
-        });
-      }
+    if (s.productionName) setProductionName(s.productionName);
+
+    const headlinerPerf = s.showPerformers.find(
+      (sp: { role: string; sortOrder: number }) => sp.role === "headliner" && sp.sortOrder === 0,
+    );
+    if (headlinerPerf) {
+      setHeadlinerName(headlinerPerf.performer.name);
+      setHeadliner({
+        name: headlinerPerf.performer.name,
+        tmAttractionId: undefined,
+        imageUrl: headlinerPerf.performer.imageUrl ?? undefined,
+      });
     }
 
     // Venue
@@ -459,6 +460,8 @@ export default function AddPage() {
       if (result.date) setDate(result.date);
       if (result.seat) setSeat(result.seat);
       if (result.price) setPricePaid(result.price);
+      if (result.ticket_count) setTicketCount(String(result.ticket_count));
+      if (result.production_name) setProductionName(result.production_name);
       if (result.kind_hint) setKind(result.kind_hint);
     } catch (err) {
       setPdfError(err instanceof Error ? err.message : "Failed to extract from PDF");
@@ -556,6 +559,8 @@ export default function AddPage() {
       if (result.date) setDate(result.date);
       if (result.seat) setSeat(result.seat);
       if (result.price) setPricePaid(result.price);
+      if (result.ticket_count) setTicketCount(String(result.ticket_count));
+      if (result.production_name) setProductionName(result.production_name);
       if (result.kind_hint) setKind(result.kind_hint);
       setGmailShowResults(false);
     },
@@ -639,7 +644,11 @@ export default function AddPage() {
   }, [chatParsed, createShow]);
 
   const handleFormSave = useCallback(async () => {
-    if (!kind || !headliner.name || !venue.name || !venue.city || !date) return;
+    const needsHeadliner = kind !== "theatre" && kind !== "festival";
+    const needsProductionName = kind === "theatre" || kind === "festival";
+    if (!kind || !venue.name || !venue.city || !date) return;
+    if (needsHeadliner && !headliner.name) return;
+    if (needsProductionName && !productionName) return;
 
     let allPerformers = [...performers];
     if (kind === "festival" && festivalHeadliners.trim()) {
@@ -685,13 +694,15 @@ export default function AddPage() {
 
       const payload = {
         kind,
-        headliner,
+        headliner: headliner.name ? headliner : { name: productionName || "Unknown" },
         venue: venueToSave,
         date,
         endDate: endDate || undefined,
         seat: seat || undefined,
         pricePaid: pricePaid || undefined,
+        ticketCount: parseInt(ticketCount) || 1,
         tourName: tourName || undefined,
+        productionName: productionName || undefined,
         setlist: setlist ?? undefined,
         performers: allPerformers.length > 0 ? allPerformers : undefined,
       };
@@ -712,7 +723,9 @@ export default function AddPage() {
     endDate,
     seat,
     pricePaid,
+    ticketCount,
     tourName,
+    productionName,
     setlist,
     performers,
     festivalHeadliners,
@@ -773,7 +786,8 @@ export default function AddPage() {
 
   // Determine if form can save
   const hasValidVenue = venue.name.length > 0 && venue.city.length > 0;
-  const canSave = kind !== null && headliner.name.length > 0 && hasValidVenue && date.length > 0;
+  const hasIdentity = (kind === "theatre" || kind === "festival") ? productionName.length > 0 : headliner.name.length > 0;
+  const canSave = kind !== null && hasIdentity && hasValidVenue && date.length > 0;
 
   // Provenance statuses derived from state
   const provenanceStatuses = useMemo(() => {
@@ -982,9 +996,43 @@ export default function AddPage() {
         </div>
       </div>
 
+      {/* ── Festival Name / Show Title ── */}
+      {(kind === "festival" || kind === "theatre") && (
+        <div style={{ marginBottom: 26 }}>
+          <FieldLabel>{kind === "festival" ? "Festival Name" : "Show Title"}</FieldLabel>
+          <div style={{
+            padding: "10px 14px",
+            background: "var(--surface)",
+            border: `1px solid var(--rule-strong)`,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}>
+            <span style={{ color: "var(--muted)", fontSize: 14 }}>{kind === "festival" ? "★" : "🎭"}</span>
+            <input
+              type="text"
+              placeholder={kind === "festival" ? "e.g. Governors Ball, Coachella" : "e.g. Wicked, Hamilton"}
+              value={productionName}
+              onChange={(e) => setProductionName(e.target.value)}
+              style={{
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                fontFamily: sans,
+                fontSize: 14,
+                color: productionName ? "var(--ink)" : "var(--faint)",
+                letterSpacing: -0.1,
+                width: "100%",
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* ── Lineup / Headliner ── */}
       <div style={{ marginBottom: 26 }}>
-        <FieldLabel hint="first is headliner">Lineup</FieldLabel>
+        <FieldLabel hint={kind === "theatre" ? "lead performer" : "first is headliner"}>{kind === "theatre" ? "Cast" : "Lineup"}</FieldLabel>
         <div style={{ border: `1px solid var(--rule-strong)` }}>
           {/* Headliner input row */}
           <div style={{
@@ -1206,7 +1254,7 @@ export default function AddPage() {
       </div>
 
       {/* ── Venue + Date + Cost ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 130px", columnGap: 14, marginBottom: 26 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 80px 130px", columnGap: 14, marginBottom: 26 }}>
         <div style={{ position: "relative" }}>
           <FieldLabel hint={tmEnriched ? "auto · from ticket" : venue.googlePlaceId ? "auto · google places" : undefined}>Venue</FieldLabel>
           <div style={{
@@ -1305,7 +1353,39 @@ export default function AddPage() {
           </div>
         </div>
         <div>
-          <FieldLabel>Cost</FieldLabel>
+          <FieldLabel>Tickets</FieldLabel>
+          <div style={{
+            padding: "10px 14px",
+            background: "var(--surface)",
+            border: `1px solid var(--rule-strong)`,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}>
+            <input
+              type="number"
+              placeholder="1"
+              value={ticketCount}
+              onChange={(e) => setTicketCount(e.target.value)}
+              min="1"
+              step="1"
+              style={{
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                fontFamily: mono,
+                fontSize: 13,
+                color: ticketCount && ticketCount !== "1" ? "var(--ink)" : "var(--faint)",
+                letterSpacing: -0.1,
+                width: "100%",
+                textAlign: "center",
+              }}
+            />
+          </div>
+        </div>
+        <div>
+          <FieldLabel>Total cost</FieldLabel>
           <div style={{
             padding: "10px 14px",
             background: "var(--surface)",
@@ -1802,7 +1882,7 @@ export default function AddPage() {
             : !canSave
               ? <>missing: {[
                   !kind && "kind",
-                  !headliner.name && "headliner",
+                  !hasIdentity && ((kind === "theatre" || kind === "festival") ? "title" : "headliner"),
                   !venue.name && "venue",
                   venue.name && !venue.city && "venue city",
                   !date && "date",
@@ -2053,7 +2133,11 @@ export default function AddPage() {
     if (venue.name) detailRows.push(["Venue", venue.name]);
     if (venue.city) detailRows.push(["City", venue.city]);
     if (seat) detailRows.push(["Seat", seat]);
-    if (pricePaid) detailRows.push(["Paid", `$${pricePaid}`]);
+    if (pricePaid) {
+      const count = parseInt(ticketCount) || 1;
+      const perTicket = (parseFloat(pricePaid) / count).toFixed(2);
+      detailRows.push(["Paid", `$${pricePaid}${count > 1 ? ` ($${perTicket}/ea × ${count})` : ""}`]);
+    }
     if (tourName) detailRows.push(["Tour", tourName]);
     if (setlist && setlist.length > 0) detailRows.push(["Setlist", `${setlist.length} songs`]);
 
@@ -2116,17 +2200,22 @@ export default function AddPage() {
             )}
           </div>
 
-          {/* Headliner */}
+          {/* Headliner / Title */}
           <div style={{
             fontFamily: sans,
             fontSize: 30,
             fontWeight: 600,
-            color: headliner.name ? "var(--ink)" : "var(--faint)",
+            color: (productionName || headliner.name) ? "var(--ink)" : "var(--faint)",
             letterSpacing: -1.1,
             lineHeight: 1,
           }}>
-            {headliner.name || "Headliner"}
+            {(kind === "theatre" || kind === "festival") ? (productionName || "Title") : (headliner.name || "Headliner")}
           </div>
+          {(kind === "theatre" || kind === "festival") && headliner.name && (
+            <div style={{ fontFamily: sans, fontSize: 14, color: "var(--muted)", marginTop: 6, letterSpacing: -0.15 }}>
+              {headliner.name}
+            </div>
+          )}
 
           {/* Support */}
           {performers.length > 0 && (

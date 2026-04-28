@@ -23,11 +23,13 @@ export interface Show {
   date: { month: string; day: string; year: string; dow: string };
   seat?: string;
   paid?: number;
+  ticketCount?: number;
 }
 
 interface ShowRowProps {
   show: Show;
   selected?: boolean;
+  missingCoords?: boolean;
   onClick?: () => void;
 }
 
@@ -45,7 +47,7 @@ const KIND_LABELS: Record<ShowKind, string> = {
   festival: "Festival",
 };
 
-export function ShowRow({ show, selected, onClick }: ShowRowProps) {
+export function ShowRow({ show, selected, missingCoords, onClick }: ShowRowProps) {
   /* ── bar modifier ── */
   const barClass =
     show.state === "past"
@@ -63,7 +65,9 @@ export function ShowRow({ show, selected, onClick }: ShowRowProps) {
   const KindIcon = KIND_ICONS[show.kind];
 
   /* ── paid formatting ── */
-  const paidDisplay = show.paid != null ? `$${show.paid}` : "—";
+  const count = show.ticketCount ?? 1;
+  const perTicket = show.paid != null && count > 0 ? show.paid / count : null;
+  const paidDisplay = perTicket != null ? `$${Math.round(perTicket)}${count > 1 ? "/ea" : ""}` : "—";
   const paidClass =
     show.paid != null
       ? "show-row__paid"
@@ -111,17 +115,25 @@ export function ShowRow({ show, selected, onClick }: ShowRowProps) {
 
       {/* 5. Venue + neighborhood */}
       <div className="show-row__venue-cell">
-        {show.venueId ? (
-          <Link
-            href={`/venues/${show.venueId}`}
-            className="show-row__venue show-row__venue--link"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {show.venue}
-          </Link>
-        ) : (
-          <div className="show-row__venue">{show.venue}</div>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+          {show.venueId ? (
+            <Link
+              href={`/venues/${show.venueId}`}
+              className="show-row__venue show-row__venue--link"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {show.venue}
+            </Link>
+          ) : (
+            <div className="show-row__venue">{show.venue}</div>
+          )}
+          {missingCoords && (
+            <span
+              title="No coordinates — won't appear on map"
+              style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--kind-theatre)", flexShrink: 0, opacity: 0.7 }}
+            />
+          )}
+        </div>
         {show.neighborhood && (
           <div className="show-row__neighborhood">{show.neighborhood}</div>
         )}

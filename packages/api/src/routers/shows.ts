@@ -122,6 +122,7 @@ export const showsRouter = router({
         endDate: z.string().optional(),
         seat: z.string().optional(),
         pricePaid: z.string().optional(), // decimal as string
+        ticketCount: z.number().int().min(1).default(1),
         tourName: z.string().optional(),
         productionName: z.string().optional(),
         setlist: z.array(z.string()).optional(),
@@ -168,6 +169,7 @@ export const showsRouter = router({
           endDate: input.endDate ?? null,
           seat: input.seat ?? null,
           pricePaid: input.pricePaid ?? null,
+          ticketCount: input.ticketCount,
           tourName: input.tourName ?? null,
           productionName,
           setlist: input.setlist ?? null,
@@ -231,6 +233,7 @@ export const showsRouter = router({
         newState: z.enum(['past', 'ticketed', 'watching']),
         seat: z.string().optional(),
         pricePaid: z.string().optional(),
+        ticketCount: z.number().int().min(1).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -272,6 +275,7 @@ export const showsRouter = router({
       };
       if (input.seat) updates.seat = input.seat;
       if (input.pricePaid) updates.pricePaid = input.pricePaid;
+      if (input.ticketCount) updates.ticketCount = input.ticketCount;
 
       const [updated] = await ctx.db
         .update(shows)
@@ -298,6 +302,7 @@ export const showsRouter = router({
         endDate: z.string().optional(),
         seat: z.string().optional(),
         pricePaid: z.string().optional(),
+        ticketCount: z.number().int().min(1).default(1),
         tourName: z.string().optional(),
         productionName: z.string().optional(),
         setlist: z.array(z.string()).optional(),
@@ -348,6 +353,7 @@ export const showsRouter = router({
           endDate: input.endDate ?? null,
           seat: input.seat ?? null,
           pricePaid: input.pricePaid ?? null,
+          ticketCount: input.ticketCount,
           tourName: input.tourName ?? null,
           productionName,
           setlist: input.setlist ?? null,

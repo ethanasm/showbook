@@ -89,6 +89,7 @@ interface VenueShowData {
   headliner: string;
   seat: string | null;
   pricePaid: string | null;
+  ticketCount: number;
 }
 
 interface VenueGroup {
@@ -114,7 +115,7 @@ function getHeadliner(show: {
     performer: { name: string };
   }[];
 }): string {
-  if (show.kind === "theatre" && show.productionName) {
+  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
     return show.productionName;
   }
   const headliner = show.showPerformers.find(
@@ -226,9 +227,9 @@ function TopBar({ venues }: { venues: VenueGroup[] }) {
   const escapeCSV = (val: string) => `"${val.replace(/"/g, '""')}"`;
 
   const exportCSV = useCallback(() => {
-    const headers = ["Date", "Kind", "Headliner", "Venue", "City", "Seat", "Price Paid", "State"];
+    const headers = ["Date", "Kind", "Headliner", "Venue", "City", "Seat", "Price Paid", "Tickets", "State"];
     const rows = venues.flatMap((g) =>
-      g.shows.map((s) => [s.date, s.kind, s.headliner, g.name, g.city, s.seat ?? "", s.pricePaid ?? "", s.state])
+      g.shows.map((s) => [s.date, s.kind, s.headliner, g.name, g.city, s.seat ?? "", s.pricePaid ?? "", String(s.ticketCount), s.state])
     );
     const csv = [headers, ...rows].map((r) => r.map((c) => escapeCSV(c)).join(",")).join("\n");
     downloadBlob(csv, "showbook-export.csv", "text/csv");
@@ -240,7 +241,7 @@ function TopBar({ venues }: { venues: VenueGroup[] }) {
       g.shows.map((s) => ({
         date: s.date, kind: s.kind, headliner: s.headliner, venue: g.name, city: g.city,
         latitude: g.latitude, longitude: g.longitude,
-        seat: s.seat, pricePaid: s.pricePaid, state: s.state,
+        seat: s.seat, pricePaid: s.pricePaid, ticketCount: s.ticketCount, state: s.state,
       }))
     );
     downloadBlob(JSON.stringify(data, null, 2), "showbook-export.json", "application/json");
@@ -606,7 +607,7 @@ function VenueInspector({
                 </div>
               </div>
               <div className="venue-inspector__visit-price">
-                {show.pricePaid ? `$${parseFloat(show.pricePaid).toFixed(0)}` : "--"}
+                {show.pricePaid ? `$${Math.round(parseFloat(show.pricePaid) / (show.ticketCount || 1))}/ea` : "--"}
               </div>
             </div>
           );
@@ -692,6 +693,7 @@ export default function MapView() {
         headliner: getHeadliner(show),
         seat: show.seat,
         pricePaid: show.pricePaid,
+        ticketCount: show.ticketCount ?? 1,
       };
 
       if (existing) {
@@ -756,6 +758,20 @@ export default function MapView() {
     [filteredVenues]
   );
 
+  const unmappedCount = useMemo(() => {
+    if (!shows) return 0;
+    return shows.filter(
+      (s) =>
+        !s.venue?.latitude ||
+        !s.venue?.longitude ||
+        !s.venue?.stateRegion,
+    ).length;
+  }, [shows]);
+
+  const backfillCoordinates = trpc.venues.backfillCoordinates.useMutation();
+  const utils = trpc.useUtils();
+  const [backfilling, setBackfilling] = useState(false);
+
   const selectedVenue = useMemo(
     () => filteredVenues.find((v) => v.venueId === selectedVenueId) ?? null,
     [filteredVenues, selectedVenueId]
@@ -784,7 +800,26 @@ export default function MapView() {
     return (
       <div className="map-empty">
         <p>No venues with coordinates.</p>
-        <p>Add a show with a venue to see it on the map.</p>
+        {unmappedCount > 0 ? (
+          <button
+            type="button"
+            className="map-backfill-banner__btn"
+            disabled={backfilling}
+            onClick={async () => {
+              setBackfilling(true);
+              try {
+                await backfillCoordinates.mutateAsync();
+                await utils.shows.list.invalidate();
+              } finally {
+                setBackfilling(false);
+              }
+            }}
+          >
+            {backfilling ? "Geocoding..." : `Geocode ${unmappedCount} venue${unmappedCount !== 1 ? "s" : ""}`}
+          </button>
+        ) : (
+          <p>Add a show with a venue to see it on the map.</p>
+        )}
       </div>
     );
   }
@@ -800,6 +835,30 @@ export default function MapView() {
         venueCount={filteredVenues.length}
         showCount={totalShowCount}
       />
+
+      {unmappedCount > 0 && (
+        <div className="map-backfill-banner">
+          <span>
+            {unmappedCount} show{unmappedCount !== 1 ? "s" : ""} at venues
+            without coordinates
+          </span>
+          <button
+            type="button"
+            disabled={backfilling}
+            onClick={async () => {
+              setBackfilling(true);
+              try {
+                await backfillCoordinates.mutateAsync();
+                await utils.shows.list.invalidate();
+              } finally {
+                setBackfilling(false);
+              }
+            }}
+          >
+            {backfilling ? "Geocoding..." : "Geocode now"}
+          </button>
+        </div>
+      )}
 
       <div className="map-body">
         {/* Map area */}

@@ -22,6 +22,7 @@ export interface TestDataSet {
     date: string;
     seat?: string;
     pricePaid?: string;
+    ticketCount?: number;
   }>;
 }
 

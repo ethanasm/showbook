@@ -19,12 +19,14 @@ export interface CastMember {
 
 export interface ExtractedTicketInfo {
   headliner: string;
+  production_name: string | null;
   venue_name: string | null;
   venue_city: string | null;
   venue_state: string | null;
   date: string | null;
   seat: string | null;
   price: string | null;
+  ticket_count: number | null;
   kind_hint: 'concert' | 'theatre' | 'comedy' | 'festival' | null;
   confidence: 'high' | 'medium' | 'low';
 }
@@ -94,13 +96,15 @@ export async function extractShowFromEmail(
         content:
           'You are a structured data extractor for a LIVE ENTERTAINMENT tracker (concerts, theatre, comedy shows, music festivals). Given an email, determine if it is a ticket confirmation for a live entertainment event and extract ALL available details.\n\n' +
           'Return ONLY a JSON object with these fields:\n' +
-          '- headliner (string): the main performer, artist, or show name. Extract the ARTIST name, not the tour name.\n' +
+          '- headliner (string): the main performer or artist name. For festivals, this is the top-billed act. For theatre/broadway, this is the lead performer if known.\n' +
+          '- production_name (string or null): for festivals, the festival name (e.g. "Governors Ball", "Coachella"). For theatre/broadway, the show title (e.g. "Wicked", "Hamilton"). Null for concerts and comedy.\n' +
           '- venue_name (string or null): the venue name. Look carefully — it is usually near the date and address. Examples: "Fox Theater", "Madison Square Garden", "The Fillmore".\n' +
           '- venue_city (string or null): the city. Often appears after the venue name or in the address line.\n' +
           '- venue_state (string or null): the full state or region name (e.g. "California", "New York", "Texas"), never abbreviations\n' +
           '- date (string or null): the event date in YYYY-MM-DD format. Look for dates in ANY format (e.g. "Sun · Aug 16, 2026", "March 15, 2025", "03/15/2025") and convert to YYYY-MM-DD.\n' +
           '- seat (string or null): section, row, and seat info combined\n' +
           '- price (string or null): total price paid as a decimal string\n' +
+          '- ticket_count (number or null): number of tickets purchased (e.g. 2 if "Qty: 2")\n' +
           '- kind_hint (one of: concert, theatre, comedy, festival, or null)\n' +
           '- confidence (one of: high, medium, low): how confident you are this is a ticket for a live entertainment event\n\n' +
           'IMPORTANT: Extract EVERY field you can find. Do not leave fields null if the information is anywhere in the email. Scan the ENTIRE email body carefully.\n\n' +
@@ -207,13 +211,15 @@ export async function extractShowFromPdfText(
           'You are a structured data extractor for a LIVE ENTERTAINMENT tracker. ' +
           'Given text extracted from a PDF ticket or receipt, extract ALL available details.\n\n' +
           'Return ONLY a JSON object with these fields:\n' +
-          '- headliner (string): the main performer, artist, or show name\n' +
+          '- headliner (string): the main performer or artist name. For festivals, the top-billed act. For theatre, the lead performer if known.\n' +
+          '- production_name (string or null): for festivals, the festival name (e.g. "Governors Ball"). For theatre, the show title (e.g. "Wicked"). Null for concerts and comedy.\n' +
           '- venue_name (string or null): the venue name\n' +
           '- venue_city (string or null): the city\n' +
           '- venue_state (string or null): the full state or region name (e.g. "California", "New York", "Texas"), never abbreviations\n' +
           '- date (string or null): the event date in YYYY-MM-DD format\n' +
           '- seat (string or null): section, row, and seat info combined\n' +
           '- price (string or null): total price paid as a decimal string\n' +
+          '- ticket_count (number or null): number of tickets purchased\n' +
           '- kind_hint (one of: concert, theatre, comedy, festival, or null)\n' +
           '- confidence (one of: high, medium, low)\n\n' +
           'Extract EVERY field you can find. Do not leave fields null if the information is anywhere in the text.',
