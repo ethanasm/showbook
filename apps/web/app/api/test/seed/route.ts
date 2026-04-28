@@ -8,6 +8,7 @@ import {
   shows,
   showPerformers,
   announcements,
+  showAnnouncementLinks,
   userVenueFollows,
   userRegions,
   userPreferences,
@@ -110,15 +111,19 @@ export async function GET() {
       return NextResponse.json({ error: 'Run /api/test/login first to create test user' }, { status: 400 });
     }
 
-    // Clean existing test user data in FK order
+    // Clean existing test user data in FK order. Announcements must be
+    // deleted BEFORE shows because the cleanup_orphaned_venue trigger fires
+    // on show delete and tries to drop venues with no shows — which would
+    // fail FK if announcements still reference them.
     const userShows = await db.query.shows.findMany({ where: eq(shows.userId, user.id) });
     for (const s of userShows) {
       await db.delete(showPerformers).where(eq(showPerformers.showId, s.id));
+      await db.delete(showAnnouncementLinks).where(eq(showAnnouncementLinks.showId, s.id));
     }
     await db.delete(userVenueFollows).where(eq(userVenueFollows.userId, user.id));
     await db.delete(userRegions).where(eq(userRegions.userId, user.id));
-    await db.delete(shows).where(eq(shows.userId, user.id));
     await db.delete(announcements);
+    await db.delete(shows).where(eq(shows.userId, user.id));
 
     // Insert venues
     const venueMap = new Map<string, string>();
@@ -223,7 +228,7 @@ export async function GET() {
     ]);
 
     // Follow 3 venues
-    const followVenues = ['Madison Square Garden', 'Brooklyn Steel', 'The Beacon Theatre'];
+    const followVenues = ['Madison Square Garden', 'Brooklyn Steel', 'The Beacon Theatre', 'Radio City Music Hall'];
     for (const name of followVenues) {
       const vid = venueMap.get(name);
       if (vid) {
@@ -236,12 +241,35 @@ export async function GET() {
     const bsId = venueMap.get('Brooklyn Steel')!;
     const btId = venueMap.get('The Beacon Theatre')!;
 
+    // Build a 90-night Hamilton run for testing run-card rendering.
+    const hamiltonDates: string[] = [];
+    const hamStart = new Date('2026-08-01');
+    for (let i = 0; i < 90; i++) {
+      const d = new Date(hamStart);
+      d.setDate(hamStart.getDate() + i);
+      hamiltonDates.push(d.toISOString().slice(0, 10));
+    }
+    const radioCityId = venueMap.get('Radio City Music Hall')!;
+
     await db.insert(announcements).values([
-      { venueId: msgId, kind: 'concert', headliner: 'Bon Iver', support: ['Big Thief'], showDate: '2026-08-15', onSaleStatus: 'on_sale', source: 'ticketmaster' },
-      { venueId: msgId, kind: 'comedy', headliner: 'Trevor Noah', showDate: '2026-09-01', onSaleStatus: 'announced', source: 'ticketmaster' },
-      { venueId: bsId, kind: 'concert', headliner: 'Alvvays', support: ['Men I Trust'], showDate: '2026-07-22', onSaleStatus: 'on_sale', source: 'ticketmaster' },
-      { venueId: btId, kind: 'concert', headliner: 'Fleet Foxes', showDate: '2026-08-30', onSaleStatus: 'sold_out', source: 'ticketmaster' },
-      { venueId: btId, kind: 'concert', headliner: 'Big Thief', support: ['Adrianne Lenker'], showDate: '2026-10-18', onSaleStatus: 'announced', source: 'ticketmaster' },
+      { venueId: msgId, kind: 'concert', headliner: 'Bon Iver', support: ['Big Thief'], showDate: '2026-08-15', runStartDate: '2026-08-15', runEndDate: '2026-08-15', performanceDates: ['2026-08-15'], onSaleStatus: 'on_sale', source: 'ticketmaster' },
+      { venueId: msgId, kind: 'comedy', headliner: 'Trevor Noah', showDate: '2026-09-01', runStartDate: '2026-09-01', runEndDate: '2026-09-01', performanceDates: ['2026-09-01'], onSaleStatus: 'announced', source: 'ticketmaster' },
+      { venueId: bsId, kind: 'concert', headliner: 'Alvvays', support: ['Men I Trust'], showDate: '2026-07-22', runStartDate: '2026-07-22', runEndDate: '2026-07-22', performanceDates: ['2026-07-22'], onSaleStatus: 'on_sale', source: 'ticketmaster' },
+      { venueId: btId, kind: 'concert', headliner: 'Fleet Foxes', showDate: '2026-08-30', runStartDate: '2026-08-30', runEndDate: '2026-08-30', performanceDates: ['2026-08-30'], onSaleStatus: 'sold_out', source: 'ticketmaster' },
+      { venueId: btId, kind: 'concert', headliner: 'Big Thief', support: ['Adrianne Lenker'], showDate: '2026-10-18', runStartDate: '2026-10-18', runEndDate: '2026-10-18', performanceDates: ['2026-10-18'], onSaleStatus: 'announced', source: 'ticketmaster' },
+      // Multi-night theatre run — exercises the run-card UI path
+      {
+        venueId: radioCityId,
+        kind: 'theatre',
+        headliner: 'Hamilton',
+        productionName: 'Hamilton',
+        showDate: hamiltonDates[0]!,
+        runStartDate: hamiltonDates[0]!,
+        runEndDate: hamiltonDates[hamiltonDates.length - 1]!,
+        performanceDates: hamiltonDates,
+        onSaleStatus: 'on_sale',
+        source: 'ticketmaster',
+      },
     ]);
 
     return NextResponse.json({
@@ -250,7 +278,7 @@ export async function GET() {
         venues: venueMap.size,
         performers: performerMap.size,
         shows: showCount,
-        announcements: 5,
+        announcements: 6,
         regions: 2,
         followedVenues: followVenues.length,
       },

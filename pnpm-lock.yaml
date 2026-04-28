@@ -182,6 +182,9 @@ importers:
         specifier: ^6.12.2
         version: 6.12.2
     devDependencies:
+      tsx:
+        specifier: ^4.19.0
+        version: 4.21.0
       typescript:
         specifier: ^5.7.0
         version: 5.9.3

@@ -10,7 +10,10 @@ import {
 } from './notifications';
 import { runSetlistRetry } from './setlist-retry';
 import { runShowsNightly } from './shows-nightly';
-import { runScrapers, closeBrowser } from '@showbook/scrapers';
+// @showbook/scrapers pulls in Playwright, which the Next.js dev server
+// tries to bundle. Import it lazily inside the handler so it stays out of
+// the web app's static dependency graph.
+type ScrapersModule = typeof import('@showbook/scrapers');
 
 export const JOBS = {
   SHOWS_NIGHTLY: 'shows/nightly',
@@ -65,15 +68,18 @@ async function discoverIngestHandler(jobs: PgBoss.Job[]) {
       );
 
       try {
-        const scrape = await runScrapers();
-        console.log(
-          `[${JOBS.DISCOVER_INGEST}] Scrapers: attempted=${scrape.attempted} ` +
-          `succeeded=${scrape.succeeded} failed=${scrape.failed} created=${scrape.eventsCreated}`,
-        );
+        const scrapers: ScrapersModule = await import('@showbook/scrapers');
+        try {
+          const scrape = await scrapers.runScrapers();
+          console.log(
+            `[${JOBS.DISCOVER_INGEST}] Scrapers: attempted=${scrape.attempted} ` +
+            `succeeded=${scrape.succeeded} failed=${scrape.failed} created=${scrape.eventsCreated}`,
+          );
+        } finally {
+          await scrapers.closeBrowser();
+        }
       } catch (err) {
         console.error(`[${JOBS.DISCOVER_INGEST}] Scrapers failed:`, err);
-      } finally {
-        await closeBrowser();
       }
 
       const digest = await runWeeklyDiscoveryDigest({
