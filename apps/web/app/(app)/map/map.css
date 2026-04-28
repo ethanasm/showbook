@@ -175,11 +175,21 @@
   background: var(--bg);
   overflow-x: auto;
   max-width: calc(5 * 80px + 1px);
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-strong) transparent;
 }
 
 .map-filterbar__years::-webkit-scrollbar {
-  display: none;
+  height: 4px;
+}
+
+.map-filterbar__years::-webkit-scrollbar-thumb {
+  background: var(--rule-strong);
+  border-radius: 2px;
+}
+
+.map-filterbar__years::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .map-filterbar__year-btn {
