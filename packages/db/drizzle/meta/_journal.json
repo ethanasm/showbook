@@ -26,8 +26,15 @@
     {
       "idx": 3,
       "version": "7",
+      "when": 1777200000000,
+      "tag": "0003_users_nextauth",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
       "when": 1777344000000,
-      "tag": "0003_discover_overhaul",
+      "tag": "0004_discover_overhaul",
       "breakpoints": true
     }
   ]
