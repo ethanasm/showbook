@@ -61,8 +61,6 @@ const KIND_ICONS: Record<string, typeof Music> = {
   festival: Tent,
 };
 
-const YEARS = ["All-time", "2026", "2025", "2024", "2023"] as const;
-
 const KINDS = [
   { k: "all", label: "All kinds" },
   { k: "concert", label: "Concert" },
@@ -303,6 +301,7 @@ function FilterBar({
   setKind,
   venueCount,
   showCount,
+  years,
 }: {
   year: string;
   setYear: (y: string) => void;
@@ -310,6 +309,7 @@ function FilterBar({
   setKind: (k: string) => void;
   venueCount: number;
   showCount: number;
+  years: string[];
 }) {
   return (
     <div className="map-filterbar">
@@ -321,7 +321,7 @@ function FilterBar({
       </div>
 
       <div className="map-filterbar__years">
-        {YEARS.map((y) => (
+        {years.map((y) => (
           <button
             key={y}
             className={`map-filterbar__year-btn ${
@@ -674,6 +674,18 @@ export default function MapView() {
 
   const { data: shows, isLoading } = trpc.shows.list.useQuery({});
 
+  const yearOptions = useMemo(() => {
+    if (!shows) return ["All-time"];
+    const yearSet = new Set<number>();
+    for (const show of shows) {
+      if (show.date) {
+        yearSet.add(new Date(show.date + "T00:00:00").getFullYear());
+      }
+    }
+    const sorted = Array.from(yearSet).sort((a, b) => b - a);
+    return ["All-time", ...sorted.map(String)];
+  }, [shows]);
+
   // Build venue groups from shows
   const venueGroups = useMemo(() => {
     if (!shows) return [];
@@ -834,6 +846,7 @@ export default function MapView() {
         setKind={setKindFilter}
         venueCount={filteredVenues.length}
         showCount={totalShowCount}
+        years={yearOptions}
       />
 
       {unmappedCount > 0 && (

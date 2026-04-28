@@ -173,6 +173,13 @@
   align-items: stretch;
   border: 1px solid var(--rule-strong);
   background: var(--bg);
+  overflow-x: auto;
+  max-width: calc(5 * 80px + 1px);
+  scrollbar-width: none;
+}
+
+.map-filterbar__years::-webkit-scrollbar {
+  display: none;
 }
 
 .map-filterbar__year-btn {
@@ -187,6 +194,8 @@
   letter-spacing: -0.2px;
   cursor: pointer;
   font-feature-settings: "tnum";
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .map-filterbar__year-btn:last-child {

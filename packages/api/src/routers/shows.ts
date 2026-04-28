@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
-import { shows, showPerformers } from '@showbook/db';
+import { shows, showPerformers, userVenueFollows, userPerformerFollows } from '@showbook/db';
 import { matchOrCreateVenue, type VenueInput } from '../venue-matcher';
 import {
   matchOrCreatePerformer,
@@ -457,6 +457,9 @@ export const showsRouter = router({
       await ctx.db
         .delete(showPerformers)
         .where(sql`${showPerformers.showId} IN (${sql.join(showIds.map(id => sql`${id}`), sql`, `)})`);
+
+      await ctx.db.delete(userVenueFollows).where(eq(userVenueFollows.userId, userId));
+      await ctx.db.delete(userPerformerFollows).where(eq(userPerformerFollows.userId, userId));
 
       await ctx.db.delete(shows).where(eq(shows.userId, userId));
 
