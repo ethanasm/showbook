@@ -12,8 +12,10 @@ import {
   Search,
   Settings,
   MoreHorizontal,
+  LogOut,
 } from "lucide-react";
-import type { ComponentType } from "react";
+import { type ComponentType, useEffect, useRef, useState } from "react";
+import { signOut } from "next-auth/react";
 
 export interface NavItem {
   id: string;
@@ -150,16 +152,65 @@ export function Sidebar({
       <div className="sidebar__spacer" />
 
       {/* User profile */}
-      <div className="sidebar__user">
-        <div className="sidebar__user-avatar">{userInitials}</div>
-        <div className="sidebar__user-info">
-          <div className="sidebar__user-name">{userName}</div>
-          <div className="sidebar__user-sync">{syncStatus}</div>
-        </div>
-        <button className="sidebar__user-more" type="button" aria-label="More options">
-          <MoreHorizontal size={14} />
-        </button>
-      </div>
+      <UserMenu
+        userInitials={userInitials}
+        userName={userName}
+        syncStatus={syncStatus}
+      />
     </aside>
+  );
+}
+
+function UserMenu({
+  userInitials,
+  userName,
+  syncStatus,
+}: {
+  userInitials: string;
+  userName: string;
+  syncStatus: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  return (
+    <div className="sidebar__user" ref={menuRef}>
+      <div className="sidebar__user-avatar">{userInitials}</div>
+      <div className="sidebar__user-info">
+        <div className="sidebar__user-name">{userName}</div>
+        <div className="sidebar__user-sync">{syncStatus}</div>
+      </div>
+      <button
+        className="sidebar__user-more"
+        type="button"
+        aria-label="More options"
+        onClick={() => setOpen(!open)}
+      >
+        <MoreHorizontal size={14} />
+      </button>
+      {open && (
+        <div className="sidebar__user-menu">
+          <button
+            className="sidebar__user-menu-item"
+            type="button"
+            onClick={() => signOut({ callbackUrl: "/signin" })}
+          >
+            <LogOut size={13} />
+            <span>Sign out</span>
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

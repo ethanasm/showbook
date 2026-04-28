@@ -536,6 +536,7 @@ a.show-row__support-link:hover {
 
 /* User profile */
 .sidebar__user {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -594,6 +595,38 @@ a.show-row__support-link:hover {
 
 .sidebar__user-more:hover {
   color: var(--ink);
+}
+
+.sidebar__user-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 12px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 140px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  z-index: 50;
+}
+
+.sidebar__user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.sidebar__user-menu-item:hover {
+  background: var(--hover);
 }
 
 /* ── AppShell ─────────────────────────────────────────────── */
