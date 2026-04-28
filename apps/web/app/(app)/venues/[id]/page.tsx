@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
+import { EditableName } from "@/components/EditableName";
 import {
   Music,
   Clapperboard,
@@ -133,6 +134,23 @@ function getSupport(show: ShowData): string[] {
     .filter((sp) => sp.role === "support")
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((sp) => sp.performer.name);
+}
+
+function getHeadlinerId(show: ShowData): string | undefined {
+  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
+    return undefined;
+  }
+  const hl = show.showPerformers.find(
+    (sp) => sp.role === "headliner" && sp.sortOrder === 0,
+  );
+  return hl?.performer.id;
+}
+
+function getSupportPerformers(show: ShowData): { id: string; name: string }[] {
+  return show.showPerformers
+    .filter((sp) => sp.role === "support")
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((sp) => ({ id: sp.performer.id, name: sp.performer.name }));
 }
 
 export default function VenueDetailPage() {
@@ -594,16 +612,19 @@ export default function VenueDetailPage() {
                       kind: s.kind,
                       state: s.state,
                       headliner: getHeadliner(s),
+                      headlinerId: getHeadlinerId(s),
                       support: getSupport(s),
+                      supportPerformers: getSupportPerformers(s),
                       venue: venue.name,
                       venueId: venue.id,
+                      showId: s.id,
                       date: formatDateParts(s.date),
                       seat: s.seat ?? undefined,
                       paid: s.pricePaid ? parseFloat(s.pricePaid) : undefined,
                       ticketCount: s.ticketCount,
                     }}
                     selected={expandedShowId === s.id}
-                    onClick={() => handleRowClick(s.id)}
+                    onExpandToggle={() => handleRowClick(s.id)}
                   />
                   {expandedShowId === s.id && (
                     <ShowDetailPanel
@@ -686,11 +707,47 @@ function ShowDetailPanel({
           Details
         </div>
         <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 20, fontWeight: 600, color: "var(--ink)", letterSpacing: -0.5, lineHeight: 1.1 }}>
-          {getHeadliner(show)}
+          {(() => {
+            const hlId = getHeadlinerId(show);
+            const name = getHeadliner(show);
+            return hlId ? (
+              <Link
+                href={`/artists/${hlId}`}
+                style={{ color: "inherit", textDecoration: "none" }}
+                onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+              >
+                {name}
+              </Link>
+            ) : name;
+          })()}
         </div>
         {support.length > 0 && (
           <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 12.5, color: "var(--muted)", marginTop: 5 }}>
-            with {support.join(", ")}
+            with{" "}
+            {(() => {
+              const supportRich = getSupportPerformers(show);
+              return support.map((name, i) => {
+                const id = supportRich.find((p) => p.name === name)?.id;
+                return (
+                  <span key={`${name}-${i}`}>
+                    {id ? (
+                      <Link
+                        href={`/artists/${id}`}
+                        style={{ color: "inherit", textDecoration: "none" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                        onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                      >
+                        {name}
+                      </Link>
+                    ) : (
+                      name
+                    )}
+                    {i < support.length - 1 ? ", " : ""}
+                  </span>
+                );
+              });
+            })()}
           </div>
         )}
         {show.tourName && (
@@ -906,86 +963,6 @@ function CardMessage({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
-    </div>
-  );
-}
-
-function EditableName({
-  value,
-  onSave,
-}: {
-  value: string;
-  onSave: (name: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (editing) {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }
-  }, [editing]);
-
-  useEffect(() => {
-    setDraft(value);
-  }, [value]);
-
-  function commit() {
-    const trimmed = draft.trim();
-    setEditing(false);
-    if (trimmed && trimmed !== value) {
-      onSave(trimmed);
-    } else {
-      setDraft(value);
-    }
-  }
-
-  const sharedStyle: React.CSSProperties = {
-    fontFamily: "var(--font-geist-sans), sans-serif",
-    fontSize: 48,
-    fontWeight: 600,
-    color: "var(--ink)",
-    letterSpacing: -1.6,
-    lineHeight: 0.98,
-    marginTop: 10,
-  };
-
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") commit();
-          if (e.key === "Escape") {
-            setDraft(value);
-            setEditing(false);
-          }
-        }}
-        style={{
-          ...sharedStyle,
-          width: "100%",
-          background: "transparent",
-          border: "none",
-          borderBottom: "2px solid var(--accent)",
-          outline: "none",
-          padding: 0,
-        }}
-      />
-    );
-  }
-
-  return (
-    <div
-      onDoubleClick={() => setEditing(true)}
-      style={{ ...sharedStyle, cursor: "text" }}
-      title="Double-click to edit"
-    >
-      {value}
     </div>
   );
 }

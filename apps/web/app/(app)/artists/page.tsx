@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { Music, ArrowDownUp, Search } from "lucide-react";
 
@@ -207,8 +208,9 @@ export default function ArtistsPage() {
             </div>
 
             {filtered.map((artist) => (
-              <div
+              <Link
                 key={artist.id}
+                href={`/artists/${artist.id}`}
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1.5fr 80px 110px 110px",
@@ -216,8 +218,12 @@ export default function ArtistsPage() {
                   padding: "12px 20px",
                   borderBottom: "1px solid var(--rule)",
                   alignItems: "center",
-                  cursor: "default",
+                  cursor: "pointer",
+                  color: "inherit",
+                  textDecoration: "none",
                 }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                   <Music size={14} color="var(--muted)" style={{ flexShrink: 0 }} />
@@ -260,7 +266,7 @@ export default function ArtistsPage() {
                 }}>
                   {artist.lastSeen ? formatDate(artist.lastSeen) : "—"}
                 </div>
-              </div>
+              </Link>
             ))}
 
             <div style={{

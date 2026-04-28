@@ -106,6 +106,23 @@ function getHeadliner(show: ShowData): string {
   return headliner?.performer.name ?? "Unknown Artist";
 }
 
+function getHeadlinerId(show: ShowData): string | undefined {
+  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
+    return undefined;
+  }
+  const headliner = show.showPerformers.find(
+    (sp) => sp.role === "headliner" && sp.sortOrder === 0
+  );
+  return headliner?.performer.id;
+}
+
+function getSupportPerformers(show: ShowData): { id: string; name: string }[] {
+  return show.showPerformers
+    .filter((sp) => sp.role === "support")
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((sp) => ({ id: sp.performer.id, name: sp.performer.name }));
+}
+
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString("en-US", {
@@ -810,11 +827,47 @@ export default function ShowsPage() {
             Details
           </div>
           <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 20, fontWeight: 600, color: "var(--ink)", letterSpacing: -0.5, lineHeight: 1.1 }}>
-            {getHeadliner(show)}
+            {(() => {
+              const hlId = getHeadlinerId(show);
+              const name = getHeadliner(show);
+              return hlId ? (
+                <Link
+                  href={`/artists/${hlId}`}
+                  style={{ color: "inherit", textDecoration: "none" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                  onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                >
+                  {name}
+                </Link>
+              ) : name;
+            })()}
           </div>
           {support.length > 0 && (
             <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 12.5, color: "var(--muted)", marginTop: 5 }}>
-              with {support.join(", ")}
+              with{" "}
+              {(() => {
+                const supportRich = getSupportPerformers(show);
+                return support.map((name, i) => {
+                  const id = supportRich.find((p) => p.name === name)?.id;
+                  return (
+                    <span key={`${name}-${i}`}>
+                      {id ? (
+                        <Link
+                          href={`/artists/${id}`}
+                          style={{ color: "inherit", textDecoration: "none" }}
+                          onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                          onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                        >
+                          {name}
+                        </Link>
+                      ) : (
+                        name
+                      )}
+                      {i < support.length - 1 ? ", " : ""}
+                    </span>
+                  );
+                });
+              })()}
             </div>
           )}
           {show.tourName && (
@@ -1031,9 +1084,12 @@ export default function ShowsPage() {
                   kind: show.kind,
                   state: show.state,
                   headliner: getHeadliner(show),
+                  headlinerId: getHeadlinerId(show),
                   support: getSupport(show),
+                  supportPerformers: getSupportPerformers(show),
                   venue: show.venue.name,
                   venueId: show.venue.id,
+                  showId: show.id,
                   neighborhood: getNeighborhood(show),
                   date: toDateParts(show.date),
                   seat: show.seat ?? undefined,
@@ -1042,7 +1098,7 @@ export default function ShowsPage() {
                 }}
                 missingCoords={show.venue.latitude == null || show.venue.longitude == null}
                 selected={expandedShowId === show.id}
-                onClick={() => handleRowClick(show.id)}
+                onExpandToggle={() => handleRowClick(show.id)}
               />
               {expandedShowId === show.id && renderDetailPanel(show)}
             </div>

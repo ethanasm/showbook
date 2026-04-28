@@ -57,11 +57,12 @@ interface ShowSeed {
   ticketCount?: number;
   tourName?: string;
   productionName?: string;
+  setlist?: string[];
 }
 
 const SHOWS: ShowSeed[] = [
   // Past concerts (5)
-  { kind: 'concert', state: 'past', headliner: 'Radiohead', support: ['LCD Soundsystem'], venueName: 'Madison Square Garden', date: '2024-06-15', seat: 'FLOOR B · 12', pricePaid: '370.00', ticketCount: 2, tourName: 'In Rainbows Anniversary' },
+  { kind: 'concert', state: 'past', headliner: 'Radiohead', support: ['LCD Soundsystem'], venueName: 'Madison Square Garden', date: '2024-06-15', seat: 'FLOOR B · 12', pricePaid: '370.00', ticketCount: 2, tourName: 'In Rainbows Anniversary', setlist: ['15 Step', 'Bodysnatchers', 'Nude', 'Weird Fishes/Arpeggi', 'All I Need', 'Faust Arp', 'Reckoner', 'House of Cards', 'Jigsaw Falling into Place', 'Videotape'] },
   { kind: 'concert', state: 'past', headliner: 'LCD Soundsystem', venueName: 'Brooklyn Steel', date: '2024-08-22', seat: 'GA', pricePaid: '75.00' },
   { kind: 'concert', state: 'past', headliner: 'The National', venueName: 'The Beacon Theatre', date: '2024-09-10', seat: 'MEZZ · H22', pricePaid: '95.00' },
   { kind: 'concert', state: 'past', headliner: 'Japanese Breakfast', support: ['Phoebe Bridgers'], venueName: 'Irving Plaza', date: '2024-11-03', seat: 'GA', pricePaid: '45.00' },
@@ -168,6 +169,7 @@ export async function GET() {
         ticketCount: s.ticketCount ?? 1,
         tourName: s.tourName ?? null,
         productionName,
+        setlist: s.setlist ?? null,
       }).returning();
 
       if (!show) continue;

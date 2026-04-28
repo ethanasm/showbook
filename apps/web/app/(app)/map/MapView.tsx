@@ -85,6 +85,7 @@ interface VenueShowData {
   state: string;
   date: string;
   headliner: string;
+  headlinerId: string | null;
   seat: string | null;
   pricePaid: string | null;
   ticketCount: number;
@@ -123,6 +124,24 @@ function getHeadliner(show: {
   const fallback = show.showPerformers.find((sp) => sp.role === "headliner");
   if (fallback) return fallback.performer.name;
   return show.showPerformers[0]?.performer.name ?? "Unknown Artist";
+}
+
+function getHeadlinerId(show: {
+  kind?: string;
+  productionName?: string | null;
+  showPerformers: {
+    role: string;
+    sortOrder: number;
+    performer: { id: string };
+  }[];
+}): string | null {
+  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
+    return null;
+  }
+  const headliner = show.showPerformers.find(
+    (sp) => sp.role === "headliner" && sp.sortOrder === 0
+  );
+  return headliner?.performer.id ?? null;
 }
 
 function dotRadius(count: number): number {
@@ -600,7 +619,18 @@ function VenueInspector({
               </div>
               <div className="venue-inspector__visit-info">
                 <div className="venue-inspector__visit-artist">
-                  {show.headliner}
+                  {show.headlinerId ? (
+                    <Link
+                      href={`/artists/${show.headlinerId}`}
+                      style={{ color: "inherit", textDecoration: "none" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                      onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                    >
+                      {show.headliner}
+                    </Link>
+                  ) : (
+                    show.headliner
+                  )}
                 </div>
                 <div className="venue-inspector__visit-seat">
                   {show.seat ? show.seat.toLowerCase() : "general"}
@@ -703,6 +733,7 @@ export default function MapView() {
         state: show.state,
         date: show.date,
         headliner: getHeadliner(show),
+        headlinerId: getHeadlinerId(show),
         seat: show.seat,
         pricePaid: show.pricePaid,
         ticketCount: show.ticketCount ?? 1,

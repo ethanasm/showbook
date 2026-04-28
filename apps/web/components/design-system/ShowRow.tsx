@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import "./design-system.css";
 import { StateChip, type ShowState } from "./StateChip";
@@ -10,15 +11,19 @@ import {
   Laugh,
   Tent,
   ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 
 export interface Show {
   kind: ShowKind;
   state: ShowState;
   headliner: string;
+  headlinerId?: string;
   support?: string[];
+  supportPerformers?: { id: string; name: string }[];
   venue: string;
   venueId?: string;
+  showId?: string;
   neighborhood?: string;
   date: { month: string; day: string; year: string; dow: string };
   seat?: string;
@@ -30,6 +35,9 @@ interface ShowRowProps {
   show: Show;
   selected?: boolean;
   missingCoords?: boolean;
+  /** When provided, the chevron becomes an inline expand/collapse button. */
+  onExpandToggle?: () => void;
+  /** Legacy: row-level click handler (used when showId is absent). */
   onClick?: () => void;
 }
 
@@ -47,7 +55,15 @@ const KIND_LABELS: Record<ShowKind, string> = {
   festival: "Festival",
 };
 
-export function ShowRow({ show, selected, missingCoords, onClick }: ShowRowProps) {
+export function ShowRow({
+  show,
+  selected,
+  missingCoords,
+  onExpandToggle,
+  onClick,
+}: ShowRowProps) {
+  const router = useRouter();
+
   /* ── bar modifier ── */
   const barClass =
     show.state === "past"
@@ -78,8 +94,29 @@ export function ShowRow({ show, selected, missingCoords, onClick }: ShowRowProps
     ? "show-row show-row--selected"
     : "show-row";
 
+  function handleRowActivate() {
+    if (show.showId) {
+      router.push(`/shows/${show.showId}`);
+    } else if (onClick) {
+      onClick();
+    }
+  }
+
+  function handleRowKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleRowActivate();
+    }
+  }
+
   return (
-    <div className={rowClass} onClick={onClick} role="button" tabIndex={0}>
+    <div
+      className={rowClass}
+      onClick={handleRowActivate}
+      onKeyDown={handleRowKeyDown}
+      role={show.showId ? "link" : "button"}
+      tabIndex={0}
+    >
       {/* 1. Left bar */}
       <div className="show-row__bar-cell">
         <div className={barClass} style={barStyle} />
@@ -105,10 +142,39 @@ export function ShowRow({ show, selected, missingCoords, onClick }: ShowRowProps
 
       {/* 4. Headliner + support */}
       <div className="show-row__headliner-cell">
-        <div className="show-row__headliner">{show.headliner}</div>
+        {show.headlinerId ? (
+          <Link
+            href={`/artists/${show.headlinerId}`}
+            className="show-row__headliner show-row__headliner--link"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {show.headliner}
+          </Link>
+        ) : (
+          <div className="show-row__headliner">{show.headliner}</div>
+        )}
         {show.support && show.support.length > 0 && (
           <div className="show-row__support">
-            + {show.support.join(", ")}
+            +{" "}
+            {show.support.map((name, i) => {
+              const id = show.supportPerformers?.find((p) => p.name === name)?.id;
+              return (
+                <span key={`${name}-${i}`}>
+                  {id ? (
+                    <Link
+                      href={`/artists/${id}`}
+                      className="show-row__support-link"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {name}
+                    </Link>
+                  ) : (
+                    name
+                  )}
+                  {i < (show.support?.length ?? 0) - 1 ? ", " : ""}
+                </span>
+              );
+            })}
           </div>
         )}
       </div>
@@ -153,8 +219,28 @@ export function ShowRow({ show, selected, missingCoords, onClick }: ShowRowProps
       <div className="show-row__state">
         {show.state === "ticketed" && <StateChip state="ticketed" />}
         {show.state === "watching" && <StateChip state="watching" />}
-        {show.state === "past" && (
-          <ChevronRight size={14} className="show-row__chevron" />
+        {onExpandToggle ? (
+          <button
+            type="button"
+            className="show-row__expand"
+            aria-label={selected ? "Collapse details" : "Expand details"}
+            aria-expanded={selected ? true : false}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onExpandToggle();
+            }}
+          >
+            {selected ? (
+              <ChevronDown size={14} className="show-row__chevron" />
+            ) : (
+              <ChevronRight size={14} className="show-row__chevron" />
+            )}
+          </button>
+        ) : (
+          show.state === "past" && (
+            <ChevronRight size={14} className="show-row__chevron" />
+          )
         )}
       </div>
     </div>
