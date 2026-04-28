@@ -35,3 +35,4 @@ Thumbs.db
 
 # SSL certs
 certs/*.pem
+apps/web/certificates/
