@@ -154,27 +154,40 @@ function toStateCode(stateRegion: string | undefined | null): string | undefined
   return US_STATE_CODES[stateRegion.toLowerCase()];
 }
 
+function venueNameVariants(name: string): string[] {
+  const variants: string[] = [name];
+  // Google Places often appends " at <parent>" or " - <org>"
+  const stripped = name.replace(/\s+at\s+.+$/i, '').replace(/\s+-\s+.+$/, '');
+  if (stripped !== name && stripped.length >= 3) variants.push(stripped);
+  return variants;
+}
+
 export async function findTmVenueId(
   name: string,
   city: string,
   stateRegion?: string | null,
 ): Promise<string | null> {
-  try {
-    const tmResults = await searchVenues({
-      keyword: name,
-      stateCode: toStateCode(stateRegion),
-      size: 10,
-    });
-    const cityLower = city.toLowerCase().split(',')[0].trim();
-    const match = tmResults.find((v) => {
-      const tmCity = v.city?.name?.toLowerCase() ?? '';
-      return tmCity.includes(cityLower) || cityLower.includes(tmCity);
-    });
-    return match?.id ?? null;
-  } catch (err) {
-    console.warn('[venue-matcher] TM venue lookup failed:', err);
-    return null;
+  const cityLower = city.toLowerCase().split(',')[0].trim();
+  const stateCode = toStateCode(stateRegion);
+
+  for (const variant of venueNameVariants(name)) {
+    try {
+      const tmResults = await searchVenues({
+        keyword: variant,
+        stateCode,
+        size: 10,
+      });
+      const match = tmResults.find((v) => {
+        const tmCity = v.city?.name?.toLowerCase() ?? '';
+        return tmCity.includes(cityLower) || cityLower.includes(tmCity);
+      });
+      if (match) return match.id;
+    } catch (err) {
+      console.warn('[venue-matcher] TM venue lookup failed:', err);
+      return null;
+    }
   }
+  return null;
 }
 
 async function maybeUpdate(
@@ -212,7 +225,8 @@ async function maybeUpdate(
   }
 
   if (!existing.ticketmasterVenueId && !input.tmVenueId) {
-    const tmId = await findTmVenueId(existing.name, existing.city, existing.stateRegion);
+    const stateForTm = (updates.stateRegion as string | undefined) ?? input.stateRegion ?? existing.stateRegion;
+    const tmId = await findTmVenueId(existing.name, existing.city, stateForTm);
     if (tmId) updates.ticketmasterVenueId = tmId;
   }
 

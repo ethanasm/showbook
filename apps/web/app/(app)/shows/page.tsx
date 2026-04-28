@@ -362,6 +362,7 @@ export default function ShowsPage() {
       production_name: string | null;
       venue_name: string | null;
       venue_city: string | null;
+      venue_state: string | null;
       date: string | null;
       seat: string | null;
       price: string | null;
@@ -640,6 +641,7 @@ export default function ShowsPage() {
           venue: {
             name: ticket.venue_name ?? "Unknown Venue",
             city: ticket.venue_city ?? "Unknown",
+            stateRegion: ticket.venue_state ?? undefined,
           },
           date: ticket.date ?? new Date().toISOString().split("T")[0],
           seat: ticket.seat ?? undefined,

@@ -176,6 +176,7 @@ export default function AddPage() {
       production_name: string | null;
       venue_name: string | null;
       venue_city: string | null;
+      venue_state: string | null;
       date: string | null;
       seat: string | null;
       price: string | null;
@@ -554,6 +555,7 @@ export default function AddPage() {
           ...prev,
           name: result.venue_name ?? prev.name,
           city: result.venue_city ?? prev.city,
+          stateRegion: result.venue_state ?? prev.stateRegion,
         }));
       }
       if (result.date) setDate(result.date);

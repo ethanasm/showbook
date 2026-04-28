@@ -37,6 +37,7 @@ interface ExtractedTicket {
   production_name: string | null;
   venue_name: string | null;
   venue_city: string | null;
+  venue_state: string | null;
   date: string | null;
   seat: string | null;
   price: string | null;
@@ -54,6 +55,7 @@ function mergeTickets(allExtracted: ExtractedTicket[]): ExtractedTicket[] {
     if (!target.production_name && source.production_name) target.production_name = source.production_name;
     if (!target.venue_name && source.venue_name) target.venue_name = source.venue_name;
     if (!target.venue_city && source.venue_city) target.venue_city = source.venue_city;
+    if (!target.venue_state && source.venue_state) target.venue_state = source.venue_state;
     if (!target.date && source.date) target.date = source.date;
     if (!target.seat && source.seat) target.seat = source.seat;
     if (!target.price && source.price) target.price = source.price;
