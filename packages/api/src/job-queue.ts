@@ -8,21 +8,27 @@
 
 import PgBoss from 'pg-boss';
 
-let sender: PgBoss | null = null;
-let starting: Promise<PgBoss> | null = null;
+// Cache pg-boss on globalThis so Next.js HMR doesn't leak connection pools.
+// pg-boss opens its own pool of ~5 connections per instance; without
+// caching, a few module reloads exhaust Postgres's default 100-conn limit.
+const globalForBoss = globalThis as unknown as {
+  __showbookBoss?: PgBoss;
+  __showbookBossStarting?: Promise<PgBoss>;
+};
 
 async function getSender(): Promise<PgBoss> {
-  if (sender) return sender;
-  if (starting) return starting;
-  starting = (async () => {
+  if (globalForBoss.__showbookBoss) return globalForBoss.__showbookBoss;
+  if (globalForBoss.__showbookBossStarting) return globalForBoss.__showbookBossStarting;
+  globalForBoss.__showbookBossStarting = (async () => {
     const instance = new PgBoss({
       connectionString: process.env.DATABASE_URL!,
+      max: 2, // send-only client; we don't need a big pool
     });
     await instance.start();
-    sender = instance;
+    globalForBoss.__showbookBoss = instance;
     return instance;
   })();
-  return starting;
+  return globalForBoss.__showbookBossStarting;
 }
 
 export const JOB_NAMES = {
