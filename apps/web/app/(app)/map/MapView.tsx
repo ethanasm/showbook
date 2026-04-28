@@ -269,7 +269,7 @@ function TopBar({ venues }: { venues: VenueGroup[] }) {
     <div className="map-topbar">
       <div>
         <div className="map-topbar__subtitle">Map &middot; geographic view</div>
-        <div className="map-topbar__title">Where you've been</div>
+        <div className="map-topbar__title">Where you&apos;ve been</div>
       </div>
       <div className="map-topbar__actions">
         <div ref={dropdownRef} style={{ position: "relative" }}>

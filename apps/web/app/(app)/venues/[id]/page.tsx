@@ -307,6 +307,8 @@ export default function VenueDetailPage() {
           letterSpacing: ".04em",
         }}
       >
+        <Link href="/venues" style={{ color: "var(--muted)", textDecoration: "none" }}>← venues</Link>
+        <span style={{ color: "var(--faint)" }}>/</span>
         <span style={{ color: "var(--ink)" }}>{venue.name.toLowerCase()}</span>
       </div>
 
