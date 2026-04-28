@@ -393,6 +393,15 @@
   text-overflow: ellipsis;
 }
 
+a.discover-row__headliner-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+a.discover-row__headliner-link:hover {
+  text-decoration: underline;
+}
+
 .discover-row__support {
   font-family: var(--font-geist-sans), sans-serif;
   font-size: 11.5px;

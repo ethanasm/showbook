@@ -29,6 +29,7 @@ type Announcement = {
   venueId: string;
   kind: ShowKind;
   headliner: string;
+  headlinerPerformerId: string | null;
   support: string[] | null;
   showDate: string;
   onSaleDate: string | null;
@@ -212,7 +213,19 @@ function AnnouncementRow({
 
       {/* Headliner */}
       <div className="discover-row__headliner-cell">
-        <div className="discover-row__headliner">{announcement.headliner}</div>
+        <div className="discover-row__headliner">
+          {announcement.headlinerPerformerId ? (
+            <Link
+              href={`/artists/${announcement.headlinerPerformerId}`}
+              className="discover-row__headliner-link"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {announcement.headliner}
+            </Link>
+          ) : (
+            announcement.headliner
+          )}
+        </div>
         {announcement.support && announcement.support.length > 0 && (
           <div className="discover-row__support">
             + {announcement.support.join(", ")}

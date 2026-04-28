@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import "./design-system.css";
 import type { ShowKind } from "./KindBadge";
 import {
@@ -16,8 +17,11 @@ import type { LucideIcon } from "lucide-react";
 
 export interface HeroShow {
   headliner: string;
+  headlinerId?: string;
   support: string[];
+  supportPerformers?: { id: string; name: string }[];
   venue: string;
+  venueId?: string;
   city: string;
   seat: string;
   paid: number;
@@ -119,7 +123,18 @@ export function HeroCard({ show }: HeroCardProps) {
             lineHeight: 0.95,
           }}
         >
-          {show.headliner}
+          {show.headlinerId ? (
+            <Link
+              href={`/artists/${show.headlinerId}`}
+              style={{ color: "inherit", textDecoration: "none" }}
+              onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+              onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+            >
+              {show.headliner}
+            </Link>
+          ) : (
+            show.headliner
+          )}
         </div>
 
         {/* Support artists */}
@@ -133,7 +148,27 @@ export function HeroCard({ show }: HeroCardProps) {
               letterSpacing: -0.2,
             }}
           >
-            with {show.support.join(", ")}
+            with{" "}
+            {show.support.map((name, i) => {
+              const id = show.supportPerformers?.find((p) => p.name === name)?.id;
+              return (
+                <span key={`${name}-${i}`}>
+                  {id ? (
+                    <Link
+                      href={`/artists/${id}`}
+                      style={{ color: "inherit", textDecoration: "none" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                      onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                    >
+                      {name}
+                    </Link>
+                  ) : (
+                    name
+                  )}
+                  {i < show.support.length - 1 ? ", " : ""}
+                </span>
+              );
+            })}
           </div>
         )}
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { HeroCard } from "@/components/design-system/HeroCard";
@@ -56,6 +57,29 @@ function getHeadliner(
   return show.showPerformers[0]?.performer.name ?? "Unknown Artist";
 }
 
+function getHeadlinerId(
+  show: {
+    kind?: string;
+    productionName?: string | null;
+    showPerformers: {
+      role: string;
+      sortOrder: number;
+      performer: { id: string };
+    }[];
+  }
+): string | undefined {
+  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
+    return undefined;
+  }
+  const headliner = show.showPerformers.find(
+    (sp) => sp.role === "headliner" && sp.sortOrder === 1
+  );
+  if (headliner) return headliner.performer.id;
+  const fallback = show.showPerformers.find((sp) => sp.role === "headliner");
+  if (fallback) return fallback.performer.id;
+  return show.showPerformers[0]?.performer.id;
+}
+
 function getSupport(
   showPerformers: {
     role: string;
@@ -67,6 +91,19 @@ function getSupport(
     .filter((sp) => sp.role === "support")
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((sp) => sp.performer.name);
+}
+
+function getSupportPerformers(
+  showPerformers: {
+    role: string;
+    sortOrder: number;
+    performer: { id: string; name: string };
+  }[]
+): { id: string; name: string }[] {
+  return showPerformers
+    .filter((sp) => sp.role === "support")
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((sp) => ({ id: sp.performer.id, name: sp.performer.name }));
 }
 
 function toDateParts(dateStr: string): {
@@ -394,7 +431,9 @@ export default function HomePage() {
             <HeroCard
               show={{
                 headliner: getHeadliner(heroShow),
+                headlinerId: getHeadlinerId(heroShow),
                 support: getSupport(heroShow.showPerformers),
+                supportPerformers: getSupportPerformers(heroShow.showPerformers),
                 venue: heroShow.venue.name,
                 city: [heroShow.venue.city, heroShow.venue.stateRegion]
                   .filter(Boolean)
@@ -526,7 +565,20 @@ export default function HomePage() {
                         textOverflow: "ellipsis",
                       }}
                     >
-                      {getHeadliner(u)}
+                      {(() => {
+                        const id = getHeadlinerId(u);
+                        const name = getHeadliner(u);
+                        return id ? (
+                          <Link
+                            href={`/artists/${id}`}
+                            style={{ color: "inherit", textDecoration: "none" }}
+                            onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                            onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                          >
+                            {name}
+                          </Link>
+                        ) : name;
+                      })()}
                     </div>
 
                     {/* Venue */}
@@ -666,6 +718,7 @@ export default function HomePage() {
                 const KindIcon = KIND_ICONS[kind];
                 const dateParts = toDateParts(s.date);
                 const headliner = getHeadliner(s);
+                const headlinerId = getHeadlinerId(s);
                 const support = getSupport(s.showPerformers);
                 const paidDisplay = s.pricePaid
                   ? `$${parseFloat(s.pricePaid)}`
@@ -752,7 +805,18 @@ export default function HomePage() {
                           textOverflow: "ellipsis",
                         }}
                       >
-                        {headliner}
+                        {headlinerId ? (
+                          <Link
+                            href={`/artists/${headlinerId}`}
+                            style={{ color: "inherit", textDecoration: "none" }}
+                            onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                            onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                          >
+                            {headliner}
+                          </Link>
+                        ) : (
+                          headliner
+                        )}
                       </div>
                       {support.length > 0 && (
                         <div
