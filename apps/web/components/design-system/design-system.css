@@ -409,6 +409,13 @@ a.show-row__support-link:hover {
   background: var(--surface);
   border: 1px solid var(--rule);
   cursor: pointer;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+}
+
+.sidebar__search:hover {
+  border-color: var(--rule-strong);
 }
 
 .sidebar__search-icon {

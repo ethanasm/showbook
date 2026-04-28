@@ -1,21 +1,19 @@
-/* ── Floating trigger ───────────────────────────────────── */
+/* ── Floating trigger (mobile only — desktop uses sidebar search) ── */
 
 .global-search__trigger {
   position: fixed;
-  top: 14px;
-  right: 22px;
+  top: 10px;
+  right: 12px;
   z-index: 50;
-  display: inline-flex;
+  display: none;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px 6px 10px;
+  padding: 8px;
   background: var(--surface);
   border: 1px solid var(--rule-strong);
   border-radius: 999px;
   font-family: var(--font-geist-mono), monospace;
   font-size: 11px;
   color: var(--muted);
-  letter-spacing: 0.04em;
   cursor: pointer;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
   backdrop-filter: blur(6px);
@@ -27,28 +25,13 @@
   color: var(--ink);
 }
 
-.global-search__trigger-label {
-  font-size: 11px;
-}
-
-.global-search__trigger-kbd {
-  font-size: 10px;
-  color: var(--faint);
-  border: 1px solid var(--rule);
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--bg);
-}
-
 @media (max-width: 767px) {
+  .global-search__trigger {
+    display: inline-flex;
+  }
   .global-search__trigger-label,
   .global-search__trigger-kbd {
     display: none;
-  }
-  .global-search__trigger {
-    padding: 8px;
-    top: 10px;
-    right: 12px;
   }
 }
 

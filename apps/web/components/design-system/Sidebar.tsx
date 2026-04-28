@@ -45,6 +45,7 @@ export const BOTTOM_NAV_ITEMS = [
 interface SidebarProps {
   active?: string;
   onNavigate?: (id: string) => void;
+  onSearchClick?: () => void;
   counts?: Partial<Record<string, number>>;
   userName?: string;
   userInitials?: string;
@@ -54,6 +55,7 @@ interface SidebarProps {
 export function Sidebar({
   active = "home",
   onNavigate,
+  onSearchClick,
   counts,
   userName = "Ethan Smith",
   userInitials = "ES",
@@ -89,11 +91,11 @@ export function Sidebar({
 
       {/* Search box */}
       <div className="sidebar__search-section">
-        <div className="sidebar__search">
+        <button className="sidebar__search" type="button" onClick={onSearchClick}>
           <Search size={13} className="sidebar__search-icon" />
           <span className="sidebar__search-text">search...</span>
           <kbd className="sidebar__search-kbd">&thinsp;&#8984;K&thinsp;</kbd>
-        </div>
+        </button>
       </div>
 
       {/* Navigate section */}

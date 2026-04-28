@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar, NAV_ITEMS, BOTTOM_NAV_ITEMS } from "@/components/design-system/Sidebar";
 import { ThemeProvider } from "@/components/design-system/ThemeProvider";
-import { GlobalSearch } from "@/components/GlobalSearch";
+import { GlobalSearch, openGlobalSearch } from "@/components/GlobalSearch";
 import { trpc } from "@/lib/trpc";
 import type { ReactNode } from "react";
 
@@ -37,7 +37,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <ThemeProvider>
       <div className="app-shell">
         <div className="app-shell__sidebar">
-          <Sidebar active={activeId} onNavigate={handleNavigate} counts={counts} />
+          <Sidebar active={activeId} onNavigate={handleNavigate} onSearchClick={openGlobalSearch} counts={counts} />
         </div>
         <main className="app-shell__content">
           <GlobalSearch />

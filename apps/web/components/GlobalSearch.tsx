@@ -54,9 +54,17 @@ export function GlobalSearchTrigger({ onClick }: { onClick: () => void }) {
   );
 }
 
+let openGlobalSearchFn: (() => void) | null = null;
+export function openGlobalSearch() { openGlobalSearchFn?.(); }
+
 export function GlobalSearch() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    openGlobalSearchFn = () => setOpen(true);
+    return () => { openGlobalSearchFn = null; };
+  }, []);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
