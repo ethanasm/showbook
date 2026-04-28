@@ -13,6 +13,7 @@ import {
   Trash2,
   Ticket,
   ChevronLeft,
+  CalendarPlus,
 } from "lucide-react";
 import {
   StateChip,
@@ -542,6 +543,27 @@ export default function ShowDetailPage() {
             >
               <MoreHorizontal size={14} /> Edit
             </button>
+            <a
+              href={`/api/shows/${show.id}/ical`}
+              download
+              data-testid="add-to-calendar"
+              style={{
+                padding: "9px 16px",
+                background: "transparent",
+                border: "1px solid var(--rule-strong)",
+                color: "var(--ink)",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 13,
+                fontWeight: 500,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                cursor: "pointer",
+                textDecoration: "none",
+              }}
+            >
+              <CalendarPlus size={14} /> Add to calendar
+            </a>
             <button
               onClick={handleDelete}
               style={{

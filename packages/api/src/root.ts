@@ -5,6 +5,7 @@ import { performersRouter } from './routers/performers';
 import { discoverRouter } from './routers/discover';
 import { enrichmentRouter } from './routers/enrichment';
 import { preferencesRouter } from './routers/preferences';
+import { searchRouter } from './routers/search';
 export const appRouter = router({
   shows: showsRouter,
   venues: venuesRouter,
@@ -12,6 +13,7 @@ export const appRouter = router({
   discover: discoverRouter,
   enrichment: enrichmentRouter,
   preferences: preferencesRouter,
+  search: searchRouter,
 });
 
 export type AppRouter = typeof appRouter;

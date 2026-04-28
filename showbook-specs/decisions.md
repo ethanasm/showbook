@@ -131,3 +131,30 @@ Resolved decisions and remaining open questions for the data layer.
 **Rationale:** "Broadway" is a specific theatre district in Manhattan. The app tracks all live theatre — Broadway, Off-Broadway, West End, regional companies, touring productions. "Theatre" is the accurate umbrella term.
 
 **Migration note:** The prototype files (hifi-v2.html, shared-data.jsx, etc.) still reference `broadway` in mock data, kind enums, and palette labels. These need to be updated when the prototypes are next touched.
+
+### D23: Add to calendar → Per-event .ics download
+**Decision:** Both Show detail and Discover announcements expose an "Add to calendar" affordance that returns an RFC 5545 `.ics` file. We don't expose a `webcal://` subscription feed in v1.
+
+**Implementation:**
+- Per-show: `GET /api/shows/[id]/ical` — auth-gated, returns one VEVENT for the show.
+- Per-announcement: `GET /api/announcements/[id]/ical` — auth-gated, returns the show VEVENT plus an on-sale VEVENT when `on_sale_date` is set.
+- Default time: **7pm local, 3-hour duration** (we don't store start time on `shows.date`). Encoded as floating local (no `Z`, no `TZID`) so the importing calendar interprets it in its own timezone.
+- Stable UID: `show-{id}@showbook` / `announcement-{id}@showbook` so re-imports update the same event.
+
+**Rationale:** Stateless and simple. A subscription feed needs a per-user token model and lifecycle — defer until users ask for it.
+
+### D24: Global search → ⌘K palette across user data
+**Decision:** A keyboard-driven global search palette is mounted in the app shell. It searches across the user's shows, performers, and venues from a single input.
+
+**Scope:**
+- Shows: matches on production name, tour name, venue name, or any performer's name. Restricted to the current user's shows.
+- Performers: matches on name. Restricted to performers the user has shows with.
+- Venues: matches on name or city. Restricted to venues the user has shows at OR follows.
+- Top 8 results per group, ordered by recency (shows) or show count (performers, venues).
+
+**UX:**
+- ⌘K (macOS) / Ctrl-K (other) toggles the modal globally; Esc closes; ↑/↓/Enter for keyboard nav.
+- A floating top-right trigger (icon + ⌘K hint) is rendered inside the main content area on every authenticated page.
+- The page-local filters on Shows / Discover / Artists / Venues remain — global search complements them rather than replacing them.
+
+**Rationale:** Most user lookups are page-local, but jumping between an artist, a show they were at, and the venue is a common cross-list query. A single keyboard-first palette is the lowest-friction surface.
