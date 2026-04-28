@@ -68,16 +68,85 @@ fi
 log "Running drizzle migrations..."
 pnpm db:migrate
 
-# 5. Install Playwright browsers for e2e tests (best-effort).
-#    cdn.playwright.dev may not be in the sandbox network allowlist, so we
-#    don't fail the hook if the download is blocked — lint/typecheck/db tasks
-#    still work without it.
-log "Installing Playwright browsers (best-effort)..."
-if ! pnpm --filter web exec playwright install chromium; then
-  log "WARN: Playwright browser install failed (likely network allowlist). Skipping."
+# 5. Install Playwright Chromium.
+#    cdn.playwright.dev is blocked in the sandbox network, so try the standard
+#    installer first (in case the host gets allowlisted later) and fall back to
+#    pulling Chrome for Testing directly from Google's public storage.
+PW_BROWSERS_DIR="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
+mkdir -p "$PW_BROWSERS_DIR"
+
+PW_BROWSERS_JSON=$(find "$CLAUDE_PROJECT_DIR/node_modules" -path "*playwright-core/browsers.json" 2>/dev/null | head -1)
+if [ -z "$PW_BROWSERS_JSON" ]; then
+  log "ERROR: could not locate playwright-core/browsers.json after pnpm install."
+  exit 1
 fi
 
-# 6. Persist DATABASE_URL so the agent shell sees it.
+read_browsers_json() {
+  node -e "
+    const j = require('$PW_BROWSERS_JSON');
+    const b = j.browsers.find(x => x.name === '$1');
+    if (!b) process.exit(1);
+    console.log(b.revision + ' ' + b.browserVersion);
+  "
+}
+
+install_cft_zip() {
+  local name="$1"           # chromium | chromium-headless-shell
+  local zip_basename="$2"   # chrome-linux64.zip | chrome-headless-shell-linux64.zip
+  local revision version dir
+  read revision version < <(read_browsers_json "$name")
+  dir="$PW_BROWSERS_DIR/${name//-/_}-${revision}"
+
+  if [ -f "$dir/INSTALLATION_COMPLETE" ]; then
+    log "$name-$revision already installed."
+    return 0
+  fi
+
+  local url="https://storage.googleapis.com/chrome-for-testing-public/${version}/linux64/${zip_basename}"
+  local tmp; tmp=$(mktemp -d)
+  log "Downloading $name $version from $url"
+  curl -sSfL --max-time 180 -o "$tmp/$zip_basename" "$url"
+  mkdir -p "$dir"
+  unzip -q -o "$tmp/$zip_basename" -d "$dir"
+  touch "$dir/INSTALLATION_COMPLETE"
+  rm -rf "$tmp"
+  log "Installed $name to $dir"
+}
+
+log "Installing Playwright Chromium..."
+if pnpm --filter web exec playwright install chromium >/dev/null 2>&1; then
+  log "playwright install succeeded via standard CDN."
+else
+  log "playwright install failed (CDN blocked); falling back to direct CFT download."
+  install_cft_zip chromium chrome-linux64.zip
+  install_cft_zip chromium-headless-shell chrome-headless-shell-linux64.zip
+fi
+
+# 6. Stub apps/web/.env.local so the Next.js dev server can boot under Playwright.
+#    Modules read these eagerly at import time; placeholder values are fine for
+#    tests that don't actually call the third-party services. Next loads env
+#    from the directory where `next dev` runs, which is apps/web.
+if [ ! -f apps/web/.env.local ]; then
+  log "Writing stub apps/web/.env.local (placeholder values for tests)..."
+  cat > apps/web/.env.local <<'ENVEOF'
+DATABASE_URL=postgresql://showbook:showbook_dev@localhost:5433/showbook
+NEXTAUTH_URL=https://localhost:3001
+NEXTAUTH_SECRET=test-secret-not-for-production
+GOOGLE_CLIENT_ID=stub-google-client-id
+GOOGLE_CLIENT_SECRET=stub-google-client-secret
+TICKETMASTER_API_KEY=stub-ticketmaster
+SETLISTFM_API_KEY=stub-setlistfm
+GROQ_API_KEY=gsk_stub_groq_key_for_tests
+GOOGLE_PLACES_API_KEY=stub-google-places
+R2_ACCOUNT_ID=stub
+R2_ACCESS_KEY_ID=stub
+R2_SECRET_ACCESS_KEY=stub
+R2_BUCKET_NAME=stub
+R2_PUBLIC_URL=http://localhost/r2
+ENVEOF
+fi
+
+# 7. Persist DATABASE_URL so the agent shell sees it.
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   echo 'export DATABASE_URL="postgresql://showbook:showbook_dev@localhost:5433/showbook"' >> "$CLAUDE_ENV_FILE"
 fi
