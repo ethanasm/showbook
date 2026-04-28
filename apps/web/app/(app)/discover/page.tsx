@@ -16,6 +16,7 @@ import {
   Plus,
   Search,
   X,
+  CalendarPlus,
 } from "lucide-react";
 import "./discover.css";
 
@@ -247,6 +248,16 @@ function AnnouncementRow({
           isWatching={isWatching}
           onToggle={onToggleWatch}
         />
+        <a
+          href={`/api/announcements/${announcement.id}/ical`}
+          download
+          data-testid="add-to-calendar"
+          className="discover-tix-btn"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <CalendarPlus size={11} />
+          Calendar
+        </a>
         <button type="button" className="discover-tix-btn">
           <ArrowUpRight size={11} />
           Tix

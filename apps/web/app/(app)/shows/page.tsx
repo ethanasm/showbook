@@ -13,6 +13,8 @@ import {
 import {
   Archive,
   Calendar,
+  ArrowUp,
+  ArrowDown,
   ArrowDownUp,
   ChevronRight,
   MoreHorizontal,
@@ -34,6 +36,83 @@ import {
 // ---------------------------------------------------------------------------
 
 type ViewMode = "list" | "calendar" | "stats";
+
+type SortField =
+  | "date"
+  | "kind"
+  | "headliner"
+  | "venue"
+  | "seat"
+  | "paid"
+  | "state";
+
+interface SortConfig {
+  field: SortField;
+  dir: "asc" | "desc";
+}
+
+const KIND_ORDER: Record<ShowKind, number> = {
+  concert: 0,
+  theatre: 1,
+  comedy: 2,
+  festival: 3,
+};
+
+const STATE_ORDER: Record<ShowState, number> = {
+  ticketed: 0,
+  watching: 1,
+  past: 2,
+};
+
+function defaultDirFor(field: SortField): "asc" | "desc" {
+  return field === "date" || field === "paid" ? "desc" : "asc";
+}
+
+function compareNullable<T>(
+  a: T | null | undefined,
+  b: T | null | undefined,
+  cmp: (x: T, y: T) => number,
+): number {
+  const aNull = a == null;
+  const bNull = b == null;
+  if (aNull && bNull) return 0;
+  if (aNull) return 1;
+  if (bNull) return -1;
+  return cmp(a as T, b as T);
+}
+
+function compareShows(a: ShowData, b: ShowData, sort: SortConfig): number {
+  const flip = sort.dir === "desc" ? -1 : 1;
+  switch (sort.field) {
+    case "date":
+      return (
+        flip *
+        (new Date(a.date).getTime() - new Date(b.date).getTime())
+      );
+    case "kind":
+      return flip * (KIND_ORDER[a.kind] - KIND_ORDER[b.kind]);
+    case "state":
+      return flip * (STATE_ORDER[a.state] - STATE_ORDER[b.state]);
+    case "headliner":
+      return flip * getHeadliner(a).localeCompare(getHeadliner(b));
+    case "venue":
+      return flip * a.venue.name.localeCompare(b.venue.name);
+    case "seat":
+      return (
+        flip *
+        compareNullable(a.seat, b.seat, (x, y) => x.localeCompare(y))
+      );
+    case "paid":
+      return (
+        flip *
+        compareNullable(
+          a.pricePaid != null ? parseFloat(a.pricePaid) : null,
+          b.pricePaid != null ? parseFloat(b.pricePaid) : null,
+          (x, y) => x - y,
+        )
+      );
+  }
+}
 
 interface ShowData {
   id: string;
@@ -88,6 +167,55 @@ const KIND_LABELS: Record<ShowKind, string> = {
 };
 
 const ALL_KINDS: ShowKind[] = ["concert", "theatre", "comedy", "festival"];
+
+function SortHeader({
+  field,
+  label,
+  sort,
+  onToggle,
+  align,
+}: {
+  field: SortField;
+  label: string;
+  sort: SortConfig;
+  onToggle: (field: SortField) => void;
+  align?: "right";
+}) {
+  const active = sort.field === field;
+  const Arrow = sort.dir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(field)}
+      data-testid={`sort-header-${field}`}
+      data-sort-active={active ? sort.dir : undefined}
+      style={{
+        background: "none",
+        border: "none",
+        padding: 0,
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        justifyContent: align === "right" ? "flex-end" : "flex-start",
+        width: "100%",
+        fontFamily: "inherit",
+        fontSize: "inherit",
+        letterSpacing: "inherit",
+        textTransform: "inherit",
+        color: active ? "var(--ink)" : "var(--faint)",
+        textAlign: align === "right" ? "right" : "left",
+      }}
+    >
+      <span>{label}</span>
+      {active ? (
+        <Arrow size={10} />
+      ) : (
+        <span style={{ width: 10, height: 10, display: "inline-block" }} />
+      )}
+    </button>
+  );
+}
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -203,7 +331,15 @@ export default function ShowsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedYear, setSelectedYear] = useState<string>("All");
   const [selectedKind, setSelectedKind] = useState<ShowKind | null>(null);
-  const [sortNewest, setSortNewest] = useState(true);
+  const [sort, setSort] = useState<SortConfig>({ field: "date", dir: "desc" });
+
+  const toggleSort = useCallback((field: SortField) => {
+    setSort((prev) =>
+      prev.field === field
+        ? { field, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { field, dir: defaultDirFor(field) },
+    );
+  }, []);
   const [expandedShowId, setExpandedShowId] = useState<string | null>(null);
 
   // Calendar state
@@ -284,14 +420,10 @@ export default function ShowsPage() {
       result = result.filter((s) => s.kind === selectedKind);
     }
 
-    result = [...result].sort((a, b) => {
-      const dateA = new Date(a.date).getTime();
-      const dateB = new Date(b.date).getTime();
-      return sortNewest ? dateB - dateA : dateA - dateB;
-    });
+    result = [...result].sort((a, b) => compareShows(a, b, sort));
 
     return result;
-  }, [shows, selectedKind, sortNewest, selectedYear]);
+  }, [shows, selectedKind, sort, selectedYear]);
 
   // Counts
   const totalShows = (allShowsUnfiltered ?? []).length;
@@ -757,33 +889,6 @@ export default function ShowsPage() {
           })}
         </div>
 
-        {/* Separator */}
-        <span style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10.5,
-          color: "var(--muted)",
-          letterSpacing: ".04em",
-        }}>
-          &middot;
-        </span>
-
-        {/* Sort dropdown */}
-        <div
-          onClick={() => setSortNewest(!sortNewest)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
-            color: "var(--muted)",
-            cursor: "pointer",
-          }}
-        >
-          <ArrowDownUp size={12} color="var(--muted)" />
-          {sortNewest ? "newest first" : "oldest first"}
-        </div>
-
         {/* Spacer */}
         <div style={{ flex: 1 }} />
 
@@ -1068,13 +1173,13 @@ export default function ShowsPage() {
             textTransform: "uppercase",
           }}>
             <div />
-            <div>Date</div>
-            <div>Kind</div>
-            <div>Headline</div>
-            <div>Venue</div>
-            <div>Seat</div>
-            <div style={{ textAlign: "right" }}>Paid</div>
-            <div style={{ textAlign: "right" }}>State</div>
+            <SortHeader field="date" label="Date" sort={sort} onToggle={toggleSort} />
+            <SortHeader field="kind" label="Kind" sort={sort} onToggle={toggleSort} />
+            <SortHeader field="headliner" label="Headline" sort={sort} onToggle={toggleSort} />
+            <SortHeader field="venue" label="Venue" sort={sort} onToggle={toggleSort} />
+            <SortHeader field="seat" label="Seat" sort={sort} onToggle={toggleSort} />
+            <SortHeader field="paid" label="Paid" sort={sort} onToggle={toggleSort} align="right" />
+            <SortHeader field="state" label="State" sort={sort} onToggle={toggleSort} align="right" />
           </div>
 
           {filteredShows.map((show) => (
