@@ -32,6 +32,24 @@ export async function geocodeVenue(
   venueName: string,
   city: string,
 ): Promise<GeocodeResult | null> {
+  // Google Places first — returns googlePlaceId for dedup
+  try {
+    const suggestions = await autocomplete(`${venueName}, ${city}`, ['establishment']);
+    if (suggestions.length > 0) {
+      const details = await getPlaceDetails(suggestions[0].placeId);
+      if (details && details.latitude && details.longitude) {
+        return {
+          lat: details.latitude,
+          lng: details.longitude,
+          stateRegion: details.stateRegion ?? undefined,
+          country: details.country ?? undefined,
+          googlePlaceId: details.googlePlaceId,
+        };
+      }
+    }
+  } catch { /* Google Places failed; try Nominatim */ }
+
+  // Fallback: Nominatim (no googlePlaceId)
   const headers = { 'User-Agent': 'Showbook/1.0' };
   const queries = [
     `${venueName}, ${city}`,
@@ -58,23 +76,6 @@ export async function geocodeVenue(
       continue;
     }
   }
-
-  // Fallback: Google Places API
-  try {
-    const suggestions = await autocomplete(`${venueName}, ${city}`, ['establishment']);
-    if (suggestions.length > 0) {
-      const details = await getPlaceDetails(suggestions[0].placeId);
-      if (details && details.latitude && details.longitude) {
-        return {
-          lat: details.latitude,
-          lng: details.longitude,
-          stateRegion: details.stateRegion ?? undefined,
-          country: details.country ?? undefined,
-          googlePlaceId: details.googlePlaceId,
-        };
-      }
-    }
-  } catch { /* Google Places fallback failed */ }
 
   return null;
 }

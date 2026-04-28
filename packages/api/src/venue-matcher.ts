@@ -2,6 +2,7 @@ import { db } from '@showbook/db';
 import { venues } from '@showbook/db';
 import { eq, and, sql } from 'drizzle-orm';
 import { geocodeVenue } from './geocode';
+import { searchVenues } from './ticketmaster';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -88,7 +89,7 @@ export async function matchOrCreateVenue(
   let lng = input.lng ?? null;
   let stateRegion = input.stateRegion ?? null;
   let country = input.country ?? 'US';
-
+  let tmVenueId = input.tmVenueId ?? null;
   let googlePlaceId = input.googlePlaceId ?? null;
 
   if (lat == null && input.name && input.city) {
@@ -104,6 +105,17 @@ export async function matchOrCreateVenue(
     } catch { /* geocoding failed; save without coordinates */ }
   }
 
+  if (!tmVenueId && input.name && input.city) {
+    try {
+      const tmResults = await searchVenues({ keyword: `${input.name}`, size: 3 });
+      const cityLower = input.city.toLowerCase().split(',')[0].trim();
+      const match = tmResults.find(
+        (v) => v.city?.name?.toLowerCase() === cityLower,
+      );
+      if (match) tmVenueId = match.id;
+    } catch { /* TM lookup failed; continue without */ }
+  }
+
   const [created] = await db
     .insert(venues)
     .values({
@@ -111,7 +123,7 @@ export async function matchOrCreateVenue(
       city: input.city,
       stateRegion,
       country,
-      ticketmasterVenueId: input.tmVenueId ?? null,
+      ticketmasterVenueId: tmVenueId,
       latitude: lat,
       longitude: lng,
       googlePlaceId,

@@ -234,6 +234,22 @@ export async function getAttraction(
   }
 }
 
+export async function searchVenues(params: {
+  keyword: string;
+  stateCode?: string;
+  countryCode?: string;
+  size?: number;
+}): Promise<TMVenue[]> {
+  const url = buildUrl("/venues.json", {
+    keyword: params.keyword,
+    stateCode: params.stateCode,
+    countryCode: params.countryCode,
+    size: (params.size ?? 5).toString(),
+  });
+  const data = await tmFetch<TMPageResponse<TMVenue>>(url);
+  return data._embedded?.venues ?? [];
+}
+
 export async function searchAttractions(
   keyword: string,
 ): Promise<TMAttraction[]> {
