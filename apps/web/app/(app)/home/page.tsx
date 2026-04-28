@@ -435,6 +435,7 @@ export default function HomePage() {
                 support: getSupport(heroShow.showPerformers),
                 supportPerformers: getSupportPerformers(heroShow.showPerformers),
                 venue: heroShow.venue.name,
+                venueId: heroShow.venue.id,
                 city: [heroShow.venue.city, heroShow.venue.stateRegion]
                   .filter(Boolean)
                   .join(", "),
@@ -733,7 +734,6 @@ export default function HomePage() {
                 return (
                   <div
                     key={s.id}
-                    onClick={() => router.push("/shows")}
                     style={{
                       display: "grid",
                       gridTemplateColumns:
@@ -742,7 +742,6 @@ export default function HomePage() {
                       padding: "14px 20px",
                       borderBottom: "1px solid var(--rule)",
                       alignItems: "center",
-                      cursor: "pointer",
                     }}
                   >
                     {/* Date */}
@@ -847,7 +846,14 @@ export default function HomePage() {
                           textOverflow: "ellipsis",
                         }}
                       >
-                        {s.venue.name}
+                        <Link
+                          href={`/venues/${s.venue.id}`}
+                          style={{ color: "inherit", textDecoration: "none" }}
+                          onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                          onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                        >
+                          {s.venue.name}
+                        </Link>
                       </div>
                       {neighborhood && (
                         <div

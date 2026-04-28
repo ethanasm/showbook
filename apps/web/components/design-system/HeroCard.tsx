@@ -187,7 +187,20 @@ export function HeroCard({ show }: HeroCardProps) {
           <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
             <MapPin size={14} color="var(--muted)" />
             <div>
-              <div>{show.venue}</div>
+              <div>
+                {show.venueId ? (
+                  <Link
+                    href={`/venues/${show.venueId}`}
+                    style={{ color: "inherit", textDecoration: "none" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                    onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                  >
+                    {show.venue}
+                  </Link>
+                ) : (
+                  show.venue
+                )}
+              </div>
               <div
                 style={{
                   fontFamily: "var(--font-geist-mono), monospace",
