@@ -551,20 +551,40 @@ export default function VenueDetailPage() {
                       {KIND_LABELS[a.kind as ShowKind] ?? a.kind}
                     </div>
                     <div style={{ minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontFamily: "var(--font-geist-sans), sans-serif",
-                          fontSize: 14,
-                          fontWeight: 500,
-                          color: "var(--ink)",
-                          letterSpacing: -0.2,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        {a.headliner}
-                      </div>
+                      {a.headlinerPerformerId ? (
+                        <Link
+                          href={`/artists/${a.headlinerPerformerId}`}
+                          style={{
+                            fontFamily: "var(--font-geist-sans), sans-serif",
+                            fontSize: 14,
+                            fontWeight: 500,
+                            color: "var(--ink)",
+                            letterSpacing: -0.2,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            textDecoration: "none",
+                            display: "block",
+                          }}
+                        >
+                          {a.headliner}
+                        </Link>
+                      ) : (
+                        <div
+                          style={{
+                            fontFamily: "var(--font-geist-sans), sans-serif",
+                            fontSize: 14,
+                            fontWeight: 500,
+                            color: "var(--ink)",
+                            letterSpacing: -0.2,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {a.headliner}
+                        </div>
+                      )}
                       {a.support && a.support.length > 0 && (
                         <div
                           style={{
