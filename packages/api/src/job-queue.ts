@@ -7,6 +7,7 @@
  */
 
 import PgBoss from 'pg-boss';
+import { db, sql } from '@showbook/db';
 
 // Cache pg-boss on globalThis so Next.js HMR doesn't leak connection pools.
 // pg-boss opens its own pool of ~5 connections per instance; without
@@ -57,11 +58,37 @@ export async function enqueueIngestPerformer(performerId: string): Promise<void>
   }
 }
 
-export async function enqueueIngestRegion(regionId: string): Promise<void> {
+export async function enqueueIngestRegion(
+  regionId: string,
+): Promise<string | null> {
   try {
     const boss = await getSender();
-    await boss.send(JOB_NAMES.INGEST_REGION, { regionId });
+    return await boss.send(JOB_NAMES.INGEST_REGION, { regionId });
   } catch (err) {
     console.error('[job-queue] enqueueIngestRegion failed:', err);
+    return null;
+  }
+}
+
+/**
+ * Returns true if there's a queued or in-flight ingest job for this region.
+ * Used by the Near You tab to show a "Discovering shows…" indicator while
+ * the region's first ingest is running. Pending = created | retry | active.
+ */
+export async function isRegionIngestPending(
+  regionId: string,
+): Promise<boolean> {
+  try {
+    const rows = await db.execute(
+      sql`SELECT 1 FROM pgboss.job
+          WHERE name = ${JOB_NAMES.INGEST_REGION}
+            AND state IN ('created','retry','active')
+            AND data->>'regionId' = ${regionId}
+          LIMIT 1`,
+    );
+    return rows.length > 0;
+  } catch (err) {
+    console.error('[job-queue] isRegionIngestPending failed:', err);
+    return false;
   }
 }

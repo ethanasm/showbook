@@ -177,9 +177,9 @@ export const preferencesRouter = router({
         })
         .returning();
 
-      await enqueueIngestRegion(region.id);
+      const ingestJobId = await enqueueIngestRegion(region.id);
 
-      return region;
+      return { ...region, ingestJobId };
     }),
 
   removeRegion: protectedProcedure

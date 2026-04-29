@@ -17,6 +17,7 @@ import { matchOrCreatePerformer } from '../performer-matcher';
 import {
   enqueueIngestVenue,
   enqueueIngestPerformer,
+  isRegionIngestPending,
 } from '../job-queue';
 import { searchAttractions, selectBestImage } from '../ticketmaster';
 
@@ -179,17 +180,29 @@ export const discoverRouter = router({
     }),
 
   /**
-   * Feed of announcements at nearby (but not followed) venues.
-   * Uses a bounding-box approximation of the user's active regions.
-   * Each item includes regionId and regionCityName (smallest-radius matching region).
+   * Feed of upcoming announcements at nearby (but not followed) venues.
+   * Runs one bounding-box query per active region (capped at 250 closest-
+   * upcoming shows each), so regions with sparser data aren't crowded out by
+   * regions with dense data. Each item is tagged with the smallest-radius
+   * matching region. Cursors are returned per region.
    */
   nearbyFeed: protectedProcedure
-    .input(paginationInput)
+    .input(
+      z.object({
+        cursors: z.record(z.string(), z.string()).optional(),
+        perRegionLimit: z
+          .number()
+          .int()
+          .min(1)
+          .max(250)
+          .optional()
+          .default(250),
+      }),
+    )
     .query(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;
-      const { cursor, limit } = input;
+      const { cursors = {}, perRegionLimit } = input;
 
-      // Get user's active regions
       const regions = await db
         .select()
         .from(userRegions)
@@ -198,10 +211,9 @@ export const discoverRouter = router({
         );
 
       if (regions.length === 0) {
-        return { items: [], nextCursor: undefined, hasRegions: false };
+        return { items: [], nextCursors: {}, hasRegions: false };
       }
 
-      // Get followed venue IDs to exclude
       const followedVenues = await db
         .select({ venueId: userVenueFollows.venueId })
         .from(userVenueFollows)
@@ -209,7 +221,6 @@ export const discoverRouter = router({
 
       const followedVenueIds = followedVenues.map((v) => v.venueId);
 
-      // Build bounding-box conditions for each region (OR'd together)
       const regionBboxes = regions.map((region) => {
         const latDelta = region.radiusMiles / 69.0;
         const lngDelta =
@@ -224,52 +235,56 @@ export const discoverRouter = router({
         };
       });
 
-      const regionConditions = regionBboxes.map(({ minLat, maxLat, minLng, maxLng }) =>
-        sql`(
-          ${venues.latitude} BETWEEN ${minLat} AND ${maxLat}
-          AND ${venues.longitude} BETWEEN ${minLng} AND ${maxLng}
-        )`
+      // Run one query per region in parallel. Each gets up to perRegionLimit
+      // upcoming announcements ordered by show_date ASC.
+      const perRegionResults = await Promise.all(
+        regionBboxes.map(async ({ region, minLat, maxLat, minLng, maxLng }) => {
+          const conditions = [
+            sql`${venues.latitude} BETWEEN ${minLat} AND ${maxLat}`,
+            sql`${venues.longitude} BETWEEN ${minLng} AND ${maxLng}`,
+            sql`${announcements.showDate} >= CURRENT_DATE`,
+          ];
+          if (followedVenueIds.length > 0) {
+            conditions.push(notInArray(announcements.venueId, followedVenueIds));
+          }
+          const decoded = decodeCursor(cursors[region.id]);
+          if (decoded) {
+            conditions.push(cursorCondition(decoded));
+          }
+
+          const rows = await db
+            .select({ announcement: announcements, venue: venues })
+            .from(announcements)
+            .innerJoin(venues, eq(announcements.venueId, venues.id))
+            .where(and(...conditions))
+            .orderBy(asc(announcements.showDate), asc(announcements.id))
+            .limit(perRegionLimit + 1);
+
+          let nextCursor: string | undefined;
+          if (rows.length > perRegionLimit) {
+            const extra = rows.pop()!;
+            nextCursor = encodeCursor(
+              extra.announcement.showDate,
+              extra.announcement.id,
+            );
+          }
+          return { region, rows, nextCursor };
+        }),
       );
 
-      const regionFilter = sql`(${sql.join(regionConditions, sql` OR `)})`;
-
-      // Build conditions
-      const conditions = [regionFilter];
-
-      if (followedVenueIds.length > 0) {
-        conditions.push(
-          notInArray(announcements.venueId, followedVenueIds),
-        );
-      }
-
-      const decoded = decodeCursor(cursor);
-      if (decoded) {
-        conditions.push(cursorCondition(decoded));
-      }
-
-      const rows = await db
-        .select({
-          announcement: announcements,
-          venue: venues,
-        })
-        .from(announcements)
-        .innerJoin(venues, eq(announcements.venueId, venues.id))
-        .where(and(...conditions))
-        .orderBy(asc(announcements.showDate), asc(announcements.id))
-        .limit(limit + 1);
-
-      let nextCursor: string | undefined;
-      if (rows.length > limit) {
-        const extra = rows.pop()!;
-        nextCursor = encodeCursor(extra.announcement.showDate, extra.announcement.id);
-      }
-
-      // Assign each item to its smallest-radius matching region
+      // Assign each item to its smallest-radius matching region. Items can
+      // appear in multiple region bboxes when regions overlap; we de-dup by
+      // announcement id, keeping the smallest-radius region's copy.
       function findRegionForVenue(lat: number | null, lng: number | null) {
         if (lat == null || lng == null) return null;
         let best: (typeof regionBboxes)[0] | null = null;
         for (const bbox of regionBboxes) {
-          if (lat >= bbox.minLat && lat <= bbox.maxLat && lng >= bbox.minLng && lng <= bbox.maxLng) {
+          if (
+            lat >= bbox.minLat &&
+            lat <= bbox.maxLat &&
+            lng >= bbox.minLng &&
+            lng <= bbox.maxLng
+          ) {
             if (!best || bbox.region.radiusMiles < best.region.radiusMiles) {
               best = bbox;
             }
@@ -278,24 +293,82 @@ export const discoverRouter = router({
         return best;
       }
 
-      return {
-        items: rows.map((r) => {
-          const match = findRegionForVenue(r.venue.latitude, r.venue.longitude);
-          return {
+      const nextCursors: Record<string, string> = {};
+      const seenIds = new Set<string>();
+      const items: Array<
+        (typeof announcements.$inferSelect) & {
+          ticketUrl: string | null;
+          venue: typeof venues.$inferSelect;
+          regionId: string | null;
+          regionCityName: string | null;
+          regionRadiusMiles: number | null;
+        }
+      > = [];
+
+      for (const { region, rows, nextCursor } of perRegionResults) {
+        if (nextCursor) nextCursors[region.id] = nextCursor;
+        for (const r of rows) {
+          if (seenIds.has(r.announcement.id)) continue;
+          const match = findRegionForVenue(
+            r.venue.latitude,
+            r.venue.longitude,
+          );
+          if (match && match.region.id !== region.id) {
+            // Belongs to a smaller-radius region; skip here, it will be
+            // emitted from that region's batch.
+            continue;
+          }
+          seenIds.add(r.announcement.id);
+          items.push({
             ...r.announcement,
-            ticketUrl: r.announcement.ticketUrl
-              || (r.announcement.sourceEventId
+            ticketUrl:
+              r.announcement.ticketUrl ||
+              (r.announcement.sourceEventId
                 ? `https://www.ticketmaster.com/event/${r.announcement.sourceEventId}`
                 : null),
             venue: r.venue,
-            regionId: match?.region.id ?? null,
-            regionCityName: match?.region.cityName ?? null,
-            regionRadiusMiles: match?.region.radiusMiles ?? null,
-          };
-        }),
-        nextCursor,
-        hasRegions: true,
-      };
+            regionId: match?.region.id ?? region.id,
+            regionCityName: match?.region.cityName ?? region.cityName,
+            regionRadiusMiles: match?.region.radiusMiles ?? region.radiusMiles,
+          });
+        }
+      }
+
+      // Stable ordering across the whole feed by show_date, id.
+      items.sort((a, b) => {
+        if (a.showDate < b.showDate) return -1;
+        if (a.showDate > b.showDate) return 1;
+        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+      });
+
+      return { items, nextCursors, hasRegions: true };
+    }),
+
+  /**
+   * Returns whether a region's discover ingest job is still queued/running.
+   * Used by the Near You tab to show a "Discovering shows…" indicator while
+   * a just-added region is still being populated.
+   */
+  regionIngestStatus: protectedProcedure
+    .input(z.object({ regionId: z.string().uuid() }))
+    .query(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+      // Only allow checking status for the user's own regions.
+      const [region] = await db
+        .select({ id: userRegions.id })
+        .from(userRegions)
+        .where(
+          and(
+            eq(userRegions.id, input.regionId),
+            eq(userRegions.userId, userId),
+          ),
+        )
+        .limit(1);
+      if (!region) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Region not found' });
+      }
+      const pending = await isRegionIngestPending(input.regionId);
+      return { pending };
     }),
 
   /**
