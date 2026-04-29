@@ -14,7 +14,7 @@ export const enrichmentQueue = pgTable('enrichment_queue', {
   id: uuid('id').defaultRandom().primaryKey(),
   showId: uuid('show_id')
     .notNull()
-    .references(() => shows.id),
+    .references(() => shows.id, { onDelete: 'cascade' }),
   type: enrichmentTypeEnum('type').notNull(),
   attempts: integer('attempts').notNull().default(0),
   maxAttempts: integer('max_attempts').notNull().default(14),

@@ -4,6 +4,12 @@ Investigation of the two open data-model questions in `Planned Improvements.md`.
 Snapshot date: 2026-04-29. Schema source of truth: `packages/db/schema/*` and
 `packages/db/drizzle/*.sql`.
 
+> **Status (2026-04-29):** The recommendations in the analysis section
+> were implemented in migration `0012_cascade_show_relations.sql` and
+> the accompanying router/job edits. The "current" tables below describe
+> the pre-`0012` state; see the `Status` block at the bottom of this doc
+> for what shipped.
+
 ---
 
 ## Current ground truth
@@ -296,3 +302,40 @@ Tempting — would simplify a lot of code. Resist for these specifically:
 - **`user_*_follows.venue_id` / `.performer_id`**: leave as `no action`. Currently the orphan-cleanup paths delete follows before letting the parent go (or never delete the parent at all). Cascading would hide bugs where we accidentally delete a venue/performer that still has followers.
 
 A CASCADE makes the schema enforce a directionality. Use it where the directionality is obvious (a `show_performers` row is meaningless without its show); avoid it where the parent's "deletion" is itself a derived state (venues, performers, users).
+
+---
+
+## Status — what shipped (2026-04-29)
+
+Migration: `packages/db/drizzle/0012_cascade_show_relations.sql`.
+
+**FK changes:**
+- `show_performers.show_id` → `ON DELETE CASCADE` (was `no action`).
+- `enrichment_queue.show_id` → `ON DELETE CASCADE` (was `no action`).
+
+**New trigger: `cleanup_orphaned_performer`** — symmetric to
+`cleanup_orphaned_venue`. Fires on:
+- `AFTER DELETE` / `AFTER UPDATE` on `show_performers` (when `performer_id` changes)
+- `AFTER DELETE` on `user_performer_follows`
+- `AFTER DELETE` on `announcements`
+
+A performer row is removed once nothing references it across
+`show_performers`, `user_performer_follows`, or
+`announcements.headliner_performer_id`.
+
+**Code changes:**
+- `shows.delete` — drops manual `show_performers` pre-delete (now cascades).
+- `shows.deleteAll` — drops manual `show_performers` pre-delete; **no longer wipes follows** (follows are independent of show history).
+- `shows.update` — unchanged (still replaces performers explicitly; orphan trigger handles abandoned performers).
+- `runShowsNightly` — drops manual `show_performers` and `show_announcement_links` pre-deletes.
+- `discover.unwatchlist` — drops manual `show_announcement_links` pre-delete; this also fixes the latent FK bug where the comment claimed `show_performers` cascaded but it didn't.
+- `venues.unfollow` — drops manual `show_announcement_links` pre-delete; **announcement deletion now respects active regions and followed performers** (mirrors `performers.unfollow`). New helper: `computeVenueUnfollowAnnouncementsToDelete` in `preferences.ts`.
+
+**Tests:**
+- `packages/api/src/__tests__/venue-unfollow-cleanup.test.ts` — 7 unit tests for the new helper.
+
+**Not implemented:**
+- C16 (R2 photo cleanup on show delete) — photos feature isn't built yet; track with the photos work.
+- C17 (account deletion) — no account-deletion flow exists yet; track when it's added.
+- The `performers.delete` UI semantics question — pure UX, not a placement issue. Track separately.
+- The latent `cleanup_orphaned_venue` ↔ `user_venue_follows` race (the trigger doesn't check follows; if a user deletes their last show at a followed venue with no announcements, the trigger's `DELETE FROM venues` would hit an FK from `user_venue_follows`). Rare in practice but worth a follow-up.

@@ -5,8 +5,9 @@ import { router, protectedProcedure } from '../trpc';
 import {
   venues,
   userVenueFollows,
+  userPerformerFollows,
+  userRegions,
   announcements,
-  showAnnouncementLinks,
   shows,
 } from '@showbook/db';
 import { getPlaceDetails } from '../google-places';
@@ -15,6 +16,7 @@ import { geocodeVenue } from '../geocode';
 import { enqueueIngestVenue } from '../job-queue';
 import { scrapeConfigSchema, parseScrapeConfig } from '../scrape-config';
 import { venueScrapeRuns } from '@showbook/db';
+import { computeVenueUnfollowAnnouncementsToDelete } from './preferences';
 
 export const venuesRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -132,19 +134,46 @@ export const venuesRouter = router({
         .limit(1);
 
       if (!stillFollowed) {
-        const venueAnnouncements = await ctx.db
-          .select({ id: announcements.id })
+        // Selectively delete this venue's announcements: drop only those
+        // not preserved by some active region or followed performer.
+        // show_announcement_links cascade on announcement delete.
+        const candidateRows = await ctx.db
+          .select({
+            id: announcements.id,
+            venueId: announcements.venueId,
+            headlinerPerformerId: announcements.headlinerPerformerId,
+            venueLat: venues.latitude,
+            venueLng: venues.longitude,
+          })
           .from(announcements)
+          .innerJoin(venues, eq(announcements.venueId, venues.id))
           .where(eq(announcements.venueId, input.venueId));
 
-        if (venueAnnouncements.length > 0) {
-          const ids = venueAnnouncements.map((a) => a.id);
-          await ctx.db
-            .delete(showAnnouncementLinks)
-            .where(inArray(showAnnouncementLinks.announcementId, ids));
-          await ctx.db
-            .delete(announcements)
-            .where(eq(announcements.venueId, input.venueId));
+        if (candidateRows.length > 0) {
+          const activeRegionRows = await ctx.db
+            .select({
+              latitude: userRegions.latitude,
+              longitude: userRegions.longitude,
+              radiusMiles: userRegions.radiusMiles,
+            })
+            .from(userRegions)
+            .where(eq(userRegions.active, true));
+
+          const followedPerformerRows = await ctx.db
+            .select({ performerId: userPerformerFollows.performerId })
+            .from(userPerformerFollows);
+
+          const toDelete = computeVenueUnfollowAnnouncementsToDelete(
+            candidateRows,
+            activeRegionRows,
+            followedPerformerRows.map((r) => r.performerId),
+          );
+
+          if (toDelete.length > 0) {
+            await ctx.db
+              .delete(announcements)
+              .where(inArray(announcements.id, toDelete));
+          }
         }
       }
 
