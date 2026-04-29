@@ -342,6 +342,58 @@ export async function ingestVenue(venueId: string): Promise<{ events: number }> 
 }
 
 /**
+ * Run Phase 2 for a single region (when a user adds or re-activates one).
+ * Uses TM's native latlong+radius query and skips events at venues the user
+ * already follows so Phase 1 stays the source of truth for those.
+ */
+export async function ingestRegion(regionId: string): Promise<{ events: number }> {
+  const [region] = await db
+    .select({
+      id: userRegions.id,
+      latitude: userRegions.latitude,
+      longitude: userRegions.longitude,
+      radiusMiles: userRegions.radiusMiles,
+      active: userRegions.active,
+    })
+    .from(userRegions)
+    .where(eq(userRegions.id, regionId))
+    .limit(1);
+
+  if (!region || !region.active) return { events: 0 };
+
+  const followedVenueRows = await db
+    .selectDistinctOn([userVenueFollows.venueId], {
+      tmVenueId: venues.ticketmasterVenueId,
+    })
+    .from(userVenueFollows)
+    .innerJoin(venues, eq(userVenueFollows.venueId, venues.id))
+    .where(isNotNull(venues.ticketmasterVenueId));
+  const followedTmVenueIds = new Set(
+    followedVenueRows
+      .map((v) => v.tmVenueId)
+      .filter((id): id is string => !!id),
+  );
+
+  const existingSourceIds = await loadExistingSourceIds();
+  const events = await fetchAllEvents({
+    latlong: `${region.latitude},${region.longitude}`,
+    radius: region.radiusMiles,
+    unit: 'miles',
+    startDateTime: nowISO(),
+    endDateTime: futureISO(INGEST_HORIZON_MONTHS),
+  });
+  const filtered = events.filter((e) => {
+    const tmVenue = e._embedded?.venues?.[0];
+    return !(tmVenue?.id && followedTmVenueIds.has(tmVenue.id));
+  });
+  const created = await ingestTmEvents(filtered, existingSourceIds);
+  console.log(
+    `[discover/ingest-targeted] region=${regionId} fetched=${events.length} created=${created}`,
+  );
+  return { events: created };
+}
+
+/**
  * Run Phase 3 for a single performer (when a user follows an artist). The TM
  * attraction id is required.
  */

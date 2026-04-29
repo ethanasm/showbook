@@ -4,5 +4,6 @@ export {
   runDiscoverIngest,
   ingestVenue,
   ingestPerformer,
+  ingestRegion,
 } from './discover-ingest';
 export { runWeeklyDiscoveryDigest } from './notifications';
