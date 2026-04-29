@@ -43,13 +43,6 @@
       "when": 1777428525304,
       "tag": "0005_volatile_the_professor",
       "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1777429630504,
-      "tag": "0006_announcement_link_cascade",
-      "breakpoints": true
     }
   ]
 }

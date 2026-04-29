@@ -334,19 +334,6 @@ function AnnouncementRow({
 // Venue Search Modal
 // ---------------------------------------------------------------------------
 
-function useDebounced<T>(value: T, delay = 200): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(t);
-  }, [value, delay]);
-  return debounced;
-}
-
-type VenueSearchAction =
-  | { kind: "follow"; venueId: string }
-  | { kind: "createAndFollow"; placeId: string };
-
 function VenueSearchModal({
   onClose,
   onFollowed,
@@ -355,18 +342,16 @@ function VenueSearchModal({
   onFollowed: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const debouncedQuery = useDebounced(query.trim(), 200);
 
   const searchResults = trpc.venues.search.useQuery(
-    { query: debouncedQuery },
-    { enabled: debouncedQuery.length >= 2 },
+    { query },
+    { enabled: query.length >= 2 },
   );
 
   const placesResults = trpc.enrichment.searchPlaces.useQuery(
-    { query: debouncedQuery, types: "venue" },
-    { enabled: debouncedQuery.length >= 2 },
+    { query, types: "venue" },
+    { enabled: query.length >= 2 },
   );
 
   const followMutation = trpc.venues.follow.useMutation({
@@ -386,234 +371,98 @@ function VenueSearchModal({
     inputRef.current?.focus();
   }, []);
 
-  const localVenues = useMemo(() => searchResults.data ?? [], [searchResults.data]);
-  const filteredPlaces = useMemo(() => {
-    const places = placesResults.data ?? [];
-    const localPlaceIds = new Set(
-      localVenues.map((v) => v.googlePlaceId).filter(Boolean) as string[],
-    );
-    return places.filter((p) => !localPlaceIds.has(p.placeId));
-  }, [placesResults.data, localVenues]);
+  const localVenues = searchResults.data ?? [];
+  const places = placesResults.data ?? [];
+  const localIds = new Set(localVenues.map((v) => v.googlePlaceId).filter(Boolean));
+  const filteredPlaces = places.filter((p) => !localIds.has(p.placeId));
   const isPending = followMutation.isPending || createAndFollow.isPending;
 
-  const actions = useMemo<VenueSearchAction[]>(
-    () => [
-      ...localVenues.map((v): VenueSearchAction => ({ kind: "follow", venueId: v.id })),
-      ...filteredPlaces.map((p): VenueSearchAction => ({ kind: "createAndFollow", placeId: p.placeId })),
-    ],
-    [localVenues, filteredPlaces],
-  );
-
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [actions.length]);
-
-  const select = (action: VenueSearchAction) => {
-    if (isPending) return;
-    if (action.kind === "follow") {
-      followMutation.mutate({ venueId: action.venueId });
-    } else {
-      createAndFollow.mutate({ placeId: action.placeId });
-    }
-  };
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-        return;
-      }
-      if (actions.length === 0) return;
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setActiveIndex((i) => (i + 1) % actions.length);
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setActiveIndex((i) => (i - 1 + actions.length) % actions.length);
-      } else if (e.key === "Enter") {
-        const action = actions[activeIndex];
-        if (action) {
-          e.preventDefault();
-          select(action);
-        }
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actions, activeIndex, onClose, isPending]);
-
-  const venuesStart = 0;
-  const placesStart = localVenues.length;
-  const showResults = debouncedQuery.length >= 2;
-  const isFetching = searchResults.isFetching || placesResults.isFetching;
-  const hasNoResults =
-    showResults && !isFetching && localVenues.length === 0 && filteredPlaces.length === 0;
-
   return (
-    <div
-      className="discover-modal-overlay"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
+    <div className="discover-modal-overlay" onClick={onClose}>
       <div
         className="discover-modal"
         onClick={(e) => e.stopPropagation()}
-        data-testid="venue-follow-modal"
       >
-        <div className="discover-modal__input-row">
-          <Search size={14} className="discover-modal__input-icon" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search venues…"
-            className="discover-modal__input"
-            data-testid="venue-follow-input"
-            autoComplete="off"
-            spellCheck={false}
-          />
+        <div className="discover-modal__header">
+          <div className="discover-modal__title">Follow a venue</div>
           <button
             type="button"
-            onClick={onClose}
             className="discover-modal__close"
-            aria-label="Close"
+            onClick={onClose}
           >
             <X size={14} />
           </button>
         </div>
 
-        <div className="discover-modal__body">
-          {!showResults ? (
-            <div className="discover-modal__empty">
-              Type at least 2 characters to search
-            </div>
-          ) : isFetching && actions.length === 0 ? (
-            <div className="discover-modal__empty">Searching…</div>
-          ) : hasNoResults ? (
-            <div className="discover-modal__empty">No venues found</div>
-          ) : (
-            <div className="discover-modal__results">
-              {localVenues.length > 0 && (
-                <Section title="Venues">
-                  {localVenues.map((venue, i) => {
-                    const idx = venuesStart + i;
-                    return (
-                      <ResultRow
-                        key={venue.id}
-                        active={idx === activeIndex}
-                        onMouseEnter={() => setActiveIndex(idx)}
-                        onClick={() => select({ kind: "follow", venueId: venue.id })}
-                        disabled={isPending}
-                        primary={venue.name}
-                        secondary={[venue.city, venue.stateRegion]
-                          .filter(Boolean)
-                          .join(", ")}
-                        meta="Follow"
-                        dataTestId="venue-follow-result-db"
-                      />
-                    );
-                  })}
-                </Section>
-              )}
-              {filteredPlaces.length > 0 && (
-                <Section title="From Google Places">
-                  {filteredPlaces.map((place, i) => {
-                    const idx = placesStart + i;
-                    return (
-                      <ResultRow
-                        key={place.placeId}
-                        active={idx === activeIndex}
-                        onMouseEnter={() => setActiveIndex(idx)}
-                        onClick={() =>
-                          select({ kind: "createAndFollow", placeId: place.placeId })
-                        }
-                        disabled={isPending}
-                        primary={place.displayName}
-                        secondary={place.formattedAddress}
-                        meta="Add & follow"
-                        dataTestId="venue-follow-result-place"
-                      />
-                    );
-                  })}
-                </Section>
-              )}
-            </div>
-          )}
+        <div className="discover-modal__search">
+          <Search size={13} color="var(--muted)" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search venues..."
+            className="discover-modal__input"
+          />
         </div>
 
-        <div className="discover-modal__footer">
-          <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
-          <span><kbd>↵</kbd> follow</span>
-          <span><kbd>Esc</kbd> close</span>
+        <div className="discover-modal__results">
+          {query.length < 2 && (
+            <div className="discover-modal__hint">
+              Type at least 2 characters to search
+            </div>
+          )}
+          {query.length >= 2 && searchResults.isLoading && (
+            <div className="discover-modal__hint">Searching...</div>
+          )}
+          {localVenues.map((venue) => (
+            <button
+              key={venue.id}
+              type="button"
+              className="discover-modal__result"
+              onClick={() => followMutation.mutate({ venueId: venue.id })}
+              disabled={isPending}
+            >
+              <div className="discover-modal__result-body">
+                <div className="discover-modal__result-name">{venue.name}</div>
+                <div className="discover-modal__result-meta">
+                  {[venue.city, venue.stateRegion].filter(Boolean).join(", ")}
+                </div>
+              </div>
+              <div className="discover-modal__result-action">
+                <Plus size={12} />
+                Follow
+              </div>
+            </button>
+          ))}
+          {filteredPlaces.length > 0 && localVenues.length > 0 && (
+            <div className="discover-modal__hint" style={{ borderBottom: "1px solid var(--rule)" }}>
+              From Google Places
+            </div>
+          )}
+          {filteredPlaces.map((place) => (
+            <button
+              key={place.placeId}
+              type="button"
+              className="discover-modal__result"
+              onClick={() => createAndFollow.mutate({ placeId: place.placeId })}
+              disabled={isPending}
+            >
+              <div className="discover-modal__result-body">
+                <div className="discover-modal__result-name">{place.displayName}</div>
+                <div className="discover-modal__result-meta">{place.formattedAddress}</div>
+              </div>
+              <div className="discover-modal__result-action">
+                <Plus size={12} />
+                Follow
+              </div>
+            </button>
+          ))}
+          {query.length >= 2 && !searchResults.isLoading && localVenues.length === 0 && filteredPlaces.length === 0 && (
+            <div className="discover-modal__hint">No venues found</div>
+          )}
         </div>
       </div>
     </div>
-  );
-}
-
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="discover-modal__section">
-      <div className="discover-modal__section-title">{title}</div>
-      <div>{children}</div>
-    </div>
-  );
-}
-
-function ResultRow({
-  active,
-  onClick,
-  onMouseEnter,
-  disabled,
-  primary,
-  secondary,
-  meta,
-  dataTestId,
-}: {
-  active: boolean;
-  onClick: () => void;
-  onMouseEnter: () => void;
-  disabled: boolean;
-  primary: string;
-  secondary: string;
-  meta: string;
-  dataTestId?: string;
-}) {
-  const ref = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (active && ref.current) {
-      ref.current.scrollIntoView({ block: "nearest" });
-    }
-  }, [active]);
-  return (
-    <button
-      ref={ref}
-      type="button"
-      onClick={onClick}
-      onMouseEnter={onMouseEnter}
-      disabled={disabled}
-      className={`discover-modal__row${active ? " discover-modal__row--active" : ""}`}
-      data-testid={dataTestId}
-    >
-      <span className="discover-modal__row-icon">
-        <MapPin size={13} />
-      </span>
-      <span className="discover-modal__row-text">
-        <span className="discover-modal__row-primary">{primary}</span>
-        <span className="discover-modal__row-secondary">{secondary}</span>
-      </span>
-      <span className="discover-modal__row-meta">{meta}</span>
-    </button>
   );
 }
 

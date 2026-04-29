@@ -56,7 +56,7 @@ export const showAnnouncementLinks = pgTable(
       .references(() => shows.id, { onDelete: 'cascade' }),
     announcementId: uuid('announcement_id')
       .notNull()
-      .references(() => announcements.id, { onDelete: 'cascade' }),
+      .references(() => announcements.id),
   },
   (table) => [
     primaryKey({ columns: [table.showId, table.announcementId] }),
