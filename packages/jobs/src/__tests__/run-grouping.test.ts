@@ -23,6 +23,7 @@ function makeEvent(overrides: Partial<NormalizedEvent>): NormalizedEvent {
     onSaleDate: overrides.onSaleDate ?? null,
     onSaleStatus: overrides.onSaleStatus ?? 'on_sale',
     source: overrides.source ?? 'ticketmaster',
+    ticketUrl: overrides.ticketUrl ?? null,
   };
 }
 

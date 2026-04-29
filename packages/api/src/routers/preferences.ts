@@ -3,6 +3,7 @@ import { eq, and, not } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
 import { userPreferences, userRegions } from '@showbook/db';
+import { enqueueIngestRegion } from '../job-queue';
 
 // ---------------------------------------------------------------------------
 // Input schemas
@@ -89,6 +90,8 @@ export const preferencesRouter = router({
         })
         .returning();
 
+      await enqueueIngestRegion(region.id);
+
       return region;
     }),
 
@@ -152,6 +155,11 @@ export const preferencesRouter = router({
         .set({ active: not(userRegions.active) })
         .where(eq(userRegions.id, input.regionId))
         .returning();
+
+      // Re-activating a region should backfill announcements just like adding.
+      if (updated.active && !existing.active) {
+        await enqueueIngestRegion(updated.id);
+      }
 
       return updated;
     }),
