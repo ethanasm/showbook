@@ -3,8 +3,10 @@
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar, NAV_ITEMS, BOTTOM_NAV_ITEMS } from "@/components/design-system/Sidebar";
 import { ThemeProvider } from "@/components/design-system/ThemeProvider";
+import { PrefsServerSync } from "@/components/PrefsServerSync";
 import { GlobalSearch, openGlobalSearch } from "@/components/GlobalSearch";
 import { trpc } from "@/lib/trpc";
+import { useSession } from "next-auth/react";
 import type { ReactNode } from "react";
 
 function pathnameToNavId(pathname: string): string {
@@ -17,10 +19,19 @@ function navIdToPath(id: string): string {
   return `/${id}`;
 }
 
+function deriveInitials(name: string | null | undefined, email: string | null | undefined): string {
+  const source = (name ?? email ?? "").trim();
+  if (!source) return "?";
+  const parts = source.split(/\s+/);
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const activeId = pathnameToNavId(pathname);
+  const { data: session } = useSession();
 
   const showsQuery = trpc.shows.list.useQuery({}, { select: (d) => d.length });
   const performersQuery = trpc.performers.list.useQuery(undefined, { select: (d) => d.length });
@@ -31,15 +42,27 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (performersQuery.data !== undefined) counts.artists = performersQuery.data;
   if (venuesQuery.data !== undefined) counts.venues = venuesQuery.data;
 
+  const sessionUser = session?.user;
+  const userName = sessionUser?.name ?? sessionUser?.email ?? undefined;
+  const userInitials = deriveInitials(sessionUser?.name, sessionUser?.email);
+
   const handleNavigate = (id: string) => {
     router.push(navIdToPath(id));
   };
 
   return (
     <ThemeProvider>
+      <PrefsServerSync />
       <div className="app-shell">
         <div className="app-shell__sidebar">
-          <Sidebar active={activeId} onNavigate={handleNavigate} onSearchClick={openGlobalSearch} counts={counts} />
+          <Sidebar
+            active={activeId}
+            onNavigate={handleNavigate}
+            onSearchClick={openGlobalSearch}
+            counts={counts}
+            userName={userName}
+            userInitials={userInitials}
+          />
         </div>
         <main className="app-shell__content">
           <GlobalSearch />

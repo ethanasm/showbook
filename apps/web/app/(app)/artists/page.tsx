@@ -4,12 +4,14 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { Music, ArrowDownUp, Search } from "lucide-react";
+import { useCompactMode } from "@/lib/useCompactMode";
 
 type SortMode = "recent" | "count" | "alpha";
 
 export default function ArtistsPage() {
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [search, setSearch] = useState("");
+  const compact = useCompactMode();
 
   const { data: artists, isLoading, error } = trpc.performers.list.useQuery();
 
@@ -215,7 +217,7 @@ export default function ArtistsPage() {
                   display: "grid",
                   gridTemplateColumns: "1.5fr 80px 110px 110px",
                   columnGap: 16,
-                  padding: "12px 20px",
+                  padding: compact ? "5px 20px" : "12px 20px",
                   borderBottom: "1px solid var(--rule)",
                   alignItems: "center",
                   cursor: "pointer",

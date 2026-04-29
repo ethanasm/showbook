@@ -5,6 +5,7 @@ import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { MapPin, Search, Eye } from "lucide-react";
 import { SortHeader, type SortConfig } from "@/components/SortHeader";
+import { useCompactMode } from "@/lib/useCompactMode";
 
 type SortField = "name" | "state" | "city" | "past" | "future";
 
@@ -22,6 +23,7 @@ export default function VenuesListPage() {
     dir: "desc",
   });
   const [search, setSearch] = useState("");
+  const compact = useCompactMode();
 
   const { data, isLoading, error } = trpc.venues.list.useQuery();
 
@@ -287,7 +289,7 @@ export default function VenuesListPage() {
                   display: "grid",
                   gridTemplateColumns: "minmax(120px,2fr) minmax(80px,1fr) minmax(80px,1fr) 70px 70px 50px 50px 32px",
                   columnGap: 20,
-                  padding: "12px 20px",
+                  padding: compact ? "5px 20px" : "12px 20px",
                   borderBottom: "1px solid var(--rule)",
                   alignItems: "center",
                   cursor: "pointer",

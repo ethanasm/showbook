@@ -61,10 +61,12 @@ export function Sidebar({
   onNavigate,
   onSearchClick,
   counts,
-  userName = "Ethan Smith",
-  userInitials = "ES",
-  syncStatus = "synced 2m ago",
+  userName,
+  userInitials,
+  syncStatus = "signed in",
 }: SidebarProps) {
+  const displayName = userName ?? "…";
+  const displayInitials = userInitials ?? "·";
   const navItems = NAV_ITEMS.filter((i) => i.section === "navigate");
   const settingsItems = NAV_ITEMS.filter((i) => i.section === "settings");
 
@@ -153,8 +155,8 @@ export function Sidebar({
 
       {/* User profile */}
       <UserMenu
-        userInitials={userInitials}
-        userName={userName}
+        userInitials={displayInitials}
+        userName={displayName}
         syncStatus={syncStatus}
       />
     </aside>

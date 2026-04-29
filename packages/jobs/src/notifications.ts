@@ -173,12 +173,15 @@ export async function runNotificationDigest(): Promise<{
   let sent = 0;
   let skipped = 0;
 
-  // Current hour in ET (the app is self-hosted, timezone-aware)
+  // Current hour in ET (the app is self-hosted, timezone-aware).
+  // We compare against the *hour* component of digest_time only — Postgres TIME
+  // round-trips as HH:MM:SS, the UI quantizes to whole hours, and the cron itself
+  // only ticks hourly.
   const now = new Date();
   const etNow = new Date(
     now.toLocaleString('en-US', { timeZone: 'America/New_York' })
   );
-  const currentHour = `${String(etNow.getHours()).padStart(2, '0')}:00`;
+  const currentHourInt = etNow.getHours();
   const dayOfWeek = etNow.getDay(); // 0=Sun, 1=Mon
 
   const todayStr = etNow.toISOString().split('T')[0]; // YYYY-MM-DD
@@ -206,7 +209,7 @@ export async function runNotificationDigest(): Promise<{
     .innerJoin(users, eq(userPreferences.userId, users.id))
     .where(
       and(
-        eq(userPreferences.digestTime, currentHour),
+        sql`extract(hour from ${userPreferences.digestTime}) = ${currentHourInt}`,
         ne(userPreferences.digestFrequency, 'off')
       )
     );
@@ -378,7 +381,9 @@ export async function runNotificationDigest(): Promise<{
       .where(eq(userPreferences.userId, user.userId))
       .limit(1);
 
-    if (!prefs[0] || prefs[0].digestTime !== currentHour) continue;
+    if (!prefs[0]) continue;
+    const prefHour = parseInt(String(prefs[0].digestTime).slice(0, 2), 10);
+    if (prefHour !== currentHourInt) continue;
 
     try {
       const todayRows = await db

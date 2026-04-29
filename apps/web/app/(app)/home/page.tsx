@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
+import { useCompactMode } from "@/lib/useCompactMode";
 import { HeroCard } from "@/components/design-system/HeroCard";
 import type { ShowKind } from "@/components/design-system/KindBadge";
 import {
@@ -172,6 +173,7 @@ const SANS = "var(--font-geist-sans), sans-serif";
 
 export default function HomePage() {
   const router = useRouter();
+  const compact = useCompactMode();
   const { data: shows, isLoading } = trpc.shows.list.useQuery({});
 
   // Split shows into upcoming and past
@@ -754,7 +756,7 @@ export default function HomePage() {
                       gridTemplateColumns:
                         "72px 110px 1fr 1fr 110px 64px 28px",
                       columnGap: 16,
-                      padding: "14px 20px",
+                      padding: compact ? "6px 20px" : "14px 20px",
                       borderBottom: "1px solid var(--rule)",
                       alignItems: "center",
                     }}

@@ -73,6 +73,19 @@
   min-height: 48px;
 }
 
+/* Compact mode: tighter rows, smaller date typography. */
+[data-compact="true"] .show-row {
+  padding: 4px 16px;
+  min-height: 36px;
+  column-gap: 12px;
+}
+[data-compact="true"] .show-row__date-top {
+  font-size: 14px;
+}
+[data-compact="true"] .show-row__date-bottom {
+  font-size: 9px;
+}
+
 .show-row:hover {
   background: rgba(245, 245, 243, 0.04);
 }

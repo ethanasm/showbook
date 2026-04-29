@@ -323,6 +323,11 @@
   transition: background 0.12s;
 }
 
+[data-compact="true"] .discover-row {
+  padding: 5px 12px;
+  column-gap: 12px;
+}
+
 .discover-row:hover {
   background: rgba(245, 245, 243, 0.04);
 }

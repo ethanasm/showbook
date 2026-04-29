@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useSession } from "next-auth/react";
-import { MapPin, Check, Plus, Search, X } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
+import { MapPin, Check, Plus, Search, X, LogOut } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useTheme } from "@/components/design-system/ThemeProvider";
 import { SegmentedControl } from "@/components/design-system/SegmentedControl";
@@ -269,13 +269,15 @@ function AddRegionForm({ onAdd }: { onAdd: () => void }) {
   const [longitude, setLongitude] = useState("");
   const [radius, setRadius] = useState("25");
   const [expanded, setExpanded] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
   const [debouncedCity, setDebouncedCity] = useState("");
   const cityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const utils = trpc.useUtils();
 
   const citySearch = trpc.enrichment.searchPlaces.useQuery(
     { query: debouncedCity, types: "city" },
-    { enabled: debouncedCity.length >= 2 },
+    { enabled: debouncedCity.length >= 2 && !manualMode, retry: false },
   );
 
   const addRegion = trpc.preferences.addRegion.useMutation({
@@ -286,17 +288,24 @@ function AddRegionForm({ onAdd }: { onAdd: () => void }) {
       setLongitude("");
       setRadius("25");
       setExpanded(false);
+      setManualMode(false);
+      setDetailsError(null);
       onAdd();
     },
   });
 
   const handleCityInput = (value: string) => {
     setCityQuery(value);
-    setCityName("");
-    setLatitude("");
-    setLongitude("");
+    if (!manualMode) {
+      setCityName("");
+      setLatitude("");
+      setLongitude("");
+    } else {
+      setCityName(value);
+    }
+    setDetailsError(null);
     if (cityTimerRef.current) clearTimeout(cityTimerRef.current);
-    if (value.length >= 2) {
+    if (value.length >= 2 && !manualMode) {
       cityTimerRef.current = setTimeout(() => setDebouncedCity(value), 400);
     } else {
       setDebouncedCity("");
@@ -312,11 +321,25 @@ function AddRegionForm({ onAdd }: { onAdd: () => void }) {
         setLatitude(String(details.latitude));
         setLongitude(String(details.longitude));
         setDebouncedCity("");
+        setDetailsError(null);
       }
-    } catch { /* ignore */ }
+    } catch (e) {
+      setDetailsError(
+        "Couldn't load location details. Try again, or enter coordinates manually below.",
+      );
+    }
   };
 
-  const canSubmit = cityName.trim() !== "" && latitude !== "" && longitude !== "" && radius !== "" && !addRegion.isPending;
+  const searchFailed = !manualMode && citySearch.isError;
+
+  const canSubmit =
+    cityName.trim() !== "" &&
+    latitude !== "" &&
+    longitude !== "" &&
+    !Number.isNaN(parseFloat(latitude)) &&
+    !Number.isNaN(parseFloat(longitude)) &&
+    radius !== "" &&
+    !addRegion.isPending;
 
   if (!expanded) {
     return (
@@ -351,7 +374,7 @@ function AddRegionForm({ onAdd }: { onAdd: () => void }) {
             placeholder="e.g. Nashville"
             style={formStyles.input}
           />
-          {debouncedCity.length >= 2 && (
+          {!manualMode && debouncedCity.length >= 2 && (
             <div style={{
               position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20,
               background: "var(--surface)", border: "1px solid var(--rule-strong)",
@@ -359,6 +382,14 @@ function AddRegionForm({ onAdd }: { onAdd: () => void }) {
             }}>
               {citySearch.isLoading && (
                 <div style={{ padding: "8px 12px", fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--muted)" }}>Searching...</div>
+              )}
+              {citySearch.isError && (
+                <div style={{ padding: "8px 12px", fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "#E63946" }}>
+                  Search unavailable. Use manual entry below.
+                </div>
+              )}
+              {citySearch.data?.length === 0 && !citySearch.isLoading && (
+                <div style={{ padding: "8px 12px", fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)" }}>No matches</div>
               )}
               {citySearch.data?.map((p) => (
                 <button key={p.placeId} type="button" onClick={() => handleSelectCity(p.placeId)} style={{
@@ -384,6 +415,70 @@ function AddRegionForm({ onAdd }: { onAdd: () => void }) {
           />
         </div>
       </div>
+
+      {detailsError && (
+        <div style={formStyles.errorMessage}>{detailsError}</div>
+      )}
+      {searchFailed && !manualMode && (
+        <div style={formStyles.errorMessage}>
+          City search is unavailable right now.
+        </div>
+      )}
+
+      {manualMode && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={formStyles.inputLabel}>Latitude</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="any"
+              value={latitude}
+              onChange={(e) => setLatitude(e.target.value)}
+              placeholder="36.1627"
+              style={formStyles.input}
+            />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={formStyles.inputLabel}>Longitude</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="any"
+              value={longitude}
+              onChange={(e) => setLongitude(e.target.value)}
+              placeholder="-86.7816"
+              style={formStyles.input}
+            />
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+        <button
+          type="button"
+          onClick={() => {
+            setManualMode((prev) => {
+              const next = !prev;
+              if (next) {
+                setCityName(cityQuery);
+                setDebouncedCity("");
+              }
+              return next;
+            });
+          }}
+          style={formStyles.linkButton}
+        >
+          {manualMode ? "Use city search instead" : "Enter coordinates manually"}
+        </button>
+      </div>
+
+      {addRegion.isError && (
+        <div style={formStyles.errorMessage}>
+          Couldn&apos;t add region: {addRegion.error?.message ?? "unknown error"}
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
         <button
           type="button"
@@ -406,7 +501,11 @@ function AddRegionForm({ onAdd }: { onAdd: () => void }) {
         </button>
         <button
           type="button"
-          onClick={() => setExpanded(false)}
+          onClick={() => {
+            setExpanded(false);
+            setManualMode(false);
+            setDetailsError(null);
+          }}
           style={formStyles.cancelButton}
         >
           Cancel
@@ -463,6 +562,25 @@ const formStyles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     transition: "opacity 0.15s ease",
   },
+  errorMessage: {
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: "0.7rem",
+    color: "#E63946",
+    marginTop: 8,
+    letterSpacing: "0.04em",
+  },
+  linkButton: {
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: "0.7rem",
+    fontWeight: 500,
+    color: "var(--accent)",
+    background: "transparent",
+    border: "none",
+    padding: "6px 0 0",
+    cursor: "pointer",
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+  },
 };
 
 // ── Data Source Row ────────────────────────────────────────
@@ -499,7 +617,10 @@ function VenueFollowModal({ onClose, onFollowed }: { onClose: () => void; onFoll
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const searchResults = trpc.venues.search.useQuery({ query }, { enabled: query.length >= 2 });
-  const placesResults = trpc.enrichment.searchPlaces.useQuery({ query, types: "venue" }, { enabled: query.length >= 2 });
+  const placesResults = trpc.enrichment.searchPlaces.useQuery(
+    { query, types: "venue" },
+    { enabled: query.length >= 2, retry: false },
+  );
   const followMutation = trpc.venues.follow.useMutation({
     onSuccess: () => { setQuery(""); onFollowed(); },
   });
@@ -536,7 +657,12 @@ function VenueFollowModal({ onClose, onFollowed }: { onClose: () => void; onFoll
         </div>
         <div style={{ overflow: "auto", maxHeight: 300 }}>
           {query.length < 2 && <div style={{ padding: "20px", color: "var(--faint)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>Type at least 2 characters</div>}
-          {searchResults.isLoading && <div style={{ padding: "20px", color: "var(--muted)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>Searching...</div>}
+          {(searchResults.isLoading || placesResults.isLoading) && <div style={{ padding: "20px", color: "var(--muted)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>Searching...</div>}
+          {placesResults.isError && query.length >= 2 && (
+            <div style={{ padding: "10px 20px", color: "#E63946", fontFamily: mono, fontSize: 11 }}>
+              Google Places search is unavailable. Showing local matches only.
+            </div>
+          )}
           {(followMutation.isError || createAndFollow.isError) && (
             <div style={{ padding: "10px 20px", color: "#E63946", fontFamily: mono, fontSize: 11 }}>Failed to follow venue</div>
           )}
@@ -561,7 +687,7 @@ function VenueFollowModal({ onClose, onFollowed }: { onClose: () => void; onFoll
               <div style={{ fontFamily: mono, fontSize: 10.5, color: "var(--muted)", marginTop: 2 }}>{p.formattedAddress}</div>
             </button>
           ))}
-          {query.length >= 2 && !searchResults.isLoading && localVenues.length === 0 && filteredPlaces.length === 0 && (
+          {query.length >= 2 && !searchResults.isLoading && !placesResults.isLoading && localVenues.length === 0 && filteredPlaces.length === 0 && !placesResults.isError && (
             <div style={{ padding: "20px", color: "var(--faint)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>No venues found</div>
           )}
         </div>
@@ -603,6 +729,7 @@ export default function PreferencesPage() {
   const regions = prefsQuery.data?.regions ?? [];
   const venues = venuesQuery.data ?? [];
   const userEmail = session?.user?.email ?? "";
+  const userName = session?.user?.name ?? "";
 
   return (
     <div style={styles.container}>
@@ -618,8 +745,24 @@ export default function PreferencesPage() {
           {/* ── Account ─────────────────────────────── */}
           <SectionHead label="Account" sub="your login" />
           <div style={styles.card}>
-            <SettingRow label="Email" description="for digests and account recovery" last>
+            {userName && (
+              <SettingRow label="Name" description="from your Google account">
+                <span style={styles.emailDisplay}>{userName}</span>
+              </SettingRow>
+            )}
+            <SettingRow label="Email" description="for digests and account recovery">
               <span style={styles.emailDisplay}>{userEmail}</span>
+            </SettingRow>
+            <SettingRow label="Sign out" description="end this session on this device" last>
+              <button
+                type="button"
+                onClick={() => signOut({ callbackUrl: "/signin" })}
+                style={styles.signOutButton}
+                aria-label="Sign out"
+              >
+                <LogOut size={12} />
+                <span>Sign out</span>
+              </button>
             </SettingRow>
           </div>
 
@@ -672,13 +815,16 @@ export default function PreferencesPage() {
               />
             </SettingRow>
 
-            <SettingRow label="Digest time" description="when to send the email">
+            <SettingRow label="Digest time" description="sent at this hour, your local time">
               <input
                 type="time"
-                value={prefs?.digestTime ?? "09:00"}
-                onChange={(e) =>
-                  updatePrefs.mutate({ digestTime: e.target.value })
-                }
+                step={3600}
+                value={(prefs?.digestTime ?? "09:00:00").slice(0, 5)}
+                onChange={(e) => {
+                  // Cron is hourly — quantize to HH:00 so picker, storage, and dispatch agree.
+                  const hh = e.target.value.slice(0, 2);
+                  updatePrefs.mutate({ digestTime: `${hh}:00` });
+                }}
                 style={styles.timeInput}
               />
             </SettingRow>
@@ -1000,6 +1146,23 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: ".06em",
     textTransform: "uppercase",
     transition: "all 0.15s ease",
+    flexShrink: 0,
+  },
+  signOutButton: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: 10.5,
+    fontWeight: 500,
+    color: "var(--ink)",
+    background: "transparent",
+    border: "1px solid var(--rule-strong)",
+    borderRadius: 0,
+    padding: "6px 12px",
+    cursor: "pointer",
+    letterSpacing: ".06em",
+    textTransform: "uppercase",
     flexShrink: 0,
   },
   timeInput: {
