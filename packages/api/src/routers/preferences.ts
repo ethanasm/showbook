@@ -23,7 +23,7 @@ export interface RegionBbox {
   radiusMiles: number;
 }
 
-function isVenueInBbox(lat: number, lng: number, region: RegionBbox): boolean {
+export function isVenueInBbox(lat: number, lng: number, region: RegionBbox): boolean {
   const latDelta = region.radiusMiles / 69.0;
   const lngDelta = region.radiusMiles / (69.0 * Math.cos((region.latitude * Math.PI) / 180));
   return (
@@ -59,6 +59,23 @@ export function computeAnnouncementsToDelete(
       // Keep if user follows the headliner performer
       if (a.headlinerPerformerId && followedPerformerSet.has(a.headlinerPerformerId)) return false;
 
+      return true;
+    })
+    .map((a) => a.id);
+}
+
+export function computePerformerAnnouncementsToDelete(
+  candidates: AnnouncementCandidate[],
+  allActiveRegions: RegionBbox[],
+  allFollowedVenueIds: string[],
+): string[] {
+  const followedVenueSet = new Set(allFollowedVenueIds);
+
+  return candidates
+    .filter((a) => {
+      if (a.venueLat == null || a.venueLng == null) return false;
+      if (followedVenueSet.has(a.venueId)) return false;
+      if (allActiveRegions.some((r) => isVenueInBbox(a.venueLat!, a.venueLng!, r))) return false;
       return true;
     })
     .map((a) => a.id);

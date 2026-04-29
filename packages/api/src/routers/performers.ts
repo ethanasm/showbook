@@ -2,8 +2,9 @@ import { z } from 'zod';
 import { eq, and, ne, sql, desc, count, max, min, inArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
-import { performers, userPerformerFollows, shows, showPerformers } from '@showbook/db';
+import { performers, userPerformerFollows, shows, showPerformers, announcements, venues, userVenueFollows, userRegions } from '@showbook/db';
 import { enqueueIngestPerformer } from '../job-queue';
+import { computePerformerAnnouncementsToDelete } from './preferences';
 import { searchAttractions, selectBestImage } from '../ticketmaster';
 import { matchOrCreatePerformer } from '../performer-matcher';
 
@@ -124,6 +125,61 @@ export const performersRouter = router({
             eq(userPerformerFollows.performerId, input.performerId),
           ),
         );
+
+      const [stillFollowed] = await ctx.db
+        .select({ userId: userPerformerFollows.userId })
+        .from(userPerformerFollows)
+        .where(eq(userPerformerFollows.performerId, input.performerId))
+        .limit(1);
+
+      if (!stillFollowed) {
+        const candidateRows = await ctx.db
+          .select({
+            id: announcements.id,
+            venueId: announcements.venueId,
+            headlinerPerformerId: announcements.headlinerPerformerId,
+            venueLat: venues.latitude,
+            venueLng: venues.longitude,
+          })
+          .from(announcements)
+          .innerJoin(venues, eq(announcements.venueId, venues.id))
+          .where(eq(announcements.headlinerPerformerId, input.performerId));
+
+        if (candidateRows.length > 0) {
+          const followedVenueRows = await ctx.db
+            .select({ venueId: userVenueFollows.venueId })
+            .from(userVenueFollows);
+          const allFollowedVenueIds = followedVenueRows.map((r) => r.venueId);
+
+          const activeRegionRows = await ctx.db
+            .select()
+            .from(userRegions)
+            .where(eq(userRegions.active, true));
+          const allActiveRegions = activeRegionRows.map((r) => ({
+            latitude: r.latitude,
+            longitude: r.longitude,
+            radiusMiles: r.radiusMiles,
+          }));
+
+          const toDelete = computePerformerAnnouncementsToDelete(
+            candidateRows.map((r) => ({
+              id: r.id,
+              venueId: r.venueId,
+              headlinerPerformerId: r.headlinerPerformerId,
+              venueLat: r.venueLat,
+              venueLng: r.venueLng,
+            })),
+            allActiveRegions,
+            allFollowedVenueIds,
+          );
+
+          if (toDelete.length > 0) {
+            await ctx.db
+              .delete(announcements)
+              .where(inArray(announcements.id, toDelete));
+          }
+        }
+      }
 
       return { success: true };
     }),
