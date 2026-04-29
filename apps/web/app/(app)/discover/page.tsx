@@ -203,11 +203,13 @@ function AnnouncementRow({
   isWatching,
   onToggleWatch,
   showReason,
+  groupBy,
 }: {
   announcement: Announcement;
   isWatching: boolean;
   onToggleWatch: (id: string, watching: boolean) => void;
   showReason: boolean;
+  groupBy: "venue" | "artist";
 }) {
   const date = formatShowDateShort(announcement.showDate);
   const KindIcon = KIND_ICONS[announcement.kind];
@@ -258,28 +260,49 @@ function AnnouncementRow({
         {KIND_LABELS[announcement.kind]}
       </div>
 
-      {/* Headliner */}
+      {/* Headliner / Venue */}
       <div className="discover-row__headliner-cell">
-        <div className="discover-row__headliner">
-          {announcement.headlinerPerformerId ? (
-            <Link
-              href={`/artists/${announcement.headlinerPerformerId}`}
-              className="discover-row__headliner-link"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {announcement.headliner}
-            </Link>
-          ) : (
-            announcement.headliner
-          )}
-        </div>
-        {announcement.support && announcement.support.length > 0 && (
-          <div className="discover-row__support">
-            + {announcement.support.join(", ")}
-          </div>
-        )}
-        {showReason && reasonText && (
-          <div className="discover-row__reason">{reasonText}</div>
+        {groupBy === "artist" ? (
+          <>
+            <div className="discover-row__headliner">
+              <Link
+                href={`/venues/${announcement.venue.id}`}
+                className="discover-row__headliner-link"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {announcement.venue.name}
+              </Link>
+            </div>
+            {announcement.venue.city && (
+              <div className="discover-row__support">
+                {announcement.venue.city}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="discover-row__headliner">
+              {announcement.headlinerPerformerId ? (
+                <Link
+                  href={`/artists/${announcement.headlinerPerformerId}`}
+                  className="discover-row__headliner-link"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {announcement.headliner}
+                </Link>
+              ) : (
+                announcement.headliner
+              )}
+            </div>
+            {announcement.support && announcement.support.length > 0 && (
+              <div className="discover-row__support">
+                + {announcement.support.join(", ")}
+              </div>
+            )}
+            {showReason && reasonText && (
+              <div className="discover-row__reason">{reasonText}</div>
+            )}
+          </>
         )}
       </div>
 
@@ -511,7 +534,7 @@ function VenueRail({
       >
         <div className="discover-rail__item-body">
           <div className="discover-rail__item-name">
-            {tabLabel === "Followed venues" ? "All followed" : "All nearby"}
+            {tabLabel === "Nearby venues" ? "All nearby" : "All followed"}
           </div>
         </div>
         <div className="discover-rail__item-count">{totalCount}</div>
@@ -601,6 +624,7 @@ function FeedSection({
   onToggleWatch,
   activeTab,
   onVenueFollowed,
+  groupBy,
 }: {
   items: Announcement[] | undefined;
   isLoading: boolean;
@@ -609,59 +633,76 @@ function FeedSection({
   onToggleWatch: (id: string, watching: boolean) => void;
   activeTab: string;
   onVenueFollowed: () => void;
+  groupBy: "venue" | "artist";
 }) {
-  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [showFollowModal, setShowFollowModal] = useState(false);
 
-  // Extract unique venues with counts and neighborhoods
-  const venueList = useMemo(() => {
+  function getGroupKey(item: Announcement): string | null {
+    return groupBy === "artist" ? item.headlinerPerformerId : item.venue.id;
+  }
+
+  // Extract unique groups (venues or artists) with counts
+  const groupList = useMemo(() => {
     if (!items) return [];
     const seen = new Map<
       string,
       { id: string; name: string; label?: string; count: number }
     >();
     for (const item of items) {
-      if (!seen.has(item.venue.id)) {
-        seen.set(item.venue.id, {
-          id: item.venue.id,
-          name: item.venue.name,
-          label: item.venue.city,
+      const key = getGroupKey(item);
+      if (!key) continue;
+      if (!seen.has(key)) {
+        seen.set(key, {
+          id: key,
+          name: groupBy === "artist" ? item.headliner : item.venue.name,
+          label: groupBy === "artist" ? undefined : item.venue.city,
           count: 0,
         });
       }
-      seen.get(item.venue.id)!.count++;
+      seen.get(key)!.count++;
     }
     return Array.from(seen.values());
-  }, [items]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, groupBy]);
 
-  // Filter items by selected venue
+  // Filter items by selected group
   const filteredItems = useMemo(() => {
     if (!items) return [];
-    if (!selectedVenueId) return items;
-    return items.filter((item) => item.venue.id === selectedVenueId);
-  }, [items, selectedVenueId]);
+    if (!selectedGroupId) return items;
+    return items.filter((item) => getGroupKey(item) === selectedGroupId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, selectedGroupId, groupBy]);
 
-  // Group by venue (when "All" is selected)
+  // Group rows (when "All" is selected)
   const groups = useMemo(() => {
-    if (selectedVenueId) {
-      const v = venueList.find((v) => v.id === selectedVenueId) || {
-        id: selectedVenueId,
+    if (selectedGroupId) {
+      const g = groupList.find((g) => g.id === selectedGroupId) || {
+        id: selectedGroupId,
         name: "",
         label: "",
         count: 0,
       };
-      return [{ venue: v, items: filteredItems }];
+      return [{ group: g, items: filteredItems }];
     }
-    return venueList.map((v) => ({
-      venue: v,
-      items: filteredItems.filter((item) => item.venue.id === v.id),
+    return groupList.map((g) => ({
+      group: g,
+      items: filteredItems.filter((item) => getGroupKey(item) === g.id),
     }));
-  }, [filteredItems, venueList, selectedVenueId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredItems, groupList, selectedGroupId, groupBy]);
 
-  const totalCount = venueList.length;
+  const totalCount = groupList.length;
   const isFollowed = activeTab === "Followed";
-  const tabLabel = isFollowed ? "Followed venues" : "Nearby venues";
-  const showAllGrouped = selectedVenueId === null;
+  const isArtists = activeTab === "Artists";
+  const tabLabel = isFollowed
+    ? "Followed venues"
+    : isArtists
+      ? "Followed artists"
+      : "Nearby venues";
+  const showAllGrouped = selectedGroupId === null;
+  const groupRoute = groupBy === "artist" ? "artists" : "venues";
+  const groupPageLabel = groupBy === "artist" ? "artist page" : "venue page";
 
   function handleFollowVenue() {
     setShowFollowModal(true);
@@ -685,7 +726,7 @@ function FeedSection({
         <VenueRail
           venues={[]}
           selected={null}
-          onSelect={setSelectedVenueId}
+          onSelect={setSelectedGroupId}
           tabLabel={tabLabel}
           totalCount={0}
           showFollowLink={isFollowed}
@@ -709,7 +750,7 @@ function FeedSection({
         <VenueRail
           venues={[]}
           selected={null}
-          onSelect={setSelectedVenueId}
+          onSelect={setSelectedGroupId}
           tabLabel={tabLabel}
           totalCount={0}
           showFollowLink={isFollowed}
@@ -727,9 +768,9 @@ function FeedSection({
     <div className="discover-main">
       {/* Left Rail (desktop) */}
       <VenueRail
-        venues={venueList}
-        selected={selectedVenueId}
-        onSelect={setSelectedVenueId}
+        venues={groupList}
+        selected={selectedGroupId}
+        onSelect={setSelectedGroupId}
         tabLabel={tabLabel}
         totalCount={totalCount}
         showFollowLink={isFollowed}
@@ -738,9 +779,9 @@ function FeedSection({
 
       {/* Mobile Chips */}
       <VenueChips
-        venues={venueList}
-        selected={selectedVenueId}
-        onSelect={setSelectedVenueId}
+        venues={groupList}
+        selected={selectedGroupId}
+        onSelect={setSelectedGroupId}
         totalCount={totalCount}
       />
 
@@ -750,48 +791,49 @@ function FeedSection({
         <div className="discover-col-headers">
           <div>Show date</div>
           <div>Kind</div>
-          <div>Headliner</div>
+          <div>{groupBy === "artist" ? "Venue" : "Headliner"}</div>
           <div>On sale</div>
           <div>Status</div>
           <div />
         </div>
 
         {/* Grouped rows */}
-        {groups.map((group) => (
-          <div key={group.venue.id || "flat"} className="discover-venue-group">
-            {/* Venue header (only when "All" is selected) */}
-            {showAllGrouped && group.venue.id && (
+        {groups.map(({ group, items: groupItems }) => (
+          <div key={group.id || "flat"} className="discover-venue-group">
+            {/* Group header (only when "All" is selected) */}
+            {showAllGrouped && group.id && (
               <div className="discover-venue-group__header">
                 <Link
-                  href={`/venues/${group.venue.id}`}
+                  href={`/${groupRoute}/${group.id}`}
                   className="discover-venue-group__name discover-venue-group__name--link"
                 >
-                  {group.venue.name}
+                  {group.name}
                 </Link>
                 <span className="discover-venue-group__meta">
-                  {group.venue.label
-                    ? group.venue.label.toLowerCase() + " · "
+                  {group.label
+                    ? group.label.toLowerCase() + " · "
                     : ""}
-                  {group.items.length} upcoming
+                  {groupItems.length} upcoming
                 </span>
                 <div className="discover-venue-group__rule" />
                 <Link
-                  href={`/venues/${group.venue.id}`}
+                  href={`/${groupRoute}/${group.id}`}
                   className="discover-venue-group__link"
                 >
-                  venue page &rarr;
+                  {groupPageLabel} &rarr;
                 </Link>
               </div>
             )}
 
             {/* Announcement rows */}
-            {group.items.map((item) => (
+            {groupItems.map((item) => (
               <AnnouncementRow
                 key={item.id}
                 announcement={item}
                 isWatching={watchedIds.has(item.id)}
                 onToggleWatch={onToggleWatch}
                 showReason={showAllGrouped}
+                groupBy={groupBy}
               />
             ))}
           </div>
@@ -988,6 +1030,7 @@ export default function DiscoverPage() {
           onToggleWatch={handleToggleWatch}
           activeTab={activeTab}
           onVenueFollowed={handleVenueFollowed}
+          groupBy="venue"
         />
       )}
 
@@ -1000,6 +1043,7 @@ export default function DiscoverPage() {
           onToggleWatch={handleToggleWatch}
           activeTab={activeTab}
           onVenueFollowed={handleVenueFollowed}
+          groupBy="artist"
         />
       )}
 
@@ -1012,6 +1056,7 @@ export default function DiscoverPage() {
           onToggleWatch={handleToggleWatch}
           activeTab={activeTab}
           onVenueFollowed={handleVenueFollowed}
+          groupBy="venue"
         />
       )}
     </div>
