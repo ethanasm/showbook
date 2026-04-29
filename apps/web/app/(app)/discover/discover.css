@@ -603,45 +603,59 @@ a.discover-row__headliner-link:hover {
   }
 }
 
-/* ── Venue Search Modal ─────────────────────────────── */
+/* ── Venue Search Modal (palette-style) ─────────────── */
 
 .discover-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
+  background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(4px);
+  z-index: 200;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 12vh;
 }
 
 .discover-modal {
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: 12px;
   width: 100%;
-  max-width: 440px;
-  max-height: 480px;
+  max-width: 640px;
+  margin: 0 16px;
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
+  max-height: 70vh;
   overflow: hidden;
 }
 
-.discover-modal__header {
+.discover-modal__input-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px 12px;
+  gap: 10px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--rule);
 }
 
-.discover-modal__title {
-  font-family: var(--font-geist-sans), sans-serif;
-  font-size: 16px;
-  font-weight: 600;
+.discover-modal__input-icon {
+  color: var(--muted);
+}
+
+.discover-modal__input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
   color: var(--ink);
-  letter-spacing: -0.3px;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 15px;
+  letter-spacing: -0.2px;
+}
+
+.discover-modal__input::placeholder {
+  color: var(--faint);
 }
 
 .discover-modal__close {
@@ -650,109 +664,134 @@ a.discover-row__headliner-link:hover {
   color: var(--muted);
   cursor: pointer;
   padding: 4px;
-  display: flex;
-  align-items: center;
+  display: inline-flex;
 }
 
 .discover-modal__close:hover {
   color: var(--ink);
 }
 
-.discover-modal__search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  border-bottom: 1px solid var(--rule);
-}
-
-.discover-modal__input {
-  border: none;
-  background: transparent;
-  color: var(--ink);
-  font-family: var(--font-geist-sans), sans-serif;
-  font-size: 14px;
-  outline: none;
-  width: 100%;
-}
-
-.discover-modal__input::placeholder {
-  color: var(--faint);
-}
-
-.discover-modal__results {
+.discover-modal__body {
   flex: 1;
-  overflow: auto;
-  min-height: 0;
+  overflow-y: auto;
+  min-height: 60px;
 }
 
-.discover-modal__hint {
+.discover-modal__empty {
   padding: 24px 20px;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 11px;
-  color: var(--muted);
   text-align: center;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 12px;
+  color: var(--faint);
   letter-spacing: 0.04em;
 }
 
-.discover-modal__result {
+.discover-modal__results {
   display: flex;
+  flex-direction: column;
+  padding: 6px 0 10px;
+}
+
+.discover-modal__section {
+  display: flex;
+  flex-direction: column;
+}
+
+.discover-modal__section-title {
+  padding: 12px 16px 6px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  color: var(--faint);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.discover-modal__row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
   align-items: center;
   gap: 12px;
-  padding: 12px 20px;
+  padding: 8px 16px;
   width: 100%;
-  border: none;
-  border-bottom: 1px solid var(--rule);
   background: transparent;
-  cursor: pointer;
+  border: none;
   text-align: left;
-  transition: background 0.12s;
+  cursor: pointer;
+  color: var(--ink);
+  font-family: inherit;
 }
 
-.discover-modal__result:hover {
-  background: var(--surface2);
+.discover-modal__row--active {
+  background: rgba(245, 245, 243, 0.06);
 }
 
-.discover-modal__result:disabled {
+.discover-modal__row:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.discover-modal__result-body {
-  flex: 1;
+.discover-modal__row-icon {
+  color: var(--muted);
+  display: inline-flex;
+}
+
+.discover-modal__row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
 
-.discover-modal__result-name {
+.discover-modal__row-primary {
   font-family: var(--font-geist-sans), sans-serif;
   font-size: 14px;
-  font-weight: 500;
   color: var(--ink);
   letter-spacing: -0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.discover-modal__result-meta {
+.discover-modal__row-secondary {
   font-family: var(--font-geist-mono), monospace;
   font-size: 10.5px;
-  color: var(--muted);
-  margin-top: 2px;
+  color: var(--faint);
   letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.discover-modal__result-action {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+.discover-modal__row-meta {
   font-family: var(--font-geist-mono), monospace;
   font-size: 10.5px;
   color: var(--muted);
   letter-spacing: 0.04em;
   white-space: nowrap;
-  flex-shrink: 0;
 }
 
-.discover-modal__result:hover .discover-modal__result-action {
+.discover-modal__row--active .discover-modal__row-meta {
   color: var(--ink);
+}
+
+.discover-modal__footer {
+  display: flex;
+  gap: 18px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--rule);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  color: var(--faint);
+  letter-spacing: 0.04em;
+}
+
+.discover-modal__footer kbd {
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin-right: 4px;
+  background: var(--bg);
+  color: var(--muted);
 }
 
 /* ── Mobile: Venue Filter Chips ──────────────────────── */
