@@ -315,6 +315,7 @@ export const discoverRouter = router({
           venueId: announcement.venueId,
           date: showDate,
           productionName: isRun ? announcement.headliner : null,
+          ticketUrl: announcement.ticketUrl,
         })
         .returning();
 

@@ -31,6 +31,8 @@ import {
   X,
   Check,
   Loader2,
+  ArrowUpRight,
+  Link2,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -126,6 +128,7 @@ interface ShowData {
   productionName: string | null;
   setlist: string[] | null;
   photos: string[] | null;
+  ticketUrl: string | null;
   venue: {
     id: string;
     name: string;
@@ -345,6 +348,9 @@ export default function ShowsPage() {
   const deleteAllShows = trpc.shows.deleteAll.useMutation();
   const createShow = trpc.shows.create.useMutation();
   const utils = trpc.useUtils();
+  const setTicketUrl = trpc.shows.setTicketUrl.useMutation({
+    onSuccess: () => utils.shows.list.invalidate(),
+  });
 
   // Gmail
   const [gmailProgress, setGmailProgress] = useState<{ phase: string; processed: number; total: number; found: number } | null>(null);
@@ -992,9 +998,11 @@ export default function ShowsPage() {
           <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 2 }}>
             Actions
           </div>
-          {show.state === "watching" && (
-            <button
-              onClick={() => handleStateTransition(show)}
+          {show.state === "watching" && show.ticketUrl && (
+            <a
+              href={show.ticketUrl}
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
                 padding: "8px 14px",
                 background: "var(--accent)",
@@ -1007,9 +1015,55 @@ export default function ShowsPage() {
                 alignItems: "center",
                 gap: 6,
                 cursor: "pointer",
+                textDecoration: "none",
               }}
             >
-              <Ticket size={13} /> Buy tickets
+              <ArrowUpRight size={13} /> Tix
+            </a>
+          )}
+          {show.state === "watching" && !show.ticketUrl && (
+            <button
+              onClick={() => {
+                const url = prompt("Paste ticket URL:");
+                if (url) {
+                  setTicketUrl.mutate({ showId: show.id, ticketUrl: url });
+                }
+              }}
+              style={{
+                padding: "8px 14px",
+                background: "transparent",
+                border: "1px solid var(--rule-strong)",
+                color: "var(--ink)",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 12.5,
+                fontWeight: 500,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                cursor: "pointer",
+              }}
+            >
+              <Link2 size={13} /> Link tickets
+            </button>
+          )}
+          {show.state === "watching" && (
+            <button
+              onClick={() => handleStateTransition(show)}
+              style={{
+                padding: "8px 14px",
+                background: show.ticketUrl ? "transparent" : "var(--accent)",
+                color: show.ticketUrl ? "var(--ink)" : "var(--accent-text)",
+                border: show.ticketUrl ? "1px solid var(--rule-strong)" : "none",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 12.5,
+                fontWeight: 500,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                cursor: "pointer",
+              }}
+            >
+              <Ticket size={13} /> Got tickets
             </button>
           )}
           {transition && show.state === "ticketed" && (

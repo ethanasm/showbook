@@ -15,6 +15,7 @@ import {
   matchOrCreatePerformer,
   type PerformerInput,
 } from '../performer-matcher';
+import { searchEvents } from '../ticketmaster';
 
 // ---------------------------------------------------------------------------
 // Input schemas
@@ -263,6 +264,27 @@ export const showsRouter = router({
         }
       }
 
+      if (state === 'watching' && input.kind !== 'festival') {
+        try {
+          const tmVenueId = venueResult.venue.ticketmasterVenueId;
+          const { events } = await searchEvents({
+            keyword: input.headliner.name,
+            venueId: tmVenueId ?? undefined,
+            startDateTime: `${input.date}T00:00:00Z`,
+            endDateTime: `${input.date}T23:59:59Z`,
+            size: 1,
+          });
+          if (events.length > 0 && events[0]!.url) {
+            await ctx.db
+              .update(shows)
+              .set({ ticketUrl: events[0]!.url })
+              .where(eq(shows.id, show.id));
+          }
+        } catch {
+          // Non-blocking — don't fail the create if TM is down
+        }
+      }
+
       // Return the full show with relations
       return ctx.db.query.shows.findFirst({
         where: eq(shows.id, show.id),
@@ -273,6 +295,26 @@ export const showsRouter = router({
           },
         },
       });
+    }),
+
+  setTicketUrl: protectedProcedure
+    .input(
+      z.object({
+        showId: z.string().uuid(),
+        ticketUrl: z.string().url(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const [updated] = await ctx.db
+        .update(shows)
+        .set({ ticketUrl: input.ticketUrl })
+        .where(and(eq(shows.id, input.showId), eq(shows.userId, userId)))
+        .returning();
+      if (!updated) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+      }
+      return updated;
     }),
 
   updateState: protectedProcedure

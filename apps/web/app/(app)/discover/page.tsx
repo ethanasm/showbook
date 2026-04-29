@@ -39,6 +39,7 @@ type Announcement = {
   onSaleDate: string | null;
   onSaleStatus: "announced" | "on_sale" | "sold_out";
   source: string;
+  ticketUrl: string | null;
   venue: {
     id: string;
     name: string;
@@ -312,9 +313,9 @@ function AnnouncementRow({
           <CalendarPlus size={11} />
           Calendar
         </a>
-        {announcement.sourceEventId && (
+        {announcement.ticketUrl && (
           <a
-            href={`https://www.ticketmaster.com/event/${announcement.sourceEventId}`}
+            href={announcement.ticketUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="discover-tix-btn"
