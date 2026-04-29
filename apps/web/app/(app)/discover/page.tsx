@@ -116,12 +116,14 @@ function formatShowDateShort(dateStr: string): {
   return { month, day, year, dow };
 }
 
-function formatOnSaleDate(dateStr: string | null): string {
+function formatOnSaleDate(dateStr: string | Date | null): string {
   if (!dateStr) return "—";
-  const d = new Date(dateStr + "T00:00:00");
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
+    year: "numeric",
   });
 }
 

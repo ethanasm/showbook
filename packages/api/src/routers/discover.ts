@@ -298,9 +298,13 @@ export const discoverRouter = router({
           ? null
           : announcement.showDate;
 
-      const { performer } = await matchOrCreatePerformer({
-        name: announcement.headliner,
-      });
+      let performerId = announcement.headlinerPerformerId;
+      if (!performerId) {
+        const { performer } = await matchOrCreatePerformer({
+          name: announcement.headliner,
+        });
+        performerId = performer.id;
+      }
 
       const [show] = await db
         .insert(shows)
@@ -316,9 +320,9 @@ export const discoverRouter = router({
 
       await db.insert(showPerformers).values({
         showId: show.id,
-        performerId: performer.id,
+        performerId,
         role: 'headliner',
-        sortOrder: 1,
+        sortOrder: 0,
       });
 
       await db.insert(showAnnouncementLinks).values({
