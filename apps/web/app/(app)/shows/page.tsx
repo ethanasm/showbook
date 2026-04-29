@@ -362,9 +362,10 @@ export default function ShowsPage() {
     data: allShows,
     isLoading,
     error,
-  } = trpc.shows.list.useQuery({
-    year: yearFilter,
-  });
+  } = trpc.shows.list.useQuery(
+    { year: yearFilter },
+    { staleTime: 60_000 }
+  );
 
   const updateState = trpc.shows.updateState.useMutation();
   const deleteShow = trpc.shows.delete.useMutation();
@@ -384,7 +385,7 @@ export default function ShowsPage() {
   );
 
   // Get all years from unfiltered data
-  const { data: allShowsUnfiltered } = trpc.shows.list.useQuery({});
+  const { data: allShowsUnfiltered } = trpc.shows.list.useQuery({}, { staleTime: 60_000 });
   const allYears = useMemo(
     () => getUniqueYears((allShowsUnfiltered ?? []) as ShowData[]),
     [allShowsUnfiltered]
@@ -711,8 +712,19 @@ export default function ShowsPage() {
 
   if (isLoading) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, fontFamily: "var(--font-geist-mono), monospace", fontSize: "0.85rem", color: "var(--muted)" }}>
-        Loading shows...
+      <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+        {/* skeleton mode/filter header */}
+        <div style={{ padding: "14px 36px", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 52 }} />
+        {/* skeleton stats strip */}
+        <div style={{ padding: "12px 36px", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 64, background: "var(--surface)" }} />
+        {/* skeleton table rows */}
+        <div style={{ flex: 1, minHeight: 0, padding: "12px 36px 24px", overflow: "hidden" }}>
+          <div style={{ background: "var(--surface)" }}>
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} style={{ height: 48, borderBottom: "1px solid var(--rule)", background: "var(--surface)" }} />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

@@ -143,6 +143,7 @@ export default function AddPage() {
   const [castMembers, setCastMembers] = useState<CastMember[]>([]);
   const [openerName, setOpenerName] = useState("");
   const [productionName, setProductionName] = useState("");
+  const [notes, setNotes] = useState("");
 
   // Personal data
   const [seat, setSeat] = useState("");
@@ -294,6 +295,7 @@ export default function AddPage() {
     }
 
     if (s.productionName) setProductionName(s.productionName);
+    if (s.notes) setNotes(s.notes);
 
     const headlinerPerf = s.showPerformers.find(
       (sp: { role: string; sortOrder: number }) => sp.role === "headliner" && sp.sortOrder === 0,
@@ -767,6 +769,7 @@ export default function AddPage() {
         ticketCount: parseInt(ticketCount) || 1,
         tourName: tourName || undefined,
         productionName: productionName || undefined,
+        notes: notes || undefined,
         performers: performersWithSetlists.length > 0 ? performersWithSetlists : undefined,
       };
 
@@ -789,6 +792,7 @@ export default function AddPage() {
     ticketCount,
     tourName,
     productionName,
+    notes,
     setlistsByPerformer,
     performers,
     openerName,
@@ -1672,6 +1676,36 @@ export default function AddPage() {
               color: tourName ? "var(--ink)" : "var(--faint)",
               letterSpacing: -0.1,
               width: "100%",
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Notes */}
+      <div style={{ marginBottom: 26 }}>
+        <FieldLabel optional>Notes</FieldLabel>
+        <div style={{
+          padding: "10px 14px",
+          background: "var(--surface)",
+          border: `1px solid var(--rule-strong)`,
+        }}>
+          <textarea
+            placeholder="Anything to remember about this show — observations, rating, setlist surprises…"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={4}
+            style={{
+              width: "100%",
+              minHeight: 80,
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              resize: "vertical",
+              fontFamily: sans,
+              fontSize: 14,
+              color: notes ? "var(--ink)" : "var(--faint)",
+              letterSpacing: -0.1,
+              lineHeight: 1.5,
             }}
           />
         </div>

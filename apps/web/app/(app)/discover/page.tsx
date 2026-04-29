@@ -1123,12 +1123,26 @@ function FeedSection({
     return (
       <div className="discover-main">
         {venueRail}
-        <div className="discover-empty">
-          <div className="discover-loading">
-            <div className="discover-loading__dot" />
-            <div className="discover-loading__dot" />
-            <div className="discover-loading__dot" />
-          </div>
+        <div className="discover-list" style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              style={{
+                height: 96,
+                borderBottom: "1px solid var(--rule)",
+                background: "var(--surface)",
+                padding: "16px 20px",
+                display: "grid",
+                gridTemplateColumns: "1fr",
+                alignContent: "center",
+                gap: 8,
+              }}
+            >
+              <div style={{ height: 14, width: "40%", background: "var(--rule)" }} />
+              <div style={{ height: 12, width: "65%", background: "var(--rule)" }} />
+              <div style={{ height: 10, width: "25%", background: "var(--rule)" }} />
+            </div>
+          ))}
         </div>
         {followModal}
       </div>
@@ -1357,11 +1371,19 @@ export default function DiscoverPage() {
 
   const utils = trpc.useUtils();
 
-  const followedFeed = trpc.discover.followedFeed.useQuery({ limit: 100 });
-  const followedVenuesList = trpc.venues.followed.useQuery();
+  const followedFeed = trpc.discover.followedFeed.useQuery(
+    { limit: 100 },
+    { staleTime: 60_000 }
+  );
+  const followedVenuesList = trpc.venues.followed.useQuery(undefined, {
+    staleTime: 60_000,
+  });
   const preferences = trpc.preferences.get.useQuery();
 
-  const nearbyFeed = trpc.discover.nearbyFeed.useQuery({});
+  const nearbyFeed = trpc.discover.nearbyFeed.useQuery(
+    {},
+    { staleTime: 60_000 }
+  );
 
   const handlePendingChange = useCallback(
     (regionId: string, pending: boolean) => {
@@ -1379,9 +1401,10 @@ export default function DiscoverPage() {
 
   const activeRegions = preferences.data?.regions?.filter((r) => r.active) ?? [];
 
-  const followedArtistsFeed = trpc.discover.followedArtistsFeed.useQuery({
-    limit: 100,
-  });
+  const followedArtistsFeed = trpc.discover.followedArtistsFeed.useQuery(
+    { limit: 100 },
+    { staleTime: 60_000 }
+  );
 
   const refreshNow = trpc.discover.refreshNow.useMutation({
     onSuccess: (data) => {
