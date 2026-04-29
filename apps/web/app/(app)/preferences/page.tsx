@@ -589,7 +589,6 @@ const DATA_SOURCES = [
   { name: "setlist.fm", desc: "Setlists, tour info, song data", connected: true },
   { name: "Ticketmaster", desc: "Venue, date, seat, pricing", connected: true },
   { name: "Playbill", desc: "Theatre cast on the night", connected: true },
-  { name: "Wikipedia", desc: "Material context, album info", connected: false },
 ] as const;
 
 // ── Main Page ──────────────────────────────────────────────
@@ -696,10 +695,13 @@ function VenueFollowModal({ onClose, onFollowed }: { onClose: () => void; onFoll
   );
 }
 
+const VENUES_PER_PAGE = 10;
+
 export default function PreferencesPage() {
   const { theme: currentTheme, setTheme } = useTheme();
   const { data: session } = useSession();
   const utils = trpc.useUtils();
+  const [venuePage, setVenuePage] = useState(0);
 
   const prefsQuery = trpc.preferences.get.useQuery();
   const venuesQuery = trpc.venues.followed.useQuery();
@@ -820,7 +822,7 @@ export default function PreferencesPage() {
               />
             </SettingRow>
 
-            <SettingRow label="Digest time" description="sent at this hour, your local time">
+            <SettingRow label="Digest time" description="sent at this hour, your local time, every day">
               <input
                 type="time"
                 step={3600}
@@ -850,6 +852,7 @@ export default function PreferencesPage() {
             <SettingRow
               label="Push notifications"
               description="mobile app alerts"
+              last
             >
               <Toggle
                 checked={prefs?.pushNotifications ?? false}
@@ -859,25 +862,23 @@ export default function PreferencesPage() {
                 disabled={updatePrefs.isPending}
               />
             </SettingRow>
-
-            <SettingRow
-              label="Show-day reminder"
-              description="morning of the show - doors, seat, venue"
-              last
-            >
-              <Toggle
-                checked={prefs?.showDayReminder ?? false}
-                onChange={(value) =>
-                  updatePrefs.mutate({ showDayReminder: value })
-                }
-                disabled={updatePrefs.isPending}
-              />
-            </SettingRow>
           </div>
 
           {/* ── Regions ──────────────────────────────── */}
-          <SectionHead label="Regions" sub="where to look for nearby shows" />
-          <div style={{ ...styles.card, padding: "16px 20px" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 18 }}>
+            <div>
+              <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 11, color: "var(--ink)", letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 500 }}>
+                Regions
+              </div>
+              <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)", marginTop: 3, letterSpacing: ".04em" }}>
+                where to look for nearby shows
+              </div>
+            </div>
+            <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: regions.length >= 5 ? "#E63946" : "var(--muted)", letterSpacing: ".04em", marginLeft: "auto" }}>
+              {regions.length} / 5 regions
+            </div>
+          </div>
+          <div style={{ ...styles.card, padding: "16px 20px", marginBottom: 36 }}>
             {regions.length > 0 ? (
               <>
                 <div style={styles.regionGrid}>
@@ -907,7 +908,13 @@ export default function PreferencesPage() {
                     marginTop: 12,
                   }}
                 >
-                  <AddRegionForm onAdd={() => prefsQuery.refetch()} />
+                  {regions.length < 5 ? (
+                    <AddRegionForm onAdd={() => prefsQuery.refetch()} />
+                  ) : (
+                    <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)", letterSpacing: ".04em", marginTop: 12 }}>
+                      Maximum 5 regions — remove one to add another
+                    </div>
+                  )}
                   <div
                     style={{
                       fontFamily: "var(--font-geist-mono)",
@@ -936,62 +943,88 @@ export default function PreferencesPage() {
           <div style={styles.card}>
             {venues.length > 0 ? (
               <>
-                {venues.map(
-                  (
-                    venue: { id: string; name: string; city?: string },
-                    i: number
-                  ) => (
-                    <div
-                      key={venue.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 12,
-                        padding: "12px 0",
-                        borderBottom:
-                          i < venues.length - 1
-                            ? "1px solid var(--rule)"
-                            : "none",
-                      }}
-                    >
-                      <MapPin size={14} color="var(--faint)" />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontFamily: "var(--font-geist-sans)",
-                            fontSize: 13.5,
-                            fontWeight: 500,
-                            color: "var(--ink)",
-                            letterSpacing: -0.15,
-                          }}
-                        >
-                          {venue.name}
-                        </div>
-                        {venue.city && (
+                {venues
+                  .slice(venuePage * VENUES_PER_PAGE, (venuePage + 1) * VENUES_PER_PAGE)
+                  .map(
+                    (
+                      venue: { id: string; name: string; city?: string },
+                      i: number,
+                      pageVenues: { id: string; name: string; city?: string }[]
+                    ) => (
+                      <div
+                        key={venue.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          padding: "12px 0",
+                          borderBottom:
+                            i < pageVenues.length - 1
+                              ? "1px solid var(--rule)"
+                              : "none",
+                        }}
+                      >
+                        <MapPin size={14} color="var(--faint)" />
+                        <div style={{ flex: 1, minWidth: 0 }}>
                           <div
                             style={{
-                              fontFamily: "var(--font-geist-mono)",
-                              fontSize: 10,
-                              color: "var(--faint)",
-                              marginTop: 2,
+                              fontFamily: "var(--font-geist-sans)",
+                              fontSize: 13.5,
+                              fontWeight: 500,
+                              color: "var(--ink)",
+                              letterSpacing: -0.15,
                             }}
                           >
-                            {venue.city.toLowerCase()}
+                            {venue.name}
                           </div>
-                        )}
+                          {venue.city && (
+                            <div
+                              style={{
+                                fontFamily: "var(--font-geist-mono)",
+                                fontSize: 10,
+                                color: "var(--faint)",
+                                marginTop: 2,
+                              }}
+                            >
+                              {venue.city.toLowerCase()}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            unfollowVenue.mutate({ venueId: venue.id })
+                          }
+                          disabled={unfollowVenue.isPending}
+                          style={styles.unfollowButton}
+                        >
+                          {unfollowVenue.isPending ? "..." : "Unfollow"}
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          unfollowVenue.mutate({ venueId: venue.id })
-                        }
-                        disabled={unfollowVenue.isPending}
-                        style={styles.unfollowButton}
-                      >
-                        {unfollowVenue.isPending ? "..." : "Unfollow"}
-                      </button>
-                    </div>
-                  )
+                    )
+                  )}
+                {venues.length > VENUES_PER_PAGE && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderTop: "1px solid var(--rule)", marginTop: 4 }}>
+                    <button
+                      type="button"
+                      onClick={() => setVenuePage((p) => Math.max(0, p - 1))}
+                      disabled={venuePage === 0}
+                      style={{ ...styles.unfollowButton, opacity: venuePage === 0 ? 0.3 : 1 }}
+                    >
+                      &larr; Prev
+                    </button>
+                    <span style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)" }}>
+                      {venuePage * VENUES_PER_PAGE + 1}–{Math.min((venuePage + 1) * VENUES_PER_PAGE, venues.length)} of {venues.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setVenuePage((p) => p + 1)}
+                      disabled={(venuePage + 1) * VENUES_PER_PAGE >= venues.length}
+                      style={{ ...styles.unfollowButton, opacity: (venuePage + 1) * VENUES_PER_PAGE >= venues.length ? 0.3 : 1 }}
+                    >
+                      Next &rarr;
+                    </button>
+                  </div>
                 )}
               </>
             ) : (

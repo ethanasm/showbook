@@ -19,5 +19,4 @@ export const userPreferences = pgTable('user_preferences', {
   digestTime: time('digest_time').default('08:00'),
   emailNotifications: boolean('email_notifications').default(true),
   pushNotifications: boolean('push_notifications').default(true),
-  showDayReminder: boolean('show_day_reminder').default(true),
 });

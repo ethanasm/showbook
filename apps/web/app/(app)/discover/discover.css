@@ -319,7 +319,6 @@
   padding: 12px;
   align-items: center;
   border-bottom: 1px solid var(--rule);
-  cursor: pointer;
   transition: background 0.12s;
 }
 
@@ -769,7 +768,57 @@ a.discover-row__headliner-link:hover {
   display: none;
 }
 
-/* ── Responsive ──────────────────────────────────────── */
+/* ── Half-width responsive (720–960px) ───────────────── */
+
+@media (min-width: 720px) and (max-width: 960px) {
+  .discover-main {
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .discover-rail {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+    padding: 10px 0;
+    display: flex;
+    flex-wrap: wrap;
+    flex-direction: row;
+    gap: 0;
+    overflow: visible;
+  }
+
+  .discover-rail__title {
+    width: 100%;
+    padding: 0 18px 8px;
+  }
+
+  .discover-rail__item {
+    width: auto;
+    flex: 0 0 auto;
+  }
+
+  .discover-rail__follow {
+    width: 100%;
+    border-top: none;
+    margin-top: 0;
+    padding: 8px 18px 2px;
+  }
+
+  .discover-feed {
+    overflow: visible;
+  }
+
+  .discover-header {
+    padding: 16px 20px;
+  }
+
+  .discover-tabs-bar {
+    padding: 11px 20px;
+  }
+}
+
+/* ── Mobile ──────────────────────────────────────────── */
 
 @media (max-width: 767px) {
   .discover-header {

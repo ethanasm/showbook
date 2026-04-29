@@ -201,7 +201,6 @@ export async function runNotificationDigest(): Promise<{
       userId: userPreferences.userId,
       digestFrequency: userPreferences.digestFrequency,
       emailNotifications: userPreferences.emailNotifications,
-      showDayReminder: userPreferences.showDayReminder,
       email: users.email,
       displayName: users.name,
     })
@@ -346,14 +345,13 @@ export async function runNotificationDigest(): Promise<{
   }
 
   // ── 3. Show-day reminders (separate from digest) ────────────────────
-  // Find users with showDayReminder=true who have ticketed shows today
-  // but were NOT already covered by a digest email above
+  // Send to all users with email notifications enabled who have ticketed
+  // shows today but were NOT already covered by a digest email above.
   const digestUserIds = new Set(eligibleUsers.map((u) => u.userId));
 
   const reminderUsers = await db
     .select({
       userId: userPreferences.userId,
-      showDayReminder: userPreferences.showDayReminder,
       emailNotifications: userPreferences.emailNotifications,
       email: users.email,
       displayName: users.name,
@@ -361,10 +359,7 @@ export async function runNotificationDigest(): Promise<{
     .from(userPreferences)
     .innerJoin(users, eq(userPreferences.userId, users.id))
     .where(
-      and(
-        eq(userPreferences.showDayReminder, true),
-        eq(userPreferences.emailNotifications, true)
-      )
+      eq(userPreferences.emailNotifications, true)
     );
 
   for (const user of reminderUsers) {

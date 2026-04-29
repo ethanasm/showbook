@@ -18,6 +18,7 @@ import {
   enqueueIngestVenue,
   enqueueIngestPerformer,
 } from '../job-queue';
+import { searchAttractions, selectBestImage } from '../ticketmaster';
 
 // ---------------------------------------------------------------------------
 // Cursor-based pagination, composite (showDate, id) to match ORDER BY.
@@ -180,6 +181,7 @@ export const discoverRouter = router({
   /**
    * Feed of announcements at nearby (but not followed) venues.
    * Uses a bounding-box approximation of the user's active regions.
+   * Each item includes regionId and regionCityName (smallest-radius matching region).
    */
   nearbyFeed: protectedProcedure
     .input(paginationInput)
@@ -208,22 +210,26 @@ export const discoverRouter = router({
       const followedVenueIds = followedVenues.map((v) => v.venueId);
 
       // Build bounding-box conditions for each region (OR'd together)
-      const regionConditions = regions.map((region) => {
+      const regionBboxes = regions.map((region) => {
         const latDelta = region.radiusMiles / 69.0;
         const lngDelta =
           region.radiusMiles /
           (69.0 * Math.cos((region.latitude * Math.PI) / 180));
+        return {
+          region,
+          minLat: region.latitude - latDelta,
+          maxLat: region.latitude + latDelta,
+          minLng: region.longitude - lngDelta,
+          maxLng: region.longitude + lngDelta,
+        };
+      });
 
-        const minLat = region.latitude - latDelta;
-        const maxLat = region.latitude + latDelta;
-        const minLng = region.longitude - lngDelta;
-        const maxLng = region.longitude + lngDelta;
-
-        return sql`(
+      const regionConditions = regionBboxes.map(({ minLat, maxLat, minLng, maxLng }) =>
+        sql`(
           ${venues.latitude} BETWEEN ${minLat} AND ${maxLat}
           AND ${venues.longitude} BETWEEN ${minLng} AND ${maxLng}
-        )`;
-      });
+        )`
+      );
 
       const regionFilter = sql`(${sql.join(regionConditions, sql` OR `)})`;
 
@@ -258,18 +264,57 @@ export const discoverRouter = router({
         nextCursor = encodeCursor(extra.announcement.showDate, extra.announcement.id);
       }
 
+      // Assign each item to its smallest-radius matching region
+      function findRegionForVenue(lat: number | null, lng: number | null) {
+        if (lat == null || lng == null) return null;
+        let best: (typeof regionBboxes)[0] | null = null;
+        for (const bbox of regionBboxes) {
+          if (lat >= bbox.minLat && lat <= bbox.maxLat && lng >= bbox.minLng && lng <= bbox.maxLng) {
+            if (!best || bbox.region.radiusMiles < best.region.radiusMiles) {
+              best = bbox;
+            }
+          }
+        }
+        return best;
+      }
+
       return {
-        items: rows.map((r) => ({
-          ...r.announcement,
-          ticketUrl: r.announcement.ticketUrl
-            || (r.announcement.sourceEventId
-              ? `https://www.ticketmaster.com/event/${r.announcement.sourceEventId}`
-              : null),
-          venue: r.venue,
-        })),
+        items: rows.map((r) => {
+          const match = findRegionForVenue(r.venue.latitude, r.venue.longitude);
+          return {
+            ...r.announcement,
+            ticketUrl: r.announcement.ticketUrl
+              || (r.announcement.sourceEventId
+                ? `https://www.ticketmaster.com/event/${r.announcement.sourceEventId}`
+                : null),
+            venue: r.venue,
+            regionId: match?.region.id ?? null,
+            regionCityName: match?.region.cityName ?? null,
+            regionRadiusMiles: match?.region.radiusMiles ?? null,
+          };
+        }),
         nextCursor,
         hasRegions: true,
       };
+    }),
+
+  /**
+   * Search Ticketmaster for attractions to follow as artists.
+   */
+  searchArtists: protectedProcedure
+    .input(z.object({ keyword: z.string().min(1) }))
+    .query(async ({ input }) => {
+      try {
+        const attractions = await searchAttractions(input.keyword);
+        return attractions.slice(0, 10).map((a) => ({
+          id: a.id,
+          name: a.name,
+          imageUrl: selectBestImage(a.images) ?? null,
+          mbid: a.externalLinks?.musicbrainz?.[0]?.id ?? null,
+        }));
+      } catch {
+        return [];
+      }
     }),
 
   /**
