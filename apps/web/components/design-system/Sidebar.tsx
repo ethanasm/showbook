@@ -43,7 +43,7 @@ export const BOTTOM_NAV_ITEMS = [
   { id: "shows", label: "Shows", icon: Archive },
   { id: "add", label: "Add", icon: Plus, isAddButton: true },
   { id: "map", label: "Map", icon: Map },
-  { id: "me", label: "Me", icon: Settings },
+  { id: "preferences", label: "Me", icon: Settings },
 ] as const;
 
 interface SidebarProps {
