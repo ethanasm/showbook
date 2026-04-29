@@ -55,6 +55,7 @@ export const shows = pgTable(
     tourName: text('tour_name'),
     productionName: text('production_name'),
     setlist: text('setlist').array(),
+    setlists: jsonb('setlists').$type<Record<string, string[]>>(),
     photos: text('photos').array(),
     sourceRefs: jsonb('source_refs'),
     ticketUrl: text('ticket_url'),

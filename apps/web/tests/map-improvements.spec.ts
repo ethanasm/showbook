@@ -14,11 +14,11 @@ test.describe('Map improvements', () => {
 
   test('map shows the five new view preset buttons', async ({ page }) => {
     await page.goto('/map');
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(1000); // leaflet init
+    // The map view is dynamically imported with ssr:false; first hit on a
+    // fresh dev server takes longer to compile + hydrate. Wait for one of
+    // the preset buttons to actually show up rather than a fixed sleep.
+    await expect(page.getByRole('button', { name: 'Bay Area' })).toBeVisible({ timeout: 30000 });
 
-    // The five new presets
-    await expect(page.getByRole('button', { name: 'Bay Area' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'LA' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Oregon' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'NYC' })).toBeVisible();

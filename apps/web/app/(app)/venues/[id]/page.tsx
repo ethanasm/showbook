@@ -183,7 +183,11 @@ export default function VenueDetailPage() {
   });
 
   const unfollowMutation = trpc.venues.unfollow.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data.deleted) {
+        router.push("/venues");
+        return;
+      }
       utils.venues.detail.invalidate({ venueId });
       utils.venues.followed.invalidate();
       utils.discover.followedFeed.invalidate();
@@ -455,8 +459,10 @@ export default function VenueDetailPage() {
           gap: 36,
         }}
       >
-        {/* Scrape config — for venues without a Ticketmaster ID */}
-        <ScrapeConfigSection venueId={venueId} venueName={venue.name} />
+        {/* Scrape config — only for venues not covered by Ticketmaster */}
+        {!venue.ticketmasterVenueId && (
+          <ScrapeConfigSection venueId={venueId} venueName={venue.name} />
+        )}
 
         {/* Upcoming */}
         <section>
@@ -688,7 +694,8 @@ export default function VenueDetailPage() {
             }}
           >
             <Link
-              href="/map"
+              href={`/map?venue=${venue.id}`}
+              data-testid="view-on-map"
               style={{
                 color: "var(--muted)",
                 textDecoration: "none",
@@ -1071,8 +1078,6 @@ function ScrapeConfigSection({
       setEditing(false);
     },
   });
-
-  if (statusQuery.isLoading) return null;
 
   const config = statusQuery.data?.config;
   const lastRun = statusQuery.data?.lastRun;

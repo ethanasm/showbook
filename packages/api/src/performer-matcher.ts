@@ -8,7 +8,7 @@ import { eq, sql } from 'drizzle-orm';
 export interface PerformerInput {
   name: string;
   tmAttractionId?: string;
-  setlistfmMbid?: string;
+  musicbrainzId?: string;
   imageUrl?: string;
 }
 
@@ -28,14 +28,14 @@ export interface PerformerMatchResult {
 function buildUpdate(
   existing: typeof performers.$inferSelect,
   input: PerformerInput,
-): Partial<Record<'imageUrl' | 'setlistfmMbid' | 'ticketmasterAttractionId', string>> | null {
+): Partial<Record<'imageUrl' | 'musicbrainzId' | 'ticketmasterAttractionId', string>> | null {
   const updates: Record<string, string> = {};
 
   if (!existing.imageUrl && input.imageUrl) {
     updates.imageUrl = input.imageUrl;
   }
-  if (!existing.setlistfmMbid && input.setlistfmMbid) {
-    updates.setlistfmMbid = input.setlistfmMbid;
+  if (!existing.musicbrainzId && input.musicbrainzId) {
+    updates.musicbrainzId = input.musicbrainzId;
   }
   if (!existing.ticketmasterAttractionId && input.tmAttractionId) {
     updates.ticketmasterAttractionId = input.tmAttractionId;
@@ -83,12 +83,12 @@ export async function matchOrCreatePerformer(
     }
   }
 
-  // 2. setlist.fm MBID match
-  if (input.setlistfmMbid) {
+  // 2. MusicBrainz ID match
+  if (input.musicbrainzId) {
     const [match] = await db
       .select()
       .from(performers)
-      .where(eq(performers.setlistfmMbid, input.setlistfmMbid))
+      .where(eq(performers.musicbrainzId, input.musicbrainzId))
       .limit(1);
 
     if (match) {
@@ -113,7 +113,7 @@ export async function matchOrCreatePerformer(
     .values({
       name: input.name,
       ticketmasterAttractionId: input.tmAttractionId ?? null,
-      setlistfmMbid: input.setlistfmMbid ?? null,
+      musicbrainzId: input.musicbrainzId ?? null,
       imageUrl: input.imageUrl ?? null,
     })
     .returning();

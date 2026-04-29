@@ -74,6 +74,28 @@ export const venuesRouter = router({
         console.error('[venues/follow] ingestion failed:', err);
       }
 
+      // Auto-fill googlePlaceId for venues created via TM ingestion (which
+      // skip the venue-matcher geocoding path).
+      try {
+        const [venue] = await ctx.db
+          .select({ name: venues.name, city: venues.city, googlePlaceId: venues.googlePlaceId })
+          .from(venues)
+          .where(eq(venues.id, input.venueId))
+          .limit(1);
+
+        if (venue && !venue.googlePlaceId && venue.name && venue.city) {
+          const geo = await geocodeVenue(venue.name, venue.city);
+          if (geo?.googlePlaceId) {
+            await ctx.db
+              .update(venues)
+              .set({ googlePlaceId: geo.googlePlaceId })
+              .where(eq(venues.id, input.venueId));
+          }
+        }
+      } catch (err) {
+        console.error('[venues/follow] googlePlaceId backfill failed:', err);
+      }
+
       return { success: true };
     }),
 
@@ -126,7 +148,15 @@ export const venuesRouter = router({
         }
       }
 
-      return { success: true };
+      // Check if the venue was orphan-deleted by the DB trigger
+      // (cleanup_orphaned_venue fires when shows + announcements are both gone).
+      const [venueStillExists] = await ctx.db
+        .select({ id: venues.id })
+        .from(venues)
+        .where(eq(venues.id, input.venueId))
+        .limit(1);
+
+      return { success: true, deleted: !venueStillExists, venueId: input.venueId };
     }),
 
   createFromPlace: protectedProcedure

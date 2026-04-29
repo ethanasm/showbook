@@ -20,7 +20,8 @@ test.describe('Multi-user isolation', () => {
     await bob.goto('/api/test/login?email=bob@showbook.dev&name=Bob');
     await bob.waitForURL('**/home');
 
-    await expect(bob.getByText('No upcoming shows', { exact: false })).toBeVisible();
+    // Home now shows the empty state when the user has no shows.
+    await expect(bob.getByText('No shows yet', { exact: false })).toBeVisible();
     await expect(bob.getByText('Radiohead')).toHaveCount(0);
 
     await bob.screenshot({

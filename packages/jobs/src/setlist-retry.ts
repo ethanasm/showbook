@@ -61,7 +61,7 @@ export async function runSetlistRetry(): Promise<{
         .select({
           performerId: showPerformers.performerId,
           name: performers.name,
-          setlistfmMbid: performers.setlistfmMbid,
+          musicbrainzId: performers.musicbrainzId,
         })
         .from(showPerformers)
         .innerJoin(performers, eq(showPerformers.performerId, performers.id))
@@ -81,7 +81,7 @@ export async function runSetlistRetry(): Promise<{
       }
 
       // 2c/2d. Resolve MBID
-      let mbid = headlinerRow.setlistfmMbid;
+      let mbid = headlinerRow.musicbrainzId;
 
       if (!mbid) {
         // Try to find the artist on setlist.fm
@@ -91,7 +91,7 @@ export async function runSetlistRetry(): Promise<{
           // Persist the MBID for future lookups
           await db
             .update(performers)
-            .set({ setlistfmMbid: mbid })
+            .set({ musicbrainzId: mbid })
             .where(eq(performers.id, headlinerRow.performerId));
         }
       }
@@ -111,11 +111,14 @@ export async function runSetlistRetry(): Promise<{
       const result = await searchSetlist(mbid, show.date);
 
       if (result) {
-        // 2g. Found — update the show and delete the queue entry
+        // 2g. Found — update the show and delete the queue entry.
+        // Write to setlists (per-performer) keyed by headliner's performerId.
+        const setlistsUpdate: Record<string, string[]> = {};
+        setlistsUpdate[headlinerRow.performerId] = result.songs;
         await db
           .update(shows)
           .set({
-            setlist: result.songs,
+            setlists: setlistsUpdate,
             tourName: result.tourName ?? undefined,
           })
           .where(eq(shows.id, item.showId));

@@ -136,7 +136,8 @@ export default function AddPage() {
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
   // Kind-specific enrichment
-  const [setlist, setSetlist] = useState<string[] | null>(null);
+  // setlistsByPerformer: keyed by performer name (headliner or support)
+  const [setlistsByPerformer, setSetlistsByPerformer] = useState<Record<string, string[]>>({});
   const [tourName, setTourName] = useState("");
   const [performers, setPerformers] = useState<PerformerData[]>([]);
   const [castMembers, setCastMembers] = useState<CastMember[]>([]);
@@ -227,7 +228,7 @@ export default function AddPage() {
     { enabled: debouncedVenueQuery.length >= 2 && !tmEnriched },
   );
 
-  // Setlist fetch
+  // Auto-fetch headliner setlist for past concerts
   const isPastConcert =
     kind === "concert" && date && new Date(date) < new Date();
   const setlistQuery = trpc.enrichment.fetchSetlist.useQuery(
@@ -237,6 +238,8 @@ export default function AddPage() {
         !!isPastConcert && headliner.name.length > 0 && date.length > 0,
     },
   );
+  // Track which performers have a pending setlist fetch
+  const [fetchingSetlistFor, setFetchingSetlistFor] = useState<Record<string, boolean>>({});
 
   // Mutations
   const parseChat = trpc.enrichment.parseChat.useMutation();
@@ -271,7 +274,24 @@ export default function AddPage() {
     if (s.pricePaid) setPricePaid(s.pricePaid);
     if (s.ticketCount) setTicketCount(String(s.ticketCount));
     if (s.tourName) setTourName(s.tourName);
-    if (s.setlist) setSetlist(s.setlist);
+    // Prefill setlists from existing show (setlists map or legacy setlist array)
+    if (s.setlists && typeof s.setlists === 'object') {
+      // Map performerId → songs, but we need names; build name-keyed version
+      const byName: Record<string, string[]> = {};
+      const allPerfs = s.showPerformers ?? [];
+      for (const [pid, songs] of Object.entries(s.setlists as Record<string, string[]>)) {
+        const perf = allPerfs.find((sp: { performer: { id: string } }) => sp.performer.id === pid);
+        if (perf) byName[perf.performer.name] = songs;
+      }
+      if (Object.keys(byName).length > 0) setSetlistsByPerformer(byName);
+    } else if (s.setlist && s.setlist.length > 0) {
+      const headlinerPerf = s.showPerformers.find(
+        (sp: { role: string; sortOrder: number }) => sp.role === 'headliner' && sp.sortOrder === 0,
+      );
+      if (headlinerPerf) {
+        setSetlistsByPerformer({ [headlinerPerf.performer.name]: s.setlist });
+      }
+    }
 
     if (s.productionName) setProductionName(s.productionName);
 
@@ -345,10 +365,10 @@ export default function AddPage() {
       if (headliner.tmAttractionId) count++;
       if (performers.length > 0) count++;
     }
-    if (setlist && setlist.length > 0) count++;
+    if (Object.keys(setlistsByPerformer).length > 0) count++;
     if (tourName && setlistQuery.data) count++;
     return count;
-  }, [tmEnriched, venue, date, headliner, performers, setlist, tourName, setlistQuery.data]);
+  }, [tmEnriched, venue, date, headliner, performers, setlistsByPerformer, tourName, setlistQuery.data]);
 
   // ── Handlers ─────────────────────────────────────────────
 
@@ -584,15 +604,18 @@ export default function AddPage() {
     [],
   );
 
-  // Update setlist when query resolves
+  // Auto-fill headliner setlist when query resolves
   useEffect(() => {
-    if (setlistQuery.data) {
-      setSetlist(setlistQuery.data.songs);
+    if (setlistQuery.data && headliner.name) {
+      setSetlistsByPerformer((prev) => ({
+        ...prev,
+        [headliner.name]: setlistQuery.data!.songs,
+      }));
       if (setlistQuery.data.tourName) {
         setTourName(setlistQuery.data.tourName);
       }
     }
-  }, [setlistQuery.data]);
+  }, [setlistQuery.data, headliner.name]);
 
   const handleChatSend = useCallback(async () => {
     if (!chatInput.trim()) return;
@@ -697,9 +720,18 @@ export default function AddPage() {
         }
       }
 
+      // Attach per-performer setlists to performers; headliner gets its own field
+      const headlinerSetlist = headliner.name ? setlistsByPerformer[headliner.name] : undefined;
+      const performersWithSetlists = allPerformers.map((p) => ({
+        ...p,
+        setlist: setlistsByPerformer[p.name] ?? undefined,
+      }));
+
       const payload = {
         kind,
-        headliner: headliner.name ? headliner : { name: productionName || "Unknown" },
+        headliner: headliner.name
+          ? { ...headliner, setlist: headlinerSetlist }
+          : { name: productionName || "Unknown" },
         venue: venueToSave,
         date,
         endDate: endDate || undefined,
@@ -708,8 +740,7 @@ export default function AddPage() {
         ticketCount: parseInt(ticketCount) || 1,
         tourName: tourName || undefined,
         productionName: productionName || undefined,
-        setlist: setlist ?? undefined,
-        performers: allPerformers.length > 0 ? allPerformers : undefined,
+        performers: performersWithSetlists.length > 0 ? performersWithSetlists : undefined,
       };
 
       if (isEditMode && editId) {
@@ -731,7 +762,7 @@ export default function AddPage() {
     ticketCount,
     tourName,
     productionName,
-    setlist,
+    setlistsByPerformer,
     performers,
     openerName,
     createShow,
@@ -798,8 +829,11 @@ export default function AddPage() {
     return [
       {
         source: "setlist.fm",
-        what: setlist ? `${setlist.length} songs${tourName ? ` · ${tourName}` : ""}` : "tour, setlist",
-        status: setlistQuery.isLoading ? "pending" : setlist ? "ok" : setlistQuery.isFetched ? "skipped" : isPastConcert ? "pending" : "skipped",
+        what: (() => {
+          const total = Object.values(setlistsByPerformer).reduce((s, songs) => s + songs.length, 0);
+          return total > 0 ? `${total} songs${tourName ? ` · ${tourName}` : ""}` : "tour, setlist";
+        })(),
+        status: setlistQuery.isLoading ? "pending" : Object.keys(setlistsByPerformer).length > 0 ? "ok" : setlistQuery.isFetched ? "skipped" : isPastConcert ? "pending" : "skipped",
       },
       {
         source: "ticketmaster",
@@ -822,7 +856,7 @@ export default function AddPage() {
         status: "pending",
       },
     ];
-  }, [setlist, tourName, setlistQuery.isLoading, setlistQuery.isFetched, isPastConcert, tmEnriched, debouncedQuery, tmSearch.isLoading, castMembers, kind, headliner, venue.name, date]);
+  }, [setlistsByPerformer, tourName, setlistQuery.isLoading, setlistQuery.isFetched, isPastConcert, tmEnriched, debouncedQuery, tmSearch.isLoading, castMembers, kind, headliner, venue.name, date]);
 
   // Kind color helper
   const kindColor = (k: ShowKind) => `var(--kind-${k})`;
@@ -1691,39 +1725,66 @@ export default function AddPage() {
         </div>
       )}
 
-      {/* Setlist (past concerts) — leave untouched */}
-      {isPastConcert && (
-        <div style={{ marginBottom: 26 }}>
-          <FieldLabel hint={setlistQuery.isLoading ? "fetching..." : setlist ? `${setlist.length} songs` : undefined}>
-            Setlist
-          </FieldLabel>
-          {setlistQuery.isLoading && (
-            <div style={{ fontFamily: mono, fontSize: 10.5, color: "var(--muted)", padding: "8px 0" }}>
-              Checking setlist.fm...
-            </div>
+      {/* ── Setlist — per-performer (past concerts) ── */}
+      {isPastConcert && (kind === "concert") && (
+        <div style={{ marginBottom: 26 }} data-testid="setlist-section">
+          <FieldLabel hint="one block per performer">Setlist</FieldLabel>
+          {/* Headliner block */}
+          {headliner.name && (
+            <PerformerSetlistBlock
+              performerName={headliner.name}
+              songs={setlistsByPerformer[headliner.name] ?? null}
+              loading={setlistQuery.isLoading}
+              fetchingFor={fetchingSetlistFor}
+              onFetch={async () => {
+                setFetchingSetlistFor((prev) => ({ ...prev, [headliner.name]: true }));
+                try {
+                  const result = await utils.enrichment.fetchSetlist.fetch({
+                    performerName: headliner.name,
+                    date,
+                  });
+                  if (result?.songs?.length) {
+                    setSetlistsByPerformer((prev) => ({ ...prev, [headliner.name]: result.songs }));
+                    if (result.tourName) setTourName(result.tourName);
+                  }
+                } finally {
+                  setFetchingSetlistFor((prev) => ({ ...prev, [headliner.name]: false }));
+                }
+              }}
+              onChange={(songs) =>
+                setSetlistsByPerformer((prev) => ({ ...prev, [headliner.name]: songs }))
+              }
+            />
           )}
-          {setlist && setlist.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {setlist.map((song, i) => (
-                <span key={i} style={{
-                  display: "inline-block",
-                  padding: "4px 10px",
-                  background: "var(--surface2)",
-                  color: "var(--ink)",
-                  fontFamily: mono,
-                  fontSize: 11,
-                  letterSpacing: ".02em",
-                }}>
-                  {song}
-                </span>
-              ))}
-            </div>
-          )}
-          {!setlistQuery.isLoading && (!setlist || setlist.length === 0) && (
-            <div style={{ fontFamily: mono, fontSize: 10.5, color: "var(--faint)", padding: "8px 0" }}>
-              No setlist found. We&apos;ll check again later.
-            </div>
-          )}
+          {/* Support performer blocks */}
+          {performers
+            .filter((p) => p.role === "support")
+            .map((p) => (
+              <PerformerSetlistBlock
+                key={p.name}
+                performerName={p.name}
+                songs={setlistsByPerformer[p.name] ?? null}
+                loading={false}
+                fetchingFor={fetchingSetlistFor}
+                onFetch={async () => {
+                  setFetchingSetlistFor((prev) => ({ ...prev, [p.name]: true }));
+                  try {
+                    const result = await utils.enrichment.fetchSetlist.fetch({
+                      performerName: p.name,
+                      date,
+                    });
+                    if (result?.songs?.length) {
+                      setSetlistsByPerformer((prev) => ({ ...prev, [p.name]: result.songs }));
+                    }
+                  } finally {
+                    setFetchingSetlistFor((prev) => ({ ...prev, [p.name]: false }));
+                  }
+                }}
+                onChange={(songs) =>
+                  setSetlistsByPerformer((prev) => ({ ...prev, [p.name]: songs }))
+                }
+              />
+            ))}
         </div>
       )}
 
@@ -2139,7 +2200,8 @@ export default function AddPage() {
       detailRows.push(["Paid", `$${pricePaid}${count > 1 ? ` ($${perTicket}/ea × ${count})` : ""}`]);
     }
     if (tourName) detailRows.push(["Tour", tourName]);
-    if (setlist && setlist.length > 0) detailRows.push(["Setlist", `${setlist.length} songs`]);
+    const totalSongs = Object.values(setlistsByPerformer).reduce((s, songs) => s + songs.length, 0);
+    if (totalSongs > 0) detailRows.push(["Setlist", `${totalSongs} songs`]);
 
     return (
       <div style={{
@@ -2471,6 +2533,113 @@ export default function AddPage() {
       </div>
     </div>
     </>
+  );
+}
+
+// ── PerformerSetlistBlock ─────────────────────────────────────
+
+function PerformerSetlistBlock({
+  performerName,
+  songs,
+  loading,
+  fetchingFor,
+  onFetch,
+  onChange,
+}: {
+  performerName: string;
+  songs: string[] | null;
+  loading: boolean;
+  fetchingFor: Record<string, boolean>;
+  onFetch: () => Promise<void>;
+  onChange: (songs: string[]) => void;
+}) {
+  const isFetching = fetchingFor[performerName] ?? loading;
+  const hasSongs = songs && songs.length > 0;
+
+  return (
+    <div
+      data-testid={`setlist-block-${performerName.replace(/\s+/g, "-").toLowerCase()}`}
+      style={{
+        marginBottom: 12,
+        border: "1px solid var(--rule-strong)",
+        background: "var(--surface)",
+      }}
+    >
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "10px 14px",
+        borderBottom: hasSongs ? "1px solid var(--rule)" : "none",
+      }}>
+        <span style={{
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 13,
+          fontWeight: 600,
+          color: "var(--ink)",
+          letterSpacing: -0.1,
+        }}>
+          {performerName}
+        </span>
+        <button
+          type="button"
+          data-testid={`search-setlist-${performerName.replace(/\s+/g, "-").toLowerCase()}`}
+          onClick={onFetch}
+          disabled={isFetching}
+          style={{
+            padding: "5px 10px",
+            background: "transparent",
+            border: "1px solid var(--rule-strong)",
+            color: isFetching ? "var(--faint)" : "var(--muted)",
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 10,
+            letterSpacing: ".06em",
+            textTransform: "uppercase",
+            cursor: isFetching ? "default" : "pointer",
+          }}
+        >
+          {isFetching ? "fetching..." : "Search setlist.fm"}
+        </button>
+      </div>
+      {hasSongs && (
+        <div style={{ padding: "8px 14px", display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {songs.map((song, i) => (
+            <span key={i} style={{
+              display: "inline-block",
+              padding: "3px 8px",
+              background: "var(--surface2)",
+              color: "var(--ink)",
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 10.5,
+              letterSpacing: ".02em",
+            }}>
+              {song}
+            </span>
+          ))}
+        </div>
+      )}
+      {!hasSongs && !isFetching && (
+        <div style={{ padding: "8px 14px" }}>
+          <textarea
+            placeholder="Enter songs one per line..."
+            value={(songs ?? []).join("\n")}
+            onChange={(e) => onChange(e.target.value.split("\n").filter(Boolean))}
+            rows={3}
+            style={{
+              width: "100%",
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 11,
+              color: "var(--ink)",
+              resize: "vertical",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 

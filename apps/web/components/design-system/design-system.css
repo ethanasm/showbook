@@ -805,4 +805,25 @@ a.show-row__support-link:hover {
   .bottom-bar__add-popover-item:hover {
     background: var(--bg);
   }
+
+  /* ShowRow: collapse to 5 essential columns at narrow widths so the row
+     fits a 390px viewport without horizontal overflow clipping links. */
+  .show-row {
+    grid-template-columns: 8px 64px 1.2fr 1fr 64px;
+    column-gap: 8px;
+  }
+  [data-compact="true"] .show-row {
+    column-gap: 6px;
+  }
+  .show-row__kind,
+  .show-row__seat,
+  .show-row__paid {
+    display: none;
+  }
+  .show-row__date-top {
+    font-size: 13px;
+  }
+  .show-row__date-bottom {
+    font-size: 9px;
+  }
 }

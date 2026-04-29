@@ -1,6 +1,7 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, } from "next/navigation";
+import { useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import {
@@ -155,7 +156,18 @@ export default function ShowDetailPage() {
     await deleteShow.mutateAsync({ showId: show.id });
   }
 
-  const setlist = show.setlist ?? [];
+  // Build effective setlists: prefer new per-performer map; fall back to
+  // legacy setlist array placed under the headliner key for old rows.
+  const setlistsMap: Record<string, string[]> = (() => {
+    const raw = show.setlists as Record<string, string[]> | null | undefined;
+    if (raw && Object.keys(raw).length > 0) return raw;
+    if (show.setlist && show.setlist.length > 0 && headlinerSP) {
+      return { [headlinerSP.performer.id]: show.setlist };
+    }
+    return {};
+  })();
+
+  const setlistPerformerIds = Object.keys(setlistsMap);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
@@ -430,59 +442,13 @@ export default function ShowDetailPage() {
           </section>
         )}
 
-        {/* Setlist */}
-        {setlist.length > 0 && (
-          <section>
-            <SectionHeader
-              label={`Setlist · ${setlist.length} song${setlist.length !== 1 ? "s" : ""}`}
-              note="from setlist.fm"
-            />
-            <ol
-              style={{
-                background: "var(--surface)",
-                listStyle: "none",
-                margin: 0,
-                padding: 0,
-                counterReset: "song",
-              }}
-            >
-              {setlist.map((song, i) => (
-                <li
-                  key={`${i}-${song}`}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "48px 1fr",
-                    columnGap: 12,
-                    padding: "10px 16px",
-                    borderBottom: "1px solid var(--rule)",
-                    alignItems: "baseline",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 11,
-                      color: "var(--faint)",
-                      letterSpacing: ".04em",
-                      fontFeatureSettings: '"tnum"',
-                    }}
-                  >
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: "var(--font-geist-sans), sans-serif",
-                      fontSize: 14,
-                      color: "var(--ink)",
-                      letterSpacing: -0.1,
-                    }}
-                  >
-                    {song}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </section>
+        {/* Setlist — per-performer */}
+        {setlistPerformerIds.length > 0 && (
+          <SetlistSection
+            setlistsMap={setlistsMap}
+            lineup={lineup}
+            headlinerPerformerId={headlinerSP?.performer.id ?? null}
+          />
         )}
 
         {/* Actions */}
@@ -685,6 +651,125 @@ function CenteredMessage({
     >
       {children}
     </div>
+  );
+}
+
+// ── Per-performer setlist section ────────────────────────────────────────
+
+type ShowPerformerEntry = {
+  performer: { id: string; name: string };
+  role: string;
+  sortOrder: number;
+};
+
+function SetlistSection({
+  setlistsMap,
+  lineup,
+  headlinerPerformerId,
+}: {
+  setlistsMap: Record<string, string[]>;
+  lineup: ShowPerformerEntry[];
+  headlinerPerformerId: string | null;
+}) {
+  const performerIds = Object.keys(setlistsMap);
+
+  const defaultId =
+    (headlinerPerformerId && performerIds.includes(headlinerPerformerId)
+      ? headlinerPerformerId
+      : null) ?? performerIds[0] ?? null;
+
+  const [selectedId, setSelectedId] = useState<string | null>(defaultId);
+
+  const activeSongs = selectedId ? (setlistsMap[selectedId] ?? []) : [];
+
+  const labelFor = (id: string) => {
+    const sp = lineup.find((p) => p.performer.id === id);
+    return sp?.performer.name ?? id;
+  };
+
+  return (
+    <section data-testid="setlist-section">
+      <SectionHeader label={`Setlist · ${activeSongs.length} song${activeSongs.length !== 1 ? "s" : ""}`} />
+      {/* Artist picker — only shown when multiple performers have setlists */}
+      {performerIds.length > 1 && (
+        <div
+          style={{
+            display: "flex",
+            gap: 0,
+            marginBottom: 12,
+            border: "1px solid var(--rule-strong)",
+            width: "fit-content",
+          }}
+        >
+          {performerIds.map((id, i) => (
+            <button
+              key={id}
+              type="button"
+              data-testid={`setlist-tab-${labelFor(id).replace(/\s+/g, "-").toLowerCase()}`}
+              onClick={() => setSelectedId(id)}
+              style={{
+                padding: "7px 14px",
+                background: selectedId === id ? "var(--ink)" : "transparent",
+                color: selectedId === id ? "var(--bg)" : "var(--muted)",
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: 11,
+                letterSpacing: ".04em",
+                fontWeight: 500,
+                border: "none",
+                borderLeft: i === 0 ? "none" : "1px solid var(--rule-strong)",
+                cursor: "pointer",
+              }}
+            >
+              {labelFor(id)}
+            </button>
+          ))}
+        </div>
+      )}
+      <ol
+        style={{
+          background: "var(--surface)",
+          listStyle: "none",
+          margin: 0,
+          padding: 0,
+        }}
+      >
+        {activeSongs.map((song, i) => (
+          <li
+            key={`${i}-${song}`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "48px 1fr",
+              columnGap: 12,
+              padding: "10px 16px",
+              borderBottom: "1px solid var(--rule)",
+              alignItems: "baseline",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: 11,
+                color: "var(--faint)",
+                letterSpacing: ".04em",
+                fontFeatureSettings: '"tnum"',
+              }}
+            >
+              {String(i + 1).padStart(2, "0")}
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 14,
+                color: "var(--ink)",
+                letterSpacing: -0.1,
+              }}
+            >
+              {song}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 

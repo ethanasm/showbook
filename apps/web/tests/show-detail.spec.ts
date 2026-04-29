@@ -6,24 +6,25 @@ async function loginAndSeed(page: Page) {
   await page.waitForURL('**/home');
 }
 
+async function gotoRadioheadMSG(page: Page): Promise<string> {
+  // Look up the show id directly so we don't depend on shows-page pagination.
+  const res = await page.request.get(
+    '/api/test/show-id?headliner=Radiohead&venueName=Madison+Square+Garden&state=past',
+  );
+  const { id } = await res.json();
+  if (!id) throw new Error('Radiohead @ MSG show not seeded');
+  await page.goto(`/shows/${id}`);
+  await page.locator('text=Loading show…').waitFor({ state: 'detached', timeout: 15000 });
+  return id;
+}
+
 test.describe('Show detail page', () => {
   test.beforeEach(async ({ page }) => {
     await loginAndSeed(page);
   });
 
-  test('loads via row navigation and renders headliner + venue', async ({ page }) => {
-    await page.goto('/shows');
-    await page.waitForSelector('.show-row', { timeout: 10000 });
-
-    // Click the row that contains "Radiohead" at MSG. The seed has two
-    // Radiohead shows (MSG past, Beacon future); target the MSG one
-    // specifically since this test asserts on the Madison Square Garden
-    // venue link.
-    const radioheadRow = page.locator('.show-row', { hasText: 'Radiohead' }).filter({ hasText: 'Madison Square Garden' }).first();
-    await expect(radioheadRow).toBeVisible();
-    await radioheadRow.click();
-
-    await page.waitForURL(/\/shows\/[0-9a-f-]+/);
+  test('loads via direct id navigation and renders headliner + venue', async ({ page }) => {
+    await gotoRadioheadMSG(page);
 
     // Hero shows headliner.
     await expect(page.locator('h1')).toContainText('Radiohead');
@@ -38,13 +39,7 @@ test.describe('Show detail page', () => {
   });
 
   test('renders setlist when present', async ({ page }) => {
-    await page.goto('/shows');
-    await page.waitForSelector('.show-row', { timeout: 10000 });
-    // The seed has TWO Radiohead shows (MSG 2024 past, Beacon 2026 future).
-    // The first three tests below need the past MSG one (it has the seeded
-    // setlist + Madison venue link). Target it specifically.
-    await page.locator('.show-row', { hasText: 'Radiohead' }).filter({ hasText: 'Madison Square Garden' }).first().click();
-    await page.waitForURL(/\/shows\/[0-9a-f-]+/);
+    await gotoRadioheadMSG(page);
 
     // The Radiohead seeded concert has a 10-song setlist.
     await expect(page.getByText(/Setlist · 10 songs/i)).toBeVisible();
@@ -54,22 +49,19 @@ test.describe('Show detail page', () => {
   });
 
   test('hides the setlist section when not present', async ({ page }) => {
-    await page.goto('/shows');
-    await page.waitForSelector('.show-row', { timeout: 10000 });
     // LCD Soundsystem at Brooklyn Steel does NOT have a seeded setlist.
-    await page.locator('.show-row', { hasText: 'LCD Soundsystem' }).first().click();
-    await page.waitForURL(/\/shows\/[0-9a-f-]+/);
+    const res = await page.request.get(
+      '/api/test/show-id?headliner=LCD+Soundsystem&venueName=Brooklyn+Steel&state=past',
+    );
+    const { id } = await res.json();
+    if (!id) throw new Error('LCD @ Brooklyn Steel show not seeded');
+    await page.goto(`/shows/${id}`);
+    await page.locator('text=Loading show…').waitFor({ state: 'detached', timeout: 15000 });
     await expect(page.getByText(/^Setlist ·/i)).toHaveCount(0);
   });
 
   test('headliner link navigates to /artists/[id]', async ({ page }) => {
-    await page.goto('/shows');
-    await page.waitForSelector('.show-row', { timeout: 10000 });
-    // The seed has TWO Radiohead shows (MSG 2024 past, Beacon 2026 future).
-    // The first three tests below need the past MSG one (it has the seeded
-    // setlist + Madison venue link). Target it specifically.
-    await page.locator('.show-row', { hasText: 'Radiohead' }).filter({ hasText: 'Madison Square Garden' }).first().click();
-    await page.waitForURL(/\/shows\/[0-9a-f-]+/);
+    await gotoRadioheadMSG(page);
 
     await page.getByRole('link', { name: 'Radiohead' }).first().click();
     await page.waitForURL(/\/artists\/[0-9a-f-]+/);
@@ -77,13 +69,7 @@ test.describe('Show detail page', () => {
   });
 
   test('venue link navigates to /venues/[id]', async ({ page }) => {
-    await page.goto('/shows');
-    await page.waitForSelector('.show-row', { timeout: 10000 });
-    // The seed has TWO Radiohead shows (MSG 2024 past, Beacon 2026 future).
-    // The first three tests below need the past MSG one (it has the seeded
-    // setlist + Madison venue link). Target it specifically.
-    await page.locator('.show-row', { hasText: 'Radiohead' }).filter({ hasText: 'Madison Square Garden' }).first().click();
-    await page.waitForURL(/\/shows\/[0-9a-f-]+/);
+    await gotoRadioheadMSG(page);
 
     await page.getByRole('link', { name: /Madison Square Garden/i }).first().click();
     await page.waitForURL(/\/venues\/[0-9a-f-]+/);
@@ -91,38 +77,26 @@ test.describe('Show detail page', () => {
   });
 
   test('Edit button routes to /add?editId=', async ({ page }) => {
-    await page.goto('/shows');
-    await page.waitForSelector('.show-row', { timeout: 10000 });
-    // The seed has TWO Radiohead shows (MSG 2024 past, Beacon 2026 future).
-    // The first three tests below need the past MSG one (it has the seeded
-    // setlist + Madison venue link). Target it specifically.
-    await page.locator('.show-row', { hasText: 'Radiohead' }).filter({ hasText: 'Madison Square Garden' }).first().click();
-    await page.waitForURL(/\/shows\/[0-9a-f-]+/);
+    await gotoRadioheadMSG(page);
 
     await page.getByRole('button', { name: /Edit/i }).click();
     await page.waitForURL(/\/add\?editId=[0-9a-f-]+/);
   });
 });
 
-test.describe('Shows list — row vs chevron split', () => {
+test.describe('Shows list — row click navigates', () => {
   test.beforeEach(async ({ page }) => {
     await loginAndSeed(page);
   });
 
-  test('chevron expands inline; row click navigates', async ({ page }) => {
+  test('row click navigates to detail (no inline expand any more)', async ({ page }) => {
     await page.goto('/shows');
     await page.waitForSelector('.show-row', { timeout: 10000 });
 
-    const startUrl = page.url();
-    const row = page.locator('.show-row', { hasText: 'Radiohead' }).first();
-
-    // Chevron click should NOT navigate.
-    const chevron = row.locator('.show-row__expand');
-    await chevron.click();
-    expect(page.url()).toBe(startUrl);
-
-    // Row click (anywhere outside chevron / venue link / headliner link) should navigate.
-    // Click the date cell, which has no inner link/button.
+    // Click the date cell — it has no inner link/button, so the row's
+    // own navigation handler fires (instead of e.g. the headliner Link
+    // intercepting the click).
+    const row = page.locator('.show-row').first();
     await row.locator('.show-row__date').click();
     await page.waitForURL(/\/shows\/[0-9a-f-]+/);
   });

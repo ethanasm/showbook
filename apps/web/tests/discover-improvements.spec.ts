@@ -8,6 +8,12 @@ async function loginAndSeed(page: Page) {
 }
 
 test.describe('Discover improvements', () => {
+  // Discover-rail features (right-click venue, Follow another artist, region
+  // headers) live in the desktop rail (.discover-rail). On <768px the rail is
+  // hidden and replaced with .discover-chips, which does not expose these
+  // affordances. Skip on mobile.
+  test.skip(({ viewport }) => (viewport?.width ?? 1440) < 768);
+
   test.beforeEach(async ({ page }) => {
     await loginAndSeed(page);
   });
