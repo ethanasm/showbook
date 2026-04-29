@@ -51,6 +51,7 @@ export interface TMAttraction {
 export interface TMEvent {
   id: string;
   name: string;
+  url?: string;
   dates: {
     start: {
       localDate: string;

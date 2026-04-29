@@ -56,6 +56,7 @@ export const shows = pgTable(
     setlist: text('setlist').array(),
     photos: text('photos').array(),
     sourceRefs: jsonb('source_refs'),
+    ticketUrl: text('ticket_url'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

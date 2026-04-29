@@ -44,6 +44,7 @@ export const announcements = pgTable('announcements', {
   onSaleStatus: onSaleStatusEnum('on_sale_status').notNull(),
   source: announcementSourceEnum('source').notNull(),
   sourceEventId: text('source_event_id'),
+  ticketUrl: text('ticket_url'),
   discoveredAt: timestamp('discovered_at').defaultNow().notNull(),
 });
 

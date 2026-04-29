@@ -66,6 +66,7 @@ function mapEventToResult(event: TMEvent) {
   const attractions = event._embedded?.attractions ?? [];
   return {
     tmEventId: event.id,
+    url: event.url ?? null,
     name: event.name,
     date: event.dates.start.localDate,
     venueName: venue?.name ?? null,
