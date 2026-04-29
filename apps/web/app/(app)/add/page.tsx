@@ -126,6 +126,7 @@ export default function AddPage() {
   const venueSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [date, setDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const timeframeManuallySet = useRef(false);
   const [tmEnriched, setTmEnriched] = useState(false);
   const [selectedTmEvent, setSelectedTmEvent] = useState<TMResult | null>(null);
   const [importUrlOpen, setImportUrlOpen] = useState(false);
@@ -140,13 +141,13 @@ export default function AddPage() {
   const [performers, setPerformers] = useState<PerformerData[]>([]);
   const [castMembers, setCastMembers] = useState<CastMember[]>([]);
   const [openerName, setOpenerName] = useState("");
-  const [festivalHeadliners, setFestivalHeadliners] = useState("");
   const [productionName, setProductionName] = useState("");
 
   // Personal data
   const [seat, setSeat] = useState("");
   const [pricePaid, setPricePaid] = useState("");
   const [ticketCount, setTicketCount] = useState("1");
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<
@@ -369,6 +370,20 @@ export default function AddPage() {
     },
     [],
   );
+
+  const handleDateChange = useCallback((value: string) => {
+    setDate(value);
+    if (!timeframeManuallySet.current && value) {
+      const d = new Date(value + "T12:00:00");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (d < today) {
+        setTimeframe("past");
+      } else if (timeframe !== "upcoming") {
+        setTimeframe("watching");
+      }
+    }
+  }, [timeframe]);
 
   const handleSelectTmResult = useCallback(
     (result: TMResult) => {
@@ -653,18 +668,6 @@ export default function AddPage() {
     if (needsProductionName && !productionName) return;
 
     let allPerformers = [...performers];
-    if (kind === "festival" && festivalHeadliners.trim()) {
-      const festNames = festivalHeadliners
-        .split(",")
-        .map((n) => n.trim())
-        .filter(Boolean);
-      const festPerformers: PerformerData[] = festNames.map((name, i) => ({
-        name,
-        role: "headliner" as const,
-        sortOrder: allPerformers.length + i + 1,
-      }));
-      allPerformers = [...allPerformers, ...festPerformers];
-    }
 
     if (kind === "comedy" && openerName.trim()) {
       allPerformers = [
@@ -730,7 +733,6 @@ export default function AddPage() {
     productionName,
     setlist,
     performers,
-    festivalHeadliners,
     openerName,
     createShow,
     updateShow,
@@ -896,52 +898,184 @@ export default function AddPage() {
 
   const renderFormFields = () => (
     <>
-      {/* ── Timeframe (hidden in edit mode) ── */}
+      {/* ── Import From (top of form, add mode only) ── */}
       {!isEditMode && (
-        <div style={{ marginBottom: 26 }}>
-          <FieldLabel>Timeframe</FieldLabel>
-          <div style={{ display: "flex", gap: 6 }}>
-            {TIMEFRAME_CONFIG.map((tf) => {
-              const active = timeframe === tf.key;
-              return (
-                <button
-                  key={tf.key}
-                  type="button"
-                  onClick={() => setTimeframe(tf.key)}
-                  style={{
-                    flex: 1,
-                    padding: "12px 14px",
-                    background: active ? "var(--surface)" : "transparent",
-                    border: `1px solid ${active ? "var(--rule-strong)" : "var(--rule)"}`,
-                    borderLeft: active ? "2px solid var(--ink)" : "2px solid transparent",
-                    cursor: "pointer",
-                    textAlign: "left",
-                  }}
-                >
-                  <div style={{
-                    fontFamily: sans,
-                    fontSize: 14,
-                    fontWeight: active ? 600 : 500,
-                    color: active ? "var(--ink)" : "var(--muted)",
-                    letterSpacing: -0.2,
-                  }}>
-                    {tf.label}
-                  </div>
+        <div style={{ marginBottom: 0 }}>
+          <FieldLabel hint="start from a source">Import from</FieldLabel>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8 }}>
+            {IMPORT_SOURCES.map((src) => (
+              <div
+                key={src.tag}
+                onClick={
+                  src.tag === "mail" ? handleGmailImportClick
+                  : src.tag === "url" ? () => setImportUrlOpen((v) => !v)
+                  : src.tag === "pdf" ? () => pdfInputRef.current?.click()
+                  : undefined
+                }
+                style={{
+                  padding: "12px 14px",
+                  background: src.tag === "mail" && gmailScanning ? "var(--ink)"
+                    : src.tag === "url" && importUrlOpen ? "var(--ink)"
+                    : src.tag === "pdf" && pdfImporting ? "var(--ink)"
+                    : "var(--surface)",
+                  border: `1px solid var(--rule-strong)`,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                  cursor: "pointer",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{
                     fontFamily: mono,
-                    fontSize: 10,
-                    color: "var(--faint)",
-                    letterSpacing: ".04em",
-                    marginTop: 3,
+                    fontSize: 9.5,
+                    color: (src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--muted)",
+                    letterSpacing: ".1em",
+                    padding: "2px 5px",
+                    border: `1px solid ${(src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--rule-strong)"}`,
+                    textTransform: "uppercase",
                   }}>
-                    {tf.sub}
+                    {src.tag}
                   </div>
-                </button>
-              );
-            })}
+                  <div style={{
+                    fontFamily: sans,
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: (src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--ink)",
+                    letterSpacing: -0.1,
+                  }}>
+                    {src.tag === "mail" && gmailScanning ? "Scanning..." : src.tag === "url" && fetchTMEvent.isPending ? "Importing..." : src.tag === "pdf" && pdfImporting ? "Extracting..." : src.label}
+                  </div>
+                </div>
+                <div style={{
+                  fontFamily: mono,
+                  fontSize: 10,
+                  color: (src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--faint)",
+                  letterSpacing: ".04em",
+                }}>
+                  {src.sub}
+                </div>
+              </div>
+            ))}
           </div>
+
+          {/* Hidden PDF file input */}
+          <input
+            ref={pdfInputRef}
+            type="file"
+            accept=".pdf"
+            onChange={handlePdfImport}
+            style={{ display: "none" }}
+          />
+          {pdfError && (
+            <div style={{ fontFamily: mono, fontSize: 10.5, color: "#E63946", marginTop: 6 }}>
+              {pdfError}
+            </div>
+          )}
+
+          {/* URL import input */}
+          {importUrlOpen && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{
+                padding: "10px 14px",
+                background: "var(--surface)",
+                border: "1px solid var(--rule-strong)",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+              }}>
+                <input
+                  type="text"
+                  placeholder="https://www.ticketmaster.com/.../event/..."
+                  value={importUrlValue}
+                  onChange={(e) => setImportUrlValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); handleImportFromUrl(); }
+                    if (e.key === "Escape") { setImportUrlOpen(false); setImportUrlValue(""); }
+                  }}
+                  autoFocus
+                  style={{
+                    flex: 1,
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    fontFamily: mono,
+                    fontSize: 13,
+                    color: "var(--ink)",
+                    letterSpacing: -0.1,
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleImportFromUrl}
+                  disabled={fetchTMEvent.isPending || !importUrlValue.trim()}
+                  style={{
+                    padding: "6px 12px",
+                    background: importUrlValue.trim() ? "var(--ink)" : "var(--surface2)",
+                    color: importUrlValue.trim() ? "var(--bg)" : "var(--faint)",
+                    fontFamily: mono,
+                    fontSize: 10.5,
+                    letterSpacing: ".06em",
+                    textTransform: "uppercase" as const,
+                    border: "none",
+                    cursor: importUrlValue.trim() ? "pointer" : "not-allowed",
+                  }}
+                >
+                  {fetchTMEvent.isPending ? "Loading..." : "Import"}
+                </button>
+              </div>
+              {fetchTMEvent.isError && (
+                <div style={{ fontFamily: mono, fontSize: 10.5, color: "#E63946", marginTop: 6 }}>
+                  {fetchTMEvent.error?.message?.includes("not found")
+                    ? "Event not found. Check the URL and try again."
+                    : "Failed to import. Check the URL and try again."}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Gmail results dropdown */}
+          {gmailShowResults && (
+            <div style={{ marginTop: 8, border: "1px solid var(--rule-strong)", background: "var(--surface)" }}>
+              {gmailScanning && (
+                <div style={{ padding: "14px 16px", fontFamily: mono, fontSize: 11, color: "var(--muted)", letterSpacing: ".04em" }}>
+                  Scanning Gmail for &ldquo;{headlinerName}&rdquo;...
+                </div>
+              )}
+              {!gmailScanning && gmailResults.length === 0 && (
+                <div style={{ padding: "14px 16px", fontFamily: mono, fontSize: 11, color: "var(--faint)", letterSpacing: ".04em" }}>
+                  No ticket emails found
+                </div>
+              )}
+              {gmailResults.map((result, i) => (
+                <div
+                  key={i}
+                  onClick={() => handleSelectGmailResult(result)}
+                  style={{ padding: "10px 16px", cursor: "pointer", borderTop: i > 0 ? "1px solid var(--rule)" : "none", display: "flex", flexDirection: "column", gap: 3 }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 500, color: "var(--ink)", letterSpacing: -0.1 }}>
+                    {result.headliner}
+                  </div>
+                  <div style={{ fontFamily: mono, fontSize: 10.5, color: "var(--muted)", letterSpacing: ".04em", display: "flex", gap: 12 }}>
+                    {result.venue_name && <span>{result.venue_name}</span>}
+                    {result.date && <span>{result.date}</span>}
+                    {result.seat && <span>{result.seat}</span>}
+                    {result.price && <span>${result.price}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Separator below import section */}
+          <div style={{ borderBottom: "1px solid var(--rule)", margin: "22px 0 26px" }} />
         </div>
       )}
+
+      {/* ── WHAT ── */}
+      <SectionLabel>What</SectionLabel>
 
       {/* ── Kind ── */}
       <div style={{ marginBottom: 26 }}>
@@ -998,7 +1132,7 @@ export default function AddPage() {
         </div>
       </div>
 
-      {/* ── Festival Name / Show Title ── */}
+      {/* ── Festival Name / Show Title (WHAT section) ── */}
       {(kind === "festival" || kind === "theatre") && (
         <div style={{ marginBottom: 26 }}>
           <FieldLabel>{kind === "festival" ? "Festival Name" : "Show Title"}</FieldLabel>
@@ -1032,7 +1166,7 @@ export default function AddPage() {
         </div>
       )}
 
-      {/* ── Lineup / Headliner ── */}
+      {/* ── Lineup / Headliner (still WHAT) ── */}
       <div style={{ marginBottom: 26 }}>
         <FieldLabel hint={kind === "theatre" ? "lead performer" : "first is headliner"}>{kind === "theatre" ? "Cast" : "Lineup"}</FieldLabel>
         <div style={{ border: `1px solid var(--rule-strong)` }}>
@@ -1255,237 +1389,167 @@ export default function AddPage() {
         </div>
       </div>
 
-      {/* ── Venue + Date + Cost ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 80px 130px", columnGap: 14, marginBottom: 26 }}>
-        <div style={{ position: "relative" }}>
-          <FieldLabel hint={tmEnriched ? "auto · from ticket" : venue.googlePlaceId ? "auto · google places" : undefined}>Venue</FieldLabel>
+      {/* ── WHERE ── */}
+      <SectionLabel>Where</SectionLabel>
+
+      {/* Venue */}
+      <div style={{ marginBottom: 26, position: "relative" }}>
+        <FieldLabel hint={tmEnriched ? "auto · from ticket" : venue.googlePlaceId ? "auto · google places" : undefined}>Venue</FieldLabel>
+        <div style={{
+          padding: "10px 14px",
+          background: "var(--surface)",
+          border: `1px solid var(--rule-strong)`,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+        }}>
+          <span style={{ color: "var(--muted)", fontSize: 14 }}>📍</span>
+          <input
+            type="text"
+            placeholder="Search for a venue..."
+            value={tmEnriched ? `${venue.name}${venue.city ? ` · ${venue.city}` : ""}` : venueQuery}
+            onChange={(e) => {
+              if (tmEnriched) return;
+              handleVenueInput(e.target.value);
+            }}
+            readOnly={tmEnriched}
+            style={{
+              flex: 1,
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              fontFamily: sans,
+              fontSize: 14,
+              color: venue.name ? "var(--ink)" : "var(--faint)",
+              letterSpacing: -0.1,
+            }}
+          />
+        </div>
+        {debouncedVenueQuery.length >= 2 && !tmEnriched && (
           <div style={{
-            padding: "10px 14px",
-            background: "var(--surface)",
-            border: `1px solid var(--rule-strong)`,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
+            position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20,
+            background: "var(--surface)", border: "1px solid var(--rule-strong)", borderTop: "none",
+            maxHeight: 240, overflow: "auto",
           }}>
-            <span style={{ color: "var(--muted)", fontSize: 14 }}>📍</span>
-            <input
-              type="text"
-              placeholder="Search for a venue..."
-              value={tmEnriched ? `${venue.name}${venue.city ? ` · ${venue.city}` : ""}` : venueQuery}
-              onChange={(e) => {
-                if (tmEnriched) return;
-                handleVenueInput(e.target.value);
-              }}
-              readOnly={tmEnriched}
-              style={{
-                flex: 1,
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                fontFamily: sans,
-                fontSize: 14,
-                color: venue.name ? "var(--ink)" : "var(--faint)",
-                letterSpacing: -0.1,
-              }}
-            />
+            {venueSearch.isLoading && (
+              <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--muted)" }}>
+                Searching venues...
+              </div>
+            )}
+            {venueSearch.data?.map((place) => (
+              <button
+                key={place.placeId}
+                type="button"
+                onClick={() => handleSelectPlace(place.placeId)}
+                style={{
+                  width: "100%", padding: "10px 16px", background: "transparent",
+                  border: "none", borderBottom: "1px solid var(--rule)", cursor: "pointer", textAlign: "left",
+                }}
+              >
+                <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>
+                  {place.displayName}
+                </div>
+                <div style={{ fontFamily: mono, fontSize: 10, color: "var(--muted)", marginTop: 2 }}>
+                  {place.formattedAddress}
+                </div>
+              </button>
+            ))}
+            {venueSearch.data && venueSearch.data.length === 0 && (
+              <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--faint)" }}>
+                No venues found
+              </div>
+            )}
           </div>
-          {debouncedVenueQuery.length >= 2 && !tmEnriched && (
+        )}
+      </div>
+
+      {/* ── WHEN ── */}
+      <SectionLabel>When</SectionLabel>
+
+      {/* Date + Timeframe (side by side) */}
+      <div style={{ marginBottom: 26 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isEditMode ? "1fr" : "minmax(160px, 200px) 1fr", gap: 14, alignItems: "start" }}>
+          <div>
+            <FieldLabel>Date</FieldLabel>
             <div style={{
-              position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20,
-              background: "var(--surface)", border: "1px solid var(--rule-strong)", borderTop: "none",
-              maxHeight: 240, overflow: "auto",
+              padding: "10px 14px",
+              background: "var(--surface)",
+              border: `1px solid var(--rule-strong)`,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
             }}>
-              {venueSearch.isLoading && (
-                <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--muted)" }}>
-                  Searching venues...
-                </div>
-              )}
-              {venueSearch.data?.map((place) => (
-                <button
-                  key={place.placeId}
-                  type="button"
-                  onClick={() => handleSelectPlace(place.placeId)}
-                  style={{
-                    width: "100%", padding: "10px 16px", background: "transparent",
-                    border: "none", borderBottom: "1px solid var(--rule)", cursor: "pointer", textAlign: "left",
-                  }}
-                >
-                  <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>
-                    {place.displayName}
-                  </div>
-                  <div style={{ fontFamily: mono, fontSize: 10, color: "var(--muted)", marginTop: 2 }}>
-                    {place.formattedAddress}
-                  </div>
-                </button>
-              ))}
-              {venueSearch.data && venueSearch.data.length === 0 && (
-                <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--faint)" }}>
-                  No venues found
-                </div>
-              )}
+              <span style={{ color: "var(--muted)", fontSize: 14 }}>📅</span>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => handleDateChange(e.target.value)}
+                style={{
+                  flex: 1,
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  fontFamily: mono,
+                  fontSize: 13,
+                  color: date ? "var(--ink)" : "var(--faint)",
+                  letterSpacing: -0.1,
+                  minWidth: 0,
+                }}
+              />
+            </div>
+          </div>
+          {!isEditMode && (
+            <div>
+              <FieldLabel>Timeframe</FieldLabel>
+              <div style={{ display: "flex", gap: 6 }}>
+                {TIMEFRAME_CONFIG.map((tf) => {
+                  const active = timeframe === tf.key;
+                  return (
+                    <button
+                      key={tf.key}
+                      type="button"
+                      onClick={() => {
+                        timeframeManuallySet.current = true;
+                        setTimeframe(tf.key);
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: "10px 10px",
+                        background: active ? "var(--surface)" : "transparent",
+                        border: `1px solid ${active ? "var(--rule-strong)" : "var(--rule)"}`,
+                        borderLeft: active ? "2px solid var(--ink)" : "2px solid transparent",
+                        cursor: "pointer",
+                        textAlign: "left",
+                      }}
+                    >
+                      <div style={{
+                        fontFamily: sans,
+                        fontSize: 13,
+                        fontWeight: active ? 600 : 500,
+                        color: active ? "var(--ink)" : "var(--muted)",
+                        letterSpacing: -0.2,
+                      }}>
+                        {tf.label}
+                      </div>
+                      <div style={{
+                        fontFamily: mono,
+                        fontSize: 10,
+                        color: "var(--faint)",
+                        letterSpacing: ".04em",
+                        marginTop: 2,
+                      }}>
+                        {tf.sub}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
-        <div>
-          <FieldLabel>Date</FieldLabel>
-          <div style={{
-            padding: "10px 14px",
-            background: "var(--surface)",
-            border: `1px solid var(--rule-strong)`,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}>
-            <span style={{ color: "var(--muted)", fontSize: 14 }}>📅</span>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              style={{
-                flex: 1,
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                fontFamily: mono,
-                fontSize: 13,
-                color: date ? "var(--ink)" : "var(--faint)",
-                letterSpacing: -0.1,
-              }}
-            />
-          </div>
-        </div>
-        <div>
-          <FieldLabel>Tickets</FieldLabel>
-          <div style={{
-            padding: "10px 14px",
-            background: "var(--surface)",
-            border: `1px solid var(--rule-strong)`,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}>
-            <input
-              type="number"
-              placeholder="1"
-              value={ticketCount}
-              onChange={(e) => setTicketCount(e.target.value)}
-              min="1"
-              step="1"
-              style={{
-                flex: 1,
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                fontFamily: mono,
-                fontSize: 13,
-                color: ticketCount && ticketCount !== "1" ? "var(--ink)" : "var(--faint)",
-                letterSpacing: -0.1,
-                width: "100%",
-                textAlign: "center",
-              }}
-            />
-          </div>
-        </div>
-        <div>
-          <FieldLabel>Total cost</FieldLabel>
-          <div style={{
-            padding: "10px 14px",
-            background: "var(--surface)",
-            border: `1px solid var(--rule-strong)`,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}>
-            <span style={{ color: "var(--muted)", fontSize: 14 }}>$</span>
-            <input
-              type="number"
-              placeholder="0.00"
-              value={pricePaid}
-              onChange={(e) => setPricePaid(e.target.value)}
-              min="0"
-              step="0.01"
-              style={{
-                flex: 1,
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                fontFamily: mono,
-                fontSize: 13,
-                color: pricePaid ? "var(--ink)" : "var(--faint)",
-                letterSpacing: -0.1,
-                width: "100%",
-              }}
-            />
-            <span style={{ fontFamily: mono, fontSize: 10, color: "var(--faint)", letterSpacing: ".04em" }}>USD</span>
-          </div>
-        </div>
       </div>
 
-      {/* ── Seat + Tour ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 14, marginBottom: 26 }}>
-        <div>
-          <FieldLabel optional>Seat</FieldLabel>
-          <div style={{
-            padding: "10px 14px",
-            background: "var(--surface)",
-            border: `1px solid var(--rule-strong)`,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}>
-            <span style={{ color: "var(--muted)", fontSize: 14 }}>🎫</span>
-            <input
-              type="text"
-              placeholder="e.g. ORCH L · 14"
-              value={seat}
-              onChange={(e) => setSeat(e.target.value)}
-              style={{
-                flex: 1,
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                fontFamily: mono,
-                fontSize: 13,
-                color: seat ? "var(--ink)" : "var(--faint)",
-                letterSpacing: -0.1,
-                width: "100%",
-              }}
-            />
-          </div>
-        </div>
-        <div>
-          <FieldLabel hint={setlistQuery.data?.tourName ? "auto · setlist.fm" : undefined} optional>Tour</FieldLabel>
-          <div style={{
-            padding: "10px 14px",
-            background: "var(--surface)",
-            border: `1px solid var(--rule-strong)`,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}>
-            <span style={{ color: "var(--muted)", fontSize: 14 }}>♫</span>
-            <input
-              type="text"
-              placeholder="e.g. Romance World Tour"
-              value={tourName}
-              onChange={(e) => setTourName(e.target.value)}
-              style={{
-                flex: 1,
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                fontFamily: sans,
-                fontSize: 14,
-                color: tourName ? "var(--ink)" : "var(--faint)",
-                letterSpacing: -0.1,
-                width: "100%",
-              }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* ── Festival: End Date ── */}
+      {/* Festival: End Date */}
       {kind === "festival" && (
         <div style={{ marginBottom: 26 }}>
           <FieldLabel>End Date</FieldLabel>
@@ -1517,35 +1581,42 @@ export default function AddPage() {
         </div>
       )}
 
-      {/* ── Festival: other headliners ── */}
-      {kind === "festival" && (
-        <div style={{ marginBottom: 26 }}>
-          <FieldLabel hint="comma-separated">Other Headliners</FieldLabel>
-          <div style={{
-            padding: "10px 14px",
-            background: "var(--surface)",
-            border: `1px solid var(--rule-strong)`,
-          }}>
-            <input
-              type="text"
-              placeholder="Artist 1, Artist 2, Artist 3"
-              value={festivalHeadliners}
-              onChange={(e) => setFestivalHeadliners(e.target.value)}
-              style={{
-                width: "100%",
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                fontFamily: sans,
-                fontSize: 14,
-                color: "var(--ink)",
-              }}
-            />
-          </div>
-        </div>
-      )}
+      {/* ── DETAILS ── */}
+      <SectionLabel>Details</SectionLabel>
 
-      {/* ── Comedy: opener ── */}
+      {/* Tour name */}
+      <div style={{ marginBottom: 26 }}>
+        <FieldLabel hint={setlistQuery.data?.tourName ? "auto · setlist.fm" : undefined} optional>Tour</FieldLabel>
+        <div style={{
+          padding: "10px 14px",
+          background: "var(--surface)",
+          border: `1px solid var(--rule-strong)`,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+        }}>
+          <span style={{ color: "var(--muted)", fontSize: 14 }}>♫</span>
+          <input
+            type="text"
+            placeholder="e.g. Romance World Tour"
+            value={tourName}
+            onChange={(e) => setTourName(e.target.value)}
+            style={{
+              flex: 1,
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              fontFamily: sans,
+              fontSize: 14,
+              color: tourName ? "var(--ink)" : "var(--faint)",
+              letterSpacing: -0.1,
+              width: "100%",
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Comedy: opener */}
       {kind === "comedy" && (
         <div style={{ marginBottom: 26 }}>
           <FieldLabel optional>Opener</FieldLabel>
@@ -1573,7 +1644,7 @@ export default function AddPage() {
         </div>
       )}
 
-      {/* ── Theatre: playbill upload ── */}
+      {/* Theatre: playbill upload */}
       {kind === "theatre" && (
         <div style={{ marginBottom: 26 }}>
           <FieldLabel hint="OCR cast extraction" optional>Playbill Photo</FieldLabel>
@@ -1620,7 +1691,7 @@ export default function AddPage() {
         </div>
       )}
 
-      {/* ── Setlist (past concerts) ── */}
+      {/* Setlist (past concerts) — leave untouched */}
       {isPastConcert && (
         <div style={{ marginBottom: 26 }}>
           <FieldLabel hint={setlistQuery.isLoading ? "fetching..." : setlist ? `${setlist.length} songs` : undefined}>
@@ -1656,212 +1727,139 @@ export default function AddPage() {
         </div>
       )}
 
-      {/* ── Import From (hidden in edit mode) ── */}
-      {!isEditMode && <div style={{ marginBottom: 26 }}>
-        <FieldLabel hint="start from a source">Import from</FieldLabel>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-          {IMPORT_SOURCES.map((src) => (
-            <div
-              key={src.tag}
-              onClick={
-                src.tag === "mail" ? handleGmailImportClick
-                : src.tag === "url" ? () => setImportUrlOpen((v) => !v)
-                : src.tag === "pdf" ? () => pdfInputRef.current?.click()
-                : undefined
-              }
-              style={{
-                padding: "12px 14px",
-                background: src.tag === "mail" && gmailScanning ? "var(--ink)"
-                  : src.tag === "url" && importUrlOpen ? "var(--ink)"
-                  : src.tag === "pdf" && pdfImporting ? "var(--ink)"
-                  : "var(--surface)",
+      {/* ── More details (collapsible: seat, tickets, price) ── */}
+      <div style={{ marginBottom: 26 }}>
+        <button
+          type="button"
+          onClick={() => setShowMoreDetails((v) => !v)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: "6px 0",
+            fontFamily: mono,
+            fontSize: 10.5,
+            color: "var(--muted)",
+            letterSpacing: ".06em",
+            textTransform: "uppercase",
+          }}
+        >
+          <span style={{
+            display: "inline-block",
+            transform: showMoreDetails ? "rotate(90deg)" : "none",
+            transition: "transform 0.15s",
+            fontSize: 8,
+          }}>▶</span>
+          More details
+          {(seat || pricePaid) && !showMoreDetails && (
+            <span style={{ color: "var(--faint)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+              · {[seat && "seat", pricePaid && "price"].filter(Boolean).join(", ")}
+            </span>
+          )}
+        </button>
+        {showMoreDetails && (
+          <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>
+            <div>
+              <FieldLabel optional>Seat</FieldLabel>
+              <div style={{
+                padding: "10px 14px",
+                background: "var(--surface)",
                 border: `1px solid var(--rule-strong)`,
                 display: "flex",
-                flexDirection: "column",
-                gap: 4,
-                cursor: "pointer",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{
-                  fontFamily: mono,
-                  fontSize: 9.5,
-                  color: (src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--muted)",
-                  letterSpacing: ".1em",
-                  padding: "2px 5px",
-                  border: `1px solid ${(src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--rule-strong)"}`,
-                  textTransform: "uppercase",
-                }}>
-                  {src.tag}
-                </div>
-                <div style={{
-                  fontFamily: sans,
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: (src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--ink)",
-                  letterSpacing: -0.1,
-                }}>
-                  {src.tag === "mail" && gmailScanning ? "Scanning..." : src.tag === "url" && fetchTMEvent.isPending ? "Importing..." : src.tag === "pdf" && pdfImporting ? "Extracting..." : src.label}
-                </div>
-              </div>
-              <div style={{
-                fontFamily: mono,
-                fontSize: 10,
-                color: (src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--faint)",
-                letterSpacing: ".04em",
+                alignItems: "center",
+                gap: 10,
               }}>
-                {src.sub}
+                <span style={{ color: "var(--muted)", fontSize: 14 }}>🎫</span>
+                <input
+                  type="text"
+                  placeholder="e.g. ORCH L · 14"
+                  value={seat}
+                  onChange={(e) => setSeat(e.target.value)}
+                  style={{
+                    flex: 1,
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    fontFamily: mono,
+                    fontSize: 13,
+                    color: seat ? "var(--ink)" : "var(--faint)",
+                    letterSpacing: -0.1,
+                    width: "100%",
+                  }}
+                />
               </div>
             </div>
-          ))}
-        </div>
-
-        {/* Hidden PDF file input */}
-        <input
-          ref={pdfInputRef}
-          type="file"
-          accept=".pdf"
-          onChange={handlePdfImport}
-          style={{ display: "none" }}
-        />
-        {pdfError && (
-          <div style={{ fontFamily: mono, fontSize: 10.5, color: "#E63946", marginTop: 6 }}>
-            {pdfError}
-          </div>
-        )}
-
-        {/* URL import input */}
-        {importUrlOpen && (
-          <div style={{ marginTop: 8 }}>
-            <div style={{
-              padding: "10px 14px",
-              background: "var(--surface)",
-              border: "1px solid var(--rule-strong)",
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-            }}>
-              <input
-                type="text"
-                placeholder="https://www.ticketmaster.com/.../event/..."
-                value={importUrlValue}
-                onChange={(e) => setImportUrlValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") { e.preventDefault(); handleImportFromUrl(); }
-                  if (e.key === "Escape") { setImportUrlOpen(false); setImportUrlValue(""); }
-                }}
-                autoFocus
-                style={{
-                  flex: 1,
-                  background: "transparent",
-                  border: "none",
-                  outline: "none",
-                  fontFamily: mono,
-                  fontSize: 13,
-                  color: "var(--ink)",
-                  letterSpacing: -0.1,
-                }}
-              />
-              <button
-                type="button"
-                onClick={handleImportFromUrl}
-                disabled={fetchTMEvent.isPending || !importUrlValue.trim()}
-                style={{
-                  padding: "6px 12px",
-                  background: importUrlValue.trim() ? "var(--ink)" : "var(--surface2)",
-                  color: importUrlValue.trim() ? "var(--bg)" : "var(--faint)",
-                  fontFamily: mono,
-                  fontSize: 10.5,
-                  letterSpacing: ".06em",
-                  textTransform: "uppercase" as const,
-                  border: "none",
-                  cursor: importUrlValue.trim() ? "pointer" : "not-allowed",
-                }}
-              >
-                {fetchTMEvent.isPending ? "Loading..." : "Import"}
-              </button>
+            <div>
+              <FieldLabel optional>Tickets</FieldLabel>
+              <div style={{
+                padding: "10px 14px",
+                background: "var(--surface)",
+                border: `1px solid var(--rule-strong)`,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+              }}>
+                <input
+                  type="number"
+                  placeholder="1"
+                  value={ticketCount}
+                  onChange={(e) => setTicketCount(e.target.value)}
+                  min="1"
+                  step="1"
+                  style={{
+                    flex: 1,
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    fontFamily: mono,
+                    fontSize: 13,
+                    color: ticketCount && ticketCount !== "1" ? "var(--ink)" : "var(--faint)",
+                    letterSpacing: -0.1,
+                    width: "100%",
+                    textAlign: "center",
+                  }}
+                />
+              </div>
             </div>
-            {fetchTMEvent.isError && (
-              <div style={{ fontFamily: mono, fontSize: 10.5, color: "#E63946", marginTop: 6 }}>
-                {fetchTMEvent.error?.message?.includes("not found")
-                  ? "Event not found. Check the URL and try again."
-                  : "Failed to import. Check the URL and try again."}
+            <div>
+              <FieldLabel optional>Total cost</FieldLabel>
+              <div style={{
+                padding: "10px 14px",
+                background: "var(--surface)",
+                border: `1px solid var(--rule-strong)`,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+              }}>
+                <span style={{ color: "var(--muted)", fontSize: 14 }}>$</span>
+                <input
+                  type="number"
+                  placeholder="0.00"
+                  value={pricePaid}
+                  onChange={(e) => setPricePaid(e.target.value)}
+                  min="0"
+                  step="0.01"
+                  style={{
+                    flex: 1,
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    fontFamily: mono,
+                    fontSize: 13,
+                    color: pricePaid ? "var(--ink)" : "var(--faint)",
+                    letterSpacing: -0.1,
+                    width: "100%",
+                  }}
+                />
+                <span style={{ fontFamily: mono, fontSize: 10, color: "var(--faint)", letterSpacing: ".04em" }}>USD</span>
               </div>
-            )}
+            </div>
           </div>
         )}
-
-        {/* Gmail results dropdown */}
-        {gmailShowResults && (
-          <div style={{
-            marginTop: 8,
-            border: "1px solid var(--rule-strong)",
-            background: "var(--surface)",
-          }}>
-            {gmailScanning && (
-              <div style={{
-                padding: "14px 16px",
-                fontFamily: mono,
-                fontSize: 11,
-                color: "var(--muted)",
-                letterSpacing: ".04em",
-              }}>
-                Scanning Gmail for &ldquo;{headlinerName}&rdquo;...
-              </div>
-            )}
-            {!gmailScanning && gmailResults.length === 0 && (
-              <div style={{
-                padding: "14px 16px",
-                fontFamily: mono,
-                fontSize: 11,
-                color: "var(--faint)",
-                letterSpacing: ".04em",
-              }}>
-                No ticket emails found
-              </div>
-            )}
-            {gmailResults.map((result, i) => (
-              <div
-                key={i}
-                onClick={() => handleSelectGmailResult(result)}
-                style={{
-                  padding: "10px 16px",
-                  cursor: "pointer",
-                  borderTop: i > 0 ? "1px solid var(--rule)" : "none",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 3,
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-              >
-                <div style={{
-                  fontFamily: sans,
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: "var(--ink)",
-                  letterSpacing: -0.1,
-                }}>
-                  {result.headliner}
-                </div>
-                <div style={{
-                  fontFamily: mono,
-                  fontSize: 10.5,
-                  color: "var(--muted)",
-                  letterSpacing: ".04em",
-                  display: "flex",
-                  gap: 12,
-                }}>
-                  {result.venue_name && <span>{result.venue_name}</span>}
-                  {result.date && <span>{result.date}</span>}
-                  {result.seat && <span>{result.seat}</span>}
-                  {result.price && <span>${result.price}</span>}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>}
+      </div>
 
       {/* ── Commit Bar ── */}
       <div style={{
@@ -2397,16 +2395,17 @@ export default function AddPage() {
   }
 
   return (
-    <div style={{
-      display: "flex",
-      flexDirection: "column",
-      height: "100%",
-      minHeight: "100vh",
-      background: "var(--bg)",
-      color: "var(--ink)",
-      fontFamily: sans,
-      WebkitFontSmoothing: "antialiased",
-    }}>
+    <>
+    <style>{`
+      .add-outer { display: flex; flex-direction: column; height: 100%; min-height: 100vh; background: var(--bg); color: var(--ink); font-family: ${sans}; -webkit-font-smoothing: antialiased; }
+      .add-layout { flex: 1; display: grid; grid-template-columns: 1fr 440px; min-height: 0; overflow: hidden; }
+      .add-preview-panel { min-width: 0; border-left: 1px solid var(--rule); background: var(--bg); overflow: auto; }
+      @media (max-width: 960px) {
+        .add-layout { grid-template-columns: 1fr; overflow: visible; }
+        .add-preview-panel { display: none; }
+      }
+    `}</style>
+    <div className="add-outer">
       {/* Top bar / Breadcrumb */}
       <div style={{
         padding: "14px 32px",
@@ -2459,29 +2458,19 @@ export default function AddPage() {
       </div>
 
       {/* 2-column layout */}
-      <div style={{
-        flex: 1,
-        display: "grid",
-        gridTemplateColumns: "1fr 440px",
-        minHeight: 0,
-        overflow: "hidden",
-      }}>
+      <div className="add-layout">
         {/* Left: Form */}
         <div style={{ minWidth: 0, display: "flex", flexDirection: "column", overflow: "auto" }}>
           {renderFormPanel()}
         </div>
 
         {/* Right: Live Preview + Provenance */}
-        <div style={{
-          minWidth: 0,
-          borderLeft: `1px solid var(--rule)`,
-          background: "var(--bg)",
-          overflow: "auto",
-        }}>
+        <div className="add-preview-panel">
           {renderLivePreview()}
         </div>
       </div>
     </div>
+    </>
   );
 }
 
@@ -2529,6 +2518,25 @@ function FieldLabel({
           {hint}
         </div>
       )}
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{
+      fontFamily: "var(--font-geist-mono), monospace",
+      fontSize: 9.5,
+      color: "var(--faint)",
+      letterSpacing: ".14em",
+      textTransform: "uppercase",
+      fontWeight: 600,
+      marginBottom: 14,
+      marginTop: 4,
+      paddingBottom: 7,
+      borderBottom: "1px solid var(--rule)",
+    }}>
+      {children}
     </div>
   );
 }
