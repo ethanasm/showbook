@@ -251,19 +251,87 @@ export default function HomePage() {
 
   if (isLoading) {
     return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+        {/* skeleton top bar */}
+        <div style={{ padding: "14px 36px", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 52 }} />
+        <div style={{ flex: 1, minHeight: 0, padding: "28px 36px 40px", display: "grid", gap: 28, alignContent: "start" }}>
+          {/* skeleton hero */}
+          <div style={{ height: 148, background: "var(--surface)", borderLeft: "3px solid var(--rule)" }} />
+          {/* skeleton mini cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1, background: "var(--rule)" }}>
+            {[0,1,2].map((i) => (
+              <div key={i} style={{ height: 80, background: "var(--surface)" }} />
+            ))}
+          </div>
+          {/* skeleton recent rows */}
+          <div style={{ background: "var(--surface)" }}>
+            {[0,1,2,3,4].map((i) => (
+              <div key={i} style={{ height: 48, borderBottom: "1px solid var(--rule)", background: "var(--surface)" }} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const noShows = !isLoading && shows !== undefined && shows.length === 0;
+
+  if (noShows) {
+    return (
       <div
         style={{
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
           height: "100%",
-          fontFamily: MONO,
-          fontSize: 11,
-          color: "var(--muted)",
-          letterSpacing: ".06em",
+          gap: 16,
+          padding: "40px 24px",
+          textAlign: "center",
         }}
       >
-        Loading...
+        <Music size={32} color="var(--muted)" strokeWidth={1.5} />
+        <div
+          style={{
+            fontFamily: SANS,
+            fontSize: 20,
+            fontWeight: 600,
+            color: "var(--ink)",
+            letterSpacing: -0.4,
+          }}
+        >
+          No shows yet
+        </div>
+        <div
+          style={{
+            fontFamily: SANS,
+            fontSize: 14,
+            color: "var(--muted)",
+            maxWidth: 320,
+            lineHeight: 1.5,
+          }}
+        >
+          Track concerts, theatre, comedy, and festivals. Import your ticket history from Gmail to get started.
+        </div>
+        <button
+          type="button"
+          onClick={() => router.push("/shows?gmail=1")}
+          style={{
+            marginTop: 8,
+            padding: "10px 22px",
+            background: "var(--accent)",
+            color: "var(--accent-text)",
+            border: "none",
+            cursor: "pointer",
+            fontFamily: MONO,
+            fontSize: 11.5,
+            letterSpacing: ".06em",
+            textTransform: "uppercase",
+            fontWeight: 500,
+          }}
+        >
+          Import from Gmail
+        </button>
       </div>
     );
   }
@@ -280,7 +348,7 @@ export default function HomePage() {
       {/* ── Top bar ─────────────────────────────────────────── */}
       <div
         style={{
-          padding: "16px 36px",
+          padding: "14px 36px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -288,40 +356,29 @@ export default function HomePage() {
           flexShrink: 0,
         }}
       >
-        <div>
-          <div
+        {/* Wordmark */}
+        <div data-testid="home-wordmark" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Music size={15} color="var(--accent)" strokeWidth={2} />
+          <span
             style={{
               fontFamily: MONO,
-              fontSize: 10.5,
-              color: "var(--muted)",
-              letterSpacing: ".08em",
-              textTransform: "uppercase",
-            }}
-          >
-            {formatTopBarDate()}
-          </div>
-          <div
-            style={{
-              fontFamily: SANS,
-              fontSize: 22,
+              fontSize: 13,
               fontWeight: 600,
               color: "var(--ink)",
-              letterSpacing: -0.6,
-              marginTop: 3,
+              letterSpacing: ".06em",
             }}
           >
-            {getGreeting()}
-          </div>
+            showbook
+          </span>
         </div>
 
         {stats && (
-          <div style={{ display: "flex", gap: 28, alignItems: "center" }}>
+          <div data-testid="home-stats" style={{ display: "flex", gap: 28, alignItems: "center" }}>
             {[
-              ["Shows", String(stats.shows), "this year"],
-              ["Spent", stats.spent, stats.avgPerShow],
-              ["Venues", String(stats.venues), "NYC"],
-              ["Artists", String(stats.artists), "+ 3 new"],
-            ].map(([label, value, subtitle]) => (
+              { label: "Shows", value: String(stats.shows), subtitle: "this year" },
+              { label: "Venues", value: String(stats.venues), subtitle: "" },
+              { label: "Artists", value: String(stats.artists), subtitle: "" },
+            ].map(({ label, value, subtitle }) => (
               <div
                 key={label}
                 style={{ display: "flex", flexDirection: "column" }}
@@ -346,16 +403,18 @@ export default function HomePage() {
                   >
                     {value}
                   </div>
-                  <div
-                    style={{
-                      fontFamily: MONO,
-                      fontSize: 10,
-                      color: "var(--faint)",
-                      letterSpacing: ".04em",
-                    }}
-                  >
-                    {subtitle}
-                  </div>
+                  {subtitle && (
+                    <div
+                      style={{
+                        fontFamily: MONO,
+                        fontSize: 10,
+                        color: "var(--faint)",
+                        letterSpacing: ".04em",
+                      }}
+                    >
+                      {subtitle}
+                    </div>
+                  )}
                 </div>
                 <div
                   style={{
@@ -611,7 +670,14 @@ export default function HomePage() {
                         textOverflow: "ellipsis",
                       }}
                     >
-                      {u.venue.name}
+                      <Link
+                        href={`/venues/${u.venue.id}`}
+                        style={{ color: "inherit", textDecoration: "none" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                        onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                      >
+                        {u.venue.name}
+                      </Link>
                     </div>
 
                     {/* Bottom: date + countdown */}
@@ -751,6 +817,8 @@ export default function HomePage() {
                 return (
                   <div
                     key={s.id}
+                    data-testid="recent-row"
+                    onClick={() => router.push(`/shows/${s.id}`)}
                     style={{
                       display: "grid",
                       gridTemplateColumns:
@@ -759,7 +827,10 @@ export default function HomePage() {
                       padding: compact ? "6px 20px" : "14px 20px",
                       borderBottom: "1px solid var(--rule)",
                       alignItems: "center",
+                      cursor: "pointer",
                     }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "")}
                   >
                     {/* Date */}
                     <div>
@@ -825,6 +896,7 @@ export default function HomePage() {
                           <Link
                             href={`/artists/${headlinerId}`}
                             style={{ color: "inherit", textDecoration: "none" }}
+                            onClick={(e) => e.stopPropagation()}
                             onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
                             onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
                           >
@@ -866,6 +938,7 @@ export default function HomePage() {
                         <Link
                           href={`/venues/${s.venue.id}`}
                           style={{ color: "inherit", textDecoration: "none" }}
+                          onClick={(e) => e.stopPropagation()}
                           onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
                           onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
                         >

@@ -55,16 +55,35 @@ function determineOnSaleStatus(
   return 'on_sale';
 }
 
-async function fetchAllEvents(
+/**
+ * Dedup strategy: TM sourceEventId dedup uses `existingSourceIds` (a Set of
+ * already-ingested TM event IDs loaded from the announcements table before
+ * each ingest run). This is the primary key for single-night events and for
+ * the nights that make up a run. Google Place ID dedup is handled in
+ * venue-matcher.ts when a googlePlaceId is available; TM events don't supply
+ * one, so TM venue ID (tmVenueId) is the effective dedup key for venues.
+ * Between the two layers, re-running ingest is safe and idempotent.
+ */
+export async function fetchAllEvents(
   params: Parameters<typeof searchEvents>[0],
-  maxEvents = 200,
+  maxEvents = 1000,
+  searchFn: typeof searchEvents = searchEvents,
 ): Promise<TMEvent[]> {
-  const first = await searchEvents({ ...params, size: 100, page: 0 });
+  // TM caps page*size at 1000; use 200 per page for 5 pages max.
+  const PAGE_SIZE = 200;
+  const first = await searchFn({ ...params, size: PAGE_SIZE, page: 0 });
   const all = [...first.events];
-  if (first.totalElements > 100 && all.length < maxEvents) {
-    const page2 = await searchEvents({ ...params, size: 100, page: 1 });
-    all.push(...page2.events);
+
+  let page = 1;
+  while (all.length < maxEvents && all.length < first.totalElements) {
+    // TM hard cap: page * size must be <= 1000 (5 pages of 200).
+    if (page * PAGE_SIZE > 1000) break;
+    const next = await searchFn({ ...params, size: PAGE_SIZE, page });
+    if (next.events.length === 0) break;
+    all.push(...next.events);
+    page++;
   }
+
   return all.slice(0, maxEvents);
 }
 
@@ -335,9 +354,14 @@ export async function ingestVenue(venueId: string): Promise<{ events: number }> 
     endDateTime: futureISO(INGEST_HORIZON_MONTHS),
   });
   const created = await ingestTmEvents(events, existingSourceIds);
-  console.log(
-    `[discover/ingest-targeted] venue=${venueId} fetched=${events.length} created=${created}`,
-  );
+  console.log(JSON.stringify({
+    msg: '[discover/ingest-targeted]',
+    target: 'venue',
+    venueId,
+    fetched: events.length,
+    inserted: created,
+    skipped: events.length - created,
+  }));
   return { events: created };
 }
 
@@ -387,9 +411,15 @@ export async function ingestRegion(regionId: string): Promise<{ events: number }
     return !(tmVenue?.id && followedTmVenueIds.has(tmVenue.id));
   });
   const created = await ingestTmEvents(filtered, existingSourceIds);
-  console.log(
-    `[discover/ingest-targeted] region=${regionId} fetched=${events.length} created=${created}`,
-  );
+  console.log(JSON.stringify({
+    msg: '[discover/ingest-targeted]',
+    target: 'region',
+    regionId,
+    fetched: events.length,
+    filtered: filtered.length,
+    inserted: created,
+    skipped: filtered.length - created,
+  }));
   return { events: created };
 }
 
@@ -415,9 +445,14 @@ export async function ingestPerformer(
     endDateTime: futureISO(INGEST_HORIZON_MONTHS),
   });
   const created = await ingestTmEvents(events, existingSourceIds);
-  console.log(
-    `[discover/ingest-targeted] performer=${performerId} fetched=${events.length} created=${created}`,
-  );
+  console.log(JSON.stringify({
+    msg: '[discover/ingest-targeted]',
+    target: 'performer',
+    performerId,
+    fetched: events.length,
+    inserted: created,
+    skipped: events.length - created,
+  }));
   return { events: created };
 }
 
@@ -477,9 +512,13 @@ export async function runDiscoverIngest(): Promise<{
     (p): p is typeof p & { tmAttractionId: string } => p.tmAttractionId !== null,
   );
 
-  console.log(
-    `[discover/ingest] Phase 0: ${followedVenues.length} venues, ${regionRows.length} regions, ${followedPerformers.length} performers`,
-  );
+  console.log(JSON.stringify({
+    msg: '[discover/ingest]',
+    phase: 0,
+    venues: followedVenues.length,
+    regions: regionRows.length,
+    performers: followedPerformers.length,
+  }));
 
   // ==========================================================================
   // Phase 1: Followed venue events (per-venue, grouped to runs as needed)
@@ -501,7 +540,7 @@ export async function runDiscoverIngest(): Promise<{
       );
     }
   }
-  console.log(`[discover/ingest] Phase 1 done: ${phase1Events} new events`);
+  console.log(JSON.stringify({ msg: '[discover/ingest]', phase: 1, inserted: phase1Events }));
 
   // ==========================================================================
   // Phase 2: Near-you events (per-region, excluding followed venues)
@@ -530,7 +569,7 @@ export async function runDiscoverIngest(): Promise<{
       );
     }
   }
-  console.log(`[discover/ingest] Phase 2 done: ${phase2Events} new events`);
+  console.log(JSON.stringify({ msg: '[discover/ingest]', phase: 2, inserted: phase2Events }));
 
   // ==========================================================================
   // Phase 3: Tracked-performer events (per-attraction, filtered to user
@@ -587,7 +626,7 @@ export async function runDiscoverIngest(): Promise<{
       );
     }
   }
-  console.log(`[discover/ingest] Phase 3 done: ${phase3Events} new events`);
+  console.log(JSON.stringify({ msg: '[discover/ingest]', phase: 3, inserted: phase3Events }));
 
   // Quiet "unused import" — followedVenueIdSet is referenced for clarity.
   void followedVenueIdSet;
@@ -606,7 +645,7 @@ export async function runDiscoverIngest(): Promise<{
     .where(lt(announcements.showDate, cutoffDate))
     .returning({ id: announcements.id });
   const pruned = deleted.length;
-  console.log(`[discover/ingest] Phase 4 done: ${pruned} old announcements pruned`);
+  console.log(JSON.stringify({ msg: '[discover/ingest]', phase: 4, pruned }));
 
   return {
     phase1Events,

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import {
   ShowRow,
@@ -281,6 +281,7 @@ const STATE_TRANSITIONS: Record<string, { label: string; target: ShowState }> =
 
 export default function ShowsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedYear, setSelectedYear] = useState<string>("All");
   const [selectedKind, setSelectedKind] = useState<ShowKind | null>(null);
@@ -569,6 +570,14 @@ export default function ShowsPage() {
       }, 500);
     }
   }, [startGmailScan]);
+
+  // Auto-open Gmail modal when navigated from the empty-state CTA (?gmail=1)
+  useEffect(() => {
+    if (searchParams.get("gmail") === "1") {
+      handleOpenGmailModal();
+      router.replace("/shows");
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleToggleGmailResult = useCallback((index: number) => {
     setGmailBulkSelected((prev) => {

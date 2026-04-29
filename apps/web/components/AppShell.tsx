@@ -7,7 +7,16 @@ import { PrefsServerSync } from "@/components/PrefsServerSync";
 import { GlobalSearch, openGlobalSearch } from "@/components/GlobalSearch";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "next-auth/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState, useRef, useEffect } from "react";
+import { Plus, Search, Map, MapPin, Music, Eye } from "lucide-react";
+
+const ADD_MENU_ITEMS = [
+  { id: "add", label: "Add a show", Icon: Plus },
+  { id: "discover", label: "Discover", Icon: Eye },
+  { id: "venues", label: "Venues", Icon: MapPin },
+  { id: "artists", label: "Artists", Icon: Music },
+  { id: "map", label: "Map", Icon: Map },
+] as const;
 
 function pathnameToNavId(pathname: string): string {
   const segment = pathname.split("/")[1] ?? "home";
@@ -33,9 +42,30 @@ export function AppShell({ children }: { children: ReactNode }) {
   const activeId = pathnameToNavId(pathname);
   const { data: session } = useSession();
 
-  const showsQuery = trpc.shows.list.useQuery({}, { select: (d) => d.length });
-  const performersQuery = trpc.performers.list.useQuery(undefined, { select: (d) => d.length });
-  const venuesQuery = trpc.venues.list.useQuery(undefined, { select: (d) => d.length });
+  const showsQuery = trpc.shows.list.useQuery({}, { select: (d) => d.length, staleTime: 60_000 });
+  const performersQuery = trpc.performers.list.useQuery(undefined, { select: (d) => d.length, staleTime: 60_000 });
+  const venuesQuery = trpc.venues.list.useQuery(undefined, { select: (d) => d.length, staleTime: 60_000 });
+
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const addMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!addMenuOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
+        setAddMenuOpen(false);
+      }
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setAddMenuOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [addMenuOpen]);
 
   const counts: Partial<Record<string, number>> = {};
   if (showsQuery.data !== undefined) counts.shows = showsQuery.data;
@@ -73,18 +103,37 @@ export function AppShell({ children }: { children: ReactNode }) {
             const isActive = activeId === item.id;
             if ("isAddButton" in item && item.isAddButton) {
               return (
-                <button
-                  key={item.id}
-                  className="bottom-bar__item bottom-bar__item--add"
-                  onClick={() => handleNavigate(item.id)}
-                  type="button"
-                  aria-label="Add a show"
-                >
-                  <span className="bottom-bar__add-circle">
-                    <item.icon size={20} strokeWidth={2.5} />
-                  </span>
-                  <span className="bottom-bar__label">{item.label}</span>
-                </button>
+                <div key={item.id} className="bottom-bar__add-wrapper" ref={addMenuRef}>
+                  {addMenuOpen && (
+                    <div className="bottom-bar__add-popover" role="menu">
+                      {ADD_MENU_ITEMS.map(({ label, id, Icon }) => (
+                        <button
+                          key={id}
+                          className="bottom-bar__add-popover-item"
+                          type="button"
+                          role="menuitem"
+                          onClick={() => { setAddMenuOpen(false); handleNavigate(id); }}
+                        >
+                          <Icon size={14} />
+                          <span>{label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    className="bottom-bar__item bottom-bar__item--add"
+                    onClick={() => setAddMenuOpen((o) => !o)}
+                    type="button"
+                    aria-label="Add"
+                    aria-expanded={addMenuOpen}
+                    aria-haspopup="menu"
+                  >
+                    <span className="bottom-bar__add-circle">
+                      <item.icon size={20} strokeWidth={2.5} />
+                    </span>
+                    <span className="bottom-bar__label">{item.label}</span>
+                  </button>
+                </div>
               );
             }
             return (
