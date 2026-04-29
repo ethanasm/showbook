@@ -872,20 +872,13 @@ export default function DiscoverPage() {
 
   const utils = trpc.useUtils();
 
-  const followedFeed = trpc.discover.followedFeed.useQuery(
-    { limit: 50 },
-    { enabled: activeTab === "Followed" },
-  );
+  const followedFeed = trpc.discover.followedFeed.useQuery({ limit: 100 });
 
-  const nearbyFeed = trpc.discover.nearbyFeed.useQuery(
-    { limit: 50 },
-    { enabled: activeTab === "Near You" },
-  );
+  const nearbyFeed = trpc.discover.nearbyFeed.useQuery({ limit: 100 });
 
-  const followedArtistsFeed = trpc.discover.followedArtistsFeed.useQuery(
-    { limit: 50 },
-    { enabled: activeTab === "Artists" },
-  );
+  const followedArtistsFeed = trpc.discover.followedArtistsFeed.useQuery({
+    limit: 100,
+  });
 
   const refreshNow = trpc.discover.refreshNow.useMutation({
     onSuccess: (data) => {
