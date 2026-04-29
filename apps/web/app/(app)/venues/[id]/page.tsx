@@ -178,6 +178,7 @@ export default function VenueDetailPage() {
       utils.venues.detail.invalidate({ venueId });
       utils.venues.followed.invalidate();
       utils.discover.followedFeed.invalidate();
+      utils.discover.nearbyFeed.invalidate();
     },
   });
 
@@ -186,6 +187,7 @@ export default function VenueDetailPage() {
       utils.venues.detail.invalidate({ venueId });
       utils.venues.followed.invalidate();
       utils.discover.followedFeed.invalidate();
+      utils.discover.nearbyFeed.invalidate();
     },
   });
 

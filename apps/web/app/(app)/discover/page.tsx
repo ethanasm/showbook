@@ -859,6 +859,7 @@ export default function DiscoverPage() {
 
   function handleVenueFollowed() {
     utils.discover.followedFeed.invalidate();
+    utils.discover.nearbyFeed.invalidate();
     utils.venues.followed.invalidate();
   }
 

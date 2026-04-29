@@ -573,6 +573,7 @@ function VenueFollowModal({ onClose, onFollowed }: { onClose: () => void; onFoll
 export default function PreferencesPage() {
   const { theme: currentTheme, setTheme } = useTheme();
   const { data: session } = useSession();
+  const utils = trpc.useUtils();
 
   const prefsQuery = trpc.preferences.get.useQuery();
   const venuesQuery = trpc.venues.followed.useQuery();
@@ -587,7 +588,11 @@ export default function PreferencesPage() {
     onSuccess: () => prefsQuery.refetch(),
   });
   const unfollowVenue = trpc.venues.unfollow.useMutation({
-    onSuccess: () => venuesQuery.refetch(),
+    onSuccess: () => {
+      venuesQuery.refetch();
+      utils.discover.followedFeed.invalidate();
+      utils.discover.nearbyFeed.invalidate();
+    },
   });
   const [showFollowModal, setShowFollowModal] = useState(false);
 
@@ -869,7 +874,12 @@ export default function PreferencesPage() {
           {showFollowModal && (
             <VenueFollowModal
               onClose={() => setShowFollowModal(false)}
-              onFollowed={() => { venuesQuery.refetch(); setShowFollowModal(false); }}
+              onFollowed={() => {
+                venuesQuery.refetch();
+                utils.discover.followedFeed.invalidate();
+                utils.discover.nearbyFeed.invalidate();
+                setShowFollowModal(false);
+              }}
             />
           )}
 
