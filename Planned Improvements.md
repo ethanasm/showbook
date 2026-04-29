@@ -1,41 +1,19 @@
 ## Remaining (not yet addressed)
 
 ### General
-- ~~**Sluggish loading on other pages.** Home has a skeleton + sidebar counts use staleTime. Other pages (Shows, Venues, Artists, Discover, Preferences) still render a plain "Loading..." until queries resolve. Apply the same skeleton + stale-time pattern to those pages.~~ *(Done — Shows/Venues/Artists/Discover/Preferences now render layout-shaped skeletons and use `staleTime: 60_000` on their primary list queries, matching the sidebar.)*
 - **Friendlier UX with better imagery and layouts.** Open-ended — needs design pass.
 - **Photo and video support.**
   1. Upload photos for shows; group photos at venue → venue detail, photos at artist → artist detail.
   2. For longer videos, investigate cheap/free storage (Drive?) and how to play them back inline.
-- ~~**Notes support for shows.**~~ *(Done — `shows.notes text` column added in 0012, accepted by `shows.create`/`shows.update`, textarea in Add/Edit form, rendered on show detail.)*
 - **Security audit.**
 - **Langfuse integration for observability.**
 - **Better structured logging.** (S1 added it to `discover-ingest`; not project-wide.)
 - **Email notifications.** What's needed to enable for free, and what should the email content look like (functional + sleek + modern).
 - **Critical code smells.** (Run `/ultrareview` to surface specifics.)
 
-### Add a Show Page
-- ~~**Playbill photos — what is this for?**~~ *(Answered: theatre-only OCR cast extraction. Image goes to Groq's `meta-llama/llama-4-scout-17b-16e-instruct` vision model, comes back as `{actor, role}` pairs, and auto-populates `show_performers` rows with `role: 'cast'` + `characterName`. Image itself is not stored. Verified by `apps/web/tests/playbill-cast-extract.spec.ts`. **Recommendation**: keep playbill as a separate tool from the deferred general photo upload (General #7); when general photos land, relabel this UI as "Extract cast from playbill" so it's clearly a tool, not a media-upload button. The schema's existing unused `shows.photos text[]` column is ready for general photos.)*
-
 ### Mobile App
 - We have some hifi designs of mobile app through claude design, but we need to do a deep dive on a design for the mobile app now that we've added more features.
 - Hook up push notifications in preferences page to mobile app once done.
-
-### Data Model Questions
-- ~~Do we allow venues to be deleted?~~ *(Answered: no, not directly. There is no `venues.delete` mutation. Venues are auto-cleaned by the Postgres trigger `cleanup_orphaned_venue` (`packages/db/drizzle/0002_venue_cleanup.sql`, updated in `0008_venue_cleanup_announcements.sql`) which fires after DELETE/UPDATE on `shows` and `announcements` and removes the venue row only if no rows remain in either table referencing it. **Recommendation**: keep current behavior — adding an explicit delete would orphan shows (FK is RESTRICT) and exposes a foot-gun. The trigger model is correct.)*
-- ~~Tables affected by delete/unfollow/follow.~~ *(Answered:)*
-  | Action | Tables modified |
-  |---|---|
-  | **Show delete** (`shows.delete`) | `show_performers` (manual), `shows`, `show_announcement_links` (cascade), `venues` (trigger if orphaned). `enrichment_queue` rows persist — no cascade. |
-  | **Show update of `venueId`** | `shows`, then trigger may delete the **old** `venues` row if now orphaned. |
-  | **Venue follow** (`venues.follow`) | `user_venue_follows`; optional `venues` update if Google Place ID is backfilled; queues ingestion. |
-  | **Venue unfollow** (`venues.unfollow`) | `user_venue_follows`, `announcements` (if no other followers), `show_announcement_links` (cascade), `venues` (trigger). |
-  | **Artist follow** (`performers.follow`) | `user_performer_follows`; queues ingestion. |
-  | **Artist unfollow** (`performers.unfollow`) | `user_performer_follows`, `announcements` (smart-delete via `computePerformerAnnouncementsToDelete`, respecting other follows/regions), `show_announcement_links` (cascade), `venues` (trigger). |
-  | **Artist "delete"** (`performers.delete`) | Only removes `show_performers` rows for **the user's own** shows. Never deletes the global `performers` row. (Misnamed — really "remove from my shows".) |
-  | **Region remove** (`preferences.removeRegion`) | `user_regions`, `announcements` (smart-delete), `show_announcement_links` (cascade), `venues` (trigger). |
-  | **Region toggle/add** | `user_regions`; queues ingestion. No deletion. |
-
-  No triggers exist that auto-delete performers, follow rows, or shows. The only auto-cleanup trigger is on `venues`.
 
 ---
 
@@ -51,16 +29,7 @@
 3. ~~Ingestion for regions - limit should be increased from 100 to 1000. Verify that we are properly deduping ticketmaster venue ids and/or google place ids.~~
 4. ~~In compact view, There is a button that directs to /me but that gives 404. It should go to preferences instead. Alos instead of add button in the middle that should open a dropdown to get to the other pages (discvoer, vneues, artists, etc. )~~
 5. ~~A few of these pages take a long time to load. When I click on different pages, it takes a while for anything to respond and it feels like a sluggish UX. Can we go to the page quicker and have a frame that shows while APIs are loading?~~ *(Done — Shows/Venues/Artists/Discover/Preferences now render layout-shaped skeletons and use `staleTime: 60_000` on their primary queries, matching Home + sidebar.)*
-6. In general, I want to see if we can improve the UX with freindlier imagery and layouts here. I want suggestions on where to improve this. *(Deferred — see Remaining.)*
-7. Photo and video support? Uploading photos to the system for different shows - what would that take?
-	1. Id want the photos for shows at a specific venue to all be displayed on venue detail page. Same with artist images grouped on artist detail page.
-	2. If I have longer videos - how to best handle that and not pay money to store? Keep in google drive? Investigate options how videos can still be played back inline in the app. *(Deferred — see Remaining.)*
-8. ~~Notes support for shows.~~ *(Done — `shows.notes text` column in 0012, accepted by create/update, textarea on Add/Edit, rendered on show detail.)*
-9. Security audit *(Deferred — see Remaining.)*
-10. Langfuse integration for observability *(Deferred — see Remaining.)*
-11. Better structured logging *(Partial: discover-ingest now logs `fetched/inserted/skipped` per call; not project-wide — see Remaining.)*
-12. Emai notifications - what do we need to enable that for free? What do we need email content to look like? It should be functional but also look sleek and modern. *(Deferred — see Remaining.)*
-13. Critical code smells *(Deferred — see Remaining.)*
+6. ~~Notes support for shows.~~ *(Done — `shows.notes text` column in 0012, accepted by create/update, textarea on Add/Edit, rendered on show detail.)*
 
 ### Home Page
 1. ~~Remove Godo evening and date from header. Replace with some image or icon that would be appropriate there.~~
@@ -72,7 +41,7 @@
 
 ### Add a Show Page
 1. ~~We need to redesign this. Use UI/UX best practices. Import from seems logical to be at the top. The date should be near timeframe - the timeframe slector should update automatically between past and watching depending if the date is in the past or future.~~
-2. ~~Playbill photos - what is this for?~~ *(Answered — see Remaining → Add a Show Page.)*
+2. ~~Playbill photos - what is this for?~~ *(Answered: theatre-only OCR cast extraction. Image goes to Groq's `meta-llama/llama-4-scout-17b-16e-instruct` vision model, comes back as `{actor, role}` pairs, and auto-populates `show_performers` rows with `role: 'cast'` + `characterName`. Image itself is not stored. Verified by `apps/web/tests/playbill-cast-extract.spec.ts`. The schema's existing unused `shows.photos text[]` column is ready for general photos when that lands.)*
 3. ~~Remove other headliners field - lineup will handle all performers.~~
 
 ### Discover Page
@@ -135,10 +104,19 @@
 4. ~~Paginate the followed venues so it doesnt take up the whole page. 10 at a time.~~
 5. ~~Remove wikipedia from data sources at bottom.~~
 
-### Mobile App
-1. We have some hifi designs of mobile app thorugh claude design, but we need to do a deep dive on an design for the mobile app now that we've added more features. *(Deferred — web-only this round. See Remaining.)*
-2. Hook up push notitfications in preferences page to mobile app once done *(Deferred — see Remaining.)*
-
 ### Data Model Questions
-1. ~~Do we allow venues to be deleted?~~ *(Answered — see Remaining → Data Model Questions.)*
-2. ~~Tables affected by delete/unfollow/follow.~~ *(Answered — see Remaining → Data Model Questions.)*
+1. ~~Do we allow venues to be deleted?~~ *(Answered: no, not directly. There is no `venues.delete` mutation. Venues are auto-cleaned by the Postgres trigger `cleanup_orphaned_venue` (`packages/db/drizzle/0002_venue_cleanup.sql`, updated in `0008_venue_cleanup_announcements.sql`) which fires after DELETE/UPDATE on `shows` and `announcements` and removes the venue row only if no rows remain in either table referencing it. Adding an explicit delete would orphan shows (FK is RESTRICT). The trigger model is correct.)*
+2. ~~Tables affected by delete/unfollow/follow.~~ *(Answered:)*
+   | Action | Tables modified |
+   |---|---|
+   | **Show delete** (`shows.delete`) | `show_performers` (manual), `shows`, `show_announcement_links` (cascade), `venues` (trigger if orphaned). `enrichment_queue` rows persist — no cascade. |
+   | **Show update of `venueId`** | `shows`, then trigger may delete the **old** `venues` row if now orphaned. |
+   | **Venue follow** (`venues.follow`) | `user_venue_follows`; optional `venues` update if Google Place ID is backfilled; queues ingestion. |
+   | **Venue unfollow** (`venues.unfollow`) | `user_venue_follows`, `announcements` (if no other followers), `show_announcement_links` (cascade), `venues` (trigger). |
+   | **Artist follow** (`performers.follow`) | `user_performer_follows`; queues ingestion. |
+   | **Artist unfollow** (`performers.unfollow`) | `user_performer_follows`, `announcements` (smart-delete via `computePerformerAnnouncementsToDelete`, respecting other follows/regions), `show_announcement_links` (cascade), `venues` (trigger). |
+   | **Artist "delete"** (`performers.delete`) | Only removes `show_performers` rows for **the user's own** shows. Never deletes the global `performers` row. (Misnamed — really "remove from my shows".) |
+   | **Region remove** (`preferences.removeRegion`) | `user_regions`, `announcements` (smart-delete), `show_announcement_links` (cascade), `venues` (trigger). |
+   | **Region toggle/add** | `user_regions`; queues ingestion. No deletion. |
+
+   No triggers exist that auto-delete performers, follow rows, or shows. The only auto-cleanup trigger is on `venues`.
