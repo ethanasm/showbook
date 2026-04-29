@@ -617,6 +617,33 @@ export default function AddPage() {
     }
   }, [setlistQuery.data, headliner.name]);
 
+  // Auto-fetch support performer setlists for past concerts.
+  // Mirrors the headliner useQuery above but loops over the dynamic
+  // performers array. The Set tracks attempted name+date combos so we
+  // don't refetch on every render or clobber manual edits.
+  const supportSetlistAttemptedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!isPastConcert || !date) return;
+    for (const p of performers) {
+      if (p.role !== "support" || !p.name) continue;
+      const key = `${p.name} ${date}`;
+      if (supportSetlistAttemptedRef.current.has(key)) continue;
+      supportSetlistAttemptedRef.current.add(key);
+      const performerName = p.name;
+      setFetchingSetlistFor((prev) => ({ ...prev, [performerName]: true }));
+      utils.enrichment.fetchSetlist
+        .fetch({ performerName, date })
+        .then((result) => {
+          if (result?.songs?.length) {
+            setSetlistsByPerformer((prev) => ({ ...prev, [performerName]: result.songs }));
+          }
+        })
+        .finally(() => {
+          setFetchingSetlistFor((prev) => ({ ...prev, [performerName]: false }));
+        });
+    }
+  }, [performers, date, isPastConcert, utils]);
+
   const handleChatSend = useCallback(async () => {
     if (!chatInput.trim()) return;
 
