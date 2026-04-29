@@ -290,6 +290,10 @@ export async function GET(request: Request) {
     }
     const radioCityId = venueMap.get('Radio City Music Hall')!;
 
+    // Two non-followed nearby venues so Near You has data to render.
+    const irvingPlazaId = venueMap.get('Irving Plaza');
+    const comedyCellarId = venueMap.get('The Comedy Cellar');
+
     await db.insert(announcements).values([
       { venueId: msgId, kind: 'concert', headliner: 'Bon Iver', support: ['Big Thief'], showDate: '2026-08-15', runStartDate: '2026-08-15', runEndDate: '2026-08-15', performanceDates: ['2026-08-15'], onSaleStatus: 'on_sale', source: 'ticketmaster' },
       { venueId: msgId, kind: 'comedy', headliner: 'Trevor Noah', showDate: '2026-09-01', runStartDate: '2026-09-01', runEndDate: '2026-09-01', performanceDates: ['2026-09-01'], onSaleStatus: 'announced', source: 'ticketmaster' },
@@ -309,6 +313,9 @@ export async function GET(request: Request) {
         onSaleStatus: 'on_sale',
         source: 'ticketmaster',
       },
+      // Nearby (non-followed) venues so the Near You tab has data.
+      ...(irvingPlazaId ? [{ venueId: irvingPlazaId, kind: 'concert' as const, headliner: 'Mitski', showDate: '2026-09-12', runStartDate: '2026-09-12', runEndDate: '2026-09-12', performanceDates: ['2026-09-12'], onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
+      ...(comedyCellarId ? [{ venueId: comedyCellarId, kind: 'comedy' as const, headliner: 'Sam Morril', showDate: '2026-08-05', runStartDate: '2026-08-05', runEndDate: '2026-08-05', performanceDates: ['2026-08-05'], onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
     ]);
 
     return NextResponse.json({

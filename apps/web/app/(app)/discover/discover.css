@@ -139,6 +139,37 @@
   text-transform: uppercase;
 }
 
+/* Region section header in the venue rail (Near You tab). Sits between
+ * "All nearby" and the venues belonging to that region. */
+.discover-rail__region {
+  margin-top: 6px;
+}
+
+.discover-rail__section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 14px 18px 4px;
+  border-top: 1px solid var(--rule);
+  margin-top: 8px;
+}
+
+.discover-rail__section-name {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.1px;
+  text-transform: none;
+}
+
+.discover-rail__section-meta {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  color: var(--faint);
+  letter-spacing: 0.04em;
+}
+
 .discover-rail__item {
   display: flex;
   align-items: center;
@@ -251,6 +282,11 @@
   border-bottom: 1px solid var(--rule);
 }
 
+/* Near You table has an extra Venue column between Kind and Headliner. */
+.discover-col-headers--region {
+  grid-template-columns: 72px 100px 180px 1fr 120px 110px 200px;
+}
+
 /* ── Venue Group ─────────────────────────────────────── */
 
 .discover-venue-group {
@@ -320,6 +356,40 @@
   align-items: center;
   border-bottom: 1px solid var(--rule);
   transition: background 0.12s;
+}
+
+/* Near You row layout includes a Venue cell. */
+.discover-row.discover-row--region {
+  grid-template-columns: 72px 100px 180px 1fr 120px 110px 200px;
+}
+
+.discover-row__venue-cell {
+  min-width: 0;
+}
+
+.discover-row__venue-name {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Region ingest pending indicator on the Near You feed header. */
+.discover-region-ingest-pending {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+  animation: discover-ingest-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes discover-ingest-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
 }
 
 [data-compact="true"] .discover-row {

@@ -294,7 +294,7 @@ function AnnouncementRow({
   isWatching: boolean;
   onToggleWatch: (id: string, watching: boolean) => void;
   showReason: boolean;
-  groupBy: "venue" | "artist";
+  groupBy: "venue" | "artist" | "region";
 }) {
   const date = formatShowDateShort(announcement.showDate);
   const KindIcon = KIND_ICONS[announcement.kind];
@@ -312,7 +312,7 @@ function AnnouncementRow({
 
   return (
     <div
-      className={`discover-row discover-row--${announcement.kind} ${isWatching ? "discover-row--watched" : ""} ${runMode ? "discover-row--run" : ""}`}
+      className={`discover-row discover-row--${announcement.kind} ${isWatching ? "discover-row--watched" : ""} ${runMode ? "discover-row--run" : ""} ${groupBy === "region" ? "discover-row--region" : ""}`}
     >
       {/* Date */}
       <div>
@@ -344,6 +344,26 @@ function AnnouncementRow({
         <KindIcon size={12} />
         {KIND_LABELS[announcement.kind]}
       </div>
+
+      {/* Venue (region mode only — separate cell before Headliner) */}
+      {groupBy === "region" && (
+        <div className="discover-row__venue-cell">
+          <div className="discover-row__venue-name">
+            <Link
+              href={`/venues/${announcement.venue.id}`}
+              className="discover-row__headliner-link"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {announcement.venue.name}
+            </Link>
+          </div>
+          {announcement.venue.city && (
+            <div className="discover-row__support">
+              {announcement.venue.city}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Headliner / Venue */}
       <div className="discover-row__headliner-cell">
@@ -587,6 +607,7 @@ function VenueSearchModal({
 
 function VenueRail({
   venues,
+  regionGroups,
   selected,
   onSelect,
   tabLabel,
@@ -602,6 +623,12 @@ function VenueRail({
     label?: string;
     count: number;
   }[];
+  regionGroups?: {
+    id: string;
+    cityName: string;
+    radiusMiles: number;
+    venues: { id: string; name: string; label?: string; count: number }[];
+  }[] | null;
   selected: string | null;
   onSelect: (venueId: string | null) => void;
   tabLabel: string;
@@ -720,26 +747,58 @@ function VenueRail({
         <div className="discover-rail__item-count">{totalCount}</div>
       </button>
 
-      {/* Per-venue items */}
-      {venues.map((v) => (
-        <button
-          key={v.id}
-          type="button"
-          className={`discover-rail__item ${selected === v.id ? "discover-rail__item--active" : ""}`}
-          onClick={() => onSelect(selected === v.id ? null : v.id)}
-          onContextMenu={(e) => handleContextMenu(e, v.id)}
-        >
-          <div className="discover-rail__item-body">
-            <div className="discover-rail__item-name">{v.name}</div>
-            {v.label && (
-              <div className="discover-rail__item-nbhd">
-                {v.label.toLowerCase()}
+      {/* Per-venue items — grouped under region headers when regionGroups is supplied (Near You) */}
+      {regionGroups
+        ? regionGroups.map((region) => (
+            <div key={region.id} className="discover-rail__region">
+              <div className="discover-rail__section-header">
+                <span className="discover-rail__section-name">
+                  {region.cityName}
+                </span>
+                <span className="discover-rail__section-meta">
+                  {region.radiusMiles}mi
+                </span>
               </div>
-            )}
-          </div>
-          <div className="discover-rail__item-count">{v.count}</div>
-        </button>
-      ))}
+              {region.venues.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  className={`discover-rail__item ${selected === v.id ? "discover-rail__item--active" : ""}`}
+                  onClick={() => onSelect(selected === v.id ? null : v.id)}
+                  onContextMenu={(e) => handleContextMenu(e, v.id)}
+                >
+                  <div className="discover-rail__item-body">
+                    <div className="discover-rail__item-name">{v.name}</div>
+                    {v.label && (
+                      <div className="discover-rail__item-nbhd">
+                        {v.label.toLowerCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="discover-rail__item-count">{v.count}</div>
+                </button>
+              ))}
+            </div>
+          ))
+        : venues.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              className={`discover-rail__item ${selected === v.id ? "discover-rail__item--active" : ""}`}
+              onClick={() => onSelect(selected === v.id ? null : v.id)}
+              onContextMenu={(e) => handleContextMenu(e, v.id)}
+            >
+              <div className="discover-rail__item-body">
+                <div className="discover-rail__item-name">{v.name}</div>
+                {v.label && (
+                  <div className="discover-rail__item-nbhd">
+                    {v.label.toLowerCase()}
+                  </div>
+                )}
+              </div>
+              <div className="discover-rail__item-count">{v.count}</div>
+            </button>
+          ))}
 
       {showFollowLink && (
         <div className="discover-rail__follow">
@@ -817,6 +876,8 @@ function FeedSection({
   groupBy,
   allFollowedVenues,
   hasRegions,
+  pendingIngestRegionIds,
+  activeRegions,
 }: {
   items: Announcement[] | undefined;
   isLoading: boolean;
@@ -825,9 +886,11 @@ function FeedSection({
   onToggleWatch: (id: string, watching: boolean) => void;
   activeTab: string;
   onVenueFollowed: () => void;
-  groupBy: "venue" | "artist";
+  groupBy: "venue" | "artist" | "region";
   allFollowedVenues?: { id: string; name: string; city: string }[];
   hasRegions?: boolean;
+  pendingIngestRegionIds?: Set<string>;
+  activeRegions?: { id: string; cityName: string; radiusMiles: number }[];
 }) {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [showFollowModal, setShowFollowModal] = useState(false);
@@ -935,21 +998,82 @@ function FeedSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredItems, groupList, selectedGroupId, groupBy]);
 
-  // Region groups for Near You tab
+  // Region groups for Near You tab. Seed with all active regions so newly-
+  // added regions (with no announcements yet) still render a header — the
+  // ingest pending indicator hangs off the header.
   const regionGroups = useMemo(() => {
-    if (!items || activeTab !== "Near You") return null;
+    if (activeTab !== "Near You") return null;
     const regions = new Map<string, { id: string; cityName: string; radiusMiles: number; items: Announcement[] }>();
-    for (const item of items) {
-      const rid = item.regionId ?? "__unknown";
-      const rname = item.regionCityName ?? "Unknown";
-      const rradius = item.regionRadiusMiles ?? 0;
-      if (!regions.has(rid)) {
-        regions.set(rid, { id: rid, cityName: rname, radiusMiles: rradius, items: [] });
+    if (activeRegions) {
+      for (const r of activeRegions) {
+        regions.set(r.id, { id: r.id, cityName: r.cityName, radiusMiles: r.radiusMiles, items: [] });
       }
-      regions.get(rid)!.items.push(item);
+    }
+    if (items) {
+      for (const item of items) {
+        const rid = item.regionId ?? "__unknown";
+        const rname = item.regionCityName ?? "Unknown";
+        const rradius = item.regionRadiusMiles ?? 0;
+        if (!regions.has(rid)) {
+          regions.set(rid, { id: rid, cityName: rname, radiusMiles: rradius, items: [] });
+        }
+        regions.get(rid)!.items.push(item);
+      }
     }
     return Array.from(regions.values());
-  }, [items, activeTab]);
+  }, [items, activeTab, activeRegions]);
+
+  // Region-grouped venue rail data (Near You only). Each region contains its
+  // distinct venues (with counts) so the rail can render section headers.
+  // Seeded with all active regions so empty regions still appear.
+  const regionVenueGroups = useMemo(() => {
+    if (activeTab !== "Near You") return null;
+    const regions = new Map<
+      string,
+      {
+        id: string;
+        cityName: string;
+        radiusMiles: number;
+        venues: { id: string; name: string; label?: string; count: number }[];
+      }
+    >();
+    if (activeRegions) {
+      for (const r of activeRegions) {
+        regions.set(r.id, {
+          id: r.id,
+          cityName: r.cityName,
+          radiusMiles: r.radiusMiles,
+          venues: [],
+        });
+      }
+    }
+    if (items) {
+      for (const item of items) {
+        const rid = item.regionId ?? "__unknown";
+        const rname = item.regionCityName ?? "Unknown";
+        const rradius = item.regionRadiusMiles ?? 0;
+        if (!regions.has(rid)) {
+          regions.set(rid, { id: rid, cityName: rname, radiusMiles: rradius, venues: [] });
+        }
+        const region = regions.get(rid)!;
+        const existing = region.venues.find((v) => v.id === item.venue.id);
+        if (existing) {
+          existing.count++;
+        } else {
+          region.venues.push({
+            id: item.venue.id,
+            name: item.venue.name,
+            label: item.venue.city,
+            count: 1,
+          });
+        }
+      }
+    }
+    for (const r of regions.values()) {
+      r.venues.sort((a, b) => b.count - a.count);
+    }
+    return Array.from(regions.values());
+  }, [items, activeTab, activeRegions]);
 
   const totalCount = groupList.length;
   const isFollowed = activeTab === "Followed";
@@ -983,6 +1107,7 @@ function FeedSection({
   const venueRail = (
     <VenueRail
       venues={groupList}
+      regionGroups={isNearby ? regionVenueGroups : null}
       selected={selectedGroupId}
       onSelect={setSelectedGroupId}
       tabLabel={tabLabel}
@@ -1010,7 +1135,11 @@ function FeedSection({
     );
   }
 
-  if (!items || items.length === 0) {
+  // For Near You with active regions, fall through to the main render even
+  // when items is empty so region headers (and the ingest pending indicator)
+  // still appear. For other tabs, show the empty state.
+  const hasAnyRegionsToShow = activeTab === "Near You" && (regionGroups?.length ?? 0) > 0;
+  if ((!items || items.length === 0) && !hasAnyRegionsToShow) {
     return (
       <div className="discover-main">
         {venueRail}
@@ -1038,9 +1167,10 @@ function FeedSection({
       {/* Feed */}
       <div className="discover-feed">
         {/* Column headers */}
-        <div className="discover-col-headers">
+        <div className={`discover-col-headers ${groupBy === "region" ? "discover-col-headers--region" : ""}`}>
           <div>Show date</div>
           <div>Kind</div>
+          {groupBy === "region" && <div>Venue</div>}
           <div>{groupBy === "artist" ? "Venue" : "Headliner"}</div>
           <div>On sale</div>
           <div>Status</div>
@@ -1051,6 +1181,7 @@ function FeedSection({
         {isNearby && regionGroups ? (
           regionGroups.map((region) => {
             const collapsed = collapsedRegions.has(region.id);
+            const isPendingIngest = pendingIngestRegionIds?.has(region.id) ?? false;
             return (
               <div key={region.id} className="discover-venue-group">
                 <div
@@ -1076,6 +1207,14 @@ function FeedSection({
                   </button>
                   <span className="discover-venue-group__meta">
                     {region.radiusMiles}mi · {region.items.length} upcoming
+                    {isPendingIngest && (
+                      <span
+                        className="discover-region-ingest-pending"
+                        data-testid="region-ingest-pending"
+                      >
+                        {" · "}Discovering shows in {region.cityName}…
+                      </span>
+                    )}
                   </span>
                   <div className="discover-venue-group__rule" />
                 </div>
@@ -1165,6 +1304,42 @@ function FeedSection({
 }
 
 // ---------------------------------------------------------------------------
+// Region Ingest Poller — invisible component that watches one region's
+// pg-boss ingest status and notifies the parent. Polls every 2s while
+// pending; stops polling when the job completes/fails. On the
+// pending→done transition, invalidates the nearbyFeed so just-ingested
+// shows appear without manual refresh.
+// ---------------------------------------------------------------------------
+
+function RegionIngestPoller({
+  regionId,
+  onPendingChange,
+}: {
+  regionId: string;
+  onPendingChange: (regionId: string, pending: boolean) => void;
+}) {
+  const utils = trpc.useUtils();
+  const status = trpc.discover.regionIngestStatus.useQuery(
+    { regionId },
+    {
+      refetchInterval: (query) =>
+        query.state.data?.pending ? 2000 : false,
+      refetchOnWindowFocus: false,
+    },
+  );
+  const pending = status.data?.pending ?? false;
+  const prevPendingRef = useRef(pending);
+  useEffect(() => {
+    onPendingChange(regionId, pending);
+    if (prevPendingRef.current && !pending) {
+      utils.discover.nearbyFeed.invalidate();
+    }
+    prevPendingRef.current = pending;
+  }, [pending, regionId, onPendingChange, utils.discover.nearbyFeed]);
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
@@ -1178,13 +1353,31 @@ export default function DiscoverPage() {
   const [activeTab, setActiveTab] = useState<string>("Followed");
   const [watchedIds, setWatchedIds] = useState<Set<string>>(new Set());
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
+  const [pendingIngestRegionIds, setPendingIngestRegionIds] = useState<Set<string>>(new Set());
 
   const utils = trpc.useUtils();
 
   const followedFeed = trpc.discover.followedFeed.useQuery({ limit: 100 });
   const followedVenuesList = trpc.venues.followed.useQuery();
+  const preferences = trpc.preferences.get.useQuery();
 
-  const nearbyFeed = trpc.discover.nearbyFeed.useQuery({ limit: 100 });
+  const nearbyFeed = trpc.discover.nearbyFeed.useQuery({});
+
+  const handlePendingChange = useCallback(
+    (regionId: string, pending: boolean) => {
+      setPendingIngestRegionIds((prev) => {
+        if (pending && prev.has(regionId)) return prev;
+        if (!pending && !prev.has(regionId)) return prev;
+        const next = new Set(prev);
+        if (pending) next.add(regionId);
+        else next.delete(regionId);
+        return next;
+      });
+    },
+    [],
+  );
+
+  const activeRegions = preferences.data?.regions?.filter((r) => r.active) ?? [];
 
   const followedArtistsFeed = trpc.discover.followedArtistsFeed.useQuery({
     limit: 100,
@@ -1260,6 +1453,15 @@ export default function DiscoverPage() {
 
   return (
     <div className="discover-page">
+      {/* Hidden ingest-status pollers, one per active region */}
+      {activeRegions.map((r) => (
+        <RegionIngestPoller
+          key={r.id}
+          regionId={r.id}
+          onPendingChange={handlePendingChange}
+        />
+      ))}
+
       {/* Header */}
       <header className="discover-header">
         <div>
@@ -1360,8 +1562,10 @@ export default function DiscoverPage() {
           onToggleWatch={handleToggleWatch}
           activeTab={activeTab}
           onVenueFollowed={handleVenueFollowed}
-          groupBy="venue"
+          groupBy="region"
           hasRegions={nearbyFeed.data?.hasRegions}
+          pendingIngestRegionIds={pendingIngestRegionIds}
+          activeRegions={activeRegions}
         />
       )}
     </div>

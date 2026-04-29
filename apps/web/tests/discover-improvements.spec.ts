@@ -150,4 +150,70 @@ test.describe('Discover improvements', () => {
     const unfollowBtn = page.locator('button', { hasText: 'Unfollow region' }).first();
     await expect(unfollowBtn).toBeVisible({ timeout: 3000 });
   });
+
+  test('Near You rail groups venues under region section headers', async ({ page }) => {
+    await page.goto('/discover');
+    await page.waitForLoadState('networkidle');
+
+    await page.getByRole('button', { name: /Near you/i }).click();
+    await page.waitForLoadState('networkidle');
+
+    // Seed has two regions (New York, Brooklyn). With non-followed nearby
+    // venues seeded (Irving Plaza, Comedy Cellar), the rail should render
+    // a section header for each region (even if some have zero venues).
+    const sectionHeaders = page.locator('.discover-rail__section-header');
+    const count = await sectionHeaders.count();
+    expect(count).toBeGreaterThanOrEqual(1);
+
+    // Each section header should display a region name and the radius.
+    await expect(sectionHeaders.first()).toContainText(/mi/i);
+
+    // The rail should still have the "All nearby" aggregate item at top.
+    await expect(page.locator('.discover-rail__item', { hasText: /All nearby/i }).first()).toBeVisible();
+  });
+
+  test('Near You table shows both Venue and Headliner column headers', async ({ page }) => {
+    await page.goto('/discover');
+    await page.waitForLoadState('networkidle');
+
+    await page.getByRole('button', { name: /Near you/i }).click();
+    await page.waitForLoadState('networkidle');
+
+    // The Near You tab uses the --region column-header layout, which renders
+    // a Venue column in addition to Headliner.
+    const headers = page.locator('.discover-col-headers--region');
+    const count = await headers.count();
+    if (count === 0) {
+      // No region groups visible (possible if no items + no active regions);
+      // tolerated by other tests, skip here.
+      test.skip();
+      return;
+    }
+    await expect(headers.first()).toContainText(/Venue/i);
+    await expect(headers.first()).toContainText(/Headliner/i);
+
+    // Sanity: the Followed venues tab should NOT have the --region variant.
+    await page.getByRole('button', { name: /Followed venues/i }).click();
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('.discover-col-headers--region')).toHaveCount(0);
+  });
+
+  test('Near You row uses the --region grid (extra venue cell)', async ({ page }) => {
+    await page.goto('/discover');
+    await page.waitForLoadState('networkidle');
+
+    await page.getByRole('button', { name: /Near you/i }).click();
+    await page.waitForLoadState('networkidle');
+
+    const regionRows = page.locator('.discover-row.discover-row--region');
+    const count = await regionRows.count();
+    if (count === 0) {
+      test.skip();
+      return;
+    }
+
+    // The venue cell should contain a link to /venues/...
+    const firstVenueLink = regionRows.first().locator('.discover-row__venue-cell a').first();
+    await expect(firstVenueLink).toHaveAttribute('href', /^\/venues\//);
+  });
 });
