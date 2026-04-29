@@ -206,3 +206,93 @@ the rest.
 
 None of these are blockers; (1) is the only correctness bug, the rest are
 clarity/UX issues.
+
+---
+
+## Code-side vs DB-side cleanup: full compilation & analysis
+
+The codebase mixes three cleanup mechanisms:
+- **FK `ON DELETE CASCADE`** — automatic, structural
+- **DB trigger** — automatic, can encode lightweight conditions
+- **Application code** — explicit, can encode business logic
+
+This section enumerates every cleanup site and recommends where it
+belongs.
+
+### Compilation
+
+| # | Trigger event | Cleanup performed | Where today | Notes |
+|---|---|---|---|---|
+| C1 | `shows` row deleted (any path) | delete dependent `show_performers` | code (`shows.delete`, `shows.deleteAll`, `shows.update`, `runShowsNightly`, `discover.unwatch`) | FK is `no action`; every call site repeats the same boilerplate. **Buggy at `discover.unwatch`** — comment claims it cascades, but it doesn't. |
+| C2 | `shows` row deleted | delete dependent `show_announcement_links` | DB cascade (`0000`) ✓ | `runShowsNightly:55` and `discover.unwatch:506` redundantly delete first. `runShowsNightly` even has a "be explicit" comment. |
+| C3 | `shows` row deleted | delete dependent `enrichment_queue` rows | **nowhere** | FK is `no action`. **Latent bug** — any concert with a queued retry will throw on delete. |
+| C4 | `announcements` row deleted | delete dependent `show_announcement_links` | DB cascade (`0006`) ✓ | `venues.unfollow:143` redundantly deletes first. |
+| C5 | `venues` row deleted | delete dependent `venue_scrape_runs` | DB cascade (`0004`) ✓ | Right place. |
+| C6 | last `show` and last `announcement` reference a venue gone | delete `venues` row | DB trigger `cleanup_orphaned_venue` (`0002`/`0008`) ✓ | Right place. |
+| C7 | venue unfollowed by last user | delete that venue's `announcements` | code (`venues.unfollow`) | Multi-tenant business decision — needs cross-user visibility. Stays code. **But the rule is incomplete**: doesn't preserve announcements whose venue is in someone's active region (asymmetric with C8). |
+| C8 | performer unfollowed by last user | selectively delete `announcements` where this performer headlines AND venue not followed AND venue not in any region | code (`performers.unfollow` → `computePerformerAnnouncementsToDelete`) | Rich, cross-user logic. Stays code. |
+| C9 | region removed | selectively delete `announcements` in the bbox not preserved by other regions/follows | code (`preferences.removeRegion` → `computeAnnouncementsToDelete`) | Rich logic. Stays code. |
+| C10 | watching show date passed | delete the show + dependent rows | code (`runShowsNightly`) | Business policy ("auto-expire watching"); stays code. |
+| C11 | announcement older than 7 days past | delete | code (`discover-ingest` Phase 4) | Business policy; stays code. |
+| C12 | setlist enrichment succeeds / gives up | delete `enrichment_queue` row | code (`runSetlistRetry`) | Self-managed queue; stays code. |
+| C13 | `shows.deleteAll` | wipe `user_venue_follows` + `user_performer_follows` for the user | code (`shows.deleteAll`) | Policy decision — see issue (6) above; questionable default. |
+| C14 | performer "delete" from a user's artist list | unlink only that user's `show_performers` rows; remove their follow | code (`performers.delete`) | Per-user scope; stays code, but the **semantics are misleading** (see issue 3). |
+| C15 | orphaned `performer` row (no `show_performers`, no follows, no announcements reference it) | delete | **nowhere** | Symmetric to C6 but missing. Optional — performer rows are tiny. |
+| C16 | show photos field changed / show deleted | delete corresponding R2 objects | **nowhere** | Spec calls for it (`schema.md:85`); photos aren't implemented yet. Track when photos land. |
+| C17 | `users` row deleted | delete every user-scoped row | **nowhere** (no delete-account flow) | Will need an explicit ordered teardown when added. |
+
+### Heuristic for placement
+
+DB-side (cascade or trigger) wins when **all** of:
+- The cleanup is unconditional given the parent delete
+- It's pure referential / structural housekeeping
+- No external systems (R2, pg-boss, webhooks, email) need to be notified
+- Multiple call sites would otherwise duplicate the same code
+
+Code-side wins when **any** of:
+- The decision depends on data the trigger can't see efficiently (cross-user follow/region state, current user identity, request inputs)
+- The cleanup has external side effects (R2 deletes, queued jobs, emails)
+- The rule is a business policy, not referential integrity (auto-expire, prune-after-7-days)
+- The caller needs structured feedback about what happened
+
+### Recommendations
+
+**Move to DB-side (concrete fixes):**
+
+1. **C1: change `show_performers.show_id` FK to `ON DELETE CASCADE`.**
+   Currently five call sites repeat `delete(show_performers).where(show_id IN …)` before deleting shows. One of them (`discover.unwatch`) is buggy — the comment claims a cascade exists, but it doesn't, so unwatching a watched announcement throws if the show has a `show_performers` row (which it always does for non-theatre via `shows.create`). After the cascade, all five sites can drop the explicit pre-delete.
+
+2. **C3: change `enrichment_queue.show_id` FK to `ON DELETE CASCADE`.**
+   Same pattern — pure referential, nothing else needs to know. Fixes the latent bug where deleting a freshly-past concert with a queued retry fails.
+
+**Stays in DB-side, no change:**
+
+3. **C2, C4** — cascades correct. *Remove redundant code-side deletes* in `runShowsNightly:55`, `discover.unwatch:506`, and `venues.unfollow:143`. They were defensive but are now dead weight.
+
+4. **C5, C6** — cascades/trigger correct.
+
+**Stays in code-side, no change:**
+
+5. **C8, C9, C10, C11, C12, C14** — all need cross-user, cross-region, or business-policy logic that doesn't translate to triggers.
+
+**Stays in code-side, but fix the rule:**
+
+6. **C7 (venue unfollow)**: extend the deletion criterion to mirror C8 — also preserve announcements whose venue lat/lng falls inside any user's active region. Today it deletes too aggressively when no one follows the venue but someone has it in a region.
+
+7. **C13 (deleteAll wiping follows)**: scope to "follows that have no shows after the deletion" rather than wiping all of them.
+
+**Optional additions:**
+
+8. **C15 (orphan performer trigger)**: add `cleanup_orphaned_performer` trigger symmetric to `cleanup_orphaned_venue`, firing on `show_performers` / `user_performer_follows` / `announcements.headliner_performer_id` mutations. Nice for symmetry; cost of skipping is low because performer rows are small.
+
+9. **C16, C17**: track in their own follow-ups when those features land.
+
+### Why not just CASCADE everything?
+
+Tempting — would simplify a lot of code. Resist for these specifically:
+
+- **`shows.user_id` → `users.id`**: leave as `no action`. Account deletion is a sensitive operation that should go through an explicit, auditable flow with R2 cleanup, pg-boss job cancellation, and a confirmation step. A surprise cascade could wipe years of show history if someone's auth row gets corrupted or deleted in a backfill.
+- **`announcements.venue_id` → `venues.id`**: leave as `no action`. The trigger inverts the dependency (venue goes when announcements + shows are gone). If we cascaded the other way, deleting a venue would silently nuke other users' watchlists.
+- **`user_*_follows.venue_id` / `.performer_id`**: leave as `no action`. Currently the orphan-cleanup paths delete follows before letting the parent go (or never delete the parent at all). Cascading would hide bugs where we accidentally delete a venue/performer that still has followers.
+
+A CASCADE makes the schema enforce a directionality. Use it where the directionality is obvious (a `show_performers` row is meaningless without its show); avoid it where the parent's "deletion" is itself a derived state (venues, performers, users).
