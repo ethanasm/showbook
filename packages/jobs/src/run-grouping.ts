@@ -23,6 +23,7 @@ export interface NormalizedEvent {
   onSaleDate: Date | null;
   onSaleStatus: 'announced' | 'on_sale' | 'sold_out';
   source: 'ticketmaster' | 'manual' | 'scraped';
+  ticketUrl: string | null;
 }
 
 export interface EventRun {
@@ -44,6 +45,7 @@ export interface EventRun {
   onSaleDate: Date | null;
   onSaleStatus: 'announced' | 'on_sale' | 'sold_out';
   source: 'ticketmaster' | 'manual' | 'scraped';
+  ticketUrl: string | null;
 }
 
 /**
@@ -143,5 +145,6 @@ function makeRun(cluster: NormalizedEvent[]): EventRun {
     onSaleDate: earliestOnSale,
     onSaleStatus,
     source: first.source,
+    ticketUrl: first.ticketUrl,
   };
 }

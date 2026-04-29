@@ -122,6 +122,7 @@ async function normalizeTmEvent(event: TMEvent): Promise<NormalizedEvent | null>
       : null,
     onSaleStatus: determineOnSaleStatus(event),
     source: 'ticketmaster',
+    ticketUrl: event.url ?? null,
   };
 }
 
@@ -149,6 +150,7 @@ async function insertSingleEvent(
     onSaleStatus: event.onSaleStatus,
     source: event.source,
     sourceEventId: event.sourceEventId,
+    ticketUrl: event.ticketUrl,
   });
   existingSourceIds.add(event.sourceEventId);
   return true;
@@ -234,6 +236,7 @@ async function upsertRun(
     // let the per-night IDs live in performanceDates' association via
     // existingSourceIds dedup.
     sourceEventId: null,
+    ticketUrl: run.ticketUrl,
   });
   for (const id of newSourceIds) existingSourceIds.add(id);
   return 1;
