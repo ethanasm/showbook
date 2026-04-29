@@ -140,7 +140,10 @@
 }
 
 /* Region section header in the venue rail (Near You tab). Sits between
- * "All nearby" and the venues belonging to that region. */
+ * "All nearby" and the venues belonging to that region. The header itself
+ * is a button (clicking it collapses/expands the venues underneath) so we
+ * reset button defaults. The label is uppercase mono with an accent tint
+ * and a leading chevron — visually distinct from venue names below. */
 .discover-rail__region {
   margin-top: 6px;
 }
@@ -149,18 +152,43 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  padding: 14px 18px 4px;
+  width: 100%;
+  padding: 14px 18px 6px;
   border-top: 1px solid var(--rule);
   margin-top: 8px;
+  background: transparent;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.discover-rail__section-header:hover .discover-rail__section-name {
+  color: var(--accent);
 }
 
 .discover-rail__section-name {
-  font-family: var(--font-geist-sans), sans-serif;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-geist-mono), monospace;
   font-size: 11px;
-  font-weight: 600;
-  color: var(--ink);
-  letter-spacing: -0.1px;
-  text-transform: none;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: color 0.12s;
+}
+
+.discover-rail__section-chevron {
+  font-size: 9px;
+  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: 0;
+  width: 8px;
+  display: inline-block;
 }
 
 .discover-rail__section-meta {

@@ -18,6 +18,10 @@ import {
   X,
   CalendarPlus,
 } from "lucide-react";
+import {
+  groupAnnouncementsByRegion,
+  groupVenuesByRegion,
+} from "./region-helpers";
 import "./discover.css";
 
 // ---------------------------------------------------------------------------
@@ -639,6 +643,7 @@ function VenueRail({
   showArtistSearch?: boolean;
 }) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  const [collapsedRailRegions, setCollapsedRailRegions] = useState<Set<string>>(new Set());
   const [artistSearchOpen, setArtistSearchOpen] = useState(false);
   const [artistQuery, setArtistQuery] = useState("");
   const [debouncedArtistQuery, setDebouncedArtistQuery] = useState("");
@@ -749,37 +754,60 @@ function VenueRail({
 
       {/* Per-venue items — grouped under region headers when regionGroups is supplied (Near You) */}
       {regionGroups
-        ? regionGroups.map((region) => (
-            <div key={region.id} className="discover-rail__region">
-              <div className="discover-rail__section-header">
-                <span className="discover-rail__section-name">
-                  {region.cityName}
-                </span>
-                <span className="discover-rail__section-meta">
-                  {region.radiusMiles}mi
-                </span>
-              </div>
-              {region.venues.map((v) => (
+        ? regionGroups.map((region) => {
+            const collapsed = collapsedRailRegions.has(region.id);
+            return (
+              <div key={region.id} className="discover-rail__region">
                 <button
-                  key={v.id}
                   type="button"
-                  className={`discover-rail__item ${selected === v.id ? "discover-rail__item--active" : ""}`}
-                  onClick={() => onSelect(selected === v.id ? null : v.id)}
-                  onContextMenu={(e) => handleContextMenu(e, v.id)}
+                  className="discover-rail__section-header"
+                  onClick={() =>
+                    setCollapsedRailRegions((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(region.id)) next.delete(region.id);
+                      else next.add(region.id);
+                      return next;
+                    })
+                  }
+                  aria-expanded={!collapsed}
+                  aria-controls={`rail-region-${region.id}`}
                 >
-                  <div className="discover-rail__item-body">
-                    <div className="discover-rail__item-name">{v.name}</div>
-                    {v.label && (
-                      <div className="discover-rail__item-nbhd">
-                        {v.label.toLowerCase()}
-                      </div>
-                    )}
-                  </div>
-                  <div className="discover-rail__item-count">{v.count}</div>
+                  <span className="discover-rail__section-name">
+                    <span className="discover-rail__section-chevron" aria-hidden="true">
+                      {collapsed ? "▶" : "▼"}
+                    </span>
+                    {region.cityName}
+                  </span>
+                  <span className="discover-rail__section-meta">
+                    {region.radiusMiles}mi
+                  </span>
                 </button>
-              ))}
-            </div>
-          ))
+                {!collapsed && (
+                  <div id={`rail-region-${region.id}`}>
+                    {region.venues.map((v) => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        className={`discover-rail__item ${selected === v.id ? "discover-rail__item--active" : ""}`}
+                        onClick={() => onSelect(selected === v.id ? null : v.id)}
+                        onContextMenu={(e) => handleContextMenu(e, v.id)}
+                      >
+                        <div className="discover-rail__item-body">
+                          <div className="discover-rail__item-name">{v.name}</div>
+                          {v.label && (
+                            <div className="discover-rail__item-nbhd">
+                              {v.label.toLowerCase()}
+                            </div>
+                          )}
+                        </div>
+                        <div className="discover-rail__item-count">{v.count}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })
         : venues.map((v) => (
             <button
               key={v.id}
@@ -998,81 +1026,20 @@ function FeedSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredItems, groupList, selectedGroupId, groupBy]);
 
-  // Region groups for Near You tab. Seed with all active regions so newly-
-  // added regions (with no announcements yet) still render a header — the
-  // ingest pending indicator hangs off the header.
+  // Region groups for the right-side Near You feed. Filtered by the
+  // currently-selected venue (rail click) so the table reflects the filter.
+  // Seeded with all active regions so an empty/just-added region still
+  // renders a header (the ingest pending indicator hangs off the header).
   const regionGroups = useMemo(() => {
     if (activeTab !== "Near You") return null;
-    const regions = new Map<string, { id: string; cityName: string; radiusMiles: number; items: Announcement[] }>();
-    if (activeRegions) {
-      for (const r of activeRegions) {
-        regions.set(r.id, { id: r.id, cityName: r.cityName, radiusMiles: r.radiusMiles, items: [] });
-      }
-    }
-    if (items) {
-      for (const item of items) {
-        const rid = item.regionId ?? "__unknown";
-        const rname = item.regionCityName ?? "Unknown";
-        const rradius = item.regionRadiusMiles ?? 0;
-        if (!regions.has(rid)) {
-          regions.set(rid, { id: rid, cityName: rname, radiusMiles: rradius, items: [] });
-        }
-        regions.get(rid)!.items.push(item);
-      }
-    }
-    return Array.from(regions.values());
-  }, [items, activeTab, activeRegions]);
+    return groupAnnouncementsByRegion(items, activeRegions, selectedGroupId);
+  }, [items, activeTab, activeRegions, selectedGroupId]);
 
-  // Region-grouped venue rail data (Near You only). Each region contains its
-  // distinct venues (with counts) so the rail can render section headers.
-  // Seeded with all active regions so empty regions still appear.
+  // Rail's region-grouped venue list. Always built from the unfiltered set
+  // so clicking a venue doesn't change other venue counts in the rail.
   const regionVenueGroups = useMemo(() => {
     if (activeTab !== "Near You") return null;
-    const regions = new Map<
-      string,
-      {
-        id: string;
-        cityName: string;
-        radiusMiles: number;
-        venues: { id: string; name: string; label?: string; count: number }[];
-      }
-    >();
-    if (activeRegions) {
-      for (const r of activeRegions) {
-        regions.set(r.id, {
-          id: r.id,
-          cityName: r.cityName,
-          radiusMiles: r.radiusMiles,
-          venues: [],
-        });
-      }
-    }
-    if (items) {
-      for (const item of items) {
-        const rid = item.regionId ?? "__unknown";
-        const rname = item.regionCityName ?? "Unknown";
-        const rradius = item.regionRadiusMiles ?? 0;
-        if (!regions.has(rid)) {
-          regions.set(rid, { id: rid, cityName: rname, radiusMiles: rradius, venues: [] });
-        }
-        const region = regions.get(rid)!;
-        const existing = region.venues.find((v) => v.id === item.venue.id);
-        if (existing) {
-          existing.count++;
-        } else {
-          region.venues.push({
-            id: item.venue.id,
-            name: item.venue.name,
-            label: item.venue.city,
-            count: 1,
-          });
-        }
-      }
-    }
-    for (const r of regions.values()) {
-      r.venues.sort((a, b) => b.count - a.count);
-    }
-    return Array.from(regions.values());
+    return groupVenuesByRegion(items, activeRegions);
   }, [items, activeTab, activeRegions]);
 
   const totalCount = groupList.length;
@@ -1191,9 +1158,18 @@ function FeedSection({
           <div />
         </div>
 
-        {/* Near You: grouped by region */}
+        {/* Near You: grouped by region. When the user has selected a venue,
+            hide regions that contributed no items (the filter narrowed away
+            their entire content) — keep their empty headers only if a
+            pending ingest indicator needs to live there. */}
         {isNearby && regionGroups ? (
-          regionGroups.map((region) => {
+          regionGroups
+            .filter((region) =>
+              selectedGroupId === null
+              || region.items.length > 0
+              || (pendingIngestRegionIds?.has(region.id) ?? false),
+            )
+            .map((region) => {
             const collapsed = collapsedRegions.has(region.id);
             const isPendingIngest = pendingIngestRegionIds?.has(region.id) ?? false;
             return (
