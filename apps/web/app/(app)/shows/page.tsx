@@ -378,7 +378,10 @@ export default function ShowsPage() {
   // Gmail
   const [gmailProgress, setGmailProgress] = useState<{ phase: string; processed: number; total: number; found: number } | null>(null);
 
-  const shows = (allShows ?? []) as ShowData[];
+  const shows = useMemo(
+    () => (allShows ?? []) as ShowData[],
+    [allShows],
+  );
 
   // Get all years from unfiltered data
   const { data: allShowsUnfiltered } = trpc.shows.list.useQuery({});

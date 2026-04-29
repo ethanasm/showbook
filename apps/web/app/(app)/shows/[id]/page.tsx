@@ -803,7 +803,7 @@ function PickDateBanner({ showId }: { showId: string }) {
       }}
     >
       <div style={{ marginBottom: 8 }}>
-        <strong>Date TBD.</strong> You're watching this run without a specific
+        <strong>Date TBD.</strong> You&apos;re watching this run without a specific
         performance picked yet.
       </div>
       {dates && dates.length > 0 ? (

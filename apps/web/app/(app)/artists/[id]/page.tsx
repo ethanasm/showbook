@@ -135,7 +135,10 @@ export default function ArtistDetailPage() {
   });
 
   const performer = detailQuery.data;
-  const userShows = (userShowsQuery.data ?? []) as ShowData[];
+  const userShows = useMemo(
+    () => (userShowsQuery.data ?? []) as ShowData[],
+    [userShowsQuery.data],
+  );
 
   const stats = useMemo(() => {
     const sorted = [...userShows].sort((a, b) => a.date.localeCompare(b.date));

@@ -221,7 +221,10 @@ export default function VenueDetailPage() {
   const [expandedShowId, setExpandedShowId] = useState<string | null>(null);
 
   const venue = detailQuery.data;
-  const userShows = (userShowsQuery.data ?? []) as ShowData[];
+  const userShows = useMemo(
+    () => (userShowsQuery.data ?? []) as ShowData[],
+    [userShowsQuery.data],
+  );
   const upcoming = announcementsQuery.data ?? [];
 
   const stats = useMemo(() => {

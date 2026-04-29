@@ -87,7 +87,7 @@ export default function SignInPage() {
             Every show, <em>worth&nbsp;remembering.</em>
           </h1>
           <p className="signin__subtitle">
-            A private logbook for the concerts, plays, sets, and festivals you've seen — and the ones still ahead.
+            A private logbook for the concerts, plays, sets, and festivals you&apos;ve seen — and the ones still ahead.
           </p>
 
           <ul className="signin__kinds">
