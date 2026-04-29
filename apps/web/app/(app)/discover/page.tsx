@@ -9,6 +9,7 @@ import {
   Clapperboard,
   Laugh,
   Tent,
+  Trophy,
   MapPin,
   Eye,
   Check,
@@ -20,6 +21,8 @@ import {
 } from "lucide-react";
 import "./discover.css";
 
+type DiscoverKind = ShowKind | "sports";
+
 // ---------------------------------------------------------------------------
 // Types inferred from the tRPC router
 // ---------------------------------------------------------------------------
@@ -27,7 +30,7 @@ import "./discover.css";
 type Announcement = {
   id: string;
   venueId: string;
-  kind: ShowKind;
+  kind: DiscoverKind;
   headliner: string;
   headlinerPerformerId: string | null;
   support: string[] | null;
@@ -69,20 +72,22 @@ function formatRunRange(start: string, end: string): string {
 // ---------------------------------------------------------------------------
 
 const KIND_ICONS: Record<
-  ShowKind,
+  DiscoverKind,
   React.ComponentType<{ size?: number; className?: string }>
 > = {
   concert: Music,
   theatre: Clapperboard,
   comedy: Laugh,
   festival: Tent,
+  sports: Trophy,
 };
 
-const KIND_LABELS: Record<ShowKind, string> = {
+const KIND_LABELS: Record<DiscoverKind, string> = {
   concert: "Concert",
   theatre: "Theatre",
   comedy: "Comedy",
   festival: "Festival",
+  sports: "Sports",
 };
 
 const REASON_LABELS: Record<string, string> = {
@@ -198,11 +203,13 @@ function AnnouncementRow({
   isWatching,
   onToggleWatch,
   showReason,
+  groupBy,
 }: {
   announcement: Announcement;
   isWatching: boolean;
   onToggleWatch: (id: string, watching: boolean) => void;
   showReason: boolean;
+  groupBy: "venue" | "artist";
 }) {
   const date = formatShowDateShort(announcement.showDate);
   const KindIcon = KIND_ICONS[announcement.kind];
@@ -253,28 +260,39 @@ function AnnouncementRow({
         {KIND_LABELS[announcement.kind]}
       </div>
 
-      {/* Headliner */}
+      {/* Headliner / Venue */}
       <div className="discover-row__headliner-cell">
-        <div className="discover-row__headliner">
-          {announcement.headlinerPerformerId ? (
-            <Link
-              href={`/artists/${announcement.headlinerPerformerId}`}
-              className="discover-row__headliner-link"
-              onClick={(e) => e.stopPropagation()}
-            >
+        {groupBy === "artist" ? (
+          <>
+            <div className="discover-row__headliner">
+              <Link
+                href={`/venues/${announcement.venue.id}`}
+                className="discover-row__headliner-link"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {announcement.venue.name}
+              </Link>
+            </div>
+            {announcement.venue.city && (
+              <div className="discover-row__support">
+                {announcement.venue.city}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="discover-row__headliner">
               {announcement.headliner}
-            </Link>
-          ) : (
-            announcement.headliner
-          )}
-        </div>
-        {announcement.support && announcement.support.length > 0 && (
-          <div className="discover-row__support">
-            + {announcement.support.join(", ")}
-          </div>
-        )}
-        {showReason && reasonText && (
-          <div className="discover-row__reason">{reasonText}</div>
+            </div>
+            {announcement.support && announcement.support.length > 0 && (
+              <div className="discover-row__support">
+                + {announcement.support.join(", ")}
+              </div>
+            )}
+            {showReason && reasonText && (
+              <div className="discover-row__reason">{reasonText}</div>
+            )}
+          </>
         )}
       </div>
 
@@ -298,11 +316,13 @@ function AnnouncementRow({
 
       {/* Actions */}
       <div className="discover-row__actions">
-        <WatchButton
-          announcementId={announcement.id}
-          isWatching={isWatching}
-          onToggle={onToggleWatch}
-        />
+        {announcement.kind !== "sports" && (
+          <WatchButton
+            announcementId={announcement.id}
+            isWatching={isWatching}
+            onToggle={onToggleWatch}
+          />
+        )}
         <a
           href={`/api/announcements/${announcement.id}/ical`}
           download
@@ -334,19 +354,6 @@ function AnnouncementRow({
 // Venue Search Modal
 // ---------------------------------------------------------------------------
 
-function useDebounced<T>(value: T, delay = 200): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(t);
-  }, [value, delay]);
-  return debounced;
-}
-
-type VenueSearchAction =
-  | { kind: "follow"; venueId: string }
-  | { kind: "createAndFollow"; placeId: string };
-
 function VenueSearchModal({
   onClose,
   onFollowed,
@@ -355,18 +362,16 @@ function VenueSearchModal({
   onFollowed: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const debouncedQuery = useDebounced(query.trim(), 200);
 
   const searchResults = trpc.venues.search.useQuery(
-    { query: debouncedQuery },
-    { enabled: debouncedQuery.length >= 2 },
+    { query },
+    { enabled: query.length >= 2 },
   );
 
   const placesResults = trpc.enrichment.searchPlaces.useQuery(
-    { query: debouncedQuery, types: "venue" },
-    { enabled: debouncedQuery.length >= 2 },
+    { query, types: "venue" },
+    { enabled: query.length >= 2 },
   );
 
   const followMutation = trpc.venues.follow.useMutation({
@@ -386,234 +391,98 @@ function VenueSearchModal({
     inputRef.current?.focus();
   }, []);
 
-  const localVenues = useMemo(() => searchResults.data ?? [], [searchResults.data]);
-  const filteredPlaces = useMemo(() => {
-    const places = placesResults.data ?? [];
-    const localPlaceIds = new Set(
-      localVenues.map((v) => v.googlePlaceId).filter(Boolean) as string[],
-    );
-    return places.filter((p) => !localPlaceIds.has(p.placeId));
-  }, [placesResults.data, localVenues]);
+  const localVenues = searchResults.data ?? [];
+  const places = placesResults.data ?? [];
+  const localIds = new Set(localVenues.map((v) => v.googlePlaceId).filter(Boolean));
+  const filteredPlaces = places.filter((p) => !localIds.has(p.placeId));
   const isPending = followMutation.isPending || createAndFollow.isPending;
 
-  const actions = useMemo<VenueSearchAction[]>(
-    () => [
-      ...localVenues.map((v): VenueSearchAction => ({ kind: "follow", venueId: v.id })),
-      ...filteredPlaces.map((p): VenueSearchAction => ({ kind: "createAndFollow", placeId: p.placeId })),
-    ],
-    [localVenues, filteredPlaces],
-  );
-
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [actions.length]);
-
-  const select = (action: VenueSearchAction) => {
-    if (isPending) return;
-    if (action.kind === "follow") {
-      followMutation.mutate({ venueId: action.venueId });
-    } else {
-      createAndFollow.mutate({ placeId: action.placeId });
-    }
-  };
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-        return;
-      }
-      if (actions.length === 0) return;
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setActiveIndex((i) => (i + 1) % actions.length);
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setActiveIndex((i) => (i - 1 + actions.length) % actions.length);
-      } else if (e.key === "Enter") {
-        const action = actions[activeIndex];
-        if (action) {
-          e.preventDefault();
-          select(action);
-        }
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actions, activeIndex, onClose, isPending]);
-
-  const venuesStart = 0;
-  const placesStart = localVenues.length;
-  const showResults = debouncedQuery.length >= 2;
-  const isFetching = searchResults.isFetching || placesResults.isFetching;
-  const hasNoResults =
-    showResults && !isFetching && localVenues.length === 0 && filteredPlaces.length === 0;
-
   return (
-    <div
-      className="discover-modal-overlay"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
+    <div className="discover-modal-overlay" onClick={onClose}>
       <div
         className="discover-modal"
         onClick={(e) => e.stopPropagation()}
-        data-testid="venue-follow-modal"
       >
-        <div className="discover-modal__input-row">
-          <Search size={14} className="discover-modal__input-icon" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search venues…"
-            className="discover-modal__input"
-            data-testid="venue-follow-input"
-            autoComplete="off"
-            spellCheck={false}
-          />
+        <div className="discover-modal__header">
+          <div className="discover-modal__title">Follow a venue</div>
           <button
             type="button"
-            onClick={onClose}
             className="discover-modal__close"
-            aria-label="Close"
+            onClick={onClose}
           >
             <X size={14} />
           </button>
         </div>
 
-        <div className="discover-modal__body">
-          {!showResults ? (
-            <div className="discover-modal__empty">
-              Type at least 2 characters to search
-            </div>
-          ) : isFetching && actions.length === 0 ? (
-            <div className="discover-modal__empty">Searching…</div>
-          ) : hasNoResults ? (
-            <div className="discover-modal__empty">No venues found</div>
-          ) : (
-            <div className="discover-modal__results">
-              {localVenues.length > 0 && (
-                <Section title="Venues">
-                  {localVenues.map((venue, i) => {
-                    const idx = venuesStart + i;
-                    return (
-                      <ResultRow
-                        key={venue.id}
-                        active={idx === activeIndex}
-                        onMouseEnter={() => setActiveIndex(idx)}
-                        onClick={() => select({ kind: "follow", venueId: venue.id })}
-                        disabled={isPending}
-                        primary={venue.name}
-                        secondary={[venue.city, venue.stateRegion]
-                          .filter(Boolean)
-                          .join(", ")}
-                        meta="Follow"
-                        dataTestId="venue-follow-result-db"
-                      />
-                    );
-                  })}
-                </Section>
-              )}
-              {filteredPlaces.length > 0 && (
-                <Section title="From Google Places">
-                  {filteredPlaces.map((place, i) => {
-                    const idx = placesStart + i;
-                    return (
-                      <ResultRow
-                        key={place.placeId}
-                        active={idx === activeIndex}
-                        onMouseEnter={() => setActiveIndex(idx)}
-                        onClick={() =>
-                          select({ kind: "createAndFollow", placeId: place.placeId })
-                        }
-                        disabled={isPending}
-                        primary={place.displayName}
-                        secondary={place.formattedAddress}
-                        meta="Add & follow"
-                        dataTestId="venue-follow-result-place"
-                      />
-                    );
-                  })}
-                </Section>
-              )}
-            </div>
-          )}
+        <div className="discover-modal__search">
+          <Search size={13} color="var(--muted)" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search venues..."
+            className="discover-modal__input"
+          />
         </div>
 
-        <div className="discover-modal__footer">
-          <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
-          <span><kbd>↵</kbd> follow</span>
-          <span><kbd>Esc</kbd> close</span>
+        <div className="discover-modal__results">
+          {query.length < 2 && (
+            <div className="discover-modal__hint">
+              Type at least 2 characters to search
+            </div>
+          )}
+          {query.length >= 2 && searchResults.isLoading && (
+            <div className="discover-modal__hint">Searching...</div>
+          )}
+          {localVenues.map((venue) => (
+            <button
+              key={venue.id}
+              type="button"
+              className="discover-modal__result"
+              onClick={() => followMutation.mutate({ venueId: venue.id })}
+              disabled={isPending}
+            >
+              <div className="discover-modal__result-body">
+                <div className="discover-modal__result-name">{venue.name}</div>
+                <div className="discover-modal__result-meta">
+                  {[venue.city, venue.stateRegion].filter(Boolean).join(", ")}
+                </div>
+              </div>
+              <div className="discover-modal__result-action">
+                <Plus size={12} />
+                Follow
+              </div>
+            </button>
+          ))}
+          {filteredPlaces.length > 0 && localVenues.length > 0 && (
+            <div className="discover-modal__hint" style={{ borderBottom: "1px solid var(--rule)" }}>
+              From Google Places
+            </div>
+          )}
+          {filteredPlaces.map((place) => (
+            <button
+              key={place.placeId}
+              type="button"
+              className="discover-modal__result"
+              onClick={() => createAndFollow.mutate({ placeId: place.placeId })}
+              disabled={isPending}
+            >
+              <div className="discover-modal__result-body">
+                <div className="discover-modal__result-name">{place.displayName}</div>
+                <div className="discover-modal__result-meta">{place.formattedAddress}</div>
+              </div>
+              <div className="discover-modal__result-action">
+                <Plus size={12} />
+                Follow
+              </div>
+            </button>
+          ))}
+          {query.length >= 2 && !searchResults.isLoading && localVenues.length === 0 && filteredPlaces.length === 0 && (
+            <div className="discover-modal__hint">No venues found</div>
+          )}
         </div>
       </div>
     </div>
-  );
-}
-
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="discover-modal__section">
-      <div className="discover-modal__section-title">{title}</div>
-      <div>{children}</div>
-    </div>
-  );
-}
-
-function ResultRow({
-  active,
-  onClick,
-  onMouseEnter,
-  disabled,
-  primary,
-  secondary,
-  meta,
-  dataTestId,
-}: {
-  active: boolean;
-  onClick: () => void;
-  onMouseEnter: () => void;
-  disabled: boolean;
-  primary: string;
-  secondary: string;
-  meta: string;
-  dataTestId?: string;
-}) {
-  const ref = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (active && ref.current) {
-      ref.current.scrollIntoView({ block: "nearest" });
-    }
-  }, [active]);
-  return (
-    <button
-      ref={ref}
-      type="button"
-      onClick={onClick}
-      onMouseEnter={onMouseEnter}
-      disabled={disabled}
-      className={`discover-modal__row${active ? " discover-modal__row--active" : ""}`}
-      data-testid={dataTestId}
-    >
-      <span className="discover-modal__row-icon">
-        <MapPin size={13} />
-      </span>
-      <span className="discover-modal__row-text">
-        <span className="discover-modal__row-primary">{primary}</span>
-        <span className="discover-modal__row-secondary">{secondary}</span>
-      </span>
-      <span className="discover-modal__row-meta">{meta}</span>
-    </button>
   );
 }
 
@@ -655,7 +524,7 @@ function VenueRail({
       >
         <div className="discover-rail__item-body">
           <div className="discover-rail__item-name">
-            {tabLabel === "Followed venues" ? "All followed" : "All nearby"}
+            {tabLabel === "Nearby venues" ? "All nearby" : "All followed"}
           </div>
         </div>
         <div className="discover-rail__item-count">{totalCount}</div>
@@ -745,6 +614,7 @@ function FeedSection({
   onToggleWatch,
   activeTab,
   onVenueFollowed,
+  groupBy,
 }: {
   items: Announcement[] | undefined;
   isLoading: boolean;
@@ -753,59 +623,76 @@ function FeedSection({
   onToggleWatch: (id: string, watching: boolean) => void;
   activeTab: string;
   onVenueFollowed: () => void;
+  groupBy: "venue" | "artist";
 }) {
-  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [showFollowModal, setShowFollowModal] = useState(false);
 
-  // Extract unique venues with counts and neighborhoods
-  const venueList = useMemo(() => {
+  function getGroupKey(item: Announcement): string | null {
+    return groupBy === "artist" ? item.headlinerPerformerId : item.venue.id;
+  }
+
+  // Extract unique groups (venues or artists) with counts
+  const groupList = useMemo(() => {
     if (!items) return [];
     const seen = new Map<
       string,
       { id: string; name: string; label?: string; count: number }
     >();
     for (const item of items) {
-      if (!seen.has(item.venue.id)) {
-        seen.set(item.venue.id, {
-          id: item.venue.id,
-          name: item.venue.name,
-          label: item.venue.city,
+      const key = getGroupKey(item);
+      if (!key) continue;
+      if (!seen.has(key)) {
+        seen.set(key, {
+          id: key,
+          name: groupBy === "artist" ? item.headliner : item.venue.name,
+          label: groupBy === "artist" ? undefined : item.venue.city,
           count: 0,
         });
       }
-      seen.get(item.venue.id)!.count++;
+      seen.get(key)!.count++;
     }
     return Array.from(seen.values());
-  }, [items]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, groupBy]);
 
-  // Filter items by selected venue
+  // Filter items by selected group
   const filteredItems = useMemo(() => {
     if (!items) return [];
-    if (!selectedVenueId) return items;
-    return items.filter((item) => item.venue.id === selectedVenueId);
-  }, [items, selectedVenueId]);
+    if (!selectedGroupId) return items;
+    return items.filter((item) => getGroupKey(item) === selectedGroupId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, selectedGroupId, groupBy]);
 
-  // Group by venue (when "All" is selected)
+  // Group rows (when "All" is selected)
   const groups = useMemo(() => {
-    if (selectedVenueId) {
-      const v = venueList.find((v) => v.id === selectedVenueId) || {
-        id: selectedVenueId,
+    if (selectedGroupId) {
+      const g = groupList.find((g) => g.id === selectedGroupId) || {
+        id: selectedGroupId,
         name: "",
         label: "",
         count: 0,
       };
-      return [{ venue: v, items: filteredItems }];
+      return [{ group: g, items: filteredItems }];
     }
-    return venueList.map((v) => ({
-      venue: v,
-      items: filteredItems.filter((item) => item.venue.id === v.id),
+    return groupList.map((g) => ({
+      group: g,
+      items: filteredItems.filter((item) => getGroupKey(item) === g.id),
     }));
-  }, [filteredItems, venueList, selectedVenueId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredItems, groupList, selectedGroupId, groupBy]);
 
-  const totalCount = venueList.length;
+  const totalCount = groupList.length;
   const isFollowed = activeTab === "Followed";
-  const tabLabel = isFollowed ? "Followed venues" : "Nearby venues";
-  const showAllGrouped = selectedVenueId === null;
+  const isArtists = activeTab === "Artists";
+  const tabLabel = isFollowed
+    ? "Followed venues"
+    : isArtists
+      ? "Followed artists"
+      : "Nearby venues";
+  const showAllGrouped = selectedGroupId === null;
+  const groupRoute = groupBy === "artist" ? "artists" : "venues";
+  const groupPageLabel = groupBy === "artist" ? "artist page" : "venue page";
 
   function handleFollowVenue() {
     setShowFollowModal(true);
@@ -829,7 +716,7 @@ function FeedSection({
         <VenueRail
           venues={[]}
           selected={null}
-          onSelect={setSelectedVenueId}
+          onSelect={setSelectedGroupId}
           tabLabel={tabLabel}
           totalCount={0}
           showFollowLink={isFollowed}
@@ -853,7 +740,7 @@ function FeedSection({
         <VenueRail
           venues={[]}
           selected={null}
-          onSelect={setSelectedVenueId}
+          onSelect={setSelectedGroupId}
           tabLabel={tabLabel}
           totalCount={0}
           showFollowLink={isFollowed}
@@ -871,9 +758,9 @@ function FeedSection({
     <div className="discover-main">
       {/* Left Rail (desktop) */}
       <VenueRail
-        venues={venueList}
-        selected={selectedVenueId}
-        onSelect={setSelectedVenueId}
+        venues={groupList}
+        selected={selectedGroupId}
+        onSelect={setSelectedGroupId}
         tabLabel={tabLabel}
         totalCount={totalCount}
         showFollowLink={isFollowed}
@@ -882,9 +769,9 @@ function FeedSection({
 
       {/* Mobile Chips */}
       <VenueChips
-        venues={venueList}
-        selected={selectedVenueId}
-        onSelect={setSelectedVenueId}
+        venues={groupList}
+        selected={selectedGroupId}
+        onSelect={setSelectedGroupId}
         totalCount={totalCount}
       />
 
@@ -894,48 +781,49 @@ function FeedSection({
         <div className="discover-col-headers">
           <div>Show date</div>
           <div>Kind</div>
-          <div>Headliner</div>
+          <div>{groupBy === "artist" ? "Venue" : "Headliner"}</div>
           <div>On sale</div>
           <div>Status</div>
           <div />
         </div>
 
         {/* Grouped rows */}
-        {groups.map((group) => (
-          <div key={group.venue.id || "flat"} className="discover-venue-group">
-            {/* Venue header (only when "All" is selected) */}
-            {showAllGrouped && group.venue.id && (
+        {groups.map(({ group, items: groupItems }) => (
+          <div key={group.id || "flat"} className="discover-venue-group">
+            {/* Group header (only when "All" is selected) */}
+            {showAllGrouped && group.id && (
               <div className="discover-venue-group__header">
                 <Link
-                  href={`/venues/${group.venue.id}`}
+                  href={`/${groupRoute}/${group.id}`}
                   className="discover-venue-group__name discover-venue-group__name--link"
                 >
-                  {group.venue.name}
+                  {group.name}
                 </Link>
                 <span className="discover-venue-group__meta">
-                  {group.venue.label
-                    ? group.venue.label.toLowerCase() + " · "
+                  {group.label
+                    ? group.label.toLowerCase() + " · "
                     : ""}
-                  {group.items.length} upcoming
+                  {groupItems.length} upcoming
                 </span>
                 <div className="discover-venue-group__rule" />
                 <Link
-                  href={`/venues/${group.venue.id}`}
+                  href={`/${groupRoute}/${group.id}`}
                   className="discover-venue-group__link"
                 >
-                  venue page &rarr;
+                  {groupPageLabel} &rarr;
                 </Link>
               </div>
             )}
 
             {/* Announcement rows */}
-            {group.items.map((item) => (
+            {groupItems.map((item) => (
               <AnnouncementRow
                 key={item.id}
                 announcement={item}
                 isWatching={watchedIds.has(item.id)}
                 onToggleWatch={onToggleWatch}
                 showReason={showAllGrouped}
+                groupBy={groupBy}
               />
             ))}
           </div>
@@ -974,20 +862,13 @@ export default function DiscoverPage() {
 
   const utils = trpc.useUtils();
 
-  const followedFeed = trpc.discover.followedFeed.useQuery(
-    { limit: 50 },
-    { enabled: activeTab === "Followed" },
-  );
+  const followedFeed = trpc.discover.followedFeed.useQuery({ limit: 100 });
 
-  const nearbyFeed = trpc.discover.nearbyFeed.useQuery(
-    { limit: 50 },
-    { enabled: activeTab === "Near You" },
-  );
+  const nearbyFeed = trpc.discover.nearbyFeed.useQuery({ limit: 100 });
 
-  const followedArtistsFeed = trpc.discover.followedArtistsFeed.useQuery(
-    { limit: 50 },
-    { enabled: activeTab === "Artists" },
-  );
+  const followedArtistsFeed = trpc.discover.followedArtistsFeed.useQuery({
+    limit: 100,
+  });
 
   const refreshNow = trpc.discover.refreshNow.useMutation({
     onSuccess: (data) => {
@@ -1010,6 +891,7 @@ export default function DiscoverPage() {
 
   function handleVenueFollowed() {
     utils.discover.followedFeed.invalidate();
+    utils.discover.nearbyFeed.invalidate();
     utils.venues.followed.invalidate();
   }
 
@@ -1131,6 +1013,7 @@ export default function DiscoverPage() {
           onToggleWatch={handleToggleWatch}
           activeTab={activeTab}
           onVenueFollowed={handleVenueFollowed}
+          groupBy="venue"
         />
       )}
 
@@ -1143,6 +1026,7 @@ export default function DiscoverPage() {
           onToggleWatch={handleToggleWatch}
           activeTab={activeTab}
           onVenueFollowed={handleVenueFollowed}
+          groupBy="artist"
         />
       )}
 
@@ -1155,6 +1039,7 @@ export default function DiscoverPage() {
           onToggleWatch={handleToggleWatch}
           activeTab={activeTab}
           onVenueFollowed={handleVenueFollowed}
+          groupBy="venue"
         />
       )}
     </div>

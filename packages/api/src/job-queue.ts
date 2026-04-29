@@ -34,6 +34,7 @@ async function getSender(): Promise<PgBoss> {
 export const JOB_NAMES = {
   INGEST_VENUE: 'discover/ingest-venue',
   INGEST_PERFORMER: 'discover/ingest-performer',
+  INGEST_REGION: 'discover/ingest-region',
 } as const;
 
 export async function enqueueIngestVenue(venueId: string): Promise<void> {
@@ -53,5 +54,14 @@ export async function enqueueIngestPerformer(performerId: string): Promise<void>
     await boss.send(JOB_NAMES.INGEST_PERFORMER, { performerId });
   } catch (err) {
     console.error('[job-queue] enqueueIngestPerformer failed:', err);
+  }
+}
+
+export async function enqueueIngestRegion(regionId: string): Promise<void> {
+  try {
+    const boss = await getSender();
+    await boss.send(JOB_NAMES.INGEST_REGION, { regionId });
+  } catch (err) {
+    console.error('[job-queue] enqueueIngestRegion failed:', err);
   }
 }

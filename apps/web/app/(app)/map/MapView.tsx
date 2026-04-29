@@ -488,11 +488,19 @@ function VenueInspector({
   );
 
   const followMutation = trpc.venues.follow.useMutation({
-    onSuccess: () => utils.venues.followed.invalidate(),
+    onSuccess: () => {
+      utils.venues.followed.invalidate();
+      utils.discover.followedFeed.invalidate();
+      utils.discover.nearbyFeed.invalidate();
+    },
   });
 
   const unfollowMutation = trpc.venues.unfollow.useMutation({
-    onSuccess: () => utils.venues.followed.invalidate(),
+    onSuccess: () => {
+      utils.venues.followed.invalidate();
+      utils.discover.followedFeed.invalidate();
+      utils.discover.nearbyFeed.invalidate();
+    },
   });
 
   const handleFollowToggle = useCallback(() => {

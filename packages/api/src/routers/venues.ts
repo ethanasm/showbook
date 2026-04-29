@@ -12,7 +12,7 @@ import {
 import { getPlaceDetails } from '../google-places';
 import { matchOrCreateVenue, findTmVenueId } from '../venue-matcher';
 import { geocodeVenue } from '../geocode';
-import { enqueueIngestVenue } from '../job-queue';
+import { ingestVenue } from '@showbook/jobs';
 import { scrapeConfigSchema, parseScrapeConfig } from '../scrape-config';
 import { venueScrapeRuns } from '@showbook/db';
 
@@ -67,12 +67,11 @@ export const venuesRouter = router({
         .values({ userId, venueId: input.venueId })
         .onConflictDoNothing();
 
-      // Fire-and-forget: pull this venue's upcoming events from Ticketmaster
-      // immediately, so the Discover feed populates within seconds rather
-      // than waiting for the next weekly ingestion. Errors are logged and
-      // swallowed inside enqueueIngestVenue — the user-facing follow
-      // succeeds even if the queue is briefly unreachable.
-      void enqueueIngestVenue(input.venueId);
+      try {
+        await ingestVenue(input.venueId);
+      } catch (err) {
+        console.error('[venues/follow] ingestion failed:', err);
+      }
 
       return { success: true };
     }),

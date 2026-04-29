@@ -3,8 +3,8 @@
 .discover-page {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  flex: 1;
+  height: 100%;
+  overflow: hidden;
 }
 
 /* ── Header ──────────────────────────────────────────── */
@@ -345,6 +345,7 @@
 .discover-row--theatre  { border-left: 2px solid var(--kind-theatre); }
 .discover-row--comedy   { border-left: 2px solid var(--kind-comedy); }
 .discover-row--festival { border-left: 2px solid var(--kind-festival); }
+.discover-row--sports   { border-left: 2px solid var(--kind-sports); }
 
 /* Date column */
 .discover-row__date-main {
@@ -381,6 +382,7 @@
 .discover-row__kind--theatre  { color: var(--kind-theatre); }
 .discover-row__kind--comedy   { color: var(--kind-comedy); }
 .discover-row__kind--festival { color: var(--kind-festival); }
+.discover-row__kind--sports   { color: var(--kind-sports); }
 
 /* Headliner column */
 .discover-row__headliner-cell {
@@ -467,6 +469,7 @@ a.discover-row__headliner-link:hover {
 .discover-row__status-badge--on_sale.discover-row__status-badge--theatre  { background: var(--kind-theatre); }
 .discover-row__status-badge--on_sale.discover-row__status-badge--comedy   { background: var(--kind-comedy); }
 .discover-row__status-badge--on_sale.discover-row__status-badge--festival { background: var(--kind-festival); }
+.discover-row__status-badge--on_sale.discover-row__status-badge--sports   { background: var(--kind-sports); }
 
 .discover-row__status-badge--sold_out {
   color: var(--muted);
@@ -608,59 +611,45 @@ a.discover-row__headliner-link:hover {
   }
 }
 
-/* ── Venue Search Modal (palette-style) ─────────────── */
+/* ── Venue Search Modal ─────────────────────────────── */
 
 .discover-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
-  z-index: 200;
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
+  align-items: center;
   justify-content: center;
-  align-items: flex-start;
-  padding-top: 12vh;
+  z-index: 200;
+  backdrop-filter: blur(4px);
 }
 
 .discover-modal {
-  width: 100%;
-  max-width: 640px;
-  margin: 0 16px;
   background: var(--surface);
-  border: 1px solid var(--rule-strong);
-  border-radius: 8px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 440px;
+  max-height: 480px;
   display: flex;
   flex-direction: column;
-  max-height: 70vh;
   overflow: hidden;
 }
 
-.discover-modal__input-row {
+.discover-modal__header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
   border-bottom: 1px solid var(--rule);
 }
 
-.discover-modal__input-icon {
-  color: var(--muted);
-}
-
-.discover-modal__input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  outline: none;
-  color: var(--ink);
+.discover-modal__title {
   font-family: var(--font-geist-sans), sans-serif;
-  font-size: 15px;
-  letter-spacing: -0.2px;
-}
-
-.discover-modal__input::placeholder {
-  color: var(--faint);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.3px;
 }
 
 .discover-modal__close {
@@ -669,134 +658,109 @@ a.discover-row__headliner-link:hover {
   color: var(--muted);
   cursor: pointer;
   padding: 4px;
-  display: inline-flex;
+  display: flex;
+  align-items: center;
 }
 
 .discover-modal__close:hover {
   color: var(--ink);
 }
 
-.discover-modal__body {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 60px;
+.discover-modal__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--rule);
 }
 
-.discover-modal__empty {
-  padding: 24px 20px;
-  text-align: center;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 12px;
+.discover-modal__input {
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+}
+
+.discover-modal__input::placeholder {
   color: var(--faint);
-  letter-spacing: 0.04em;
 }
 
 .discover-modal__results {
-  display: flex;
-  flex-direction: column;
-  padding: 6px 0 10px;
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
 }
 
-.discover-modal__section {
-  display: flex;
-  flex-direction: column;
-}
-
-.discover-modal__section-title {
-  padding: 12px 16px 6px;
+.discover-modal__hint {
+  padding: 24px 20px;
   font-family: var(--font-geist-mono), monospace;
-  font-size: 9.5px;
-  color: var(--faint);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  letter-spacing: 0.04em;
 }
 
-.discover-modal__row {
-  display: grid;
-  grid-template-columns: 24px 1fr auto;
+.discover-modal__result {
+  display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 16px;
+  padding: 12px 20px;
   width: 100%;
-  background: transparent;
   border: none;
-  text-align: left;
+  border-bottom: 1px solid var(--rule);
+  background: transparent;
   cursor: pointer;
-  color: var(--ink);
-  font-family: inherit;
+  text-align: left;
+  transition: background 0.12s;
 }
 
-.discover-modal__row--active {
-  background: rgba(245, 245, 243, 0.06);
+.discover-modal__result:hover {
+  background: var(--surface2);
 }
 
-.discover-modal__row:disabled {
+.discover-modal__result:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.discover-modal__row-icon {
-  color: var(--muted);
-  display: inline-flex;
-}
-
-.discover-modal__row-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.discover-modal__result-body {
+  flex: 1;
   min-width: 0;
 }
 
-.discover-modal__row-primary {
+.discover-modal__result-name {
   font-family: var(--font-geist-sans), sans-serif;
   font-size: 14px;
+  font-weight: 500;
   color: var(--ink);
   letter-spacing: -0.2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.discover-modal__row-secondary {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
-  color: var(--faint);
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.discover-modal__row-meta {
+.discover-modal__result-meta {
   font-family: var(--font-geist-mono), monospace;
   font-size: 10.5px;
   color: var(--muted);
+  margin-top: 2px;
   letter-spacing: 0.04em;
-  white-space: nowrap;
 }
 
-.discover-modal__row--active .discover-modal__row-meta {
-  color: var(--ink);
-}
-
-.discover-modal__footer {
+.discover-modal__result-action {
   display: flex;
-  gap: 18px;
-  padding: 10px 16px;
-  border-top: 1px solid var(--rule);
+  align-items: center;
+  gap: 5px;
   font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
-  color: var(--faint);
+  font-size: 10.5px;
+  color: var(--muted);
   letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.discover-modal__footer kbd {
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  padding: 1px 4px;
-  margin-right: 4px;
-  background: var(--bg);
-  color: var(--muted);
+.discover-modal__result:hover .discover-modal__result-action {
+  color: var(--ink);
 }
 
 /* ── Mobile: Venue Filter Chips ──────────────────────── */

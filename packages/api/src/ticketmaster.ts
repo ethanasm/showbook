@@ -265,13 +265,17 @@ export async function searchAttractions(
 
 export function inferKind(
   classifications?: TMEvent["classifications"],
-): "concert" | "theatre" | "comedy" | "festival" {
+): "concert" | "theatre" | "comedy" | "festival" | "sports" {
   if (!classifications || classifications.length === 0) return "concert";
 
   const primary =
     classifications.find((c) => c.primary) ?? classifications[0];
   const segmentName = primary?.segment?.name?.toLowerCase() ?? "";
   const genreName = primary?.genre?.name?.toLowerCase() ?? "";
+
+  if (segmentName.includes("sports")) {
+    return "sports";
+  }
 
   if (segmentName.includes("music")) {
     // Music segment — check for festival in the genre/subGenre

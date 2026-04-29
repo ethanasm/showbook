@@ -3,6 +3,7 @@ import {
   runDiscoverIngest,
   ingestVenue,
   ingestPerformer,
+  ingestRegion,
 } from './discover-ingest';
 import {
   runNotificationDigest,
@@ -21,6 +22,7 @@ export const JOBS = {
   DISCOVER_INGEST: 'discover/ingest',
   DISCOVER_INGEST_VENUE: 'discover/ingest-venue',
   DISCOVER_INGEST_PERFORMER: 'discover/ingest-performer',
+  DISCOVER_INGEST_REGION: 'discover/ingest-region',
   NOTIFICATIONS_DIGEST: 'notifications/digest',
   NOTIFICATIONS_WEEKLY_DIGEST: 'notifications/weekly-digest',
 } as const;
@@ -135,6 +137,26 @@ async function discoverIngestPerformerHandler(
   }
 }
 
+async function discoverIngestRegionHandler(
+  jobs: PgBoss.Job<{ regionId: string }>[],
+) {
+  for (const job of jobs) {
+    if (!job.data?.regionId) continue;
+    try {
+      const { events } = await ingestRegion(job.data.regionId);
+      console.log(
+        `[${JOBS.DISCOVER_INGEST_REGION}] region=${job.data.regionId} created=${events}`,
+      );
+    } catch (err) {
+      console.error(
+        `[${JOBS.DISCOVER_INGEST_REGION}] error region=${job.data.regionId}:`,
+        err,
+      );
+      throw err;
+    }
+  }
+}
+
 async function notificationsDigestHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
     console.log(`[${JOBS.NOTIFICATIONS_DIGEST}] Running show-day reminder...`, job.id);
@@ -160,6 +182,7 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   await boss.work(JOBS.DISCOVER_INGEST, discoverIngestHandler);
   await boss.work(JOBS.DISCOVER_INGEST_VENUE, discoverIngestVenueHandler);
   await boss.work(JOBS.DISCOVER_INGEST_PERFORMER, discoverIngestPerformerHandler);
+  await boss.work(JOBS.DISCOVER_INGEST_REGION, discoverIngestRegionHandler);
   await boss.work(JOBS.NOTIFICATIONS_DIGEST, notificationsDigestHandler);
 
   await boss.schedule(JOBS.SHOWS_NIGHTLY, '0 3 * * *', {}, { tz: 'America/New_York' });

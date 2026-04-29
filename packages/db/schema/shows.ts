@@ -20,6 +20,7 @@ export const kindEnum = pgEnum('kind', [
   'theatre',
   'comedy',
   'festival',
+  'sports',
 ]);
 
 export const stateEnum = pgEnum('state', ['past', 'ticketed', 'watching']);

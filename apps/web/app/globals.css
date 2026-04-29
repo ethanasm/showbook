@@ -19,6 +19,7 @@
   --kind-theatre: #E63946;
   --kind-comedy: #9D4EDD;
   --kind-festival: #2A9D8F;
+  --kind-sports: #E8772E;
 
   /* Backward-compatible aliases */
   --background: var(--bg);
@@ -50,6 +51,7 @@
   --kind-theatre: #D42F3A;
   --kind-comedy: #8340C4;
   --kind-festival: #238577;
+  --kind-sports: #D06A28;
 }
 
 * {
