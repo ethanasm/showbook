@@ -703,8 +703,12 @@ export default function PreferencesPage() {
   const utils = trpc.useUtils();
   const [venuePage, setVenuePage] = useState(0);
 
-  const prefsQuery = trpc.preferences.get.useQuery();
-  const venuesQuery = trpc.venues.followed.useQuery();
+  const prefsQuery = trpc.preferences.get.useQuery(undefined, {
+    staleTime: 60_000,
+  });
+  const venuesQuery = trpc.venues.followed.useQuery(undefined, {
+    staleTime: 60_000,
+  });
 
   const updatePrefs = trpc.preferences.update.useMutation({
     onSuccess: () => prefsQuery.refetch(),
@@ -727,7 +731,20 @@ export default function PreferencesPage() {
   if (prefsQuery.isLoading || venuesQuery.isLoading) {
     return (
       <div style={styles.container}>
-        <p style={styles.loading}>Loading...</p>
+        {/* skeleton header */}
+        <div style={{ padding: "16px 36px", borderBottom: "1px solid var(--rule)", height: 52 }} />
+        {/* skeleton sections */}
+        <div style={{ padding: "28px 36px", display: "grid", gap: 28, alignContent: "start" }}>
+          {Array.from({ length: 3 }).map((_, sectionIdx) => (
+            <div key={sectionIdx} style={{ display: "grid", gap: 10 }}>
+              <div style={{ height: 14, width: 140, background: "var(--rule)" }} />
+              <div style={{ display: "grid", gap: 1, background: "var(--rule)" }}>
+                <div style={{ height: 40, background: "var(--surface)" }} />
+                <div style={{ height: 40, background: "var(--surface)" }} />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

@@ -55,7 +55,9 @@ export default function VenuesListPage() {
   const [editingName, setEditingName] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
 
-  const { data, isLoading, error } = trpc.venues.list.useQuery();
+  const { data, isLoading, error } = trpc.venues.list.useQuery(undefined, {
+    staleTime: 60_000,
+  });
   const utils = trpc.useUtils();
   const renameMutation = trpc.venues.rename.useMutation({
     onSuccess: () => utils.venues.list.invalidate(),
@@ -181,7 +183,22 @@ export default function VenuesListPage() {
   }
 
   if (isLoading) {
-    return <CenteredMessage>Loading venues…</CenteredMessage>;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+        {/* skeleton header */}
+        <div style={{ padding: "16px 36px", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 52 }} />
+        {/* skeleton filter bar */}
+        <div style={{ padding: "10px 36px", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 44, background: "var(--surface)" }} />
+        {/* skeleton table rows */}
+        <div style={{ flex: 1, minHeight: 0, padding: "12px 36px 24px", overflow: "hidden" }}>
+          <div style={{ background: "var(--surface)" }}>
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} style={{ height: 40, borderBottom: "1px solid var(--rule)", background: "var(--surface)" }} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (error) {

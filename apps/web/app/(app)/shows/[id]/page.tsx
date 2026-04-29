@@ -451,6 +451,27 @@ export default function ShowDetailPage() {
           />
         )}
 
+        {/* Notes */}
+        {show.notes && show.notes.trim().length > 0 && (
+          <section>
+            <SectionHeader label="Notes" />
+            <div
+              style={{
+                fontFamily: "var(--font-sans, ui-sans-serif, system-ui, sans-serif)",
+                fontSize: 14,
+                lineHeight: 1.55,
+                color: "var(--ink)",
+                whiteSpace: "pre-wrap",
+                background: "var(--surface)",
+                borderLeft: "3px solid var(--rule)",
+                padding: "12px 16px",
+              }}
+            >
+              {show.notes}
+            </div>
+          </section>
+        )}
+
         {/* Actions */}
         <section>
           <SectionHeader label="Actions" />

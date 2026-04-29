@@ -177,6 +177,7 @@ export const showsRouter = router({
         ticketCount: z.number().int().min(1).default(1),
         tourName: z.string().optional(),
         productionName: z.string().optional(),
+        notes: z.string().optional(),
         performers: z.array(performerInputSchema).optional(),
         sourceRefs: z.any().optional(),
       })
@@ -258,6 +259,7 @@ export const showsRouter = router({
           productionName,
           setlists: Object.keys(setlistsMap).length > 0 ? setlistsMap : null,
           photos: null,
+          notes: input.notes ?? null,
           sourceRefs: input.sourceRefs ?? null,
         })
         .returning();
@@ -415,6 +417,7 @@ export const showsRouter = router({
         ticketCount: z.number().int().min(1).default(1),
         tourName: z.string().optional(),
         productionName: z.string().optional(),
+        notes: z.string().nullable().optional(),
         performers: z.array(performerInputSchema).optional(),
         sourceRefs: z.any().optional(),
       })
@@ -517,6 +520,7 @@ export const showsRouter = router({
           tourName: input.tourName ?? null,
           productionName,
           setlists: Object.keys(setlistsMap).length > 0 ? setlistsMap : null,
+          notes: input.notes ?? null,
           sourceRefs: input.sourceRefs ?? null,
           updatedAt: new Date(),
         })
