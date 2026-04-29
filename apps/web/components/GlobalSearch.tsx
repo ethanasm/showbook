@@ -221,7 +221,7 @@ export function GlobalSearch() {
                   <Section title="Shows">
                     {showsList.map((s, i) => {
                       const idx = showsStart + i;
-                      const Kind = KIND_ICONS[s.kind];
+                      const Kind = KIND_ICONS[s.kind as keyof typeof KIND_ICONS] ?? Music;
                       return (
                         <Row
                           key={s.id}

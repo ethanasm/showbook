@@ -112,6 +112,10 @@ export const discoverRouter = router({
       return {
         items: rows.map((r) => ({
           ...r.announcement,
+          ticketUrl: r.announcement.ticketUrl
+            || (r.announcement.sourceEventId
+              ? `https://www.ticketmaster.com/event/${r.announcement.sourceEventId}`
+              : null),
           venue: r.venue,
         })),
         nextCursor,
@@ -161,7 +165,14 @@ export const discoverRouter = router({
       }
 
       return {
-        items: rows.map((r) => ({ ...r.announcement, venue: r.venue })),
+        items: rows.map((r) => ({
+          ...r.announcement,
+          ticketUrl: r.announcement.ticketUrl
+            || (r.announcement.sourceEventId
+              ? `https://www.ticketmaster.com/event/${r.announcement.sourceEventId}`
+              : null),
+          venue: r.venue,
+        })),
         nextCursor,
       };
     }),
@@ -250,6 +261,10 @@ export const discoverRouter = router({
       return {
         items: rows.map((r) => ({
           ...r.announcement,
+          ticketUrl: r.announcement.ticketUrl
+            || (r.announcement.sourceEventId
+              ? `https://www.ticketmaster.com/event/${r.announcement.sourceEventId}`
+              : null),
           venue: r.venue,
         })),
         nextCursor,
@@ -285,6 +300,13 @@ export const discoverRouter = router({
 
       if (!announcement) {
         throw new Error('Announcement not found');
+      }
+
+      if (announcement.kind === 'sports') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Sports events cannot be added to your watchlist',
+        });
       }
 
       const isRun =

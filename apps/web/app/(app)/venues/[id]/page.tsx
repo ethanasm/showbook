@@ -492,7 +492,7 @@ export default function VenueDetailPage() {
               </div>
               {upcoming.map((a) => {
                 const date = formatDateParts(a.showDate);
-                const KindIcon = KIND_ICONS[a.kind as ShowKind];
+                const KindIcon = KIND_ICONS[a.kind as ShowKind] ?? Music;
                 const isOnSale = a.onSaleStatus === "on_sale";
                 return (
                   <div
@@ -542,7 +542,7 @@ export default function VenueDetailPage() {
                       }}
                     >
                       <KindIcon size={12} />
-                      {KIND_LABELS[a.kind as ShowKind]}
+                      {KIND_LABELS[a.kind as ShowKind] ?? a.kind}
                     </div>
                     <div style={{ minWidth: 0 }}>
                       <div

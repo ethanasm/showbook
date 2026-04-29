@@ -3,8 +3,8 @@
 .discover-page {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  flex: 1;
+  height: 100%;
+  overflow: hidden;
 }
 
 /* ── Header ──────────────────────────────────────────── */
@@ -340,6 +340,7 @@
 .discover-row--theatre  { border-left: 2px solid var(--kind-theatre); }
 .discover-row--comedy   { border-left: 2px solid var(--kind-comedy); }
 .discover-row--festival { border-left: 2px solid var(--kind-festival); }
+.discover-row--sports   { border-left: 2px solid var(--kind-sports); }
 
 /* Date column */
 .discover-row__date-main {
@@ -376,6 +377,7 @@
 .discover-row__kind--theatre  { color: var(--kind-theatre); }
 .discover-row__kind--comedy   { color: var(--kind-comedy); }
 .discover-row__kind--festival { color: var(--kind-festival); }
+.discover-row__kind--sports   { color: var(--kind-sports); }
 
 /* Headliner column */
 .discover-row__headliner-cell {
@@ -462,6 +464,7 @@ a.discover-row__headliner-link:hover {
 .discover-row__status-badge--on_sale.discover-row__status-badge--theatre  { background: var(--kind-theatre); }
 .discover-row__status-badge--on_sale.discover-row__status-badge--comedy   { background: var(--kind-comedy); }
 .discover-row__status-badge--on_sale.discover-row__status-badge--festival { background: var(--kind-festival); }
+.discover-row__status-badge--on_sale.discover-row__status-badge--sports   { background: var(--kind-sports); }
 
 .discover-row__status-badge--sold_out {
   color: var(--muted);
