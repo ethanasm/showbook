@@ -64,6 +64,13 @@
       "when": 1777695600000,
       "tag": "0008_venue_cleanup_announcements",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1777444820729,
+      "tag": "0009_drop_show_day_reminder",
+      "breakpoints": true
     }
   ]
 }

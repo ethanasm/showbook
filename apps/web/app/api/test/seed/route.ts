@@ -97,9 +97,29 @@ const SHOWS: ShowSeed[] = [
   { kind: 'festival', state: 'watching', headliner: 'The National', support: ['Japanese Breakfast', 'Phoebe Bridgers'], venueName: 'Randalls Island Park', date: '2026-06-05', endDate: '2026-06-07', productionName: 'Panorama Festival' },
 ];
 
-export async function GET() {
+export async function GET(request: Request) {
   if (process.env.NODE_ENV === 'production') {
     return NextResponse.json({ error: 'Not available in production' }, { status: 403 });
+  }
+
+  // If ?addRegion is present, just add a single region without re-seeding
+  const url = new URL(request.url);
+  if (url.searchParams.has('addRegion')) {
+    const lat = parseFloat(url.searchParams.get('lat') ?? '0');
+    const lng = parseFloat(url.searchParams.get('lng') ?? '0');
+    const radius = parseInt(url.searchParams.get('radius') ?? '25', 10);
+    const city = url.searchParams.get('city') ?? 'TestCity';
+
+    const user = await db.query.users.findFirst({ where: eq(users.email, TEST_EMAIL) });
+    if (!user) return NextResponse.json({ error: 'No test user' }, { status: 404 });
+
+    const existing = await db.select({ id: userRegions.id }).from(userRegions).where(eq(userRegions.userId, user.id));
+    if (existing.length >= 5) {
+      return NextResponse.json({ error: 'cap', regions: existing.length }, { status: 400 });
+    }
+
+    await db.insert(userRegions).values({ userId: user.id, cityName: city, latitude: lat, longitude: lng, radiusMiles: radius });
+    return NextResponse.json({ ok: true });
   }
 
   try {
@@ -225,7 +245,6 @@ export async function GET() {
       digestTime: '09:00',
       emailNotifications: true,
       pushNotifications: true,
-      showDayReminder: true,
     }).onConflictDoNothing();
 
     // Insert regions

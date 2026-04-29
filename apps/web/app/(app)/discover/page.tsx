@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { type ShowKind } from "@/components/design-system";
@@ -10,7 +10,6 @@ import {
   Laugh,
   Tent,
   Trophy,
-  MapPin,
   Eye,
   Check,
   ArrowUpRight,
@@ -20,6 +19,89 @@ import {
   CalendarPlus,
 } from "lucide-react";
 import "./discover.css";
+
+// ---------------------------------------------------------------------------
+// Lightweight context menu (local; a shared one is coming post-merge)
+// ---------------------------------------------------------------------------
+
+function ContextMenu({
+  x,
+  y,
+  items,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  items: { label: string; onClick: () => void; danger?: boolean }[];
+  onClose: () => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  useEffect(() => {
+    const handler = () => onClose();
+    document.addEventListener("scroll", handler, true);
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") onClose();
+    });
+    return () => {
+      document.removeEventListener("scroll", handler, true);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={menuRef}
+      style={{
+        position: "fixed",
+        top: y,
+        left: x,
+        background: "var(--surface)",
+        border: "1px solid var(--rule-strong)",
+        zIndex: 1000,
+        minWidth: 140,
+        boxShadow: "0 4px 16px rgba(0,0,0,.2)",
+      }}
+    >
+      {items.map((item) => (
+        <button
+          key={item.label}
+          type="button"
+          onClick={() => {
+            item.onClick();
+            onClose();
+          }}
+          style={{
+            display: "block",
+            width: "100%",
+            padding: "10px 14px",
+            background: "none",
+            border: "none",
+            color: item.danger ? "#E63946" : "var(--ink)",
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 11,
+            textAlign: "left",
+            cursor: "pointer",
+            letterSpacing: ".04em",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface2)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 type DiscoverKind = ShowKind | "sports";
 
@@ -49,6 +131,9 @@ type Announcement = {
     city: string;
   };
   reason?: string;
+  regionId?: string | null;
+  regionCityName?: string | null;
+  regionRadiusMiles?: number | null;
 };
 
 function isRun(a: Announcement): boolean {
@@ -282,7 +367,17 @@ function AnnouncementRow({
         ) : (
           <>
             <div className="discover-row__headliner">
-              {announcement.headliner}
+              {announcement.headlinerPerformerId ? (
+                <Link
+                  href={`/artists/${announcement.headlinerPerformerId}`}
+                  className="discover-row__headliner-link"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {announcement.headliner}
+                </Link>
+              ) : (
+                announcement.headliner
+              )}
             </div>
             {announcement.support && announcement.support.length > 0 && (
               <div className="discover-row__support">
@@ -498,6 +593,8 @@ function VenueRail({
   totalCount,
   showFollowLink,
   onFollowVenue,
+  onUnfollowItem,
+  showArtistSearch,
 }: {
   venues: {
     id: string;
@@ -511,10 +608,103 @@ function VenueRail({
   totalCount: number;
   showFollowLink: boolean;
   onFollowVenue?: () => void;
+  onUnfollowItem?: (id: string) => void;
+  showArtistSearch?: boolean;
 }) {
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  const [artistSearchOpen, setArtistSearchOpen] = useState(false);
+  const [artistQuery, setArtistQuery] = useState("");
+  const [debouncedArtistQuery, setDebouncedArtistQuery] = useState("");
+  const artistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const artistInputRef = useRef<HTMLInputElement>(null);
+  const utils = trpc.useUtils();
+
+  const artistSearchResults = trpc.discover.searchArtists.useQuery(
+    { keyword: debouncedArtistQuery },
+    { enabled: debouncedArtistQuery.length >= 2 },
+  );
+
+  const followAttraction = trpc.performers.followAttraction.useMutation({
+    onSuccess: () => {
+      utils.discover.followedArtistsFeed.invalidate();
+      setArtistSearchOpen(false);
+      setArtistQuery("");
+      setDebouncedArtistQuery("");
+    },
+  });
+
+  useEffect(() => {
+    if (artistSearchOpen) {
+      artistInputRef.current?.focus();
+    }
+  }, [artistSearchOpen]);
+
+  const handleArtistQueryChange = (value: string) => {
+    setArtistQuery(value);
+    if (artistTimerRef.current) clearTimeout(artistTimerRef.current);
+    if (value.length >= 2) {
+      artistTimerRef.current = setTimeout(() => setDebouncedArtistQuery(value), 350);
+    } else {
+      setDebouncedArtistQuery("");
+    }
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, id: string) => {
+    if (!onUnfollowItem) return;
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, id });
+  };
+
   return (
     <aside className="discover-rail">
       <div className="discover-rail__title">{tabLabel}</div>
+
+      {/* "Follow another artist" affordance */}
+      {showArtistSearch && (
+        <div className="discover-rail__follow" style={{ marginTop: 0, marginBottom: 4 }}>
+          {artistSearchOpen ? (
+            <div style={{ padding: "8px 18px 4px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, borderBottom: "1px solid var(--rule)", paddingBottom: 6 }}>
+                <Search size={11} color="var(--muted)" />
+                <input
+                  ref={artistInputRef}
+                  value={artistQuery}
+                  onChange={(e) => handleArtistQueryChange(e.target.value)}
+                  placeholder="Search artists..."
+                  style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--ink)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11 }}
+                />
+                <button type="button" onClick={() => { setArtistSearchOpen(false); setArtistQuery(""); setDebouncedArtistQuery(""); }} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", padding: 0 }}>
+                  <X size={11} />
+                </button>
+              </div>
+              <div style={{ maxHeight: 200, overflowY: "auto" }}>
+                {debouncedArtistQuery.length >= 2 && artistSearchResults.isLoading && (
+                  <div style={{ padding: "6px 0", fontFamily: "var(--font-geist-mono), monospace", fontSize: 10, color: "var(--muted)" }}>Searching...</div>
+                )}
+                {artistSearchResults.data?.map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => followAttraction.mutate({ tmAttractionId: a.id, name: a.name, imageUrl: a.imageUrl ?? undefined })}
+                    disabled={followAttraction.isPending}
+                    style={{ display: "block", width: "100%", padding: "6px 0", background: "none", border: "none", borderBottom: "1px solid var(--rule)", textAlign: "left", cursor: "pointer", opacity: followAttraction.isPending ? 0.5 : 1 }}
+                  >
+                    <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 12, color: "var(--ink)", fontWeight: 500 }}>{a.name}</div>
+                  </button>
+                ))}
+                {debouncedArtistQuery.length >= 2 && !artistSearchResults.isLoading && (artistSearchResults.data?.length ?? 0) === 0 && (
+                  <div style={{ padding: "6px 0", fontFamily: "var(--font-geist-mono), monospace", fontSize: 10, color: "var(--muted)" }}>No artists found</div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <button type="button" className="discover-rail__follow-link" onClick={() => setArtistSearchOpen(true)}>
+              <Plus size={11} />
+              Follow another artist
+            </button>
+          )}
+        </div>
+      )}
 
       {/* "All" item */}
       <button
@@ -537,6 +727,7 @@ function VenueRail({
           type="button"
           className={`discover-rail__item ${selected === v.id ? "discover-rail__item--active" : ""}`}
           onClick={() => onSelect(selected === v.id ? null : v.id)}
+          onContextMenu={(e) => handleContextMenu(e, v.id)}
         >
           <div className="discover-rail__item-body">
             <div className="discover-rail__item-name">{v.name}</div>
@@ -557,6 +748,15 @@ function VenueRail({
             Follow another venue
           </button>
         </div>
+      )}
+
+      {contextMenu && onUnfollowItem && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={[{ label: "Unfollow", onClick: () => onUnfollowItem(contextMenu.id), danger: true }]}
+          onClose={() => setContextMenu(null)}
+        />
       )}
     </aside>
   );
@@ -615,6 +815,8 @@ function FeedSection({
   activeTab,
   onVenueFollowed,
   groupBy,
+  allFollowedVenues,
+  hasRegions,
 }: {
   items: Announcement[] | undefined;
   isLoading: boolean;
@@ -624,9 +826,50 @@ function FeedSection({
   activeTab: string;
   onVenueFollowed: () => void;
   groupBy: "venue" | "artist";
+  allFollowedVenues?: { id: string; name: string; city: string }[];
+  hasRegions?: boolean;
 }) {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [showFollowModal, setShowFollowModal] = useState(false);
+  const [collapsedRegions, setCollapsedRegions] = useState<Set<string>>(new Set());
+  const [regionContextMenu, setRegionContextMenu] = useState<{ x: number; y: number; regionId: string } | null>(null);
+
+  const utils = trpc.useUtils();
+
+  const unfollowVenueMutation = trpc.venues.unfollow.useMutation({
+    onMutate: ({ venueId }) => {
+      setSelectedGroupId((prev) => (prev === venueId ? null : prev));
+    },
+    onSuccess: () => {
+      utils.venues.followed.invalidate();
+      utils.discover.followedFeed.invalidate();
+      utils.discover.nearbyFeed.invalidate();
+    },
+  });
+
+  const unfollowArtistMutation = trpc.performers.unfollow.useMutation({
+    onMutate: ({ performerId }) => {
+      setSelectedGroupId((prev) => (prev === performerId ? null : prev));
+    },
+    onSuccess: () => {
+      utils.discover.followedArtistsFeed.invalidate();
+    },
+  });
+
+  const removeRegionMutation = trpc.preferences.removeRegion.useMutation({
+    onSuccess: () => {
+      utils.discover.nearbyFeed.invalidate();
+      utils.preferences.get.invalidate();
+    },
+  });
+
+  const handleUnfollowItem = useCallback((id: string) => {
+    if (groupBy === "venue") {
+      unfollowVenueMutation.mutate({ venueId: id });
+    } else {
+      unfollowArtistMutation.mutate({ performerId: id });
+    }
+  }, [groupBy, unfollowVenueMutation, unfollowArtistMutation]);
 
   function getGroupKey(item: Announcement): string | null {
     return groupBy === "artist" ? item.headlinerPerformerId : item.venue.id;
@@ -634,27 +877,37 @@ function FeedSection({
 
   // Extract unique groups (venues or artists) with counts
   const groupList = useMemo(() => {
-    if (!items) return [];
     const seen = new Map<
       string,
       { id: string; name: string; label?: string; count: number }
     >();
-    for (const item of items) {
-      const key = getGroupKey(item);
-      if (!key) continue;
-      if (!seen.has(key)) {
-        seen.set(key, {
-          id: key,
-          name: groupBy === "artist" ? item.headliner : item.venue.name,
-          label: groupBy === "artist" ? undefined : item.venue.city,
-          count: 0,
-        });
+
+    // For followed-venues tab, seed with all followed venues (count=0) so newly
+    // followed venues appear in the rail even before announcements are ingested.
+    if (groupBy === "venue" && allFollowedVenues) {
+      for (const v of allFollowedVenues) {
+        seen.set(v.id, { id: v.id, name: v.name, label: v.city, count: 0 });
       }
-      seen.get(key)!.count++;
+    }
+
+    if (items) {
+      for (const item of items) {
+        const key = getGroupKey(item);
+        if (!key) continue;
+        if (!seen.has(key)) {
+          seen.set(key, {
+            id: key,
+            name: groupBy === "artist" ? item.headliner : item.venue.name,
+            label: groupBy === "artist" ? undefined : item.venue.city,
+            count: 0,
+          });
+        }
+        seen.get(key)!.count++;
+      }
     }
     return Array.from(seen.values());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, groupBy]);
+  }, [items, groupBy, allFollowedVenues]);
 
   // Filter items by selected group
   const filteredItems = useMemo(() => {
@@ -682,9 +935,26 @@ function FeedSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredItems, groupList, selectedGroupId, groupBy]);
 
+  // Region groups for Near You tab
+  const regionGroups = useMemo(() => {
+    if (!items || activeTab !== "Near You") return null;
+    const regions = new Map<string, { id: string; cityName: string; radiusMiles: number; items: Announcement[] }>();
+    for (const item of items) {
+      const rid = item.regionId ?? "__unknown";
+      const rname = item.regionCityName ?? "Unknown";
+      const rradius = item.regionRadiusMiles ?? 0;
+      if (!regions.has(rid)) {
+        regions.set(rid, { id: rid, cityName: rname, radiusMiles: rradius, items: [] });
+      }
+      regions.get(rid)!.items.push(item);
+    }
+    return Array.from(regions.values());
+  }, [items, activeTab]);
+
   const totalCount = groupList.length;
   const isFollowed = activeTab === "Followed";
   const isArtists = activeTab === "Artists";
+  const isNearby = activeTab === "Near You";
   const tabLabel = isFollowed
     ? "Followed venues"
     : isArtists
@@ -710,18 +980,24 @@ function FeedSection({
     />
   );
 
+  const venueRail = (
+    <VenueRail
+      venues={groupList}
+      selected={selectedGroupId}
+      onSelect={setSelectedGroupId}
+      tabLabel={tabLabel}
+      totalCount={isNearby ? (items?.length ?? 0) : totalCount}
+      showFollowLink={isFollowed}
+      onFollowVenue={handleFollowVenue}
+      onUnfollowItem={(isFollowed || isArtists) ? handleUnfollowItem : undefined}
+      showArtistSearch={isArtists}
+    />
+  );
+
   if (isLoading) {
     return (
       <div className="discover-main">
-        <VenueRail
-          venues={[]}
-          selected={null}
-          onSelect={setSelectedGroupId}
-          tabLabel={tabLabel}
-          totalCount={0}
-          showFollowLink={isFollowed}
-          onFollowVenue={handleFollowVenue}
-        />
+        {venueRail}
         <div className="discover-empty">
           <div className="discover-loading">
             <div className="discover-loading__dot" />
@@ -737,15 +1013,7 @@ function FeedSection({
   if (!items || items.length === 0) {
     return (
       <div className="discover-main">
-        <VenueRail
-          venues={[]}
-          selected={null}
-          onSelect={setSelectedGroupId}
-          tabLabel={tabLabel}
-          totalCount={0}
-          showFollowLink={isFollowed}
-          onFollowVenue={handleFollowVenue}
-        />
+        {venueRail}
         <div className="discover-empty">
           <p className="discover-empty__text">{emptyMessage}</p>
         </div>
@@ -757,15 +1025,7 @@ function FeedSection({
   return (
     <div className="discover-main">
       {/* Left Rail (desktop) */}
-      <VenueRail
-        venues={groupList}
-        selected={selectedGroupId}
-        onSelect={setSelectedGroupId}
-        tabLabel={tabLabel}
-        totalCount={totalCount}
-        showFollowLink={isFollowed}
-        onFollowVenue={handleFollowVenue}
-      />
+      {venueRail}
 
       {/* Mobile Chips */}
       <VenueChips
@@ -787,47 +1047,91 @@ function FeedSection({
           <div />
         </div>
 
-        {/* Grouped rows */}
-        {groups.map(({ group, items: groupItems }) => (
-          <div key={group.id || "flat"} className="discover-venue-group">
-            {/* Group header (only when "All" is selected) */}
-            {showAllGrouped && group.id && (
-              <div className="discover-venue-group__header">
-                <Link
-                  href={`/${groupRoute}/${group.id}`}
-                  className="discover-venue-group__name discover-venue-group__name--link"
+        {/* Near You: grouped by region */}
+        {isNearby && regionGroups ? (
+          regionGroups.map((region) => {
+            const collapsed = collapsedRegions.has(region.id);
+            return (
+              <div key={region.id} className="discover-venue-group">
+                <div
+                  className="discover-venue-group__header discover-venue-group__header--region"
+                  onContextMenu={(e) => {
+                    if (region.id === "__unknown") return;
+                    e.preventDefault();
+                    setRegionContextMenu({ x: e.clientX, y: e.clientY, regionId: region.id });
+                  }}
                 >
-                  {group.name}
-                </Link>
-                <span className="discover-venue-group__meta">
-                  {group.label
-                    ? group.label.toLowerCase() + " · "
-                    : ""}
-                  {groupItems.length} upcoming
-                </span>
-                <div className="discover-venue-group__rule" />
-                <Link
-                  href={`/${groupRoute}/${group.id}`}
-                  className="discover-venue-group__link"
-                >
-                  {groupPageLabel} &rarr;
-                </Link>
+                  <button
+                    type="button"
+                    className="discover-venue-group__name"
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 6 }}
+                    onClick={() => setCollapsedRegions((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(region.id)) next.delete(region.id);
+                      else next.add(region.id);
+                      return next;
+                    })}
+                  >
+                    {collapsed ? "▶" : "▼"} {region.cityName}
+                  </button>
+                  <span className="discover-venue-group__meta">
+                    {region.radiusMiles}mi · {region.items.length} upcoming
+                  </span>
+                  <div className="discover-venue-group__rule" />
+                </div>
+                {!collapsed && region.items.map((item) => (
+                  <AnnouncementRow
+                    key={item.id}
+                    announcement={item}
+                    isWatching={watchedIds.has(item.id)}
+                    onToggleWatch={onToggleWatch}
+                    showReason={false}
+                    groupBy={groupBy}
+                  />
+                ))}
               </div>
-            )}
+            );
+          })
+        ) : (
+          /* Followed venues / Artists: standard grouping */
+          groups.map(({ group, items: groupItems }) => (
+            <div key={group.id || "flat"} className="discover-venue-group">
+              {/* Group header (only when "All" is selected) */}
+              {showAllGrouped && group.id && (
+                <div className="discover-venue-group__header">
+                  <span className="discover-venue-group__name">
+                    {group.name}
+                  </span>
+                  <span className="discover-venue-group__meta">
+                    {group.label
+                      ? group.label.toLowerCase() + " · "
+                      : ""}
+                    {groupItems.length} upcoming
+                  </span>
+                  <div className="discover-venue-group__rule" />
+                  <Link
+                    href={`/${groupRoute}/${group.id}`}
+                    className="discover-venue-group__link"
+                  >
+                    {groupPageLabel} &rarr;
+                  </Link>
+                </div>
+              )}
 
-            {/* Announcement rows */}
-            {groupItems.map((item) => (
-              <AnnouncementRow
-                key={item.id}
-                announcement={item}
-                isWatching={watchedIds.has(item.id)}
-                onToggleWatch={onToggleWatch}
-                showReason={showAllGrouped}
-                groupBy={groupBy}
-              />
-            ))}
-          </div>
-        ))}
+              {/* Announcement rows */}
+              {groupItems.map((item) => (
+                <AnnouncementRow
+                  key={item.id}
+                  announcement={item}
+                  isWatching={watchedIds.has(item.id)}
+                  onToggleWatch={onToggleWatch}
+                  showReason={showAllGrouped}
+                  groupBy={groupBy}
+                />
+              ))}
+            </div>
+          ))
+        )}
 
         {/* Footer */}
         <div className="discover-footer">
@@ -840,6 +1144,21 @@ function FeedSection({
           </span>
         </div>
       </div>
+
+      {/* Region right-click context menu */}
+      {regionContextMenu && (
+        <ContextMenu
+          x={regionContextMenu.x}
+          y={regionContextMenu.y}
+          items={[{
+            label: "Unfollow region",
+            danger: true,
+            onClick: () => removeRegionMutation.mutate({ regionId: regionContextMenu.regionId }),
+          }]}
+          onClose={() => setRegionContextMenu(null)}
+        />
+      )}
+
       {followModal}
     </div>
   );
@@ -863,6 +1182,7 @@ export default function DiscoverPage() {
   const utils = trpc.useUtils();
 
   const followedFeed = trpc.discover.followedFeed.useQuery({ limit: 100 });
+  const followedVenuesList = trpc.venues.followed.useQuery();
 
   const nearbyFeed = trpc.discover.nearbyFeed.useQuery({ limit: 100 });
 
@@ -890,9 +1210,9 @@ export default function DiscoverPage() {
   });
 
   function handleVenueFollowed() {
+    utils.venues.followed.invalidate();
     utils.discover.followedFeed.invalidate();
     utils.discover.nearbyFeed.invalidate();
-    utils.venues.followed.invalidate();
   }
 
   function handleToggleWatch(announcementId: string, watching: boolean) {
@@ -1014,6 +1334,7 @@ export default function DiscoverPage() {
           activeTab={activeTab}
           onVenueFollowed={handleVenueFollowed}
           groupBy="venue"
+          allFollowedVenues={followedVenuesList.data}
         />
       )}
 
@@ -1040,6 +1361,7 @@ export default function DiscoverPage() {
           activeTab={activeTab}
           onVenueFollowed={handleVenueFollowed}
           groupBy="venue"
+          hasRegions={nearbyFeed.data?.hasRegions}
         />
       )}
     </div>

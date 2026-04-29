@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   MapContainer,
   TileLayer,
@@ -19,7 +19,6 @@ import {
   Plus,
   Filter,
   MapPin,
-  Eye,
   X,
   Music,
   Theater,
@@ -70,8 +69,10 @@ const KINDS = [
 ] as const;
 
 const VIEW_PRESETS: { label: string; center: [number, number]; zoom: number }[] = [
+  { label: "Bay Area", center: [37.7749, -122.4194], zoom: 9 },
+  { label: "LA", center: [34.0522, -118.2437], zoom: 9 },
+  { label: "Oregon", center: [44.0, -120.5], zoom: 7 },
   { label: "NYC", center: [40.7128, -74.006], zoom: 12 },
-  { label: "Northeast", center: [41.0, -74.0], zoom: 7 },
   { label: "World", center: [30.0, -20.0], zoom: 3 },
 ];
 
@@ -666,21 +667,6 @@ function VenueInspector({
           {isMutating ? "..." : isFollowed ? "Following" : "Follow"}
         </button>
         <button
-          className="venue-inspector__cta-outline"
-          type="button"
-          onClick={() => {
-            const params = new URLSearchParams({
-              timeframe: "watching",
-              venueName: venue.name,
-              venueCity: venue.city,
-            });
-            router.push(`/add?${params.toString()}`);
-          }}
-        >
-          <Eye size={13} />
-          Watch upcoming
-        </button>
-        <button
           className="venue-inspector__cta-solid"
           type="button"
           onClick={() => {
@@ -704,8 +690,26 @@ function VenueInspector({
 // Main MapView
 // ---------------------------------------------------------------------------
 
+// Deep-link flyTo controller: flies to a venue when it becomes available
+function FlyToVenue({ venueId, venues }: { venueId: string | null; venues: VenueGroup[] }) {
+  const map = useMap();
+  const didFly = useRef(false);
+
+  useEffect(() => {
+    if (!venueId || didFly.current) return;
+    const venue = venues.find((v) => v.venueId === venueId);
+    if (!venue) return;
+    map.flyTo([venue.latitude, venue.longitude], 14);
+    didFly.current = true;
+  }, [venueId, venues, map]);
+
+  return null;
+}
+
 export default function MapView() {
-  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const deepLinkVenueId = searchParams.get("venue");
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(deepLinkVenueId);
   const [yearFilter, setYearFilter] = useState("All-time");
   const [kindFilter, setKindFilter] = useState("all");
   const [activeView, setActiveView] = useState<number | null>(null);
@@ -935,6 +939,9 @@ export default function MapView() {
               />
             ) : (
               <FitBounds venues={filteredVenues} />
+            )}
+            {deepLinkVenueId && (
+              <FlyToVenue venueId={deepLinkVenueId} venues={filteredVenues} />
             )}
             {filteredVenues.map((venue) => {
               const count = venue.shows.length;

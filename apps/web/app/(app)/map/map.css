@@ -839,6 +839,36 @@
   display: none !important;
 }
 
+/* ── Half-width responsive (720–960px) ──────────────────────────────────── */
+
+@media (min-width: 720px) and (max-width: 960px) {
+  .map-topbar {
+    padding: 10px 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .map-topbar__title {
+    font-size: 18px;
+  }
+
+  .map-topbar__actions {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .map-filterbar {
+    padding: 10px 16px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .map-filterbar__years,
+  .map-filterbar__kinds {
+    flex-wrap: wrap;
+  }
+}
+
 /* ── Mobile — bottom sheet ──────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
