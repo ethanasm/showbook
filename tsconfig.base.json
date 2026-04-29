@@ -21,7 +21,9 @@
       "@showbook/jobs": ["packages/jobs/src"],
       "@showbook/jobs/*": ["packages/jobs/src/*"],
       "@showbook/shared": ["packages/shared/src"],
-      "@showbook/shared/*": ["packages/shared/src/*"]
+      "@showbook/shared/*": ["packages/shared/src/*"],
+      "@showbook/scrapers": ["packages/scrapers/src"],
+      "@showbook/scrapers/*": ["packages/scrapers/src/*"]
     }
   },
   "exclude": ["node_modules", "dist", ".next"]

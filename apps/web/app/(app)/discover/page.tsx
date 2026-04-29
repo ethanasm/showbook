@@ -312,10 +312,18 @@ function AnnouncementRow({
           <CalendarPlus size={11} />
           Calendar
         </a>
-        <button type="button" className="discover-tix-btn">
-          <ArrowUpRight size={11} />
-          Tix
-        </button>
+        {announcement.sourceEventId && (
+          <a
+            href={`https://www.ticketmaster.com/event/${announcement.sourceEventId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="discover-tix-btn"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ArrowUpRight size={11} />
+            Tix
+          </a>
+        )}
       </div>
     </div>
   );

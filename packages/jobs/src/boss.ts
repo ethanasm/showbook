@@ -9,7 +9,7 @@ export function getBoss(): PgBoss {
       retryLimit: 3,
       retryDelay: 60,
       retryBackoff: true,
-      expireInHours: 24,
+      expireInHours: 23,
       archiveCompletedAfterSeconds: 86400,
       deleteAfterDays: 7,
     });

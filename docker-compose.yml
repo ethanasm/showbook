@@ -41,6 +41,7 @@ services:
       - /app/packages/db/node_modules
       - /app/packages/api/node_modules
       - /app/packages/jobs/node_modules
+      - /app/packages/scrapers/node_modules
       - /app/packages/shared/node_modules
     depends_on:
       postgres:

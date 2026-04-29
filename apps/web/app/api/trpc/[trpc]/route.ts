@@ -13,6 +13,9 @@ const handler = async (req: Request) => {
       createContext({
         session: session?.user?.id ? { user: { id: session.user.id } } : null,
       }),
+    onError: ({ path, error }) => {
+      console.error(`[tRPC] ${path ?? 'unknown'}:`, error);
+    },
   });
 };
 

@@ -151,6 +151,10 @@ async function notificationsDigestHandler(jobs: PgBoss.Job[]) {
 }
 
 export async function registerAllJobs(boss: PgBoss): Promise<void> {
+  for (const name of Object.values(JOBS)) {
+    await boss.createQueue(name);
+  }
+
   await boss.work(JOBS.SHOWS_NIGHTLY, showsNightlyHandler);
   await boss.work(JOBS.SETLIST_RETRY, setlistRetryHandler);
   await boss.work(JOBS.DISCOVER_INGEST, discoverIngestHandler);
@@ -160,9 +164,7 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
 
   await boss.schedule(JOBS.SHOWS_NIGHTLY, '0 3 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.SETLIST_RETRY, '0 4 * * *', {}, { tz: 'America/New_York' });
-  // Weekly Monday 6 AM ET. Sends one digest email per user immediately after.
   await boss.schedule(JOBS.DISCOVER_INGEST, '0 6 * * 1', {}, { tz: 'America/New_York' });
-  // Hourly check; runNotificationDigest now only handles show-day reminders.
   await boss.schedule(JOBS.NOTIFICATIONS_DIGEST, '0 * * * *', {}, { tz: 'America/New_York' });
 
   console.log('All jobs registered and scheduled');
