@@ -21,8 +21,8 @@
 - Hook up push notifications in preferences page to mobile app once done.
 
 ### Data Model Questions
-- Do we allow venues to be deleted? Or just let them automatically be deleted through triggers and cascades when shows and artists are deleted?
-- Similar to the above, when a show, venue, or artist is deleted and/or unfollowed or followed — what are the affected tables that are impacted?
+- Do we allow venues to be deleted? Or just let them automatically be deleted through triggers and cascades when shows and artists are deleted? *(Investigated 2026-04-29 — see `showbook-specs/data-model-deletion-cascades-2026-04-29.md`. Recommendation: keep deletion implicit; the existing `cleanup_orphaned_venue` trigger already covers it.)*
+- Similar to the above, when a show, venue, or artist is deleted and/or unfollowed or followed — what are the affected tables that are impacted? *(Investigated 2026-04-29 — see same doc. Per-operation impact map plus six follow-up issues, including a real FK bug on `enrichment_queue.show_id`.)*
 
 ---
 
