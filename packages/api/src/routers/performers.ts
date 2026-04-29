@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, and, ne, sql, desc, count, max, min } from 'drizzle-orm';
+import { eq, and, ne, sql, desc, count, max, min, inArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
 import { performers, userPerformerFollows, shows, showPerformers } from '@showbook/db';
@@ -27,7 +27,13 @@ export const performersRouter = router({
       .groupBy(performers.id, performers.name, performers.imageUrl)
       .orderBy(desc(max(shows.date)));
 
-    return rows;
+    const followed = await ctx.db
+      .select({ performerId: userPerformerFollows.performerId })
+      .from(userPerformerFollows)
+      .where(eq(userPerformerFollows.userId, userId));
+
+    const followedSet = new Set(followed.map((f) => f.performerId));
+    return rows.map((r) => ({ ...r, isFollowed: followedSet.has(r.id) }));
   }),
 
   search: protectedProcedure
@@ -213,5 +219,39 @@ export const performersRouter = router({
         .returning();
       if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Performer not found' });
       return updated;
+    }),
+
+  delete: protectedProcedure
+    .input(z.object({ performerId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      const userShowIds = await ctx.db
+        .select({ id: shows.id })
+        .from(shows)
+        .where(eq(shows.userId, userId));
+
+      if (userShowIds.length > 0) {
+        const ids = userShowIds.map((s) => s.id);
+        await ctx.db
+          .delete(showPerformers)
+          .where(
+            and(
+              eq(showPerformers.performerId, input.performerId),
+              inArray(showPerformers.showId, ids),
+            ),
+          );
+      }
+
+      await ctx.db
+        .delete(userPerformerFollows)
+        .where(
+          and(
+            eq(userPerformerFollows.userId, userId),
+            eq(userPerformerFollows.performerId, input.performerId),
+          ),
+        );
+
+      return { deleted: 1 };
     }),
 });

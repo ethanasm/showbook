@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
-import { MapPin, Search, Eye } from "lucide-react";
+import { MapPin, Search, Eye, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
 import { SortHeader, type SortConfig } from "@/components/SortHeader";
 import { useCompactMode } from "@/lib/useCompactMode";
+import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 
 type SortField = "name" | "state" | "city" | "past" | "future";
 
@@ -17,15 +18,54 @@ const DEFAULT_DIR: Record<SortField, "asc" | "desc"> = {
   future: "desc",
 };
 
+function useWindowWidth() {
+  const [width, setWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1440,
+  );
+  useEffect(() => {
+    function onResize() {
+      setWidth(window.innerWidth);
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return width;
+}
+
 export default function VenuesListPage() {
   const [sort, setSort] = useState<SortConfig<SortField>>({
     field: "past",
     dir: "desc",
   });
   const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(0);
   const compact = useCompactMode();
+  const windowWidth = useWindowWidth();
+  const isHalfWidth = windowWidth < 960;
+
+  const PAGE_SIZE = compact ? 12 : 15;
+
+  const [contextMenu, setContextMenu] = useState<{
+    venueId: string;
+    venueName: string;
+    isFollowed: boolean;
+    position: { x: number; y: number };
+  } | null>(null);
+  const [editingVenueId, setEditingVenueId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading, error } = trpc.venues.list.useQuery();
+  const utils = trpc.useUtils();
+  const renameMutation = trpc.venues.rename.useMutation({
+    onSuccess: () => utils.venues.list.invalidate(),
+  });
+  const followMutation = trpc.venues.follow.useMutation({
+    onSuccess: () => utils.venues.list.invalidate(),
+  });
+  const unfollowMutation = trpc.venues.unfollow.useMutation({
+    onSuccess: () => utils.venues.list.invalidate(),
+  });
 
   const toggleSort = useCallback((field: SortField) => {
     setSort((prev) =>
@@ -33,6 +73,7 @@ export default function VenuesListPage() {
         ? { field, dir: prev.dir === "asc" ? "desc" : "asc" }
         : { field, dir: DEFAULT_DIR[field] },
     );
+    setCurrentPage(0);
   }, []);
 
   const filtered = useMemo(() => {
@@ -51,7 +92,7 @@ export default function VenuesListPage() {
     const flip = sort.dir === "asc" ? 1 : -1;
     const cmpStr = (a: string | null, b: string | null) => {
       if (a === b) return 0;
-      if (a == null) return 1; // nulls last in asc, but consistent under flip
+      if (a == null) return 1;
       if (b == null) return -1;
       return a.localeCompare(b);
     };
@@ -74,405 +115,267 @@ export default function VenuesListPage() {
     return result;
   }, [data, search, sort]);
 
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [search, sort.field, sort.dir]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paged = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+
+  function handleContextMenu(
+    e: React.MouseEvent,
+    venueId: string,
+    venueName: string,
+    isFollowed: boolean,
+  ) {
+    e.preventDefault();
+    setContextMenu({
+      venueId,
+      venueName,
+      isFollowed,
+      position: { x: e.clientX, y: e.clientY },
+    });
+  }
+
+  function startRename(venueId: string, currentName: string) {
+    setEditingVenueId(venueId);
+    setEditingName(currentName);
+    setTimeout(() => editInputRef.current?.focus(), 0);
+  }
+
+  async function commitRename() {
+    if (!editingVenueId || !editingName.trim()) {
+      setEditingVenueId(null);
+      return;
+    }
+    await renameMutation.mutateAsync({
+      venueId: editingVenueId,
+      name: editingName.trim(),
+    });
+    setEditingVenueId(null);
+  }
+
+  function buildVenueMenuItems(
+    venueId: string,
+    venueName: string,
+    isFollowed: boolean,
+  ): ContextMenuItem[] {
+    return [
+      {
+        label: "Rename",
+        icon: <Pencil size={13} />,
+        onClick: () => startRename(venueId, venueName),
+      },
+      {
+        label: isFollowed ? "Unfollow" : "Follow",
+        icon: <Eye size={13} />,
+        onClick: () => {
+          if (isFollowed) {
+            unfollowMutation.mutate({ venueId });
+          } else {
+            followMutation.mutate({ venueId });
+          }
+        },
+      },
+    ];
+  }
+
   if (isLoading) {
-    return (
-      <CenteredMessage>Loading venues…</CenteredMessage>
-    );
+    return <CenteredMessage>Loading venues…</CenteredMessage>;
   }
 
   if (error) {
-    return (
-      <CenteredMessage tone="error">Failed to load venues.</CenteredMessage>
-    );
+    return <CenteredMessage tone="error">Failed to load venues.</CenteredMessage>;
   }
+
+  // Column layout: differs by responsive breakpoint
+  const gridCols = isHalfWidth
+    ? "minmax(120px,2fr) minmax(80px,1fr) 70px 70px 50px 50px 32px"
+    : "minmax(120px,2fr) minmax(60px,0.7fr) minmax(80px,1fr) 70px 70px 50px 50px 32px";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* Header */}
-      <div
-        style={{
-          padding: "16px 36px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          borderBottom: "1px solid var(--rule)",
-        }}
-      >
+      <div style={{ padding: "16px 36px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--rule)" }}>
         <div>
-          <div
-            style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
-              color: "var(--muted)",
-              letterSpacing: ".1em",
-              textTransform: "uppercase",
-            }}
-          >
+          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", letterSpacing: ".1em", textTransform: "uppercase" }}>
             Places you&apos;ve been
           </div>
-          <div
-            style={{
-              fontFamily: "var(--font-geist-sans), sans-serif",
-              fontSize: 26,
-              fontWeight: 600,
-              color: "var(--ink)",
-              letterSpacing: -0.9,
-              marginTop: 4,
-            }}
-          >
+          <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 26, fontWeight: 600, color: "var(--ink)", letterSpacing: -0.9, marginTop: 4 }}>
             Venues
           </div>
         </div>
       </div>
 
       {/* Filter bar */}
-      <div
-        style={{
-          padding: "11px 36px",
-          display: "flex",
-          alignItems: "center",
-          gap: 18,
-          background: "var(--surface)",
-          borderBottom: "1px solid var(--rule)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "5px 10px",
-            border: "1px solid var(--rule-strong)",
-            minWidth: 220,
-          }}
-        >
+      <div style={{ padding: "11px 36px", display: "flex", alignItems: "center", gap: 18, background: "var(--surface)", borderBottom: "1px solid var(--rule)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", border: "1px solid var(--rule-strong)", minWidth: 220 }}>
           <Search size={12} color="var(--muted)" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="filter venues, cities, states..."
-            style={{
-              border: "none",
-              background: "transparent",
-              color: "var(--ink)",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 11,
-              outline: "none",
-              width: "100%",
-              letterSpacing: ".02em",
-            }}
+            style={{ border: "none", background: "transparent", color: "var(--ink)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, outline: "none", width: "100%", letterSpacing: ".02em" }}
           />
         </div>
-
         <div style={{ flex: 1 }} />
-
-        <div
-          style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
-            color: "var(--faint)",
-            letterSpacing: ".04em",
-          }}
-        >
+        <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--faint)", letterSpacing: ".04em" }}>
           {filtered.length} venue{filtered.length !== 1 ? "s" : ""}
         </div>
       </div>
 
       {/* List */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflow: "auto",
-          background: "var(--bg)",
-        }}
-      >
-        <div
-          style={{
-            padding: "18px 36px 8px",
-            display: "flex",
-            alignItems: "baseline",
-            gap: 14,
-          }}
-        >
-          <div
-            style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 11,
-              color: "var(--ink)",
-              letterSpacing: ".1em",
-              textTransform: "uppercase",
-              fontWeight: 500,
-            }}
-          >
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)" }}>
+        <div style={{ padding: "18px 36px 8px", display: "flex", alignItems: "baseline", gap: 14 }}>
+          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--ink)", letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 500 }}>
             {search ? "Matching" : "All venues"} &middot; {filtered.length}
           </div>
         </div>
 
         {filtered.length === 0 ? (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              minHeight: 300,
-              fontFamily: "var(--font-geist-sans), sans-serif",
-              fontSize: "1rem",
-              color: "var(--muted)",
-            }}
-          >
-            {search
-              ? "No venues match your search."
-              : "No venues yet. Add your first show!"}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, fontFamily: "var(--font-geist-sans), sans-serif", fontSize: "1rem", color: "var(--muted)" }}>
+            {search ? "No venues match your search." : "No venues yet. Add your first show!"}
           </div>
         ) : (
-          <div style={{ margin: "4px 36px 36px", background: "var(--surface)" }}>
+          <div style={{ margin: "4px 36px 0", background: "var(--surface)" }}>
             {/* Column headers */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "minmax(120px,2fr) minmax(80px,1fr) minmax(80px,1fr) 70px 70px 50px 50px 32px",
-                columnGap: 20,
-                padding: "10px 20px",
-                borderBottom: "1px solid var(--rule)",
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 9.5,
-                color: "var(--faint)",
-                letterSpacing: ".12em",
-                textTransform: "uppercase",
-              }}
-            >
-              <SortHeader<SortField>
-                field="name"
-                label="Name"
-                sort={sort}
-                onToggle={toggleSort}
-              />
-              <SortHeader<SortField>
-                field="state"
-                label="State"
-                sort={sort}
-                onToggle={toggleSort}
-              />
-              <SortHeader<SortField>
-                field="city"
-                label="City"
-                sort={sort}
-                onToggle={toggleSort}
-              />
-              <SortHeader<SortField>
-                field="past"
-                label="Past"
-                sort={sort}
-                onToggle={toggleSort}
-                align="center"
-              />
-              <SortHeader<SortField>
-                field="future"
-                label="Future"
-                sort={sort}
-                onToggle={toggleSort}
-                align="center"
-              />
+            <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: 20, padding: "10px 20px", borderBottom: "1px solid var(--rule)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase" }}>
+              <SortHeader<SortField> field="name" label="Name" sort={sort} onToggle={toggleSort} />
+              {!isHalfWidth && (
+                <SortHeader<SortField> field="state" label="State" sort={sort} onToggle={toggleSort} />
+              )}
+              <SortHeader<SortField> field="city" label={isHalfWidth ? "City" : "City"} sort={sort} onToggle={toggleSort} />
+              <SortHeader<SortField> field="past" label="Past" sort={sort} onToggle={toggleSort} align="center" />
+              <SortHeader<SortField> field="future" label="Future" sort={sort} onToggle={toggleSort} align="center" />
               <div style={{ textAlign: "center" }}>TM</div>
               <div style={{ textAlign: "center" }}>GP</div>
-              <div style={{ textAlign: "center" }}>
-                <Eye size={10} />
-              </div>
+              <div style={{ textAlign: "center" }}><Eye size={10} /></div>
             </div>
 
-            {filtered.map((v) => (
-              <Link
-                key={v.id}
-                href={`/venues/${v.id}`}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "minmax(120px,2fr) minmax(80px,1fr) minmax(80px,1fr) 70px 70px 50px 50px 32px",
-                  columnGap: 20,
-                  padding: compact ? "5px 20px" : "12px 20px",
-                  borderBottom: "1px solid var(--rule)",
-                  alignItems: "center",
-                  cursor: "pointer",
-                  color: "inherit",
-                  textDecoration: "none",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "var(--surface2, var(--surface))")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "transparent")
-                }
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                  <MapPin size={14} color="var(--muted)" style={{ flexShrink: 0 }} />
-                  <span
-                    style={{
-                      fontFamily: "var(--font-geist-sans), sans-serif",
-                      fontSize: 14,
-                      fontWeight: 500,
-                      color: "var(--ink)",
-                      letterSpacing: -0.2,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {v.name}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11,
-                    color: v.stateRegion ? "var(--ink)" : "var(--faint)",
-                    letterSpacing: ".02em",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {v.stateRegion ?? "—"}
-                </div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11,
-                    color: "var(--muted)",
-                    letterSpacing: ".02em",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {v.city}
-                </div>
-                <div
-                  style={{
-                    textAlign: "center",
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 12,
-                    fontWeight: 500,
-                    color: v.pastShowsCount > 0 ? "var(--ink)" : "var(--faint)",
-                    fontFeatureSettings: '"tnum"',
-                  }}
-                >
-                  {v.pastShowsCount}
-                </div>
-                <div
-                  style={{
-                    textAlign: "center",
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 12,
-                    fontWeight: 500,
-                    color: v.futureShowsCount > 0 ? "var(--accent)" : "var(--faint)",
-                    fontFeatureSettings: '"tnum"',
-                  }}
-                >
-                  {v.futureShowsCount}
-                </div>
-                <IdBadge
-                  label="TM"
-                  linked={Boolean(v.ticketmasterVenueId)}
-                  color="var(--accent)"
-                  tooltip={
-                    v.ticketmasterVenueId
-                      ? "Ticketmaster ID linked"
-                      : "No Ticketmaster ID"
-                  }
-                />
-                <IdBadge
-                  label="GP"
-                  linked={Boolean(v.googlePlaceId)}
-                  color="var(--kind-concert)"
-                  tooltip={
-                    v.googlePlaceId
-                      ? "Google Places ID linked"
-                      : "No Google Places ID"
-                  }
-                />
-                <span
-                  title={v.isFollowed ? "Following" : "Not following"}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {v.isFollowed && <Eye size={13} color="var(--accent)" />}
-                </span>
-              </Link>
-            ))}
+            {paged.map((v) => {
+              const isEditing = editingVenueId === v.id;
+              const cityDisplay = isHalfWidth && v.stateRegion
+                ? `${v.city}, ${v.stateRegion}`
+                : v.city;
 
-            <div
-              style={{
-                padding: "16px 20px",
-                textAlign: "center",
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
-                color: "var(--faint)",
-                letterSpacing: ".1em",
-              }}
+              return (
+                <div
+                  key={v.id}
+                  onContextMenu={(e) => handleContextMenu(e, v.id, v.name, v.isFollowed)}
+                  style={{ position: "relative" }}
+                >
+                  {isEditing ? (
+                    <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: 20, padding: compact ? "5px 20px" : "10px 20px", borderBottom: "1px solid var(--rule)", alignItems: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                        <MapPin size={14} color="var(--muted)" style={{ flexShrink: 0 }} />
+                        <input
+                          ref={editInputRef}
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitRename();
+                            if (e.key === "Escape") setEditingVenueId(null);
+                          }}
+                          onBlur={commitRename}
+                          style={{ border: "none", borderBottom: "1px solid var(--accent)", background: "transparent", color: "var(--ink)", fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 14, fontWeight: 500, outline: "none", width: "100%" }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <Link
+                      href={`/venues/${v.id}`}
+                      style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: 20, padding: compact ? "5px 20px" : "12px 20px", borderBottom: "1px solid var(--rule)", alignItems: "center", cursor: "pointer", color: "inherit", textDecoration: "none" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface2, var(--surface))")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                        <MapPin size={14} color="var(--muted)" style={{ flexShrink: 0 }} />
+                        <span style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 14, fontWeight: 500, color: "var(--ink)", letterSpacing: -0.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {v.name}
+                        </span>
+                      </div>
+                      {!isHalfWidth && (
+                        <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: v.stateRegion ? "var(--ink)" : "var(--faint)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {v.stateRegion ?? "—"}
+                        </div>
+                      )}
+                      <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {cityDisplay}
+                      </div>
+                      <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: v.pastShowsCount > 0 ? "var(--ink)" : "var(--faint)", fontFeatureSettings: '"tnum"' }}>
+                        {v.pastShowsCount}
+                      </div>
+                      <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: v.futureShowsCount > 0 ? "var(--accent)" : "var(--faint)", fontFeatureSettings: '"tnum"' }}>
+                        {v.futureShowsCount}
+                      </div>
+                      <IdBadge label="TM" linked={Boolean(v.ticketmasterVenueId)} color="var(--accent)" tooltip={v.ticketmasterVenueId ? "Ticketmaster ID linked" : "No Ticketmaster ID"} />
+                      <IdBadge label="GP" linked={Boolean(v.googlePlaceId)} color="var(--kind-concert)" tooltip={v.googlePlaceId ? "Google Places ID linked" : "No Google Places ID"} />
+                      <span title={v.isFollowed ? "Following" : "Not following"} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                        {v.isFollowed && <Eye size={13} color="var(--accent)" />}
+                      </span>
+                    </Link>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Pagination footer */}
+        {filtered.length > 0 && (
+          <div style={{ margin: "0 36px 36px", background: "var(--surface)", borderTop: "1px solid var(--rule)", padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+              disabled={currentPage === 0}
+              style={{ display: "flex", alignItems: "center", gap: 4, border: "1px solid var(--rule-strong)", background: "transparent", color: currentPage === 0 ? "var(--faint)" : "var(--ink)", padding: "5px 11px", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, cursor: currentPage === 0 ? "not-allowed" : "pointer", opacity: currentPage === 0 ? 0.4 : 1 }}
+              data-testid="pagination-prev"
             >
-              {filtered.length} venue{filtered.length !== 1 ? "s" : ""} total
-            </div>
+              <ChevronLeft size={12} /> Prev
+            </button>
+            <span style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--faint)", letterSpacing: ".06em" }}>
+              {filtered.length === 0
+                ? "0 venues"
+                : `${currentPage * PAGE_SIZE + 1}–${Math.min((currentPage + 1) * PAGE_SIZE, filtered.length)} of ${filtered.length}`}
+            </span>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={currentPage >= totalPages - 1}
+              style={{ display: "flex", alignItems: "center", gap: 4, border: "1px solid var(--rule-strong)", background: "transparent", color: currentPage >= totalPages - 1 ? "var(--faint)" : "var(--ink)", padding: "5px 11px", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, cursor: currentPage >= totalPages - 1 ? "not-allowed" : "pointer", opacity: currentPage >= totalPages - 1 ? 0.4 : 1 }}
+              data-testid="pagination-next"
+            >
+              Next <ChevronRight size={12} />
+            </button>
           </div>
         )}
       </div>
+
+      {/* Context menu */}
+      {contextMenu && (
+        <ContextMenu
+          items={buildVenueMenuItems(contextMenu.venueId, contextMenu.venueName, contextMenu.isFollowed)}
+          position={contextMenu.position}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }
 
-function IdBadge({
-  label,
-  linked,
-  color,
-  tooltip,
-}: {
-  label: string;
-  linked: boolean;
-  color: string;
-  tooltip: string;
-}) {
+function IdBadge({ label, linked, color, tooltip }: { label: string; linked: boolean; color: string; tooltip: string }) {
   return (
     <span
       title={tooltip}
       data-linked={linked}
-      style={{
-        fontFamily: "var(--font-geist-mono), monospace",
-        fontSize: 10,
-        letterSpacing: ".06em",
-        textTransform: "uppercase",
-        padding: "3px 8px",
-        border: `1px solid ${linked ? color : "var(--faint)"}`,
-        color: linked ? color : "var(--faint)",
-        textAlign: "center",
-        fontWeight: 500,
-      }}
+      style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10, letterSpacing: ".06em", textTransform: "uppercase", padding: "3px 8px", border: `1px solid ${linked ? color : "var(--faint)"}`, color: linked ? color : "var(--faint)", textAlign: "center", fontWeight: 500 }}
     >
       {label}
     </span>
   );
 }
 
-function CenteredMessage({
-  children,
-  tone,
-}: {
-  children: React.ReactNode;
-  tone?: "error";
-}) {
+function CenteredMessage({ children, tone }: { children: React.ReactNode; tone?: "error" }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: 300,
-        fontFamily: "var(--font-geist-mono), monospace",
-        fontSize: 11,
-        color: tone === "error" ? "var(--kind-theatre)" : "var(--muted)",
-      }}
-    >
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: tone === "error" ? "var(--kind-theatre)" : "var(--muted)" }}>
       {children}
     </div>
   );

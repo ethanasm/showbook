@@ -19,6 +19,7 @@ import {
   Calendar,
   ArrowDownUp,
   ChevronRight,
+  ChevronLeft,
   MoreHorizontal,
   Ticket,
   Music,
@@ -33,7 +34,11 @@ import {
   Loader2,
   ArrowUpRight,
   Link2,
+  Pencil,
+  Eye,
 } from "lucide-react";
+import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
+import { useCompactMode } from "@/lib/useCompactMode";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -279,12 +284,19 @@ const STATE_TRANSITIONS: Record<string, { label: string; target: ShowState }> =
 // Main Page
 // ---------------------------------------------------------------------------
 
+type CalView = "month" | "year";
+type StatsTimeframe = "year" | "5years" | "all";
+
 export default function ShowsPage() {
   const router = useRouter();
+  const compact = useCompactMode();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedYear, setSelectedYear] = useState<string>("All");
   const [selectedKind, setSelectedKind] = useState<ShowKind | null>(null);
   const [sort, setSort] = useState<SortConfig>({ field: "date", dir: "desc" });
+  const [currentPage, setCurrentPage] = useState(0);
+
+  const PAGE_SIZE = compact ? 10 : 12;
 
   const toggleSort = useCallback((field: SortField) => {
     setSort((prev) =>
@@ -292,12 +304,22 @@ export default function ShowsPage() {
         ? { field, dir: prev.dir === "asc" ? "desc" : "asc" }
         : { field, dir: defaultDirFor(field) },
     );
+    setCurrentPage(0);
   }, []);
-  const [expandedShowId, setExpandedShowId] = useState<string | null>(null);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    show: ShowData;
+    position: { x: number; y: number };
+  } | null>(null);
 
   // Calendar state
+  const [calView, setCalView] = useState<CalView>("month");
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [calYear, setCalYear] = useState(new Date().getFullYear());
+
+  // Stats timeframe
+  const [statsTimeframe, setStatsTimeframe] = useState<StatsTimeframe>("all");
 
   // State transition modal
   const [transitionShow, setTransitionShow] = useState<ShowData | null>(null);
@@ -364,6 +386,16 @@ export default function ShowsPage() {
     [allShowsUnfiltered]
   );
 
+  // Reset page when filters change
+  const prevFiltersRef = useRef({ selectedYear, selectedKind: selectedKind ?? "" });
+  useEffect(() => {
+    const prev = prevFiltersRef.current;
+    if (prev.selectedYear !== selectedYear || prev.selectedKind !== (selectedKind ?? "")) {
+      setCurrentPage(0);
+      prevFiltersRef.current = { selectedYear, selectedKind: selectedKind ?? "" };
+    }
+  }, [selectedYear, selectedKind]);
+
   // Filtered shows
   const filteredShows = useMemo(() => {
     let result = shows;
@@ -381,6 +413,9 @@ export default function ShowsPage() {
 
     return result;
   }, [shows, selectedKind, sort, selectedYear]);
+
+  const totalPages = Math.ceil(filteredShows.length / PAGE_SIZE);
+  const pagedShows = filteredShows.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
   // Counts
   const totalShows = (allShowsUnfiltered ?? []).length;
@@ -404,8 +439,9 @@ export default function ShowsPage() {
   // Handlers
   // ---------------------------------------------------------------------------
 
-  function handleRowClick(showId: string) {
-    setExpandedShowId((prev) => (prev === showId ? null : showId));
+  function handleContextMenu(e: React.MouseEvent, show: ShowData) {
+    e.preventDefault();
+    setContextMenu({ show, position: { x: e.clientX, y: e.clientY } });
   }
 
   async function handleStateTransition(show: ShowData) {
@@ -446,7 +482,6 @@ export default function ShowsPage() {
   async function handleDelete(showId: string) {
     if (!confirm("Delete this show? This cannot be undone.")) return;
     await deleteShow.mutateAsync({ showId });
-    setExpandedShowId(null);
     utils.shows.list.invalidate();
     utils.performers.list.invalidate();
   }
@@ -454,9 +489,50 @@ export default function ShowsPage() {
   async function handleDeleteAll() {
     if (!confirm(`Delete all ${totalShows} shows? This cannot be undone.`)) return;
     await deleteAllShows.mutateAsync();
-    setExpandedShowId(null);
     utils.shows.list.invalidate();
     utils.performers.list.invalidate();
+  }
+
+  function buildShowContextMenuItems(show: ShowData): ContextMenuItem[] {
+    const items: ContextMenuItem[] = [
+      {
+        label: "Edit",
+        icon: <Pencil size={13} />,
+        onClick: () => router.push(`/add?editId=${show.id}`),
+      },
+      {
+        label: "Delete",
+        icon: <Trash2 size={13} />,
+        onClick: () => handleDelete(show.id),
+        danger: true,
+      },
+    ];
+
+    if (show.state === "ticketed") {
+      items.splice(1, 0, {
+        label: "Mark as attended",
+        icon: <Check size={13} />,
+        onClick: () => handleStateTransition(show),
+      });
+    }
+
+    if (show.state === "watching") {
+      items.splice(1, 0, {
+        label: "Got tickets",
+        icon: <Ticket size={13} />,
+        onClick: () => handleStateTransition(show),
+      });
+    }
+
+    if (show.ticketUrl) {
+      items.push({
+        label: "Open in Ticketmaster",
+        icon: <ArrowUpRight size={13} />,
+        onClick: () => window.open(show.ticketUrl!, "_blank", "noopener,noreferrer"),
+      });
+    }
+
+    return items;
   }
 
   // ---------------------------------------------------------------------------
@@ -1164,7 +1240,7 @@ export default function ShowsPage() {
         </div>
 
         {/* Show list */}
-        <div style={{ margin: "4px 36px 36px", background: "var(--surface)" }}>
+        <div style={{ margin: "4px 36px 0", background: "var(--surface)" }}>
           {/* Column headers */}
           <div style={{
             display: "grid",
@@ -1188,8 +1264,12 @@ export default function ShowsPage() {
             <SortHeader field="state" label="State" sort={sort} onToggle={toggleSort} align="right" />
           </div>
 
-          {filteredShows.map((show) => (
-            <div key={show.id}>
+          {pagedShows.map((show) => (
+            <div
+              key={show.id}
+              data-show-id={show.id}
+              onContextMenu={(e) => handleContextMenu(e, show)}
+            >
               <ShowRow
                 show={{
                   kind: show.kind,
@@ -1208,24 +1288,72 @@ export default function ShowsPage() {
                   ticketCount: show.ticketCount,
                 }}
                 missingCoords={show.venue.latitude == null || show.venue.longitude == null}
-                selected={expandedShowId === show.id}
-                onExpandToggle={() => handleRowClick(show.id)}
+                hideChevron
               />
-              {expandedShowId === show.id && renderDetailPanel(show)}
             </div>
           ))}
+        </div>
 
-          {/* Footer */}
-          <div style={{
-            padding: "16px 20px",
-            textAlign: "center",
+        {/* Pagination footer */}
+        <div style={{
+          margin: "0 36px 36px",
+          background: "var(--surface)",
+          borderTop: "1px solid var(--rule)",
+          padding: "12px 20px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}>
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+            disabled={currentPage === 0}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              border: "1px solid var(--rule-strong)",
+              background: "transparent",
+              color: currentPage === 0 ? "var(--faint)" : "var(--ink)",
+              padding: "5px 11px",
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 11,
+              cursor: currentPage === 0 ? "not-allowed" : "pointer",
+              opacity: currentPage === 0 ? 0.4 : 1,
+            }}
+            data-testid="pagination-prev"
+          >
+            <ChevronLeft size={12} /> Prev
+          </button>
+          <span style={{
             fontFamily: "var(--font-geist-mono), monospace",
             fontSize: 10.5,
             color: "var(--faint)",
-            letterSpacing: ".1em",
+            letterSpacing: ".06em",
           }}>
-            {filteredShows.length} show{filteredShows.length !== 1 ? "s" : ""} total
-          </div>
+            {filteredShows.length === 0
+              ? "0 shows"
+              : `${currentPage * PAGE_SIZE + 1}–${Math.min((currentPage + 1) * PAGE_SIZE, filteredShows.length)} of ${filteredShows.length}`}
+          </span>
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={currentPage >= totalPages - 1}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              border: "1px solid var(--rule-strong)",
+              background: "transparent",
+              color: currentPage >= totalPages - 1 ? "var(--faint)" : "var(--ink)",
+              padding: "5px 11px",
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 11,
+              cursor: currentPage >= totalPages - 1 ? "not-allowed" : "pointer",
+              opacity: currentPage >= totalPages - 1 ? 0.4 : 1,
+            }}
+            data-testid="pagination-next"
+          >
+            Next <ChevronRight size={12} />
+          </button>
         </div>
       </div>
     );
@@ -1236,47 +1364,23 @@ export default function ShowsPage() {
   // ---------------------------------------------------------------------------
 
   function renderCalendar() {
-    const daysInMonth = getDaysInMonth(calYear, calMonth);
-    const firstDay = getFirstDayOfWeek(calYear, calMonth);
-
-    // Build day -> shows map for current month
-    const dayShowsMap = new Map<number, ShowData[]>();
-    for (const show of shows) {
-      const d = new Date(show.date + "T00:00:00");
-      if (d.getMonth() === calMonth && d.getFullYear() === calYear) {
-        const day = d.getDate();
-        if (!dayShowsMap.has(day)) dayShowsMap.set(day, []);
-        dayShowsMap.get(day)!.push(show);
-      }
-    }
-
-    // Build cells array
-    const cells: (number | null)[] = [];
-    for (let i = 0; i < firstDay; i++) cells.push(null);
-    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-    while (cells.length % 7) cells.push(null);
-
     const today = new Date();
-    const isToday = (d: number | null) => d !== null && calYear === today.getFullYear() && calMonth === today.getMonth() && d === today.getDate();
 
-    // Count events this month
-    let pastInMonth = 0, upInMonth = 0, watchInMonth = 0;
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dayShows = dayShowsMap.get(d) ?? [];
-      for (const s of dayShows) {
-        if (s.state === "past") pastInMonth++;
-        else if (s.state === "ticketed") upInMonth++;
-        else if (s.state === "watching") watchInMonth++;
-      }
-    }
+    // Compute bounds from all shows
+    const allDates = shows.map((s) => new Date(s.date + "T00:00:00"));
+    const calMin = allDates.length > 0
+      ? { year: Math.min(...allDates.map((d) => d.getFullYear())), month: allDates.reduce((a, b) => a < b ? a : b).getMonth() }
+      : null;
+    const calMax = allDates.length > 0
+      ? { year: Math.max(...allDates.map((d) => d.getFullYear())), month: allDates.reduce((a, b) => a > b ? a : b).getMonth() }
+      : null;
 
-    // "This month & next" list — shows from this month and next month
-    const railShows = shows.filter((s) => {
-      const d = new Date(s.date + "T00:00:00");
-      const m = d.getMonth();
-      const y = d.getFullYear();
-      return (y === calYear && m === calMonth) || (y === calYear && m === calMonth + 1) || (calMonth === 11 && y === calYear + 1 && m === 0);
-    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // More precise bounds: earliest and latest show dates
+    const minDate = allDates.length > 0 ? allDates.reduce((a, b) => a < b ? a : b) : null;
+    const maxDate = allDates.length > 0 ? allDates.reduce((a, b) => a > b ? a : b) : null;
+
+    const atMin = minDate && calYear === minDate.getFullYear() && calMonth === minDate.getMonth();
+    const atMax = maxDate && calYear === maxDate.getFullYear() && calMonth === maxDate.getMonth();
 
     const goToday = () => {
       setCalMonth(today.getMonth());
@@ -1298,10 +1402,142 @@ export default function ShowsPage() {
 
     const dows = ["S", "M", "T", "W", "T", "F", "S"];
 
+    // Build day -> shows map for any given year/month
+    function buildDayShowsMap(year: number, month: number) {
+      const map = new Map<number, ShowData[]>();
+      for (const show of shows) {
+        const d = new Date(show.date + "T00:00:00");
+        if (d.getMonth() === month && d.getFullYear() === year) {
+          const day = d.getDate();
+          if (!map.has(day)) map.set(day, []);
+          map.get(day)!.push(show);
+        }
+      }
+      return map;
+    }
+
+    // Toolbar buttons
+    const toolbarNav = (
+      <div style={{ display: "flex", alignItems: "stretch", border: "1px solid var(--rule-strong)" }}>
+        <button
+          onClick={() => stepMonth(-1)}
+          disabled={Boolean(atMin)}
+          style={{
+            padding: "7px 12px",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 13,
+            color: atMin ? "var(--faint)" : "var(--ink)",
+            cursor: atMin ? "not-allowed" : "pointer",
+            border: "none",
+            borderRight: "1px solid var(--rule-strong)",
+            background: "transparent",
+            fontWeight: 500,
+            opacity: atMin ? 0.4 : 1,
+          }}
+          data-testid="cal-prev"
+        >
+          ‹
+        </button>
+        <button onClick={goToday} style={{
+          padding: "7px 14px",
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 13,
+          color: "var(--ink)",
+          cursor: "pointer",
+          border: "none",
+          borderRight: "1px solid var(--rule-strong)",
+          background: "transparent",
+          fontWeight: 500,
+        }}>
+          Today
+        </button>
+        <button
+          onClick={() => stepMonth(1)}
+          disabled={Boolean(atMax)}
+          style={{
+            padding: "7px 12px",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 13,
+            color: atMax ? "var(--faint)" : "var(--ink)",
+            cursor: atMax ? "not-allowed" : "pointer",
+            border: "none",
+            background: "transparent",
+            fontWeight: 500,
+            opacity: atMax ? 0.4 : 1,
+          }}
+          data-testid="cal-next"
+        >
+          ›
+        </button>
+      </div>
+    );
+
+    const viewToggle = (
+      <div style={{ display: "flex", alignItems: "stretch", border: "1px solid var(--rule-strong)" }}>
+        {(["month", "year"] as CalView[]).map((v, i, arr) => {
+          const active = calView === v;
+          return (
+            <button
+              key={v}
+              onClick={() => setCalView(v)}
+              data-testid={`cal-view-${v}`}
+              style={{
+                padding: "7px 14px",
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: 11,
+                border: "none",
+                borderRight: i < arr.length - 1 ? "1px solid var(--rule-strong)" : "none",
+                background: active ? "var(--ink)" : "transparent",
+                color: active ? "var(--bg)" : "var(--ink)",
+                cursor: "pointer",
+                fontWeight: active ? 500 : 400,
+                letterSpacing: ".06em",
+                textTransform: "uppercase",
+              }}
+            >
+              {v}
+            </button>
+          );
+        })}
+      </div>
+    );
+
+    if (calView === "year") {
+      return renderCalendarYearView(today, toolbarNav, viewToggle);
+    }
+
+    const daysInMonth = getDaysInMonth(calYear, calMonth);
+    const firstDay = getFirstDayOfWeek(calYear, calMonth);
+    const dayShowsMap = buildDayShowsMap(calYear, calMonth);
+
+    const cells: (number | null)[] = [];
+    for (let i = 0; i < firstDay; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+    while (cells.length % 7) cells.push(null);
+
+    const isToday = (d: number | null) => d !== null && calYear === today.getFullYear() && calMonth === today.getMonth() && d === today.getDate();
+
+    let pastInMonth = 0, upInMonth = 0, watchInMonth = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dayShows = dayShowsMap.get(d) ?? [];
+      for (const s of dayShows) {
+        if (s.state === "past") pastInMonth++;
+        else if (s.state === "ticketed") upInMonth++;
+        else if (s.state === "watching") watchInMonth++;
+      }
+    }
+
+    const railShows = shows.filter((s) => {
+      const d = new Date(s.date + "T00:00:00");
+      const m = d.getMonth();
+      const y = d.getFullYear();
+      return (y === calYear && m === calMonth) || (y === calYear && m === calMonth + 1) || (calMonth === 11 && y === calYear + 1 && m === 0);
+    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
     return (
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: "22px 36px 36px" }}>
         {/* Month toolbar */}
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
             <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 30, fontWeight: 600, color: "var(--ink)", letterSpacing: -0.9 }}>
               {MONTH_NAMES[calMonth]} <span style={{ color: "var(--faint)", fontWeight: 400 }}>{calYear}</span>
@@ -1310,55 +1546,23 @@ export default function ShowsPage() {
               {pastInMonth} past &middot; {upInMonth} upcoming &middot; {watchInMonth} watching
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "stretch", border: "1px solid var(--rule-strong)" }}>
-            {[
-              { l: "‹", onClick: () => stepMonth(-1) },
-              { l: "Today", onClick: goToday },
-              { l: "›", onClick: () => stepMonth(1) },
-            ].map(({ l, onClick }, i) => (
-              <button key={i} onClick={onClick} style={{
-                padding: "7px 14px",
-                fontFamily: "var(--font-geist-sans), sans-serif",
-                fontSize: 13,
-                color: "var(--ink)",
-                cursor: "pointer",
-                borderRight: i === 2 ? "none" : "1px solid var(--rule-strong)",
-                border: "none",
-                background: "transparent",
-                fontWeight: 500,
-              }}>
-                {l}
-              </button>
-            ))}
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {viewToggle}
+            {toolbarNav}
           </div>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 22, minHeight: 0 }}>
           {/* Calendar grid */}
           <div style={{ background: "var(--surface)", border: "1px solid var(--rule)" }}>
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(7, 1fr)",
-              borderBottom: "1px solid var(--rule)",
-            }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "1px solid var(--rule)" }}>
               {dows.map((d, i) => (
-                <div key={i} style={{
-                  padding: "9px 10px",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10,
-                  color: "var(--faint)",
-                  letterSpacing: ".12em",
-                  textTransform: "uppercase",
-                }}>
+                <div key={i} style={{ padding: "9px 10px", fontFamily: "var(--font-geist-mono), monospace", fontSize: 10, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase" }}>
                   {d}
                 </div>
               ))}
             </div>
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(7, 1fr)",
-              gridAutoRows: "minmax(92px, 1fr)",
-            }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gridAutoRows: "minmax(92px, 1fr)" }}>
               {cells.map((d, i) => {
                 const todayCell = isToday(d);
                 const evs = d ? (dayShowsMap.get(d) ?? []) : [];
@@ -1373,28 +1577,11 @@ export default function ShowsPage() {
                     flexDirection: "column",
                     gap: 5,
                   }}>
-                    <div style={{
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 11,
-                      color: todayCell ? "var(--ink)" : (d ? "var(--muted)" : "var(--faint)"),
-                      fontWeight: todayCell ? 600 : 400,
-                      letterSpacing: ".02em",
-                    }}>
+                    <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: todayCell ? "var(--ink)" : (d ? "var(--muted)" : "var(--faint)"), fontWeight: todayCell ? 600 : 400, letterSpacing: ".02em" }}>
                       {d ?? ""}
                     </div>
                     {evs.map((s) => (
-                      <div key={s.id} style={{
-                        fontFamily: "var(--font-geist-mono), monospace",
-                        fontSize: 10,
-                        color: "var(--ink)",
-                        padding: "3px 6px",
-                        background: s.state === "past" ? "transparent" : `var(--kind-${s.kind}, rgba(255,255,255,0.1))`,
-                        borderLeft: `2px solid var(--kind-${s.kind})`,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        letterSpacing: ".01em",
-                      }}>
+                      <div key={s.id} style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10, color: "var(--ink)", padding: "3px 6px", background: s.state === "past" ? "transparent" : `var(--kind-${s.kind}, rgba(255,255,255,0.1))`, borderLeft: `2px solid var(--kind-${s.kind})`, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: ".01em" }}>
                         {getHeadliner(s)}
                       </div>
                     ))}
@@ -1406,82 +1593,31 @@ export default function ShowsPage() {
 
           {/* Right rail */}
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
-              color: "var(--ink)",
-              letterSpacing: ".1em",
-              textTransform: "uppercase",
-              fontWeight: 500,
-            }}>
+            <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--ink)", letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 500 }}>
               This month & next
             </div>
             {railShows.map((show) => {
               const dp = toDateParts(show.date);
               const stateTag = show.state === "past" ? "past" : show.state === "ticketed" ? "tix" : "watch";
               return (
-                <div key={show.id} style={{
-                  padding: "12px 14px",
-                  background: "var(--surface)",
-                  borderLeft: `2px solid var(--kind-${show.kind})`,
-                  display: "grid",
-                  gridTemplateColumns: "58px 1fr auto",
-                  columnGap: 12,
-                  alignItems: "start",
-                }}>
+                <div key={show.id} style={{ padding: "12px 14px", background: "var(--surface)", borderLeft: `2px solid var(--kind-${show.kind})`, display: "grid", gridTemplateColumns: "58px 1fr auto", columnGap: 12, alignItems: "start" }}>
                   <div>
-                    <div style={{
-                      fontFamily: "var(--font-geist-sans), sans-serif",
-                      fontSize: 15,
-                      fontWeight: 500,
-                      color: stateTag === "past" ? "var(--muted)" : "var(--ink)",
-                      letterSpacing: -0.3,
-                      lineHeight: 1,
-                      fontFeatureSettings: '"tnum"',
-                    }}>
+                    <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 15, fontWeight: 500, color: stateTag === "past" ? "var(--muted)" : "var(--ink)", letterSpacing: -0.3, lineHeight: 1, fontFeatureSettings: '"tnum"' }}>
                       {dp.month} {dp.day}
                     </div>
-                    <div style={{
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 9.5,
-                      color: "var(--faint)",
-                      marginTop: 3,
-                    }}>
+                    <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", marginTop: 3 }}>
                       {dp.dow.toLowerCase()}
                     </div>
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{
-                      fontFamily: "var(--font-geist-sans), sans-serif",
-                      fontSize: 13,
-                      fontWeight: 500,
-                      color: stateTag === "past" ? "var(--muted)" : "var(--ink)",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}>
+                    <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 13, fontWeight: 500, color: stateTag === "past" ? "var(--muted)" : "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {getHeadliner(show)}
                     </div>
-                    <div style={{
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 10,
-                      color: "var(--muted)",
-                      marginTop: 2,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}>
+                    <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10, color: "var(--muted)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {show.venue.name.toLowerCase()}
                     </div>
                   </div>
-                  <div style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 9.5,
-                    letterSpacing: ".06em",
-                    textTransform: "uppercase",
-                    color: stateTag === "past" ? "var(--faint)" : (stateTag === "watch" ? "var(--muted)" : "var(--ink)"),
-                    fontWeight: 500,
-                  }}>
+                  <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, letterSpacing: ".06em", textTransform: "uppercase", color: stateTag === "past" ? "var(--faint)" : (stateTag === "watch" ? "var(--muted)" : "var(--ink)"), fontWeight: 500 }}>
                     {stateTag}
                   </div>
                 </div>
@@ -1498,12 +1634,123 @@ export default function ShowsPage() {
     );
   }
 
+  function renderCalendarYearView(
+    today: Date,
+    toolbarNav: React.ReactNode,
+    viewToggle: React.ReactNode,
+  ) {
+    // Build all-shows-by-date map
+    const dateShowsMap = new Map<string, ShowData[]>();
+    for (const show of shows) {
+      const key = show.date; // "YYYY-MM-DD"
+      if (!dateShowsMap.has(key)) dateShowsMap.set(key, []);
+      dateShowsMap.get(key)!.push(show);
+    }
+
+    const YEAR_MONTHS = Array.from({ length: 12 }, (_, i) => i);
+    const dows = ["S", "M", "T", "W", "T", "F", "S"];
+
+    function miniMonthGrid(year: number, month: number) {
+      const daysInMonth = getDaysInMonth(year, month);
+      const firstDay = getFirstDayOfWeek(year, month);
+      const cells: (number | null)[] = [];
+      for (let i = 0; i < firstDay; i++) cells.push(null);
+      for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+      while (cells.length % 7) cells.push(null);
+
+      const isThisMonth = year === today.getFullYear() && month === today.getMonth();
+
+      return (
+        <div
+          key={month}
+          data-testid={`year-mini-grid-${month}`}
+          style={{
+            background: "var(--surface)",
+            border: isThisMonth ? "1px solid var(--accent)" : "1px solid var(--rule)",
+            padding: "8px",
+            cursor: "pointer",
+          }}
+          onClick={() => {
+            setCalMonth(month);
+            setCalYear(year);
+            setCalView("month");
+          }}
+        >
+          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9, color: "var(--ink)", letterSpacing: ".08em", textTransform: "uppercase", fontWeight: 500, marginBottom: 4 }}>
+            {MONTHS[month]}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1 }}>
+            {dows.map((d, i) => (
+              <div key={i} style={{ fontSize: 6, color: "var(--faint)", textAlign: "center", fontFamily: "var(--font-geist-mono), monospace" }}>
+                {d}
+              </div>
+            ))}
+            {cells.map((d, ci) => {
+              const dateKey = d ? `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}` : null;
+              const hasDot = dateKey ? (dateShowsMap.get(dateKey) ?? []).length > 0 : false;
+              const isToday = d !== null && year === today.getFullYear() && month === today.getMonth() && d === today.getDate();
+              return (
+                <div key={ci} style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 10, position: "relative" }}>
+                  {d && (
+                    <>
+                      {isToday && (
+                        <div style={{ position: "absolute", inset: 0, background: "var(--accent)", opacity: 0.15, borderRadius: 1 }} />
+                      )}
+                      {hasDot && (
+                        <div style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--accent)" }} />
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: "22px 36px 36px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 30, fontWeight: 600, color: "var(--ink)", letterSpacing: -0.9 }}>
+            {calYear}
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {viewToggle}
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => setCalYear((y) => y - 1)} style={{ padding: "7px 12px", border: "1px solid var(--rule-strong)", background: "transparent", color: "var(--ink)", cursor: "pointer", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11 }}>
+                ‹ {calYear - 1}
+              </button>
+              <button onClick={() => setCalYear((y) => y + 1)} style={{ padding: "7px 12px", border: "1px solid var(--rule-strong)", background: "transparent", color: "var(--ink)", cursor: "pointer", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11 }}>
+                {calYear + 1} ›
+              </button>
+            </div>
+          </div>
+        </div>
+        <div
+          data-testid="year-view-grid"
+          style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}
+        >
+          {YEAR_MONTHS.map((m) => miniMonthGrid(calYear, m))}
+        </div>
+      </div>
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Render: Stats Mode
   // ---------------------------------------------------------------------------
 
   function renderStats() {
-    const allShowsList = (allShowsUnfiltered ?? []) as ShowData[];
+    const rawShows = (allShowsUnfiltered ?? []) as ShowData[];
+    const currentYear = new Date().getFullYear();
+    const allShowsList = rawShows.filter((s) => {
+      if (statsTimeframe === "all") return true;
+      const y = getYear(s.date);
+      if (statsTimeframe === "year") return y === currentYear;
+      if (statsTimeframe === "5years") return y >= currentYear - 4;
+      return true;
+    });
     const total = allShowsList.length;
 
     // Compute stats
@@ -1513,7 +1760,6 @@ export default function ShowsPage() {
     const uniqueVenues = new Set(allShowsList.map((s) => s.venue.name)).size;
     const uniqueArtists = new Set(allShowsList.flatMap((s) => s.showPerformers.map((sp) => sp.performer.name))).size;
 
-    const currentYear = new Date().getFullYear();
     const newArtistsThisYear = (() => {
       const thisYearArtists = new Set(
         allShowsList
@@ -1595,8 +1841,51 @@ export default function ShowsPage() {
 
     const SPARKLINE_MAX = Math.max(maxArtistCount, maxVenueCount, 8);
 
+    const timeframeLabel = statsTimeframe === "year"
+      ? String(currentYear)
+      : statsTimeframe === "5years"
+        ? `${currentYear - 4}–${currentYear}`
+        : "All time";
+
     return (
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: "22px 36px 36px" }}>
+        {/* Timeframe selector */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".06em" }}>
+            {timeframeLabel} &middot; {total} show{total !== 1 ? "s" : ""}
+          </div>
+          <div style={{ display: "flex", alignItems: "stretch", border: "1px solid var(--rule-strong)" }}>
+            {([
+              { k: "year" as StatsTimeframe, l: "This year" },
+              { k: "5years" as StatsTimeframe, l: "Last 5 years" },
+              { k: "all" as StatsTimeframe, l: "All time" },
+            ]).map(({ k, l }, i, arr) => {
+              const active = statsTimeframe === k;
+              return (
+                <button
+                  key={k}
+                  onClick={() => setStatsTimeframe(k)}
+                  data-testid={`stats-timeframe-${k}`}
+                  style={{
+                    padding: "6px 13px",
+                    border: "none",
+                    borderRight: i < arr.length - 1 ? "1px solid var(--rule-strong)" : "none",
+                    background: active ? "var(--ink)" : "transparent",
+                    color: active ? "var(--bg)" : "var(--ink)",
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 11,
+                    fontWeight: active ? 500 : 400,
+                    cursor: "pointer",
+                    letterSpacing: ".04em",
+                  }}
+                >
+                  {l}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Big headline numbers */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 1, background: "var(--rule)", marginBottom: 22 }}>
           {[
@@ -2022,6 +2311,15 @@ export default function ShowsPage() {
       {viewMode === "list" && renderList()}
       {viewMode === "calendar" && renderCalendar()}
       {viewMode === "stats" && renderStats()}
+
+      {/* Context menu */}
+      {contextMenu && (
+        <ContextMenu
+          items={buildShowContextMenuItems(contextMenu.show)}
+          position={contextMenu.position}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
 
       {/* Gmail bulk scan modal */}
       {gmailModalOpen && (

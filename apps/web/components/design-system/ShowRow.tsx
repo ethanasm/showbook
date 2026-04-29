@@ -39,6 +39,8 @@ interface ShowRowProps {
   onExpandToggle?: () => void;
   /** Legacy: row-level click handler (used when showId is absent). */
   onClick?: () => void;
+  /** Suppress the decorative chevron on the right side of the row. */
+  hideChevron?: boolean;
 }
 
 const KIND_ICONS: Record<ShowKind, React.ComponentType<{ size?: number; className?: string }>> = {
@@ -61,6 +63,7 @@ export function ShowRow({
   missingCoords,
   onExpandToggle,
   onClick,
+  hideChevron,
 }: ShowRowProps) {
   const router = useRouter();
 
@@ -219,27 +222,29 @@ export function ShowRow({
       <div className="show-row__state">
         {show.state === "ticketed" && <StateChip state="ticketed" />}
         {show.state === "watching" && <StateChip state="watching" />}
-        {onExpandToggle ? (
-          <button
-            type="button"
-            className="show-row__expand"
-            aria-label={selected ? "Collapse details" : "Expand details"}
-            aria-expanded={selected ? true : false}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onExpandToggle();
-            }}
-          >
-            {selected ? (
-              <ChevronDown size={14} className="show-row__chevron" />
-            ) : (
+        {!hideChevron && (
+          onExpandToggle ? (
+            <button
+              type="button"
+              className="show-row__expand"
+              aria-label={selected ? "Collapse details" : "Expand details"}
+              aria-expanded={selected ? true : false}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onExpandToggle();
+              }}
+            >
+              {selected ? (
+                <ChevronDown size={14} className="show-row__chevron" />
+              ) : (
+                <ChevronRight size={14} className="show-row__chevron" />
+              )}
+            </button>
+          ) : (
+            show.state === "past" && (
               <ChevronRight size={14} className="show-row__chevron" />
-            )}
-          </button>
-        ) : (
-          show.state === "past" && (
-            <ChevronRight size={14} className="show-row__chevron" />
+            )
           )
         )}
       </div>
