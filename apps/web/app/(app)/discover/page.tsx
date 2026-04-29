@@ -282,17 +282,7 @@ function AnnouncementRow({
         ) : (
           <>
             <div className="discover-row__headliner">
-              {announcement.headlinerPerformerId ? (
-                <Link
-                  href={`/artists/${announcement.headlinerPerformerId}`}
-                  className="discover-row__headliner-link"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {announcement.headliner}
-                </Link>
-              ) : (
-                announcement.headliner
-              )}
+              {announcement.headliner}
             </div>
             {announcement.support && announcement.support.length > 0 && (
               <div className="discover-row__support">
@@ -900,9 +890,13 @@ export default function DiscoverPage() {
   });
 
   function handleVenueFollowed() {
-    utils.discover.followedFeed.invalidate();
-    utils.discover.nearbyFeed.invalidate();
     utils.venues.followed.invalidate();
+    // Ingestion runs async after the follow — delay feed invalidation so
+    // announcements have time to land before we re-query.
+    setTimeout(() => {
+      utils.discover.followedFeed.invalidate();
+      utils.discover.nearbyFeed.invalidate();
+    }, 5000);
   }
 
   function handleToggleWatch(announcementId: string, watching: boolean) {
