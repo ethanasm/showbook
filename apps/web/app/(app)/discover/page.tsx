@@ -9,6 +9,7 @@ import {
   Clapperboard,
   Laugh,
   Tent,
+  Trophy,
   MapPin,
   Eye,
   Check,
@@ -20,6 +21,8 @@ import {
 } from "lucide-react";
 import "./discover.css";
 
+type DiscoverKind = ShowKind | "sports";
+
 // ---------------------------------------------------------------------------
 // Types inferred from the tRPC router
 // ---------------------------------------------------------------------------
@@ -27,7 +30,7 @@ import "./discover.css";
 type Announcement = {
   id: string;
   venueId: string;
-  kind: ShowKind;
+  kind: DiscoverKind;
   headliner: string;
   headlinerPerformerId: string | null;
   support: string[] | null;
@@ -69,20 +72,22 @@ function formatRunRange(start: string, end: string): string {
 // ---------------------------------------------------------------------------
 
 const KIND_ICONS: Record<
-  ShowKind,
+  DiscoverKind,
   React.ComponentType<{ size?: number; className?: string }>
 > = {
   concert: Music,
   theatre: Clapperboard,
   comedy: Laugh,
   festival: Tent,
+  sports: Trophy,
 };
 
-const KIND_LABELS: Record<ShowKind, string> = {
+const KIND_LABELS: Record<DiscoverKind, string> = {
   concert: "Concert",
   theatre: "Theatre",
   comedy: "Comedy",
   festival: "Festival",
+  sports: "Sports",
 };
 
 const REASON_LABELS: Record<string, string> = {
@@ -298,11 +303,13 @@ function AnnouncementRow({
 
       {/* Actions */}
       <div className="discover-row__actions">
-        <WatchButton
-          announcementId={announcement.id}
-          isWatching={isWatching}
-          onToggle={onToggleWatch}
-        />
+        {announcement.kind !== "sports" && (
+          <WatchButton
+            announcementId={announcement.id}
+            isWatching={isWatching}
+            onToggle={onToggleWatch}
+          />
+        )}
         <a
           href={`/api/announcements/${announcement.id}/ical`}
           download

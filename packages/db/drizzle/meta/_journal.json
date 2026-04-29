@@ -50,6 +50,13 @@
       "when": 1777429630504,
       "tag": "0006_announcement_link_cascade",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1777609200000,
+      "tag": "0007_add_sports_kind",
+      "breakpoints": true
     }
   ]
 }

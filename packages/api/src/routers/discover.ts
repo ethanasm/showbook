@@ -287,6 +287,13 @@ export const discoverRouter = router({
         throw new Error('Announcement not found');
       }
 
+      if (announcement.kind === 'sports') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Sports events cannot be added to your watchlist',
+        });
+      }
+
       const isRun =
         announcement.runStartDate !== null &&
         announcement.runEndDate !== null &&

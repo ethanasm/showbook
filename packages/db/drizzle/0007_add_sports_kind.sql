@@ -1,0 +1,1 @@
+ALTER TYPE "kind" ADD VALUE IF NOT EXISTS 'sports';
