@@ -1,11 +1,12 @@
 import { z } from 'zod';
-import { eq, and, asc, desc, gte, sql, isNotNull } from 'drizzle-orm';
+import { eq, and, asc, desc, gte, sql, isNotNull, inArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
 import {
   venues,
   userVenueFollows,
   announcements,
+  showAnnouncementLinks,
   shows,
 } from '@showbook/db';
 import { getPlaceDetails } from '../google-places';
@@ -101,6 +102,29 @@ export const venuesRouter = router({
             eq(userVenueFollows.venueId, input.venueId),
           ),
         );
+
+      const [stillFollowed] = await ctx.db
+        .select({ userId: userVenueFollows.userId })
+        .from(userVenueFollows)
+        .where(eq(userVenueFollows.venueId, input.venueId))
+        .limit(1);
+
+      if (!stillFollowed) {
+        const venueAnnouncements = await ctx.db
+          .select({ id: announcements.id })
+          .from(announcements)
+          .where(eq(announcements.venueId, input.venueId));
+
+        if (venueAnnouncements.length > 0) {
+          const ids = venueAnnouncements.map((a) => a.id);
+          await ctx.db
+            .delete(showAnnouncementLinks)
+            .where(inArray(showAnnouncementLinks.announcementId, ids));
+          await ctx.db
+            .delete(announcements)
+            .where(eq(announcements.venueId, input.venueId));
+        }
+      }
 
       return { success: true };
     }),

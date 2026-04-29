@@ -651,7 +651,7 @@ function FeedSection({
     }));
   }, [filteredItems, venueList, selectedVenueId]);
 
-  const totalCount = items?.length ?? 0;
+  const totalCount = venueList.length;
   const isFollowed = activeTab === "Followed";
   const tabLabel = isFollowed ? "Followed venues" : "Nearby venues";
   const showAllGrouped = selectedVenueId === null;
@@ -889,12 +889,18 @@ export default function DiscoverPage() {
         : nearbyItems;
   const currentCount = currentItems?.length ?? 0;
 
-  // Counts for tabs
-  const followedCount = followedItems?.length ?? 0;
+  // Counts for tabs — show number of followed venues/artists, not announcements
+  const followedVenueCount = useMemo(() => {
+    if (!followedItems) return 0;
+    return new Set(followedItems.map((a) => a.venueId)).size;
+  }, [followedItems]);
   const nearbyCount = nearbyItems?.length ?? 0;
-  const artistsCount = artistItems?.length ?? 0;
+  const artistsCount = useMemo(() => {
+    if (!artistItems) return 0;
+    return new Set(artistItems.map((a) => a.headlinerPerformerId).filter(Boolean)).size;
+  }, [artistItems]);
   const tabCounts: Record<string, number> = {
-    Followed: followedCount,
+    Followed: followedVenueCount,
     Artists: artistsCount,
     "Near You": nearbyCount,
   };
