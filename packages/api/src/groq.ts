@@ -35,7 +35,18 @@ export interface ExtractedTicketInfo {
 // Client
 // ---------------------------------------------------------------------------
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// Lazy-initialized so a missing GROQ_API_KEY at module-load time doesn't
+// crash the entire server (we want the rest of the app to work; the Groq
+// features will throw clearly if invoked without a key).
+let _groq: Groq | null = null;
+function groq(): Groq {
+  if (_groq) return _groq;
+  if (!process.env.GROQ_API_KEY) {
+    throw new Error('GROQ_API_KEY is not set — cannot use Groq features.');
+  }
+  _groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  return _groq;
+}
 
 // ---------------------------------------------------------------------------
 // parseShowInput — free-text → structured show fields
@@ -44,7 +55,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 export async function parseShowInput(
   freeText: string,
 ): Promise<ParsedShowInput> {
-  const result = await groq.chat.completions.create({
+  const result = await groq().chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
       {
@@ -88,7 +99,7 @@ export async function extractShowFromEmail(
   let result;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      result = await groq.chat.completions.create({
+      result = await groq().chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
       {
@@ -162,7 +173,7 @@ export async function validateAndDedupTickets<T extends ExtractedTicketInfo>(
 ): Promise<T[]> {
   if (tickets.length === 0) return [];
 
-  const result = await groq.chat.completions.create({
+  const result = await groq().chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
       {
@@ -202,7 +213,7 @@ export async function validateAndDedupTickets<T extends ExtractedTicketInfo>(
 export async function extractShowFromPdfText(
   pdfText: string,
 ): Promise<ExtractedTicketInfo> {
-  const result = await groq.chat.completions.create({
+  const result = await groq().chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
       {
@@ -242,10 +253,25 @@ export async function extractShowFromPdfText(
   }
 }
 
+function detectImageMime(b64: string): string {
+  if (b64.startsWith('iVBORw0KGgo')) return 'image/png';
+  if (b64.startsWith('/9j/')) return 'image/jpeg';
+  if (b64.startsWith('R0lGOD')) return 'image/gif';
+  if (b64.startsWith('UklGR')) return 'image/webp';
+  return 'image/jpeg';
+}
+
 export async function extractCast(
   imageBase64: string,
 ): Promise<CastMember[]> {
-  const result = await groq.chat.completions.create({
+  // Client may pass either a raw base64 payload or a full data URL.
+  // Detect the MIME from the base64 magic bytes so PNG/WEBP/GIF aren't
+  // mislabeled as JPEG (Groq's vision endpoint rejects format mismatches).
+  const dataUrl = imageBase64.startsWith('data:')
+    ? imageBase64
+    : `data:${detectImageMime(imageBase64)};base64,${imageBase64}`;
+
+  const result = await groq().chat.completions.create({
     model: 'meta-llama/llama-4-scout-17b-16e-instruct',
     messages: [
       {
@@ -253,11 +279,11 @@ export async function extractCast(
         content: [
           {
             type: 'image_url',
-            image_url: { url: `data:image/jpeg;base64,${imageBase64}` },
+            image_url: { url: dataUrl },
           },
           {
             type: 'text',
-            text: 'Extract the principal cast list from this playbill photo. Return ONLY a JSON object with a "cast" key containing an array of objects with "actor" and "role" fields. Skip ensemble, swing, and understudy listings. Example: {"cast": [{"actor": "Cynthia Erivo", "role": "Elphaba"}]}',
+            text: 'Extract the principal cast list from this playbill photo. Return ONLY a JSON object with a "cast" key containing an array of objects with "actor" and "role" fields. Skip ensemble, swing, understudy, dance captain, fight captain, music director, and orchestra listings. Example: {"cast": [{"actor": "Cynthia Erivo", "role": "Elphaba"}]}',
           },
         ],
       },

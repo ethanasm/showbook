@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 
-const FIXTURE = path.join(__dirname, 'fixtures/playbills/hadestown.jpg');
+const FIXTURE = path.join(__dirname, 'fixtures/playbills/Hadestown.png');
 
 const MAIN_CAST: Array<{ actor: string; role: string }> = [
   { actor: 'Nickolaus Colón', role: 'Hades' },
@@ -66,11 +66,18 @@ test.describe('Playbill cast extraction (Groq vision)', () => {
   // Vision call can be slow; allow plenty of headroom.
   test.setTimeout(120_000);
 
+  // Skip when GROQ_API_KEY isn't configured (e.g. in CI without secrets).
+  // Local dev with a valid key runs the test normally.
+  test.skip(
+    !process.env.GROQ_API_KEY,
+    'GROQ_API_KEY not set',
+  );
+
   test.beforeAll(() => {
     if (!fs.existsSync(FIXTURE)) {
       throw new Error(
         `Missing fixture at ${FIXTURE}. ` +
-          'Drop the Hadestown playbill JPG there before running this test.',
+          'The Hadestown playbill PNG should be committed at this path.',
       );
     }
   });
