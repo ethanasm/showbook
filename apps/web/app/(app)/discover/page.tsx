@@ -890,13 +890,9 @@ export default function DiscoverPage() {
   });
 
   function handleVenueFollowed() {
+    utils.discover.followedFeed.invalidate();
+    utils.discover.nearbyFeed.invalidate();
     utils.venues.followed.invalidate();
-    // Ingestion runs async after the follow — delay feed invalidation so
-    // announcements have time to land before we re-query.
-    setTimeout(() => {
-      utils.discover.followedFeed.invalidate();
-      utils.discover.nearbyFeed.invalidate();
-    }, 5000);
   }
 
   function handleToggleWatch(announcementId: string, watching: boolean) {
