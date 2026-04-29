@@ -12,7 +12,7 @@ import {
 import { getPlaceDetails } from '../google-places';
 import { matchOrCreateVenue, findTmVenueId } from '../venue-matcher';
 import { geocodeVenue } from '../geocode';
-import { ingestVenue } from '@showbook/jobs';
+import { enqueueIngestVenue } from '../job-queue';
 import { scrapeConfigSchema, parseScrapeConfig } from '../scrape-config';
 import { venueScrapeRuns } from '@showbook/db';
 
@@ -68,6 +68,7 @@ export const venuesRouter = router({
         .onConflictDoNothing();
 
       try {
+        const { ingestVenue } = await import('@showbook/jobs');
         await ingestVenue(input.venueId);
       } catch (err) {
         console.error('[venues/follow] ingestion failed:', err);
