@@ -191,7 +191,7 @@ runs on the same host and reaches the web service via loopback.
 
 | Service | Container | Host port |
 |---------|-----------|-----------|
-| PostgreSQL 16 | showbook-db | 127.0.0.1:5433 |
+| PostgreSQL 16 | showbook-dev-db | 127.0.0.1:5433 |
 | Next.js (dev mode, source bind-mounted) | showbook-web | 127.0.0.1:3001 |
 
 ### Prod (`docker-compose.prod.yml`, project `showbook-prod`)

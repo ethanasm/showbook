@@ -6,7 +6,7 @@ name: showbook
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: showbook-db
+    container_name: showbook-dev-db
     restart: unless-stopped
     environment:
       POSTGRES_DB: showbook
