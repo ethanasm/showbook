@@ -22,6 +22,9 @@ export function NavigationProgress() {
     }
   }
 
+  // Our patched history.pushState can be invoked synchronously from inside
+  // React internals (useInsertionEffect, where setState is forbidden). Defer
+  // state updates with queueMicrotask so they always land outside that frame.
   function start() {
     if (hideTimeoutRef.current) {
       clearTimeout(hideTimeoutRef.current);
@@ -29,9 +32,11 @@ export function NavigationProgress() {
     }
     clearTrickle();
     startedAtRef.current = Date.now();
-    setVisible(true);
-    setProgress(8);
-    requestAnimationFrame(() => setProgress(30));
+    queueMicrotask(() => {
+      setVisible(true);
+      setProgress(8);
+      requestAnimationFrame(() => setProgress(30));
+    });
     trickleRef.current = setInterval(() => {
       setProgress((p) => {
         if (p >= 90) return p;
@@ -44,7 +49,7 @@ export function NavigationProgress() {
   function done() {
     if (!startedAtRef.current) return;
     clearTrickle();
-    setProgress(100);
+    queueMicrotask(() => setProgress(100));
     hideTimeoutRef.current = setTimeout(() => {
       setVisible(false);
       setProgress(0);
