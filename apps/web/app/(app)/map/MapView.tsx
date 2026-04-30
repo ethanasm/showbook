@@ -20,10 +20,8 @@ import {
   Filter,
   X,
   Music,
-  Theater,
-  Laugh,
-  Tent,
 } from "lucide-react";
+import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import "./map.css";
 
 // ---------------------------------------------------------------------------
@@ -43,20 +41,6 @@ const KIND_COLORS_HEX: Record<string, string> = {
   theatre: "#E63946",
   comedy: "#9D4EDD",
   festival: "#2A9D8F",
-};
-
-const KIND_LABELS: Record<string, string> = {
-  concert: "Concert",
-  theatre: "Theatre",
-  comedy: "Comedy",
-  festival: "Festival",
-};
-
-const KIND_ICONS: Record<string, typeof Music> = {
-  concert: Music,
-  theatre: Theater,
-  comedy: Laugh,
-  festival: Tent,
 };
 
 const KINDS = [
@@ -574,7 +558,7 @@ function VenueInspector({
       <div className="venue-inspector__kindmix">
         <div className="venue-inspector__kindmix-label">Kind mix</div>
         {Object.entries(venue.kindBreakdown).map(([k, count]) => {
-          const KindIcon = KIND_ICONS[k];
+          const KindIcon = KIND_ICONS[k as keyof typeof KIND_ICONS];
           const color = KIND_COLORS[k] ?? "var(--muted)";
           return (
             <div
@@ -583,7 +567,7 @@ function VenueInspector({
               style={{ color }}
             >
               {KindIcon && <KindIcon size={12} />}
-              {KIND_LABELS[k] ?? k} &middot; {count}
+              {KIND_LABELS[k as keyof typeof KIND_LABELS] ?? k} &middot; {count}
             </div>
           );
         })}

@@ -6,14 +6,8 @@ import "./design-system.css";
 import { StateChip, type ShowState } from "./StateChip";
 import type { ShowKind } from "./KindBadge";
 import { RemoteImage } from "./RemoteImage";
-import {
-  Music,
-  Clapperboard,
-  Laugh,
-  Tent,
-  ChevronRight,
-  ChevronDown,
-} from "lucide-react";
+import { ChevronRight, ChevronDown } from "lucide-react";
+import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 
 export interface Show {
   kind: ShowKind;
@@ -44,20 +38,6 @@ interface ShowRowProps {
   /** Suppress the decorative chevron on the right side of the row. */
   hideChevron?: boolean;
 }
-
-const KIND_ICONS: Record<ShowKind, React.ComponentType<{ size?: number; className?: string }>> = {
-  concert: Music,
-  theatre: Clapperboard,
-  comedy: Laugh,
-  festival: Tent,
-};
-
-const KIND_LABELS: Record<ShowKind, string> = {
-  concert: "Concert",
-  theatre: "Theatre",
-  comedy: "Comedy",
-  festival: "Festival",
-};
 
 export function ShowRow({
   show,

@@ -7,9 +7,6 @@ import { trpc } from "@/lib/trpc";
 import { EditableName } from "@/components/EditableName";
 import {
   Music,
-  Clapperboard,
-  Laugh,
-  Tent,
   ArrowUpRight,
   Plus,
   Check,
@@ -17,6 +14,7 @@ import {
   Trash2,
   Ticket,
 } from "lucide-react";
+import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import {
   RemoteImage,
   ShowRow as ShowRowComponent,
@@ -56,23 +54,6 @@ type ShowData = {
   tourName: string | null;
   productionName: string | null;
   showPerformers: ShowPerformer[];
-};
-
-const KIND_ICONS: Record<
-  ShowKind,
-  React.ComponentType<{ size?: number; color?: string; className?: string }>
-> = {
-  concert: Music,
-  theatre: Clapperboard,
-  comedy: Laugh,
-  festival: Tent,
-};
-
-const KIND_LABELS: Record<ShowKind, string> = {
-  concert: "Concert",
-  theatre: "Theatre",
-  comedy: "Comedy",
-  festival: "Festival",
 };
 
 const ON_SALE_STATUS_LABELS: Record<string, string> = {

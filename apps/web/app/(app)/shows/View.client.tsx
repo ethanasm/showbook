@@ -23,10 +23,6 @@ import {
   ChevronLeft,
   MoreHorizontal,
   Ticket,
-  Music,
-  Clapperboard,
-  Laugh,
-  Tent,
   Square,
   Trash2,
   Mail,
@@ -41,6 +37,7 @@ import {
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { useCompactMode } from "@/lib/useCompactMode";
 import { daysUntil, formatDateParts } from "@showbook/shared";
+import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -160,20 +157,6 @@ interface ShowData {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const KIND_ICONS: Record<ShowKind, React.ComponentType<{ size?: number; color?: string; style?: React.CSSProperties }>> = {
-  concert: Music,
-  theatre: Clapperboard,
-  comedy: Laugh,
-  festival: Tent,
-};
-
-const KIND_LABELS: Record<ShowKind, string> = {
-  concert: "concert",
-  theatre: "theatre",
-  comedy: "comedy",
-  festival: "festival",
-};
 
 const ALL_KINDS: ShowKind[] = ["concert", "theatre", "comedy", "festival"];
 

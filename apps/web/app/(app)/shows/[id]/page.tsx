@@ -5,10 +5,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import {
-  Music,
-  Clapperboard,
-  Laugh,
-  Tent,
   MapPin,
   MoreHorizontal,
   Trash2,
@@ -16,6 +12,7 @@ import {
   ChevronLeft,
   CalendarPlus,
 } from "lucide-react";
+import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import {
   StateChip,
   type ShowKind,
@@ -27,23 +24,6 @@ import {
   formatDateLong,
   formatDateRangeLong,
 } from "@showbook/shared";
-
-const KIND_ICONS: Record<
-  ShowKind,
-  React.ComponentType<{ size?: number; color?: string; className?: string }>
-> = {
-  concert: Music,
-  theatre: Clapperboard,
-  comedy: Laugh,
-  festival: Tent,
-};
-
-const KIND_LABELS: Record<ShowKind, string> = {
-  concert: "Concert",
-  theatre: "Theatre",
-  comedy: "Comedy",
-  festival: "Festival",
-};
 
 const STATE_TRANSITIONS: Record<string, { label: string; target: ShowState }> = {
   watching: { label: "Got tickets", target: "ticketed" },

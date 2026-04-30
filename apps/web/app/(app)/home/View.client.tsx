@@ -11,30 +11,13 @@ import {
   ArrowRight,
   ChevronRight,
   Music,
-  Clapperboard,
-  Laugh,
-  Tent,
   Eye,
   Square,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { formatDateParts as toDateParts } from "@showbook/shared";
+import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 
 // ── Helpers ──────────────────────────────────────────────────────────────
-
-const KIND_ICONS: Record<ShowKind, LucideIcon> = {
-  concert: Music,
-  theatre: Clapperboard,
-  comedy: Laugh,
-  festival: Tent,
-};
-
-const KIND_LABELS: Record<ShowKind, string> = {
-  concert: "Concert",
-  theatre: "Theatre",
-  comedy: "Comedy",
-  festival: "Festival",
-};
 
 function getHeadliner(
   show: {

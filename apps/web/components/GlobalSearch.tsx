@@ -6,21 +6,12 @@ import {
   Search as SearchIcon,
   X,
   Music,
-  Clapperboard,
-  Laugh,
-  Tent,
   MapPin,
   User,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { KIND_ICONS } from "@/lib/kind-icons";
 import "./GlobalSearch.css";
-
-const KIND_ICONS = {
-  concert: Music,
-  theatre: Clapperboard,
-  comedy: Laugh,
-  festival: Tent,
-} as const;
 
 type FlatItem = { href: string };
 

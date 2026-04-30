@@ -10,10 +10,6 @@ import {
 import { EmptyState, type ShowKind } from "@/components/design-system";
 import {
   Music,
-  Clapperboard,
-  Laugh,
-  Tent,
-  Trophy,
   Eye,
   Check,
   ArrowUpRight,
@@ -26,6 +22,7 @@ import {
   groupAnnouncementsByRegion,
   groupVenuesByRegion,
 } from "./region-helpers";
+import { DISCOVER_KIND_ICONS as KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import "./discover.css";
 
 // ---------------------------------------------------------------------------
@@ -171,25 +168,6 @@ function formatRunRange(start: string, end: string): string {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const KIND_ICONS: Record<
-  DiscoverKind,
-  React.ComponentType<{ size?: number; className?: string }>
-> = {
-  concert: Music,
-  theatre: Clapperboard,
-  comedy: Laugh,
-  festival: Tent,
-  sports: Trophy,
-};
-
-const KIND_LABELS: Record<DiscoverKind, string> = {
-  concert: "Concert",
-  theatre: "Theatre",
-  comedy: "Comedy",
-  festival: "Festival",
-  sports: "Sports",
-};
 
 const REASON_LABELS: Record<string, string> = {
   "followed-venue": "followed venue",
