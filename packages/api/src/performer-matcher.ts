@@ -23,7 +23,7 @@ type Tx = Database | Parameters<Parameters<Database['transaction']>[0]>[0];
 // Helpers
 // ---------------------------------------------------------------------------
 
-function buildUpdate(
+export function buildUpdate(
   existing: typeof performers.$inferSelect,
   input: PerformerInput,
 ): Partial<Record<'imageUrl' | 'musicbrainzId' | 'ticketmasterAttractionId', string>> | null {
@@ -147,7 +147,7 @@ export async function matchOrCreatePerformer(
   });
 }
 
-function isUniqueViolation(err: unknown): boolean {
+export function isUniqueViolation(err: unknown): boolean {
   return (
     typeof err === 'object' &&
     err !== null &&

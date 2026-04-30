@@ -182,7 +182,7 @@ export async function matchOrCreateVenue(
   });
 }
 
-function isUniqueViolation(err: unknown): boolean {
+export function isUniqueViolation(err: unknown): boolean {
   return (
     typeof err === 'object' &&
     err !== null &&
@@ -211,7 +211,7 @@ const US_STATE_CODES: Record<string, string> = {
   'prince edward island': 'PE', 'newfoundland and labrador': 'NL',
 };
 
-function toStateCode(stateRegion: string | undefined | null): string | undefined {
+export function toStateCode(stateRegion: string | undefined | null): string | undefined {
   if (!stateRegion) return undefined;
   if (stateRegion.length === 2) return stateRegion.toUpperCase();
   return US_STATE_CODES[stateRegion.toLowerCase()];
