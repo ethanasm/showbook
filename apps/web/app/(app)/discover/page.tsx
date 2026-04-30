@@ -193,7 +193,7 @@ const KIND_LABELS: Record<DiscoverKind, string> = {
 
 const REASON_LABELS: Record<string, string> = {
   "followed-venue": "followed venue",
-  nearby: "near you",
+  nearby: "followed region",
   "tracked-artist": "tracked artist",
 };
 
@@ -793,7 +793,7 @@ function RegionSearchModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="discover-modal__header">
-          <div className="discover-modal__title">Add a region</div>
+          <div className="discover-modal__title">Follow a region</div>
           <button
             type="button"
             className="discover-modal__close"
@@ -926,7 +926,7 @@ function RegionSearchModal({
                 })
               }
             >
-              {addRegion.isPending ? "Adding..." : "Add Region"}
+              {addRegion.isPending ? "Following..." : "Follow Region"}
             </button>
             <button
               type="button"
@@ -1058,7 +1058,7 @@ function VenueRail({
             title={addRegionHint}
           >
             <Plus size={11} />
-            Add a region
+            Follow another region
           </button>
           {addRegionHint && (
             <div className="discover-rail__follow-hint">{addRegionHint}</div>
@@ -1121,7 +1121,7 @@ function VenueRail({
       >
         <div className="discover-rail__item-body">
           <div className="discover-rail__item-name">
-            {tabLabel === "Nearby venues" ? "All nearby" : "All followed"}
+            {tabLabel === "Followed regions" ? "All regions" : "All followed"}
           </div>
         </div>
         <div className="discover-rail__item-count">{totalCount}</div>
@@ -1461,7 +1461,7 @@ function FeedSection({
     ? "Followed venues"
     : isArtists
       ? "Followed artists"
-      : "Nearby venues";
+      : "Followed regions";
   const showAllGrouped = selectedGroupId === null;
   const groupRoute = groupBy === "artist" ? "artists" : "venues";
   const groupPageLabel = groupBy === "artist" ? "artist page" : "venue page";
@@ -1860,7 +1860,7 @@ function RegionIngestPoller({
 const TABS = [
   { key: "Followed", label: "Followed venues" },
   { key: "Artists", label: "Followed artists" },
-  { key: "Near You", label: "Near you" },
+  { key: "Near You", label: "Followed regions" },
 ] as const;
 
 export default function DiscoverPage() {
@@ -2080,7 +2080,7 @@ export default function DiscoverPage() {
         <FeedSection
           items={nearbyItems}
           isLoading={nearbyFeed.isLoading}
-          emptyMessage={nearbyFeed.data?.hasRegions ? "No announcements near you right now" : "Add a region in Preferences to see nearby shows"}
+          emptyMessage={nearbyFeed.data?.hasRegions ? "No announcements in followed regions right now" : "Follow a region in Preferences to see regional shows"}
           watchedIds={watchedIds}
           onToggleWatch={handleToggleWatch}
           activeTab={activeTab}

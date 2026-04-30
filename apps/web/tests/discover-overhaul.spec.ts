@@ -15,14 +15,14 @@ test.describe('Discover overhaul', () => {
     await loginAsTestUser(page);
   });
 
-  test('Discover page has 3 tabs (Followed venues / Followed artists / Near you) and a Refresh button', async ({ page }) => {
+  test('Discover page has 3 tabs (Followed venues / Followed artists / Followed regions) and a Refresh button', async ({ page }) => {
     await page.goto('/discover');
     await page.waitForLoadState('networkidle');
 
     // Tabs
     await expect(page.getByRole('button', { name: /Followed venues/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Followed artists/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Near you/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Followed regions/i })).toBeVisible();
 
     // Refresh button
     await expect(page.getByRole('button', { name: /^Refresh$/ })).toBeVisible();
