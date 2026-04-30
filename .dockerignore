@@ -14,3 +14,8 @@
 .env.production.*
 .env.development
 .env.development.*
+
+# Local mkcert dev certs — bind-mounted into the dev container, never
+# baked into prod (would make prod serve HTTPS on a port the Cloudflare
+# Tunnel expects to be plain HTTP).
+certs/
