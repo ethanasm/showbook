@@ -809,15 +809,27 @@ export default function AddPage() {
         return;
       }
 
+      // Map performer names (used in staging) → newly-created performer ids.
+      const nameToPerformerId = new Map<string, string>();
+      for (const sp of created.showPerformers ?? []) {
+        if (sp?.performer?.name && sp.performer.id) {
+          nameToPerformerId.set(sp.performer.name, sp.performer.id);
+        }
+      }
+
       const errors: string[] = [];
       for (let i = 0; i < stagedMedia.length; i++) {
         const item = stagedMedia[i]!;
         setMediaUploadStatus(`Uploading ${i + 1} of ${stagedMedia.length}: ${item.file.name}`);
+        const performerIds = item.performerNames
+          .map((name) => nameToPerformerId.get(name))
+          .filter((id): id is string => Boolean(id));
         try {
           const opts = {
             showId: created.id,
             file: item.file,
             caption: item.caption || undefined,
+            performerIds: performerIds.length > 0 ? performerIds : undefined,
             createIntent: (input: Parameters<typeof createUploadIntent.mutateAsync>[0]) =>
               createUploadIntent.mutateAsync(input),
             completeUpload: (input: { assetId: string }) =>
@@ -1787,6 +1799,10 @@ export default function AddPage() {
             staged={stagedMedia}
             onChange={setStagedMedia}
             disabled={createShow.isPending || Boolean(mediaUploadStatus)}
+            lineupNames={[
+              ...(headliner.name ? [headliner.name] : []),
+              ...performers.map((p) => p.name).filter(Boolean),
+            ]}
           />
           {mediaUploadStatus && (
             <div

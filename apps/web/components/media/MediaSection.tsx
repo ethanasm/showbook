@@ -1,12 +1,14 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { ImagePlus, Trash2, Upload, Video } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Tag, Trash2, Upload, Video, X, ImagePlus } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { uploadPhotoForShow, uploadVideoForShow } from "./uploadHelpers";
 import "./media.css";
 
 type MediaScope = "show" | "venue" | "performer";
+
+export type MediaPerformer = { id: string; name: string };
 
 type MediaAsset = {
   id: string;
@@ -14,6 +16,7 @@ type MediaAsset = {
   bytes: number;
   durationMs?: number | null;
   urls: Record<string, string>;
+  performerIds?: string[];
   sourceShow?: {
     id: string;
     title: string;
@@ -40,19 +43,28 @@ export function MediaSection({
   showId,
   venueId,
   performerId,
-  defaultPerformerIds = [],
+  lineup = [],
 }: {
   scope: MediaScope;
   showId?: string;
   venueId?: string;
   performerId?: string;
-  defaultPerformerIds?: string[];
+  lineup?: MediaPerformer[];
 }) {
   const utils = trpc.useUtils();
   const photoInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [openTagPickerFor, setOpenTagPickerFor] = useState<string | null>(null);
+
+  // Auto-tag rule: a photo uploaded from a single-performer show gets
+  // tagged with that performer. Multi-performer shows leave new uploads
+  // untagged so the user can pick per asset.
+  const defaultPerformerIds = useMemo(
+    () => (lineup.length === 1 && lineup[0] ? [lineup[0].id] : []),
+    [lineup],
+  );
 
   const showMedia = trpc.media.listForShow.useQuery(
     { showId: showId ?? "" },
@@ -76,6 +88,28 @@ export function MediaSection({
   const deleteMedia = trpc.media.delete.useMutation({
     onSuccess: () => invalidateMedia(),
   });
+  const setPerformersMutation = trpc.media.setPerformers.useMutation({
+    onSuccess: () => {
+      invalidateMedia();
+      // setPerformers may auto-add a performer to the show's lineup
+      // (showPerformers row), so refresh the show detail too.
+      if (showId) utils.shows.detail.invalidate({ showId });
+    },
+  });
+
+  // Local cache of performer name → id learned from search results, so
+  // chips can render the right label even before listForShow refetches.
+  const [knownNames, setKnownNames] = useState<Record<string, string>>({});
+  function rememberName(id: string, name: string) {
+    setKnownNames((prev) => (prev[id] === name ? prev : { ...prev, [id]: name }));
+  }
+
+  async function setAssetPerformers(asset: MediaAsset, performerIds: string[]) {
+    await setPerformersMutation.mutateAsync({
+      assetId: asset.id,
+      performerIds,
+    });
+  }
 
   const assets = useMemo(() => {
     if (scope === "show") return (showMedia.data ?? []) as MediaAsset[];
@@ -276,35 +310,183 @@ export function MediaSection({
         </div>
       ) : (
         <div className="media-grid" data-testid="media-gallery">
-          {assets.map((asset) => (
-            <article className="media-card" key={asset.id}>
-              <div className="media-card__frame">
-                {asset.mediaType === "photo" ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={asset.urls.card ?? asset.urls.full ?? asset.urls.thumb} alt="" />
-                ) : (
-                  <video src={asset.urls.source} controls preload="metadata" />
-                )}
-              </div>
-              <div className="media-card__meta">
-                <div className="media-card__label" title={sourceLabel(asset)}>
-                  {sourceLabel(asset)}
+          {assets.map((asset) => {
+            const showTagPicker = scope === "show";
+            const isPickerOpen = openTagPickerFor === asset.id;
+            return (
+              <article className="media-card" key={asset.id}>
+                <div className="media-card__frame">
+                  {asset.mediaType === "photo" ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={asset.urls.card ?? asset.urls.full ?? asset.urls.thumb} alt="" />
+                  ) : (
+                    <video src={asset.urls.source} controls preload="metadata" />
+                  )}
                 </div>
-                {scope === "show" && (
-                  <button
-                    type="button"
-                    className="media-card__delete"
-                    aria-label="Delete media"
-                    onClick={() => deleteMedia.mutate({ assetId: asset.id })}
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                <div className="media-card__meta">
+                  <div className="media-card__label" title={sourceLabel(asset)}>
+                    {sourceLabel(asset)}
+                  </div>
+                  {scope === "show" && (
+                    <button
+                      type="button"
+                      className="media-card__delete"
+                      aria-label="Delete media"
+                      onClick={() => deleteMedia.mutate({ assetId: asset.id })}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+                {showTagPicker && (
+                  <TagEditor
+                    asset={asset}
+                    lineup={lineup}
+                    knownNames={knownNames}
+                    rememberName={rememberName}
+                    isOpen={isPickerOpen}
+                    onToggleOpen={() =>
+                      setOpenTagPickerFor(isPickerOpen ? null : asset.id)
+                    }
+                    onCommit={(ids) => setAssetPerformers(asset, ids)}
+                    isPending={setPerformersMutation.isPending}
+                  />
                 )}
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       )}
     </section>
   );
 }
+
+function TagEditor({
+  asset,
+  lineup,
+  knownNames,
+  rememberName,
+  isOpen,
+  onToggleOpen,
+  onCommit,
+  isPending,
+}: {
+  asset: MediaAsset;
+  lineup: MediaPerformer[];
+  knownNames: Record<string, string>;
+  rememberName: (id: string, name: string) => void;
+  isOpen: boolean;
+  onToggleOpen: () => void;
+  onCommit: (performerIds: string[]) => Promise<void>;
+  isPending: boolean;
+}) {
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    return () => clearTimeout(handle);
+  }, [query]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setQuery("");
+      setDebouncedQuery("");
+    }
+  }, [isOpen]);
+
+  const search = trpc.performers.search.useQuery(
+    { query: debouncedQuery },
+    { enabled: isOpen && debouncedQuery.length >= 1 },
+  );
+
+  const performerIds = asset.performerIds ?? [];
+  const nameFor = (id: string): string => {
+    const fromLineup = lineup.find((p) => p.id === id)?.name;
+    if (fromLineup) return fromLineup;
+    return knownNames[id] ?? "Unknown performer";
+  };
+  const tagged = performerIds.map((id) => ({ id, name: nameFor(id) }));
+
+  async function addPerformer(p: { id: string; name: string }) {
+    rememberName(p.id, p.name);
+    if (performerIds.includes(p.id)) return;
+    await onCommit([...performerIds, p.id]);
+    setQuery("");
+  }
+
+  async function removePerformer(id: string) {
+    await onCommit(performerIds.filter((existing) => existing !== id));
+  }
+
+  const results = (search.data ?? []).filter(
+    (row) => !performerIds.includes(row.id),
+  );
+
+  return (
+    <div className="media-card__tags" data-testid="media-card-tags">
+      {tagged.map((p) => (
+        <span key={p.id} className="media-tag">
+          {p.name}
+          <button
+            type="button"
+            className="media-tag__remove"
+            aria-label={`Remove ${p.name}`}
+            disabled={isPending}
+            onClick={() => removePerformer(p.id)}
+          >
+            <X size={10} />
+          </button>
+        </span>
+      ))}
+      <button
+        type="button"
+        className="media-tag media-tag--button"
+        onClick={onToggleOpen}
+        aria-expanded={isOpen}
+        data-testid="media-tag-edit"
+      >
+        <Tag size={11} />
+        {tagged.length === 0 ? "Tag performers" : "Add"}
+      </button>
+      {isOpen && (
+        <div className="media-tag-picker" data-testid="media-tag-picker">
+          <input
+            type="text"
+            className="media-tag-picker__search"
+            placeholder="Search performers…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            autoFocus
+            data-testid="media-tag-search"
+          />
+          <div className="media-tag-picker__results">
+            {debouncedQuery.length === 0 ? (
+              <div className="media-tag-picker__hint">
+                Type a performer name. Selecting one not yet on this show
+                will add them to the lineup.
+              </div>
+            ) : search.isLoading ? (
+              <div className="media-tag-picker__hint">Searching…</div>
+            ) : results.length === 0 ? (
+              <div className="media-tag-picker__hint">No matches.</div>
+            ) : (
+              results.map((row) => (
+                <button
+                  key={row.id}
+                  type="button"
+                  className="media-tag-picker__row"
+                  disabled={isPending}
+                  onClick={() => addPerformer({ id: row.id, name: row.name })}
+                >
+                  {row.name}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+

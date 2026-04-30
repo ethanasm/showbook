@@ -170,11 +170,10 @@ export default function ShowDetailPage() {
   const lineup = [...show.showPerformers].sort(
     (a, b) => a.sortOrder - b.sortOrder,
   );
-  const defaultMediaPerformerIds = headlinerSP?.performer.id
-    ? [headlinerSP.performer.id]
-    : lineup[0]?.performer.id
-      ? [lineup[0].performer.id]
-      : [];
+  const mediaLineup = lineup.map((sp) => ({
+    id: sp.performer.id,
+    name: sp.performer.name,
+  }));
 
   async function handleStateTransition() {
     if (!transition) return;
@@ -415,7 +414,7 @@ export default function ShowDetailPage() {
         <MediaSection
           scope="show"
           showId={show.id}
-          defaultPerformerIds={defaultMediaPerformerIds}
+          lineup={mediaLineup}
         />
 
         {/* Lineup */}

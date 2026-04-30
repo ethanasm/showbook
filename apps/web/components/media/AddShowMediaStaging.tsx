@@ -10,6 +10,7 @@ export type StagedMediaItem = {
   kind: "photo" | "video";
   previewUrl: string;
   caption: string;
+  performerNames: string[];
 };
 
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp,image/heic,image/heif";
@@ -31,10 +32,12 @@ export function AddShowMediaStaging({
   staged,
   onChange,
   disabled,
+  lineupNames = [],
 }: {
   staged: StagedMediaItem[];
   onChange: (next: StagedMediaItem[]) => void;
   disabled?: boolean;
+  lineupNames?: string[];
 }) {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -50,6 +53,8 @@ export function AddShowMediaStaging({
   }, []);
 
   function addFiles(files: FileList | File[]) {
+    const defaultPerformerNames =
+      lineupNames.length === 1 && lineupNames[0] ? [lineupNames[0]] : [];
     const next: StagedMediaItem[] = [];
     for (const file of Array.from(files)) {
       const kind = classify(file);
@@ -60,10 +65,26 @@ export function AddShowMediaStaging({
         kind,
         previewUrl: URL.createObjectURL(file),
         caption: "",
+        performerNames: defaultPerformerNames,
       });
     }
     if (next.length === 0) return;
     onChange([...staged, ...next]);
+  }
+
+  function togglePerformer(id: string, name: string) {
+    onChange(
+      staged.map((s) => {
+        if (s.id !== id) return s;
+        const has = s.performerNames.includes(name);
+        return {
+          ...s,
+          performerNames: has
+            ? s.performerNames.filter((n) => n !== name)
+            : [...s.performerNames, name],
+        };
+      }),
+    );
   }
 
   function removeItem(id: string) {
@@ -174,6 +195,42 @@ export function AddShowMediaStaging({
                   </button>
                 </div>
               </div>
+              {lineupNames.length > 1 && (
+                <div
+                  className="media-card__tags"
+                  data-testid="add-show-staged-tags"
+                  style={{ flexDirection: "column", gap: 4, alignItems: "stretch" }}
+                >
+                  <div
+                    style={{
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: 10,
+                      color: "var(--muted)",
+                      letterSpacing: ".05em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Tag performers
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {lineupNames.map((name) => {
+                      const checked = item.performerNames.includes(name);
+                      return (
+                        <button
+                          key={name}
+                          type="button"
+                          className={
+                            checked ? "media-tag" : "media-tag media-tag--button"
+                          }
+                          onClick={() => togglePerformer(item.id, name)}
+                        >
+                          {checked ? "✓ " : "+ "}{name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </article>
           ))}
         </div>
