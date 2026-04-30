@@ -76,7 +76,7 @@ export const showPerformers = pgTable(
   {
     showId: uuid('show_id')
       .notNull()
-      .references(() => shows.id),
+      .references(() => shows.id, { onDelete: 'cascade' }),
     performerId: uuid('performer_id')
       .notNull()
       .references(() => performers.id),

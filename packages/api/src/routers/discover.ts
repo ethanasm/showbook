@@ -574,18 +574,7 @@ export const discoverRouter = router({
         throw new Error('No watchlist entry found for this announcement');
       }
 
-      // Delete the showAnnouncementLink
-      await db
-        .delete(showAnnouncementLinks)
-        .where(
-          and(
-            eq(showAnnouncementLinks.showId, link.showId),
-            eq(showAnnouncementLinks.announcementId, input.announcementId),
-          ),
-        );
-
-      // Delete the show (cascade will also clean up show_performers
-      // since showId FK on shows is the source of truth)
+      // show_announcement_links and show_performers cascade on shows.id.
       await db.delete(shows).where(eq(shows.id, link.showId));
 
       return { success: true };

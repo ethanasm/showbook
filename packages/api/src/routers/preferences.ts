@@ -81,6 +81,31 @@ export function computePerformerAnnouncementsToDelete(
     .map((a) => a.id);
 }
 
+/**
+ * When the last user unfollows a venue, decide which of its announcements
+ * to drop. Caller must have already confirmed nobody else follows the
+ * venue. An announcement is preserved if its venue is inside any user's
+ * active region, OR if its headliner is followed by any user.
+ * Announcements whose venue has no coordinates are also preserved
+ * (we can't tell whether they're inside any region).
+ */
+export function computeVenueUnfollowAnnouncementsToDelete(
+  candidates: AnnouncementCandidate[],
+  allActiveRegions: RegionBbox[],
+  allFollowedPerformerIds: string[],
+): string[] {
+  const followedPerformerSet = new Set(allFollowedPerformerIds);
+
+  return candidates
+    .filter((a) => {
+      if (a.venueLat == null || a.venueLng == null) return false;
+      if (allActiveRegions.some((r) => isVenueInBbox(a.venueLat!, a.venueLng!, r))) return false;
+      if (a.headlinerPerformerId && followedPerformerSet.has(a.headlinerPerformerId)) return false;
+      return true;
+    })
+    .map((a) => a.id);
+}
+
 // ---------------------------------------------------------------------------
 // Input schemas
 // ---------------------------------------------------------------------------

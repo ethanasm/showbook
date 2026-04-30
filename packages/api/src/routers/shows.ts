@@ -5,8 +5,6 @@ import { router, protectedProcedure } from '../trpc';
 import {
   shows,
   showPerformers,
-  userVenueFollows,
-  userPerformerFollows,
   showAnnouncementLinks,
   announcements,
 } from '@showbook/db';
@@ -553,12 +551,6 @@ export const showsRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
       }
 
-      // Delete show_performers first (foreign key constraint)
-      await ctx.db
-        .delete(showPerformers)
-        .where(eq(showPerformers.showId, input.showId));
-
-      // Delete the show
       await ctx.db.delete(shows).where(eq(shows.id, input.showId));
 
       return { success: true };
@@ -568,24 +560,13 @@ export const showsRouter = router({
     .mutation(async ({ ctx }) => {
       const userId = ctx.session.user.id;
 
-      const userShows = await ctx.db
-        .select({ id: shows.id })
-        .from(shows)
-        .where(eq(shows.userId, userId));
+      // Follows (venues, performers) are independent of show history — a
+      // user's Discover state is preserved even if they wipe their shows.
+      const deleted = await ctx.db
+        .delete(shows)
+        .where(eq(shows.userId, userId))
+        .returning({ id: shows.id });
 
-      if (userShows.length === 0) return { deleted: 0 };
-
-      const showIds = userShows.map((s) => s.id);
-
-      await ctx.db
-        .delete(showPerformers)
-        .where(sql`${showPerformers.showId} IN (${sql.join(showIds.map(id => sql`${id}`), sql`, `)})`);
-
-      await ctx.db.delete(userVenueFollows).where(eq(userVenueFollows.userId, userId));
-      await ctx.db.delete(userPerformerFollows).where(eq(userPerformerFollows.userId, userId));
-
-      await ctx.db.delete(shows).where(eq(shows.userId, userId));
-
-      return { deleted: showIds.length };
+      return { deleted: deleted.length };
     }),
 });

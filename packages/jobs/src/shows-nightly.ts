@@ -1,10 +1,5 @@
 import { db } from '@showbook/db';
-import {
-  shows,
-  showPerformers,
-  showAnnouncementLinks,
-  enrichmentQueue,
-} from '@showbook/db';
+import { shows, enrichmentQueue } from '@showbook/db';
 import { and, eq, lt, sql, inArray } from 'drizzle-orm';
 
 export async function runShowsNightly(): Promise<{
@@ -47,15 +42,6 @@ export async function runShowsNightly(): Promise<{
   if (watchingToDelete.length > 0) {
     const ids = watchingToDelete.map((s) => s.id);
 
-    // Delete show_performers rows first (no cascade on FK)
-    await db.delete(showPerformers).where(inArray(showPerformers.showId, ids));
-
-    // Delete show_announcement_links (has cascade but be explicit)
-    await db
-      .delete(showAnnouncementLinks)
-      .where(inArray(showAnnouncementLinks.showId, ids));
-
-    // Delete the shows themselves
     const deletedRows = await db
       .delete(shows)
       .where(inArray(shows.id, ids))
