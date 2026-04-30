@@ -400,7 +400,7 @@
 
 .venue-photo-band {
   position: relative;
-  height: 240px;
+  height: 180px;
   overflow: hidden;
   border: 1px solid var(--rule);
   border-radius: 12px 12px 0 0;

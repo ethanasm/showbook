@@ -10,7 +10,6 @@ import {
   Clapperboard,
   Laugh,
   Tent,
-  MapPin,
   ArrowUpRight,
   Plus,
   Check,
@@ -19,7 +18,6 @@ import {
   Ticket,
 } from "lucide-react";
 import {
-  EmptyState,
   RemoteImage,
   ShowRow as ShowRowComponent,
   type ShowKind,
@@ -365,10 +363,10 @@ export default function VenueDetailPage() {
         </div>
       </div>
 
-      {/* Hero */}
+      {/* Hero — title + compact inline meta + actions on right */}
       <div
         style={{
-          padding: "28px 36px 24px",
+          padding: "20px 36px 18px",
           borderBottom: "1px solid var(--rule)",
           display: "grid",
           gridTemplateColumns: "1fr auto",
@@ -383,19 +381,54 @@ export default function VenueDetailPage() {
             displayValue={gradientLastWord(venue.name)}
             onSave={(name) => renameMutation.mutate({ venueId: venue.id, name })}
           />
-          {locationLine && (
-            <div
-              style={{
-                fontFamily: "var(--font-geist-sans), sans-serif",
-                fontSize: 14,
-                color: "var(--muted)",
-                marginTop: 10,
-                letterSpacing: -0.1,
-              }}
-            >
-              {locationLine}
-            </div>
-          )}
+          {/* Compact meta line: location · visit count · first/last seen · upcoming */}
+          <div
+            style={{
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 11.5,
+              color: "var(--muted)",
+              marginTop: 8,
+              letterSpacing: ".02em",
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              columnGap: 10,
+              rowGap: 4,
+            }}
+          >
+            {locationLine && (
+              <span style={{ color: "var(--ink)" }}>{locationLine}</span>
+            )}
+            {locationLine && <span style={{ color: "var(--faint)" }}>·</span>}
+            <span>
+              <span style={{ color: "var(--ink)" }}>
+                {venue.userShowCount}
+              </span>{" "}
+              {venue.userShowCount === 1 ? "visit" : "visits"}
+            </span>
+            {stats.first && (
+              <>
+                <span style={{ color: "var(--faint)" }}>·</span>
+                <span>
+                  {stats.first === stats.last
+                    ? formatDateLong(stats.first)
+                    : `${formatDateLong(stats.first)} – ${formatDateLong(stats.last!)}`}
+                </span>
+              </>
+            )}
+            <span style={{ color: "var(--faint)" }}>·</span>
+            <span>
+              <span
+                style={{
+                  color: venue.upcomingCount > 0 ? "var(--accent)" : "var(--muted)",
+                }}
+              >
+                {venue.upcomingCount}
+              </span>{" "}
+              upcoming
+            </span>
+          </div>
+          {/* Source-link chips */}
           <div style={{ display: "inline-flex", gap: 8, marginTop: 10 }}>
             <span
               style={{
@@ -423,6 +456,27 @@ export default function VenueDetailPage() {
             >
               {venue.googlePlaceId ? "Places linked" : "No Place ID"}
             </span>
+            {venue.latitude != null && venue.longitude != null && (
+              <Link
+                href={`/map?venue=${venue.id}`}
+                data-testid="view-on-map"
+                style={{
+                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontSize: 10,
+                  letterSpacing: ".06em",
+                  textTransform: "uppercase",
+                  padding: "3px 8px",
+                  border: "1px solid var(--rule-strong)",
+                  color: "var(--muted)",
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                }}
+              >
+                View on map <ArrowUpRight size={10} />
+              </Link>
+            )}
           </div>
         </div>
 
@@ -458,29 +512,6 @@ export default function VenueDetailPage() {
         </button>
       </div>
 
-      {/* Stat bar */}
-      <div
-        style={{
-          padding: "16px 36px",
-          background: "var(--surface)",
-          borderBottom: "1px solid var(--rule)",
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          columnGap: 28,
-        }}
-      >
-        <Stat label="Your shows" value={String(venue.userShowCount)} />
-        <Stat label="Upcoming" value={String(venue.upcomingCount)} />
-        <Stat
-          label="First seen"
-          value={stats.first ? formatDateLong(stats.first) : "—"}
-        />
-        <Stat
-          label="Last seen"
-          value={stats.last ? formatDateLong(stats.last) : "—"}
-        />
-      </div>
-
       {/* Body */}
       <div
         style={{
@@ -488,10 +519,10 @@ export default function VenueDetailPage() {
           minHeight: 0,
           overflow: "auto",
           background: "var(--bg)",
-          padding: "24px 36px 48px",
+          padding: "20px 36px 40px",
           display: "flex",
           flexDirection: "column",
-          gap: 36,
+          gap: 28,
         }}
       >
         {/* Scrape config — only for venues not covered by Ticketmaster */}
@@ -499,20 +530,97 @@ export default function VenueDetailPage() {
           <ScrapeConfigSection venueId={venueId} venueName={venue.name} />
         )}
 
-        {/* Upcoming */}
+        {/* Your shows — show this FIRST. The user's own history is the
+            primary content of this page; upcoming announcements are
+            secondary discovery. */}
+        <section>
+          <SectionHeader
+            label={`Your shows · ${userShows.length}`}
+            note={userShows.length > 0 ? "newest first" : undefined}
+          />
+          {userShowsQuery.isLoading ? (
+            <CardMessage>Loading your history…</CardMessage>
+          ) : userShows.length === 0 ? (
+            <CardMessage>
+              No visits logged here yet. Shows you log at this venue will
+              appear with seats, spend, and status.
+            </CardMessage>
+          ) : (
+            <div style={{ background: "var(--surface)" }}>
+              {/* Column headers */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "14px 32px 80px 110px 1.2fr 1fr 110px 64px 88px",
+                columnGap: 16,
+                padding: "10px 20px 10px 10px",
+                borderBottom: "1px solid var(--rule)",
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: 9.5,
+                color: "var(--faint)",
+                letterSpacing: ".12em",
+                textTransform: "uppercase",
+              }}>
+                <div />
+                <div />
+                <div>Date</div>
+                <div>Kind</div>
+                <div>Headline</div>
+                <div>Venue</div>
+                <div>Seat</div>
+                <div style={{ textAlign: "right" }}>Paid</div>
+                <div style={{ textAlign: "right" }}>State</div>
+              </div>
+              {userShows.map((s) => (
+                <div key={s.id}>
+                  <ShowRowComponent
+                    show={{
+                      kind: s.kind,
+                      state: s.state,
+                      headliner: getHeadliner(s),
+                      headlinerId: getHeadlinerId(s),
+                      imageUrl: getHeadlinerImageUrl(s),
+                      support: getSupport(s),
+                      supportPerformers: getSupportPerformers(s),
+                      venue: venue.name,
+                      venueId: venue.id,
+                      showId: s.id,
+                      date: formatDateParts(s.date),
+                      seat: s.seat ?? undefined,
+                      paid: s.pricePaid ? parseFloat(s.pricePaid) : undefined,
+                      ticketCount: s.ticketCount,
+                    }}
+                    selected={expandedShowId === s.id}
+                    onExpandToggle={() => handleRowClick(s.id)}
+                  />
+                  {expandedShowId === s.id && (
+                    <ShowDetailPanel
+                      show={s}
+                      venueName={venue.name}
+                      venueId={venue.id}
+                      onEdit={() => router.push(`/add?editId=${s.id}`)}
+                      onDelete={() => handleDelete(s.id)}
+                      onStateTransition={() => handleStateTransition(s)}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Upcoming announcements — secondary; render as discovery feed */}
         <section>
           <SectionHeader
             label={`Upcoming · ${upcoming.length}`}
-            note="ascending · soonest first"
+            note={upcoming.length > 0 ? "ascending · soonest first" : undefined}
           />
           {announcementsQuery.isLoading ? (
             <CardMessage>Loading announcements…</CardMessage>
           ) : upcoming.length === 0 ? (
-            <EmptyState
-              kind="discover"
-              title="Quiet calendar"
-              body="No upcoming announcements are attached to this venue yet."
-            />
+            <CardMessage>
+              No upcoming announcements yet. New shows from this venue will
+              appear here as they go on sale.
+            </CardMessage>
           ) : (
             <div style={{ background: "var(--surface)" }}>
               <div
@@ -669,108 +777,6 @@ export default function VenueDetailPage() {
           )}
         </section>
 
-        {/* Your shows */}
-        <section>
-          <SectionHeader
-            label={`Your shows · ${userShows.length}`}
-            note="newest first"
-          />
-          {userShowsQuery.isLoading ? (
-            <CardMessage>Loading your history…</CardMessage>
-          ) : userShows.length === 0 ? (
-            <EmptyState
-              kind="venues"
-              title="No visits logged"
-              body="Shows you log at this venue will appear here with seats, spend, and status."
-            />
-          ) : (
-            <div style={{ background: "var(--surface)" }}>
-              {/* Column headers */}
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "14px 32px 80px 110px 1.2fr 1fr 110px 64px 88px",
-                columnGap: 16,
-                padding: "10px 20px 10px 10px",
-                borderBottom: "1px solid var(--rule)",
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 9.5,
-                color: "var(--faint)",
-                letterSpacing: ".12em",
-                textTransform: "uppercase",
-              }}>
-                <div />
-                <div />
-                <div>Date</div>
-                <div>Kind</div>
-                <div>Headline</div>
-                <div>Venue</div>
-                <div>Seat</div>
-                <div style={{ textAlign: "right" }}>Paid</div>
-                <div style={{ textAlign: "right" }}>State</div>
-              </div>
-              {userShows.map((s) => (
-                <div key={s.id}>
-                  <ShowRowComponent
-                    show={{
-                      kind: s.kind,
-                      state: s.state,
-                      headliner: getHeadliner(s),
-                      headlinerId: getHeadlinerId(s),
-                      imageUrl: getHeadlinerImageUrl(s),
-                      support: getSupport(s),
-                      supportPerformers: getSupportPerformers(s),
-                      venue: venue.name,
-                      venueId: venue.id,
-                      showId: s.id,
-                      date: formatDateParts(s.date),
-                      seat: s.seat ?? undefined,
-                      paid: s.pricePaid ? parseFloat(s.pricePaid) : undefined,
-                      ticketCount: s.ticketCount,
-                    }}
-                    selected={expandedShowId === s.id}
-                    onExpandToggle={() => handleRowClick(s.id)}
-                  />
-                  {expandedShowId === s.id && (
-                    <ShowDetailPanel
-                      show={s}
-                      venueName={venue.name}
-                      venueId={venue.id}
-                      onEdit={() => router.push(`/add?editId=${s.id}`)}
-                      onDelete={() => handleDelete(s.id)}
-                      onStateTransition={() => handleStateTransition(s)}
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Map link if we have coords */}
-        {venue.latitude != null && venue.longitude != null && (
-          <div
-            style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 11,
-              color: "var(--muted)",
-              letterSpacing: ".04em",
-            }}
-          >
-            <Link
-              href={`/map?venue=${venue.id}`}
-              data-testid="view-on-map"
-              style={{
-                color: "var(--muted)",
-                textDecoration: "none",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              View on map <ArrowUpRight size={11} />
-            </Link>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -1020,37 +1026,6 @@ function SectionHeader({ label, note }: { label: string; note?: string }) {
           {note}
         </div>
       )}
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div
-        style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10,
-          color: "var(--faint)",
-          letterSpacing: ".12em",
-          textTransform: "uppercase",
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontFamily: "var(--font-geist-sans), sans-serif",
-          fontSize: 22,
-          fontWeight: 500,
-          color: "var(--ink)",
-          letterSpacing: -0.6,
-          marginTop: 4,
-          fontFeatureSettings: '"tnum"',
-        }}
-      >
-        {value}
-      </div>
     </div>
   );
 }
