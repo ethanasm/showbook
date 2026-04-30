@@ -68,6 +68,47 @@ pnpm prod:down      # stop
 Both composes bind host port 3001, so stop one before starting the other:
 `pnpm dev:down` before `pnpm prod:up` (and vice versa).
 
+### Continuous deployment
+
+`.github/workflows/deploy.yml` redeploys the prod box every time CI passes
+on `main`. It runs on a **self-hosted GitHub Actions runner** installed on
+the prod machine, fetches the deploy SHA into a fixed prod tree, and runs
+`pnpm prod:up && pnpm prod:migrate`. No inbound ports are required — the
+runner connects out to GitHub, so this works behind Cloudflare Tunnel.
+
+One-time setup on the prod host:
+
+1. **Place the prod tree at a fixed path** (default `/opt/showbook`). Clone
+   the repo there and populate `.env.prod` (see above). Override the path
+   with a repo Variable named `PROD_DIR` if you keep it elsewhere.
+
+   ```bash
+   sudo mkdir -p /opt/showbook && sudo chown "$USER" /opt/showbook
+   git clone <repo-url> /opt/showbook
+   cp apps/web/.env.example /opt/showbook/.env.prod   # then edit
+   ```
+
+2. **Install the GitHub Actions runner** with the labels
+   `self-hosted,showbook-prod`. Follow the registration steps under
+   *Settings → Actions → Runners → New self-hosted runner* and pass
+   `--labels showbook-prod` to `config.sh`. Install it as a service
+   (`sudo ./svc.sh install && sudo ./svc.sh start`) so it survives
+   reboots. Make sure docker, docker compose, git, and pnpm are on the
+   service's `PATH` (the runner inherits its env from systemd; for pnpm
+   under corepack you may need `corepack enable` in the runner user's
+   shell profile).
+
+3. **Lock down fork PRs.** Under *Settings → Actions → General* set
+   *Fork pull request workflows from outside collaborators* to
+   *Require approval for all outside collaborators*. The workflow also
+   refuses to deploy unless the upstream CI run was on `main` and was not
+   a `pull_request` event, but defence in depth matters when the runner
+   sits on your prod box.
+
+After that, every push to `main` that turns CI green will redeploy. To
+deploy a specific SHA on demand, use *Actions → Deploy (prod) → Run
+workflow* and pass the SHA.
+
 ## Environment Variables
 
 See [`apps/web/.env.example`](apps/web/.env.example) for the full template with

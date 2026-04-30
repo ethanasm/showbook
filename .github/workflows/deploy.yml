@@ -1,0 +1,104 @@
+name: Deploy (prod)
+
+# Continuous deployment for the self-hosted prod box.
+#
+# Trigger: CI ("CI" workflow) completes successfully on `main`.
+# `workflow_run` runs in the repo's own context (not the PR's), so fork PRs
+# cannot trigger this workflow even if their CI passes — but we still gate
+# explicitly on branch + event below as a defence in depth.
+#
+# The self-hosted runner must:
+#   - have the labels `self-hosted` AND `showbook-prod`
+#   - have docker, docker compose, git, and pnpm on PATH
+#   - have a checked-out prod tree at $PROD_DIR (default /opt/showbook)
+#     containing a populated `.env.prod` file. The deploy fetches + resets
+#     this tree to the deploy SHA, then runs `pnpm prod:up && pnpm prod:migrate`.
+#
+# See README.md → "Continuous deployment" for runner install steps.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit SHA to deploy (defaults to latest main)"
+        required: false
+        default: ""
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to self-hosted prod
+    # workflow_run: only deploy if CI passed AND was on main AND wasn't a fork PR.
+    # workflow_dispatch: always allowed (manual trigger from the Actions tab).
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+          (github.event.workflow_run.conclusion == 'success' &&
+           github.event.workflow_run.head_branch == 'main' &&
+           github.event.workflow_run.event != 'pull_request') }}
+    runs-on: [self-hosted, showbook-prod]
+    timeout-minutes: 30
+    env:
+      # Override via repo-level Variables (Settings → Variables → Actions)
+      # if your prod tree lives somewhere other than /opt/showbook.
+      PROD_DIR: ${{ vars.PROD_DIR || '/opt/showbook' }}
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || inputs.sha }}
+    steps:
+      - name: Verify prod tree
+        run: |
+          set -euo pipefail
+          test -d "$PROD_DIR/.git"          || { echo "PROD_DIR is not a git checkout: $PROD_DIR"; exit 1; }
+          test -f "$PROD_DIR/.env.prod"     || { echo ".env.prod missing in $PROD_DIR"; exit 1; }
+          test -f "$PROD_DIR/docker-compose.prod.yml" \
+                                            || { echo "docker-compose.prod.yml missing in $PROD_DIR"; exit 1; }
+
+      - name: Fetch latest main
+        working-directory: ${{ env.PROD_DIR }}
+        run: git fetch --prune origin main
+
+      - name: Resolve deploy SHA
+        working-directory: ${{ env.PROD_DIR }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DEPLOY_SHA}" ]; then
+            DEPLOY_SHA=$(git rev-parse origin/main)
+          fi
+          echo "DEPLOY_SHA=$DEPLOY_SHA" >> "$GITHUB_ENV"
+          echo "Deploying $DEPLOY_SHA to $PROD_DIR"
+
+      - name: Reset prod tree to deploy SHA
+        working-directory: ${{ env.PROD_DIR }}
+        run: |
+          set -euo pipefail
+          git reset --hard "$DEPLOY_SHA"
+          # Remove untracked tracked-adjacent files but keep gitignored state
+          # (.env.prod, node_modules, .next caches, etc.).
+          git clean -fd
+
+      - name: Build + start prod containers
+        working-directory: ${{ env.PROD_DIR }}
+        run: pnpm prod:up
+
+      - name: Apply DB migrations
+        working-directory: ${{ env.PROD_DIR }}
+        run: pnpm prod:migrate
+
+      - name: Prune dangling images
+        run: docker image prune -f
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Deploy result"
+            echo ""
+            echo "- SHA: \`$DEPLOY_SHA\`"
+            echo "- Target: \`$PROD_DIR\`"
+            echo "- Status: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"
