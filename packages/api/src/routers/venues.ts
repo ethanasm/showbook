@@ -17,6 +17,7 @@ import { enqueueIngestVenue } from '../job-queue';
 import { scrapeConfigSchema, parseScrapeConfig } from '../scrape-config';
 import { venueScrapeRuns } from '@showbook/db';
 import { computeVenueUnfollowAnnouncementsToDelete } from './preferences';
+import { enforceRateLimit } from '../rate-limit';
 import { child } from '@showbook/observability';
 
 const log = child({ component: 'api.venues' });
@@ -54,8 +55,12 @@ export const venuesRouter = router({
   }),
 
   search: protectedProcedure
-    .input(z.object({ query: z.string().min(1) }))
+    .input(z.object({ query: z.string().min(1).max(200) }))
     .query(async ({ ctx, input }) => {
+      enforceRateLimit(`venues.search:${ctx.session.user.id}`, {
+        max: 60,
+        windowMs: 60_000,
+      });
       return ctx.db
         .select()
         .from(venues)
@@ -113,6 +118,31 @@ export const venuesRouter = router({
   rename: protectedProcedure
     .input(z.object({ venueId: z.string().uuid(), name: z.string().min(1).max(300) }))
     .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      // Authorize: user must follow this venue OR have a show at it.
+      const [follow] = await ctx.db
+        .select({ venueId: userVenueFollows.venueId })
+        .from(userVenueFollows)
+        .where(
+          and(
+            eq(userVenueFollows.userId, userId),
+            eq(userVenueFollows.venueId, input.venueId),
+          ),
+        )
+        .limit(1);
+
+      if (!follow) {
+        const [show] = await ctx.db
+          .select({ id: shows.id })
+          .from(shows)
+          .where(and(eq(shows.userId, userId), eq(shows.venueId, input.venueId)))
+          .limit(1);
+        if (!show) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Not authorized to rename this venue' });
+        }
+      }
+
       const [updated] = await ctx.db
         .update(venues)
         .set({ name: input.name.trim() })

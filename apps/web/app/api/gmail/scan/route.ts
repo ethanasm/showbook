@@ -1,8 +1,10 @@
+import { auth } from '@/auth';
 import {
   searchMessages,
   getMessageBody,
   buildBulkScanQueries,
   extractShowFromEmail,
+  isRateLimited,
 } from '@showbook/api';
 
 function correctExtractedYear(
@@ -85,6 +87,20 @@ function mergeTickets(allExtracted: ExtractedTicket[]): ExtractedTicket[] {
 }
 
 export async function POST(request: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  if (
+    isRateLimited(`gmail.scan:${session.user.id}`, {
+      max: 5,
+      windowMs: 60 * 60 * 1000,
+    })
+  ) {
+    return new Response('Too Many Requests', { status: 429 });
+  }
+
   const { accessToken } = await request.json();
   if (!accessToken) {
     return new Response('Missing accessToken', { status: 400 });

@@ -8,7 +8,7 @@ const DEFAULTS = {
   showMaxPhotos: 30,
   showMaxVideos: 2,
   uploadUrlTtlSeconds: 900,
-  readUrlTtlSeconds: 3600,
+  readUrlTtlSeconds: 600,
   allowedImageTypes: 'image/jpeg,image/png,image/webp,image/heic,image/heif',
   allowedVideoTypes: 'video/mp4',
   storageMode: 'r2',
