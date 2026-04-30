@@ -27,7 +27,15 @@
     "verify:e2e": "bash scripts/verify.sh --e2e",
     "verify:coverage": "bash scripts/verify-coverage.sh",
     "email:smoke": "pnpm --filter @showbook/jobs run email:smoke",
-    "email:preview": "pnpm --filter @showbook/emails dev"
+    "email:preview": "pnpm --filter @showbook/emails dev",
+    "dev:up": "docker compose up -d",
+    "dev:down": "docker compose down",
+    "dev:build": "docker compose up -d --build",
+    "dev:logs": "docker compose logs -f web",
+    "prod:up": "docker compose -f docker-compose.prod.yml up -d --build",
+    "prod:down": "docker compose -f docker-compose.prod.yml down",
+    "prod:logs": "docker compose -f docker-compose.prod.yml logs -f web",
+    "prod:migrate": "docker compose -f docker-compose.prod.yml exec web pnpm --filter @showbook/db drizzle-kit migrate"
   },
   "devDependencies": {
     "@types/node": "^22.19.17",

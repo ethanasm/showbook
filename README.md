@@ -22,17 +22,51 @@ Personal entertainment tracker for live shows — concerts, theatre, comedy, fes
 - Node 20+
 - pnpm
 
-## Quick Start
+## Quick Start (development)
 
 ```bash
 git clone <repo-url> && cd showbook
-cp apps/web/.env.example apps/web/.env.local   # fill in API keys
-docker compose up -d
+cp apps/web/.env.example apps/web/.env.local   # for `pnpm dev` outside Docker
+cp apps/web/.env.example .env.dev              # for the dev compose
 pnpm install
+pnpm dev:up                                    # docker compose up -d (loopback only)
 pnpm db:migrate
 pnpm db:prepare:e2e
 open http://localhost:3001
 ```
+
+The dev compose hardcodes the dev postgres credentials, so `.env.dev`
+doesn't need `DATABASE_URL` or `POSTGRES_PASSWORD`. Both env files are
+gitignored.
+
+## Production deployment
+
+The prod path uses a separate compose that builds a sealed image (no source
+bind-mounts), runs Next.js with `NODE_ENV=production`, and binds web +
+Postgres to `127.0.0.1` so only loopback (e.g. cloudflared) can reach
+them. Project name `showbook-prod` namespaces volumes/containers so
+prod data doesn't share storage with dev.
+
+```bash
+cp apps/web/.env.example .env.prod
+# then in .env.prod:
+#   - comment out DATABASE_URL
+#   - set POSTGRES_PASSWORD ($(openssl rand -base64 32))
+#   - set AUTH_SECRET ($(openssl rand -base64 48))
+#   - set NEXTAUTH_URL to your Cloudflare Tunnel hostname
+#     (and add it to your Google OAuth client's redirect URIs as
+#      <NEXTAUTH_URL>/api/auth/callback/google and /api/gmail/callback)
+#   - set AUTH_ALLOWED_EMAILS and/or AUTH_ALLOWED_DOMAINS
+#   - set real API keys, leave ENABLE_TEST_ROUTES unset
+
+pnpm prod:up        # build + start
+pnpm prod:migrate   # apply migrations against the prod DB (run once after up)
+pnpm prod:logs      # tail web logs
+pnpm prod:down      # stop
+```
+
+Both composes bind host port 3001, so stop one before starting the other:
+`pnpm dev:down` before `pnpm prod:up` (and vice versa).
 
 ## Environment Variables
 
@@ -70,19 +104,32 @@ showbook/
 ## Commands
 
 ```bash
-pnpm dev                # Start Next.js dev server
+# Development
+pnpm dev                # Start Next.js dev server (no Docker — reads apps/web/.env.local)
+pnpm dev:up             # docker compose up -d (reads .env.dev, dev mode)
+pnpm dev:down           # docker compose down
+pnpm dev:build          # Rebuild dev images and start
+pnpm dev:logs           # Tail web container logs
+
+# Production (Docker only)
+pnpm prod:up            # docker compose -f docker-compose.prod.yml up -d --build
+pnpm prod:down          # Stop prod services
+pnpm prod:logs          # Tail prod web container logs
+pnpm prod:migrate       # Run drizzle migrations against the prod DB
+
+# Verify / test
 pnpm verify             # build + lint + unit tests, with status summary
 pnpm verify:e2e         # verify + Playwright e2e (also: RUN_E2E=1 pnpm verify)
 pnpm test:unit          # unit tests across api + jobs packages
 pnpm test:e2e           # Prepare showbook_e2e and run Playwright on port 3002
+
+# Email + DB
 pnpm email:smoke        # Render the daily digest with sample data to /tmp/showbook-digest.html
 pnpm email:preview      # react-email dev server (localhost:3030, hot reload)
 pnpm db:generate        # Generate Drizzle migrations
 pnpm db:migrate         # Run dev DB migrations against showbook
 pnpm db:prepare:e2e     # Reset/migrate the isolated showbook_e2e DB
 pnpm db:studio          # Open Drizzle Studio
-docker compose up -d    # Start Postgres + web containers
-docker compose logs web # View web container logs
 ```
 
 ## Email Notifications
@@ -130,14 +177,30 @@ For the operational guardrails (rate limits, per-user LLM caps, auth allowlist, 
 
 ## Docker Services
 
-| Service | Container | Port |
-|---------|-----------|------|
-| PostgreSQL 16 | showbook-db | 5433 |
-| Next.js | showbook-web | 3001 |
+Both composes bind to `127.0.0.1` only — Cloudflare Tunnel (cloudflared)
+runs on the same host and reaches the web service via loopback.
+
+### Dev (`docker-compose.yml`, project `showbook`)
+
+| Service | Container | Host port |
+|---------|-----------|-----------|
+| PostgreSQL 16 | showbook-db | 127.0.0.1:5433 |
+| Next.js (dev mode, source bind-mounted) | showbook-web | 127.0.0.1:3001 |
+
+### Prod (`docker-compose.prod.yml`, project `showbook-prod`)
+
+| Service | Container | Host port |
+|---------|-----------|-----------|
+| PostgreSQL 16 | showbook-prod-db | 127.0.0.1:5433 |
+| Next.js (prod build, NODE_ENV=production) | showbook-prod-web | 127.0.0.1:3001 |
+
+The two projects' postgres volumes are namespaced separately
+(`showbook_pgdata` vs `showbook-prod_pgdata`), so dev and prod databases
+do not share data.
 
 Named volumes:
 
 | Volume | Purpose |
 |--------|---------|
-| `showbook_pgdata` | Postgres data directory |
+| `showbook_pgdata` / `showbook-prod_pgdata` | Postgres data directory |
 | `showbook_next_cache` | Webpack persistent cache (`.next/cache`) — kept off the macOS bind mount so it survives container rebuilds and avoids ENOENT rename errors that otherwise force full cold compiles |
