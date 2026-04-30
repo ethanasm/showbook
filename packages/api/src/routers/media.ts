@@ -553,6 +553,48 @@ export const mediaRouter = router({
       return Promise.all(assets.map(toMediaDto));
     }),
 
+  setPerformers: protectedProcedure
+    .input(
+      z.object({
+        assetId: z.string().uuid(),
+        performerIds: z.array(z.string().uuid()).max(20),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const asset = await ctx.db.query.mediaAssets.findFirst({
+        where: and(eq(mediaAssets.id, input.assetId), eq(mediaAssets.userId, userId)),
+      });
+      if (!asset) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Media asset not found' });
+      }
+
+      const requested = [...new Set(input.performerIds)];
+      let validIds: string[] = [];
+      if (requested.length > 0) {
+        const validRows = await ctx.db
+          .select({ performerId: showPerformers.performerId })
+          .from(showPerformers)
+          .where(
+            and(
+              eq(showPerformers.showId, asset.showId),
+              inArray(showPerformers.performerId, requested),
+            ),
+          );
+        validIds = [...new Set(validRows.map((row) => row.performerId))];
+      }
+
+      await ctx.db
+        .delete(mediaAssetPerformers)
+        .where(eq(mediaAssetPerformers.assetId, asset.id));
+      if (validIds.length > 0) {
+        await ctx.db.insert(mediaAssetPerformers).values(
+          validIds.map((performerId) => ({ assetId: asset.id, performerId })),
+        );
+      }
+      return { performerIds: validIds };
+    }),
+
   delete: protectedProcedure
     .input(z.object({ assetId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
