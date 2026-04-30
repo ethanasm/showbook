@@ -131,7 +131,11 @@ test.describe('Context menus on list pages', () => {
     await page.waitForSelector('[data-testid="recent-row"]', { timeout: 10000 });
 
     const row = page.locator('[data-testid="recent-row"]').first();
-    await row.click({ button: 'right' });
+    // The recent-row grid is wider than the mobile viewport (390px), so
+    // Playwright's default center click lands outside the visible
+    // interactive area. Right-click at a fixed visible position so the
+    // contextmenu event fires on the row regardless of viewport.
+    await row.click({ button: 'right', position: { x: 10, y: 10 } });
 
     const menu = page.getByTestId('context-menu');
     await expect(menu).toBeVisible();
@@ -146,7 +150,10 @@ test.describe('Context menus on list pages', () => {
   test('home recent row context menu Edit navigates to /add?editId', async ({ page }) => {
     await page.waitForSelector('[data-testid="recent-row"]', { timeout: 10000 });
 
-    await page.locator('[data-testid="recent-row"]').first().click({ button: 'right' });
+    await page
+      .locator('[data-testid="recent-row"]')
+      .first()
+      .click({ button: 'right', position: { x: 10, y: 10 } });
     const menu = page.getByTestId('context-menu');
     await expect(menu).toBeVisible();
 

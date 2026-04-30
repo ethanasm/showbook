@@ -15,10 +15,12 @@ function currentDatabaseName() {
 }
 
 export function testRouteGuard() {
-  if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json({ error: 'Not available in production' }, { status: 403 });
-  }
-
+  // Test routes require BOTH the explicit opt-in flag AND the e2e database
+  // — the DB-name check is what makes it safe to allow even when
+  // NODE_ENV=production (E2E in CI runs against `next start`, which
+  // forces NODE_ENV=production). A real production deploy would never
+  // be pointed at showbook_e2e, so these two checks together prevent
+  // accidental exposure of seed/login routes.
   if (process.env.ENABLE_TEST_ROUTES !== '1') {
     return NextResponse.json({ error: 'Test routes are disabled' }, { status: 403 });
   }

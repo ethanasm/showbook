@@ -115,23 +115,41 @@ test.describe('Discover improvements', () => {
       const groupsWithRows = page.locator('.discover-venue-group').filter({
         has: page.locator('.discover-row'),
       });
-      const count = await groupsWithRows.count();
+      // The query data settles a short moment after networkidle returns
+      // — poll until the feed renders rows or we've waited long enough.
+      let count = 0;
+      for (let i = 0; i < 20; i++) {
+        count = await groupsWithRows.count();
+        if (count > 0) break;
+        await page.waitForTimeout(150);
+      }
       if (count === 0) {
-        test.skip();
-        return;
+        // No followed venues/artists with announcements in this seed —
+        // skip this iteration but continue with the next tab.
+        continue;
       }
 
-      const group = groupsWithRows.first();
-      const toggle = group.locator('.discover-venue-group__toggle').first();
+      // Lock onto the first matching group's toggle by its aria-controls
+      // ID — the `groupsWithRows` filter is dynamic (`has: .discover-row`)
+      // and re-evaluates after the toggle collapses the group, so a bare
+      // `.first()` would silently jump to the next group on the second
+      // assertion.
+      const initialToggle = groupsWithRows
+        .first()
+        .locator('.discover-venue-group__toggle')
+        .first();
+      const ariaControls = await initialToggle.getAttribute('aria-controls');
+      const toggle = page.locator(`button[aria-controls="${ariaControls}"]`);
+      const groupContent = page.locator(`#${ariaControls}`);
       await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 
       await toggle.click();
       await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-      await expect(group.locator('.discover-row')).toHaveCount(0);
+      await expect(groupContent.locator('.discover-row')).toHaveCount(0);
 
       await toggle.click();
       await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-      await expect.poll(() => group.locator('.discover-row').count()).toBeGreaterThan(0);
+      await expect.poll(() => groupContent.locator('.discover-row').count()).toBeGreaterThan(0);
     }
   });
 
