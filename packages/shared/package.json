@@ -4,7 +4,11 @@
   "private": true,
   "main": "src/index.ts",
   "types": "src/index.ts",
+  "scripts": {
+    "test": "find src/__tests__ -name '*.test.ts' -print0 | xargs -0 node --import tsx --test"
+  },
   "devDependencies": {
+    "tsx": "^4.21.0",
     "typescript": "^5.7.0"
   }
 }

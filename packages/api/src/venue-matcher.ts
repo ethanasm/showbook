@@ -217,7 +217,7 @@ export function toStateCode(stateRegion: string | undefined | null): string | un
   return US_STATE_CODES[stateRegion.toLowerCase()];
 }
 
-function venueNameVariants(name: string): string[] {
+export function venueNameVariants(name: string): string[] {
   const variants: string[] = [name];
   // Google Places often appends " at <parent>" or " - <org>"
   const stripped = name.replace(/\s+at\s+.+$/i, '').replace(/\s+-\s+.+$/, '');

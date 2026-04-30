@@ -38,6 +38,7 @@ import { daysUntil, formatDateParts } from "@showbook/shared";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import { STATE_TRANSITIONS } from "@/lib/show-state";
 import { PaginationFooter } from "@/components/PaginationFooter";
+import { compareNullable } from "@/lib/sort";
 import {
   getHeadliner,
   getHeadlinerId,
@@ -78,19 +79,6 @@ const STATE_ORDER: Record<ShowState, number> = {
 
 function defaultDirFor(field: SortField): "asc" | "desc" {
   return field === "date" || field === "paid" ? "desc" : "asc";
-}
-
-function compareNullable<T>(
-  a: T | null | undefined,
-  b: T | null | undefined,
-  cmp: (x: T, y: T) => number,
-): number {
-  const aNull = a == null;
-  const bNull = b == null;
-  if (aNull && bNull) return 0;
-  if (aNull) return 1;
-  if (bNull) return -1;
-  return cmp(a as T, b as T);
 }
 
 function compareShows(a: ShowData, b: ShowData, sort: SortConfig): number {

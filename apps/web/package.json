@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start --port 3001",
     "lint": "next lint",
+    "test": "find lib/__tests__ -name '*.test.ts' -print0 | xargs -0 node --import tsx --test",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -46,6 +47,7 @@
     "@types/react-dom": "^19.1.0",
     "eslint": "^9.18.0",
     "eslint-config-next": "^15.3.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.0"
   }
 }
