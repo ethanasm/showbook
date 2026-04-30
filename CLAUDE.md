@@ -16,6 +16,8 @@ Personal entertainment tracker for live shows — concerts, theatre, comedy, fes
 - Groq for LLM (chat-mode Add, playbill cast extraction)
 - Ticketmaster Discovery API as primary data source
 - Playwright for functional + visual testing
+- E2E tests use the isolated `showbook_e2e` database via `pnpm test:e2e`;
+  `/api/test/*` routes require `ENABLE_TEST_ROUTES=1` and refuse non-e2e DBs
 
 ## For agents
 Read `showbook-specs/README.md` first. It indexes all spec files.

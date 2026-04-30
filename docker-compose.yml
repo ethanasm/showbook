@@ -25,7 +25,9 @@ services:
       dockerfile: apps/web/Dockerfile
     container_name: showbook-web
     restart: unless-stopped
-    env_file: .env.local
+    env_file:
+      - path: .env.local
+        required: false
     environment:
       DATABASE_URL: postgresql://showbook:showbook_dev@postgres:5432/showbook
       PORT: "3001"

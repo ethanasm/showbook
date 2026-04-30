@@ -75,6 +75,28 @@ The `web` container runs Next.js which serves everything: pages, tRPC API, and p
 
 The `DATABASE_URL` inside the container uses `postgres` (the Docker service name) not `localhost`, since containers talk to each other via Docker's internal network. The host-exposed port 5433 is only for running migrations and psql from outside Docker.
 
+### E2E database isolation
+
+Local development uses the `showbook` database. Playwright uses a separate
+`showbook_e2e` database in the same Postgres container so test seeding can
+delete and recreate fixtures without touching manually entered dev data.
+
+```bash
+pnpm db:prepare:e2e
+pnpm test:e2e
+```
+
+`pnpm db:prepare:e2e` drops/recreates disposable `showbook_e2e` and applies
+Drizzle migrations with:
+
+```bash
+DATABASE_URL=postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e
+```
+
+Playwright starts its own Next.js dev server on `https://localhost:3002` with
+`ENABLE_TEST_ROUTES=1`. The `/api/test/*` routes reject requests unless test
+routes are enabled and `DATABASE_URL` points at `showbook_e2e`.
+
 ### .env.local
 
 ```bash
@@ -119,6 +141,9 @@ docker compose up -d
 
 # Run migrations (from host, via exposed port 5433)
 DATABASE_URL=postgresql://showbook:showbook_dev@localhost:5433/showbook npx drizzle-kit migrate
+
+# Prepare the isolated e2e DB
+pnpm db:prepare:e2e
 
 # Verify
 docker compose logs web       # Next.js output

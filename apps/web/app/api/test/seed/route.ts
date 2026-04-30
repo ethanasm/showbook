@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { testRouteGuard } from '../_guard';
 import {
   db,
   eq,
@@ -99,9 +100,8 @@ const SHOWS: ShowSeed[] = [
 ];
 
 export async function GET(request: Request) {
-  if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json({ error: 'Not available in production' }, { status: 403 });
-  }
+  const guardResponse = testRouteGuard();
+  if (guardResponse) return guardResponse;
 
   // If ?addRegion is present, just add a single region without re-seeding
   const url = new URL(request.url);

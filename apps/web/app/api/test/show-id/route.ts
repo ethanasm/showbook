@@ -4,13 +4,14 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { db, shows, showPerformers, performers, venues, users, eq, and } from '@showbook/db';
+import { testRouteGuard } from '../_guard';
 
 const TEST_EMAIL = 'test@showbook.dev';
 
 export async function GET(req: NextRequest) {
-  if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json({ error: 'Not available in production' }, { status: 403 });
-  }
+  const guardResponse = testRouteGuard();
+  if (guardResponse) return guardResponse;
+
   const productionName = req.nextUrl.searchParams.get('productionName');
   const state = req.nextUrl.searchParams.get('state');
   const headliner = req.nextUrl.searchParams.get('headliner');

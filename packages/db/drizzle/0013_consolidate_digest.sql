@@ -10,4 +10,9 @@ ALTER TABLE "user_preferences" DROP COLUMN "digest_time";--> statement-breakpoin
 DROP TYPE "public"."digest_frequency";--> statement-breakpoint
 
 -- Clean up stale pg-boss schedules so registerAllJobs starts from a known state.
-DELETE FROM pgboss.schedule WHERE name IN ('notifications/digest', 'notifications/weekly-digest');
+DO $$
+BEGIN
+  IF to_regclass('pgboss.schedule') IS NOT NULL THEN
+    DELETE FROM pgboss.schedule WHERE name IN ('notifications/digest', 'notifications/weekly-digest');
+  END IF;
+END $$;

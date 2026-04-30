@@ -30,6 +30,7 @@ cp .env.local.example .env.local  # fill in API keys
 docker compose up -d
 pnpm install
 pnpm db:migrate
+pnpm db:prepare:e2e
 open http://localhost:3001
 ```
 
@@ -74,12 +75,31 @@ showbook/
 ```bash
 pnpm dev                # Start Next.js dev server
 pnpm db:generate        # Generate Drizzle migrations
-pnpm db:migrate         # Run migrations
+pnpm db:migrate         # Run dev DB migrations against showbook
+pnpm db:prepare:e2e     # Reset/migrate the isolated showbook_e2e DB
 pnpm db:studio          # Open Drizzle Studio
-pnpm test:e2e           # Run Playwright tests
+pnpm test:e2e           # Prepare showbook_e2e and run Playwright on port 3002
 docker compose up -d    # Start Postgres + web containers
 docker compose logs web # View web container logs
 ```
+
+## E2E Database Isolation
+
+Development data lives in the `showbook` database. Playwright tests use a separate
+`showbook_e2e` database in the same Postgres container so `/api/test/seed` can
+wipe and rebuild fixtures without touching local dev data.
+
+`pnpm test:e2e` runs `pnpm db:prepare:e2e` first, then starts a Playwright-owned
+Next.js dev server at `https://localhost:3002` with:
+
+```bash
+DATABASE_URL=postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e
+ENABLE_TEST_ROUTES=1
+NEXTAUTH_URL=https://localhost:3002
+```
+
+The `/api/test/*` routes are disabled unless `ENABLE_TEST_ROUTES=1` is set and
+the active database name is `showbook_e2e`.
 
 ## Docker Services
 

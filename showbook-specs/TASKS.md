@@ -470,6 +470,15 @@ DATABASE_URL=postgresql://showbook:showbook_dev@localhost:5433/showbook npx driz
 
 Inside the web container, `DATABASE_URL` uses the Docker service name: `postgresql://showbook:showbook_dev@postgres:5432/showbook`
 
+Playwright does not use the dev database. Run e2e through:
+```bash
+pnpm test:e2e
+```
+
+That command resets `showbook_e2e`, migrates it, and starts the e2e server on
+`https://localhost:3002` with `ENABLE_TEST_ROUTES=1`. `/api/test/*` routes are
+guarded so they only run against `showbook_e2e`.
+
 Cloudflared is NOT in Docker — it's a host-level system service (see T30).
 
 ---
