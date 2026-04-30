@@ -211,7 +211,7 @@ export async function searchEvents(params: {
 
 export async function getVenue(tmVenueId: string): Promise<TMVenue | null> {
   try {
-    const url = buildUrl(`/venues/${tmVenueId}.json`, {});
+    const url = buildUrl(`/venues/${encodeURIComponent(tmVenueId)}.json`, {});
     return await tmFetch<TMVenue>(url);
   } catch (err) {
     if (err instanceof TMError && err.status === 404) {
@@ -223,7 +223,7 @@ export async function getVenue(tmVenueId: string): Promise<TMVenue | null> {
 
 export async function getEvent(tmEventId: string): Promise<TMEvent | null> {
   try {
-    const url = buildUrl(`/events/${tmEventId}.json`, {});
+    const url = buildUrl(`/events/${encodeURIComponent(tmEventId)}.json`, {});
     return await tmFetch<TMEvent>(url);
   } catch (err) {
     if (err instanceof TMError && err.status === 404) {
@@ -237,7 +237,7 @@ export async function getAttraction(
   tmAttractionId: string,
 ): Promise<TMAttraction | null> {
   try {
-    const url = buildUrl(`/attractions/${tmAttractionId}.json`, {});
+    const url = buildUrl(`/attractions/${encodeURIComponent(tmAttractionId)}.json`, {});
     return await tmFetch<TMAttraction>(url);
   } catch (err) {
     if (err instanceof TMError && err.status === 404) {

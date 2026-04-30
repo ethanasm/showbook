@@ -441,7 +441,6 @@ export default function ShowsView() {
       setGmailBulkSelected(initialSelected);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Scan failed";
-      console.error("Gmail scan failed:", err);
       setGmailError(msg);
     } finally {
       setGmailBulkLoading(false);
