@@ -7,6 +7,7 @@
   "scripts": {
     "run-daily-digest": "tsx scripts/run-daily-digest.ts",
     "email:smoke": "tsx scripts/email-smoke.ts",
+    "bootstrap-pgboss": "node scripts/bootstrap-pgboss.mjs",
     "test": "node --import tsx --test src/__tests__/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
