@@ -122,9 +122,6 @@ importers:
       '@showbook/db':
         specifier: workspace:*
         version: link:../db
-      '@showbook/jobs':
-        specifier: workspace:*
-        version: link:../jobs
       '@showbook/observability':
         specifier: workspace:*
         version: link:../observability
@@ -224,9 +221,6 @@ importers:
       '@showbook/observability':
         specifier: workspace:*
         version: link:../observability
-      '@showbook/scrapers':
-        specifier: workspace:*
-        version: link:../scrapers
       drizzle-orm:
         specifier: ^0.39.0
         version: 0.39.3(pg@8.20.0)(postgres@3.4.9)

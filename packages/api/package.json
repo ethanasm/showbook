@@ -13,7 +13,6 @@
     "@aws-sdk/client-s3": "^3.1035.0",
     "@aws-sdk/s3-request-presigner": "^3.1035.0",
     "@showbook/db": "workspace:*",
-    "@showbook/jobs": "workspace:*",
     "@showbook/observability": "workspace:*",
     "@showbook/shared": "workspace:*",
     "@trpc/server": "^11.0.0",
