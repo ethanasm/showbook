@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter, } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import {
@@ -11,6 +11,10 @@ import {
   Ticket,
   ChevronLeft,
   CalendarPlus,
+  Pencil,
+  Plus,
+  X,
+  Check,
 } from "lucide-react";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import {
@@ -18,12 +22,10 @@ import {
   SectionHeader,
   StateChip,
   type ShowKind,
-  type ShowState,
 } from "@/components/design-system";
 import { MediaSection } from "@/components/media";
 import {
   daysUntil,
-  formatDateLong,
   formatDateRangeLong,
   isDatePast,
 } from "@showbook/shared";
@@ -35,6 +37,12 @@ const ROLE_LABEL: Record<string, string> = {
   support: "Support",
   cast: "Cast",
 };
+
+const ROLE_OPTIONS: Array<{ value: "headliner" | "support" | "cast"; label: string }> = [
+  { value: "support", label: "Support" },
+  { value: "headliner", label: "Headliner" },
+  { value: "cast", label: "Cast" },
+];
 
 export default function ShowDetailPage() {
   const params = useParams<{ id: string }>();
@@ -140,8 +148,6 @@ export default function ShowDetailPage() {
     }
     return {};
   })();
-
-  const setlistPerformerIds = Object.keys(setlistsMap);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
@@ -360,72 +366,13 @@ export default function ShowDetailPage() {
           canUpload={showIsPast}
         />
 
-        {/* Lineup */}
-        {lineup.length > 0 && (
-          <section>
-            <SectionHeader label={`Lineup · ${lineup.length}`} />
-            <div style={{ background: "var(--surface)" }}>
-              {lineup.map((sp) => (
-                <div
-                  key={`${sp.performer.id}-${sp.role}`}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "100px 1fr 1fr",
-                    columnGap: 16,
-                    padding: "12px 16px",
-                    borderBottom: "1px solid var(--rule)",
-                    alignItems: "center",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 10,
-                      color: "var(--faint)",
-                      letterSpacing: ".1em",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {ROLE_LABEL[sp.role] ?? sp.role}
-                  </div>
-                  <Link
-                    href={`/artists/${sp.performer.id}`}
-                    style={{
-                      fontFamily: "var(--font-geist-sans), sans-serif",
-                      fontSize: 15,
-                      fontWeight: 500,
-                      color: "var(--ink)",
-                      letterSpacing: -0.2,
-                      textDecoration: "none",
-                    }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.textDecoration = "underline")
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.textDecoration = "none")
-                    }
-                  >
-                    {sp.performer.name}
-                  </Link>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 11,
-                      color: "var(--muted)",
-                      letterSpacing: ".02em",
-                    }}
-                  >
-                    {sp.characterName ? `as ${sp.characterName}` : ""}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        {/* Lineup — editable */}
+        <LineupSection showId={show.id} lineup={lineup} />
 
-        {/* Setlist — per-performer */}
-        {setlistPerformerIds.length > 0 && (
+        {/* Setlist — per-performer, editable */}
+        {lineup.length > 0 && (
           <SetlistSection
+            showId={show.id}
             setlistsMap={setlistsMap}
             lineup={lineup}
             headlinerPerformerId={headlinerSP?.performer.id ?? null}
@@ -502,6 +449,7 @@ export default function ShowDetailPage() {
               </button>
             )}
             <button
+              data-testid="action-edit-show"
               onClick={() => router.push(`/add?editId=${show.id}`)}
               style={{
                 padding: "9px 16px",
@@ -517,7 +465,7 @@ export default function ShowDetailPage() {
                 cursor: "pointer",
               }}
             >
-              <MoreHorizontal size={14} /> Edit
+              <MoreHorizontal size={14} /> Edit show
             </button>
             <a
               href={`/api/shows/${show.id}/ical`}
@@ -596,31 +544,483 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 
-// ── Per-performer setlist section ────────────────────────────────────────
+// ── Editable section header ──────────────────────────────────────────────
+
+function EditableSectionHeader({
+  label,
+  isEditing,
+  onToggle,
+  editLabel = "Edit",
+  testId,
+}: {
+  label: string;
+  isEditing: boolean;
+  onToggle: () => void;
+  editLabel?: string;
+  testId?: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "baseline",
+        justifyContent: "space-between",
+        marginBottom: 12,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-geist-mono), monospace",
+          fontSize: 11,
+          color: "var(--ink)",
+          letterSpacing: ".1em",
+          textTransform: "uppercase",
+          fontWeight: 500,
+        }}
+      >
+        {label}
+      </div>
+      <button
+        type="button"
+        onClick={onToggle}
+        data-testid={testId}
+        style={{
+          padding: "4px 10px",
+          background: "transparent",
+          border: "1px solid var(--rule-strong)",
+          color: "var(--muted)",
+          fontFamily: "var(--font-geist-mono), monospace",
+          fontSize: 10,
+          letterSpacing: ".06em",
+          textTransform: "uppercase",
+          cursor: "pointer",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 5,
+        }}
+      >
+        {isEditing ? (
+          <>
+            <Check size={11} /> Done
+          </>
+        ) : (
+          <>
+            <Pencil size={11} /> {editLabel}
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
+
+// ── Lineup section (with inline editing) ─────────────────────────────────
 
 type ShowPerformerEntry = {
   performer: { id: string; name: string };
   role: string;
   sortOrder: number;
+  characterName?: string | null;
 };
 
+function LineupSection({
+  showId,
+  lineup,
+}: {
+  showId: string;
+  lineup: ShowPerformerEntry[];
+}) {
+  const [editing, setEditing] = useState(false);
+  const utils = trpc.useUtils();
+
+  const removePerformer = trpc.shows.removePerformer.useMutation({
+    onSuccess: () => {
+      utils.shows.detail.invalidate({ showId });
+      utils.shows.invalidate();
+    },
+  });
+
+  async function handleRemove(performerId: string, role: string) {
+    await removePerformer.mutateAsync({
+      showId,
+      performerId,
+      role: role as "headliner" | "support" | "cast",
+    });
+  }
+
+  if (lineup.length === 0 && !editing) {
+    return (
+      <section data-testid="lineup-section">
+        <EditableSectionHeader
+          label="Lineup · 0"
+          isEditing={editing}
+          onToggle={() => setEditing(true)}
+          editLabel="Add"
+          testId="lineup-edit-toggle"
+        />
+      </section>
+    );
+  }
+
+  return (
+    <section data-testid="lineup-section">
+      <EditableSectionHeader
+        label={`Lineup · ${lineup.length}`}
+        isEditing={editing}
+        onToggle={() => setEditing((v) => !v)}
+        testId="lineup-edit-toggle"
+      />
+      <div style={{ background: "var(--surface)" }}>
+        {lineup.map((sp) => (
+          <div
+            key={`${sp.performer.id}-${sp.role}`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: editing
+                ? "100px 1fr 1fr 32px"
+                : "100px 1fr 1fr",
+              columnGap: 16,
+              padding: "12px 16px",
+              borderBottom: "1px solid var(--rule)",
+              alignItems: "center",
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: 10,
+                color: "var(--faint)",
+                letterSpacing: ".1em",
+                textTransform: "uppercase",
+              }}
+            >
+              {ROLE_LABEL[sp.role] ?? sp.role}
+            </div>
+            <Link
+              href={`/artists/${sp.performer.id}`}
+              style={{
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 15,
+                fontWeight: 500,
+                color: "var(--ink)",
+                letterSpacing: -0.2,
+                textDecoration: "none",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.textDecoration = "underline")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.textDecoration = "none")
+              }
+            >
+              {sp.performer.name}
+            </Link>
+            <div
+              style={{
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: 11,
+                color: "var(--muted)",
+                letterSpacing: ".02em",
+              }}
+            >
+              {sp.characterName ? `as ${sp.characterName}` : ""}
+            </div>
+            {editing && (
+              <button
+                type="button"
+                aria-label={`Remove ${sp.performer.name}`}
+                data-testid={`lineup-remove-${sp.performer.id}`}
+                onClick={() => handleRemove(sp.performer.id, sp.role)}
+                disabled={removePerformer.isPending}
+                style={{
+                  background: "transparent",
+                  border: "1px solid var(--rule)",
+                  color: "#E63946",
+                  width: 28,
+                  height: 28,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: removePerformer.isPending ? "default" : "pointer",
+                }}
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      {editing && <LineupAddForm showId={showId} />}
+    </section>
+  );
+}
+
+function LineupAddForm({ showId }: { showId: string }) {
+  const utils = trpc.useUtils();
+  const [name, setName] = useState("");
+  const [debouncedName, setDebouncedName] = useState("");
+  const [role, setRole] = useState<"headliner" | "support" | "cast">("support");
+  const [characterName, setCharacterName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedName(name.trim()), 250);
+    return () => clearTimeout(handle);
+  }, [name]);
+
+  const search = trpc.performers.search.useQuery(
+    { query: debouncedName },
+    { enabled: debouncedName.length >= 1 },
+  );
+
+  const addPerformer = trpc.shows.addPerformer.useMutation({
+    onSuccess: () => {
+      utils.shows.detail.invalidate({ showId });
+      utils.shows.invalidate();
+      setName("");
+      setDebouncedName("");
+      setCharacterName("");
+      setError(null);
+    },
+    onError: (err) => setError(err.message),
+  });
+
+  async function submit(opts?: { name?: string }) {
+    const finalName = (opts?.name ?? name).trim();
+    if (!finalName) {
+      setError("Name is required");
+      return;
+    }
+    setError(null);
+    await addPerformer.mutateAsync({
+      showId,
+      name: finalName,
+      role,
+      characterName: characterName.trim() || undefined,
+    });
+  }
+
+  return (
+    <div
+      data-testid="lineup-add-form"
+      style={{
+        marginTop: 12,
+        padding: "12px 16px",
+        background: "var(--surface)",
+        border: "1px dashed var(--rule-strong)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+      }}
+    >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "120px 1fr 1fr auto",
+          gap: 8,
+          alignItems: "center",
+        }}
+      >
+        <select
+          value={role}
+          onChange={(e) =>
+            setRole(e.target.value as "headliner" | "support" | "cast")
+          }
+          data-testid="lineup-add-role"
+          style={{
+            padding: "6px 8px",
+            background: "var(--bg)",
+            border: "1px solid var(--rule)",
+            color: "var(--ink)",
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 11,
+            letterSpacing: ".04em",
+          }}
+        >
+          {ROLE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <input
+          type="text"
+          placeholder="Performer name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          data-testid="lineup-add-name"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void submit();
+            }
+          }}
+          style={{
+            padding: "6px 10px",
+            background: "var(--bg)",
+            border: "1px solid var(--rule)",
+            color: "var(--ink)",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 13,
+          }}
+        />
+        <input
+          type="text"
+          placeholder={role === "cast" ? "Character (optional)" : ""}
+          value={characterName}
+          onChange={(e) => setCharacterName(e.target.value)}
+          data-testid="lineup-add-character"
+          disabled={role !== "cast"}
+          style={{
+            padding: "6px 10px",
+            background: role === "cast" ? "var(--bg)" : "transparent",
+            border: "1px solid var(--rule)",
+            color: "var(--ink)",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 13,
+            opacity: role === "cast" ? 1 : 0.4,
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={addPerformer.isPending || !name.trim()}
+          data-testid="lineup-add-submit"
+          style={{
+            padding: "7px 14px",
+            background: "var(--accent)",
+            color: "var(--accent-text)",
+            border: "none",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 12,
+            fontWeight: 500,
+            cursor:
+              addPerformer.isPending || !name.trim() ? "default" : "pointer",
+            opacity: addPerformer.isPending || !name.trim() ? 0.5 : 1,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+          }}
+        >
+          <Plus size={12} /> Add
+        </button>
+      </div>
+      {/* Existing-performer suggestions: clicking commits the row using
+          the matched performer's name (matchOrCreatePerformer dedupes by
+          case-insensitive name, so passing the canonical name here keeps
+          us from creating a near-duplicate). */}
+      {debouncedName.length > 0 &&
+        search.data &&
+        search.data.length > 0 && (
+          <div
+            data-testid="lineup-add-suggestions"
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 6,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: 10,
+                color: "var(--faint)",
+                letterSpacing: ".06em",
+                textTransform: "uppercase",
+              }}
+            >
+              Existing:
+            </span>
+            {search.data.slice(0, 8).map((row) => (
+              <button
+                key={row.id}
+                type="button"
+                onClick={() => {
+                  setName(row.name);
+                  setDebouncedName(row.name);
+                  void submit({ name: row.name });
+                }}
+                style={{
+                  padding: "3px 8px",
+                  background: "var(--surface2)",
+                  border: "1px solid var(--rule)",
+                  color: "var(--ink)",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                {row.name}
+              </button>
+            ))}
+          </div>
+        )}
+      {error && (
+        <div
+          style={{
+            color: "#E63946",
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 11,
+          }}
+        >
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Per-performer setlist section ────────────────────────────────────────
+
 function SetlistSection({
+  showId,
   setlistsMap,
   lineup,
   headlinerPerformerId,
 }: {
+  showId: string;
   setlistsMap: Record<string, string[]>;
   lineup: ShowPerformerEntry[];
   headlinerPerformerId: string | null;
 }) {
-  const performerIds = Object.keys(setlistsMap);
+  const [editing, setEditing] = useState(false);
+
+  // In view mode, only show tabs for performers who have a setlist. In
+  // edit mode, expand to the full lineup so the user can add a setlist
+  // for any artist on the show.
+  const lineupIds = lineup.map((sp) => sp.performer.id);
+  const populatedIds = Object.keys(setlistsMap).filter((id) =>
+    lineupIds.includes(id),
+  );
+  const visibleIds = editing ? lineupIds : populatedIds;
 
   const defaultId =
-    (headlinerPerformerId && performerIds.includes(headlinerPerformerId)
+    (headlinerPerformerId && visibleIds.includes(headlinerPerformerId)
       ? headlinerPerformerId
-      : null) ?? performerIds[0] ?? null;
+      : null) ?? visibleIds[0] ?? null;
 
   const [selectedId, setSelectedId] = useState<string | null>(defaultId);
+
+  // Keep the selected tab pointing at something that's actually in
+  // `visibleIds` — when toggling edit mode the available tabs change,
+  // and in view mode a selected-but-empty performer disappears.
+  useEffect(() => {
+    if (selectedId && visibleIds.includes(selectedId)) return;
+    setSelectedId(visibleIds[0] ?? null);
+  }, [selectedId, visibleIds]);
+
+  if (!editing && populatedIds.length === 0) {
+    return (
+      <section data-testid="setlist-section">
+        <EditableSectionHeader
+          label="Setlist"
+          isEditing={false}
+          onToggle={() => setEditing(true)}
+          editLabel="Add"
+          testId="setlist-edit-toggle"
+        />
+      </section>
+    );
+  }
 
   const activeSongs = selectedId ? (setlistsMap[selectedId] ?? []) : [];
 
@@ -631,9 +1031,14 @@ function SetlistSection({
 
   return (
     <section data-testid="setlist-section">
-      <SectionHeader label={`Setlist · ${activeSongs.length} song${activeSongs.length !== 1 ? "s" : ""}`} />
-      {/* Artist picker — only shown when multiple performers have setlists */}
-      {performerIds.length > 1 && (
+      <EditableSectionHeader
+        label={`Setlist · ${activeSongs.length} song${activeSongs.length !== 1 ? "s" : ""}`}
+        isEditing={editing}
+        onToggle={() => setEditing((v) => !v)}
+        testId="setlist-edit-toggle"
+      />
+      {/* Artist picker */}
+      {visibleIds.length > 1 && (
         <div
           style={{
             display: "flex",
@@ -641,9 +1046,10 @@ function SetlistSection({
             marginBottom: 12,
             border: "1px solid var(--rule-strong)",
             width: "fit-content",
+            flexWrap: "wrap",
           }}
         >
-          {performerIds.map((id, i) => (
+          {visibleIds.map((id, i) => (
             <button
               key={id}
               type="button"
@@ -667,51 +1073,228 @@ function SetlistSection({
           ))}
         </div>
       )}
-      <ol
+      {editing && selectedId ? (
+        <SetlistEditor
+          key={selectedId}
+          showId={showId}
+          performerId={selectedId}
+          performerName={labelFor(selectedId)}
+          initialSongs={setlistsMap[selectedId] ?? []}
+        />
+      ) : (
+        <ol
+          style={{
+            background: "var(--surface)",
+            listStyle: "none",
+            margin: 0,
+            padding: 0,
+          }}
+        >
+          {activeSongs.map((song, i) => (
+            <li
+              key={`${i}-${song}`}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "48px 1fr",
+                columnGap: 12,
+                padding: "10px 16px",
+                borderBottom: "1px solid var(--rule)",
+                alignItems: "baseline",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontSize: 11,
+                  color: "var(--faint)",
+                  letterSpacing: ".04em",
+                  fontFeatureSettings: '"tnum"',
+                }}
+              >
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <span
+                style={{
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 14,
+                  color: "var(--ink)",
+                  letterSpacing: -0.1,
+                }}
+              >
+                {song}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+function SetlistEditor({
+  showId,
+  performerId,
+  performerName,
+  initialSongs,
+}: {
+  showId: string;
+  performerId: string;
+  performerName: string;
+  initialSongs: string[];
+}) {
+  const utils = trpc.useUtils();
+  const [draft, setDraft] = useState(initialSongs.join("\n"));
+  const [error, setError] = useState<string | null>(null);
+
+  const setSetlist = trpc.shows.setSetlist.useMutation({
+    onSuccess: () => {
+      utils.shows.detail.invalidate({ showId });
+      utils.shows.invalidate();
+      setError(null);
+    },
+    onError: (err) => setError(err.message),
+  });
+
+  const songs = draft
+    .split("\n")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  const initialJoined = initialSongs.join("\n");
+  const dirty = draft !== initialJoined;
+
+  async function save() {
+    await setSetlist.mutateAsync({ showId, performerId, songs });
+  }
+
+  function reset() {
+    setDraft(initialJoined);
+    setError(null);
+  }
+
+  async function clear() {
+    await setSetlist.mutateAsync({ showId, performerId, songs: [] });
+    setDraft("");
+  }
+
+  return (
+    <div
+      data-testid={`setlist-editor-${performerName.replace(/\s+/g, "-").toLowerCase()}`}
+      style={{
+        background: "var(--surface)",
+        padding: "12px 14px",
+        border: "1px dashed var(--rule-strong)",
+      }}
+    >
+      <div
         style={{
-          background: "var(--surface)",
-          listStyle: "none",
-          margin: 0,
-          padding: 0,
+          fontFamily: "var(--font-geist-mono), monospace",
+          fontSize: 10,
+          color: "var(--faint)",
+          letterSpacing: ".06em",
+          textTransform: "uppercase",
+          marginBottom: 6,
         }}
       >
-        {activeSongs.map((song, i) => (
-          <li
-            key={`${i}-${song}`}
+        One song per line — {songs.length} song{songs.length !== 1 ? "s" : ""}
+      </div>
+      <textarea
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        rows={Math.max(6, Math.min(20, songs.length + 3))}
+        data-testid="setlist-textarea"
+        placeholder="Song one\nSong two\nSong three"
+        style={{
+          width: "100%",
+          background: "var(--bg)",
+          border: "1px solid var(--rule)",
+          padding: "8px 10px",
+          fontFamily: "var(--font-geist-mono), monospace",
+          fontSize: 12,
+          color: "var(--ink)",
+          resize: "vertical",
+          boxSizing: "border-box",
+          outline: "none",
+        }}
+      />
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginTop: 10,
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={setSetlist.isPending || !dirty}
+          data-testid="setlist-save"
+          style={{
+            padding: "7px 14px",
+            background: "var(--accent)",
+            color: "var(--accent-text)",
+            border: "none",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 12,
+            fontWeight: 500,
+            cursor: setSetlist.isPending || !dirty ? "default" : "pointer",
+            opacity: setSetlist.isPending || !dirty ? 0.5 : 1,
+          }}
+        >
+          {setSetlist.isPending ? "Saving…" : "Save setlist"}
+        </button>
+        <button
+          type="button"
+          onClick={reset}
+          disabled={setSetlist.isPending || !dirty}
+          style={{
+            padding: "7px 14px",
+            background: "transparent",
+            border: "1px solid var(--rule-strong)",
+            color: "var(--muted)",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 12,
+            cursor: setSetlist.isPending || !dirty ? "default" : "pointer",
+            opacity: setSetlist.isPending || !dirty ? 0.5 : 1,
+          }}
+        >
+          Reset
+        </button>
+        {initialSongs.length > 0 && (
+          <button
+            type="button"
+            onClick={() => void clear()}
+            disabled={setSetlist.isPending}
+            data-testid="setlist-clear"
             style={{
-              display: "grid",
-              gridTemplateColumns: "48px 1fr",
-              columnGap: 12,
-              padding: "10px 16px",
-              borderBottom: "1px solid var(--rule)",
-              alignItems: "baseline",
+              padding: "7px 14px",
+              background: "transparent",
+              border: "1px solid var(--rule-strong)",
+              color: "#E63946",
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 12,
+              cursor: setSetlist.isPending ? "default" : "pointer",
+              marginLeft: "auto",
             }}
           >
-            <span
-              style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
-                color: "var(--faint)",
-                letterSpacing: ".04em",
-                fontFeatureSettings: '"tnum"',
-              }}
-            >
-              {String(i + 1).padStart(2, "0")}
-            </span>
-            <span
-              style={{
-                fontFamily: "var(--font-geist-sans), sans-serif",
-                fontSize: 14,
-                color: "var(--ink)",
-                letterSpacing: -0.1,
-              }}
-            >
-              {song}
-            </span>
-          </li>
-        ))}
-      </ol>
-    </section>
+            Clear setlist
+          </button>
+        )}
+      </div>
+      {error && (
+        <div
+          style={{
+            color: "#E63946",
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 11,
+            marginTop: 8,
+          }}
+        >
+          {error}
+        </div>
+      )}
+    </div>
   );
 }
 

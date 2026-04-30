@@ -750,6 +750,181 @@ export const showsRouter = router({
       });
     }),
 
+  /**
+   * Add a single performer to an existing show. The performer is matched
+   * (or created) by name / external ID exactly like `create`/`update`,
+   * and slotted at the end of the lineup. The composite PK
+   * (showId, performerId, role) prevents duplicates within the same role.
+   */
+  addPerformer: protectedProcedure
+    .input(
+      z.object({
+        showId: z.string().uuid(),
+        name: z.string().min(1),
+        role: z.enum(['headliner', 'support', 'cast']),
+        characterName: z.string().optional(),
+        tmAttractionId: z.string().optional(),
+        musicbrainzId: z.string().optional(),
+        imageUrl: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      const [existing] = await ctx.db
+        .select({ id: shows.id })
+        .from(shows)
+        .where(and(eq(shows.id, input.showId), eq(shows.userId, userId)))
+        .limit(1);
+      if (!existing) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+      }
+
+      const result = await matchOrCreatePerformer({
+        name: input.name,
+        tmAttractionId: input.tmAttractionId,
+        musicbrainzId: input.musicbrainzId,
+        imageUrl: input.imageUrl,
+      });
+
+      const [{ maxOrder } = { maxOrder: 0 }] = await ctx.db
+        .select({
+          maxOrder: sql<number>`coalesce(max(${showPerformers.sortOrder}), 0)::int`,
+        })
+        .from(showPerformers)
+        .where(eq(showPerformers.showId, input.showId));
+
+      await ctx.db
+        .insert(showPerformers)
+        .values({
+          showId: input.showId,
+          performerId: result.performer.id,
+          role: input.role,
+          characterName: input.characterName ?? null,
+          sortOrder: (maxOrder ?? 0) + 1,
+        })
+        .onConflictDoNothing();
+
+      return { performerId: result.performer.id };
+    }),
+
+  /**
+   * Remove a single (performerId, role) pair from a show's lineup. Also
+   * drops any setlist keyed under that performer so we don't leave
+   * orphaned songs visible after the artist is gone.
+   */
+  removePerformer: protectedProcedure
+    .input(
+      z.object({
+        showId: z.string().uuid(),
+        performerId: z.string().uuid(),
+        role: z.enum(['headliner', 'support', 'cast']),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      const [existing] = await ctx.db
+        .select({ id: shows.id, setlists: shows.setlists })
+        .from(shows)
+        .where(and(eq(shows.id, input.showId), eq(shows.userId, userId)))
+        .limit(1);
+      if (!existing) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+      }
+
+      await ctx.db.transaction(async (tx) => {
+        await tx
+          .delete(showPerformers)
+          .where(
+            and(
+              eq(showPerformers.showId, input.showId),
+              eq(showPerformers.performerId, input.performerId),
+              eq(showPerformers.role, input.role),
+            ),
+          );
+
+        if (existing.setlists && input.performerId in existing.setlists) {
+          const next = { ...existing.setlists };
+          delete next[input.performerId];
+          await tx
+            .update(shows)
+            .set({
+              setlists: Object.keys(next).length > 0 ? next : null,
+              updatedAt: new Date(),
+            })
+            .where(eq(shows.id, input.showId));
+        }
+      });
+
+      return { success: true };
+    }),
+
+  /**
+   * Replace the songs for one performer's setlist on a show. Passing an
+   * empty array clears that performer's setlist. The legacy single-array
+   * `setlist` column is left untouched — the page renderer falls back to
+   * it only when the new map is empty, so callers should ignore it once
+   * `setlists` has any keys.
+   */
+  setSetlist: protectedProcedure
+    .input(
+      z.object({
+        showId: z.string().uuid(),
+        performerId: z.string().uuid(),
+        songs: z.array(z.string().min(1).max(300)).max(200),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      const [existing] = await ctx.db
+        .select({ id: shows.id, setlists: shows.setlists })
+        .from(shows)
+        .where(and(eq(shows.id, input.showId), eq(shows.userId, userId)))
+        .limit(1);
+      if (!existing) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+      }
+
+      // Confirm the performer is actually on this show — prevents writing
+      // setlists for unrelated artists.
+      const [perf] = await ctx.db
+        .select({ performerId: showPerformers.performerId })
+        .from(showPerformers)
+        .where(
+          and(
+            eq(showPerformers.showId, input.showId),
+            eq(showPerformers.performerId, input.performerId),
+          ),
+        )
+        .limit(1);
+      if (!perf) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Performer is not on this show',
+        });
+      }
+
+      const trimmed = input.songs.map((s) => s.trim()).filter((s) => s.length > 0);
+      const next: Record<string, string[]> = { ...(existing.setlists ?? {}) };
+      if (trimmed.length === 0) {
+        delete next[input.performerId];
+      } else {
+        next[input.performerId] = trimmed;
+      }
+
+      await ctx.db
+        .update(shows)
+        .set({
+          setlists: Object.keys(next).length > 0 ? next : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(shows.id, input.showId));
+
+      return { success: true };
+    }),
+
   delete: protectedProcedure
     .input(z.object({ showId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
