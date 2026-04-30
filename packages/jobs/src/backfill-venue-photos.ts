@@ -1,3 +1,7 @@
+// MUST be the first import: loads .env.local from the workspace root before
+// anything reads process.env at module init time (DB client, Places key …).
+import './load-env-local';
+
 import { db, venues } from '@showbook/db';
 import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { getPlaceDetails } from '@showbook/api/google-places';

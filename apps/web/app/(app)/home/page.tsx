@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { useCompactMode } from "@/lib/useCompactMode";
-import { EmptyState, HeroCard, PulseLabel } from "@/components/design-system";
+import { EmptyState, HeroCard } from "@/components/design-system";
 import type { ShowKind } from "@/components/design-system/KindBadge";
 import {
   ArrowRight,
@@ -451,33 +451,18 @@ export default function HomePage() {
       >
         {/* ── NEXT UP Section ─────────────────────────────── */}
         <section>
-          {/* Section header */}
+          {/* Section header — the "Next up · in N days …" pulse label lives
+              inside HeroCard itself; this row is just the right-aligned
+              "see all N upcoming" link. */}
           <div
             style={{
               display: "flex",
               alignItems: "baseline",
               gap: 10,
               marginBottom: 12,
+              minHeight: 16,
             }}
           >
-            <div
-              style={{
-                fontFamily: MONO,
-                fontSize: 11,
-                color: "var(--ink)",
-                letterSpacing: ".1em",
-                textTransform: "uppercase",
-                fontWeight: 500,
-              }}
-            >
-              {heroShow ? (
-                <PulseLabel>
-                  Next up &middot; {countdownText(heroShow.date)} &middot; doors 7:00 pm
-                </PulseLabel>
-              ) : (
-                "Next up"
-              )}
-            </div>
             <div style={{ flex: 1 }} />
             {upcoming.length > 0 && (
               <div

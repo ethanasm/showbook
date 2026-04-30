@@ -39,7 +39,24 @@ export async function GET(
     });
   }
 
-  const response = NextResponse.redirect(mediaUrl, 302);
-  response.headers.set('Cache-Control', 'public, max-age=86400, s-maxage=86400');
-  return response;
+  // Proxy the bytes ourselves rather than 302-redirect. Next.js's image
+  // optimizer can't follow cross-origin redirects (returns "received null")
+  // and the Google Places API key must stay server-side anyway.
+  const upstream = await fetch(mediaUrl, { cache: 'no-store' });
+
+  if (!upstream.ok || !upstream.body) {
+    return new NextResponse('Upstream error', {
+      status: 502,
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  }
+
+  const contentType = upstream.headers.get('content-type') ?? 'image/jpeg';
+  return new NextResponse(upstream.body, {
+    status: 200,
+    headers: {
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+    },
+  });
 }
