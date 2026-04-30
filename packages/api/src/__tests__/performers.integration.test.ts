@@ -9,6 +9,17 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { TRPCError } from '@trpc/server';
+
+// Install a fake pg-boss BEFORE the router/job-queue module loads, so
+// follow/unfollow mutations don't open a real Postgres pool that prevents
+// the test process from exiting.
+const __globals = globalThis as unknown as {
+  __showbookBoss?: { send: () => Promise<string | null>; start: () => Promise<void> };
+};
+__globals.__showbookBoss = {
+  send: async () => 'fake-job-id',
+  start: async () => {},
+};
 import {
   db,
   performers,
