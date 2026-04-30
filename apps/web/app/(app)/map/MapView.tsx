@@ -106,45 +106,6 @@ interface VenueGroup {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getHeadliner(show: {
-  kind?: string;
-  productionName?: string | null;
-  showPerformers: {
-    role: string;
-    sortOrder: number;
-    performer: { name: string };
-  }[];
-}): string {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return show.productionName;
-  }
-  const headliner = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0
-  );
-  if (headliner) return headliner.performer.name;
-  const fallback = show.showPerformers.find((sp) => sp.role === "headliner");
-  if (fallback) return fallback.performer.name;
-  return show.showPerformers[0]?.performer.name ?? "Unknown Artist";
-}
-
-function getHeadlinerId(show: {
-  kind?: string;
-  productionName?: string | null;
-  showPerformers: {
-    role: string;
-    sortOrder: number;
-    performer: { id: string };
-  }[];
-}): string | null {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return null;
-  }
-  const headliner = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0
-  );
-  return headliner?.performer.id ?? null;
-}
-
 function dotRadius(count: number): number {
   return Math.max(4, Math.min(18, 3 + count * 1.2));
 }
@@ -736,7 +697,7 @@ export default function MapView() {
   const [kindFilter, setKindFilter] = useState("all");
   const [activeView, setActiveView] = useState<number | null>(null);
 
-  const { data: shows, isLoading } = trpc.shows.list.useQuery({});
+  const { data: shows, isLoading } = trpc.shows.listForMap.useQuery();
 
   const yearOptions = useMemo(() => {
     if (!shows) return ["All-time"];
@@ -769,8 +730,8 @@ export default function MapView() {
         kind: show.kind as ShowKind,
         state: show.state,
         date: show.date,
-        headliner: getHeadliner(show),
-        headlinerId: getHeadlinerId(show),
+        headliner: show.headlinerName ?? "Unknown Artist",
+        headlinerId: show.headlinerId,
         seat: show.seat,
         pricePaid: show.pricePaid,
         ticketCount: show.ticketCount ?? 1,

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { eq, and, sql, desc, inArray, isNotNull } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
 import {
@@ -7,6 +7,8 @@ import {
   showPerformers,
   showAnnouncementLinks,
   announcements,
+  venues,
+  performers,
 } from '@showbook/db';
 import { matchOrCreateVenue, type VenueInput } from '../venue-matcher';
 import {
@@ -137,6 +139,92 @@ export const showsRouter = router({
         },
       });
     }),
+
+  /**
+   * Map-shaped projection: every show with its venue's geo fields plus a
+   * single denormalized headliner (name, id, imageUrl). The map view
+   * needs all shows to compute "unmapped" counts but never iterates
+   * showPerformers — denormalizing lets us drop the array-of-N join.
+   */
+  listForMap: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const rows = await ctx.db
+      .select({
+        id: shows.id,
+        kind: shows.kind,
+        state: shows.state,
+        date: shows.date,
+        seat: shows.seat,
+        pricePaid: shows.pricePaid,
+        ticketCount: shows.ticketCount,
+        productionName: shows.productionName,
+        venue: {
+          id: venues.id,
+          name: venues.name,
+          city: venues.city,
+          stateRegion: venues.stateRegion,
+          latitude: venues.latitude,
+          longitude: venues.longitude,
+          photoUrl: venues.photoUrl,
+        },
+      })
+      .from(shows)
+      .innerJoin(venues, eq(shows.venueId, venues.id))
+      .where(eq(shows.userId, userId))
+      .orderBy(desc(shows.date));
+
+    if (rows.length === 0) return [];
+
+    const headlinerName = new Map<string, string>();
+    const headlinerId = new Map<string, string>();
+    const headlinerImageUrl = new Map<string, string | null>();
+    const nonTheatreIds: string[] = [];
+
+    for (const r of rows) {
+      if (r.kind === 'theatre' && r.productionName) {
+        headlinerName.set(r.id, r.productionName);
+      } else {
+        nonTheatreIds.push(r.id);
+      }
+    }
+
+    if (nonTheatreIds.length > 0) {
+      const performerRows = await ctx.db
+        .select({
+          showId: showPerformers.showId,
+          performerId: performers.id,
+          name: performers.name,
+          imageUrl: performers.imageUrl,
+          sortOrder: showPerformers.sortOrder,
+        })
+        .from(showPerformers)
+        .innerJoin(performers, eq(showPerformers.performerId, performers.id))
+        .where(
+          and(
+            inArray(showPerformers.showId, nonTheatreIds),
+            eq(showPerformers.role, 'headliner'),
+          ),
+        );
+      // Lowest sortOrder wins per show.
+      const bestSort = new Map<string, number>();
+      for (const row of performerRows) {
+        const cur = bestSort.get(row.showId);
+        if (cur === undefined || row.sortOrder < cur) {
+          bestSort.set(row.showId, row.sortOrder);
+          headlinerName.set(row.showId, row.name);
+          headlinerId.set(row.showId, row.performerId);
+          headlinerImageUrl.set(row.showId, row.imageUrl);
+        }
+      }
+    }
+
+    return rows.map(({ productionName: _pn, ...show }) => ({
+      ...show,
+      headlinerName: headlinerName.get(show.id) ?? null,
+      headlinerId: headlinerId.get(show.id) ?? null,
+      headlinerImageUrl: headlinerImageUrl.get(show.id) ?? null,
+    }));
+  }),
 
   /**
    * Lightweight count for sidebar badges. Avoids shipping the full show
