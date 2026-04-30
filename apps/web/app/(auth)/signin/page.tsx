@@ -1,10 +1,25 @@
 import Image from 'next/image';
 import { signIn } from '@/auth';
 import { StackedCards } from '@/components/design-system';
+import { child } from '@showbook/observability';
 import './signin.css';
 
-export default function SignInPage() {
+const log = child({ component: 'web.signin' });
+
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
+  const accessDenied = error === 'AccessDenied';
   const year = new Date().getFullYear();
+
+  if (accessDenied) {
+    // NextAuth redirects allowlist-rejected users here. The URL is user-craftable
+    // so a fake denial is possible — acceptable noise for a side project.
+    log.warn({ event: 'auth.denied' }, 'Sign-in denied by allowlist');
+  }
 
   return (
     <main className="signin">
@@ -61,6 +76,11 @@ export default function SignInPage() {
           </ul>
 
           <div className="signin__cta">
+            {accessDenied ? (
+              <div className="signin__error" role="alert">
+                This Google account isn&apos;t on the allowlist. If you think it should be, reach out to the owner.
+              </div>
+            ) : null}
             <form action={async () => {
               'use server';
               await signIn('google', { redirectTo: '/home' });

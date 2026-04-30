@@ -63,6 +63,7 @@ run_step "Build" pnpm build
 run_step "Lint"  pnpm lint
 run_step "Unit tests (api)"  pnpm --filter @showbook/api  test
 run_step "Unit tests (jobs)" pnpm --filter @showbook/jobs test
+run_step "Unit tests (web)"  pnpm --filter web            test
 
 if [ "$RUN_E2E" = "1" ]; then
   if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^showbook-postgres'; then

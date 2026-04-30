@@ -235,6 +235,17 @@
   max-width: 360px;
 }
 
+.signin__error {
+  padding: 10px 14px;
+  border: 1px solid var(--rule-strong);
+  border-left: 3px solid var(--kind-comedy);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .gsi-button {
   display: inline-flex;
   align-items: center;
