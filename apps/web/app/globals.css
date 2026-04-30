@@ -21,10 +21,10 @@
   --kind-festival: #2A9D8F;
   --kind-sports: #E8772E;
 
-  /* Display serif — used for screen titles, headliner/show titles,
-     venue/artist hero names, empty-state and modal headings. Geist Sans
-     stays the default for body, controls, eyebrows, numerics, chrome. */
-  --font-display: Georgia, "Times New Roman", serif;
+  /* Display family — used for screen titles, headliner/show titles,
+     venue/artist hero, empty-state and modal headings. Same family as
+     body (Geist Sans); the title treatment lives in `.display-title`. */
+  --font-display: var(--font-geist-sans), sans-serif;
 
   /* Backward-compatible aliases */
   --background: var(--bg);
@@ -82,9 +82,9 @@ a {
   text-decoration: none;
 }
 
-/* Display serif — for names: page titles, headliner/show names,
-   venue/artist hero, empty-state + modal headings. Names get Georgia;
-   labels, controls, numbers, and UI chrome stay Geist. */
+/* Display title treatment — Geist 700 at title sizes, slightly tightened.
+   Used for page H1s, headliner/show names, venue/artist hero,
+   empty-state + modal headings. */
 .display-title {
   font-family: var(--font-display);
   font-weight: 700;
