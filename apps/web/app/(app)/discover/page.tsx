@@ -3,6 +3,10 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
+import {
+  SortHeader,
+  type SortConfig as SortConfigBase,
+} from "@/components/SortHeader";
 import { EmptyState, type ShowKind } from "@/components/design-system";
 import {
   Music,
@@ -108,6 +112,14 @@ function ContextMenu({
 }
 
 type DiscoverKind = ShowKind | "sports";
+type DiscoverSortField =
+  | "showDate"
+  | "kind"
+  | "venue"
+  | "headliner"
+  | "onSaleDate"
+  | "onSaleStatus";
+type DiscoverSortConfig = SortConfigBase<DiscoverSortField>;
 
 // ---------------------------------------------------------------------------
 // Types inferred from the tRPC router
@@ -191,6 +203,25 @@ const ON_SALE_STATUS_LABELS: Record<string, string> = {
   sold_out: "sold out",
 };
 
+const DISCOVER_KIND_ORDER: Record<DiscoverKind, number> = {
+  concert: 0,
+  theatre: 1,
+  comedy: 2,
+  festival: 3,
+  sports: 4,
+};
+
+const ON_SALE_STATUS_ORDER: Record<Announcement["onSaleStatus"], number> = {
+  announced: 0,
+  on_sale: 1,
+  sold_out: 2,
+};
+
+const DISCOVER_DEFAULT_SORT: DiscoverSortConfig = {
+  field: "showDate",
+  dir: "asc",
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -220,6 +251,72 @@ function formatOnSaleDate(dateStr: string | Date | null): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function dateValue(dateStr: string | Date | null): number | null {
+  if (!dateStr) return null;
+  const date =
+    dateStr instanceof Date
+      ? dateStr
+      : new Date(
+          /^\d{4}-\d{2}-\d{2}$/.test(dateStr)
+            ? `${dateStr}T00:00:00`
+            : dateStr,
+        );
+  const time = date.getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+function compareNullableDate(
+  a: string | Date | null,
+  b: string | Date | null,
+  dir: "asc" | "desc",
+): number {
+  const aTime = dateValue(a);
+  const bTime = dateValue(b);
+  if (aTime == null && bTime == null) return 0;
+  if (aTime == null) return 1;
+  if (bTime == null) return -1;
+  return (dir === "desc" ? -1 : 1) * (aTime - bTime);
+}
+
+function compareAnnouncements(
+  a: Announcement,
+  b: Announcement,
+  sort: DiscoverSortConfig,
+): number {
+  const flip = sort.dir === "desc" ? -1 : 1;
+  let result = 0;
+
+  switch (sort.field) {
+    case "showDate":
+      result = compareNullableDate(a.showDate, b.showDate, sort.dir);
+      break;
+    case "kind":
+      result = flip * (DISCOVER_KIND_ORDER[a.kind] - DISCOVER_KIND_ORDER[b.kind]);
+      break;
+    case "venue":
+      result = flip * a.venue.name.localeCompare(b.venue.name);
+      break;
+    case "headliner":
+      result = flip * a.headliner.localeCompare(b.headliner);
+      break;
+    case "onSaleDate":
+      result = compareNullableDate(a.onSaleDate, b.onSaleDate, sort.dir);
+      break;
+    case "onSaleStatus":
+      result =
+        flip *
+        (ON_SALE_STATUS_ORDER[a.onSaleStatus] -
+          ON_SALE_STATUS_ORDER[b.onSaleStatus]);
+      break;
+  }
+
+  if (result !== 0) return result;
+
+  const dateTie = compareNullableDate(a.showDate, b.showDate, "asc");
+  if (dateTie !== 0) return dateTie;
+  return a.id.localeCompare(b.id);
 }
 
 // ---------------------------------------------------------------------------
@@ -1215,6 +1312,7 @@ function FeedSection({
   const [showRegionModal, setShowRegionModal] = useState(false);
   const [collapsedRegions, setCollapsedRegions] = useState<Set<string>>(new Set());
   const [regionContextMenu, setRegionContextMenu] = useState<{ x: number; y: number; regionId: string } | null>(null);
+  const [sort, setSort] = useState<DiscoverSortConfig>(DISCOVER_DEFAULT_SORT);
 
   const utils = trpc.useUtils();
 
@@ -1262,6 +1360,14 @@ function FeedSection({
     }
   }, [groupBy, unfollowVenueMutation, unfollowArtistMutation]);
 
+  const toggleSort = useCallback((field: DiscoverSortField) => {
+    setSort((prev) =>
+      prev.field === field
+        ? { field, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { field, dir: "asc" },
+    );
+  }, []);
+
   function getGroupKey(item: Announcement): string | null {
     return groupBy === "artist" ? item.headlinerPerformerId : item.venue.id;
   }
@@ -1308,6 +1414,11 @@ function FeedSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, selectedGroupId, groupBy]);
 
+  const sortedFilteredItems = useMemo(
+    () => [...filteredItems].sort((a, b) => compareAnnouncements(a, b, sort)),
+    [filteredItems, sort],
+  );
+
   // Group rows (when "All" is selected)
   const groups = useMemo(() => {
     if (selectedGroupId) {
@@ -1317,23 +1428,23 @@ function FeedSection({
         label: "",
         count: 0,
       };
-      return [{ group: g, items: filteredItems }];
+      return [{ group: g, items: sortedFilteredItems }];
     }
     return groupList.map((g) => ({
       group: g,
-      items: filteredItems.filter((item) => getGroupKey(item) === g.id),
+      items: sortedFilteredItems.filter((item) => getGroupKey(item) === g.id),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredItems, groupList, selectedGroupId, groupBy]);
+  }, [sortedFilteredItems, groupList, selectedGroupId, groupBy]);
 
-  // Region groups for the right-side Near You feed. Filtered by the
-  // currently-selected venue (rail click) so the table reflects the filter.
+  // Region groups for the right-side Near You feed. The input has already
+  // been filtered by the selected venue and sorted by the active column.
   // Seeded with all active regions so an empty/just-added region still
   // renders a header (the ingest pending indicator hangs off the header).
   const regionGroups = useMemo(() => {
     if (activeTab !== "Near You") return null;
-    return groupAnnouncementsByRegion(items, activeRegions, selectedGroupId);
-  }, [items, activeTab, activeRegions, selectedGroupId]);
+    return groupAnnouncementsByRegion(sortedFilteredItems, activeRegions, null);
+  }, [sortedFilteredItems, activeTab, activeRegions]);
 
   // Rail's region-grouped venue list. Always built from the unfiltered set
   // so clicking a venue doesn't change other venue counts in the rail.
@@ -1529,12 +1640,44 @@ function FeedSection({
       <div className="discover-feed">
         {/* Column headers */}
         <div className={`discover-col-headers ${groupBy === "region" ? "discover-col-headers--region" : ""}`}>
-          <div>Show date</div>
-          <div>Kind</div>
-          {groupBy === "region" && <div>Venue</div>}
-          <div>{groupBy === "artist" ? "Venue" : "Headliner"}</div>
-          <div>On sale</div>
-          <div>Status</div>
+          <SortHeader<DiscoverSortField>
+            field="showDate"
+            label="Show date"
+            sort={sort}
+            onToggle={toggleSort}
+          />
+          <SortHeader<DiscoverSortField>
+            field="kind"
+            label="Kind"
+            sort={sort}
+            onToggle={toggleSort}
+          />
+          {groupBy === "region" && (
+            <SortHeader<DiscoverSortField>
+              field="venue"
+              label="Venue"
+              sort={sort}
+              onToggle={toggleSort}
+            />
+          )}
+          <SortHeader<DiscoverSortField>
+            field={groupBy === "artist" ? "venue" : "headliner"}
+            label={groupBy === "artist" ? "Venue" : "Headliner"}
+            sort={sort}
+            onToggle={toggleSort}
+          />
+          <SortHeader<DiscoverSortField>
+            field="onSaleDate"
+            label="On sale"
+            sort={sort}
+            onToggle={toggleSort}
+          />
+          <SortHeader<DiscoverSortField>
+            field="onSaleStatus"
+            label="Status"
+            sort={sort}
+            onToggle={toggleSort}
+          />
           <div />
         </div>
 
