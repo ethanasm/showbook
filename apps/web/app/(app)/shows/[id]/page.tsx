@@ -25,6 +25,7 @@ import {
   daysUntil,
   formatDateLong,
   formatDateRangeLong,
+  isDatePast,
 } from "@showbook/shared";
 import { STATE_TRANSITIONS } from "@/lib/show-state";
 
@@ -91,6 +92,8 @@ export default function ShowDetailPage() {
   const show = detailQuery.data;
   const KindIcon = KIND_ICONS[show.kind as ShowKind];
   const days = daysUntil(show.date);
+  const lastDay = show.endDate ?? show.date;
+  const showIsPast = Boolean(lastDay && isDatePast(lastDay));
   const countdown =
     show.state !== "past" && days > 0
       ? `in ${days} day${days !== 1 ? "s" : ""}`
@@ -354,6 +357,7 @@ export default function ShowDetailPage() {
           scope="show"
           showId={show.id}
           lineup={mediaLineup}
+          canUpload={showIsPast}
         />
 
         {/* Lineup */}
