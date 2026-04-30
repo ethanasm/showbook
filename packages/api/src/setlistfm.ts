@@ -201,12 +201,17 @@ export async function searchArtist(
 
   if (!data.artist?.length) return [];
 
-  return data.artist.map((a) => ({
-    mbid: a.mbid,
-    name: a.name,
-    sortName: a.sortName,
-    disambiguation: a.disambiguation,
-  }));
+  // Drop entries setlist.fm hasn't linked to MusicBrainz — their `mbid` is
+  // empty/undefined, and any downstream `/search/setlists?artistMbid=` call
+  // would 400.
+  return data.artist
+    .filter((a) => typeof a.mbid === 'string' && a.mbid.length > 0)
+    .map((a) => ({
+      mbid: a.mbid,
+      name: a.name,
+      sortName: a.sortName,
+      disambiguation: a.disambiguation,
+    }));
 }
 
 interface SetlistSearchResponse {
@@ -224,6 +229,9 @@ export async function searchSetlist(
   artistMbid: string,
   date: string | Date,
 ): Promise<SetlistResult | null> {
+  // setlist.fm rejects an empty `artistMbid` query parameter with HTTP 400.
+  // Fail closed at the boundary instead of building a malformed URL.
+  if (!artistMbid) return null;
   const fmDate = toSetlistFmDate(date);
   const encoded = encodeURIComponent(artistMbid);
 
