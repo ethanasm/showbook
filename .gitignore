@@ -18,6 +18,10 @@ dist/
 # Testing
 test-results/
 playwright-report/
+coverage/
+coverage/.tmp/
+packages/*/coverage/
+apps/*/coverage/
 
 # Playwright
 apps/web/test-results/

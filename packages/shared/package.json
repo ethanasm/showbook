@@ -5,7 +5,8 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "test": "find src/__tests__ -name '*.test.ts' -print0 | xargs -0 node --import tsx --test"
+    "test": "find src/__tests__ -name '*.test.ts' -print0 | xargs -0 node --import tsx --test",
+    "test:coverage": "mkdir -p coverage && find src/__tests__ -name '*.test.ts' -print0 | xargs -0 node --import tsx --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/unit.info --test-reporter=spec --test-reporter-destination=stdout"
   },
   "devDependencies": {
     "tsx": "^4.21.0",

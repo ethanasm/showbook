@@ -144,3 +144,24 @@ export function fakeUuid(prefix: string, suffix: string): string {
 }
 
 export { db, eq };
+
+/**
+ * Wrap a `before`/`after` block in a wall-clock timeout. Node's
+ * `--test-timeout` only applies to `it()` callbacks, so DB-touching hooks
+ * can otherwise hang past the integration-test budget. Use this to keep
+ * each integration test file under the 45s ceiling enforced in CI.
+ */
+export async function withTimeout<T>(ms: number, fn: () => Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Hook exceeded ${ms}ms timeout`)),
+      ms,
+    );
+  });
+  try {
+    return await Promise.race([fn(), timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}

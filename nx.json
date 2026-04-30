@@ -10,6 +10,24 @@
     },
     "lint": {
       "cache": true
+    },
+    "test": {
+      "cache": true,
+      "inputs": ["default", "^default"]
+    },
+    "test:coverage": {
+      "cache": true,
+      "inputs": ["default", "^default"],
+      "outputs": ["{projectRoot}/coverage"]
+    },
+    "test:integration": {
+      "cache": true,
+      "inputs": ["default", "^default", { "env": "DATABASE_URL" }]
+    },
+    "test:integration:coverage": {
+      "cache": true,
+      "inputs": ["default", "^default", { "env": "DATABASE_URL" }],
+      "outputs": ["{projectRoot}/coverage"]
     }
   },
   "defaultBase": "main"

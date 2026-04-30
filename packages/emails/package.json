@@ -6,7 +6,9 @@
   "types": "src/index.ts",
   "scripts": {
     "dev": "email dev --dir src/preview --port 3030",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "test": "find src/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' \\) -print0 | xargs -0 node --import tsx --test",
+    "test:coverage": "mkdir -p coverage && find src/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' \\) -print0 | xargs -0 node --import tsx --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/unit.info --test-reporter=spec --test-reporter-destination=stdout"
   },
   "dependencies": {
     "@react-email/components": "^1.0.12",
@@ -18,6 +20,7 @@
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "react-email": "^6.0.5",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.0"
   }
 }

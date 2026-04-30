@@ -2,8 +2,20 @@ import Groq from 'groq-sdk';
 import { z } from 'zod';
 import { traceLLM, groqUsage, child } from '@showbook/observability';
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+let _groq: Pick<Groq, 'chat'> | null = null;
+function groq(): Pick<Groq, 'chat'> {
+  if (!_groq) _groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  return _groq;
+}
 const log = child({ component: 'scrapers.llm' });
+
+export const __test = {
+  setClient(client: unknown): void {
+    _groq = client as Pick<Groq, 'chat'> | null;
+  },
+  buildSystemPrompt: (input: LlmExtractInput): string => buildSystemPrompt(input),
+  normalizeForQuoteMatch: (s: string): string => normalizeForQuoteMatch(s),
+};
 
 const eventSchema = z.object({
   title: z.string().min(1),
@@ -86,7 +98,7 @@ export async function extractEventsFromPage(
     modelParameters: { temperature: 0.1, response_format: 'json_object', max_tokens: 4000 },
     metadata: { venueName: input.venueName, venueCity: input.venueCity, pageUrl: input.pageUrl },
     run: () =>
-      groq.chat.completions.create({
+      groq().chat.completions.create({
         model: 'llama-3.3-70b-versatile',
         messages,
         temperature: 0.1,

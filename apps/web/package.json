@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start --port 3001",
     "lint": "next lint",
-    "test": "find lib/__tests__ -name '*.test.ts' -print0 | xargs -0 node --import tsx --test",
+    "test": "TSX_TSCONFIG_PATH=tsconfig.test.json find lib/__tests__ components/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' \\) -print0 | xargs -0 env TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./test-setup.ts --test",
+    "test:coverage": "mkdir -p coverage && find lib/__tests__ components/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' \\) -print0 | xargs -0 env TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./test-setup.ts --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/unit.info --test-reporter=spec --test-reporter-destination=stdout",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -41,12 +42,17 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
     "@playwright/test": "^1.59.1",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^22.0.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "eslint": "^9.18.0",
     "eslint-config-next": "^15.3.1",
+    "global-jsdom": "^29.0.0",
+    "jsdom": "^29.1.1",
     "tsx": "^4.21.0",
     "typescript": "^5.7.0"
   }

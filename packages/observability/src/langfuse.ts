@@ -31,3 +31,14 @@ export async function flushLangfuse(): Promise<void> {
     // Never let observability failures break the caller.
   }
 }
+
+export const __test = {
+  set(client: unknown): void {
+    _client = client as Langfuse | null;
+    _disabled = client == null;
+  },
+  reset(): void {
+    _client = null;
+    _disabled = false;
+  },
+};

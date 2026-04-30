@@ -1,0 +1,158 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify-coverage:
+    name: Verify + Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: showbook
+          POSTGRES_PASSWORD: showbook_dev
+          POSTGRES_DB: showbook
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DEV_DATABASE_URL: postgresql://showbook:showbook_dev@localhost:5433/showbook
+      E2E_DATABASE_URL: postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Wait for postgres
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5433 -U showbook; then exit 0; fi
+            sleep 1
+          done
+          echo "Postgres did not become ready"; exit 1
+
+      - name: Create showbook_e2e database
+        run: |
+          PGPASSWORD=showbook_dev psql -h localhost -p 5433 -U showbook -d showbook \
+            -tAc "SELECT 1 FROM pg_database WHERE datname = 'showbook_e2e'" \
+            | grep -q 1 || \
+          PGPASSWORD=showbook_dev createdb -h localhost -p 5433 -U showbook showbook_e2e
+
+      - name: Run verify:coverage
+        # CI=true is set automatically by GitHub Actions; verify-coverage.sh
+        # branches on it to use the postgres service container instead of
+        # docker-compose helpers.
+        run: pnpm verify:coverage
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage/lcov.info
+          if-no-files-found: warn
+          retention-days: 14
+
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: showbook
+          POSTGRES_PASSWORD: showbook_dev
+          POSTGRES_DB: showbook
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DEV_DATABASE_URL: postgresql://showbook:showbook_dev@localhost:5433/showbook
+      E2E_DATABASE_URL: postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Wait for postgres
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5433 -U showbook; then exit 0; fi
+            sleep 1
+          done
+          echo "Postgres did not become ready"; exit 1
+
+      - name: Create showbook_e2e database
+        run: |
+          PGPASSWORD=showbook_dev psql -h localhost -p 5433 -U showbook -d showbook \
+            -tAc "SELECT 1 FROM pg_database WHERE datname = 'showbook_e2e'" \
+            | grep -q 1 || \
+          PGPASSWORD=showbook_dev createdb -h localhost -p 5433 -U showbook showbook_e2e
+
+      - name: Migrate e2e database
+        run: pnpm db:migrate:e2e
+
+      - name: Bootstrap pg-boss in e2e database
+        run: pnpm --filter @showbook/jobs bootstrap-pgboss
+        env:
+          DATABASE_URL: postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e
+
+      - name: Build web app
+        run: pnpm build
+
+      - name: Run Playwright E2E
+        run: pnpm --filter web run test:e2e
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: |
+            apps/web/test-results/
+            apps/web/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -5,7 +5,9 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "run": "tsx src/cli.ts"
+    "run": "tsx src/cli.ts",
+    "test": "find src/__tests__ -name '*.test.ts' -print0 | xargs -0 node --import tsx --test",
+    "test:coverage": "mkdir -p coverage && find src/__tests__ -name '*.test.ts' -print0 | xargs -0 node --import tsx --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/unit.info --test-reporter=spec --test-reporter-destination=stdout"
   },
   "dependencies": {
     "@showbook/api": "workspace:*",
