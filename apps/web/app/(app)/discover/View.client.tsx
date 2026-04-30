@@ -26,6 +26,7 @@ import { DISCOVER_KIND_ICONS as KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons
 import { ContextMenu } from "@/components/ContextMenu";
 import { VenueSearchModal } from "@/components/VenueSearchModal";
 import { RegionSearchModal } from "@/components/RegionSearchModal";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import "./discover.css";
 
 type DiscoverKind = ShowKind | "sports";
@@ -516,10 +517,12 @@ function VenueRail({
   const [collapsedRailRegions, setCollapsedRailRegions] = useState<Set<string>>(new Set());
   const [artistSearchOpen, setArtistSearchOpen] = useState(false);
   const [artistQuery, setArtistQuery] = useState("");
-  const [debouncedArtistQuery, setDebouncedArtistQuery] = useState("");
-  const artistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const artistInputRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
+  const debouncedArtistQuery = useDebouncedValue(
+    artistQuery.length >= 2 ? artistQuery : "",
+    350,
+  );
 
   const artistSearchResults = trpc.discover.searchArtists.useQuery(
     { keyword: debouncedArtistQuery },
@@ -531,7 +534,6 @@ function VenueRail({
       utils.discover.followedArtistsFeed.invalidate();
       setArtistSearchOpen(false);
       setArtistQuery("");
-      setDebouncedArtistQuery("");
     },
   });
 
@@ -543,12 +545,6 @@ function VenueRail({
 
   const handleArtistQueryChange = (value: string) => {
     setArtistQuery(value);
-    if (artistTimerRef.current) clearTimeout(artistTimerRef.current);
-    if (value.length >= 2) {
-      artistTimerRef.current = setTimeout(() => setDebouncedArtistQuery(value), 350);
-    } else {
-      setDebouncedArtistQuery("");
-    }
   };
 
   const handleContextMenu = (e: React.MouseEvent, id: string) => {
@@ -602,7 +598,7 @@ function VenueRail({
                   placeholder="Search artists..."
                   style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--ink)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11 }}
                 />
-                <button type="button" onClick={() => { setArtistSearchOpen(false); setArtistQuery(""); setDebouncedArtistQuery(""); }} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", padding: 0 }}>
+                <button type="button" onClick={() => { setArtistSearchOpen(false); setArtistQuery(""); }} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", padding: 0 }}>
                   <X size={11} />
                 </button>
               </div>

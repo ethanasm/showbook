@@ -3,7 +3,8 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
-import { Search, Eye, Pencil, Trash2, Ticket, Check, ChevronLeft, ChevronRight, Music2 } from "lucide-react";
+import { Search, Eye, Pencil, Trash2, Ticket, Check, Music2 } from "lucide-react";
+import { PaginationFooter } from "@/components/PaginationFooter";
 import { SortHeader, type SortConfig } from "@/components/SortHeader";
 import { useCompactMode } from "@/lib/useCompactMode";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
@@ -373,29 +374,14 @@ export default function ArtistsView() {
 
         {/* Pagination footer */}
         {filtered.length > 0 && (
-          <div style={{ margin: "0 36px 36px", background: "var(--surface)", borderTop: "1px solid var(--rule)", padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-              disabled={currentPage === 0}
-              style={{ display: "flex", alignItems: "center", gap: 4, border: "1px solid var(--rule-strong)", background: "transparent", color: currentPage === 0 ? "var(--faint)" : "var(--ink)", padding: "5px 11px", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, cursor: currentPage === 0 ? "not-allowed" : "pointer", opacity: currentPage === 0 ? 0.4 : 1 }}
-              data-testid="pagination-prev"
-            >
-              <ChevronLeft size={12} /> Prev
-            </button>
-            <span style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--faint)", letterSpacing: ".06em" }}>
-              {filtered.length === 0
-                ? "0 artists"
-                : `${currentPage * PAGE_SIZE + 1}–${Math.min((currentPage + 1) * PAGE_SIZE, filtered.length)} of ${filtered.length}`}
-            </span>
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={currentPage >= totalPages - 1}
-              style={{ display: "flex", alignItems: "center", gap: 4, border: "1px solid var(--rule-strong)", background: "transparent", color: currentPage >= totalPages - 1 ? "var(--faint)" : "var(--ink)", padding: "5px 11px", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, cursor: currentPage >= totalPages - 1 ? "not-allowed" : "pointer", opacity: currentPage >= totalPages - 1 ? 0.4 : 1 }}
-              data-testid="pagination-next"
-            >
-              Next <ChevronRight size={12} />
-            </button>
-          </div>
+          <PaginationFooter
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={PAGE_SIZE}
+            totalItems={filtered.length}
+            itemLabel="artists"
+            onPageChange={setCurrentPage}
+          />
         )}
       </div>
 

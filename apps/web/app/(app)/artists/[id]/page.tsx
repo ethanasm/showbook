@@ -7,6 +7,7 @@ import { trpc } from "@/lib/trpc";
 import { ChevronLeft } from "lucide-react";
 import { FollowButton } from "@/components/FollowButton";
 import {
+  CenteredMessage,
   EmptyState,
   RemoteImage,
   SectionHeader,
@@ -414,26 +415,3 @@ function CardMessage({ children }: { children: React.ReactNode }) {
   );
 }
 
-function CenteredMessage({
-  children,
-  tone,
-}: {
-  children: React.ReactNode;
-  tone?: "error";
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: 300,
-        fontFamily: "var(--font-geist-mono), monospace",
-        fontSize: 11,
-        color: tone === "error" ? "var(--kind-theatre)" : "var(--muted)",
-      }}
-    >
-      {children}
-    </div>
-  );
-}

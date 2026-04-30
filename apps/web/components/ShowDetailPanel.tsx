@@ -17,6 +17,7 @@ import type {
   ShowKind,
   ShowState,
 } from "@/components/design-system";
+import { STATE_TRANSITIONS } from "@/lib/show-state";
 
 export interface ShowDetailPanelShow extends ShowLike {
   id: string;
@@ -30,14 +31,6 @@ export interface ShowDetailPanelShow extends ShowLike {
   tourName: string | null;
   productionName: string | null;
 }
-
-const STATE_TRANSITIONS: Record<
-  string,
-  { label: string; target: ShowState }
-> = {
-  watching: { label: "Got tickets", target: "ticketed" },
-  ticketed: { label: "Mark as attended", target: "past" },
-};
 
 interface ShowDetailPanelProps {
   show: ShowDetailPanelShow;

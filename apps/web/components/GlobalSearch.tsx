@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { KIND_ICONS } from "@/lib/kind-icons";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import "./GlobalSearch.css";
 
 type FlatItem = { href: string };
@@ -21,14 +22,6 @@ function formatShortDate(dateStr: string | null): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function useDebounced<T>(value: T, delay = 200): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(t);
-  }, [value, delay]);
-  return debounced;
-}
 
 export function GlobalSearchTrigger({ onClick }: { onClick: () => void }) {
   return (
@@ -61,7 +54,7 @@ export function GlobalSearch() {
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const debouncedQuery = useDebounced(query.trim(), 200);
+  const debouncedQuery = useDebouncedValue(query.trim(), 200);
 
   const { data, isFetching } = trpc.search.global.useQuery(
     { query: debouncedQuery },

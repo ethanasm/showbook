@@ -15,6 +15,7 @@ import {
 import { FollowButton } from "@/components/FollowButton";
 import { ShowDetailPanel } from "@/components/ShowDetailPanel";
 import { ScrapeConfigSection } from "@/components/ScrapeConfigSection";
+import { STATE_TRANSITIONS } from "@/lib/show-state";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import {
   getHeadliner,
@@ -24,6 +25,7 @@ import {
   getSupportPerformers,
 } from "@/lib/show-accessors";
 import {
+  CenteredMessage,
   RemoteImage,
   SectionHeader,
   ShowRow as ShowRowComponent,
@@ -71,10 +73,6 @@ const ON_SALE_STATUS_LABELS: Record<string, string> = {
   sold_out: "sold out",
 };
 
-const STATE_TRANSITIONS: Record<string, { label: string; target: ShowState }> = {
-  watching: { label: "Got tickets", target: "ticketed" },
-  ticketed: { label: "Mark as attended", target: "past" },
-};
 
 function gradientLastWord(name: string) {
   const words = name.trim().split(/\s+/);
@@ -692,29 +690,6 @@ function CardMessage({ children }: { children: React.ReactNode }) {
   );
 }
 
-function CenteredMessage({
-  children,
-  tone,
-}: {
-  children: React.ReactNode;
-  tone?: "error";
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: 300,
-        fontFamily: "var(--font-geist-mono), monospace",
-        fontSize: "0.85rem",
-        color: tone === "error" ? "var(--kind-theatre)" : "var(--muted)",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
 
 // ── Scrape config section ─────────────────────────────────────────────────
 

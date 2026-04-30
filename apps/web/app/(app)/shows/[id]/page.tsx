@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import {
+  CenteredMessage,
   SectionHeader,
   StateChip,
   type ShowKind,
@@ -25,11 +26,8 @@ import {
   formatDateLong,
   formatDateRangeLong,
 } from "@showbook/shared";
+import { STATE_TRANSITIONS } from "@/lib/show-state";
 
-const STATE_TRANSITIONS: Record<string, { label: string; target: ShowState }> = {
-  watching: { label: "Got tickets", target: "ticketed" },
-  ticketed: { label: "Mark as attended", target: "past" },
-};
 
 const ROLE_LABEL: Record<string, string> = {
   headliner: "Headliner",
@@ -593,29 +591,6 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function CenteredMessage({
-  children,
-  tone,
-}: {
-  children: React.ReactNode;
-  tone?: "error";
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: 300,
-        fontFamily: "var(--font-geist-mono), monospace",
-        fontSize: 11,
-        color: tone === "error" ? "var(--kind-theatre)" : "var(--muted)",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
 
 // ── Per-performer setlist section ────────────────────────────────────────
 
