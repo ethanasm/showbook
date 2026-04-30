@@ -27,8 +27,16 @@ export function PaginationFooter({
 
   return (
     <div
+      data-testid="pagination-footer"
       style={{
-        margin: "0 36px 36px",
+        // Pinned to the bottom of the viewport (= bottom of the nearest
+        // flex-column scroll container). `margin-top: auto` keeps the footer
+        // at the bottom even when the row list is short; `position: sticky`
+        // keeps it visible once the list is long enough to scroll.
+        position: "sticky",
+        bottom: 0,
+        zIndex: 5,
+        margin: "auto 36px 0",
         background: "var(--surface)",
         borderTop: "1px solid var(--rule)",
         padding: "12px 20px",
