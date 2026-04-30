@@ -41,10 +41,14 @@ test.describe('Show detail page', () => {
   test('renders setlist when present', async ({ page }) => {
     await gotoRadioheadMSG(page);
 
-    // The Radiohead seeded concert has a 10-song setlist.
-    await expect(page.getByText(/Setlist · 10 songs/i)).toBeVisible();
+    // The Radiohead seeded concert has a 10-song setlist. Scope to the
+    // setlist section — "Videotape" also appears in the seeded notes
+    // ("Thom dedicated Videotape to the crowd"), which would otherwise
+    // trip strict-mode.
+    const setlist = page.getByTestId('setlist-section');
+    await expect(setlist.getByText(/Setlist · 10 songs/i)).toBeVisible();
     for (const song of ['15 Step', 'Bodysnatchers', 'Videotape']) {
-      await expect(page.getByText(song)).toBeVisible();
+      await expect(setlist.getByText(song)).toBeVisible();
     }
   });
 

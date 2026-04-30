@@ -21,7 +21,9 @@ test.describe('Artist detail page', () => {
 
     // Hero shows the artist name.
     await expect(page.locator('body')).toContainText('Radiohead');
-    await expect(page.getByText(/Your shows ·/i)).toBeVisible();
+    // Match the shows section header exactly — `/Your shows ·/i` also
+    // hits "Media from your shows · 0", which trips strict-mode.
+    await expect(page.getByText(/^Your shows ·/i)).toBeVisible();
 
     await page.screenshot({
       path: 'test-results/screenshots/artist-detail.png',
