@@ -37,8 +37,20 @@ export type CompleteUploadFn = (input: { assetId: string }) => Promise<unknown>;
 
 export type StatusReporter = (status: string | null) => void;
 
-async function fileToBitmap(file: File): Promise<ImageBitmap> {
-  return createImageBitmap(file);
+function isHeic(file: File): boolean {
+  const type = file.type.toLowerCase();
+  if (type === "image/heic" || type === "image/heif") return true;
+  const name = file.name.toLowerCase();
+  return name.endsWith(".heic") || name.endsWith(".heif");
+}
+
+async function fileToBitmap(file: File): Promise<{ bitmap: ImageBitmap; sourceMime: string }> {
+  if (isHeic(file)) {
+    const { heicTo } = await import("heic-to");
+    const blob = await heicTo({ blob: file, type: "image/jpeg", quality: 0.92 });
+    return { bitmap: await createImageBitmap(blob), sourceMime: "image/jpeg" };
+  }
+  return { bitmap: await createImageBitmap(file), sourceMime: file.type || "image/jpeg" };
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob> {
@@ -54,8 +66,9 @@ export async function buildImageVariants(file: File): Promise<{
   width: number;
   height: number;
   variants: VariantBlob[];
+  sourceMime: string;
 }> {
-  const bitmap = await fileToBitmap(file);
+  const { bitmap, sourceMime } = await fileToBitmap(file);
   const sizes = [
     { name: "thumb", max: 260, quality: 0.78 },
     { name: "card", max: 760, quality: 0.82 },
@@ -82,7 +95,7 @@ export async function buildImageVariants(file: File): Promise<{
   }
 
   bitmap.close();
-  return { width: variants[2]?.width ?? 0, height: variants[2]?.height ?? 0, variants };
+  return { width: variants[2]?.width ?? 0, height: variants[2]?.height ?? 0, variants, sourceMime };
 }
 
 export function readVideoMetadata(file: File): Promise<{
@@ -141,7 +154,7 @@ export async function uploadPhotoForShow(opts: UploadOptions): Promise<{ assetId
   const intent = await createIntent({
     showId,
     mediaType: "photo",
-    mimeType: file.type || "image/jpeg",
+    mimeType: prepared.sourceMime || file.type || "image/jpeg",
     sourceBytes: file.size,
     storedBytes,
     width: prepared.width,
