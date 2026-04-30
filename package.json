@@ -28,7 +28,10 @@
   "pnpm": {
     "overrides": {
       "fast-xml-parser@<5.7.0": "^5.7.0",
-      "postcss@<8.5.10": "^8.5.10"
+      "postcss@<8.5.10": "^8.5.10",
+      "svix@<1.92.2": "^1.92.2",
+      "nx>minimatch@<9.0.7": "^9.0.7",
+      "@esbuild-kit/core-utils>esbuild": "^0.25.0"
     }
   }
 }
