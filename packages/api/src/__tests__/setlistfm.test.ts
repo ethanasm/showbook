@@ -136,6 +136,43 @@ test('searchArtist: rethrows non-404 errors', async () => {
   });
 });
 
+// Regression: setlist.fm returns artists with empty `mbid` for entries it
+// hasn't linked to MusicBrainz. Callers that picked the first result and
+// passed its mbid to /search/setlists would build `?artistMbid=&date=...`
+// and get a 400 from setlist.fm. Filter at this boundary so callers only
+// ever see artists they can actually fetch a setlist for.
+test('searchArtist: filters out artists with missing or empty MBID', async () => {
+  stubFetch(async () =>
+    jsonResponse({
+      artist: [
+        { mbid: '', name: 'Unlinked Artist', sortName: 'Unlinked Artist' },
+        { name: 'Mbid-less Artist', sortName: 'Mbid-less Artist' },
+        { mbid: 'mb-real', name: 'Real Artist', sortName: 'Real Artist' },
+      ],
+      total: 3,
+      page: 1,
+      itemsPerPage: 30,
+    }),
+  );
+  const result = await searchArtist('Test');
+  assert.equal(result.length, 1);
+  assert.equal(result[0]!.mbid, 'mb-real');
+});
+
+// Regression: callers must never construct /search/setlists?artistMbid= —
+// setlist.fm rejects empty mbids with 400. searchSetlist short-circuits
+// before any network call when given a falsy mbid.
+test('searchSetlist: returns null without hitting the API when mbid is empty', async () => {
+  let calls = 0;
+  stubFetch(async () => {
+    calls++;
+    return new Response('Bad Request', { status: 400, statusText: 'Bad Request' });
+  });
+  const result = await searchSetlist('', '2024-01-15');
+  assert.equal(result, null);
+  assert.equal(calls, 0);
+});
+
 // ── searchSetlist ───────────────────────────────────────────────────────
 
 test('searchSetlist: returns flattened songs across sets and encores in order', async () => {
