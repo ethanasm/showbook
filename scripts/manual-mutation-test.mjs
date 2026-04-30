@@ -7,7 +7,7 @@ import { chromium } from '/home/user/showbook/node_modules/.pnpm/playwright@1.59
 import { mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-const PORT = process.env.PLAYWRIGHT_PORT ?? '3002';
+const PORT = process.env.PLAYWRIGHT_PORT ?? '3003';
 const BASE = `https://localhost:${PORT}`;
 const OUT = join(process.cwd(), 'walkthrough-screenshots/mutation');
 const EXEC = process.env.PLAYWRIGHT_CHROMIUM_PATH ?? '/opt/pw-browsers/chromium-1217/chrome-linux64/chrome';

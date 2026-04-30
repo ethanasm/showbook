@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
 const customChromium = process.env.PLAYWRIGHT_CHROMIUM_PATH;
-const port = Number(process.env.PLAYWRIGHT_PORT ?? 3002);
+const port = Number(process.env.PLAYWRIGHT_PORT ?? 3003);
 
 // Local runs use `next dev --experimental-https` for HMR + iteration.
 // CI runs against a built app via `next start` (HTTP) — dev-mode on-demand

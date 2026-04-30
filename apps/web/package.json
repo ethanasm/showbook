@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3001 --experimental-https",
-    "dev:e2e": "DATABASE_URL=\"${E2E_DATABASE_URL:-postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e}\" ENABLE_TEST_ROUTES=1 NEXTAUTH_URL=https://localhost:${PLAYWRIGHT_PORT:-3002} AUTH_SECRET=showbook-e2e-secret NEXTAUTH_SECRET=showbook-e2e-secret next dev --port ${PLAYWRIGHT_PORT:-3002} --experimental-https",
-    "start:e2e": "DATABASE_URL=\"${E2E_DATABASE_URL:-postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e}\" ENABLE_TEST_ROUTES=1 NEXTAUTH_URL=http://localhost:${PLAYWRIGHT_PORT:-3002} AUTH_SECRET=showbook-e2e-secret NEXTAUTH_SECRET=showbook-e2e-secret next start --port ${PLAYWRIGHT_PORT:-3002}",
+    "dev:e2e": "DATABASE_URL=\"${E2E_DATABASE_URL:-postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e}\" ENABLE_TEST_ROUTES=1 NEXTAUTH_URL=https://localhost:${PLAYWRIGHT_PORT:-3003} AUTH_SECRET=showbook-e2e-secret NEXTAUTH_SECRET=showbook-e2e-secret next dev --port ${PLAYWRIGHT_PORT:-3003} --experimental-https",
+    "start:e2e": "DATABASE_URL=\"${E2E_DATABASE_URL:-postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e}\" ENABLE_TEST_ROUTES=1 NEXTAUTH_URL=http://localhost:${PLAYWRIGHT_PORT:-3003} AUTH_SECRET=showbook-e2e-secret NEXTAUTH_SECRET=showbook-e2e-secret next start --port ${PLAYWRIGHT_PORT:-3003}",
     "build": "next build",
     "start": "next start --port 3001",
     "lint": "next lint",
