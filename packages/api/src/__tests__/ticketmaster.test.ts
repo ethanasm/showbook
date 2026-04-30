@@ -242,6 +242,42 @@ test('getAttraction: rethrows non-404 errors', async () => {
   await assert.rejects(getAttraction('x'));
 });
 
+// ── path-id encoding (defense against API-key steering) ─────────────────
+
+test('getEvent: URL-encodes the id so callers cannot escape the path', async () => {
+  stubFetch(async (url) => {
+    urlsSeen.push(String(url));
+    return jsonResponse({ id: 'E1', name: 'X', dates: { start: { localDate: '2026-01-01' } } });
+  });
+  await getEvent('../../venues/V1.json?leak=');
+  const u = new URL(urlsSeen[0]);
+  assert.equal(u.pathname, '/discovery/v2/events/..%2F..%2Fvenues%2FV1.json%3Fleak%3D.json');
+  assert.equal(u.searchParams.get('apikey'), 'test-tm-key');
+  assert.equal(u.searchParams.get('leak'), null);
+});
+
+test('getVenue: URL-encodes the id', async () => {
+  stubFetch(async (url) => {
+    urlsSeen.push(String(url));
+    return jsonResponse({ id: 'V1', name: 'X' });
+  });
+  await getVenue('a/b?c=d');
+  const u = new URL(urlsSeen[0]);
+  assert.equal(u.pathname, '/discovery/v2/venues/a%2Fb%3Fc%3Dd.json');
+  assert.equal(u.searchParams.get('c'), null);
+});
+
+test('getAttraction: URL-encodes the id', async () => {
+  stubFetch(async (url) => {
+    urlsSeen.push(String(url));
+    return jsonResponse({ id: 'A1', name: 'X' });
+  });
+  await getAttraction('a b#frag');
+  const u = new URL(urlsSeen[0]);
+  assert.equal(u.pathname, '/discovery/v2/attractions/a%20b%23frag.json');
+  assert.equal(u.hash, '');
+});
+
 // ── searchVenues / searchAttractions ────────────────────────────────────
 
 test('searchVenues: defaults size=5 when not provided, includes optional codes', async () => {
