@@ -150,12 +150,12 @@ export function HeroCard({ show }: HeroCardProps) {
         {/* Headliner */}
         <div
           style={{
-            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontFamily: "var(--font-display)",
             fontSize: 52,
-            fontWeight: 600,
-            letterSpacing: 0,
+            fontWeight: 700,
+            letterSpacing: "-0.01em",
             color: "var(--ink)",
-            lineHeight: 0.95,
+            lineHeight: 1.1,
           }}
         >
           {show.headlinerId ? (
