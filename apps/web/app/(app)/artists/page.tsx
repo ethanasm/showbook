@@ -3,12 +3,22 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
-import { Search, Eye, Pencil, Trash2, Ticket, Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Eye, Pencil, Trash2, Ticket, Check, ChevronLeft, ChevronRight, Music2 } from "lucide-react";
+import { SortHeader, type SortConfig } from "@/components/SortHeader";
 import { useCompactMode } from "@/lib/useCompactMode";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { EmptyState, RemoteImage } from "@/components/design-system";
 
-type SortMode = "recent" | "count" | "alpha";
+type SortField = "name" | "shows" | "past" | "future" | "firstSeen" | "lastSeen";
+
+const DEFAULT_DIR: Record<SortField, "asc" | "desc"> = {
+  name: "asc",
+  shows: "desc",
+  past: "desc",
+  future: "desc",
+  firstSeen: "desc",
+  lastSeen: "desc",
+};
 
 function useWindowWidth() {
   const [width, setWidth] = useState(
@@ -25,7 +35,10 @@ function useWindowWidth() {
 }
 
 export default function ArtistsPage() {
-  const [sortMode, setSortMode] = useState<SortMode>("recent");
+  const [sort, setSort] = useState<SortConfig<SortField>>({
+    field: "lastSeen",
+    dir: "desc",
+  });
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(0);
   const compact = useCompactMode();
@@ -69,6 +82,15 @@ export default function ArtistsPage() {
     },
   });
 
+  const toggleSort = useCallback((field: SortField) => {
+    setSort((prev) =>
+      prev.field === field
+        ? { field, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { field, dir: DEFAULT_DIR[field] },
+    );
+    setCurrentPage(0);
+  }, []);
+
   const filtered = useMemo(() => {
     let result = artists ?? [];
 
@@ -77,18 +99,37 @@ export default function ArtistsPage() {
       result = result.filter((a) => a.name.toLowerCase().includes(q));
     }
 
+    const flip = sort.dir === "asc" ? 1 : -1;
+    const cmpStr = (a: string | null, b: string | null) => {
+      if (a === b) return 0;
+      if (a == null) return 1;
+      if (b == null) return -1;
+      return a.localeCompare(b);
+    };
+
     result = [...result].sort((a, b) => {
-      if (sortMode === "count") return b.showCount - a.showCount;
-      if (sortMode === "alpha") return a.name.localeCompare(b.name);
-      return (b.lastSeen ?? "").localeCompare(a.lastSeen ?? "");
+      switch (sort.field) {
+        case "name":
+          return cmpStr(a.name, b.name) * flip;
+        case "shows":
+          return (a.showCount - b.showCount) * flip;
+        case "past":
+          return (a.pastShowsCount - b.pastShowsCount) * flip;
+        case "future":
+          return (a.futureShowsCount - b.futureShowsCount) * flip;
+        case "firstSeen":
+          return cmpStr(a.firstSeen, b.firstSeen) * flip;
+        case "lastSeen":
+          return cmpStr(a.lastSeen, b.lastSeen) * flip;
+      }
     });
 
     return result;
-  }, [artists, search, sortMode]);
+  }, [artists, search, sort]);
 
   useEffect(() => {
     setCurrentPage(0);
-  }, [search, sortMode]);
+  }, [search, sort.field, sort.dir]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paged = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
@@ -211,10 +252,10 @@ export default function ArtistsPage() {
     );
   }
 
-  // Column layout: name | shows | first seen | last seen | follow indicator
+  // Column layout: name | shows | past | future | first seen | last seen | metadata | follow
   const gridCols = isHalfWidth
-    ? "1fr 60px 100px 32px"
-    : "1fr 60px 120px 120px 32px";
+    ? "minmax(140px,2fr) 58px 52px 58px minmax(98px,0.9fr) 32px 32px 32px"
+    : "minmax(180px,2.4fr) 62px 54px 62px minmax(106px,0.9fr) minmax(106px,0.9fr) 32px 32px 32px";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
@@ -240,30 +281,6 @@ export default function ArtistsPage() {
             placeholder="filter artists..."
             style={{ border: "none", background: "transparent", color: "var(--ink)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, outline: "none", width: "100%", letterSpacing: ".02em" }}
           />
-        </div>
-
-        <span style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)" }}>
-          &middot;
-        </span>
-
-        {/* Sort */}
-        <div style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid var(--rule-strong)" }}>
-          {([
-            { k: "recent" as SortMode, l: "Recent" },
-            { k: "count" as SortMode, l: "Most seen" },
-            { k: "alpha" as SortMode, l: "A–Z" },
-          ]).map(({ k, l }, i, arr) => {
-            const active = sortMode === k;
-            return (
-              <div
-                key={k}
-                onClick={() => setSortMode(k)}
-                style={{ padding: "5px 11px", borderRight: i === arr.length - 1 ? "none" : "1px solid var(--rule-strong)", background: active ? "var(--ink)" : "transparent", color: active ? "var(--bg)" : "var(--ink)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, fontWeight: active ? 500 : 400, cursor: "pointer", letterSpacing: ".02em" }}
-              >
-                {l}
-              </div>
-            );
-          })}
         </div>
 
         <div style={{ flex: 1 }} />
@@ -292,11 +309,15 @@ export default function ArtistsPage() {
         ) : (
           <div style={{ margin: "4px 36px 0", background: "var(--surface)" }}>
             {/* Column headers */}
-            <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: 16, padding: "10px 20px", borderBottom: "1px solid var(--rule)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase" }}>
-              <div>Name</div>
-              <div style={{ textAlign: "right" }}>Shows</div>
-              {!isHalfWidth && <div>First seen</div>}
-              <div>Last seen</div>
+            <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: 14, padding: "10px 20px", borderBottom: "1px solid var(--rule)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase" }}>
+              <SortHeader<SortField> field="name" label="Name" sort={sort} onToggle={toggleSort} />
+              <SortHeader<SortField> field="shows" label="Shows" sort={sort} onToggle={toggleSort} align="center" />
+              <SortHeader<SortField> field="past" label="Past" sort={sort} onToggle={toggleSort} align="center" />
+              <SortHeader<SortField> field="future" label="Future" sort={sort} onToggle={toggleSort} align="center" />
+              {!isHalfWidth && <SortHeader<SortField> field="firstSeen" label="First Seen" sort={sort} onToggle={toggleSort} />}
+              <SortHeader<SortField> field="lastSeen" label="Last Seen" sort={sort} onToggle={toggleSort} />
+              <div style={{ textAlign: "center" }}><Ticket size={10} /></div>
+              <div style={{ textAlign: "center" }}><Music2 size={10} /></div>
               <div style={{ textAlign: "center" }}><Eye size={10} /></div>
             </div>
 
@@ -307,8 +328,8 @@ export default function ArtistsPage() {
               >
                 <Link
                   href={`/artists/${artist.id}`}
-                  style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: 16, padding: compact ? "5px 20px" : "12px 20px", borderBottom: "1px solid var(--rule)", alignItems: "center", cursor: "pointer", color: "inherit", textDecoration: "none" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface)")}
+                  style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: 14, padding: compact ? "5px 20px" : "12px 20px", borderBottom: "1px solid var(--rule)", alignItems: "center", cursor: "pointer", color: "inherit", textDecoration: "none" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface2, var(--surface))")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
@@ -324,17 +345,25 @@ export default function ArtistsPage() {
                       {artist.name}
                     </span>
                   </div>
-                  <div style={{ textAlign: "right", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: "var(--ink)", fontFeatureSettings: '"tnum"' }}>
+                  <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: "var(--ink)", fontFeatureSettings: '"tnum"' }}>
                     {artist.showCount}&times;
                   </div>
+                  <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: artist.pastShowsCount > 0 ? "var(--ink)" : "var(--faint)", fontFeatureSettings: '"tnum"' }}>
+                    {artist.pastShowsCount}
+                  </div>
+                  <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: artist.futureShowsCount > 0 ? "var(--accent)" : "var(--faint)", fontFeatureSettings: '"tnum"' }}>
+                    {artist.futureShowsCount}
+                  </div>
                   {!isHalfWidth && (
-                    <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".02em" }}>
+                    <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {artist.firstSeen ? formatDate(artist.firstSeen) : "—"}
                     </div>
                   )}
-                  <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".02em" }}>
+                  <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {artist.lastSeen ? formatDate(artist.lastSeen) : "—"}
                   </div>
+                  <MetadataIcon linked={Boolean(artist.ticketmasterAttractionId)} label="Ticketmaster ID" Icon={Ticket} color="var(--accent)" />
+                  <MetadataIcon linked={Boolean(artist.musicbrainzId)} label="MusicBrainz ID" Icon={Music2} color="var(--kind-concert)" />
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }} title={artist.isFollowed ? "Following" : "Not following"}>
                     {artist.isFollowed && <Eye size={13} color="var(--accent)" />}
                   </div>
@@ -381,6 +410,33 @@ export default function ArtistsPage() {
         />
       )}
     </div>
+  );
+}
+
+function MetadataIcon({
+  linked,
+  label,
+  Icon,
+  color,
+}: {
+  linked: boolean;
+  label: string;
+  Icon: typeof Ticket;
+  color: string;
+}) {
+  return (
+    <span
+      title={linked ? `${label} linked` : `No ${label}`}
+      data-linked={linked}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: linked ? color : "var(--faint)",
+      }}
+    >
+      <Icon size={13} strokeWidth={2} />
+    </span>
   );
 }
 

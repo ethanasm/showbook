@@ -14,13 +14,18 @@ const log = child({ component: 'api.performers' });
 export const performersRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
+    const today = new Date().toISOString().slice(0, 10);
 
     const rows = await ctx.db
       .select({
         id: performers.id,
         name: performers.name,
         imageUrl: performers.imageUrl,
+        musicbrainzId: performers.musicbrainzId,
+        ticketmasterAttractionId: performers.ticketmasterAttractionId,
         showCount: count(shows.id),
+        pastShowsCount: sql<number>`count(case when ${shows.date} < ${today} then 1 end)::int`,
+        futureShowsCount: sql<number>`count(case when ${shows.date} >= ${today} then 1 end)::int`,
         lastSeen: max(shows.date),
         firstSeen: min(shows.date),
       })
@@ -28,7 +33,7 @@ export const performersRouter = router({
       .innerJoin(performers, eq(showPerformers.performerId, performers.id))
       .innerJoin(shows, eq(showPerformers.showId, shows.id))
       .where(and(eq(shows.userId, userId), ne(shows.kind, 'theatre')))
-      .groupBy(performers.id, performers.name, performers.imageUrl)
+      .groupBy(performers.id, performers.name, performers.imageUrl, performers.musicbrainzId, performers.ticketmasterAttractionId)
       .orderBy(desc(max(shows.date)));
 
     const followed = await ctx.db

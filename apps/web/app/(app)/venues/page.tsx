@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
-import { MapPin, Search, Eye, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
+import { MapPin, Search, Eye, Pencil, ChevronLeft, ChevronRight, Ticket } from "lucide-react";
 import { SortHeader, type SortConfig } from "@/components/SortHeader";
 import { useCompactMode } from "@/lib/useCompactMode";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
@@ -208,8 +208,8 @@ export default function VenuesListPage() {
 
   // Column layout: differs by responsive breakpoint
   const gridCols = isHalfWidth
-    ? "minmax(120px,2fr) minmax(80px,1fr) 70px 70px 50px 50px 32px"
-    : "minmax(120px,2fr) minmax(60px,0.7fr) minmax(80px,1fr) 70px 70px 50px 50px 32px";
+    ? "minmax(120px,2fr) minmax(80px,1fr) 70px 70px 32px 32px 32px"
+    : "minmax(120px,2fr) minmax(60px,0.7fr) minmax(80px,1fr) 70px 70px 32px 32px 32px";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
@@ -269,8 +269,8 @@ export default function VenuesListPage() {
               <SortHeader<SortField> field="city" label={isHalfWidth ? "City" : "City"} sort={sort} onToggle={toggleSort} />
               <SortHeader<SortField> field="past" label="Past" sort={sort} onToggle={toggleSort} align="center" />
               <SortHeader<SortField> field="future" label="Future" sort={sort} onToggle={toggleSort} align="center" />
-              <div style={{ textAlign: "center" }}>TM</div>
-              <div style={{ textAlign: "center" }}>GP</div>
+              <div style={{ textAlign: "center" }}><Ticket size={10} /></div>
+              <div style={{ textAlign: "center" }}><MapPin size={10} /></div>
               <div style={{ textAlign: "center" }}><Eye size={10} /></div>
             </div>
 
@@ -337,8 +337,8 @@ export default function VenuesListPage() {
                       <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: v.futureShowsCount > 0 ? "var(--accent)" : "var(--faint)", fontFeatureSettings: '"tnum"' }}>
                         {v.futureShowsCount}
                       </div>
-                      <IdBadge label="TM" linked={Boolean(v.ticketmasterVenueId)} color="var(--accent)" tooltip={v.ticketmasterVenueId ? "Ticketmaster ID linked" : "No Ticketmaster ID"} />
-                      <IdBadge label="GP" linked={Boolean(v.googlePlaceId)} color="var(--kind-concert)" tooltip={v.googlePlaceId ? "Google Places ID linked" : "No Google Places ID"} />
+                      <MetadataIcon linked={Boolean(v.ticketmasterVenueId)} label="Ticketmaster ID" Icon={Ticket} color="var(--accent)" />
+                      <MetadataIcon linked={Boolean(v.googlePlaceId)} label="Google Places ID" Icon={MapPin} color="var(--kind-concert)" />
                       <span title={v.isFollowed ? "Following" : "Not following"} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                         {v.isFollowed && <Eye size={13} color="var(--accent)" />}
                       </span>
@@ -390,14 +390,29 @@ export default function VenuesListPage() {
   );
 }
 
-function IdBadge({ label, linked, color, tooltip }: { label: string; linked: boolean; color: string; tooltip: string }) {
+function MetadataIcon({
+  linked,
+  label,
+  Icon,
+  color,
+}: {
+  linked: boolean;
+  label: string;
+  Icon: typeof Ticket;
+  color: string;
+}) {
   return (
     <span
-      title={tooltip}
+      title={linked ? `${label} linked` : `No ${label}`}
       data-linked={linked}
-      style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10, letterSpacing: ".06em", textTransform: "uppercase", padding: "3px 8px", border: `1px solid ${linked ? color : "var(--faint)"}`, color: linked ? color : "var(--faint)", textAlign: "center", fontWeight: 500 }}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: linked ? color : "var(--faint)",
+      }}
     >
-      {label}
+      <Icon size={13} strokeWidth={2} />
     </span>
   );
 }
