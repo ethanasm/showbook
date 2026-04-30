@@ -61,24 +61,24 @@ export default function ArtistsPage() {
 
   const utils = trpc.useUtils();
   const renameMutation = trpc.performers.rename.useMutation({
-    onSuccess: () => utils.performers.list.invalidate(),
+    onSuccess: () => utils.performers.invalidate(),
   });
   const deleteMutation = trpc.performers.delete.useMutation({
     onSuccess: () => {
-      utils.performers.list.invalidate();
-      utils.shows.list.invalidate();
+      utils.performers.invalidate();
+      utils.shows.invalidate();
     },
   });
   const followMutation = trpc.performers.follow.useMutation({
-    onSuccess: () => utils.performers.list.invalidate(),
+    onSuccess: () => utils.performers.invalidate(),
   });
   const unfollowMutation = trpc.performers.unfollow.useMutation({
-    onSuccess: () => utils.performers.list.invalidate(),
+    onSuccess: () => utils.performers.invalidate(),
   });
   const updateStateMutation = trpc.shows.updateState.useMutation({
     onSuccess: () => {
-      utils.shows.list.invalidate();
-      utils.performers.list.invalidate();
+      utils.shows.invalidate();
+      utils.performers.invalidate();
     },
   });
 

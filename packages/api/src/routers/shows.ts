@@ -14,6 +14,9 @@ import {
   type PerformerInput,
 } from '../performer-matcher';
 import { searchEvents } from '../ticketmaster';
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'api.shows' });
 
 // ---------------------------------------------------------------------------
 // Input schemas
@@ -135,6 +138,20 @@ export const showsRouter = router({
       });
     }),
 
+  /**
+   * Lightweight count for sidebar badges. Avoids shipping the full show
+   * list to the client just to read `.length` — every page-shell render
+   * subscribes to this.
+   */
+  count: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const [row] = await ctx.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(shows)
+      .where(eq(shows.userId, userId));
+    return row?.count ?? 0;
+  }),
+
   detail: protectedProcedure
     .input(z.object({ showId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
@@ -241,48 +258,60 @@ export const showsRouter = router({
         }
       }
 
-      // Create the show
-      const [show] = await ctx.db
-        .insert(shows)
-        .values({
-          userId,
-          kind: input.kind,
-          state,
-          venueId: venueResult.venue.id,
-          date: input.date,
-          endDate: input.endDate ?? null,
-          seat: input.seat ?? null,
-          pricePaid: input.pricePaid ?? null,
-          ticketCount: input.ticketCount,
-          tourName: input.tourName ?? null,
-          productionName,
-          setlists: Object.keys(setlistsMap).length > 0 ? setlistsMap : null,
-          photos: null,
-          notes: input.notes ?? null,
-          sourceRefs: input.sourceRefs ?? null,
-        })
-        .returning();
+      // Atomic: show + headliner + support performers all-or-nothing.
+      // Performer rows are now batched into a single insert.
+      const show = await ctx.db.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(shows)
+          .values({
+            userId,
+            kind: input.kind,
+            state,
+            venueId: venueResult.venue.id,
+            date: input.date,
+            endDate: input.endDate ?? null,
+            seat: input.seat ?? null,
+            pricePaid: input.pricePaid ?? null,
+            ticketCount: input.ticketCount,
+            tourName: input.tourName ?? null,
+            productionName,
+            setlists: Object.keys(setlistsMap).length > 0 ? setlistsMap : null,
+            photos: null,
+            notes: input.notes ?? null,
+            sourceRefs: input.sourceRefs ?? null,
+          })
+          .returning();
 
-      if (headlinerId) {
-        await ctx.db.insert(showPerformers).values({
-          showId: show.id,
-          performerId: headlinerId,
-          role: 'headliner',
-          characterName: null,
-          sortOrder: 0,
-        });
-      }
+        const showPerformerRows: Array<typeof showPerformers.$inferInsert> = [];
+        if (headlinerId) {
+          showPerformerRows.push({
+            showId: created.id,
+            performerId: headlinerId,
+            role: 'headliner',
+            characterName: null,
+            sortOrder: 0,
+          });
+        }
+        for (const { id, input: p } of resolvedPerformers) {
+          showPerformerRows.push({
+            showId: created.id,
+            performerId: id,
+            role: p.role,
+            characterName: p.characterName ?? null,
+            sortOrder: p.sortOrder,
+          });
+        }
+        if (showPerformerRows.length > 0) {
+          await tx.insert(showPerformers).values(showPerformerRows);
+        }
 
-      for (const { id, input: p } of resolvedPerformers) {
-        await ctx.db.insert(showPerformers).values({
-          showId: show.id,
-          performerId: id,
-          role: p.role,
-          characterName: p.characterName ?? null,
-          sortOrder: p.sortOrder,
-        });
-      }
+        return created;
+      });
 
+      // TM ticket-URL enrichment is best-effort and non-blocking — it's a
+      // nice-to-have, not part of the show's correctness, so it lives
+      // outside the transaction. Failures are logged so we know if TM is
+      // down rather than silently swallowed.
       if (state === 'watching' && input.kind !== 'festival') {
         try {
           const tmVenueId = venueResult.venue.ticketmasterVenueId;
@@ -299,8 +328,11 @@ export const showsRouter = router({
               .set({ ticketUrl: events[0]!.url })
               .where(eq(shows.id, show.id));
           }
-        } catch {
-          // Non-blocking — don't fail the create if TM is down
+        } catch (err) {
+          log.warn(
+            { err, event: 'shows.create.tm_enrichment_failed', showId: show.id },
+            'TM ticket URL lookup failed (non-blocking)',
+          );
         }
       }
 
@@ -447,6 +479,9 @@ export const showsRouter = router({
         state = 'watching';
       }
 
+      // Resolve venue + performer rows BEFORE the transaction. These touch
+      // external APIs (TM, geocoding) and we don't want to hold a tx open
+      // while they run.
       const venueResult = await matchOrCreateVenue(input.venue as VenueInput);
 
       const productionName =
@@ -454,13 +489,8 @@ export const showsRouter = router({
           ? input.productionName ?? input.headliner.name
           : input.productionName ?? null;
 
-      // Replace all performers and rebuild setlists map by resolved IDs.
-      await ctx.db
-        .delete(showPerformers)
-        .where(eq(showPerformers.showId, input.showId));
-
+      let resolvedHeadlinerId: string | null = null;
       const setlistsMap: Record<string, string[]> = {};
-
       if (input.kind !== 'theatre') {
         const headlinerResult = await matchOrCreatePerformer({
           name: input.headliner.name,
@@ -468,20 +498,16 @@ export const showsRouter = router({
           musicbrainzId: input.headliner.musicbrainzId,
           imageUrl: input.headliner.imageUrl,
         });
-
-        await ctx.db.insert(showPerformers).values({
-          showId: input.showId,
-          performerId: headlinerResult.performer.id,
-          role: 'headliner',
-          characterName: null,
-          sortOrder: 0,
-        });
-
+        resolvedHeadlinerId = headlinerResult.performer.id;
         if (input.headliner.setlist?.length) {
-          setlistsMap[headlinerResult.performer.id] = input.headliner.setlist;
+          setlistsMap[resolvedHeadlinerId] = input.headliner.setlist;
         }
       }
 
+      const resolvedSupport: Array<{
+        id: string;
+        input: NonNullable<typeof input.performers>[number];
+      }> = [];
       if (input.performers?.length) {
         for (const p of input.performers) {
           const result = await matchOrCreatePerformer({
@@ -490,40 +516,65 @@ export const showsRouter = router({
             musicbrainzId: p.musicbrainzId,
             imageUrl: p.imageUrl,
           });
-
-          await ctx.db.insert(showPerformers).values({
-            showId: input.showId,
-            performerId: result.performer.id,
-            role: p.role,
-            characterName: p.characterName ?? null,
-            sortOrder: p.sortOrder,
-          });
-
+          resolvedSupport.push({ id: result.performer.id, input: p });
           if (p.setlist?.length) {
             setlistsMap[result.performer.id] = p.setlist;
           }
         }
       }
 
-      await ctx.db
-        .update(shows)
-        .set({
-          kind: input.kind,
-          state,
-          venueId: venueResult.venue.id,
-          date: input.date,
-          endDate: input.endDate ?? null,
-          seat: input.seat ?? null,
-          pricePaid: input.pricePaid ?? null,
-          ticketCount: input.ticketCount,
-          tourName: input.tourName ?? null,
-          productionName,
-          setlists: Object.keys(setlistsMap).length > 0 ? setlistsMap : null,
-          notes: input.notes ?? null,
-          sourceRefs: input.sourceRefs ?? null,
-          updatedAt: new Date(),
-        })
-        .where(eq(shows.id, input.showId));
+      // Atomic: delete old performer rows, insert new ones, update show.
+      // The previous code did delete + sequential inserts + update outside a
+      // transaction, so a partial failure could leave a show with no
+      // performers.
+      await ctx.db.transaction(async (tx) => {
+        await tx
+          .delete(showPerformers)
+          .where(eq(showPerformers.showId, input.showId));
+
+        const showPerformerRows: Array<typeof showPerformers.$inferInsert> = [];
+        if (resolvedHeadlinerId) {
+          showPerformerRows.push({
+            showId: input.showId,
+            performerId: resolvedHeadlinerId,
+            role: 'headliner',
+            characterName: null,
+            sortOrder: 0,
+          });
+        }
+        for (const { id, input: p } of resolvedSupport) {
+          showPerformerRows.push({
+            showId: input.showId,
+            performerId: id,
+            role: p.role,
+            characterName: p.characterName ?? null,
+            sortOrder: p.sortOrder,
+          });
+        }
+        if (showPerformerRows.length > 0) {
+          await tx.insert(showPerformers).values(showPerformerRows);
+        }
+
+        await tx
+          .update(shows)
+          .set({
+            kind: input.kind,
+            state,
+            venueId: venueResult.venue.id,
+            date: input.date,
+            endDate: input.endDate ?? null,
+            seat: input.seat ?? null,
+            pricePaid: input.pricePaid ?? null,
+            ticketCount: input.ticketCount,
+            tourName: input.tourName ?? null,
+            productionName,
+            setlists: Object.keys(setlistsMap).length > 0 ? setlistsMap : null,
+            notes: input.notes ?? null,
+            sourceRefs: input.sourceRefs ?? null,
+            updatedAt: new Date(),
+          })
+          .where(eq(shows.id, input.showId));
+      });
 
       return ctx.db.query.shows.findFirst({
         where: eq(shows.id, input.showId),

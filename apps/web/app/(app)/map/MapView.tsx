@@ -894,7 +894,7 @@ export default function MapView() {
                   setBackfilling(true);
                   try {
                     await backfillCoordinates.mutateAsync();
-                    await utils.shows.list.invalidate();
+                    await utils.shows.invalidate();
                   } finally {
                     setBackfilling(false);
                   }
@@ -935,7 +935,7 @@ export default function MapView() {
               setBackfilling(true);
               try {
                 await backfillCoordinates.mutateAsync();
-                await utils.shows.list.invalidate();
+                await utils.shows.invalidate();
               } finally {
                 setBackfilling(false);
               }

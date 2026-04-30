@@ -88,7 +88,8 @@ export async function matchOrCreateVenue(
     };
   }
 
-  // 4. Create new venue — geocode if no coordinates provided
+  // 4. Create new venue — resolve external metadata BEFORE the transaction
+  // so we don't hold the advisory lock while waiting on Google/TM.
   let lat = input.lat ?? null;
   let lng = input.lng ?? null;
   let stateRegion = input.stateRegion ?? null;
@@ -116,22 +117,77 @@ export async function matchOrCreateVenue(
     if (found) tmVenueId = found;
   }
 
-  const [created] = await db
-    .insert(venues)
-    .values({
-      name: input.name,
-      city: input.city,
-      stateRegion,
-      country,
-      ticketmasterVenueId: tmVenueId,
-      latitude: lat,
-      longitude: lng,
-      googlePlaceId,
-      photoUrl,
-    })
-    .returning();
+  // Re-check + insert under an advisory lock keyed on lower(name)+lower(city)
+  // so two concurrent requests for the same venue serialize. Without the
+  // lock both would miss the SELECT above and both would INSERT, creating a
+  // duplicate global row.
+  return await db.transaction(async (tx) => {
+    const lockKey = `${input.name.trim().toLowerCase()}|${input.city.trim().toLowerCase()}`;
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${lockKey}))`);
 
-  return { venue: created, created: true };
+    const [recheck] = await tx
+      .select()
+      .from(venues)
+      .where(
+        and(
+          sql`lower(${venues.name}) = lower(${input.name})`,
+          sql`lower(${venues.city}) = lower(${input.city})`,
+        ),
+      )
+      .limit(1);
+    if (recheck) {
+      return { venue: recheck, created: false };
+    }
+
+    try {
+      const [created] = await tx
+        .insert(venues)
+        .values({
+          name: input.name,
+          city: input.city,
+          stateRegion,
+          country,
+          ticketmasterVenueId: tmVenueId,
+          latitude: lat,
+          longitude: lng,
+          googlePlaceId,
+          photoUrl,
+        })
+        .returning();
+      return { venue: created, created: true };
+    } catch (err) {
+      // External-ID unique-violation (someone else inserted with the same
+      // TM/Google id between our lookup and now). Fall back to the
+      // existing row for that ID.
+      if (isUniqueViolation(err)) {
+        if (tmVenueId) {
+          const [existing] = await tx
+            .select()
+            .from(venues)
+            .where(eq(venues.ticketmasterVenueId, tmVenueId))
+            .limit(1);
+          if (existing) return { venue: existing, created: false };
+        }
+        if (googlePlaceId) {
+          const [existing] = await tx
+            .select()
+            .from(venues)
+            .where(eq(venues.googlePlaceId, googlePlaceId))
+            .limit(1);
+          if (existing) return { venue: existing, created: false };
+        }
+      }
+      throw err;
+    }
+  });
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    (err as { code?: string }).code === '23505'
+  );
 }
 
 // ---------------------------------------------------------------------------

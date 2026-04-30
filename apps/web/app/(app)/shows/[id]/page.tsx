@@ -110,13 +110,13 @@ export default function ShowDetailPage() {
   const updateState = trpc.shows.updateState.useMutation({
     onSuccess: () => {
       utils.shows.detail.invalidate({ showId });
-      utils.shows.list.invalidate();
+      utils.shows.invalidate();
     },
   });
 
   const deleteShow = trpc.shows.delete.useMutation({
     onSuccess: () => {
-      utils.shows.list.invalidate();
+      utils.shows.invalidate();
       router.push("/shows");
     },
   });
@@ -844,7 +844,7 @@ function PickDateBanner({ showId }: { showId: string }) {
   const pickDate = trpc.discover.pickDate.useMutation({
     onSuccess: () => {
       utils.shows.detail.invalidate({ showId });
-      utils.shows.list.invalidate();
+      utils.shows.invalidate();
     },
   });
 

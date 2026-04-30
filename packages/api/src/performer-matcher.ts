@@ -1,4 +1,4 @@
-import { db, performers } from '@showbook/db';
+import { db, performers, type Database } from '@showbook/db';
 import { eq, sql } from 'drizzle-orm';
 
 // ---------------------------------------------------------------------------
@@ -17,14 +17,12 @@ export interface PerformerMatchResult {
   created: boolean;
 }
 
+type Tx = Database | Parameters<Parameters<Database['transaction']>[0]>[0];
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Build a partial update object for fields the matched performer is missing
- * but the input provides.
- */
 function buildUpdate(
   existing: typeof performers.$inferSelect,
   input: PerformerInput,
@@ -44,17 +42,15 @@ function buildUpdate(
   return Object.keys(updates).length > 0 ? updates : null;
 }
 
-/**
- * Apply pending updates to a matched performer and return the refreshed row.
- */
 async function applyUpdates(
+  tx: Tx,
   existing: typeof performers.$inferSelect,
   input: PerformerInput,
 ): Promise<typeof performers.$inferSelect> {
   const updates = buildUpdate(existing, input);
   if (!updates) return existing;
 
-  const [updated] = await db
+  const [updated] = await tx
     .update(performers)
     .set(updates)
     .where(eq(performers.id, existing.id))
@@ -70,7 +66,9 @@ async function applyUpdates(
 export async function matchOrCreatePerformer(
   input: PerformerInput,
 ): Promise<PerformerMatchResult> {
-  // 1. TM attraction ID match
+  // 1. TM attraction ID match. Backed by a partial UNIQUE index, so a
+  //    concurrent insert that races us will fail with 23505 and we'll
+  //    re-select.
   if (input.tmAttractionId) {
     const [match] = await db
       .select()
@@ -79,11 +77,11 @@ export async function matchOrCreatePerformer(
       .limit(1);
 
     if (match) {
-      return { performer: await applyUpdates(match, input), created: false };
+      return { performer: await applyUpdates(db, match, input), created: false };
     }
   }
 
-  // 2. MusicBrainz ID match
+  // 2. MusicBrainz ID match — same shape.
   if (input.musicbrainzId) {
     const [match] = await db
       .select()
@@ -92,31 +90,67 @@ export async function matchOrCreatePerformer(
       .limit(1);
 
     if (match) {
-      return { performer: await applyUpdates(match, input), created: false };
+      return { performer: await applyUpdates(db, match, input), created: false };
     }
   }
 
-  // 3. Case-insensitive name match
-  const [nameMatch] = await db
-    .select()
-    .from(performers)
-    .where(sql`lower(${performers.name}) = lower(${input.name})`)
-    .limit(1);
+  // 3. Case-insensitive name match + create-if-missing under a transaction
+  //    advisory lock. The lock is keyed on lower(name) so two concurrent
+  //    requests for the same artist serialize, while different names
+  //    proceed in parallel. Without it, both would miss the SELECT and
+  //    both would INSERT, yielding duplicate global rows.
+  return await db.transaction(async (tx) => {
+    const lockKey = input.name.trim().toLowerCase();
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${lockKey}))`);
 
-  if (nameMatch) {
-    return { performer: await applyUpdates(nameMatch, input), created: false };
-  }
+    const [nameMatch] = await tx
+      .select()
+      .from(performers)
+      .where(sql`lower(${performers.name}) = lower(${input.name})`)
+      .limit(1);
 
-  // 4. Create new performer
-  const [created] = await db
-    .insert(performers)
-    .values({
-      name: input.name,
-      ticketmasterAttractionId: input.tmAttractionId ?? null,
-      musicbrainzId: input.musicbrainzId ?? null,
-      imageUrl: input.imageUrl ?? null,
-    })
-    .returning();
+    if (nameMatch) {
+      return { performer: await applyUpdates(tx, nameMatch, input), created: false };
+    }
 
-  return { performer: created, created: true };
+    try {
+      const [created] = await tx
+        .insert(performers)
+        .values({
+          name: input.name,
+          ticketmasterAttractionId: input.tmAttractionId ?? null,
+          musicbrainzId: input.musicbrainzId ?? null,
+          imageUrl: input.imageUrl ?? null,
+        })
+        .returning();
+      return { performer: created, created: true };
+    } catch (err) {
+      // External-ID unique-violation (different name but same TM/MBID) —
+      // fall back to whatever already exists for that ID.
+      if (isUniqueViolation(err)) {
+        const conflictId = input.tmAttractionId ?? input.musicbrainzId;
+        if (conflictId) {
+          const [existing] = await tx
+            .select()
+            .from(performers)
+            .where(
+              input.tmAttractionId
+                ? eq(performers.ticketmasterAttractionId, input.tmAttractionId)
+                : eq(performers.musicbrainzId, input.musicbrainzId!),
+            )
+            .limit(1);
+          if (existing) return { performer: existing, created: false };
+        }
+      }
+      throw err;
+    }
+  });
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    (err as { code?: string }).code === '23505'
+  );
 }

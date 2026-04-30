@@ -42,9 +42,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const activeId = pathnameToNavId(pathname);
   const { data: session } = useSession();
 
-  const showsQuery = trpc.shows.list.useQuery({}, { select: (d) => d.length, staleTime: 60_000 });
-  const performersQuery = trpc.performers.list.useQuery(undefined, { select: (d) => d.length, staleTime: 60_000 });
-  const venuesQuery = trpc.venues.list.useQuery(undefined, { select: (d) => d.length, staleTime: 60_000 });
+  // Use lightweight count procedures rather than `*.list().length` —
+  // otherwise every page render fetches the full show/performer/venue list
+  // (potentially thousands of rows with relations) just to read its length.
+  const showsCountQuery = trpc.shows.count.useQuery(undefined, { staleTime: 60_000 });
+  const performersCountQuery = trpc.performers.count.useQuery(undefined, { staleTime: 60_000 });
+  const venuesCountQuery = trpc.venues.count.useQuery(undefined, { staleTime: 60_000 });
 
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
@@ -68,9 +71,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [addMenuOpen]);
 
   const counts: Partial<Record<string, number>> = {};
-  if (showsQuery.data !== undefined) counts.shows = showsQuery.data;
-  if (performersQuery.data !== undefined) counts.artists = performersQuery.data;
-  if (venuesQuery.data !== undefined) counts.venues = venuesQuery.data;
+  if (showsCountQuery.data !== undefined) counts.shows = showsCountQuery.data;
+  if (performersCountQuery.data !== undefined) counts.artists = performersCountQuery.data;
+  if (venuesCountQuery.data !== undefined) counts.venues = venuesCountQuery.data;
 
   const sessionUser = session?.user;
   const userName = sessionUser?.name ?? sessionUser?.email ?? undefined;

@@ -385,7 +385,7 @@ export default function ShowsPage() {
   const createShow = trpc.shows.create.useMutation();
   const utils = trpc.useUtils();
   const setTicketUrl = trpc.shows.setTicketUrl.useMutation({
-    onSuccess: () => utils.shows.list.invalidate(),
+    onSuccess: () => utils.shows.invalidate(),
   });
 
   // Gmail
@@ -474,7 +474,7 @@ export default function ShowsPage() {
       showId: show.id,
       newState: transition.target,
     });
-    utils.shows.list.invalidate();
+    utils.shows.invalidate();
   }
 
   async function handleTransitionSubmit() {
@@ -493,21 +493,21 @@ export default function ShowsPage() {
     setTransitionSeat("");
     setTransitionPrice("");
     setTransitionTicketCount("1");
-    utils.shows.list.invalidate();
+    utils.shows.invalidate();
   }
 
   async function handleDelete(showId: string) {
     if (!confirm("Delete this show? This cannot be undone.")) return;
     await deleteShow.mutateAsync({ showId });
-    utils.shows.list.invalidate();
-    utils.performers.list.invalidate();
+    utils.shows.invalidate();
+    utils.performers.invalidate();
   }
 
   async function handleDeleteAll() {
     if (!confirm(`Delete all ${totalShows} shows? This cannot be undone.`)) return;
     await deleteAllShows.mutateAsync();
-    utils.shows.list.invalidate();
-    utils.performers.list.invalidate();
+    utils.shows.invalidate();
+    utils.performers.invalidate();
   }
 
   function buildShowContextMenuItems(show: ShowData): ContextMenuItem[] {
@@ -714,7 +714,7 @@ export default function ShowsPage() {
 
     setGmailAdding(false);
     setGmailModalOpen(false);
-    utils.shows.list.invalidate();
+    utils.shows.invalidate();
   }, [gmailBulkResults, gmailBulkSelected, createShow, utils]);
 
   // ---------------------------------------------------------------------------

@@ -53,6 +53,19 @@ export const venuesRouter = router({
     return rows.map((r) => ({ ...r, isFollowed: followedSet.has(r.id) }));
   }),
 
+  /**
+   * Count of distinct venues the user has shows at — matches the row count
+   * returned by `list`. Used by the sidebar badge.
+   */
+  count: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const [row] = await ctx.db
+      .select({ count: sql<number>`count(distinct ${shows.venueId})::int` })
+      .from(shows)
+      .where(eq(shows.userId, userId));
+    return row?.count ?? 0;
+  }),
+
   search: protectedProcedure
     .input(z.object({ query: z.string().min(1) }))
     .query(async ({ ctx, input }) => {

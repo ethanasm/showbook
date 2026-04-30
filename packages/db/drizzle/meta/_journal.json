@@ -127,6 +127,20 @@
       "when": 1778386800000,
       "tag": "0017_add_missing_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1778473200000,
+      "tag": "0018_lower_name_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1778559600000,
+      "tag": "0019_unique_external_ids",
+      "breakpoints": true
     }
   ]
 }

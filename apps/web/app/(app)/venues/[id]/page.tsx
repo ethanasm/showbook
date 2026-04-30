@@ -227,7 +227,7 @@ export default function VenueDetailPage() {
     onSuccess: () => {
       utils.venues.userShows.invalidate();
       utils.venues.detail.invalidate();
-      utils.shows.list.invalidate();
+      utils.shows.invalidate();
     },
   });
 
@@ -236,7 +236,7 @@ export default function VenueDetailPage() {
       setExpandedShowId(null);
       utils.venues.userShows.invalidate();
       utils.venues.detail.invalidate();
-      utils.shows.list.invalidate();
+      utils.shows.invalidate();
     },
   });
 

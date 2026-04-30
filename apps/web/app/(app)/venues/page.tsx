@@ -61,13 +61,13 @@ export default function VenuesListPage() {
   });
   const utils = trpc.useUtils();
   const renameMutation = trpc.venues.rename.useMutation({
-    onSuccess: () => utils.venues.list.invalidate(),
+    onSuccess: () => utils.venues.invalidate(),
   });
   const followMutation = trpc.venues.follow.useMutation({
-    onSuccess: () => utils.venues.list.invalidate(),
+    onSuccess: () => utils.venues.invalidate(),
   });
   const unfollowMutation = trpc.venues.unfollow.useMutation({
-    onSuccess: () => utils.venues.list.invalidate(),
+    onSuccess: () => utils.venues.invalidate(),
   });
 
   const toggleSort = useCallback((field: SortField) => {

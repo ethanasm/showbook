@@ -45,6 +45,23 @@ export const performersRouter = router({
     return rows.map((r) => ({ ...r, isFollowed: followedSet.has(r.id) }));
   }),
 
+  /**
+   * Count of distinct performers across the user's non-theatre shows —
+   * matches the row count returned by `list` so sidebar badges stay
+   * consistent. Avoids hydrating the full performer list just for `.length`.
+   */
+  count: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const [row] = await ctx.db
+      .select({
+        count: sql<number>`count(distinct ${showPerformers.performerId})::int`,
+      })
+      .from(showPerformers)
+      .innerJoin(shows, eq(showPerformers.showId, shows.id))
+      .where(and(eq(shows.userId, userId), ne(shows.kind, 'theatre')));
+    return row?.count ?? 0;
+  }),
+
   search: protectedProcedure
     .input(z.object({ query: z.string().min(1) }))
     .query(async ({ ctx, input }) => {

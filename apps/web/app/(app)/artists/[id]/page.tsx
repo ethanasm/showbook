@@ -192,7 +192,7 @@ export default function ArtistDetailPage() {
   const renameMutation = trpc.performers.rename.useMutation({
     onSuccess: () => {
       utils.performers.detail.invalidate();
-      utils.performers.list.invalidate();
+      utils.performers.invalidate();
     },
   });
 

@@ -4,6 +4,15 @@ import {
   buildBulkScanQueries,
   extractShowFromEmail,
 } from '@showbook/api';
+import { auth } from '@/auth';
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'web.gmail.scan' });
+
+// Hard cap on emails processed per scan to bound Groq cost. A user with
+// thousands of confirmation emails should narrow their date range rather
+// than have the server burn through them all in one request.
+const MAX_MESSAGES_PER_SCAN = 200;
 
 function correctExtractedYear(
   extractedDate: string | null,
@@ -85,6 +94,14 @@ function mergeTickets(allExtracted: ExtractedTicket[]): ExtractedTicket[] {
 }
 
 export async function POST(request: Request) {
+  // The middleware excludes /api/*; this endpoint drives Groq calls so
+  // unauthenticated access would be a direct cost vector.
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
   const { accessToken } = await request.json();
   if (!accessToken) {
     return new Response('Missing accessToken', { status: 400 });
@@ -104,8 +121,9 @@ export async function POST(request: Request) {
         const queries = buildBulkScanQueries();
         const seen = new Set<string>();
         const allMessages: { id: string }[] = [];
+        let truncated = false;
 
-        for (const query of queries) {
+        outer: for (const query of queries) {
           let pageToken: string | undefined;
           do {
             const result = await searchMessages(accessToken, query, 100, pageToken);
@@ -113,6 +131,10 @@ export async function POST(request: Request) {
               if (!seen.has(msg.id)) {
                 seen.add(msg.id);
                 allMessages.push(msg);
+                if (allMessages.length >= MAX_MESSAGES_PER_SCAN) {
+                  truncated = true;
+                  break outer;
+                }
               }
             }
             pageToken = result.nextPageToken;
@@ -122,8 +144,15 @@ export async function POST(request: Request) {
         const total = allMessages.length;
         send('progress', { phase: 'processing', processed: 0, total, found: 0 });
 
+        if (truncated) {
+          log.info(
+            { event: 'gmail.scan.truncated', userId, cap: MAX_MESSAGES_PER_SCAN },
+            'Gmail scan hit message cap',
+          );
+        }
+
         if (total === 0) {
-          send('done', { tickets: [] });
+          send('done', { tickets: [], truncated });
           controller.close();
           return;
         }
@@ -163,7 +192,7 @@ export async function POST(request: Request) {
 
         // Step 3: merge
         const merged = mergeTickets(allExtracted);
-        send('done', { tickets: merged });
+        send('done', { tickets: merged, truncated });
       } catch (err) {
         send('error', { message: err instanceof Error ? err.message : 'Scan failed' });
       } finally {
