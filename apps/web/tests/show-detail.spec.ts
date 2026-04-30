@@ -83,7 +83,9 @@ test.describe('Show detail page', () => {
   test('Edit button routes to /add?editId=', async ({ page }) => {
     await gotoRadioheadMSG(page);
 
-    await page.getByRole('button', { name: /Edit/i }).click();
+    // Several "Edit" buttons live on this page now (lineup, setlist,
+    // actions); pick the actions one explicitly.
+    await page.getByTestId('action-edit-show').click();
     await page.waitForURL(/\/add\?editId=[0-9a-f-]+/);
   });
 });

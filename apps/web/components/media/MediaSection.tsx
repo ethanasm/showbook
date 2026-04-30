@@ -92,8 +92,71 @@ export function MediaSection({
   const deleteMedia = trpc.media.delete.useMutation({
     onSuccess: () => invalidateMedia(),
   });
+  // Optimistic update so a click on the X button reflects in the UI
+  // immediately. Without this, a user who removes a tag right after
+  // adding it can race the in-flight refetch — the new asset prop hasn't
+  // landed yet, so the click fires against stale `performerIds` and the
+  // tag silently stays.
   const setPerformersMutation = trpc.media.setPerformers.useMutation({
-    onSuccess: () => {
+    onMutate: async ({ assetId, performerIds: nextIds }) => {
+      const snapshots: {
+        listForShow?: ReturnType<typeof utils.media.listForShow.getData>;
+        listForVenue?: ReturnType<typeof utils.media.listForVenue.getData>;
+        listForPerformer?: ReturnType<typeof utils.media.listForPerformer.getData>;
+      } = {};
+      if (showId) {
+        await utils.media.listForShow.cancel({ showId });
+        snapshots.listForShow = utils.media.listForShow.getData({ showId });
+        utils.media.listForShow.setData({ showId }, (old) =>
+          old
+            ? old.map((a) =>
+                a.id === assetId ? { ...a, performerIds: nextIds } : a,
+              )
+            : old,
+        );
+      }
+      if (venueId) {
+        await utils.media.listForVenue.cancel({ venueId });
+        snapshots.listForVenue = utils.media.listForVenue.getData({ venueId });
+        utils.media.listForVenue.setData({ venueId }, (old) =>
+          old
+            ? old.map((a) =>
+                a.id === assetId ? { ...a, performerIds: nextIds } : a,
+              )
+            : old,
+        );
+      }
+      if (performerId) {
+        await utils.media.listForPerformer.cancel({ performerId });
+        snapshots.listForPerformer = utils.media.listForPerformer.getData({
+          performerId,
+        });
+        utils.media.listForPerformer.setData({ performerId }, (old) =>
+          old
+            ? old.map((a) =>
+                a.id === assetId ? { ...a, performerIds: nextIds } : a,
+              )
+            : old,
+        );
+      }
+      return snapshots;
+    },
+    onError: (_err, _vars, context) => {
+      if (!context) return;
+      if (showId && context.listForShow !== undefined) {
+        utils.media.listForShow.setData({ showId }, context.listForShow);
+      }
+      if (venueId && context.listForVenue !== undefined) {
+        utils.media.listForVenue.setData({ venueId }, context.listForVenue);
+      }
+      if (performerId && context.listForPerformer !== undefined) {
+        utils.media.listForPerformer.setData(
+          { performerId },
+          context.listForPerformer,
+        );
+      }
+    },
+    onSettled: () => {
       invalidateMedia();
       // setPerformers may auto-add a performer to the show's lineup
       // (showPerformers row), so refresh the show detail too.

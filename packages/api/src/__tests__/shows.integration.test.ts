@@ -440,6 +440,128 @@ describe('shows router', () => {
     assert.equal(past.state, 'past');
   });
 
+  it('addPerformer + removePerformer + setSetlist round-trip', async () => {
+    const created = await callerFor(USER).shows.create({
+      kind: 'concert',
+      headliner: { name: `${PREFIX} Lineup Headliner` },
+      venue: { name: `${PREFIX} Venue`, city: 'NYC' },
+      date: '2022-12-01',
+      ticketCount: 1,
+    });
+    assert.ok(created);
+    const showId = created!.id;
+    const headlinerId = created!.showPerformers[0].performerId;
+
+    // Adding a support performer.
+    const added = await callerFor(USER).shows.addPerformer({
+      showId,
+      name: `${PREFIX} Inline Support`,
+      role: 'support',
+    });
+    assert.ok(added.performerId);
+
+    let detail = await callerFor(USER).shows.detail({ showId });
+    const supportRow = detail.showPerformers.find(
+      (sp) => sp.performerId === added.performerId,
+    );
+    assert.ok(supportRow);
+    assert.equal(supportRow!.role, 'support');
+
+    // Setting a setlist for the headliner.
+    await callerFor(USER).shows.setSetlist({
+      showId,
+      performerId: headlinerId,
+      songs: ['Song 1', '  Song 2  ', '   '],
+    });
+    detail = await callerFor(USER).shows.detail({ showId });
+    assert.deepEqual(detail.setlists, { [headlinerId]: ['Song 1', 'Song 2'] });
+
+    // setSetlist with [] removes only that performer's entry.
+    await callerFor(USER).shows.setSetlist({
+      showId,
+      performerId: added.performerId,
+      songs: ['Opener'],
+    });
+    await callerFor(USER).shows.setSetlist({
+      showId,
+      performerId: headlinerId,
+      songs: [],
+    });
+    detail = await callerFor(USER).shows.detail({ showId });
+    assert.deepEqual(detail.setlists, { [added.performerId]: ['Opener'] });
+
+    // Removing a performer also clears their setlist.
+    await callerFor(USER).shows.removePerformer({
+      showId,
+      performerId: added.performerId,
+      role: 'support',
+    });
+    detail = await callerFor(USER).shows.detail({ showId });
+    assert.equal(
+      detail.showPerformers.find((sp) => sp.performerId === added.performerId),
+      undefined,
+    );
+    assert.equal(detail.setlists, null);
+  });
+
+  it('setSetlist rejects performers not on the show', async () => {
+    const created = await callerFor(USER).shows.create({
+      kind: 'concert',
+      headliner: { name: `${PREFIX} Solo Headliner` },
+      venue: { name: `${PREFIX} Venue`, city: 'NYC' },
+      date: '2022-12-02',
+      ticketCount: 1,
+    });
+    const showId = created!.id;
+    const strangerId = fakeUuid(PREFIX, 'stranger');
+    await db
+      .insert(performers)
+      .values({ id: strangerId, name: `${PREFIX} Stranger` })
+      .onConflictDoNothing();
+
+    await assert.rejects(
+      () =>
+        callerFor(USER).shows.setSetlist({
+          showId,
+          performerId: strangerId,
+          songs: ['oops'],
+        }),
+      (err: unknown) =>
+        err instanceof TRPCError && err.code === 'BAD_REQUEST',
+    );
+  });
+
+  it('addPerformer / removePerformer / setSetlist reject unknown showId', async () => {
+    const fakeShow = '00000000-0000-0000-0000-000000000000';
+    await assert.rejects(
+      () =>
+        callerFor(USER).shows.addPerformer({
+          showId: fakeShow,
+          name: 'Nobody',
+          role: 'support',
+        }),
+      (err: unknown) => err instanceof TRPCError && err.code === 'NOT_FOUND',
+    );
+    await assert.rejects(
+      () =>
+        callerFor(USER).shows.removePerformer({
+          showId: fakeShow,
+          performerId: fakeShow,
+          role: 'support',
+        }),
+      (err: unknown) => err instanceof TRPCError && err.code === 'NOT_FOUND',
+    );
+    await assert.rejects(
+      () =>
+        callerFor(USER).shows.setSetlist({
+          showId: fakeShow,
+          performerId: fakeShow,
+          songs: [],
+        }),
+      (err: unknown) => err instanceof TRPCError && err.code === 'NOT_FOUND',
+    );
+  });
+
   it('delete removes the show', async () => {
     const result = await callerFor(USER).shows.delete({ showId: SHOW_TO_DELETE });
     assert.deepEqual(result, { success: true });
