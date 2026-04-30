@@ -18,6 +18,7 @@ import {
   Square,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { formatDateParts as toDateParts } from "@showbook/shared";
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -127,22 +128,6 @@ function getSupportPerformers(
     .filter((sp) => sp.role === "support")
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((sp) => ({ id: sp.performer.id, name: sp.performer.name }));
-}
-
-function toDateParts(dateStr: string | null): {
-  month: string;
-  day: string;
-  year: string;
-  dow: string;
-} {
-  if (!dateStr) return { month: "TBD", day: "—", year: "", dow: "" };
-  const d = new Date(dateStr);
-  return {
-    month: d.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
-    day: String(d.getDate()),
-    year: String(d.getFullYear()),
-    dow: d.toLocaleDateString("en-US", { weekday: "short" }),
-  };
 }
 
 function countdownText(dateStr: string | null): string {

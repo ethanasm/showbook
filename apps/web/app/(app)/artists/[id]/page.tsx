@@ -18,6 +18,7 @@ import {
 } from "@/components/design-system";
 import { EditableName } from "@/components/EditableName";
 import { MediaSection } from "@/components/media";
+import { formatDateMedium as formatDateLong, formatDateParts } from "@showbook/shared";
 
 type Performer = {
   id: string;
@@ -54,34 +55,6 @@ type ShowData = {
   venue: Venue;
   showPerformers: ShowPerformer[];
 };
-
-function formatDateLong(dateStr: string | null): string {
-  if (!dateStr) return "—";
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatDateParts(dateStr: string | null): {
-  month: string;
-  day: string;
-  year: string;
-  dow: string;
-} {
-  if (!dateStr) {
-    return { month: "TBD", day: "", year: "—", dow: "date" };
-  }
-  const d = new Date(dateStr + "T00:00:00");
-  return {
-    month: d.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
-    day: String(d.getDate()),
-    year: String(d.getFullYear()),
-    dow: d.toLocaleDateString("en-US", { weekday: "short" }).toLowerCase(),
-  };
-}
 
 function formatShowDateParts(show: ShowData): {
   month: string;

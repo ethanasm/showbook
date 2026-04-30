@@ -24,6 +24,12 @@ import {
   type ShowState,
 } from "@/components/design-system";
 import { MediaSection } from "@/components/media";
+import {
+  daysUntil,
+  formatDateMedium as formatDateLong,
+  formatDateParts,
+  formatOnSaleDate,
+} from "@showbook/shared";
 
 type Performer = {
   id: string;
@@ -75,36 +81,6 @@ const ON_SALE_STATUS_LABELS: Record<string, string> = {
   sold_out: "sold out",
 };
 
-function formatDateLong(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatDateParts(dateStr: string): {
-  month: string;
-  day: string;
-  year: string;
-  dow: string;
-} {
-  const d = new Date(dateStr + "T00:00:00");
-  return {
-    month: d.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
-    day: String(d.getDate()),
-    year: String(d.getFullYear()),
-    dow: d.toLocaleDateString("en-US", { weekday: "short" }).toLowerCase(),
-  };
-}
-
-function formatOnSaleDate(value: Date | string | null): string {
-  if (!value) return "—";
-  const d = typeof value === "string" ? new Date(value) : value;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
 function getHeadliner(show: ShowData): string {
   if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
     return show.productionName;
@@ -117,12 +93,6 @@ function getHeadliner(show: ShowData): string {
     show.showPerformers.find((sp) => sp.role === "headliner")?.performer.name ??
     "Unknown"
   );
-}
-
-function daysUntil(dateStr: string): number {
-  const now = new Date();
-  const d = new Date(dateStr + "T00:00:00");
-  return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 const STATE_TRANSITIONS: Record<string, { label: string; target: ShowState }> = {

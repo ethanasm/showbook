@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { useCompactMode } from "@/lib/useCompactMode";
+import { daysUntil, formatDateParts } from "@showbook/shared";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -230,20 +231,9 @@ function formatDate(dateStr: string): string {
   });
 }
 
-function toDateParts(dateStr: string): {
-  month: string;
-  day: string;
-  year: string;
-  dow: string;
-} {
-  const d = new Date(dateStr + "T00:00:00");
-  return {
-    month: d.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
-    day: String(d.getDate()),
-    year: String(d.getFullYear()),
-    dow: d.toLocaleDateString("en-US", { weekday: "short" }),
-  };
-}
+// Re-exported from shared as `formatDateParts` — keep the local alias so the
+// existing call sites read naturally (`toDateParts(show.date)`).
+const toDateParts = formatDateParts;
 
 function getSupport(show: ShowData): string[] {
   return show.showPerformers
@@ -276,11 +266,6 @@ function getFirstDayOfWeek(year: number, month: number): number {
   return new Date(year, month, 1).getDay();
 }
 
-function daysUntil(dateStr: string): number {
-  const now = new Date();
-  const d = new Date(dateStr + "T00:00:00");
-  return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-}
 
 // ---------------------------------------------------------------------------
 // State transition labels
