@@ -4,6 +4,12 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { type ShowKind } from "@/components/design-system";
+import {
+  AddShowMediaStaging,
+  type StagedMediaItem,
+  uploadPhotoForShow,
+  uploadVideoForShow,
+} from "@/components/media";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -247,16 +253,19 @@ export default function AddPage() {
   const parseChat = trpc.enrichment.parseChat.useMutation();
   const extractCast = trpc.enrichment.extractCast.useMutation();
   const extractFromPdf = trpc.enrichment.extractFromPdf.useMutation();
-  const createShow = trpc.shows.create.useMutation({
-    onSuccess: () => {
-      router.push("/shows");
-    },
-  });
+  const createShow = trpc.shows.create.useMutation();
   const updateShow = trpc.shows.update.useMutation({
     onSuccess: () => {
       router.push("/shows");
     },
   });
+  const createUploadIntent = trpc.media.createUploadIntent.useMutation();
+  const completeUpload = trpc.media.completeUpload.useMutation();
+
+  // Staged media uploads (processed after show is created)
+  const [stagedMedia, setStagedMedia] = useState<StagedMediaItem[]>([]);
+  const [mediaUploadStatus, setMediaUploadStatus] = useState<string | null>(null);
+  const [mediaUploadErrors, setMediaUploadErrors] = useState<string[]>([]);
 
   // Fetch existing show for edit mode
   const editQuery = trpc.shows.detail.useQuery(
@@ -693,7 +702,7 @@ export default function AddPage() {
       chatParsed.date_hint ?? new Date().toISOString().split("T")[0]!;
 
     try {
-      await createShow.mutateAsync({
+      const created = await createShow.mutateAsync({
         kind: showKind,
         headliner: { name: chatParsed.headliner },
         venue: {
@@ -703,6 +712,7 @@ export default function AddPage() {
         date: showDate,
         seat: chatParsed.seat_hint ?? undefined,
       });
+      router.push(created ? `/shows/${created.id}` : "/shows");
     } catch {
       setChatMessages((prev) => [
         ...prev,
@@ -712,7 +722,7 @@ export default function AddPage() {
         },
       ]);
     }
-  }, [chatParsed, createShow]);
+  }, [chatParsed, createShow, router]);
 
   const handleFormSave = useCallback(async () => {
     const needsHeadliner = kind !== "theatre" && kind !== "festival";
@@ -785,11 +795,54 @@ export default function AddPage() {
 
       if (isEditMode && editId) {
         await updateShow.mutateAsync({ showId: editId, ...payload });
-      } else {
-        await createShow.mutateAsync(payload);
+        return;
       }
+
+      const created = await createShow.mutateAsync(payload);
+      if (!created) {
+        router.push("/shows");
+        return;
+      }
+
+      if (stagedMedia.length === 0) {
+        router.push(`/shows/${created.id}`);
+        return;
+      }
+
+      const errors: string[] = [];
+      for (let i = 0; i < stagedMedia.length; i++) {
+        const item = stagedMedia[i]!;
+        setMediaUploadStatus(`Uploading ${i + 1} of ${stagedMedia.length}: ${item.file.name}`);
+        try {
+          const opts = {
+            showId: created.id,
+            file: item.file,
+            caption: item.caption || undefined,
+            createIntent: (input: Parameters<typeof createUploadIntent.mutateAsync>[0]) =>
+              createUploadIntent.mutateAsync(input),
+            completeUpload: (input: { assetId: string }) =>
+              completeUpload.mutateAsync(input),
+          };
+          if (item.kind === "photo") {
+            await uploadPhotoForShow(opts);
+          } else {
+            await uploadVideoForShow(opts);
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Upload failed";
+          errors.push(`${item.file.name}: ${msg}`);
+        }
+      }
+      setMediaUploadStatus(null);
+      if (errors.length > 0) {
+        setMediaUploadErrors(errors);
+        // Show is created; let user see the partial-failure summary before navigating.
+        return;
+      }
+      router.push(`/shows/${created.id}`);
     } catch {
       // Error is surfaced via mutation isError in the UI
+      setMediaUploadStatus(null);
     }
   }, [
     kind,
@@ -811,6 +864,10 @@ export default function AddPage() {
     isEditMode,
     editId,
     utils,
+    stagedMedia,
+    createUploadIntent,
+    completeUpload,
+    router,
   ]);
 
   const handleVenueInput = useCallback((value: string) => {
@@ -1722,6 +1779,55 @@ export default function AddPage() {
         </div>
       </div>
 
+      {/* Photos & videos (staged for upload after save) */}
+      {!isEditMode && (
+        <div style={{ marginBottom: 26 }}>
+          <FieldLabel optional>Photos & videos</FieldLabel>
+          <AddShowMediaStaging
+            staged={stagedMedia}
+            onChange={setStagedMedia}
+            disabled={createShow.isPending || Boolean(mediaUploadStatus)}
+          />
+          {mediaUploadStatus && (
+            <div
+              data-testid="add-show-media-status"
+              style={{ marginTop: 8, fontFamily: mono, fontSize: 12, color: "var(--muted)" }}
+            >
+              {mediaUploadStatus}…
+            </div>
+          )}
+          {mediaUploadErrors.length > 0 && (
+            <div
+              data-testid="add-show-media-errors"
+              style={{ marginTop: 8, fontFamily: mono, fontSize: 12, color: "#E63946" }}
+            >
+              <div>Some uploads failed; the show was saved.</div>
+              <ul style={{ margin: "4px 0 0 16px" }}>
+                {mediaUploadErrors.map((err, idx) => (
+                  <li key={idx}>{err}</li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() => router.push(`/shows`)}
+                style={{
+                  marginTop: 6,
+                  background: "transparent",
+                  border: "1px solid var(--rule-strong)",
+                  padding: "4px 8px",
+                  fontFamily: mono,
+                  fontSize: 11,
+                  cursor: "pointer",
+                  color: "var(--ink)",
+                }}
+              >
+                Go to shows
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Comedy: opener */}
       {kind === "comedy" && (
         <div style={{ marginBottom: 26 }}>
@@ -2043,7 +2149,7 @@ export default function AddPage() {
         <button
           type="button"
           onClick={handleFormSave}
-          disabled={!canSave || createShow.isPending || updateShow.isPending}
+          disabled={!canSave || createShow.isPending || updateShow.isPending || Boolean(mediaUploadStatus)}
           style={{
             padding: "9px 16px",
             background: canSave ? "var(--ink)" : "var(--surface2)",
@@ -2058,12 +2164,14 @@ export default function AddPage() {
             gap: 6,
             cursor: canSave ? "pointer" : "not-allowed",
             border: "none",
-            opacity: (createShow.isPending || updateShow.isPending) ? 0.6 : 1,
+            opacity: (createShow.isPending || updateShow.isPending || Boolean(mediaUploadStatus)) ? 0.6 : 1,
           }}
         >
           {(createShow.isPending || updateShow.isPending)
             ? "Saving..."
-            : isEditMode ? "Save changes" : "✓ Save to history"}
+            : mediaUploadStatus
+              ? "Uploading..."
+              : isEditMode ? "Save changes" : "✓ Save to history"}
         </button>
       </div>
 
