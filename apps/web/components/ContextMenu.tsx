@@ -27,11 +27,18 @@ export function ContextMenu({ items, position, onClose }: ContextMenuProps) {
     function handleMouseDown(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     }
+    function handleScroll() {
+      onClose();
+    }
     document.addEventListener("keydown", handleKey);
     document.addEventListener("mousedown", handleMouseDown);
+    // Close on any ancestor scroll so the fixed-position menu doesn't end
+    // up detached from the row that opened it.
+    document.addEventListener("scroll", handleScroll, true);
     return () => {
       document.removeEventListener("keydown", handleKey);
       document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("scroll", handleScroll, true);
     };
   }, [onClose]);
 

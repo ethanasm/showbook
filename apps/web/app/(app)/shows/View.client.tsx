@@ -881,6 +881,7 @@ export default function ShowsView() {
                   background: active ? "var(--ink)" : "transparent",
                   letterSpacing: ".04em",
                   cursor: "pointer",
+                  textTransform: "lowercase",
                 }}
               >
                 <KIcon size={12} color={active ? "var(--bg)" : `var(--kind-${k})`} />

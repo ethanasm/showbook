@@ -396,7 +396,14 @@ export default function HomeView() {
                   ? parseFloat(heroShow.pricePaid)
                   : 0,
                 kind: heroShow.kind as ShowKind,
-                date: toDateParts(heroShow.date),
+                // Hero card has its own null-date display style — preserve
+                // the prior fallback so a date-less hero looks unchanged.
+                date: toDateParts(heroShow.date, {
+                  month: "TBD",
+                  day: "—",
+                  year: "",
+                  dow: "",
+                }),
                 countdown: countdownText(heroShow.date),
                 hasTix: heroShow.state === "ticketed",
                 headlinerImageUrl: getHeadlinerImageUrl(heroShow),

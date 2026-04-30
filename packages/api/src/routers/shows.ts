@@ -221,43 +221,74 @@ export const showsRouter = router({
     const headlinerName = new Map<string, string>();
     const headlinerId = new Map<string, string>();
     const headlinerImageUrl = new Map<string, string | null>();
-    const nonTheatreIds: string[] = [];
+    const nonProductionIds: string[] = [];
 
+    // Theatre/festival rows that have a productionName render the production
+    // as the "headliner" — match the legacy getHeadliner behaviour exactly.
     for (const r of rows) {
-      if (r.kind === 'theatre' && r.productionName) {
+      if (
+        (r.kind === 'theatre' || r.kind === 'festival') &&
+        r.productionName
+      ) {
         headlinerName.set(r.id, r.productionName);
       } else {
-        nonTheatreIds.push(r.id);
+        nonProductionIds.push(r.id);
       }
     }
 
-    if (nonTheatreIds.length > 0) {
+    if (nonProductionIds.length > 0) {
+      // Pull every showPerformer (not just role='headliner') so we can
+      // mirror the 3-tier fallback in apps/web/lib/show-accessors.ts:
+      //   1) headliner with sortOrder === 0
+      //   2) any headliner
+      //   3) first showPerformer regardless of role
       const performerRows = await ctx.db
         .select({
           showId: showPerformers.showId,
           performerId: performers.id,
           name: performers.name,
           imageUrl: performers.imageUrl,
+          role: showPerformers.role,
           sortOrder: showPerformers.sortOrder,
         })
         .from(showPerformers)
         .innerJoin(performers, eq(showPerformers.performerId, performers.id))
-        .where(
-          and(
-            inArray(showPerformers.showId, nonTheatreIds),
-            eq(showPerformers.role, 'headliner'),
-          ),
-        );
-      // Lowest sortOrder wins per show.
-      const bestSort = new Map<string, number>();
+        .where(inArray(showPerformers.showId, nonProductionIds));
+
+      type Best = {
+        tier: 0 | 1 | 2;
+        sortOrder: number;
+        name: string;
+        performerId: string;
+        imageUrl: string | null;
+      };
+      const best = new Map<string, Best>();
       for (const row of performerRows) {
-        const cur = bestSort.get(row.showId);
-        if (cur === undefined || row.sortOrder < cur) {
-          bestSort.set(row.showId, row.sortOrder);
-          headlinerName.set(row.showId, row.name);
-          headlinerId.set(row.showId, row.performerId);
-          headlinerImageUrl.set(row.showId, row.imageUrl);
+        const tier: Best['tier'] =
+          row.role === 'headliner' && row.sortOrder === 0
+            ? 0
+            : row.role === 'headliner'
+              ? 1
+              : 2;
+        const cur = best.get(row.showId);
+        if (
+          !cur ||
+          tier < cur.tier ||
+          (tier === cur.tier && row.sortOrder < cur.sortOrder)
+        ) {
+          best.set(row.showId, {
+            tier,
+            sortOrder: row.sortOrder,
+            name: row.name,
+            performerId: row.performerId,
+            imageUrl: row.imageUrl,
+          });
         }
+      }
+      for (const [showId, b] of best) {
+        headlinerName.set(showId, b.name);
+        headlinerId.set(showId, b.performerId);
+        headlinerImageUrl.set(showId, b.imageUrl);
       }
     }
 

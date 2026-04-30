@@ -568,6 +568,7 @@ export default function VenueDetailPage() {
                           fontSize: 10,
                           color: "var(--muted)",
                           marginTop: 2,
+                          textTransform: "lowercase",
                         }}
                       >
                         {date.year} &middot; {date.dow}

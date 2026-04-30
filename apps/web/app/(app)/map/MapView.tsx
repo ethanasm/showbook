@@ -19,7 +19,6 @@ import {
   Plus,
   Filter,
   X,
-  Music,
 } from "lucide-react";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import "./map.css";
