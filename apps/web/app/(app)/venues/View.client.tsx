@@ -244,7 +244,7 @@ export default function VenuesView() {
       </div>
 
       {/* List */}
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)" }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "18px 36px 8px", display: "flex", alignItems: "baseline", gap: 14 }}>
           <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--ink)", letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 500 }}>
             {search ? "Matching" : "All venues"} &middot; {filtered.length}

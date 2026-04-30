@@ -23,6 +23,10 @@ import {
   getSupport,
   getSupportPerformers,
 } from "@/lib/show-accessors";
+import {
+  useShowContextMenu,
+  type ShowForContextMenu,
+} from "@/lib/useShowContextMenu";
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -78,6 +82,10 @@ export default function HomeView() {
   const router = useRouter();
   const compact = useCompactMode();
   const { data: shows, isLoading } = trpc.shows.list.useQuery({});
+  const {
+    openContextMenu: handleRecentContextMenu,
+    portal: showContextMenuPortal,
+  } = useShowContextMenu<ShowForContextMenu>();
 
   // Split shows into upcoming and past
   const { upcoming, dateTbd, past, stats } = useMemo(() => {
@@ -689,7 +697,11 @@ export default function HomeView() {
                   <div
                     key={s.id}
                     data-testid="recent-row"
+                    data-show-id={s.id}
                     onClick={() => router.push(`/shows/${s.id}`)}
+                    onContextMenu={(e) =>
+                      handleRecentContextMenu(e, s as ShowForContextMenu)
+                    }
                     style={{
                       display: "grid",
                       gridTemplateColumns:
@@ -875,6 +887,7 @@ export default function HomeView() {
           </div>
         </section>
       </div>
+      {showContextMenuPortal}
     </div>
   );
 }

@@ -125,4 +125,32 @@ test.describe('Context menus on list pages', () => {
     await expect(menu.getByText('Rename')).toBeVisible();
     await expect(menu.getByText(/Follow|Unfollow/)).toBeVisible();
   });
+
+  test('right-click a home recent row opens the same shows context menu', async ({ page }) => {
+    // Home page already loaded by beforeEach; recent rows render past shows.
+    await page.waitForSelector('[data-testid="recent-row"]', { timeout: 10000 });
+
+    const row = page.locator('[data-testid="recent-row"]').first();
+    await row.click({ button: 'right' });
+
+    const menu = page.getByTestId('context-menu');
+    await expect(menu).toBeVisible();
+    // Past shows on the shows list show Edit + Delete; recent rows must match.
+    await expect(menu.getByText('Edit')).toBeVisible();
+    await expect(menu.getByText('Delete')).toBeVisible();
+    // Past shows never expose state-transition items (Got tickets / Mark as attended).
+    await expect(menu.getByText('Got tickets')).toHaveCount(0);
+    await expect(menu.getByText('Mark as attended')).toHaveCount(0);
+  });
+
+  test('home recent row context menu Edit navigates to /add?editId', async ({ page }) => {
+    await page.waitForSelector('[data-testid="recent-row"]', { timeout: 10000 });
+
+    await page.locator('[data-testid="recent-row"]').first().click({ button: 'right' });
+    const menu = page.getByTestId('context-menu');
+    await expect(menu).toBeVisible();
+
+    await menu.getByText('Edit').click();
+    await page.waitForURL(/\/add\?editId=[0-9a-f-]+/, { timeout: 8000 });
+  });
 });

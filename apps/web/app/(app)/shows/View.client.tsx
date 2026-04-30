@@ -32,11 +32,11 @@ import {
   Pencil,
   Eye,
 } from "lucide-react";
-import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { useCompactMode } from "@/lib/useCompactMode";
 import { daysUntil, formatDateParts } from "@showbook/shared";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import { STATE_TRANSITIONS } from "@/lib/show-state";
+import { useShowContextMenu } from "@/lib/useShowContextMenu";
 import { PaginationFooter } from "@/components/PaginationFooter";
 import { compareNullable } from "@/lib/sort";
 import {
@@ -234,11 +234,13 @@ export default function ShowsView() {
     setCurrentPage(0);
   }, []);
 
-  // Context menu state
-  const [contextMenu, setContextMenu] = useState<{
-    show: ShowData;
-    position: { x: number; y: number };
-  } | null>(null);
+  // Show row context menu + watching → ticketed transition modal.
+  const {
+    openContextMenu: handleContextMenu,
+    portal: showContextMenuPortal,
+    handleDelete,
+    handleStateTransition,
+  } = useShowContextMenu<ShowData>();
 
   // Calendar state
   const [calView, setCalView] = useState<CalView>("month");
@@ -247,12 +249,6 @@ export default function ShowsView() {
 
   // Stats timeframe
   const [statsTimeframe, setStatsTimeframe] = useState<StatsTimeframe>("all");
-
-  // State transition modal
-  const [transitionShow, setTransitionShow] = useState<ShowData | null>(null);
-  const [transitionSeat, setTransitionSeat] = useState("");
-  const [transitionPrice, setTransitionPrice] = useState("");
-  const [transitionTicketCount, setTransitionTicketCount] = useState("1");
 
   // Gmail bulk scan state
   const [gmailModalOpen, setGmailModalOpen] = useState(false);
@@ -293,8 +289,6 @@ export default function ShowsView() {
     { staleTime: 60_000 }
   );
 
-  const updateState = trpc.shows.updateState.useMutation();
-  const deleteShow = trpc.shows.delete.useMutation();
   const deleteAllShows = trpc.shows.deleteAll.useMutation();
   const createShow = trpc.shows.create.useMutation();
   const utils = trpc.useUtils();
@@ -370,100 +364,11 @@ export default function ShowsView() {
   // Handlers
   // ---------------------------------------------------------------------------
 
-  function handleContextMenu(e: React.MouseEvent, show: ShowData) {
-    e.preventDefault();
-    setContextMenu({ show, position: { x: e.clientX, y: e.clientY } });
-  }
-
-  async function handleStateTransition(show: ShowData) {
-    const transition = STATE_TRANSITIONS[show.state];
-    if (!transition) return;
-
-    if (show.state === "watching") {
-      setTransitionShow(show);
-      return;
-    }
-
-    await updateState.mutateAsync({
-      showId: show.id,
-      newState: transition.target,
-    });
-    utils.shows.invalidate();
-  }
-
-  async function handleTransitionSubmit() {
-    if (!transitionShow) return;
-    const transition = STATE_TRANSITIONS[transitionShow.state];
-    if (!transition) return;
-
-    await updateState.mutateAsync({
-      showId: transitionShow.id,
-      newState: transition.target,
-      seat: transitionSeat || undefined,
-      pricePaid: transitionPrice || undefined,
-      ticketCount: parseInt(transitionTicketCount) || 1,
-    });
-    setTransitionShow(null);
-    setTransitionSeat("");
-    setTransitionPrice("");
-    setTransitionTicketCount("1");
-    utils.shows.invalidate();
-  }
-
-  async function handleDelete(showId: string) {
-    if (!confirm("Delete this show? This cannot be undone.")) return;
-    await deleteShow.mutateAsync({ showId });
-    utils.shows.invalidate();
-    utils.performers.invalidate();
-  }
-
   async function handleDeleteAll() {
     if (!confirm(`Delete all ${totalShows} shows? This cannot be undone.`)) return;
     await deleteAllShows.mutateAsync();
     utils.shows.invalidate();
     utils.performers.invalidate();
-  }
-
-  function buildShowContextMenuItems(show: ShowData): ContextMenuItem[] {
-    const items: ContextMenuItem[] = [
-      {
-        label: "Edit",
-        icon: <Pencil size={13} />,
-        onClick: () => router.push(`/add?editId=${show.id}`),
-      },
-      {
-        label: "Delete",
-        icon: <Trash2 size={13} />,
-        onClick: () => handleDelete(show.id),
-        danger: true,
-      },
-    ];
-
-    if (show.state === "ticketed") {
-      items.splice(1, 0, {
-        label: "Mark as attended",
-        icon: <Check size={13} />,
-        onClick: () => handleStateTransition(show),
-      });
-    }
-
-    if (show.state === "watching") {
-      items.splice(1, 0, {
-        label: "Got tickets",
-        icon: <Ticket size={13} />,
-        onClick: () => handleStateTransition(show),
-      });
-    }
-
-    if (show.ticketUrl) {
-      items.push({
-        label: "Open in Ticketmaster",
-        icon: <ArrowUpRight size={13} />,
-        onClick: () => window.open(show.ticketUrl!, "_blank", "noopener,noreferrer"),
-      });
-    }
-
-    return items;
   }
 
   // ---------------------------------------------------------------------------
@@ -1193,7 +1098,7 @@ export default function ShowsView() {
     }
 
     return (
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)" }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
         {/* Section label */}
         <div style={{ padding: "18px 36px 8px", display: "flex", alignItems: "baseline", gap: 14 }}>
           <div style={{
@@ -2238,14 +2143,8 @@ export default function ShowsView() {
       {viewMode === "calendar" && renderCalendar()}
       {viewMode === "stats" && renderStats()}
 
-      {/* Context menu */}
-      {contextMenu && (
-        <ContextMenu
-          items={buildShowContextMenuItems(contextMenu.show)}
-          position={contextMenu.position}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
+      {/* Show row context menu + watching → ticketed transition modal */}
+      {showContextMenuPortal}
 
       {/* Gmail bulk scan modal */}
       {gmailModalOpen && (
@@ -2523,170 +2422,6 @@ export default function ShowsView() {
         </div>
       )}
 
-      {/* State transition modal */}
-      {transitionShow && (
-        <div
-          onClick={() => setTransitionShow(null)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0, 0, 0, 0.6)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 200,
-            backdropFilter: "blur(4px)",
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "var(--surface)",
-              border: "1px solid var(--rule)",
-              borderRadius: 12,
-              padding: 24,
-              width: "100%",
-              maxWidth: 400,
-              display: "flex",
-              flexDirection: "column",
-              gap: 16,
-            }}
-          >
-            <div style={{
-              fontFamily: "var(--font-geist-sans), sans-serif",
-              fontWeight: 700,
-              fontSize: "1.1rem",
-              color: "var(--ink)",
-            }}>
-              Got tickets for {getHeadliner(transitionShow)}?
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <label style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: "0.7rem",
-                fontWeight: 600,
-                color: "var(--muted)",
-                textTransform: "uppercase",
-                letterSpacing: "0.04em",
-              }}>
-                Seat
-              </label>
-              <input
-                value={transitionSeat}
-                onChange={(e) => setTransitionSeat(e.target.value)}
-                placeholder="e.g., Orchestra Row G Seat 12"
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: 6,
-                  border: "1px solid var(--rule)",
-                  background: "var(--bg)",
-                  color: "var(--ink)",
-                  fontFamily: "var(--font-geist-sans), sans-serif",
-                  fontSize: "0.9rem",
-                  outline: "none",
-                }}
-              />
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <label style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: "0.7rem",
-                fontWeight: 600,
-                color: "var(--muted)",
-                textTransform: "uppercase",
-                letterSpacing: "0.04em",
-              }}>
-                Total cost
-              </label>
-              <input
-                value={transitionPrice}
-                onChange={(e) => setTransitionPrice(e.target.value)}
-                placeholder="e.g., 85.00"
-                type="number"
-                step="0.01"
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: 6,
-                  border: "1px solid var(--rule)",
-                  background: "var(--bg)",
-                  color: "var(--ink)",
-                  fontFamily: "var(--font-geist-sans), sans-serif",
-                  fontSize: "0.9rem",
-                  outline: "none",
-                }}
-              />
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <label style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: "0.7rem",
-                fontWeight: 600,
-                color: "var(--muted)",
-                textTransform: "uppercase",
-                letterSpacing: "0.04em",
-              }}>
-                Tickets
-              </label>
-              <input
-                value={transitionTicketCount}
-                onChange={(e) => setTransitionTicketCount(e.target.value)}
-                placeholder="1"
-                type="number"
-                min="1"
-                step="1"
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: 6,
-                  border: "1px solid var(--rule)",
-                  background: "var(--bg)",
-                  color: "var(--ink)",
-                  fontFamily: "var(--font-geist-sans), sans-serif",
-                  fontSize: "0.9rem",
-                  outline: "none",
-                }}
-              />
-            </div>
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button
-                onClick={handleTransitionSubmit}
-                disabled={!transitionSeat || updateState.isPending}
-                style={{
-                  padding: "8px 16px",
-                  borderRadius: 6,
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: "0.75rem",
-                  fontWeight: 600,
-                  letterSpacing: "0.02em",
-                  cursor: "pointer",
-                  border: "none",
-                  background: "var(--accent)",
-                  color: "var(--accent-text)",
-                  opacity: (!transitionSeat || updateState.isPending) ? 0.5 : 1,
-                }}
-              >
-                {updateState.isPending ? "Saving..." : "Confirm"}
-              </button>
-              <button
-                onClick={() => setTransitionShow(null)}
-                style={{
-                  padding: "8px 16px",
-                  borderRadius: 6,
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: "0.75rem",
-                  fontWeight: 600,
-                  letterSpacing: "0.02em",
-                  cursor: "pointer",
-                  border: "1px solid var(--rule)",
-                  background: "transparent",
-                  color: "var(--muted)",
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
