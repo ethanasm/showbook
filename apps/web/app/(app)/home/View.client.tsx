@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
@@ -87,9 +87,20 @@ export default function HomeView() {
     portal: showContextMenuPortal,
   } = useShowContextMenu<ShowForContextMenu>();
 
+  // Today's date and current year are read from `new Date()`, which differs
+  // between the SSR host (often UTC) and the client (user's local TZ). Gate
+  // any render that depends on them on `mounted` so SSR and the first client
+  // render both produce the skeleton — preventing a hydration mismatch when
+  // a show's date sits on the day boundary between the two zones.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Split shows into upcoming and past
   const { upcoming, dateTbd, past, stats } = useMemo(() => {
-    if (!shows) return { upcoming: [], dateTbd: [], past: [], stats: null };
+    if (!shows || !mounted)
+      return { upcoming: [], dateTbd: [], past: [], stats: null };
 
     const now = new Date();
     now.setHours(0, 0, 0, 0);
@@ -153,36 +164,38 @@ export default function HomeView() {
         artists: uniqueArtists.size,
       },
     };
-  }, [shows]);
+  }, [shows, mounted]);
 
   const heroShow = upcoming[0] ?? null;
   const miniCards = upcoming.slice(1, 4);
   const recentShows = past.slice(0, 5);
   const totalPast = past.length;
 
-  if (isLoading) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-        {/* skeleton top bar */}
-        <div style={{ padding: "14px 36px", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 52 }} />
-        <div style={{ flex: 1, minHeight: 0, padding: "28px 36px 40px", display: "grid", gap: 28, alignContent: "start" }}>
-          {/* skeleton hero */}
-          <div style={{ height: 148, background: "var(--surface)", borderLeft: "3px solid var(--rule)" }} />
-          {/* skeleton mini cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1, background: "var(--rule)" }}>
-            {[0,1,2].map((i) => (
-              <div key={i} style={{ height: 80, background: "var(--surface)" }} />
-            ))}
-          </div>
-          {/* skeleton recent rows */}
-          <div style={{ background: "var(--surface)" }}>
-            {[0,1,2,3,4].map((i) => (
-              <div key={i} style={{ height: 48, borderBottom: "1px solid var(--rule)", background: "var(--surface)" }} />
-            ))}
-          </div>
+  const skeleton = (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+      {/* skeleton top bar */}
+      <div style={{ padding: "14px 36px", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 52 }} />
+      <div style={{ flex: 1, minHeight: 0, padding: "28px 36px 40px", display: "grid", gap: 28, alignContent: "start" }}>
+        {/* skeleton hero */}
+        <div style={{ height: 148, background: "var(--surface)", borderLeft: "3px solid var(--rule)" }} />
+        {/* skeleton mini cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1, background: "var(--rule)" }}>
+          {[0,1,2].map((i) => (
+            <div key={i} style={{ height: 80, background: "var(--surface)" }} />
+          ))}
+        </div>
+        {/* skeleton recent rows */}
+        <div style={{ background: "var(--surface)" }}>
+          {[0,1,2,3,4].map((i) => (
+            <div key={i} style={{ height: 48, borderBottom: "1px solid var(--rule)", background: "var(--surface)" }} />
+          ))}
         </div>
       </div>
-    );
+    </div>
+  );
+
+  if (isLoading) {
+    return skeleton;
   }
 
   const noShows = !isLoading && shows !== undefined && shows.length === 0;
@@ -225,6 +238,14 @@ export default function HomeView() {
         />
       </div>
     );
+  }
+
+  // Real content depends on `new Date()` (today's date, current year), which
+  // resolves differently on the SSR host and in the browser. Render the
+  // skeleton on the server and on the first client render so hydration
+  // matches; the effect above flips `mounted` and re-renders with real data.
+  if (!mounted) {
+    return skeleton;
   }
 
   return (
