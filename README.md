@@ -39,11 +39,12 @@ open http://localhost:3001
 See [`apps/web/.env.example`](apps/web/.env.example) for the full template with
 defaults and inline notes. The required groups are:
 
-- **Auth** — `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+- **Auth** — `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. Self-hosters should also set `AUTH_ALLOWED_EMAILS` and/or `AUTH_ALLOWED_DOMAINS` (comma-separated) to gate sign-in. Both unset = open sign-up.
 - **Data sources** — `TICKETMASTER_API_KEY`, `SETLISTFM_API_KEY`, `GROQ_API_KEY`, `GOOGLE_PLACES_API_KEY`
 - **Media (Cloudflare R2)** — `R2_*` plus `MEDIA_*` quotas/limits
 - **Email (Resend)** — `RESEND_API_KEY`, `EMAIL_FROM` (unset → digest job logs and skips delivery)
 - **Observability (optional)** — Langfuse and Axiom keys
+- **Per-user guardrails (optional overrides)** — `SHOWBOOK_LLM_CALLS_PER_DAY` (default 50), `SHOWBOOK_BULK_SCAN_PER_HOUR` (default 5), `SHOWBOOK_BULK_SCAN_MESSAGE_CAP` (default 200). See [`GUARDRAILS.md`](./GUARDRAILS.md) for the full list.
 
 ## Project Structure
 
@@ -116,6 +117,16 @@ NEXTAUTH_URL=https://localhost:3002
 
 The `/api/test/*` routes are disabled unless `ENABLE_TEST_ROUTES=1` is set and
 the active database name is `showbook_e2e`.
+
+## Security
+
+Found a vulnerability? Please report it privately — see [`SECURITY.md`](./SECURITY.md).
+
+For the operational guardrails (rate limits, per-user LLM caps, auth allowlist, test-route gating), see [`GUARDRAILS.md`](./GUARDRAILS.md).
+
+## License
+
+[MIT](./LICENSE) © 2026 Ethan Smith.
 
 ## Docker Services
 
