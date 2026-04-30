@@ -182,79 +182,106 @@ export function AddShowMediaStaging({
 
       {staged.length > 0 && (
         <div
-          className="media-grid"
           data-testid="add-show-staged-list"
-          style={{ marginTop: 12 }}
+          style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}
         >
           {staged.map((item) => (
-            <article className="media-card" key={item.id}>
-              <div className="media-card__frame">
-                {item.kind === "photo" ? (
-                  item.previewUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.previewUrl} alt="" />
-                  ) : (
-                    <div className="media-staging__preview-placeholder">Decoding…</div>
-                  )
-                ) : (
-                  <video src={item.previewUrl} controls preload="metadata" />
-                )}
-              </div>
-              <div className="media-card__meta" style={{ flexDirection: "column", alignItems: "stretch", gap: 6 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span className="media-card__label" title={item.file.name}>
-                    {item.file.name} · {formatBytes(item.file.size)}
-                  </span>
-                  <button
-                    type="button"
-                    className="media-card__delete"
-                    aria-label="Remove media"
-                    onClick={() => removeItem(item.id)}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
+            <div
+              key={item.id}
+              style={{
+                border: "1px solid var(--rule)",
+                padding: "8px 10px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                <span
+                  className="media-card__label"
+                  title={item.file.name}
+                  style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                >
+                  {item.file.name} · {formatBytes(item.file.size)}
+                </span>
+                <button
+                  type="button"
+                  className="media-card__delete"
+                  aria-label="Remove media"
+                  onClick={() => removeItem(item.id)}
+                >
+                  <Trash2 size={13} />
+                </button>
               </div>
               {lineupNames.length > 1 && (
                 <div
-                  className="media-card__tags"
                   data-testid="add-show-staged-tags"
-                  style={{ flexDirection: "column", gap: 4, alignItems: "stretch" }}
+                  style={{ display: "flex", flexWrap: "wrap", gap: 4 }}
                 >
-                  <div
-                    style={{
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 10,
-                      color: "var(--muted)",
-                      letterSpacing: ".05em",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Tag performers
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                    {lineupNames.map((name) => {
-                      const checked = item.performerNames.includes(name);
-                      return (
-                        <button
-                          key={name}
-                          type="button"
-                          className={
-                            checked ? "media-tag" : "media-tag media-tag--button"
-                          }
-                          onClick={() => togglePerformer(item.id, name)}
-                        >
-                          {checked ? "✓ " : "+ "}{name}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {lineupNames.map((name) => {
+                    const checked = item.performerNames.includes(name);
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        className={
+                          checked ? "media-tag" : "media-tag media-tag--button"
+                        }
+                        onClick={() => togglePerformer(item.id, name)}
+                      >
+                        {checked ? "✓ " : "+ "}{name}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
-            </article>
+            </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+export function StagedMediaPreview({ staged }: { staged: StagedMediaItem[] }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+      {staged.slice(0, 6).map((item) => (
+        <div
+          key={item.id}
+          style={{
+            aspectRatio: "4/3",
+            border: "1px solid var(--rule)",
+            background: "var(--surface2)",
+            overflow: "hidden",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {item.kind === "photo" ? (
+            item.previewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={item.previewUrl}
+                alt=""
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            ) : (
+              <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10, color: "var(--faint)" }}>
+                Decoding…
+              </div>
+            )
+          ) : (
+            <video
+              src={item.previewUrl}
+              muted
+              preload="metadata"
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          )}
+        </div>
+      ))}
     </div>
   );
 }
