@@ -1513,7 +1513,7 @@ function FeedSection({
       selected={selectedGroupId}
       onSelect={setSelectedGroupId}
       tabLabel={tabLabel}
-      totalCount={isNearby ? (items?.length ?? 0) : totalCount}
+      totalCount={isNearby ? totalRegionCount : totalCount}
       showFollowLink={isFollowed}
       onFollowVenue={handleFollowVenue}
       onUnfollowItem={(isFollowed || isArtists) ? handleUnfollowItem : undefined}
@@ -1991,7 +1991,7 @@ export default function DiscoverPage() {
     if (!followedItems) return 0;
     return new Set(followedItems.map((a) => a.venueId)).size;
   }, [followedItems]);
-  const nearbyCount = nearbyItems?.length ?? 0;
+  const nearbyCount = activeRegions.length;
   const artistsCount = useMemo(() => {
     if (!artistItems) return 0;
     return new Set(artistItems.map((a) => a.headlinerPerformerId).filter(Boolean)).size;
