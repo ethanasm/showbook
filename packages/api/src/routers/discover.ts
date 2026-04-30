@@ -32,7 +32,7 @@ const paginationInput = z.object({
   limit: z.number().int().min(1).max(100).optional().default(20),
 });
 
-function decodeCursor(cursor?: string): { showDate: string; id: string } | null {
+export function decodeCursor(cursor?: string): { showDate: string; id: string } | null {
   if (!cursor) return null;
   const parts = cursor.split('|');
   if (parts.length !== 2) return null;
@@ -41,7 +41,7 @@ function decodeCursor(cursor?: string): { showDate: string; id: string } | null 
   return { showDate, id };
 }
 
-function encodeCursor(showDate: string, id: string): string {
+export function encodeCursor(showDate: string, id: string): string {
   return `${showDate}|${id}`;
 }
 
