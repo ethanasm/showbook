@@ -30,6 +30,20 @@ Personal entertainment tracker for live shows — concerts, theatre, comedy, fes
 - `pnpm email:smoke` — render the daily digest with sample data to disk
 - `pnpm email:preview` — react-email dev server with hot reload
 
+## Running (dev vs prod)
+Two compose files, two env files. Both bind to `127.0.0.1` only — the
+Cloudflare Tunnel reaches web via loopback.
+- **Dev** — `docker-compose.yml` (project `showbook`), reads `.env.dev`,
+  source bind-mounted, Next.js in dev mode. Start with `pnpm dev:up`.
+  `apps/web/.env.local` is for `pnpm dev` outside Docker.
+- **Prod** — `docker-compose.prod.yml` (project `showbook-prod`), reads
+  `.env.prod`, sealed image with `next build` baked in,
+  `NODE_ENV=production`. Start with `pnpm prod:up`, then `pnpm prod:migrate`
+  once after first up. `.env.prod` must set `POSTGRES_PASSWORD` — the
+  compose builds `DATABASE_URL` from it (don't set both).
+- Both composes bind host port 3001, so stop one before starting the
+  other. See README.md "Production deployment" for the env checklist.
+
 ## Observability and logging
 
 All new code MUST use the shared `@showbook/observability` package — no `console.log/warn/error` and no direct `langfuse` / `pino` imports.
