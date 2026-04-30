@@ -1,15 +1,25 @@
 ## Remaining (not yet addressed)
 
-### General
-- **Critical code smells.** (Run `/ultrareview` to surface specifics.)
-
 ### Mobile App
 - We have some hifi designs of mobile app through claude design, but we need to do a deep dive on a design for the mobile app now that we've added more features.
 - Hook up push notifications in preferences page to mobile app once done.
 
+### Code Health (next batch from the audit)
+- **Refactor mega-pages.** `add/page.tsx` (~2.9k LOC), `discover/page.tsx` (~2.1k LOC), `venues/[id]/page.tsx`, `preferences/page.tsx` each bundle 5+ concerns. Round-1 audit identified clear extraction targets (`VenueSearchModal`, `RegionSearchModal`, `VenueRail`, `FormStateManager`, `SetlistFetcher`, `MediaUploadOrchestrator`, `DiscoveryImportUI`).
+- **Consolidate `KIND_ICONS`/`KIND_LABELS`.** Same constant redefined in 9 files; should live once in `packages/shared` or `apps/web/lib`.
+- **Replace remaining `auth.ts` schema gaps.** `accounts.userId` and `sessions.userId` lack FK references with `onDelete: 'cascade'` — orphaned rows on user delete.
+- **Skinnier `shows.list`.** Five callsites pull the full list with relations; add slimmer projections (or use the new count procedures + targeted detail queries).
+- **`media.setPerformers` show-ownership check.** Validates asset ownership but not the show's; tighten the join.
+- **Discover feed dedup math.** `nearbyFeed` per-region 250-row cap can drop announcements at the edge of overlapping regions.
+- **Test pyramid.** ~30 Playwright e2e specs vs. 7 unit tests. Adding unit coverage for `performer-matcher`, `venue-matcher`, and the digest math would let us refactor faster.
+
 ---
 
 ## Completed (kept for reference)
+
+### Code Audit (rounds 1 + 2)
+1. ~~**Round-1 audit fixes.**~~ *(Done — broad audit identified ~150 findings across the api, web, jobs/scrapers, and db packages. Top eight shipped on `claude/analyze-showbook-codebase-HQrEp`: setlist enrichment now keys off the canonical `setlists` jsonb (not the legacy `setlist text[]`) and dedupes against the existing queue, so nightly no longer re-queues every past concert; `performers.rename` now requires the user to own a show with the performer or follow them; Gmail OAuth callback no longer interpolates Google's response into HTML; `AbortSignal.timeout` added to all 8 external `fetch()` calls (TM, Gmail, setlist.fm, Google Places, Nominatim, robots.txt, OAuth, venue-photo proxy); `console.*` replaced with the structured pino logger in both backfill scripts and the Gmail scan handler; migration `0017` adds 10 indexes on hot lookup columns (announcements headliner/show_date/venue+date, user_regions user+active, venues tm/google/name+city, performers tm/mbid/name); transactions now wrap `discover.watchlist`, `performers.delete`, the setlist-retry update + queue-delete, and the media completeUpload failure path; daily digest collapses N×2 per-show queries into 2 total via `getHeadlinersForShows(showIds)` with `inArray`.)*
+2. ~~**Round-2 audit fixes.**~~ *(Done — five next-batch fixes on the same branch. Migration `0018` adds functional `LOWER(name)` indexes for the case-insensitive matcher lookups (the plain b-trees from 0017 don't help those queries). `/api/gmail/scan` now requires an `await auth()` session and caps each scan at 200 messages with a `truncated` flag in the SSE response; merged with the security branch's per-user 5/hour rate limiter. `shows.create` and `shows.update` are now `db.transaction`-wrapped with batch `showPerformers` inserts (instead of N sequential), and the TM ticket-URL enrichment in `create` no longer silently swallows failures — they log via the structured logger. Three new `count` tRPC procedures (`shows.count`, `performers.count`, `venues.count`) replace `*.list().length` reads in `AppShell`, so every page nav no longer hydrates full lists with relations just to read length; list-invalidating mutations across 7 files broadened to `utils.<router>.invalidate()` so the count refreshes alongside the list. Migration `0019` adds partial UNIQUE indexes on the four external IDs (`performers.{ticketmaster_attraction_id, musicbrainz_id}` and `venues.{ticketmaster_venue_id, google_place_id}`); `matchOrCreatePerformer` and `matchOrCreateVenue` now wrap the name-fallback SELECT-then-INSERT in a transaction with `pg_advisory_xact_lock` keyed on `lower(name)` (and city, for venues), and catch 23505 conflicts on insert by re-selecting the conflicting row. Verified end-to-end with `pnpm verify` plus a 13-page Playwright walkthrough that confirmed sidebar counts (`Shows 20 / Venues 8 / Artists 12`) and a successful round-trip through `shows.update` against a seeded show.)*
 
 ### Security
 1. ~~**Security audit.**~~ *(Done — full audit of code + dependencies on `claude/security-audit-ADdpW`. Critical IDORs fixed: `venues.rename` and `performers.rename` now require the user to follow the entity or have a show featuring it; `/api/gmail/scan` now gates on `auth()` and is per-user rate-limited. Defense-in-depth: `shows.update`/`updateState`/`delete` carry `userId` in their WHERE clauses. Announcement ICAL requires the user to follow the venue or headlining performer. Inputs hardened: 5000-char cap on `notes`, 200-char cap on search; new shared in-memory rate limiter (`packages/api/src/rate-limit.ts`) on search + Ticketmaster + Gmail scan; all Groq LLM JSON outputs zod-validated. R2 read URL TTL 3600 → 600s. Venue-photo proxy rejects non-`image/*` upstream and sets `X-Content-Type-Options: nosniff`. Dependencies: `drizzle-orm` ^0.45.2 (SQLi advisory), `drizzle-kit` ^0.31.10, plus pnpm overrides for `fast-xml-parser`, `postcss`, `svix`, `nx>minimatch`, and `@esbuild-kit/core-utils>esbuild`. `pnpm audit` is now clean (0 vulnerabilities).)*
