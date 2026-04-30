@@ -19,6 +19,12 @@ import {
 import { EditableName } from "@/components/EditableName";
 import { MediaSection } from "@/components/media";
 import { formatDateMedium as formatDateLong, formatDateParts } from "@showbook/shared";
+import {
+  getHeadliner,
+  getHeadlinerId,
+  getHeadlinerImageUrl,
+  getSupport,
+} from "@/lib/show-accessors";
 
 type Performer = {
   id: string;
@@ -81,40 +87,6 @@ function formatShowDateParts(show: ShowData): {
   };
 }
 
-function getHeadliner(show: ShowData): string {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return show.productionName;
-  }
-  const hl = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0,
-  );
-  return (
-    hl?.performer.name ??
-    show.showPerformers.find((sp) => sp.role === "headliner")?.performer.name ??
-    "Unknown"
-  );
-}
-
-function getHeadlinerId(show: ShowData): string | undefined {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return undefined;
-  }
-  const hl = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0,
-  );
-  return hl?.performer.id;
-}
-
-function getHeadlinerImageUrl(show: ShowData): string | null {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return null;
-  }
-  const hl = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0,
-  );
-  return hl?.performer.imageUrl ?? null;
-}
-
 function gradientLastWord(name: string) {
   const words = name.trim().split(/\s+/);
   if (words.length <= 1) return <span className="gradient-emphasis">{name}</span>;
@@ -124,13 +96,6 @@ function gradientLastWord(name: string) {
       {words.join(" ")} <span className="gradient-emphasis">{last}</span>
     </>
   );
-}
-
-function getSupport(show: ShowData): string[] {
-  return show.showPerformers
-    .filter((sp) => sp.role === "support")
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((sp) => sp.performer.name);
 }
 
 export default function ArtistDetailPage() {

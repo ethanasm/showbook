@@ -16,6 +16,13 @@ import {
 } from "lucide-react";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import {
+  getHeadliner,
+  getHeadlinerId,
+  getHeadlinerImageUrl,
+  getSupport,
+  getSupportPerformers,
+} from "@/lib/show-accessors";
+import {
   RemoteImage,
   ShowRow as ShowRowComponent,
   type ShowKind,
@@ -62,51 +69,10 @@ const ON_SALE_STATUS_LABELS: Record<string, string> = {
   sold_out: "sold out",
 };
 
-function getHeadliner(show: ShowData): string {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return show.productionName;
-  }
-  const hl = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0,
-  );
-  return (
-    hl?.performer.name ??
-    show.showPerformers.find((sp) => sp.role === "headliner")?.performer.name ??
-    "Unknown"
-  );
-}
-
 const STATE_TRANSITIONS: Record<string, { label: string; target: ShowState }> = {
   watching: { label: "Got tickets", target: "ticketed" },
   ticketed: { label: "Mark as attended", target: "past" },
 };
-
-function getSupport(show: ShowData): string[] {
-  return show.showPerformers
-    .filter((sp) => sp.role === "support")
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((sp) => sp.performer.name);
-}
-
-function getHeadlinerId(show: ShowData): string | undefined {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return undefined;
-  }
-  const hl = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0,
-  );
-  return hl?.performer.id;
-}
-
-function getHeadlinerImageUrl(show: ShowData): string | null {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return null;
-  }
-  const hl = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0,
-  );
-  return hl?.performer.imageUrl ?? null;
-}
 
 function gradientLastWord(name: string) {
   const words = name.trim().split(/\s+/);
@@ -117,13 +83,6 @@ function gradientLastWord(name: string) {
       {words.join(" ")} <span className="gradient-emphasis">{last}</span>
     </>
   );
-}
-
-function getSupportPerformers(show: ShowData): { id: string; name: string }[] {
-  return show.showPerformers
-    .filter((sp) => sp.role === "support")
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((sp) => ({ id: sp.performer.id, name: sp.performer.name }));
 }
 
 export default function VenueDetailPage() {

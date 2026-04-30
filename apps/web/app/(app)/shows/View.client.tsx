@@ -38,6 +38,13 @@ import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { useCompactMode } from "@/lib/useCompactMode";
 import { daysUntil, formatDateParts } from "@showbook/shared";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
+import {
+  getHeadliner,
+  getHeadlinerId,
+  getHeadlinerImageUrl,
+  getSupport,
+  getSupportPerformers,
+} from "@/lib/show-accessors";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -168,43 +175,6 @@ const SHOW_LIST_GRID_TEMPLATE = "14px 32px 80px 110px 1.02fr 1.03fr 110px 0.15fr
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getHeadliner(show: ShowData): string {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return show.productionName;
-  }
-  const headliner = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0
-  );
-  return headliner?.performer.name ?? "Unknown Artist";
-}
-
-function getHeadlinerId(show: ShowData): string | undefined {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return undefined;
-  }
-  const headliner = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0
-  );
-  return headliner?.performer.id;
-}
-
-function getHeadlinerImageUrl(show: ShowData): string | null {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return null;
-  }
-  const headliner = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0
-  );
-  return headliner?.performer.imageUrl ?? null;
-}
-
-function getSupportPerformers(show: ShowData): { id: string; name: string }[] {
-  return show.showPerformers
-    .filter((sp) => sp.role === "support")
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((sp) => ({ id: sp.performer.id, name: sp.performer.name }));
-}
-
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString("en-US", {
@@ -217,13 +187,6 @@ function formatDate(dateStr: string): string {
 // Re-exported from shared as `formatDateParts` — keep the local alias so the
 // existing call sites read naturally (`toDateParts(show.date)`).
 const toDateParts = formatDateParts;
-
-function getSupport(show: ShowData): string[] {
-  return show.showPerformers
-    .filter((sp) => sp.role === "support")
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((sp) => sp.performer.name);
-}
 
 function getNeighborhood(show: ShowData): string | undefined {
   const parts: string[] = [];
