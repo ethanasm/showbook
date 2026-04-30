@@ -58,9 +58,9 @@ importers:
       geist:
         specifier: ^1.4.1
         version: 1.7.0(next@15.5.15(@playwright/test@1.59.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))
-      heic2any:
-        specifier: ^0.0.4
-        version: 0.0.4
+      heic-to:
+        specifier: ^1.4.2
+        version: 1.4.2
       langfuse:
         specifier: ^3.38.4
         version: 3.38.20
@@ -3091,8 +3091,8 @@ packages:
     resolution: {integrity: sha512-ej4AhfhfL2Q2zpMmLo7U1Uv9+PyhIZpgQLGT1F9miIGmiCJIoCgSmczFdrc97mWT4kVY72KA+WnnhJ5pghSvSg==}
     engines: {node: '>= 0.4'}
 
-  heic2any@0.0.4:
-    resolution: {integrity: sha512-3lLnZiDELfabVH87htnRolZ2iehX9zwpRyGNz22GKXIu0fznlblf0/ftppXKNqS26dqFSeqfIBhAmAj/uSp0cA==}
+  heic-to@1.4.2:
+    resolution: {integrity: sha512-y69thwxfNcEm2Vk8lbOD/cMabnvMJyOREfJYiCHcXCDqlfcPyJoBhyRc8+iDe1B95LRfpbTOpzxzY1xbRkdwBA==}
 
   help-me@5.0.0:
     resolution: {integrity: sha512-7xgomUX6ADmcYzFik0HzAxh/73YlKR9bmFzf51CZwR+b6YtzU2m0u49hQCqV6SvlqIqsaxovfwdvbnsw3b/zpg==}
@@ -7289,7 +7289,7 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
-  heic2any@0.0.4: {}
+  heic-to@1.4.2: {}
 
   help-me@5.0.0: {}
 
