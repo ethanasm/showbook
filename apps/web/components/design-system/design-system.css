@@ -61,16 +61,401 @@
   border: 1px solid var(--ink);
 }
 
+/* Shared sign-in visual language */
+.glow-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(1200px 600px at 20% 10%, rgba(255, 209, 102, 0.10), transparent 60%),
+    radial-gradient(900px 500px at 80% 90%, rgba(58, 134, 255, 0.10), transparent 60%),
+    linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);
+}
+
+.glow-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--rule) 1px, transparent 1px),
+    linear-gradient(90deg, var(--rule) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at 50% 40%, black 30%, transparent 75%);
+  opacity: 0.35;
+}
+
+.eyebrow {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.gradient-emphasis {
+  font-style: normal;
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 60%, var(--kind-theatre)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.brand-mark {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--accent);
+  display: grid;
+  place-items: center;
+  color: var(--accent-text);
+  font-weight: 800;
+  font-size: 13px;
+  font-family: var(--font-geist-sans), sans-serif;
+}
+
+.kind-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.kind-chip__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.kind-chip--concert .kind-chip__dot { background: var(--kind-concert); }
+.kind-chip--theatre .kind-chip__dot { background: var(--kind-theatre); }
+.kind-chip--comedy .kind-chip__dot { background: var(--kind-comedy); }
+.kind-chip--festival .kind-chip__dot { background: var(--kind-festival); }
+
+@keyframes sb-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+.pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent);
+  animation: sb-pulse 1.6s ease-in-out infinite;
+  flex: 0 0 auto;
+}
+
+.pulse-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* RemoteImage + monogram fallback */
+.remote-image {
+  --monogram-color: var(--accent);
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--monogram-color) 12%, var(--surface));
+  isolation: isolate;
+}
+
+.remote-image--thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex: 0 0 32px;
+}
+
+.remote-image--card {
+  width: 96px;
+  border-radius: 12px;
+  flex: 0 0 96px;
+}
+
+.remote-image--hero {
+  width: 100%;
+  border-radius: 0;
+}
+
+.remote-image--aspect-square { aspect-ratio: 1 / 1; }
+.remote-image--aspect-3-2 { aspect-ratio: 3 / 2; }
+.remote-image--aspect-16-9 { aspect-ratio: 16 / 9; }
+
+.remote-image__img {
+  object-fit: cover;
+}
+
+.monogram-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 28% 18%, color-mix(in srgb, var(--monogram-color) 28%, transparent), transparent 52%),
+    color-mix(in srgb, var(--monogram-color) 18%, var(--accent-faded));
+  color: var(--ink);
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.remote-image--thumb .monogram-fallback {
+  font-size: 11px;
+}
+
+.remote-image--card .monogram-fallback {
+  font-size: 28px;
+}
+
+.remote-image--hero .monogram-fallback {
+  font-size: clamp(38px, 8vw, 86px);
+}
+
+/* Rotated ticket stack */
+.stacked-cards {
+  width: min(520px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  pointer-events: none;
+}
+
+.stacked-card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: grid;
+  grid-template-columns: 3px 64px 1fr auto;
+  column-gap: 16px;
+  align-items: center;
+  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.6);
+}
+
+.stacked-card:nth-child(1) { transform: translateX(-32px) rotate(-1.5deg); }
+.stacked-card:nth-child(2) { transform: translateX(8px) rotate(0.5deg); }
+.stacked-card:nth-child(3) { transform: translateX(-12px) rotate(-0.8deg); }
+.stacked-card:nth-child(4) { transform: translateX(24px) rotate(1.2deg); }
+
+.stacked-card__bar {
+  align-self: stretch;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.stacked-card__bar--concert { background: var(--kind-concert); }
+.stacked-card__bar--theatre { background: var(--kind-theatre); }
+.stacked-card__bar--comedy { background: var(--kind-comedy); }
+.stacked-card__bar--festival { background: var(--kind-festival); }
+
+.stacked-card__date {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.stacked-card__date strong {
+  display: block;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.stacked-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stacked-card__venue {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stacked-card__chip {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.stacked-card__chip--ticketed {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.stacked-card__chip--watching {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+}
+
+.stacked-card__chip--seen {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--rule);
+}
+
+/* Editorial empty state */
+.empty-state {
+  position: relative;
+  min-height: 360px;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.1fr);
+  gap: 34px;
+  align-items: center;
+  padding: 38px;
+}
+
+.empty-state__content,
+.empty-state__visual {
+  position: relative;
+  z-index: 1;
+}
+
+.empty-state__content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+}
+
+.empty-state__title {
+  margin: 0;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: clamp(28px, 4vw, 48px);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: 0;
+  color: var(--ink);
+  max-width: 11ch;
+}
+
+.empty-state__body {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--muted);
+  max-width: 40ch;
+}
+
+.empty-state__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.empty-state__action {
+  margin-top: 10px;
+}
+
+.empty-state__visual {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.venue-photo-band {
+  position: relative;
+  height: 240px;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-radius: 12px 12px 0 0;
+  background: var(--surface);
+}
+
+.venue-photo-band .remote-image {
+  height: 100%;
+  border: none;
+  border-radius: 12px 12px 0 0;
+}
+
+.venue-photo-band__fade {
+  position: absolute;
+  inset: auto 0 0;
+  height: 45%;
+  background: linear-gradient(180deg, transparent, var(--bg));
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  .empty-state {
+    grid-template-columns: 1fr;
+    padding: 28px 22px;
+  }
+
+  .empty-state__visual {
+    order: -1;
+    transform: scale(0.82);
+    transform-origin: center;
+  }
+
+  .stacked-card {
+    grid-template-columns: 3px 54px 1fr;
+  }
+
+  .stacked-card__chip {
+    display: none;
+  }
+}
+
 /* ShowRow — 8-column grid */
 .show-row {
   display: grid;
-  grid-template-columns: 14px 80px 110px 1.2fr 1fr 110px 64px 88px;
+  grid-template-columns: 14px 32px 80px 110px 1.2fr 1fr 110px 64px 88px;
   column-gap: 16px;
   align-items: center;
   padding: 10px 16px;
   cursor: pointer;
-  transition: background 0.12s;
+  transition: background 0.12s, border-color 0.12s, transform 0.12s;
   min-height: 48px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  margin-bottom: 8px;
 }
 
 /* Compact mode: tighter rows, smaller date typography. */
@@ -87,7 +472,8 @@
 }
 
 .show-row:hover {
-  background: rgba(245, 245, 243, 0.04);
+  background: var(--surface2);
+  border-color: var(--rule-strong);
 }
 
 .show-row--selected {
@@ -103,22 +489,28 @@
 }
 
 .show-row__bar {
-  width: 2px;
-  height: 70%;
-  border-radius: 1px;
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
 }
 
 .show-row__bar--past {
-  border-left: 2px solid currentColor;
+  border-left: 3px solid currentColor;
   /* kind color set via inline borderColor */
 }
 
 .show-row__bar--ticketed {
-  border-left: 2px solid var(--ink);
+  border-left: 3px solid var(--ink);
 }
 
 .show-row__bar--watching {
-  border-left: 2px dashed var(--ink);
+  border-left: 3px dashed var(--ink);
+}
+
+.show-row__thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* 2. Date column */
@@ -809,7 +1201,7 @@ a.show-row__support-link:hover {
   /* ShowRow: collapse to 5 essential columns at narrow widths so the row
      fits a 390px viewport without horizontal overflow clipping links. */
   .show-row {
-    grid-template-columns: 8px 64px 1.2fr 1fr 64px;
+    grid-template-columns: 8px 32px 64px 1.2fr 1fr 64px;
     column-gap: 8px;
   }
   [data-compact="true"] .show-row {

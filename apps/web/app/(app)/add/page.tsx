@@ -17,6 +17,7 @@ interface VenueData {
   country?: string;
   tmVenueId?: string;
   googlePlaceId?: string;
+  photoUrl?: string;
   lat?: number;
   lng?: number;
 }
@@ -317,6 +318,7 @@ export default function AddPage() {
       country: s.venue.country ?? undefined,
       tmVenueId: s.venue.ticketmasterVenueId ?? undefined,
       googlePlaceId: s.venue.googlePlaceId ?? undefined,
+      photoUrl: s.venue.photoUrl ?? undefined,
       lat: s.venue.latitude ?? undefined,
       lng: s.venue.longitude ?? undefined,
     });
@@ -742,7 +744,15 @@ export default function AddPage() {
             city: venueToSave.city,
           });
           if (geo) {
-            venueToSave = { ...venueToSave, lat: geo.lat, lng: geo.lng };
+            venueToSave = {
+              ...venueToSave,
+              lat: geo.lat,
+              lng: geo.lng,
+              stateRegion: venueToSave.stateRegion ?? geo.stateRegion,
+              country: venueToSave.country ?? geo.country,
+              googlePlaceId: venueToSave.googlePlaceId ?? geo.googlePlaceId,
+              photoUrl: venueToSave.photoUrl ?? geo.photoUrl,
+            };
           }
         } catch {
           // Geocoding failed; save without coordinates
@@ -826,6 +836,7 @@ export default function AddPage() {
           lat: details.latitude,
           lng: details.longitude,
           googlePlaceId: details.googlePlaceId,
+          photoUrl: details.photoUrl ?? undefined,
         });
         setVenueQuery(details.name);
         setDebouncedVenueQuery("");

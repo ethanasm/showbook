@@ -19,6 +19,8 @@ import {
   Ticket,
 } from "lucide-react";
 import {
+  EmptyState,
+  RemoteImage,
   ShowRow as ShowRowComponent,
   type ShowKind,
   type ShowState,
@@ -144,6 +146,27 @@ function getHeadlinerId(show: ShowData): string | undefined {
     (sp) => sp.role === "headliner" && sp.sortOrder === 0,
   );
   return hl?.performer.id;
+}
+
+function getHeadlinerImageUrl(show: ShowData): string | null {
+  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
+    return null;
+  }
+  const hl = show.showPerformers.find(
+    (sp) => sp.role === "headliner" && sp.sortOrder === 0,
+  );
+  return hl?.performer.imageUrl ?? null;
+}
+
+function gradientLastWord(name: string) {
+  const words = name.trim().split(/\s+/);
+  if (words.length <= 1) return <span className="gradient-emphasis">{name}</span>;
+  const last = words.pop();
+  return (
+    <>
+      {words.join(" ")} <span className="gradient-emphasis">{last}</span>
+    </>
+  );
 }
 
 function getSupportPerformers(show: ShowData): { id: string; name: string }[] {
@@ -321,6 +344,27 @@ export default function VenueDetailPage() {
         <span style={{ color: "var(--ink)" }}>{venue.name.toLowerCase()}</span>
       </div>
 
+      <div style={{ padding: "24px 36px 0" }}>
+        <div className="venue-photo-band">
+          {venue.photoUrl ? (
+            <RemoteImage
+              src={`/api/venue-photo/${venue.id}`}
+              alt={`${venue.name} venue photo`}
+              kind="venue"
+              name={venue.name}
+              aspect="16/9"
+              size="hero"
+              priority
+            />
+          ) : (
+            <div style={{ position: "absolute", inset: 0 }}>
+              <div className="glow-backdrop" />
+            </div>
+          )}
+          <div className="venue-photo-band__fade" />
+        </div>
+      </div>
+
       {/* Hero */}
       <div
         style={{
@@ -333,22 +377,10 @@ export default function VenueDetailPage() {
         }}
       >
         <div style={{ minWidth: 0 }}>
-          <div
-            style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
-              color: "var(--muted)",
-              letterSpacing: ".1em",
-              textTransform: "uppercase",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 7,
-            }}
-          >
-            <MapPin size={12} /> Venue
-          </div>
+          <div className="eyebrow">Venue</div>
           <EditableName
             value={venue.name}
+            displayValue={gradientLastWord(venue.name)}
             onSave={(name) => renameMutation.mutate({ venueId: venue.id, name })}
           />
           {locationLine && (
@@ -476,7 +508,11 @@ export default function VenueDetailPage() {
           {announcementsQuery.isLoading ? (
             <CardMessage>Loading announcements…</CardMessage>
           ) : upcoming.length === 0 ? (
-            <CardMessage>No upcoming announcements at this venue.</CardMessage>
+            <EmptyState
+              kind="discover"
+              title="Quiet calendar"
+              body="No upcoming announcements are attached to this venue yet."
+            />
           ) : (
             <div style={{ background: "var(--surface)" }}>
               <div
@@ -642,15 +678,17 @@ export default function VenueDetailPage() {
           {userShowsQuery.isLoading ? (
             <CardMessage>Loading your history…</CardMessage>
           ) : userShows.length === 0 ? (
-            <CardMessage>
-              You haven&apos;t logged any shows here yet.
-            </CardMessage>
+            <EmptyState
+              kind="venues"
+              title="No visits logged"
+              body="Shows you log at this venue will appear here with seats, spend, and status."
+            />
           ) : (
             <div style={{ background: "var(--surface)" }}>
               {/* Column headers */}
               <div style={{
                 display: "grid",
-                gridTemplateColumns: "14px 80px 110px 1.2fr 1fr 110px 64px 88px",
+                gridTemplateColumns: "14px 32px 80px 110px 1.2fr 1fr 110px 64px 88px",
                 columnGap: 16,
                 padding: "10px 20px 10px 10px",
                 borderBottom: "1px solid var(--rule)",
@@ -660,6 +698,7 @@ export default function VenueDetailPage() {
                 letterSpacing: ".12em",
                 textTransform: "uppercase",
               }}>
+                <div />
                 <div />
                 <div>Date</div>
                 <div>Kind</div>
@@ -677,6 +716,7 @@ export default function VenueDetailPage() {
                       state: s.state,
                       headliner: getHeadliner(s),
                       headlinerId: getHeadlinerId(s),
+                      imageUrl: getHeadlinerImageUrl(s),
                       support: getSupport(s),
                       supportPerformers: getSupportPerformers(s),
                       venue: venue.name,

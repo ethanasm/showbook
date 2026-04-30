@@ -3,9 +3,10 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
-import { Music, ArrowDownUp, Search, Eye, Pencil, Trash2, Ticket, Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Eye, Pencil, Trash2, Ticket, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { useCompactMode } from "@/lib/useCompactMode";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
+import { EmptyState, RemoteImage } from "@/components/design-system";
 
 type SortMode = "recent" | "count" | "alpha";
 
@@ -281,8 +282,12 @@ export default function ArtistsPage() {
         </div>
 
         {filtered.length === 0 ? (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, fontFamily: "var(--font-geist-sans), sans-serif", fontSize: "1rem", color: "var(--muted)" }}>
-            {search ? "No artists match your search." : "No artists yet. Add your first show!"}
+          <div style={{ padding: "28px 36px" }}>
+            <EmptyState
+              kind="artists"
+              title={search ? "No artist matches" : "Artists await"}
+              body={search ? "Try another spelling or clear the filter." : "Artists populate from the shows you log."}
+            />
           </div>
         ) : (
           <div style={{ margin: "4px 36px 0", background: "var(--surface)" }}>
@@ -307,7 +312,14 @@ export default function ArtistsPage() {
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                    <Music size={14} color="var(--muted)" style={{ flexShrink: 0 }} />
+                    <RemoteImage
+                      src={artist.imageUrl}
+                      alt=""
+                      kind="artists"
+                      name={artist.name}
+                      aspect="square"
+                      size="thumb"
+                    />
                     <span style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 14, fontWeight: 500, color: "var(--ink)", letterSpacing: -0.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {artist.name}
                     </span>

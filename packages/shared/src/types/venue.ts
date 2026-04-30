@@ -8,5 +8,6 @@ export interface Venue {
   longitude?: number | null;
   ticketmasterVenueId?: string | null;
   googlePlaceId?: string | null;
+  photoUrl?: string | null;
   createdAt: Date;
 }

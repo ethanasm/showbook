@@ -31,6 +31,7 @@ export const venuesRouter = router({
         stateRegion: venues.stateRegion,
         country: venues.country,
         googlePlaceId: venues.googlePlaceId,
+        photoUrl: venues.photoUrl,
         ticketmasterVenueId: venues.ticketmasterVenueId,
         pastShowsCount: sql<number>`count(case when ${shows.date} < ${today} then 1 end)::int`,
         futureShowsCount: sql<number>`count(case when ${shows.date} >= ${today} then 1 end)::int`,
@@ -80,22 +81,30 @@ export const venuesRouter = router({
       // skip the venue-matcher geocoding path).
       try {
         const [venue] = await ctx.db
-          .select({ name: venues.name, city: venues.city, googlePlaceId: venues.googlePlaceId })
+          .select({
+            name: venues.name,
+            city: venues.city,
+            googlePlaceId: venues.googlePlaceId,
+            photoUrl: venues.photoUrl,
+          })
           .from(venues)
           .where(eq(venues.id, input.venueId))
           .limit(1);
 
-        if (venue && !venue.googlePlaceId && venue.name && venue.city) {
+        if (venue && (!venue.googlePlaceId || !venue.photoUrl) && venue.name && venue.city) {
           const geo = await geocodeVenue(venue.name, venue.city);
-          if (geo?.googlePlaceId) {
+          if (geo?.googlePlaceId || geo?.photoUrl) {
+            const updates: Record<string, unknown> = {};
+            if (geo.googlePlaceId && !venue.googlePlaceId) updates.googlePlaceId = geo.googlePlaceId;
+            if (geo.photoUrl && !venue.photoUrl) updates.photoUrl = geo.photoUrl;
             await ctx.db
               .update(venues)
-              .set({ googlePlaceId: geo.googlePlaceId })
+              .set(updates)
               .where(eq(venues.id, input.venueId));
           }
         }
       } catch (err) {
-        console.error('[venues/follow] googlePlaceId backfill failed:', err);
+        console.error('[venues/follow] Places backfill failed:', err);
       }
 
       return { success: true };
@@ -201,6 +210,7 @@ export const venuesRouter = router({
         lat: details.latitude,
         lng: details.longitude,
         googlePlaceId: details.googlePlaceId,
+        photoUrl: details.photoUrl ?? undefined,
       });
       return result.venue;
     }),

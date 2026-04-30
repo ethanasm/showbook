@@ -28,6 +28,7 @@ const venueInputSchema = z.object({
   lat: z.number().optional(),
   lng: z.number().optional(),
   googlePlaceId: z.string().optional(),
+  photoUrl: z.string().optional(),
 });
 
 const performerInputSchema = z.object({

@@ -15,6 +15,7 @@ export {
 } from './ticketmaster';
 export { matchOrCreateVenue } from './venue-matcher';
 export { matchOrCreatePerformer } from './performer-matcher';
+export { getPlacePhotoMediaUrl } from './google-places';
 export { extractShowFromEmail } from './groq';
 export type { ExtractedTicketInfo } from './groq';
 export {

@@ -16,9 +16,9 @@ async function loginSeeded(page: Page) {
 test.describe('Home page — empty state', () => {
   test('shows empty-state copy and Gmail import button when no shows exist', async ({ page }) => {
     await loginEmpty(page);
-    await page.waitForSelector('text=No shows yet', { timeout: 10000 });
+    await page.waitForSelector('text=Start your logbook', { timeout: 10000 });
 
-    await expect(page.getByText('No shows yet')).toBeVisible();
+    await expect(page.getByText('Start your logbook')).toBeVisible();
     await expect(page.getByText(/Import your ticket history from Gmail/i)).toBeVisible();
 
     const gmailBtn = page.getByRole('button', { name: /Import from Gmail/i });
@@ -32,7 +32,7 @@ test.describe('Home page — empty state', () => {
 
   test('Gmail import button navigates to /shows with ?gmail=1', async ({ page }) => {
     await loginEmpty(page);
-    await page.waitForSelector('text=No shows yet', { timeout: 10000 });
+    await page.waitForSelector('text=Start your logbook', { timeout: 10000 });
 
     const gmailBtn = page.getByRole('button', { name: /Import from Gmail/i });
     await gmailBtn.click();

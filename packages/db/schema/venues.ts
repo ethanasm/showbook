@@ -17,6 +17,7 @@ export const venues = pgTable('venues', {
   longitude: doublePrecision('longitude'),
   ticketmasterVenueId: text('ticketmaster_venue_id'),
   googlePlaceId: text('google_place_id'),
+  photoUrl: text('photo_url'),
   scrapeConfig: jsonb('scrape_config'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });

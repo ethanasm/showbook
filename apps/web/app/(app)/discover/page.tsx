@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
-import { type ShowKind } from "@/components/design-system";
+import { EmptyState, type ShowKind } from "@/components/design-system";
 import {
   Music,
   Clapperboard,
@@ -1121,11 +1121,67 @@ function FeedSection({
   // still appear. For other tabs, show the empty state.
   const hasAnyRegionsToShow = activeTab === "Near You" && (regionGroups?.length ?? 0) > 0;
   if ((!items || items.length === 0) && !hasAnyRegionsToShow) {
+    const hasFollowedVenues = groupBy === "venue" && (allFollowedVenues?.length ?? 0) > 0;
+    const title = hasFollowedVenues
+      ? "Quiet week"
+      : isArtists
+        ? "Follow artists"
+        : isNearby
+          ? "Set your radius"
+          : "Follow venues";
+    const body = hasFollowedVenues
+      ? "No announcements from followed venues right now. Check back Monday after the weekly digest lands."
+      : emptyMessage;
+    const action = isFollowed && !hasFollowedVenues ? (
+      <button
+        type="button"
+        onClick={handleFollowVenue}
+        style={{
+          padding: "10px 18px",
+          background: "var(--accent)",
+          color: "var(--accent-text)",
+          border: "none",
+          borderRadius: 8,
+          cursor: "pointer",
+          fontFamily: "var(--font-geist-mono), monospace",
+          fontSize: 11,
+          letterSpacing: ".06em",
+          textTransform: "uppercase",
+          fontWeight: 500,
+        }}
+      >
+        Follow a venue
+      </button>
+    ) : isNearby && !hasRegions ? (
+      <Link
+        href="/preferences"
+        style={{
+          padding: "10px 18px",
+          background: "var(--accent)",
+          color: "var(--accent-text)",
+          borderRadius: 8,
+          textDecoration: "none",
+          fontFamily: "var(--font-geist-mono), monospace",
+          fontSize: 11,
+          letterSpacing: ".06em",
+          textTransform: "uppercase",
+          fontWeight: 500,
+        }}
+      >
+        Add region
+      </Link>
+    ) : null;
+
     return (
       <div className="discover-main">
         {venueRail}
         <div className="discover-empty">
-          <p className="discover-empty__text">{emptyMessage}</p>
+          <EmptyState
+            kind="discover"
+            title={title}
+            body={body}
+            action={action}
+          />
         </div>
         {followModal}
       </div>

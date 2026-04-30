@@ -16,6 +16,7 @@ export interface GeocodeResult {
   stateRegion?: string;
   country?: string;
   googlePlaceId?: string;
+  photoUrl?: string;
 }
 
 interface NominatimResult {
@@ -44,6 +45,7 @@ export async function geocodeVenue(
           stateRegion: details.stateRegion ?? undefined,
           country: details.country ?? undefined,
           googlePlaceId: details.googlePlaceId,
+          photoUrl: details.photoUrl ?? undefined,
         };
       }
     }

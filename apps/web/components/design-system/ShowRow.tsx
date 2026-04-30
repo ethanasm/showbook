@@ -5,6 +5,7 @@ import Link from "next/link";
 import "./design-system.css";
 import { StateChip, type ShowState } from "./StateChip";
 import type { ShowKind } from "./KindBadge";
+import { RemoteImage } from "./RemoteImage";
 import {
   Music,
   Clapperboard,
@@ -19,6 +20,7 @@ export interface Show {
   state: ShowState;
   headliner: string;
   headlinerId?: string;
+  imageUrl?: string | null;
   support?: string[];
   supportPerformers?: { id: string; name: string }[];
   venue: string;
@@ -125,7 +127,19 @@ export function ShowRow({
         <div className={barClass} style={barStyle} />
       </div>
 
-      {/* 2. Date */}
+      {/* 2. Headliner thumb */}
+      <div className="show-row__thumb">
+        <RemoteImage
+          src={show.imageUrl}
+          alt=""
+          kind={show.kind}
+          name={show.headliner}
+          aspect="square"
+          size="thumb"
+        />
+      </div>
+
+      {/* 3. Date */}
       <div className="show-row__date">
         <div className="show-row__date-top">
           {show.date.month} {show.date.day}
@@ -135,7 +149,7 @@ export function ShowRow({
         </div>
       </div>
 
-      {/* 3. Kind icon + label */}
+      {/* 4. Kind icon + label */}
       <div className="show-row__kind">
         <KindIcon size={14} className={`show-row__kind-icon show-row__kind-icon--${show.kind}`} />
         <span className={`show-row__kind-label show-row__kind-label--${show.kind}`}>
@@ -143,7 +157,7 @@ export function ShowRow({
         </span>
       </div>
 
-      {/* 4. Headliner + support */}
+      {/* 5. Headliner + support */}
       <div className="show-row__headliner-cell">
         {show.headlinerId ? (
           <Link
@@ -182,7 +196,7 @@ export function ShowRow({
         )}
       </div>
 
-      {/* 5. Venue + neighborhood */}
+      {/* 6. Venue + neighborhood */}
       <div className="show-row__venue-cell">
         <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
           {show.venueId ? (
@@ -208,17 +222,17 @@ export function ShowRow({
         )}
       </div>
 
-      {/* 6. Seat */}
+      {/* 7. Seat */}
       <div className="show-row__seat">
         {show.seat ?? "—"}
       </div>
 
-      {/* 7. Paid */}
+      {/* 8. Paid */}
       <div className={paidClass}>
         {paidDisplay}
       </div>
 
-      {/* 8. State + chevron */}
+      {/* 9. State + chevron */}
       <div className="show-row__state">
         {show.state === "ticketed" && <StateChip state="ticketed" />}
         {show.state === "watching" && <StateChip state="watching" />}

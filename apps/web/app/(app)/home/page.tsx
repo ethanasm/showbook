@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { useCompactMode } from "@/lib/useCompactMode";
-import { HeroCard } from "@/components/design-system/HeroCard";
+import { EmptyState, HeroCard, PulseLabel } from "@/components/design-system";
 import type { ShowKind } from "@/components/design-system/KindBadge";
 import {
   ArrowRight,
@@ -79,6 +79,28 @@ function getHeadlinerId(
   const fallback = show.showPerformers.find((sp) => sp.role === "headliner");
   if (fallback) return fallback.performer.id;
   return show.showPerformers[0]?.performer.id;
+}
+
+function getHeadlinerImageUrl(
+  show: {
+    kind?: string;
+    productionName?: string | null;
+    showPerformers: {
+      role: string;
+      sortOrder: number;
+      performer: { imageUrl: string | null };
+    }[];
+  }
+): string | null {
+  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
+    return null;
+  }
+  const headliner = show.showPerformers.find(
+    (sp) => sp.role === "headliner" && sp.sortOrder === 1
+  );
+  if (headliner) return headliner.performer.imageUrl;
+  const fallback = show.showPerformers.find((sp) => sp.role === "headliner");
+  return fallback?.performer.imageUrl ?? show.showPerformers[0]?.performer.imageUrl ?? null;
 }
 
 function getSupport(
@@ -280,58 +302,38 @@ export default function HomePage() {
     return (
       <div
         style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
           height: "100%",
-          gap: 16,
           padding: "40px 24px",
-          textAlign: "center",
+          display: "grid",
+          placeItems: "center",
         }}
       >
-        <Music size={32} color="var(--muted)" strokeWidth={1.5} />
-        <div
-          style={{
-            fontFamily: SANS,
-            fontSize: 20,
-            fontWeight: 600,
-            color: "var(--ink)",
-            letterSpacing: -0.4,
-          }}
-        >
-          No shows yet
-        </div>
-        <div
-          style={{
-            fontFamily: SANS,
-            fontSize: 14,
-            color: "var(--muted)",
-            maxWidth: 320,
-            lineHeight: 1.5,
-          }}
-        >
-          Track concerts, theatre, comedy, and festivals. Import your ticket history from Gmail to get started.
-        </div>
-        <button
-          type="button"
-          onClick={() => router.push("/shows?gmail=1")}
-          style={{
-            marginTop: 8,
-            padding: "10px 22px",
-            background: "var(--accent)",
-            color: "var(--accent-text)",
-            border: "none",
-            cursor: "pointer",
-            fontFamily: MONO,
-            fontSize: 11.5,
-            letterSpacing: ".06em",
-            textTransform: "uppercase",
-            fontWeight: 500,
-          }}
-        >
-          Import from Gmail
-        </button>
+        <EmptyState
+          kind="shows"
+          title="Start your logbook"
+          body="Track concerts, theatre, comedy, and festivals. Import your ticket history from Gmail to get started."
+          action={
+            <button
+              type="button"
+              onClick={() => router.push("/shows?gmail=1")}
+              style={{
+                padding: "10px 22px",
+                background: "var(--accent)",
+                color: "var(--accent-text)",
+                border: "none",
+                borderRadius: 8,
+                cursor: "pointer",
+                fontFamily: MONO,
+                fontSize: 11.5,
+                letterSpacing: ".06em",
+                textTransform: "uppercase",
+                fontWeight: 500,
+              }}
+            >
+              Import from Gmail
+            </button>
+          }
+        />
       </div>
     );
   }
@@ -468,18 +470,13 @@ export default function HomePage() {
                 fontWeight: 500,
               }}
             >
-              Next up
-            </div>
-            <div
-              style={{
-                fontFamily: MONO,
-                fontSize: 10.5,
-                color: "var(--faint)",
-              }}
-            >
-              {heroShow
-                ? `${countdownText(heroShow.date)} · doors 7:00 pm`
-                : "nothing scheduled"}
+              {heroShow ? (
+                <PulseLabel>
+                  Next up &middot; {countdownText(heroShow.date)} &middot; doors 7:00 pm
+                </PulseLabel>
+              ) : (
+                "Next up"
+              )}
             </div>
             <div style={{ flex: 1 }} />
             {upcoming.length > 0 && (
@@ -523,27 +520,15 @@ export default function HomePage() {
                 date: toDateParts(heroShow.date),
                 countdown: countdownText(heroShow.date),
                 hasTix: heroShow.state === "ticketed",
+                headlinerImageUrl: getHeadlinerImageUrl(heroShow),
               }}
             />
           ) : (
-            <div
-              style={{
-                padding: "40px 32px",
-                background: "var(--surface)",
-                borderLeft: "3px solid var(--rule)",
-                textAlign: "center",
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: SANS,
-                  fontSize: 16,
-                  color: "var(--muted)",
-                }}
-              >
-                No upcoming shows — add one!
-              </div>
-            </div>
+            <EmptyState
+              kind="shows"
+              title="No upcoming shows"
+              body="Your next ticketed or watched show will land here with the date, venue, and countdown."
+            />
           )}
 
           {/* Mini upcoming cards (3 columns) */}
@@ -993,16 +978,12 @@ export default function HomePage() {
                 );
               })
             ) : (
-              <div
-                style={{
-                  padding: "24px 20px",
-                  fontFamily: SANS,
-                  fontSize: 13,
-                  color: "var(--muted)",
-                  textAlign: "center",
-                }}
-              >
-                No past shows yet
+              <div style={{ padding: 20 }}>
+                <EmptyState
+                  kind="shows"
+                  title="No past shows"
+                  body="Once a show is marked attended, it joins your recent history here."
+                />
               </div>
             )}
           </div>

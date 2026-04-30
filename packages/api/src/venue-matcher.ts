@@ -17,6 +17,7 @@ export interface VenueInput {
   lat?: number;
   lng?: number;
   googlePlaceId?: string;
+  photoUrl?: string;
 }
 
 export interface VenueMatchResult {
@@ -91,6 +92,7 @@ export async function matchOrCreateVenue(
   let country = input.country ?? 'US';
   let tmVenueId = input.tmVenueId ?? null;
   let googlePlaceId = input.googlePlaceId ?? null;
+  let photoUrl = input.photoUrl ?? null;
 
   if (lat == null && input.name && input.city) {
     try {
@@ -101,6 +103,7 @@ export async function matchOrCreateVenue(
         if (!stateRegion && geo.stateRegion) stateRegion = geo.stateRegion;
         if (geo.country) country = geo.country;
         if (!googlePlaceId && geo.googlePlaceId) googlePlaceId = geo.googlePlaceId;
+        if (!photoUrl && geo.photoUrl) photoUrl = geo.photoUrl;
       }
     } catch { /* geocoding failed; save without coordinates */ }
   }
@@ -121,6 +124,7 @@ export async function matchOrCreateVenue(
       latitude: lat,
       longitude: lng,
       googlePlaceId,
+      photoUrl,
     })
     .returning();
 
@@ -214,11 +218,15 @@ async function maybeUpdate(
         if (!existing.stateRegion && geo.stateRegion) updates.stateRegion = geo.stateRegion;
         if (!existing.country && geo.country) updates.country = geo.country;
         if (!existing.googlePlaceId && geo.googlePlaceId) updates.googlePlaceId = geo.googlePlaceId;
+        if (!existing.photoUrl && geo.photoUrl) updates.photoUrl = geo.photoUrl;
       }
     } catch { /* geocoding failed */ }
   }
   if (input.googlePlaceId && !existing.googlePlaceId) {
     updates.googlePlaceId = input.googlePlaceId;
+  }
+  if (input.photoUrl && !existing.photoUrl) {
+    updates.photoUrl = input.photoUrl;
   }
   if (input.stateRegion && !existing.stateRegion) {
     updates.stateRegion = input.stateRegion;

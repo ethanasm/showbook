@@ -18,6 +18,7 @@ export interface PlaceDetails {
   latitude: number;
   longitude: number;
   googlePlaceId: string;
+  photoUrl: string | null;
 }
 
 export async function autocomplete(
@@ -61,7 +62,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
   const API_KEY = getApiKey();
   if (!API_KEY) return null;
 
-  const fieldMask = 'displayName,formattedAddress,location,addressComponents';
+  const fieldMask = 'displayName,formattedAddress,location,addressComponents,photos';
   const res = await fetch(
     `${BASE_URL}/places/${placeId}?languageCode=en`,
     {
@@ -90,5 +91,13 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
     latitude: data.location?.latitude ?? 0,
     longitude: data.location?.longitude ?? 0,
     googlePlaceId: placeId,
+    photoUrl: data.photos?.[0]?.name ?? null,
   };
+}
+
+export function getPlacePhotoMediaUrl(photoName: string, maxWidthPx = 1200): string | null {
+  const API_KEY = getApiKey();
+  if (!API_KEY || !photoName) return null;
+  const normalized = photoName.replace(/^\/+/, '');
+  return `${BASE_URL}/${normalized}/media?maxWidthPx=${maxWidthPx}&key=${encodeURIComponent(API_KEY)}`;
 }

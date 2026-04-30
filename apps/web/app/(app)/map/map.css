@@ -476,6 +476,19 @@
 }
 
 /* Inspector header */
+.venue-inspector__photo {
+  position: relative;
+  height: 180px;
+  border-bottom: 1px solid var(--rule);
+  overflow: hidden;
+}
+
+.venue-inspector__photo .remote-image {
+  height: 100%;
+  border: none;
+  border-radius: 0;
+}
+
 .venue-inspector__header {
   padding: 20px 24px;
   border-bottom: 1px solid var(--rule);

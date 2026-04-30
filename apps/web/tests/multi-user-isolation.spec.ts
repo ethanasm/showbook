@@ -21,7 +21,7 @@ test.describe('Multi-user isolation', () => {
     await bob.waitForURL('**/home');
 
     // Home now shows the empty state when the user has no shows.
-    await expect(bob.getByText('No shows yet', { exact: false })).toBeVisible();
+    await expect(bob.getByText('Start your logbook', { exact: false })).toBeVisible();
     await expect(bob.getByText('Radiohead')).toHaveCount(0);
 
     await bob.screenshot({

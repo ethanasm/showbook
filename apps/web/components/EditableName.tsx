@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 export function EditableName({
   value,
   onSave,
+  displayValue,
 }: {
   value: string;
   onSave: (name: string) => void;
+  displayValue?: ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -77,7 +80,7 @@ export function EditableName({
       style={{ ...sharedStyle, cursor: "text" }}
       title="Double-click to edit"
     >
-      {value}
+      {displayValue ?? value}
     </div>
   );
 }

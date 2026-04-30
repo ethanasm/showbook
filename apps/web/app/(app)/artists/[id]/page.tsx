@@ -5,12 +5,13 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import {
-  Music,
   Plus,
   Check,
   ChevronLeft,
 } from "lucide-react";
 import {
+  EmptyState,
+  RemoteImage,
   ShowRow as ShowRowComponent,
   type ShowKind,
   type ShowState,
@@ -88,6 +89,37 @@ function getHeadliner(show: ShowData): string {
     hl?.performer.name ??
     show.showPerformers.find((sp) => sp.role === "headliner")?.performer.name ??
     "Unknown"
+  );
+}
+
+function getHeadlinerId(show: ShowData): string | undefined {
+  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
+    return undefined;
+  }
+  const hl = show.showPerformers.find(
+    (sp) => sp.role === "headliner" && sp.sortOrder === 0,
+  );
+  return hl?.performer.id;
+}
+
+function getHeadlinerImageUrl(show: ShowData): string | null {
+  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
+    return null;
+  }
+  const hl = show.showPerformers.find(
+    (sp) => sp.role === "headliner" && sp.sortOrder === 0,
+  );
+  return hl?.performer.imageUrl ?? null;
+}
+
+function gradientLastWord(name: string) {
+  const words = name.trim().split(/\s+/);
+  if (words.length <= 1) return <span className="gradient-emphasis">{name}</span>;
+  const last = words.pop();
+  return (
+    <>
+      {words.join(" ")} <span className="gradient-emphasis">{last}</span>
+    </>
   );
 }
 
@@ -233,27 +265,25 @@ export default function ArtistDetailPage() {
           alignItems: "end",
         }}
       >
-        <div style={{ minWidth: 0 }}>
-          <div
-            style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
-              color: "var(--muted)",
-              letterSpacing: ".1em",
-              textTransform: "uppercase",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 7,
-            }}
-          >
-            <Music size={12} /> Artist
-          </div>
-          <EditableName
-            value={performer.name}
-            onSave={(name) =>
-              renameMutation.mutate({ performerId: performer.id, name })
-            }
+        <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 20 }}>
+          <RemoteImage
+            src={performer.imageUrl}
+            alt={`${performer.name} portrait`}
+            kind="artists"
+            name={performer.name}
+            aspect="square"
+            size="card"
           />
+          <div style={{ minWidth: 0 }}>
+            <div className="eyebrow">Performers you&apos;ve seen live</div>
+            <EditableName
+              value={performer.name}
+              displayValue={gradientLastWord(performer.name)}
+              onSave={(name) =>
+                renameMutation.mutate({ performerId: performer.id, name })
+              }
+            />
+          </div>
         </div>
 
         {/* Follow button */}
@@ -333,14 +363,18 @@ export default function ArtistDetailPage() {
           {userShowsQuery.isLoading ? (
             <CardMessage>Loading your history…</CardMessage>
           ) : userShows.length === 0 ? (
-            <CardMessage>You haven&apos;t logged any shows with this artist yet.</CardMessage>
+            <EmptyState
+              kind="artists"
+              title="No shows logged"
+              body="When this artist appears in your history, every visit will collect here."
+            />
           ) : (
             <div style={{ background: "var(--surface)" }}>
               <div
                 style={{
                   display: "grid",
                   gridTemplateColumns:
-                    "14px 80px 110px 1.2fr 1fr 110px 64px 88px",
+                    "14px 32px 80px 110px 1.2fr 1fr 110px 64px 88px",
                   columnGap: 16,
                   padding: "10px 20px 10px 10px",
                   borderBottom: "1px solid var(--rule)",
@@ -351,6 +385,7 @@ export default function ArtistDetailPage() {
                   textTransform: "uppercase",
                 }}
               >
+                <div />
                 <div />
                 <div>Date</div>
                 <div>Kind</div>
@@ -367,6 +402,8 @@ export default function ArtistDetailPage() {
                     kind: s.kind,
                     state: s.state,
                     headliner: getHeadliner(s),
+                    headlinerId: getHeadlinerId(s),
+                    imageUrl: getHeadlinerImageUrl(s),
                     support: getSupport(s),
                     venue: s.venue.name,
                     venueId: s.venue.id,

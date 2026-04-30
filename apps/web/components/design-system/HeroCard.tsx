@@ -1,8 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import "./design-system.css";
 import type { ShowKind } from "./KindBadge";
+import { PulseLabel } from "./PulseLabel";
 import {
   Music,
   Clapperboard,
@@ -29,6 +31,7 @@ export interface HeroShow {
   date: { month: string; day: string; year: string; dow: string };
   countdown: string;
   hasTix: boolean;
+  headlinerImageUrl?: string | null;
 }
 
 interface HeroCardProps {
@@ -56,17 +59,63 @@ export function HeroCard({ show }: HeroCardProps) {
   return (
     <div
       style={{
+        position: "relative",
+        overflow: "hidden",
         padding: "28px 32px",
         background: "var(--surface)",
+        border: "1px solid var(--rule)",
+        borderRadius: 12,
         borderLeft: `3px solid ${kindColor}`,
-        display: "grid",
-        gridTemplateColumns: "1fr auto",
-        gap: 32,
-        alignItems: "center",
+      }}
+    >
+      <div className="glow-backdrop" style={{ opacity: 0.55 }} />
+      {show.headlinerImageUrl && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            left: "38%",
+            zIndex: 0,
+            opacity: 0.28,
+          }}
+          aria-hidden="true"
+        >
+          <Image
+            src={show.headlinerImageUrl}
+            alt=""
+            fill
+            sizes="(max-width: 768px) 100vw, 560px"
+            style={{ objectFit: "cover" }}
+            priority
+          />
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(90deg, var(--surface) 0%, color-mix(in srgb, var(--surface) 82%, transparent) 28%, transparent 100%)",
+            }}
+          />
+        </div>
+      )}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          display: "grid",
+          gridTemplateColumns: "1fr auto",
+          gap: 32,
+          alignItems: "center",
       }}
     >
       {/* Left side */}
       <div style={{ minWidth: 0 }}>
+        <div style={{ marginBottom: 16 }}>
+          <PulseLabel>
+            Next up &middot; {show.countdown} &middot; doors 7:00 pm
+          </PulseLabel>
+        </div>
+
         {/* Kind badge + Ticketed chip row */}
         <div
           style={{
@@ -118,7 +167,7 @@ export function HeroCard({ show }: HeroCardProps) {
             fontFamily: "var(--font-geist-sans), sans-serif",
             fontSize: 52,
             fontWeight: 600,
-            letterSpacing: -2,
+            letterSpacing: 0,
             color: "var(--ink)",
             lineHeight: 0.95,
           }}
@@ -141,12 +190,12 @@ export function HeroCard({ show }: HeroCardProps) {
         {show.support.length > 0 && (
           <div
             style={{
-              fontFamily: "var(--font-geist-sans), sans-serif",
-              fontSize: 16,
-              color: "var(--muted)",
-              marginTop: 8,
-              letterSpacing: -0.2,
-            }}
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 16,
+            color: "var(--muted)",
+            marginTop: 8,
+            letterSpacing: 0,
+          }}
           >
             with{" "}
             {show.support.map((name, i) => {
@@ -235,8 +284,8 @@ export function HeroCard({ show }: HeroCardProps) {
           {/* Doors / Show time */}
           <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
             <Clock size={14} color="var(--muted)" />
-            <div>
-              <div>doors 7:00 pm</div>
+          <div>
+            <div>doors 7:00 pm</div>
               <div
                 style={{
                   fontFamily: "var(--font-geist-mono), monospace",
@@ -278,12 +327,12 @@ export function HeroCard({ show }: HeroCardProps) {
             fontFamily: "var(--font-geist-sans), sans-serif",
             fontSize: 120,
             fontWeight: 500,
-            color: "var(--ink)",
-            letterSpacing: -5,
+            letterSpacing: 0,
             lineHeight: 0.85,
             fontFeatureSettings: '"tnum"',
             marginTop: 4,
           }}
+          className="gradient-emphasis"
         >
           {show.date.day}
         </div>
@@ -311,6 +360,7 @@ export function HeroCard({ show }: HeroCardProps) {
         >
           {show.countdown}
         </div>
+      </div>
       </div>
     </div>
   );

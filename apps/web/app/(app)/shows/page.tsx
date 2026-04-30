@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import {
+  EmptyState,
   ShowRow,
   KindBadge,
   type ShowKind,
@@ -200,6 +201,16 @@ function getHeadlinerId(show: ShowData): string | undefined {
     (sp) => sp.role === "headliner" && sp.sortOrder === 0
   );
   return headliner?.performer.id;
+}
+
+function getHeadlinerImageUrl(show: ShowData): string | null {
+  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
+    return null;
+  }
+  const headliner = show.showPerformers.find(
+    (sp) => sp.role === "headliner" && sp.sortOrder === 0
+  );
+  return headliner?.performer.imageUrl ?? null;
 }
 
 function getSupportPerformers(show: ShowData): { id: string; name: string }[] {
@@ -1234,8 +1245,33 @@ export default function ShowsPage() {
   function renderList() {
     if (filteredShows.length === 0) {
       return (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, fontFamily: "var(--font-geist-sans), sans-serif", fontSize: "1rem", color: "var(--muted)" }}>
-          No shows yet. Add your first show!
+        <div style={{ padding: "28px 36px" }}>
+          <EmptyState
+            kind="shows"
+            title="Start your logbook"
+            body="Add the first show you saw, the next one you are watching, or import ticket history from Gmail."
+            action={
+              <button
+                type="button"
+                onClick={() => router.push("/add")}
+                style={{
+                  padding: "10px 18px",
+                  background: "var(--accent)",
+                  color: "var(--accent-text)",
+                  border: "none",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontSize: 11,
+                  letterSpacing: ".06em",
+                  textTransform: "uppercase",
+                  fontWeight: 500,
+                }}
+              >
+                Add a show
+              </button>
+            }
+          />
         </div>
       );
     }
@@ -1268,7 +1304,7 @@ export default function ShowsPage() {
           {/* Column headers */}
           <div style={{
             display: "grid",
-            gridTemplateColumns: "14px 80px 110px 1.2fr 1fr 110px 64px 88px",
+            gridTemplateColumns: "14px 32px 80px 110px 1.2fr 1fr 110px 64px 88px",
             columnGap: 16,
             padding: "10px 20px 10px 10px",
             borderBottom: "1px solid var(--rule)",
@@ -1278,6 +1314,7 @@ export default function ShowsPage() {
             letterSpacing: ".12em",
             textTransform: "uppercase",
           }}>
+            <div />
             <div />
             <SortHeader field="date" label="Date" sort={sort} onToggle={toggleSort} />
             <SortHeader field="kind" label="Kind" sort={sort} onToggle={toggleSort} />
@@ -1300,6 +1337,7 @@ export default function ShowsPage() {
                   state: show.state,
                   headliner: getHeadliner(show),
                   headlinerId: getHeadlinerId(show),
+                  imageUrl: getHeadlinerImageUrl(show),
                   support: getSupport(show),
                   supportPerformers: getSupportPerformers(show),
                   venue: show.venue.name,

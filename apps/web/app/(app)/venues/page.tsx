@@ -7,6 +7,7 @@ import { MapPin, Search, Eye, Pencil, ChevronLeft, ChevronRight } from "lucide-r
 import { SortHeader, type SortConfig } from "@/components/SortHeader";
 import { useCompactMode } from "@/lib/useCompactMode";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
+import { EmptyState, RemoteImage } from "@/components/design-system";
 
 type SortField = "name" | "state" | "city" | "past" | "future";
 
@@ -250,8 +251,12 @@ export default function VenuesListPage() {
         </div>
 
         {filtered.length === 0 ? (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, fontFamily: "var(--font-geist-sans), sans-serif", fontSize: "1rem", color: "var(--muted)" }}>
-            {search ? "No venues match your search." : "No venues yet. Add your first show!"}
+          <div style={{ padding: "28px 36px" }}>
+            <EmptyState
+              kind="venues"
+              title={search ? "No venue matches" : "Venues await"}
+              body={search ? "Try another city or clear the filter." : "Venues populate from the shows you log."}
+            />
           </div>
         ) : (
           <div style={{ margin: "4px 36px 0", background: "var(--surface)" }}>
@@ -306,7 +311,14 @@ export default function VenuesListPage() {
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                        <MapPin size={14} color="var(--muted)" style={{ flexShrink: 0 }} />
+                        <RemoteImage
+                          src={v.photoUrl ? `/api/venue-photo/${v.id}` : null}
+                          alt=""
+                          kind="venue"
+                          name={v.name}
+                          aspect="square"
+                          size="thumb"
+                        />
                         <span style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 14, fontWeight: 500, color: "var(--ink)", letterSpacing: -0.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {v.name}
                         </span>

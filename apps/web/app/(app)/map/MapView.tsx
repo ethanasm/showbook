@@ -13,12 +13,11 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { trpc } from "@/lib/trpc";
-import { type ShowKind } from "@/components/design-system/KindBadge";
+import { EmptyState, RemoteImage, type ShowKind } from "@/components/design-system";
 import {
   ArrowUpRight,
   Plus,
   Filter,
-  MapPin,
   X,
   Music,
   Theater,
@@ -96,6 +95,7 @@ interface VenueGroup {
   venueId: string;
   name: string;
   city: string;
+  photoUrl: string | null;
   latitude: number;
   longitude: number;
   shows: VenueShowData[];
@@ -171,6 +171,17 @@ function formatDateParts(dateStr: string) {
 
 function pluralize(count: number, singular: string): string {
   return count === 1 ? `${count} ${singular}` : `${count} ${singular}s`;
+}
+
+function gradientLastWord(name: string) {
+  const words = name.trim().split(/\s+/);
+  if (words.length <= 1) return <span className="gradient-emphasis">{name}</span>;
+  const last = words.pop();
+  return (
+    <>
+      {words.join(" ")} <span className="gradient-emphasis">{last}</span>
+    </>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -535,11 +546,22 @@ function VenueInspector({
 
   return (
     <div className="venue-inspector">
+      <div className="venue-inspector__photo">
+        <RemoteImage
+          src={venue.photoUrl ? `/api/venue-photo/${venue.venueId}` : null}
+          alt={`${venue.name} venue photo`}
+          kind="venue"
+          name={venue.name}
+          aspect="16/9"
+          size="hero"
+        />
+      </div>
+
       {/* Header */}
       <div className="venue-inspector__header">
         <div className="venue-inspector__header-top">
           <div className="venue-inspector__label">
-            <MapPin size={11} />
+            <span className="pulse-dot" />
             Selected venue
           </div>
           <button
@@ -553,7 +575,7 @@ function VenueInspector({
         </div>
         <h2 className="venue-inspector__name">
           <Link href={`/venues/${venue.venueId}`} className="venue-inspector__name-link">
-            {venue.name}
+            {gradientLastWord(venue.name)}
           </Link>
         </h2>
         <div className="venue-inspector__neighborhood">{venue.city}</div>
@@ -763,6 +785,7 @@ export default function MapView() {
           venueId: venue.id,
           name: venue.name,
           city: venue.city,
+          photoUrl: venue.photoUrl,
           latitude: venue.latitude,
           longitude: venue.longitude,
           shows: [showData],
@@ -857,27 +880,31 @@ export default function MapView() {
   if (venueGroups.length === 0) {
     return (
       <div className="map-empty">
-        <p>No venues with coordinates.</p>
-        {unmappedCount > 0 ? (
-          <button
-            type="button"
-            className="map-backfill-banner__btn"
-            disabled={backfilling}
-            onClick={async () => {
-              setBackfilling(true);
-              try {
-                await backfillCoordinates.mutateAsync();
-                await utils.shows.list.invalidate();
-              } finally {
-                setBackfilling(false);
-              }
-            }}
-          >
-            {backfilling ? "Geocoding..." : `Geocode ${unmappedCount} venue${unmappedCount !== 1 ? "s" : ""}`}
-          </button>
-        ) : (
-          <p>Add a show with a venue to see it on the map.</p>
-        )}
+        <EmptyState
+          kind="map"
+          title="No mapped venues"
+          body={unmappedCount > 0 ? "Some venues need coordinates before they can appear here." : "Add a show with a venue to see it on the map."}
+          action={
+            unmappedCount > 0 ? (
+              <button
+                type="button"
+                className="map-backfill-banner__btn"
+                disabled={backfilling}
+                onClick={async () => {
+                  setBackfilling(true);
+                  try {
+                    await backfillCoordinates.mutateAsync();
+                    await utils.shows.list.invalidate();
+                  } finally {
+                    setBackfilling(false);
+                  }
+                }}
+              >
+                {backfilling ? "Geocoding..." : `Geocode ${unmappedCount} venue${unmappedCount !== 1 ? "s" : ""}`}
+              </button>
+            ) : null
+          }
+        />
       </div>
     );
   }

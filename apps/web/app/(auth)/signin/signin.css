@@ -24,10 +24,7 @@
   position: relative;
   overflow: hidden;
   border-right: 1px solid var(--rule);
-  background:
-    radial-gradient(1200px 600px at 20% 10%, rgba(255, 209, 102, 0.10), transparent 60%),
-    radial-gradient(900px 500px at 80% 90%, rgba(58, 134, 255, 0.10), transparent 60%),
-    linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);
+  background: var(--surface);
 }
 
 .signin__grid {
@@ -53,20 +50,6 @@
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--muted);
-}
-
-.signin__marquee-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--accent);
-  box-shadow: 0 0 12px var(--accent);
-  animation: signin-pulse 1.6s ease-in-out infinite;
-}
-
-@keyframes signin-pulse {
-  0%, 100% { opacity: 0.4; transform: scale(0.85); }
-  50% { opacity: 1; transform: scale(1.1); }
 }
 
 .signin__stack {
@@ -213,32 +196,11 @@
   color: var(--muted);
 }
 
-.signin__brand-mark {
-  width: 22px;
-  height: 22px;
-  border-radius: 5px;
-  background: var(--accent);
-  display: grid;
-  place-items: center;
-  color: var(--accent-text);
-  font-weight: 800;
-  font-size: 13px;
-  font-family: var(--font-geist-sans), sans-serif;
-}
-
 .signin__hero {
   display: flex;
   flex-direction: column;
   gap: 28px;
   max-width: 460px;
-}
-
-.signin__eyebrow {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 11px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--accent);
 }
 
 .signin__title {
@@ -247,14 +209,6 @@
   line-height: 1.05;
   letter-spacing: -0.025em;
   color: var(--ink);
-}
-
-.signin__title em {
-  font-style: normal;
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 60%, var(--kind-theatre)));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
 }
 
 .signin__subtitle {
@@ -269,26 +223,6 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 4px;
-}
-
-.signin__kind {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--rule);
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.signin__kind-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
 }
 
 /* ── Google button (Google brand guidelines) ──────────────── */
