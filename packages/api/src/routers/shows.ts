@@ -141,6 +141,49 @@ export const showsRouter = router({
     }),
 
   /**
+   * Slim per-show shape: { id, date, kind, state, performerIds }. Used by
+   * callsites that need to filter / index shows by performer or year but
+   * don't render the full venue and performer object graph (the artists
+   * page right-click menu, for example).
+   */
+  listSlim: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const baseRows = await ctx.db
+      .select({
+        id: shows.id,
+        date: shows.date,
+        kind: shows.kind,
+        state: shows.state,
+      })
+      .from(shows)
+      .where(eq(shows.userId, userId))
+      .orderBy(desc(shows.date));
+
+    if (baseRows.length === 0) return [];
+
+    const performerRows = await ctx.db
+      .select({
+        showId: showPerformers.showId,
+        performerId: showPerformers.performerId,
+      })
+      .from(showPerformers)
+      .innerJoin(shows, eq(showPerformers.showId, shows.id))
+      .where(eq(shows.userId, userId));
+
+    const idsByShow = new Map<string, string[]>();
+    for (const row of performerRows) {
+      const arr = idsByShow.get(row.showId);
+      if (arr) arr.push(row.performerId);
+      else idsByShow.set(row.showId, [row.performerId]);
+    }
+
+    return baseRows.map((row) => ({
+      ...row,
+      performerIds: idsByShow.get(row.id) ?? [],
+    }));
+  }),
+
+  /**
    * Map-shaped projection: every show with its venue's geo fields plus a
    * single denormalized headliner (name, id, imageUrl). The map view
    * needs all shows to compute "unmapped" counts but never iterates

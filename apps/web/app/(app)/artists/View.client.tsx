@@ -57,7 +57,12 @@ export default function ArtistsView() {
   const { data: artists, isLoading, error } = trpc.performers.list.useQuery(undefined, {
     staleTime: 60_000,
   });
-  const { data: showsData } = trpc.shows.list.useQuery({}, { staleTime: 60_000 });
+  // Slim per-show projection — the artists right-click menu only needs
+  // performer IDs, state, and date to find each artist's most recent
+  // ticketed/watching show.
+  const { data: showsData } = trpc.shows.listSlim.useQuery(undefined, {
+    staleTime: 60_000,
+  });
 
   const utils = trpc.useUtils();
   const renameMutation = trpc.performers.rename.useMutation({
@@ -149,23 +154,16 @@ export default function ArtistsView() {
   ): ContextMenuItem[] {
     // Find this artist's most recent ticketed/watching show
     const artistShows = (showsData ?? []).filter((show) =>
-      (show as { showPerformers: { performer: { id: string } }[] }).showPerformers?.some(
-        (sp) => sp.performer.id === artistId,
-      ),
-    ) as Array<{
-      id: string;
-      state: string;
-      date: string;
-      showPerformers: { performer: { id: string } }[];
-    }>;
+      show.performerIds.includes(artistId),
+    );
 
     const ticketedShow = artistShows
       .filter((s) => s.state === "ticketed")
-      .sort((a, b) => b.date.localeCompare(a.date))[0];
+      .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))[0];
 
     const watchingShow = artistShows
       .filter((s) => s.state === "watching")
-      .sort((a, b) => b.date.localeCompare(a.date))[0];
+      .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))[0];
 
     const items: ContextMenuItem[] = [
       {
