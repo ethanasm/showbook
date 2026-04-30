@@ -268,6 +268,12 @@
   margin-top: 10px;
 }
 
+.discover-rail__follow--top {
+  padding: 0 18px 12px;
+  border-top: none;
+  margin-top: 0;
+}
+
 .discover-rail__follow-link {
   display: flex;
   align-items: center;
@@ -284,6 +290,19 @@
 
 .discover-rail__follow-link:hover {
   color: var(--ink);
+}
+
+.discover-rail__follow-link:disabled {
+  color: var(--faint);
+  cursor: not-allowed;
+}
+
+.discover-rail__follow-hint {
+  margin-top: 4px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  color: var(--faint);
+  letter-spacing: 0.04em;
 }
 
 /* ── Feed Area ───────────────────────────────────────── */
@@ -724,13 +743,18 @@ a.discover-row__headliner-link:hover {
 .discover-modal {
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: 12px;
+  border-radius: 8px;
   width: 100%;
   max-width: 440px;
   max-height: 480px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.discover-modal--region {
+  max-width: 520px;
+  max-height: min(620px, 88vh);
 }
 
 .discover-modal__header {
@@ -858,6 +882,115 @@ a.discover-row__headliner-link:hover {
 
 .discover-modal__result:hover .discover-modal__result-action {
   color: var(--ink);
+}
+
+/* ── Region Search Modal ────────────────────────────── */
+
+.discover-region-form {
+  padding: 18px 20px 20px;
+  overflow: auto;
+}
+
+.discover-region-form__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 12px;
+}
+
+.discover-region-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.discover-region-form__label {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.discover-region-form__search {
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  background: var(--surface2);
+}
+
+.discover-region-form__input {
+  width: 100%;
+  border: 1px solid var(--rule);
+  background: var(--surface2);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 14px;
+  outline: none;
+  padding: 8px 10px;
+}
+
+.discover-region-form__places {
+  margin-top: 10px;
+  border: 1px solid var(--rule);
+  max-height: 210px;
+  overflow: auto;
+}
+
+.discover-region-form__error {
+  margin-top: 10px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  color: #e63946;
+  letter-spacing: 0.04em;
+}
+
+.discover-region-form__manual {
+  margin-top: 10px;
+  padding: 6px 0 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.discover-region-form__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.discover-region-form__add,
+.discover-region-form__cancel {
+  border: none;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.discover-region-form__add {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.discover-region-form__add:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.discover-region-form__cancel {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--rule-strong);
 }
 
 /* ── Mobile: Venue Filter Chips ──────────────────────── */
