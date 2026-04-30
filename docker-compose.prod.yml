@@ -4,7 +4,7 @@ name: showbook-prod
 # loopback-only port bindings (Cloudflare Tunnel reaches web via 127.0.0.1).
 #
 # Project name `showbook-prod` namespaces volumes and containers separately
-# from the dev compose (project `showbook`), so they have independent
+# from the dev compose (project `showbook-dev`), so they have independent
 # postgres data, networks, and containers.
 #
 # Prod postgres binds to host port 5434 (vs dev's 5433) and uses a
@@ -34,7 +34,7 @@ name: showbook-prod
 #   plus any data-source / R2 / observability keys actually used.
 
 services:
-  postgres:
+  db:
     image: postgres:16-alpine
     container_name: showbook-prod-db
     restart: unless-stopped
@@ -64,13 +64,13 @@ services:
         required: true
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://showbook_prod:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.prod}@postgres:5432/showbook_prod
+      DATABASE_URL: postgresql://showbook_prod:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.prod}@db:5432/showbook_prod
       PORT: "3001"
       NODE_OPTIONS: "--max-old-space-size=4096"
     ports:
       - "127.0.0.1:3002:3001"
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
 
 volumes:

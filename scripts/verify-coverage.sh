@@ -83,7 +83,7 @@ postgres_available() {
   if [ "$CI" = "true" ]; then
     pg_isready -h localhost -p 5433 -U showbook >/dev/null 2>&1
   else
-    docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^showbook-postgres\|^showbook-dev-db'
+    docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^showbook-dev-db$'
   fi
 }
 

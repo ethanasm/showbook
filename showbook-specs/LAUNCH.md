@@ -133,7 +133,7 @@ Do not stop between waves.
 ## Acceptance criteria — DONE when ALL pass:
 
 ### Infrastructure
-- [ ] `docker compose up -d` starts showbook-dev-db and showbook-web, both healthy
+- [ ] `docker compose up -d` starts showbook-dev-db and showbook-dev-web, both healthy
 - [ ] `http://localhost:3001` loads the app
 - [ ] All database tables exist (verify via docker compose exec showbook-dev-db psql -U showbook -c '\dt')
 
