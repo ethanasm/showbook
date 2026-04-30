@@ -23,90 +23,8 @@ import {
   groupVenuesByRegion,
 } from "./region-helpers";
 import { DISCOVER_KIND_ICONS as KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
+import { ContextMenu } from "@/components/ContextMenu";
 import "./discover.css";
-
-// ---------------------------------------------------------------------------
-// Lightweight context menu (local; a shared one is coming post-merge)
-// ---------------------------------------------------------------------------
-
-function ContextMenu({
-  x,
-  y,
-  items,
-  onClose,
-}: {
-  x: number;
-  y: number;
-  items: { label: string; onClick: () => void; danger?: boolean }[];
-  onClose: () => void;
-}) {
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
-
-  useEffect(() => {
-    const handler = () => onClose();
-    document.addEventListener("scroll", handler, true);
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") onClose();
-    });
-    return () => {
-      document.removeEventListener("scroll", handler, true);
-    };
-  }, [onClose]);
-
-  return (
-    <div
-      ref={menuRef}
-      style={{
-        position: "fixed",
-        top: y,
-        left: x,
-        background: "var(--surface)",
-        border: "1px solid var(--rule-strong)",
-        zIndex: 1000,
-        minWidth: 140,
-        boxShadow: "0 4px 16px rgba(0,0,0,.2)",
-      }}
-    >
-      {items.map((item) => (
-        <button
-          key={item.label}
-          type="button"
-          onClick={() => {
-            item.onClick();
-            onClose();
-          }}
-          style={{
-            display: "block",
-            width: "100%",
-            padding: "10px 14px",
-            background: "none",
-            border: "none",
-            color: item.danger ? "#E63946" : "var(--ink)",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
-            textAlign: "left",
-            cursor: "pointer",
-            letterSpacing: ".04em",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface2)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-        >
-          {item.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 type DiscoverKind = ShowKind | "sports";
 type DiscoverSortField =
@@ -1188,16 +1106,14 @@ function VenueRail({
 
       {contextMenu && onUnfollowItem && (
         <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
           items={[{ label: "Unfollow", onClick: () => onUnfollowItem(contextMenu.id), danger: true }]}
           onClose={() => setContextMenu(null)}
         />
       )}
       {railRegionContextMenu && onUnfollowRegion && (
         <ContextMenu
-          x={railRegionContextMenu.x}
-          y={railRegionContextMenu.y}
+          position={{ x: railRegionContextMenu.x, y: railRegionContextMenu.y }}
           items={[{
             label: "Unfollow region",
             onClick: () => onUnfollowRegion(railRegionContextMenu.regionId),
@@ -1806,8 +1722,7 @@ function FeedSection({
       {/* Region right-click context menu */}
       {regionContextMenu && (
         <ContextMenu
-          x={regionContextMenu.x}
-          y={regionContextMenu.y}
+          position={{ x: regionContextMenu.x, y: regionContextMenu.y }}
           items={[{
             label: "Unfollow region",
             danger: true,

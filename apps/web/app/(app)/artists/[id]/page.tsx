@@ -12,6 +12,7 @@ import {
 import {
   EmptyState,
   RemoteImage,
+  SectionHeader,
   ShowRow as ShowRowComponent,
   type ShowKind,
   type ShowState,
@@ -421,44 +422,6 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
       >
         {value}
       </div>
-    </div>
-  );
-}
-
-function SectionHeader({ label, note }: { label: string; note?: string }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "baseline",
-        justifyContent: "space-between",
-        marginBottom: 12,
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
-          color: "var(--ink)",
-          letterSpacing: ".1em",
-          textTransform: "uppercase",
-          fontWeight: 500,
-        }}
-      >
-        {label}
-      </div>
-      {note && (
-        <div
-          style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
-            color: "var(--faint)",
-            letterSpacing: ".04em",
-          }}
-        >
-          {note}
-        </div>
-      )}
     </div>
   );
 }
