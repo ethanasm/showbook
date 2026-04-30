@@ -19,7 +19,7 @@ Self-hosted on desktop. Two Docker containers (Postgres + Next.js). Accessible a
 | **LLM** | Groq API | Fast inference on Llama 3. OpenAI-compatible SDK. Effectively free |
 | **API layer** | tRPC | End-to-end type safety between server and client |
 | **Monorepo** | Nx | Build orchestration, caching, `nx affected` |
-| **External access** | Cloudflare Tunnel | `showbook.example.com` → localhost:3001. Shared tunnel with vacation tracker |
+| **External access** | Cloudflare Tunnel | `showbook.example.com` → localhost:3002 (prod web). Shared tunnel with vacation tracker |
 
 ---
 
@@ -97,7 +97,7 @@ Drizzle migrations with:
 DATABASE_URL=postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e
 ```
 
-Playwright starts its own Next.js dev server on `https://localhost:3002` with
+Playwright starts its own Next.js dev server on `https://localhost:3003` with
 `ENABLE_TEST_ROUTES=1`. The `/api/test/*` routes reject requests unless test
 routes are enabled and `DATABASE_URL` points at `showbook_e2e`.
 
@@ -175,7 +175,7 @@ Cloudflared runs on the host as a system service (not in Docker). One tunnel, sh
 ```yaml
 ingress:
   - hostname: showbook.example.com
-    service: http://localhost:3001
+    service: http://localhost:3002    # prod web
   - hostname: vactrack.example.com
     service: http://localhost:3000
   - service: http_status:404

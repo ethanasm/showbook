@@ -70,10 +70,13 @@ pnpm prod:logs      # tail web logs
 pnpm prod:down      # stop
 ```
 
-Both composes bind host port 3001 for the web app, so stop one before
-starting the other: `pnpm dev:down` before `pnpm prod:up` (and vice
-versa). Postgres is on different host ports (dev `5433`, prod `5434`)
-so the `localhost:<port>/<db>` pair is unambiguous.
+Dev and prod stacks coexist: dev web binds host port `3001`, prod
+binds `3002`, and postgres uses `5433` / `5434` respectively. The
+Cloudflare Tunnel ingress for the prod hostname must point at
+`http://localhost:3002` (see
+[`showbook-specs/cloudflare-tunnel-setup.md`](showbook-specs/cloudflare-tunnel-setup.md)).
+Playwright's E2E dev server defaults to `3003` so it doesn't fight
+with either stack.
 
 ### Continuous deployment
 
@@ -169,7 +172,7 @@ pnpm prod:migrate       # Run drizzle migrations against the prod DB
 pnpm verify             # build + lint + unit tests, with status summary
 pnpm verify:e2e         # verify + Playwright e2e (also: RUN_E2E=1 pnpm verify)
 pnpm test:unit          # unit tests across api + jobs packages
-pnpm test:e2e           # Prepare showbook_e2e and run Playwright on port 3002
+pnpm test:e2e           # Prepare showbook_e2e and run Playwright on port 3003
 
 # Email + DB
 pnpm email:smoke        # Render the daily digest with sample data to /tmp/showbook-digest.html
@@ -202,12 +205,13 @@ Development data lives in the `showbook` database. Playwright tests use a separa
 wipe and rebuild fixtures without touching local dev data.
 
 `pnpm test:e2e` runs `pnpm db:prepare:e2e` first, then starts a Playwright-owned
-Next.js dev server at `https://localhost:3002` with:
+Next.js dev server at `https://localhost:3003` (override with `PLAYWRIGHT_PORT`)
+with:
 
 ```bash
 DATABASE_URL=postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e
 ENABLE_TEST_ROUTES=1
-NEXTAUTH_URL=https://localhost:3002
+NEXTAUTH_URL=https://localhost:3003
 ```
 
 The `/api/test/*` routes are disabled unless `ENABLE_TEST_ROUTES=1` is set and
@@ -240,12 +244,14 @@ runs on the same host and reaches the web service via loopback.
 | Service | Container | Host port |
 |---------|-----------|-----------|
 | PostgreSQL 16 | showbook-prod-db | 127.0.0.1:5434 |
-| Next.js (prod build, NODE_ENV=production) | showbook-prod-web | 127.0.0.1:3001 |
+| Next.js (prod build, NODE_ENV=production) | showbook-prod-web | 127.0.0.1:3002 |
 
 Prod uses database `showbook_prod` and role `showbook_prod` (vs dev's
 `showbook`/`showbook`), and the postgres volumes are namespaced
 separately (`showbook_pgdata` vs `showbook-prod_pgdata`), so dev and
-prod databases do not share data, credentials, or a host port.
+prod databases do not share data, credentials, or a host port. Web
+ports also differ (dev `3001`, prod `3002`), so both stacks can run
+simultaneously.
 
 Named volumes:
 

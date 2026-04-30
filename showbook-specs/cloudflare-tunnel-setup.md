@@ -50,7 +50,7 @@ credentials-file: /Users/YOUR_USERNAME/.cloudflared/{tunnel-id}.json
 
 ingress:
   - hostname: showbook.example.com
-    service: http://localhost:3001
+    service: http://localhost:3002    # prod web (dev runs on 3001)
   - hostname: vactrack.example.com
     service: http://localhost:3000
   - service: http_status:404
@@ -59,7 +59,7 @@ ingress:
 Replace `YOUR_USERNAME` and `{tunnel-id}` with your actual values.
 
 The `ingress` block routes by hostname:
-- `showbook.example.com` → Showbook Next.js on port 3001
+- `showbook.example.com` → Showbook prod Next.js on port 3002
 - `vactrack.example.com` → Vacation tracker web on port 3000
 - Everything else → 404
 
@@ -87,7 +87,7 @@ cloudflared tunnel run home-tunnel
 ```
 
 From your phone (on cellular, not WiFi):
-- `https://showbook.example.com` → should load Showbook (if Next.js is running on 3001)
+- `https://showbook.example.com` → should load Showbook (if prod web is running on 3002)
 - `https://vactrack.example.com` → should load Vacation tracker (if web container is running on 3000)
 
 HTTPS is automatic — Cloudflare handles the TLS certificate.
@@ -122,11 +122,11 @@ Edit `~/.cloudflared/config.yml` and add another ingress rule:
 ```yaml
 ingress:
   - hostname: showbook.example.com
-    service: http://localhost:3001
+    service: http://localhost:3002    # prod web
   - hostname: vactrack.example.com
     service: http://localhost:3000
   - hostname: newapp.example.com
-    service: http://localhost:3002
+    service: http://localhost:4000
   - service: http_status:404
 ```
 
@@ -153,7 +153,7 @@ cloudflared tunnel run home-tunnel    # run manually to see errors
 - DNS propagation can take up to 5 minutes
 
 **App not loading through tunnel:**
-- Verify the app is actually running on the expected port: `curl http://localhost:3001`
+- Verify the app is actually running on the expected port: `curl http://localhost:3002` (prod) or `:3001` (dev)
 - Check config.yml for typos in hostname or port
 
 **Check logs:**

@@ -410,7 +410,7 @@ React components in `apps/web/components/design-system/`:
 **Build:**
 - Cloudflared runs on the host (not Docker) — installed via `brew install cloudflared`
 - Create tunnel: `cloudflared tunnel login && cloudflared tunnel create home-tunnel`
-- Create `~/.cloudflared/config.yml` routing `showbook.example.com` → `http://localhost:3001`
+- Create `~/.cloudflared/config.yml` routing `showbook.example.com` → `http://localhost:3002` (prod web)
 - Add CNAME DNS record in Cloudflare: `showbook` → `{tunnel-id}.cfargotunnel.com`
 - Install as system service: `sudo cloudflared service install`
 - Document setup in project `RUNNING.md`
@@ -476,8 +476,9 @@ pnpm test:e2e
 ```
 
 That command resets `showbook_e2e`, migrates it, and starts the e2e server on
-`https://localhost:3002` with `ENABLE_TEST_ROUTES=1`. `/api/test/*` routes are
-guarded so they only run against `showbook_e2e`.
+`https://localhost:3003` (override with `PLAYWRIGHT_PORT`) with
+`ENABLE_TEST_ROUTES=1`. `/api/test/*` routes are guarded so they only run
+against `showbook_e2e`.
 
 Cloudflared is NOT in Docker — it's a host-level system service (see T30).
 

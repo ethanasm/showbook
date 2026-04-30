@@ -112,8 +112,8 @@ Examples:
 
 Playwright runs against the isolated `showbook_e2e` database, not the local dev
 `showbook` database. Use `pnpm test:e2e`; it resets/migrates `showbook_e2e`
-and starts a Playwright-owned Next.js server on `https://localhost:3002` with
-`ENABLE_TEST_ROUTES=1`.
+and starts a Playwright-owned Next.js server on `https://localhost:3003`
+(override with `PLAYWRIGHT_PORT`) with `ENABLE_TEST_ROUTES=1`.
 
 The `/api/test/*` routes are intentionally unavailable on the normal dev server
 unless both conditions are true:

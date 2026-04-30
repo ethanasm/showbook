@@ -74,7 +74,8 @@ pnpm test:e2e
 ```
 
 This resets/migrates `showbook_e2e` and runs tests against
-`https://localhost:3002`. Test-only API routes require `ENABLE_TEST_ROUTES=1`
+`https://localhost:3003` (override with `PLAYWRIGHT_PORT`).
+Test-only API routes require `ENABLE_TEST_ROUTES=1`
 and refuse to run unless `DATABASE_URL` points at `showbook_e2e`, so seeded test
 data cannot overwrite the normal `showbook` dev database.
 

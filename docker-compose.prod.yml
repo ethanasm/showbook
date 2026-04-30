@@ -13,10 +13,13 @@ name: showbook-prod
 # touch prod data. The `scripts/guard-not-prod-db.mjs` check is the
 # CLI-side counterpart to apps/web/app/api/test/_guard.ts.
 #
-# Both composes still bind host port 3001 for the web app, so stop dev
-# before starting prod:
-#   docker compose down                              # stop dev
-#   docker compose -f docker-compose.prod.yml up -d  # start prod
+# Web ports also differ from dev (host 3002 vs dev's 3001), so dev and
+# prod stacks can run side-by-side. The Cloudflare Tunnel ingress for
+# the prod hostname must point at http://localhost:3002. NEXTAUTH_URL
+# in .env.prod should be the tunnel hostname for real prod, or
+# https://localhost:3002 if testing prod auth locally.
+#
+#   docker compose -f docker-compose.prod.yml up -d  # start prod alongside dev
 #
 # Usage:
 #   docker compose -f docker-compose.prod.yml up -d --build
@@ -65,7 +68,7 @@ services:
       PORT: "3001"
       NODE_OPTIONS: "--max-old-space-size=4096"
     ports:
-      - "127.0.0.1:3001:3001"
+      - "127.0.0.1:3002:3001"
     depends_on:
       postgres:
         condition: service_healthy
