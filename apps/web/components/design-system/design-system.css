@@ -458,6 +458,18 @@
   margin-bottom: 8px;
 }
 
+.shows-list-table .show-row {
+  grid-template-columns: 14px 32px 80px 110px 1.02fr 1.03fr 110px 0.15fr 64px 88px;
+}
+
+.shows-list-table .show-row__paid {
+  grid-column: 9;
+}
+
+.shows-list-table .show-row__state {
+  grid-column: 10;
+}
+
 /* Compact mode: tighter rows, smaller date typography. */
 [data-compact="true"] .show-row {
   padding: 4px 16px;
@@ -1203,6 +1215,13 @@ a.show-row__support-link:hover {
   .show-row {
     grid-template-columns: 8px 32px 64px 1.2fr 1fr 64px;
     column-gap: 8px;
+  }
+  .shows-list-table .show-row {
+    grid-template-columns: 8px 32px 64px 1.2fr 1fr 64px;
+  }
+  .shows-list-table .show-row__paid,
+  .shows-list-table .show-row__state {
+    grid-column: auto;
   }
   [data-compact="true"] .show-row {
     column-gap: 6px;
