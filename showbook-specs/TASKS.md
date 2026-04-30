@@ -410,11 +410,11 @@ React components in `apps/web/components/design-system/`:
 **Build:**
 - Cloudflared runs on the host (not Docker) — installed via `brew install cloudflared`
 - Create tunnel: `cloudflared tunnel login && cloudflared tunnel create home-tunnel`
-- Create `~/.cloudflared/config.yml` routing `showbook.ethanasm.me` → `http://localhost:3001`
+- Create `~/.cloudflared/config.yml` routing `showbook.example.com` → `http://localhost:3001`
 - Add CNAME DNS record in Cloudflare: `showbook` → `{tunnel-id}.cfargotunnel.com`
 - Install as system service: `sudo cloudflared service install`
 - Document setup in project `RUNNING.md`
-**Verify:** `https://showbook.ethanasm.me` loads the app from a phone on cellular (not WiFi).
+**Verify:** `https://showbook.example.com` loads the app from a phone on cellular (not WiFi).
 
 ### T31: Expo mobile scaffold
 **Depends on:** T14, T30 (needs API + tunnel URL)
@@ -422,7 +422,7 @@ React components in `apps/web/components/design-system/`:
 **Build:**
 - Scaffold Expo app in `apps/mobile/`
 - Expo Router with tab bar (6 tabs)
-- tRPC client pointed at `https://showbook.ethanasm.me/api/trpc`
+- tRPC client pointed at `https://showbook.example.com/api/trpc`
 - Auth via Expo AuthSession (Google OAuth)
 - Build mobile versions of: Home, Shows list, Add (form only)
 **Verify:** App builds with `npx expo start`. Connects to backend. Shows list renders same data as web.

@@ -2,6 +2,12 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { withTrace, child } from '@showbook/observability';
 import { router, protectedProcedure } from '../trpc';
+import { enforceRateLimit } from '../rate-limit';
+import {
+  enforceLLMQuota,
+  enforceBulkScanRateLimit,
+  bulkScanMessageCap,
+} from '../llm-quota';
 
 const log = child({ component: 'api.enrichment' });
 import {
@@ -101,7 +107,11 @@ export const enrichmentRouter = router({
         kind: z.string().optional(),
       }),
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      enforceRateLimit(`searchTM:${ctx.session.user.id}`, {
+        max: 60,
+        windowMs: 60_000,
+      });
       const { events } = await searchEvents({
         keyword: input.headliner,
         startDateTime: input.startDate,
@@ -118,7 +128,11 @@ export const enrichmentRouter = router({
   // ---------------------------------------------------------------------------
   fetchTMEventByUrl: protectedProcedure
     .input(z.object({ url: z.string().min(1) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      enforceRateLimit(`fetchTMEventByUrl:${ctx.session.user.id}`, {
+        max: 60,
+        windowMs: 60_000,
+      });
       const pathMatch = input.url.match(/\/event\/([A-Za-z0-9]+)/);
       const queryMatch = input.url.match(/[?&]eventId=([A-Za-z0-9]+)/);
       const eventId = pathMatch?.[1] ?? queryMatch?.[1] ?? input.url.trim();
@@ -143,7 +157,11 @@ export const enrichmentRouter = router({
         date: z.string().min(1),
       }),
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      enforceRateLimit(`fetchSetlist:${ctx.session.user.id}`, {
+        max: 30,
+        windowMs: 60_000,
+      });
       let mbid = input.performerMbid;
 
       if (!mbid) {
@@ -175,13 +193,14 @@ export const enrichmentRouter = router({
         freeText: z.string().min(1),
       }),
     )
-    .mutation(async ({ input, ctx }) =>
-      withTrace(
+    .mutation(async ({ input, ctx }) => {
+      enforceLLMQuota(ctx.session.user.id);
+      return withTrace(
         'trpc.enrichment.parseChat',
         () => parseShowInput(input.freeText),
         { userId: ctx.session.user.id, tags: ['enrichment', 'llm'] },
-      ),
-    ),
+      );
+    }),
 
   // ---------------------------------------------------------------------------
   // geocodeVenue — lat/lng lookup for manually entered venues
@@ -206,23 +225,28 @@ export const enrichmentRouter = router({
         imageBase64: z.string().min(1),
       }),
     )
-    .mutation(async ({ input, ctx }) =>
-      withTrace(
+    .mutation(async ({ input, ctx }) => {
+      enforceLLMQuota(ctx.session.user.id);
+      return withTrace(
         'trpc.enrichment.extractCast',
         async () => {
           const cast = await groqExtractCast(input.imageBase64);
           return { cast };
         },
         { userId: ctx.session.user.id, tags: ['enrichment', 'llm', 'playbill'] },
-      ),
-    ),
+      );
+    }),
 
   searchPlaces: protectedProcedure
     .input(z.object({
       query: z.string().min(2),
       types: z.enum(['venue', 'city']).default('venue'),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      enforceRateLimit(`searchPlaces:${ctx.session.user.id}`, {
+        max: 30,
+        windowMs: 60_000,
+      });
       const typeMap = {
         venue: ['establishment'],
         city: ['locality', 'administrative_area_level_1'],
@@ -232,7 +256,11 @@ export const enrichmentRouter = router({
 
   placeDetails: protectedProcedure
     .input(z.object({ placeId: z.string().min(1) }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      enforceRateLimit(`placeDetails:${ctx.session.user.id}`, {
+        max: 30,
+        windowMs: 60_000,
+      });
       const details = await getPlaceDetails(input.placeId);
       if (!details) throw new TRPCError({ code: 'NOT_FOUND', message: 'Place not found' });
       return details;
@@ -243,8 +271,9 @@ export const enrichmentRouter = router({
   // ---------------------------------------------------------------------------
   extractFromPdf: protectedProcedure
     .input(z.object({ fileBase64: z.string().min(1) }))
-    .mutation(async ({ input, ctx }) =>
-      withTrace(
+    .mutation(async ({ input, ctx }) => {
+      enforceLLMQuota(ctx.session.user.id);
+      return withTrace(
         'trpc.enrichment.extractFromPdf',
         async () => {
           const pdfParse = (await import(/* webpackIgnore: true */ 'pdf-parse')).default;
@@ -256,8 +285,8 @@ export const enrichmentRouter = router({
           return extractShowFromPdfText(result.text);
         },
         { userId: ctx.session.user.id, tags: ['enrichment', 'llm', 'pdf'] },
-      ),
-    ),
+      );
+    }),
 
   // ---------------------------------------------------------------------------
   // scanGmailForShow — search Gmail for a specific show's tickets
@@ -270,8 +299,9 @@ export const enrichmentRouter = router({
         venue: z.string().optional(),
       }),
     )
-    .mutation(async ({ input, ctx }) =>
-      withTrace(
+    .mutation(async ({ input, ctx }) => {
+      enforceLLMQuota(ctx.session.user.id);
+      return withTrace(
         'trpc.enrichment.scanGmailForShow',
         async () => {
           const query = buildTicketSearchQuery({
@@ -311,8 +341,8 @@ export const enrichmentRouter = router({
           return results;
         },
         { userId: ctx.session.user.id, tags: ['enrichment', 'llm', 'gmail'] },
-      ),
-    ),
+      );
+    }),
 
   // ---------------------------------------------------------------------------
   // bulkScanGmail — scan all ticket emails with pagination
@@ -323,18 +353,21 @@ export const enrichmentRouter = router({
         accessToken: z.string().min(1),
       }),
     )
-    .mutation(async ({ input, ctx }) =>
-      withTrace(
+    .mutation(async ({ input, ctx }) => {
+      enforceBulkScanRateLimit(ctx.session.user.id);
+      enforceLLMQuota(ctx.session.user.id);
+      return withTrace(
         'trpc.enrichment.bulkScanGmail',
         async () => {
       const { accessToken } = input;
       const queries = buildBulkScanQueries();
+      const messageCap = bulkScanMessageCap();
 
-      // Fetch ALL pages from Gmail for each query
+      // Fetch up to `messageCap` messages across queries to bound LLM cost
       const seen = new Set<string>();
       const allMessages: Array<{ id: string }> = [];
 
-      for (const query of queries) {
+      outer: for (const query of queries) {
         let pageToken: string | undefined;
         do {
           const result = await searchMessages(accessToken, query, 100, pageToken);
@@ -342,6 +375,13 @@ export const enrichmentRouter = router({
             if (!seen.has(msg.id)) {
               seen.add(msg.id);
               allMessages.push(msg);
+              if (allMessages.length >= messageCap) {
+                log.info(
+                  { event: 'gmail.bulk_scan.truncated', cap: messageCap, userId: ctx.session.user.id },
+                  'Bulk scan truncated at message cap',
+                );
+                break outer;
+              }
             }
           }
           pageToken = result.nextPageToken;
@@ -471,20 +511,22 @@ export const enrichmentRouter = router({
       return { tickets: merged };
         },
         { userId: ctx.session.user.id, tags: ['enrichment', 'llm', 'gmail', 'bulk'] },
-      ),
-    ),
+      );
+    }),
 
   // ---------------------------------------------------------------------------
   // gmailCollectMessages — fetch all ticket email IDs (fast step)
   // ---------------------------------------------------------------------------
   gmailCollectMessages: protectedProcedure
     .input(z.object({ accessToken: z.string().min(1) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      enforceBulkScanRateLimit(ctx.session.user.id);
       const queries = buildBulkScanQueries();
+      const messageCap = bulkScanMessageCap();
       const seen = new Set<string>();
       const messageIds: string[] = [];
 
-      for (const query of queries) {
+      outer: for (const query of queries) {
         let pageToken: string | undefined;
         do {
           const result = await searchMessages(input.accessToken, query, 100, pageToken);
@@ -492,6 +534,7 @@ export const enrichmentRouter = router({
             if (!seen.has(msg.id)) {
               seen.add(msg.id);
               messageIds.push(msg.id);
+              if (messageIds.length >= messageCap) break outer;
             }
           }
           pageToken = result.nextPageToken;
@@ -507,10 +550,11 @@ export const enrichmentRouter = router({
   gmailProcessBatch: protectedProcedure
     .input(z.object({
       accessToken: z.string().min(1),
-      messageIds: z.array(z.string()),
+      messageIds: z.array(z.string()).max(50),
     }))
-    .mutation(async ({ input, ctx }) =>
-      withTrace(
+    .mutation(async ({ input, ctx }) => {
+      enforceLLMQuota(ctx.session.user.id);
+      return withTrace(
         'trpc.enrichment.gmailProcessBatch',
         async () => {
           const results = await Promise.all(
@@ -532,6 +576,6 @@ export const enrichmentRouter = router({
           return { tickets: results.filter((r): r is NonNullable<typeof r> => r !== null) };
         },
         { userId: ctx.session.user.id, tags: ['enrichment', 'llm', 'gmail'], metadata: { batchSize: input.messageIds.length } },
-      ),
-    ),
+      );
+    }),
 });

@@ -18,7 +18,7 @@ import { child } from '@showbook/observability';
 
 const log = child({ component: 'notifications' });
 
-const DEFAULT_FROM_ADDRESS = 'Showbook <digest@ethanasm.me>';
+const DEFAULT_FROM_ADDRESS = 'Showbook <digest@example.com>';
 
 function getFromAddress(): string {
   return process.env.EMAIL_FROM ?? DEFAULT_FROM_ADDRESS;

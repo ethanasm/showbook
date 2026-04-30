@@ -1,4 +1,4 @@
-# Cloudflare Tunnel Setup — ethanasm.me
+# Cloudflare Tunnel Setup
 
 One tunnel on your desktop, routing two apps by subdomain. No open ports, no Docker container, starts on boot.
 
@@ -6,7 +6,7 @@ One tunnel on your desktop, routing two apps by subdomain. No open ports, no Doc
 
 ## Prerequisites
 
-- Domain `ethanasm.me` added to Cloudflare (free plan)
+- Domain `example.com` added to Cloudflare (free plan)
 - Domain nameservers pointed to Cloudflare (they give you two NS addresses when you add the domain)
 - macOS with Homebrew
 
@@ -26,7 +26,7 @@ brew install cloudflared
 cloudflared tunnel login
 ```
 
-This opens your browser. Sign in to Cloudflare and authorize the tunnel for `ethanasm.me`. A credentials cert is saved to `~/.cloudflared/cert.pem`.
+This opens your browser. Sign in to Cloudflare and authorize the tunnel for `example.com`. A credentials cert is saved to `~/.cloudflared/cert.pem`.
 
 ---
 
@@ -49,9 +49,9 @@ tunnel: home-tunnel
 credentials-file: /Users/YOUR_USERNAME/.cloudflared/{tunnel-id}.json
 
 ingress:
-  - hostname: showbook.ethanasm.me
+  - hostname: showbook.example.com
     service: http://localhost:3001
-  - hostname: vactrack.ethanasm.me
+  - hostname: vactrack.example.com
     service: http://localhost:3000
   - service: http_status:404
 ```
@@ -59,8 +59,8 @@ ingress:
 Replace `YOUR_USERNAME` and `{tunnel-id}` with your actual values.
 
 The `ingress` block routes by hostname:
-- `showbook.ethanasm.me` → Showbook Next.js on port 3001
-- `vactrack.ethanasm.me` → Vacation tracker web on port 3000
+- `showbook.example.com` → Showbook Next.js on port 3001
+- `vactrack.example.com` → Vacation tracker web on port 3000
 - Everything else → 404
 
 The catch-all `http_status:404` at the bottom is required by cloudflared.
@@ -87,8 +87,8 @@ cloudflared tunnel run home-tunnel
 ```
 
 From your phone (on cellular, not WiFi):
-- `https://showbook.ethanasm.me` → should load Showbook (if Next.js is running on 3001)
-- `https://vactrack.ethanasm.me` → should load Vacation tracker (if web container is running on 3000)
+- `https://showbook.example.com` → should load Showbook (if Next.js is running on 3001)
+- `https://vactrack.example.com` → should load Vacation tracker (if web container is running on 3000)
 
 HTTPS is automatic — Cloudflare handles the TLS certificate.
 
@@ -121,11 +121,11 @@ Edit `~/.cloudflared/config.yml` and add another ingress rule:
 
 ```yaml
 ingress:
-  - hostname: showbook.ethanasm.me
+  - hostname: showbook.example.com
     service: http://localhost:3001
-  - hostname: vactrack.ethanasm.me
+  - hostname: vactrack.example.com
     service: http://localhost:3000
-  - hostname: newapp.ethanasm.me
+  - hostname: newapp.example.com
     service: http://localhost:3002
   - service: http_status:404
 ```

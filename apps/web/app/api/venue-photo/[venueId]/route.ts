@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@/auth';
 import { db, eq, venues } from '@showbook/db';
 
 const PLACES_BASE_URL = 'https://places.googleapis.com/v1';
@@ -14,6 +15,10 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ venueId: string }> },
 ) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
   const { venueId } = await params;
   const [venue] = await db
     .select({ photoUrl: venues.photoUrl })

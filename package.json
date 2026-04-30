@@ -1,7 +1,12 @@
 {
   "name": "showbook",
   "private": true,
+  "license": "MIT",
   "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
   "scripts": {
     "dev": "nx dev web",
     "build": "nx build web",

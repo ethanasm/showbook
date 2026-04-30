@@ -1,6 +1,6 @@
 # Showbook — Infrastructure & Stack
 
-Self-hosted on desktop. Two Docker containers (Postgres + Next.js). Accessible at `showbook.ethanasm.me`.
+Self-hosted on desktop. Two Docker containers (Postgres + Next.js). Accessible at `showbook.example.com`.
 
 ---
 
@@ -19,7 +19,7 @@ Self-hosted on desktop. Two Docker containers (Postgres + Next.js). Accessible a
 | **LLM** | Groq API | Fast inference on Llama 3. OpenAI-compatible SDK. Effectively free |
 | **API layer** | tRPC | End-to-end type safety between server and client |
 | **Monorepo** | Nx | Build orchestration, caching, `nx affected` |
-| **External access** | Cloudflare Tunnel | `showbook.ethanasm.me` → localhost:3001. Shared tunnel with vacation tracker |
+| **External access** | Cloudflare Tunnel | `showbook.example.com` → localhost:3001. Shared tunnel with vacation tracker |
 
 ---
 
@@ -105,7 +105,7 @@ routes are enabled and `DATABASE_URL` points at `showbook_e2e`.
 
 ```bash
 PORT=3001
-NEXTAUTH_URL=https://showbook.ethanasm.me
+NEXTAUTH_URL=https://showbook.example.com
 NEXTAUTH_SECRET=generate-a-random-string
 
 GOOGLE_CLIENT_ID=your-client-id
@@ -119,7 +119,7 @@ R2_ACCOUNT_ID=your-cloudflare-account-id
 R2_ACCESS_KEY_ID=your-r2-access-key
 R2_SECRET_ACCESS_KEY=your-r2-secret
 R2_BUCKET_NAME=showbook
-R2_PUBLIC_URL=https://media.ethanasm.me
+R2_PUBLIC_URL=https://media.example.com
 ```
 
 Note: `DATABASE_URL` is set in `docker-compose.yml` under `environment`, not in `.env.local`, because the container needs the Docker-internal hostname (`postgres`) not `localhost`.
@@ -174,9 +174,9 @@ Cloudflared runs on the host as a system service (not in Docker). One tunnel, sh
 
 ```yaml
 ingress:
-  - hostname: showbook.ethanasm.me
+  - hostname: showbook.example.com
     service: http://localhost:3001
-  - hostname: vactrack.ethanasm.me
+  - hostname: vactrack.example.com
     service: http://localhost:3000
   - service: http_status:404
 ```
@@ -190,7 +190,7 @@ Full setup instructions in `cloudflare-tunnel-setup.md`.
 ```
 Internet
    │
-   │  https://showbook.ethanasm.me
+   │  https://showbook.example.com
    ▼
 Cloudflare Edge (TLS)
    │
@@ -217,7 +217,7 @@ showbook-web ──→ Cloudflare R2 (photos)
              ──→ Groq API (chat-mode add, playbill OCR)
 ```
 
-Expo mobile → `showbook.ethanasm.me` → same tunnel → same container.
+Expo mobile → `showbook.example.com` → same tunnel → same container.
 
 ---
 
@@ -301,7 +301,7 @@ showbook/
 | Cloudflare R2 | $0 (free: 10GB, 10M reads/mo) |
 | Expo EAS | $0 (free: 30 builds/mo) |
 | Ticketmaster / setlist.fm / Google / Groq | $0 (all free tier) |
-| Domain (ethanasm.me) | already owned |
+| Domain (example.com) | already owned |
 | Electricity | ~$5–15/mo |
 | **Total** | **~$5–15/mo** |
 
