@@ -6,6 +6,7 @@
   2. For longer videos, investigate cheap/free storage (Drive?) and how to play them back inline.
 - **Security audit.**
 - **Critical code smells.** (Run `/ultrareview` to surface specifics.)
+- **Discover - Near You** - Right click on regions on the side bar to unfollow, same as artists and venues on Discover. Add a Add a Region button on the top of the side bar in the same format as venues tab (same google places UX as preferences - same limit on number of regions). On artists tab, move the add artist to follow button to the top of the sidebar like it will be on the other two tabs. 
 
 ### Mobile App
 - We have some hifi designs of mobile app through claude design, but we need to do a deep dive on a design for the mobile app now that we've added more features.
