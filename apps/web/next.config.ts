@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
     "@showbook/api",
     "@showbook/shared",
     "@showbook/jobs",
+    "@showbook/emails",
   ],
   serverExternalPackages: [
     "sharp",

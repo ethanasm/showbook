@@ -4,9 +4,13 @@
   "private": true,
   "main": "src/index.ts",
   "types": "src/index.ts",
+  "scripts": {
+    "run-daily-digest": "tsx scripts/run-daily-digest.ts"
+  },
   "dependencies": {
     "@showbook/api": "workspace:*",
     "@showbook/db": "workspace:*",
+    "@showbook/emails": "workspace:*",
     "@showbook/scrapers": "workspace:*",
     "drizzle-orm": "^0.39.0",
     "pg-boss": "^10.1.0",

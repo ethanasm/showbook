@@ -11,11 +11,9 @@ export interface UserPreferences {
   userId: string;
   theme: 'system' | 'light' | 'dark';
   compactMode: boolean;
-  digestFrequency: 'daily' | 'weekly' | 'off';
-  digestTime: string;
   emailNotifications: boolean;
   pushNotifications: boolean;
-  showDayReminder: boolean;
+  lastDigestSentAt: Date | null;
 }
 
 export interface UserRegion {

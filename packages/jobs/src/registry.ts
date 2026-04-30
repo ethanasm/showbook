@@ -5,10 +5,7 @@ import {
   ingestPerformer,
   ingestRegion,
 } from './discover-ingest';
-import {
-  runNotificationDigest,
-  runWeeklyDiscoveryDigest,
-} from './notifications';
+import { runDailyDigest } from './notifications';
 import { runSetlistRetry } from './setlist-retry';
 import { runShowsNightly } from './shows-nightly';
 // @showbook/scrapers pulls in Playwright, which the Next.js dev server
@@ -23,9 +20,15 @@ export const JOBS = {
   DISCOVER_INGEST_VENUE: 'discover/ingest-venue',
   DISCOVER_INGEST_PERFORMER: 'discover/ingest-performer',
   DISCOVER_INGEST_REGION: 'discover/ingest-region',
-  NOTIFICATIONS_DIGEST: 'notifications/digest',
-  NOTIFICATIONS_WEEKLY_DIGEST: 'notifications/weekly-digest',
+  NOTIFICATIONS_DAILY_DIGEST: 'notifications/daily-digest',
 } as const;
+
+// Pre-1.0 cron names that have been removed and must be unscheduled on startup
+// so we don't keep firing handlers that no longer exist.
+const STALE_SCHEDULES = [
+  'notifications/digest',
+  'notifications/weekly-digest',
+] as const;
 
 async function showsNightlyHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
@@ -54,9 +57,8 @@ async function setlistRetryHandler(jobs: PgBoss.Job[]) {
 }
 
 /**
- * Weekly discovery ingestion + scraping + per-user digest, chained.
- * The digest is sent immediately after both data sources have run so it
- * reflects everything discovered this week.
+ * Weekly discovery ingestion + scraping. Announcements land in the DB and
+ * the daily digest job picks them up via discoveredAt > lastDigestSentAt.
  */
 async function discoverIngestHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
@@ -83,13 +85,6 @@ async function discoverIngestHandler(jobs: PgBoss.Job[]) {
       } catch (err) {
         console.error(`[${JOBS.DISCOVER_INGEST}] Scrapers failed:`, err);
       }
-
-      const digest = await runWeeklyDiscoveryDigest({
-        ingestionRunStart: ingest.ingestionRunStart,
-      });
-      console.log(
-        `[${JOBS.NOTIFICATIONS_WEEKLY_DIGEST}] Sent: ${digest.sent}, skipped: ${digest.skipped}`,
-      );
     } catch (error) {
       console.error(`[${JOBS.DISCOVER_INGEST}] Fatal error:`, error);
       throw error;
@@ -157,22 +152,33 @@ async function discoverIngestRegionHandler(
   }
 }
 
-async function notificationsDigestHandler(jobs: PgBoss.Job[]) {
+async function notificationsDailyDigestHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
-    console.log(`[${JOBS.NOTIFICATIONS_DIGEST}] Running show-day reminder...`, job.id);
+    console.log(`[${JOBS.NOTIFICATIONS_DAILY_DIGEST}] Running daily digest...`, job.id);
     try {
-      const result = await runNotificationDigest();
+      const result = await runDailyDigest();
       console.log(
-        `[${JOBS.NOTIFICATIONS_DIGEST}] Complete: ${result.sent} sent, ${result.skipped} skipped`,
+        `[${JOBS.NOTIFICATIONS_DAILY_DIGEST}] Complete: ${result.sent} sent, ${result.skipped} skipped`,
       );
     } catch (error) {
-      console.error(`[${JOBS.NOTIFICATIONS_DIGEST}] Fatal error:`, error);
+      console.error(`[${JOBS.NOTIFICATIONS_DAILY_DIGEST}] Fatal error:`, error);
       throw error;
     }
   }
 }
 
 export async function registerAllJobs(boss: PgBoss): Promise<void> {
+  // Idempotently remove pre-1.0 schedules. The 0012 migration also runs a
+  // SQL DELETE against pgboss.schedule, but this guards against fresh DBs
+  // restored from a snapshot that predates the migration.
+  for (const stale of STALE_SCHEDULES) {
+    try {
+      await boss.unschedule(stale);
+    } catch {
+      // unschedule throws if no schedule exists — safe to ignore
+    }
+  }
+
   for (const name of Object.values(JOBS)) {
     await boss.createQueue(name);
   }
@@ -183,12 +189,12 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   await boss.work(JOBS.DISCOVER_INGEST_VENUE, discoverIngestVenueHandler);
   await boss.work(JOBS.DISCOVER_INGEST_PERFORMER, discoverIngestPerformerHandler);
   await boss.work(JOBS.DISCOVER_INGEST_REGION, discoverIngestRegionHandler);
-  await boss.work(JOBS.NOTIFICATIONS_DIGEST, notificationsDigestHandler);
+  await boss.work(JOBS.NOTIFICATIONS_DAILY_DIGEST, notificationsDailyDigestHandler);
 
   await boss.schedule(JOBS.SHOWS_NIGHTLY, '0 3 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.SETLIST_RETRY, '0 4 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.DISCOVER_INGEST, '0 6 * * 1', {}, { tz: 'America/New_York' });
-  await boss.schedule(JOBS.NOTIFICATIONS_DIGEST, '0 * * * *', {}, { tz: 'America/New_York' });
+  await boss.schedule(JOBS.NOTIFICATIONS_DAILY_DIGEST, '0 8 * * *', {}, { tz: 'America/New_York' });
 
   console.log('All jobs registered and scheduled');
 }

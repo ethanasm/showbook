@@ -92,6 +92,13 @@
       "when": 1777954800000,
       "tag": "0012_add_show_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1778041200000,
+      "tag": "0013_consolidate_digest",
+      "breakpoints": true
     }
   ]
 }

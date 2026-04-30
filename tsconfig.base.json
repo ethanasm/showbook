@@ -23,7 +23,9 @@
       "@showbook/shared": ["packages/shared/src"],
       "@showbook/shared/*": ["packages/shared/src/*"],
       "@showbook/scrapers": ["packages/scrapers/src"],
-      "@showbook/scrapers/*": ["packages/scrapers/src/*"]
+      "@showbook/scrapers/*": ["packages/scrapers/src/*"],
+      "@showbook/emails": ["packages/emails/src"],
+      "@showbook/emails/*": ["packages/emails/src/*"]
     }
   },
   "exclude": ["node_modules", "dist", ".next"]

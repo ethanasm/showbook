@@ -1,0 +1,23 @@
+{
+  "name": "@showbook/emails",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "dev": "email dev --dir src/preview --port 3030",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@react-email/components": "^1.0.12",
+    "@react-email/render": "^2.0.8",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "react-email": "^6.0.5",
+    "typescript": "^5.7.0"
+  }
+}
