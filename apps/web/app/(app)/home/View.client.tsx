@@ -501,12 +501,12 @@ export default function HomeView() {
                     {/* Headliner */}
                     <div
                       style={{
-                        fontFamily: SANS,
+                        fontFamily: "var(--font-display)",
                         fontSize: 16,
-                        fontWeight: 600,
-                        letterSpacing: -0.35,
+                        fontWeight: 700,
+                        letterSpacing: "-0.01em",
                         color: "var(--ink)",
-                        lineHeight: 1.15,
+                        lineHeight: 1.1,
                         marginTop: 6,
                         whiteSpace: "nowrap",
                         overflow: "hidden",
@@ -753,11 +753,12 @@ export default function HomeView() {
                     <div style={{ minWidth: 0 }}>
                       <div
                         style={{
-                          fontFamily: SANS,
+                          fontFamily: "var(--font-display)",
                           fontSize: 14,
-                          fontWeight: 500,
+                          fontWeight: 700,
                           color: "var(--ink)",
-                          letterSpacing: -0.2,
+                          letterSpacing: "-0.01em",
+                          lineHeight: 1.1,
                           whiteSpace: "nowrap",
                           overflow: "hidden",
                           textOverflow: "ellipsis",

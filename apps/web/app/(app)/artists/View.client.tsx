@@ -264,7 +264,7 @@ export default function ArtistsView() {
           <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", letterSpacing: ".1em", textTransform: "uppercase" }}>
             Performers you&apos;ve seen live
           </div>
-          <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 26, fontWeight: 600, color: "var(--ink)", letterSpacing: -0.9, marginTop: 4 }}>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 700, color: "var(--ink)", letterSpacing: "-0.01em", lineHeight: 1.1, marginTop: 4 }}>
             Artists
           </div>
         </div>

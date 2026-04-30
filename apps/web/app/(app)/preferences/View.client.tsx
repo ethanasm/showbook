@@ -959,11 +959,12 @@ const styles: Record<string, React.CSSProperties> = {
     textTransform: "uppercase",
   },
   pageTitle: {
-    fontFamily: "var(--font-geist-sans)",
-    fontWeight: 600,
+    fontFamily: "var(--font-display)",
+    fontWeight: 700,
     fontSize: 26,
     color: "var(--ink)",
-    letterSpacing: -0.9,
+    letterSpacing: "-0.01em",
+    lineHeight: 1.1,
     marginTop: 4,
   },
   content: {
