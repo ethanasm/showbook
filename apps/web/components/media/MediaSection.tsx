@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { ImagePlus, Tag, Trash2, Upload, Video } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Tag, Trash2, Upload, Video, X, ImagePlus } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { uploadPhotoForShow, uploadVideoForShow } from "./uploadHelpers";
 import "./media.css";
@@ -89,15 +89,26 @@ export function MediaSection({
     onSuccess: () => invalidateMedia(),
   });
   const setPerformersMutation = trpc.media.setPerformers.useMutation({
-    onSuccess: () => invalidateMedia(),
+    onSuccess: () => {
+      invalidateMedia();
+      // setPerformers may auto-add a performer to the show's lineup
+      // (showPerformers row), so refresh the show detail too.
+      if (showId) utils.shows.detail.invalidate({ showId });
+    },
   });
 
-  function togglePerformerTag(asset: MediaAsset, performerId: string) {
-    const current = asset.performerIds ?? [];
-    const next = current.includes(performerId)
-      ? current.filter((id) => id !== performerId)
-      : [...current, performerId];
-    setPerformersMutation.mutate({ assetId: asset.id, performerIds: next });
+  // Local cache of performer name → id learned from search results, so
+  // chips can render the right label even before listForShow refetches.
+  const [knownNames, setKnownNames] = useState<Record<string, string>>({});
+  function rememberName(id: string, name: string) {
+    setKnownNames((prev) => (prev[id] === name ? prev : { ...prev, [id]: name }));
+  }
+
+  async function setAssetPerformers(asset: MediaAsset, performerIds: string[]) {
+    await setPerformersMutation.mutateAsync({
+      assetId: asset.id,
+      performerIds,
+    });
   }
 
   const assets = useMemo(() => {
@@ -300,10 +311,7 @@ export function MediaSection({
       ) : (
         <div className="media-grid" data-testid="media-gallery">
           {assets.map((asset) => {
-            const tagged = (asset.performerIds ?? []).map((id) =>
-              lineup.find((p) => p.id === id),
-            ).filter((p): p is MediaPerformer => Boolean(p));
-            const showTagPicker = scope === "show" && lineup.length > 0;
+            const showTagPicker = scope === "show";
             const isPickerOpen = openTagPickerFor === asset.id;
             return (
               <article className="media-card" key={asset.id}>
@@ -331,54 +339,18 @@ export function MediaSection({
                   )}
                 </div>
                 {showTagPicker && (
-                  <div className="media-card__tags" data-testid="media-card-tags">
-                    {tagged.map((performer) => (
-                      <span key={performer.id} className="media-tag">
-                        {performer.name}
-                      </span>
-                    ))}
-                    <button
-                      type="button"
-                      className="media-tag media-tag--button"
-                      onClick={() =>
-                        setOpenTagPickerFor(isPickerOpen ? null : asset.id)
-                      }
-                      aria-expanded={isPickerOpen}
-                      data-testid="media-tag-edit"
-                    >
-                      <Tag size={11} />
-                      {tagged.length === 0 ? "Tag performers" : "Edit"}
-                    </button>
-                    {isPickerOpen && (
-                      <div
-                        className="media-tag-picker"
-                        data-testid="media-tag-picker"
-                        onMouseLeave={() => setOpenTagPickerFor(null)}
-                      >
-                        {lineup.map((performer) => {
-                          const checked = (asset.performerIds ?? []).includes(
-                            performer.id,
-                          );
-                          return (
-                            <label
-                              key={performer.id}
-                              className="media-tag-picker__row"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                disabled={setPerformersMutation.isPending}
-                                onChange={() =>
-                                  togglePerformerTag(asset, performer.id)
-                                }
-                              />
-                              <span>{performer.name}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
+                  <TagEditor
+                    asset={asset}
+                    lineup={lineup}
+                    knownNames={knownNames}
+                    rememberName={rememberName}
+                    isOpen={isPickerOpen}
+                    onToggleOpen={() =>
+                      setOpenTagPickerFor(isPickerOpen ? null : asset.id)
+                    }
+                    onCommit={(ids) => setAssetPerformers(asset, ids)}
+                    isPending={setPerformersMutation.isPending}
+                  />
                 )}
               </article>
             );
@@ -388,3 +360,133 @@ export function MediaSection({
     </section>
   );
 }
+
+function TagEditor({
+  asset,
+  lineup,
+  knownNames,
+  rememberName,
+  isOpen,
+  onToggleOpen,
+  onCommit,
+  isPending,
+}: {
+  asset: MediaAsset;
+  lineup: MediaPerformer[];
+  knownNames: Record<string, string>;
+  rememberName: (id: string, name: string) => void;
+  isOpen: boolean;
+  onToggleOpen: () => void;
+  onCommit: (performerIds: string[]) => Promise<void>;
+  isPending: boolean;
+}) {
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    return () => clearTimeout(handle);
+  }, [query]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setQuery("");
+      setDebouncedQuery("");
+    }
+  }, [isOpen]);
+
+  const search = trpc.performers.search.useQuery(
+    { query: debouncedQuery },
+    { enabled: isOpen && debouncedQuery.length >= 1 },
+  );
+
+  const performerIds = asset.performerIds ?? [];
+  const nameFor = (id: string): string => {
+    const fromLineup = lineup.find((p) => p.id === id)?.name;
+    if (fromLineup) return fromLineup;
+    return knownNames[id] ?? "Unknown performer";
+  };
+  const tagged = performerIds.map((id) => ({ id, name: nameFor(id) }));
+
+  async function addPerformer(p: { id: string; name: string }) {
+    rememberName(p.id, p.name);
+    if (performerIds.includes(p.id)) return;
+    await onCommit([...performerIds, p.id]);
+    setQuery("");
+  }
+
+  async function removePerformer(id: string) {
+    await onCommit(performerIds.filter((existing) => existing !== id));
+  }
+
+  const results = (search.data ?? []).filter(
+    (row) => !performerIds.includes(row.id),
+  );
+
+  return (
+    <div className="media-card__tags" data-testid="media-card-tags">
+      {tagged.map((p) => (
+        <span key={p.id} className="media-tag">
+          {p.name}
+          <button
+            type="button"
+            className="media-tag__remove"
+            aria-label={`Remove ${p.name}`}
+            disabled={isPending}
+            onClick={() => removePerformer(p.id)}
+          >
+            <X size={10} />
+          </button>
+        </span>
+      ))}
+      <button
+        type="button"
+        className="media-tag media-tag--button"
+        onClick={onToggleOpen}
+        aria-expanded={isOpen}
+        data-testid="media-tag-edit"
+      >
+        <Tag size={11} />
+        {tagged.length === 0 ? "Tag performers" : "Add"}
+      </button>
+      {isOpen && (
+        <div className="media-tag-picker" data-testid="media-tag-picker">
+          <input
+            type="text"
+            className="media-tag-picker__search"
+            placeholder="Search performers…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            autoFocus
+            data-testid="media-tag-search"
+          />
+          <div className="media-tag-picker__results">
+            {debouncedQuery.length === 0 ? (
+              <div className="media-tag-picker__hint">
+                Type a performer name. Selecting one not yet on this show
+                will add them to the lineup.
+              </div>
+            ) : search.isLoading ? (
+              <div className="media-tag-picker__hint">Searching…</div>
+            ) : results.length === 0 ? (
+              <div className="media-tag-picker__hint">No matches.</div>
+            ) : (
+              results.map((row) => (
+                <button
+                  key={row.id}
+                  type="button"
+                  className="media-tag-picker__row"
+                  disabled={isPending}
+                  onClick={() => addPerformer({ id: row.id, name: row.name })}
+                >
+                  {row.name}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+

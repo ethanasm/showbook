@@ -6,6 +6,7 @@ import type { SQL } from 'drizzle-orm';
 import {
   mediaAssetPerformers,
   mediaAssets,
+  performers,
   showPerformers,
   shows,
   type MediaVariant,
@@ -572,16 +573,54 @@ export const mediaRouter = router({
       const requested = [...new Set(input.performerIds)];
       let validIds: string[] = [];
       if (requested.length > 0) {
-        const validRows = await ctx.db
-          .select({ performerId: showPerformers.performerId })
-          .from(showPerformers)
-          .where(
-            and(
-              eq(showPerformers.showId, asset.showId),
-              inArray(showPerformers.performerId, requested),
-            ),
+        // Validate the ids actually point at real performers; reject any
+        // that don't so we don't auto-create show_performers rows for
+        // non-existent performers.
+        const existing = await ctx.db
+          .select({ id: performers.id })
+          .from(performers)
+          .where(inArray(performers.id, requested));
+        const existingSet = new Set(existing.map((row) => row.id));
+        validIds = requested.filter((id) => existingSet.has(id));
+
+        if (validIds.length > 0) {
+          // Auto-add any tagged performer that isn't on this show yet
+          // as 'support' so the join's invariant holds. The composite
+          // PK (showId, performerId, role) means we only conflict if
+          // they're already a 'support' on this show.
+          const existingShowPerformers = await ctx.db
+            .select({ performerId: showPerformers.performerId })
+            .from(showPerformers)
+            .where(
+              and(
+                eq(showPerformers.showId, asset.showId),
+                inArray(showPerformers.performerId, validIds),
+              ),
+            );
+          const onShow = new Set(
+            existingShowPerformers.map((row) => row.performerId),
           );
-        validIds = [...new Set(validRows.map((row) => row.performerId))];
+          const toAdd = validIds.filter((id) => !onShow.has(id));
+          if (toAdd.length > 0) {
+            const [{ maxOrder } = { maxOrder: 0 }] = await ctx.db
+              .select({
+                maxOrder: sql<number>`coalesce(max(${showPerformers.sortOrder}), 0)::int`,
+              })
+              .from(showPerformers)
+              .where(eq(showPerformers.showId, asset.showId));
+            await ctx.db
+              .insert(showPerformers)
+              .values(
+                toAdd.map((performerId, idx) => ({
+                  showId: asset.showId,
+                  performerId,
+                  role: 'support' as const,
+                  sortOrder: (maxOrder ?? 0) + idx + 1,
+                })),
+              )
+              .onConflictDoNothing();
+          }
+        }
       }
 
       await ctx.db
