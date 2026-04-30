@@ -7,6 +7,9 @@ import { enqueueIngestPerformer } from '../job-queue';
 import { computePerformerAnnouncementsToDelete } from './preferences';
 import { searchAttractions, selectBestImage } from '../ticketmaster';
 import { matchOrCreatePerformer } from '../performer-matcher';
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'api.performers' });
 
 export const performersRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -64,7 +67,7 @@ export const performersRouter = router({
           imageUrl: selectBestImage(a.images),
         }));
       } catch (err) {
-        console.error('[performers.searchExternal] failed:', err);
+        log.error({ err, event: 'performers.search_external.failed', query: input.query }, 'searchExternal failed');
         return [];
       }
     }),
@@ -106,6 +109,8 @@ export const performersRouter = router({
         .values({ userId, performerId: input.performerId })
         .onConflictDoNothing();
 
+      log.info({ event: 'performer.follow', userId, performerId: input.performerId }, 'Performer followed');
+
       // Fire-and-forget Phase 3 ingestion for this performer.
       void enqueueIngestPerformer(input.performerId);
 
@@ -125,6 +130,8 @@ export const performersRouter = router({
             eq(userPerformerFollows.performerId, input.performerId),
           ),
         );
+
+      log.info({ event: 'performer.unfollow', userId, performerId: input.performerId }, 'Performer unfollowed');
 
       const [stillFollowed] = await ctx.db
         .select({ userId: userPerformerFollows.userId })

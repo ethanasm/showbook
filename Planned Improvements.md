@@ -6,9 +6,6 @@
   1. Upload photos for shows; group photos at venue → venue detail, photos at artist → artist detail.
   2. For longer videos, investigate cheap/free storage (Drive?) and how to play them back inline.
 - **Security audit.**
-- **Langfuse integration for observability.**
-- **Better structured logging.** (S1 added it to `discover-ingest`; not project-wide.)
-- **Email notifications.** What's needed to enable for free, and what should the email content look like (functional + sleek + modern).
 - **Critical code smells.** (Run `/ultrareview` to surface specifics.)
 
 ### Mobile App
@@ -18,6 +15,10 @@
 ---
 
 ## Completed (kept for reference)
+
+### Observability
+1. ~~**Langfuse integration for observability.**~~ *(Done — every Groq call is wrapped via `traceLLM` in `@showbook/observability`; LLM-invoking tRPC procedures and pg-boss handlers wrap their entry points with `withTrace` so generations nest under user/job traces. No-op when `LANGFUSE_*` env unset.)*
+2. ~~**Better structured logging (project-wide).**~~ *(Done — pino logger in `@showbook/observability` with optional `@axiomhq/pino` transport when `AXIOM_TOKEN` set. ~60 ad-hoc `console.*` calls across api/jobs/scrapers and Next.js handlers replaced with structured logs (component bindings, dotted `event` field, `err` serializer). New logs added at previously silent boundaries: TM/setlist.fm/Gmail requests with status + duration, venue/performer follow + unfollow, auth signin/signout, scraper per-venue, digest per-user.)*
 
 ### General Improvements
 1. ~~Views need to look ok when the screen size is half of full width. Rows should have certain columns omitted at this width to fit properly, stuff should still look clean. Some pages are better than otthers. All should be reviewed but pages that don't look good:~~
@@ -30,6 +31,7 @@
 4. ~~In compact view, There is a button that directs to /me but that gives 404. It should go to preferences instead. Alos instead of add button in the middle that should open a dropdown to get to the other pages (discvoer, vneues, artists, etc. )~~
 5. ~~A few of these pages take a long time to load. When I click on different pages, it takes a while for anything to respond and it feels like a sluggish UX. Can we go to the page quicker and have a frame that shows while APIs are loading?~~ *(Done — Shows/Venues/Artists/Discover/Preferences now render layout-shaped skeletons and use `staleTime: 60_000` on their primary queries, matching Home + sidebar.)*
 6. ~~Notes support for shows.~~ *(Done — `shows.notes text` column in 0012, accepted by create/update, textarea on Add/Edit, rendered on show detail.)*
+7. ~~Email notifications. What's needed to enable for free, and what should the email content look like (functional + sleek + modern).~~ *(Done — Resend-backed daily digest job (`packages/jobs/src/notifications.ts`) renders a sleek dark editorial email matching the Showbook UI (cream ink on near-black, gold accent, tracked uppercase labels, contextual hero, on-sale chip, CTA). Sender is env-driven via `EMAIL_FROM`; `apps/web/.env.example` documents `RESEND_API_KEY`, `EMAIL_FROM`, `NEXT_PUBLIC_APP_URL`. Free tier of Resend covers typical personal usage. Toggle lives in Preferences.)*
 
 ### Home Page
 1. ~~Remove Godo evening and date from header. Replace with some image or icon that would be appropriate there.~~

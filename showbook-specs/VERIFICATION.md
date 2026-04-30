@@ -110,6 +110,16 @@ Examples:
 
 ## Functional Test Patterns
 
+Playwright runs against the isolated `showbook_e2e` database, not the local dev
+`showbook` database. Use `pnpm test:e2e`; it resets/migrates `showbook_e2e`
+and starts a Playwright-owned Next.js server on `https://localhost:3002` with
+`ENABLE_TEST_ROUTES=1`.
+
+The `/api/test/*` routes are intentionally unavailable on the normal dev server
+unless both conditions are true:
+- `ENABLE_TEST_ROUTES=1`
+- `DATABASE_URL` points at `showbook_e2e`
+
 ### Auth helper
 ```typescript
 // tests/helpers/auth.ts

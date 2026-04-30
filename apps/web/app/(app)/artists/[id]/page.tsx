@@ -43,7 +43,7 @@ type ShowData = {
   id: string;
   kind: ShowKind;
   state: ShowState;
-  date: string;
+  date: string | null;
   endDate: string | null;
   seat: string | null;
   pricePaid: string | null;
@@ -54,7 +54,8 @@ type ShowData = {
   showPerformers: ShowPerformer[];
 };
 
-function formatDateLong(dateStr: string): string {
+function formatDateLong(dateStr: string | null): string {
+  if (!dateStr) return "—";
   const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString("en-US", {
     month: "short",
@@ -63,18 +64,46 @@ function formatDateLong(dateStr: string): string {
   });
 }
 
-function formatDateParts(dateStr: string): {
+function formatDateParts(dateStr: string | null): {
   month: string;
   day: string;
   year: string;
   dow: string;
 } {
+  if (!dateStr) {
+    return { month: "TBD", day: "", year: "—", dow: "date" };
+  }
   const d = new Date(dateStr + "T00:00:00");
   return {
     month: d.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
     day: String(d.getDate()),
     year: String(d.getFullYear()),
     dow: d.toLocaleDateString("en-US", { weekday: "short" }).toLowerCase(),
+  };
+}
+
+function formatShowDateParts(show: ShowData): {
+  month: string;
+  day: string;
+  year: string;
+  dow: string;
+} {
+  const start = formatDateParts(show.date);
+  if (
+    show.kind !== "festival" ||
+    !show.date ||
+    !show.endDate ||
+    show.endDate === show.date
+  ) {
+    return start;
+  }
+
+  const end = formatDateParts(show.endDate);
+  return {
+    month: start.month,
+    day: `${start.day}-${end.day}`,
+    year: start.year,
+    dow: `${start.dow}-${end.dow}`,
   };
 }
 
@@ -173,7 +202,9 @@ export default function ArtistDetailPage() {
   );
 
   const stats = useMemo(() => {
-    const sorted = [...userShows].sort((a, b) => a.date.localeCompare(b.date));
+    const sorted = [...userShows]
+      .filter((show) => show.date)
+      .sort((a, b) => a.date!.localeCompare(b.date!));
     return {
       first: sorted[0]?.date ?? null,
       last: sorted[sorted.length - 1]?.date ?? null,
@@ -408,7 +439,7 @@ export default function ArtistDetailPage() {
                     venue: s.venue.name,
                     venueId: s.venue.id,
                     showId: s.id,
-                    date: formatDateParts(s.date),
+                    date: formatShowDateParts(s),
                     seat: s.seat ?? undefined,
                     paid: s.pricePaid ? parseFloat(s.pricePaid) : undefined,
                     ticketCount: s.ticketCount,

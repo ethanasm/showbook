@@ -1,7 +1,9 @@
 import Groq from 'groq-sdk';
 import { z } from 'zod';
+import { traceLLM, groqUsage, child } from '@showbook/observability';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const log = child({ component: 'scrapers.llm' });
 
 const eventSchema = z.object({
   title: z.string().min(1),
@@ -72,15 +74,27 @@ export async function extractEventsFromPage(
   const systemPrompt = buildSystemPrompt(input);
   const userPrompt = `Page title: ${input.pageTitle}\nPage URL: ${input.pageUrl}\n\nPage content:\n${input.pageText}`;
 
-  const completion = await groq.chat.completions.create({
+  const messages = [
+    { role: 'system' as const, content: systemPrompt },
+    { role: 'user' as const, content: userPrompt },
+  ];
+
+  const completion = await traceLLM({
+    name: 'scrapers.extractEventsFromPage',
     model: 'llama-3.3-70b-versatile',
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
-    temperature: 0.1,
-    response_format: { type: 'json_object' },
-    max_tokens: 4000,
+    input: messages,
+    modelParameters: { temperature: 0.1, response_format: 'json_object', max_tokens: 4000 },
+    metadata: { venueName: input.venueName, venueCity: input.venueCity, pageUrl: input.pageUrl },
+    run: () =>
+      groq.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages,
+        temperature: 0.1,
+        response_format: { type: 'json_object' },
+        max_tokens: 4000,
+      }),
+    extractUsage: groqUsage,
+    extractOutput: (c) => c.choices[0]?.message?.content ?? null,
   });
 
   const tokensUsed = completion.usage?.total_tokens ?? 0;
@@ -91,7 +105,7 @@ export async function extractEventsFromPage(
     const obj = JSON.parse(raw);
     parsed = responseSchema.parse(obj);
   } catch (err) {
-    console.error('[scrapers/llm] Schema validation failed:', err);
+    log.error({ err, event: 'scrapers.llm.schema_invalid', pageUrl: input.pageUrl }, 'Schema validation failed');
     return { events: [], rejected: [], tokensUsed };
   }
 

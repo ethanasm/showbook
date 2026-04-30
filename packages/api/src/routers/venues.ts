@@ -17,6 +17,9 @@ import { enqueueIngestVenue } from '../job-queue';
 import { scrapeConfigSchema, parseScrapeConfig } from '../scrape-config';
 import { venueScrapeRuns } from '@showbook/db';
 import { computeVenueUnfollowAnnouncementsToDelete } from './preferences';
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'api.venues' });
 
 export const venuesRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -70,11 +73,13 @@ export const venuesRouter = router({
         .values({ userId, venueId: input.venueId })
         .onConflictDoNothing();
 
+      log.info({ event: 'venue.follow', userId, venueId: input.venueId }, 'Venue followed');
+
       try {
         const { ingestVenue } = await import('@showbook/jobs');
         await ingestVenue(input.venueId);
       } catch (err) {
-        console.error('[venues/follow] ingestion failed:', err);
+        log.error({ err, event: 'venue.follow.ingest_failed', userId, venueId: input.venueId }, 'Venue follow ingestion failed');
       }
 
       // Auto-fill googlePlaceId for venues created via TM ingestion (which
@@ -104,7 +109,7 @@ export const venuesRouter = router({
           }
         }
       } catch (err) {
-        console.error('[venues/follow] Places backfill failed:', err);
+        log.warn({ err, event: 'venue.follow.place_backfill_failed', userId, venueId: input.venueId }, 'googlePlaceId backfill failed');
       }
 
       return { success: true };
@@ -135,6 +140,8 @@ export const venuesRouter = router({
             eq(userVenueFollows.venueId, input.venueId),
           ),
         );
+
+      log.info({ event: 'venue.unfollow', userId, venueId: input.venueId }, 'Venue unfollowed');
 
       const [stillFollowed] = await ctx.db
         .select({ userId: userVenueFollows.userId })

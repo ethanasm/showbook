@@ -5,12 +5,16 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "run-daily-digest": "tsx scripts/run-daily-digest.ts"
+    "run-daily-digest": "tsx scripts/run-daily-digest.ts",
+    "email:smoke": "tsx scripts/email-smoke.ts",
+    "test": "node --import tsx --test src/__tests__/*.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@showbook/api": "workspace:*",
     "@showbook/db": "workspace:*",
     "@showbook/emails": "workspace:*",
+    "@showbook/observability": "workspace:*",
     "@showbook/scrapers": "workspace:*",
     "drizzle-orm": "^0.39.0",
     "pg-boss": "^10.1.0",

@@ -67,6 +67,17 @@ DATABASE_URL=postgresql://showbook:showbook_dev@localhost:5433/showbook npx driz
 Inside the web container, DATABASE_URL uses the Docker service name:
 `postgresql://showbook:showbook_dev@postgres:5432/showbook`
 
+Playwright uses an isolated database and server:
+```bash
+pnpm db:prepare:e2e
+pnpm test:e2e
+```
+
+This resets/migrates `showbook_e2e` and runs tests against
+`https://localhost:3002`. Test-only API routes require `ENABLE_TEST_ROUTES=1`
+and refuse to run unless `DATABASE_URL` points at `showbook_e2e`, so seeded test
+data cannot overwrite the normal `showbook` dev database.
+
 ## Git
 - Work on `main` branch
 - Commit after each task: `T{XX}: {description}`

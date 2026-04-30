@@ -1,14 +1,14 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { encode } from 'next-auth/jwt';
 import { db, users, eq } from '@showbook/db';
+import { testRouteGuard } from '../_guard';
 
 const DEFAULT_EMAIL = 'test@showbook.dev';
 const DEFAULT_NAME = 'Test User';
 
 export async function GET(req: NextRequest) {
-  if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json({ error: 'Not available in production' }, { status: 403 });
-  }
+  const guardResponse = testRouteGuard();
+  if (guardResponse) return guardResponse;
 
   const email = req.nextUrl.searchParams.get('email') ?? DEFAULT_EMAIL;
   const name = req.nextUrl.searchParams.get('name') ?? DEFAULT_NAME;

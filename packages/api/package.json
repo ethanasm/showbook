@@ -4,11 +4,17 @@
   "private": true,
   "main": "src/index.ts",
   "types": "src/index.ts",
+  "scripts": {
+    "test": "find src/__tests__ -name '*.test.ts' -not -name '*.integration.test.ts' -print0 | xargs -0 node --import tsx --test",
+    "test:integration": "node --import tsx --test src/__tests__/*.integration.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1035.0",
     "@aws-sdk/s3-request-presigner": "^3.1035.0",
     "@showbook/db": "workspace:*",
     "@showbook/jobs": "workspace:*",
+    "@showbook/observability": "workspace:*",
     "@showbook/shared": "workspace:*",
     "@trpc/server": "^11.0.0",
     "drizzle-orm": "^0.39.0",

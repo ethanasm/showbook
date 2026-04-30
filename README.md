@@ -26,10 +26,11 @@ Personal entertainment tracker for live shows — concerts, theatre, comedy, fes
 
 ```bash
 git clone <repo-url> && cd showbook
-cp .env.local.example .env.local  # fill in API keys
+cp apps/web/.env.example apps/web/.env.local   # fill in API keys
 docker compose up -d
 pnpm install
 pnpm db:migrate
+pnpm db:prepare:e2e
 open http://localhost:3001
 ```
 
@@ -50,6 +51,11 @@ open http://localhost:3001
 | `R2_SECRET_ACCESS_KEY` | R2 secret key |
 | `R2_BUCKET_NAME` | R2 bucket name |
 | `R2_PUBLIC_URL` | R2 public URL |
+| `RESEND_API_KEY` | Resend API key (daily digest email). Unset → digest job logs and skips delivery. |
+| `EMAIL_FROM` | Digest sender, e.g. `Showbook <digest@yourdomain.com>` |
+| `NEXT_PUBLIC_APP_URL` | Public app URL used in email links and OG tags |
+
+See `apps/web/.env.example` for the full template.
 
 ## Project Structure
 
@@ -61,8 +67,11 @@ showbook/
 ├── packages/
 │   ├── db/                   # Drizzle schema + migrations
 │   ├── api/                  # tRPC routers
-│   ├── jobs/                 # pg-boss job handlers
+│   ├── jobs/                 # pg-boss job handlers (incl. daily digest)
+│   ├── emails/               # react-email templates (DailyDigest)
+│   ├── scrapers/             # External data source scrapers
 │   └── shared/               # Types, constants, utils
+├── scripts/                  # verify.sh and other workspace scripts
 ├── showbook-specs/           # Project specifications
 ├── design/                   # Hi-fi prototypes
 ├── docker-compose.yml
@@ -73,13 +82,52 @@ showbook/
 
 ```bash
 pnpm dev                # Start Next.js dev server
+pnpm verify             # build + lint + unit tests, with status summary
+pnpm verify:e2e         # verify + Playwright e2e (also: RUN_E2E=1 pnpm verify)
+pnpm test:unit          # unit tests across api + jobs packages
+pnpm test:e2e           # Prepare showbook_e2e and run Playwright on port 3002
+pnpm email:smoke        # Render the daily digest with sample data to /tmp/showbook-digest.html
+pnpm email:preview      # react-email dev server (localhost:3030, hot reload)
 pnpm db:generate        # Generate Drizzle migrations
-pnpm db:migrate         # Run migrations
+pnpm db:migrate         # Run dev DB migrations against showbook
+pnpm db:prepare:e2e     # Reset/migrate the isolated showbook_e2e DB
 pnpm db:studio          # Open Drizzle Studio
-pnpm test:e2e           # Run Playwright tests
 docker compose up -d    # Start Postgres + web containers
 docker compose logs web # View web container logs
 ```
+
+## Email Notifications
+
+The daily digest is a Resend-backed email sent at 08:00 ET to users with email
+notifications enabled in Preferences. The HTML template lives in
+`packages/emails/src/DailyDigest.tsx` and is sent from the digest job in
+`packages/jobs/src/notifications.ts`.
+
+- `pnpm email:smoke` — render with sample fixtures, write HTML to disk for
+  visual inspection. Override path with `SMOKE_OUT=...`.
+- `pnpm email:preview` — react-email dev server with hot reload at
+  http://localhost:3030.
+- `pnpm --filter @showbook/jobs run-daily-digest` — run the real digest job
+  against your dev DB. Without `RESEND_API_KEY` it logs `Would send to ...`
+  for each user instead of delivering.
+
+## E2E Database Isolation
+
+Development data lives in the `showbook` database. Playwright tests use a separate
+`showbook_e2e` database in the same Postgres container so `/api/test/seed` can
+wipe and rebuild fixtures without touching local dev data.
+
+`pnpm test:e2e` runs `pnpm db:prepare:e2e` first, then starts a Playwright-owned
+Next.js dev server at `https://localhost:3002` with:
+
+```bash
+DATABASE_URL=postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e
+ENABLE_TEST_ROUTES=1
+NEXTAUTH_URL=https://localhost:3002
+```
+
+The `/api/test/*` routes are disabled unless `ENABLE_TEST_ROUTES=1` is set and
+the active database name is `showbook_e2e`.
 
 ## Docker Services
 

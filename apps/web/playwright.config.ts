@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
 const customChromium = process.env.PLAYWRIGHT_CHROMIUM_PATH;
+const port = Number(process.env.PLAYWRIGHT_PORT ?? 3002);
 
 export default defineConfig({
   testDir: './tests',
@@ -9,7 +10,7 @@ export default defineConfig({
   // calls in one test don't wipe data another test is mid-way through using.
   workers: 1,
   use: {
-    baseURL: 'https://localhost:3001',
+    baseURL: `https://localhost:${port}`,
     ignoreHTTPSErrors: true,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
@@ -22,8 +23,8 @@ export default defineConfig({
     { name: 'mobile', use: { viewport: { width: 390, height: 844 } } },
   ],
   webServer: {
-    command: 'pnpm dev',
-    port: 3001,
-    reuseExistingServer: true,
+    command: 'pnpm dev:e2e',
+    port,
+    reuseExistingServer: false,
   },
 });

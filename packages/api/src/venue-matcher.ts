@@ -3,6 +3,9 @@ import { venues } from '@showbook/db';
 import { eq, and, sql } from 'drizzle-orm';
 import { geocodeVenue } from './geocode';
 import { searchVenues } from './ticketmaster';
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'api.venue-matcher' });
 
 // ---------------------------------------------------------------------------
 // Types
@@ -187,7 +190,7 @@ export async function findTmVenueId(
       });
       if (match) return match.id;
     } catch (err) {
-      console.warn('[venue-matcher] TM venue lookup failed:', err);
+      log.warn({ err, event: 'venue_matcher.tm_lookup.failed' }, 'TM venue lookup failed');
       return null;
     }
   }
