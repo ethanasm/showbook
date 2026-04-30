@@ -4,11 +4,8 @@ import { useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
-import {
-  Plus,
-  Check,
-  ChevronLeft,
-} from "lucide-react";
+import { ChevronLeft } from "lucide-react";
+import { FollowButton } from "@/components/FollowButton";
 import {
   EmptyState,
   RemoteImage,
@@ -257,38 +254,11 @@ export default function ArtistDetailPage() {
           </div>
         </div>
 
-        {/* Follow button */}
-        <button
-          type="button"
-          onClick={toggleFollow}
-          disabled={followBusy}
-          style={{
-            padding: "8px 14px",
-            border: `1px solid ${
-              performer.isFollowed ? "var(--accent)" : "var(--rule-strong)"
-            }`,
-            background: performer.isFollowed ? "var(--accent)" : "transparent",
-            color: performer.isFollowed ? "var(--bg)" : "var(--ink)",
-            fontFamily: "var(--font-geist-sans), sans-serif",
-            fontSize: 12.5,
-            fontWeight: 500,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            cursor: followBusy ? "default" : "pointer",
-            opacity: followBusy ? 0.6 : 1,
-          }}
-        >
-          {performer.isFollowed ? (
-            <>
-              <Check size={13} /> Following
-            </>
-          ) : (
-            <>
-              <Plus size={13} /> Follow
-            </>
-          )}
-        </button>
+        <FollowButton
+          isFollowed={performer.isFollowed}
+          isLoading={followBusy}
+          onToggle={toggleFollow}
+        />
       </div>
 
       {/* Stat strip */}

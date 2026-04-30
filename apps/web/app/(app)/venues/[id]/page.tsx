@@ -8,12 +8,11 @@ import { EditableName } from "@/components/EditableName";
 import {
   Music,
   ArrowUpRight,
-  Plus,
-  Check,
   MoreHorizontal,
   Trash2,
   Ticket,
 } from "lucide-react";
+import { FollowButton } from "@/components/FollowButton";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import {
   getHeadliner,
@@ -392,36 +391,12 @@ export default function VenueDetailPage() {
           </div>
         </div>
 
-        {/* Follow button */}
-        <button
-          type="button"
-          onClick={toggleFollow}
-          disabled={followBusy}
-          style={{
-            padding: "8px 14px",
-            border: `1px solid ${venue.isFollowed ? "var(--accent)" : "var(--rule-strong)"}`,
-            background: venue.isFollowed ? "var(--accent)" : "transparent",
-            color: venue.isFollowed ? "var(--bg)" : "var(--ink)",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
-            letterSpacing: ".04em",
-            cursor: followBusy ? "default" : "pointer",
-            opacity: followBusy ? 0.6 : 1,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
-          {venue.isFollowed ? (
-            <>
-              <Check size={12} /> Following
-            </>
-          ) : (
-            <>
-              <Plus size={12} /> Follow
-            </>
-          )}
-        </button>
+        <FollowButton
+          isFollowed={venue.isFollowed}
+          isLoading={followBusy}
+          onToggle={toggleFollow}
+          variant="mono"
+        />
       </div>
 
       {/* Body */}
