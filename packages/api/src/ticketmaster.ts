@@ -263,8 +263,22 @@ export async function searchAttractions(
 // Pure helpers (no network)
 // ---------------------------------------------------------------------------
 
+function normalizeFestivalText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function hasFestivalSignal(value: string): boolean {
+  const normalized = normalizeFestivalText(value);
+  return normalized.includes("festival") || /\bfest\b/.test(normalized);
+}
+
 export function inferKind(
   classifications?: TMEvent["classifications"],
+  context?: { eventName?: string | null },
 ): "concert" | "theatre" | "comedy" | "festival" | "sports" {
   if (!classifications || classifications.length === 0) return "concert";
 
@@ -272,20 +286,31 @@ export function inferKind(
     classifications.find((c) => c.primary) ?? classifications[0];
   const segmentName = primary?.segment?.name?.toLowerCase() ?? "";
   const genreName = primary?.genre?.name?.toLowerCase() ?? "";
+  const eventName = context?.eventName?.toLowerCase() ?? "";
 
   if (segmentName.includes("sports")) {
     return "sports";
   }
 
   if (segmentName.includes("music")) {
-    // Music segment — check for festival in the genre/subGenre
-    const subGenreName = primary?.subGenre?.name?.toLowerCase() ?? "";
-    if (
-      genreName.includes("festival") ||
-      genreName.includes("fest") ||
-      subGenreName.includes("festival") ||
-      subGenreName.includes("fest")
-    ) {
+    const classificationText = classifications
+      .flatMap((classification) => [
+        classification.genre?.name,
+        classification.subGenre?.name,
+        classification.type?.name,
+        classification.subType?.name,
+      ])
+      .filter((name): name is string => Boolean(name))
+      .join(" ")
+      .toLowerCase();
+    const festivalText = `${classificationText} ${eventName}`;
+    const knownFestivalNames = ["outside lands"];
+
+    if (hasFestivalSignal(festivalText)) {
+      return "festival";
+    }
+    const normalizedEventName = normalizeFestivalText(eventName);
+    if (knownFestivalNames.some((name) => normalizedEventName.includes(name))) {
       return "festival";
     }
     return "concert";
