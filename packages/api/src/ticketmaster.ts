@@ -1,6 +1,10 @@
 // Ticketmaster Discovery API client
 // https://developer.ticketmaster.com/products-and-docs/apis/discovery-api/v2/
 
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'api.ticketmaster', provider: 'ticketmaster' });
+
 const BASE_URL = "https://app.ticketmaster.com/discovery/v2";
 const API_KEY = process.env.TICKETMASTER_API_KEY;
 
@@ -122,10 +126,18 @@ async function rateLimitedFetch(url: string): Promise<Response> {
   }
   lastRequestTime = Date.now();
 
+  const startedAt = Date.now();
   const response = await fetch(url);
+  const durationMs = Date.now() - startedAt;
   if (response.status === 429) {
+    log.warn({ event: 'tm.request.rate_limited', durationMs }, 'Ticketmaster 429, retrying');
     await new Promise((resolve) => setTimeout(resolve, 1000));
     return rateLimitedFetch(url);
+  }
+  if (!response.ok) {
+    log.warn({ event: 'tm.request.error', status: response.status, durationMs }, 'Ticketmaster non-OK response');
+  } else {
+    log.debug({ event: 'tm.request.ok', status: response.status, durationMs }, 'Ticketmaster request');
   }
   return response;
 }

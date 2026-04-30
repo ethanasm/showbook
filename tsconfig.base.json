@@ -25,7 +25,9 @@
       "@showbook/scrapers": ["packages/scrapers/src"],
       "@showbook/scrapers/*": ["packages/scrapers/src/*"],
       "@showbook/emails": ["packages/emails/src"],
-      "@showbook/emails/*": ["packages/emails/src/*"]
+      "@showbook/emails/*": ["packages/emails/src/*"],
+      "@showbook/observability": ["packages/observability/src"],
+      "@showbook/observability/*": ["packages/observability/src/*"]
     }
   },
   "exclude": ["node_modules", "dist", ".next"]

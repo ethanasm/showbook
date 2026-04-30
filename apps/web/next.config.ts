@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
     "@showbook/shared",
     "@showbook/jobs",
     "@showbook/emails",
+    "@showbook/observability",
   ],
   serverExternalPackages: [
     "sharp",
@@ -16,6 +17,11 @@ const nextConfig: NextConfig = {
     "playwright-core",
     "chromium-bidi",
     "@showbook/scrapers",
+    "pino",
+    "pino-pretty",
+    "thread-stream",
+    "@axiomhq/pino",
+    "langfuse",
   ],
   webpack: (config, { isServer }) => {
     if (isServer) {
@@ -25,6 +31,10 @@ const nextConfig: NextConfig = {
         "playwright",
         "playwright-core",
         "chromium-bidi",
+        "pino",
+        "pino-pretty",
+        "thread-stream",
+        "@axiomhq/pino",
       );
     }
     return config;

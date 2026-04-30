@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
+import { withTrace, child } from '@showbook/observability';
 import { router, protectedProcedure } from '../trpc';
+
+const log = child({ component: 'api.enrichment' });
 import {
   searchEvents,
   getEvent,
@@ -172,9 +175,13 @@ export const enrichmentRouter = router({
         freeText: z.string().min(1),
       }),
     )
-    .mutation(async ({ input }) => {
-      return parseShowInput(input.freeText);
-    }),
+    .mutation(async ({ input, ctx }) =>
+      withTrace(
+        'trpc.enrichment.parseChat',
+        () => parseShowInput(input.freeText),
+        { userId: ctx.session.user.id, tags: ['enrichment', 'llm'] },
+      ),
+    ),
 
   // ---------------------------------------------------------------------------
   // geocodeVenue — lat/lng lookup for manually entered venues
@@ -199,10 +206,16 @@ export const enrichmentRouter = router({
         imageBase64: z.string().min(1),
       }),
     )
-    .mutation(async ({ input }) => {
-      const cast = await groqExtractCast(input.imageBase64);
-      return { cast };
-    }),
+    .mutation(async ({ input, ctx }) =>
+      withTrace(
+        'trpc.enrichment.extractCast',
+        async () => {
+          const cast = await groqExtractCast(input.imageBase64);
+          return { cast };
+        },
+        { userId: ctx.session.user.id, tags: ['enrichment', 'llm', 'playbill'] },
+      ),
+    ),
 
   searchPlaces: protectedProcedure
     .input(z.object({
@@ -230,15 +243,21 @@ export const enrichmentRouter = router({
   // ---------------------------------------------------------------------------
   extractFromPdf: protectedProcedure
     .input(z.object({ fileBase64: z.string().min(1) }))
-    .mutation(async ({ input }) => {
-      const pdfParse = (await import('pdf-parse')).default;
-      const buffer = Buffer.from(input.fileBase64, 'base64');
-      const result = await pdfParse(buffer);
-      if (!result.text.trim()) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Could not extract text from PDF' });
-      }
-      return extractShowFromPdfText(result.text);
-    }),
+    .mutation(async ({ input, ctx }) =>
+      withTrace(
+        'trpc.enrichment.extractFromPdf',
+        async () => {
+          const pdfParse = (await import('pdf-parse')).default;
+          const buffer = Buffer.from(input.fileBase64, 'base64');
+          const result = await pdfParse(buffer);
+          if (!result.text.trim()) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Could not extract text from PDF' });
+          }
+          return extractShowFromPdfText(result.text);
+        },
+        { userId: ctx.session.user.id, tags: ['enrichment', 'llm', 'pdf'] },
+      ),
+    ),
 
   // ---------------------------------------------------------------------------
   // scanGmailForShow — search Gmail for a specific show's tickets
@@ -251,43 +270,49 @@ export const enrichmentRouter = router({
         venue: z.string().optional(),
       }),
     )
-    .mutation(async ({ input }) => {
-      const query = buildTicketSearchQuery({
-        headliner: input.headliner,
-        venue: input.venue,
-      });
-      const { messages } = await searchMessages(input.accessToken, query, 5);
+    .mutation(async ({ input, ctx }) =>
+      withTrace(
+        'trpc.enrichment.scanGmailForShow',
+        async () => {
+          const query = buildTicketSearchQuery({
+            headliner: input.headliner,
+            venue: input.venue,
+          });
+          const { messages } = await searchMessages(input.accessToken, query, 5);
 
-      const results: Array<{
-        headliner: string;
-        production_name: string | null;
-        venue_name: string | null;
-        venue_city: string | null;
-        venue_state: string | null;
-        date: string | null;
-        seat: string | null;
-        price: string | null;
-        ticket_count: number | null;
-        kind_hint: 'concert' | 'theatre' | 'comedy' | 'festival' | null;
-        confidence: 'high' | 'medium' | 'low';
-      }> = [];
+          const results: Array<{
+            headliner: string;
+            production_name: string | null;
+            venue_name: string | null;
+            venue_city: string | null;
+            venue_state: string | null;
+            date: string | null;
+            seat: string | null;
+            price: string | null;
+            ticket_count: number | null;
+            kind_hint: 'concert' | 'theatre' | 'comedy' | 'festival' | null;
+            confidence: 'high' | 'medium' | 'low';
+          }> = [];
 
-      for (const msg of messages) {
-        const detail = await getMessageBody(input.accessToken, msg.id);
-        const extracted = await extractShowFromEmail(
-          detail.subject,
-          detail.body,
-          detail.from,
-          detail.date,
-        );
-        if (extracted) {
-          extracted.date = correctExtractedYear(extracted.date, detail.date);
-          results.push(extracted);
-        }
-      }
+          for (const msg of messages) {
+            const detail = await getMessageBody(input.accessToken, msg.id);
+            const extracted = await extractShowFromEmail(
+              detail.subject,
+              detail.body,
+              detail.from,
+              detail.date,
+            );
+            if (extracted) {
+              extracted.date = correctExtractedYear(extracted.date, detail.date);
+              results.push(extracted);
+            }
+          }
 
-      return results;
-    }),
+          return results;
+        },
+        { userId: ctx.session.user.id, tags: ['enrichment', 'llm', 'gmail'] },
+      ),
+    ),
 
   // ---------------------------------------------------------------------------
   // bulkScanGmail — scan all ticket emails with pagination
@@ -298,7 +323,10 @@ export const enrichmentRouter = router({
         accessToken: z.string().min(1),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) =>
+      withTrace(
+        'trpc.enrichment.bulkScanGmail',
+        async () => {
       const { accessToken } = input;
       const queries = buildBulkScanQueries();
 
@@ -320,7 +348,7 @@ export const enrichmentRouter = router({
         } while (pageToken);
       }
 
-      console.log(`[gmail] Found ${allMessages.length} emails to process`);
+      log.info({ event: 'gmail.bulk_scan.collected', total: allMessages.length, userId: ctx.session.user.id }, 'Collected Gmail messages');
 
       // Parse each message with LLM, dedup by show content
       const tickets: Array<{
@@ -343,7 +371,16 @@ export const enrichmentRouter = router({
       const allExtracted: TicketWithId[] = [];
 
       for (let i = 0; i < allMessages.length; i += BATCH_SIZE) {
-        console.log(`[gmail] Processing ${i + 1}-${Math.min(i + BATCH_SIZE, allMessages.length)} of ${allMessages.length} (${allExtracted.length} tickets found)`);
+        log.debug(
+          {
+            event: 'gmail.bulk_scan.batch',
+            batchStart: i + 1,
+            batchEnd: Math.min(i + BATCH_SIZE, allMessages.length),
+            total: allMessages.length,
+            extractedSoFar: allExtracted.length,
+          },
+          'Processing Gmail batch',
+        );
         const batch = allMessages.slice(i, i + BATCH_SIZE);
         const results = await Promise.all(
           batch.map(async (msg) => {
@@ -358,9 +395,16 @@ export const enrichmentRouter = router({
               extracted.date = correctExtractedYear(extracted.date, detail.date);
             }
             if (extracted && (!extracted.date || !extracted.venue_name)) {
-              console.log(`[gmail] INCOMPLETE: "${extracted.headliner}" missing ${!extracted.date ? 'date' : ''} ${!extracted.venue_name ? 'venue' : ''}`);
-              console.log(`[gmail]   Subject: ${detail.subject}`);
-              console.log(`[gmail]   Body (first 500): ${detail.body.slice(0, 500)}`);
+              log.warn(
+                {
+                  event: 'gmail.extract.incomplete',
+                  headliner: extracted.headliner,
+                  missingDate: !extracted.date,
+                  missingVenue: !extracted.venue_name,
+                  gmailMessageId: msg.id,
+                },
+                'Incomplete Gmail extraction',
+              );
             }
             return extracted ? { ...extracted, gmailMessageId: msg.id } : null;
           }),
@@ -414,10 +458,21 @@ export const enrichmentRouter = router({
       }
 
       const merged = Array.from(mergeMap.values());
-      console.log(`[gmail] Done — ${allExtracted.length} extracted, ${merged.length} after merge`);
+      log.info(
+        {
+          event: 'gmail.bulk_scan.complete',
+          extracted: allExtracted.length,
+          merged: merged.length,
+          userId: ctx.session.user.id,
+        },
+        'Gmail bulk scan complete',
+      );
 
       return { tickets: merged };
-    }),
+        },
+        { userId: ctx.session.user.id, tags: ['enrichment', 'llm', 'gmail', 'bulk'] },
+      ),
+    ),
 
   // ---------------------------------------------------------------------------
   // gmailCollectMessages — fetch all ticket email IDs (fast step)
@@ -454,23 +509,29 @@ export const enrichmentRouter = router({
       accessToken: z.string().min(1),
       messageIds: z.array(z.string()),
     }))
-    .mutation(async ({ input }) => {
-      const results = await Promise.all(
-        input.messageIds.map(async (msgId) => {
-          const detail = await getMessageBody(input.accessToken, msgId);
-          const extracted = await extractShowFromEmail(
-            detail.subject,
-            detail.body,
-            detail.from,
-            detail.date,
+    .mutation(async ({ input, ctx }) =>
+      withTrace(
+        'trpc.enrichment.gmailProcessBatch',
+        async () => {
+          const results = await Promise.all(
+            input.messageIds.map(async (msgId) => {
+              const detail = await getMessageBody(input.accessToken, msgId);
+              const extracted = await extractShowFromEmail(
+                detail.subject,
+                detail.body,
+                detail.from,
+                detail.date,
+              );
+              if (extracted) {
+                extracted.date = correctExtractedYear(extracted.date, detail.date);
+              }
+              return extracted ? { ...extracted, gmailMessageId: msgId } : null;
+            }),
           );
-          if (extracted) {
-            extracted.date = correctExtractedYear(extracted.date, detail.date);
-          }
-          return extracted ? { ...extracted, gmailMessageId: msgId } : null;
-        }),
-      );
 
-      return { tickets: results.filter((r): r is NonNullable<typeof r> => r !== null) };
-    }),
+          return { tickets: results.filter((r): r is NonNullable<typeof r> => r !== null) };
+        },
+        { userId: ctx.session.user.id, tags: ['enrichment', 'llm', 'gmail'], metadata: { batchSize: input.messageIds.length } },
+      ),
+    ),
 });

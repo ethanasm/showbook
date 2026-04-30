@@ -21,6 +21,9 @@ import {
   type EventRun,
   type NormalizedEvent,
 } from './run-grouping';
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'discover-ingest' });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -316,9 +319,9 @@ async function ingestTmEvents(
       const ne = await normalizeTmEvent(event);
       if (ne) normalized.push(ne);
     } catch (err) {
-      console.error(
-        `[discover/ingest] Failed to normalize TM event ${event.id} (${event.name}):`,
-        err,
+      log.error(
+        { err, event: 'tm.normalize.failed', tmEventId: event.id, name: event.name },
+        'Failed to normalize TM event',
       );
     }
   }
@@ -331,9 +334,9 @@ async function ingestTmEvents(
       count += await upsertRun(run, existingSourceIds);
       await pruneDuplicateFestivalSinglesForRun(run);
     } catch (err) {
-      console.error(
-        `[discover/ingest] Failed to upsert run "${run.productionName}" at venue ${run.venueId}:`,
-        err,
+      log.error(
+        { err, event: 'run.upsert.failed', productionName: run.productionName, venueId: run.venueId },
+        'Failed to upsert run',
       );
     }
   }
@@ -342,9 +345,9 @@ async function ingestTmEvents(
       const created = await insertSingleEvent(event, existingSourceIds);
       if (created) count++;
     } catch (err) {
-      console.error(
-        `[discover/ingest] Failed to insert event ${event.sourceEventId}:`,
-        err,
+      log.error(
+        { err, event: 'event.insert.failed', sourceEventId: event.sourceEventId },
+        'Failed to insert event',
       );
     }
   }
@@ -394,14 +397,16 @@ export async function ingestVenue(venueId: string): Promise<{ events: number }> 
     endDateTime: futureISO(INGEST_HORIZON_MONTHS),
   });
   const created = await ingestTmEvents(events, existingSourceIds);
-  console.log(JSON.stringify({
-    msg: '[discover/ingest-targeted]',
-    target: 'venue',
-    venueId,
-    fetched: events.length,
-    inserted: created,
-    skipped: events.length - created,
-  }));
+  log.info(
+    {
+      event: 'discover.ingest.targeted.venue',
+      venueId,
+      fetched: events.length,
+      inserted: created,
+      skipped: events.length - created,
+    },
+    'Targeted venue ingest complete',
+  );
   return { events: created };
 }
 
@@ -451,15 +456,17 @@ export async function ingestRegion(regionId: string): Promise<{ events: number }
     return !(tmVenue?.id && followedTmVenueIds.has(tmVenue.id));
   });
   const created = await ingestTmEvents(filtered, existingSourceIds);
-  console.log(JSON.stringify({
-    msg: '[discover/ingest-targeted]',
-    target: 'region',
-    regionId,
-    fetched: events.length,
-    filtered: filtered.length,
-    inserted: created,
-    skipped: filtered.length - created,
-  }));
+  log.info(
+    {
+      event: 'discover.ingest.targeted.region',
+      regionId,
+      fetched: events.length,
+      filtered: filtered.length,
+      inserted: created,
+      skipped: filtered.length - created,
+    },
+    'Targeted region ingest complete',
+  );
   return { events: created };
 }
 
@@ -485,14 +492,16 @@ export async function ingestPerformer(
     endDateTime: futureISO(INGEST_HORIZON_MONTHS),
   });
   const created = await ingestTmEvents(events, existingSourceIds);
-  console.log(JSON.stringify({
-    msg: '[discover/ingest-targeted]',
-    target: 'performer',
-    performerId,
-    fetched: events.length,
-    inserted: created,
-    skipped: events.length - created,
-  }));
+  log.info(
+    {
+      event: 'discover.ingest.targeted.performer',
+      performerId,
+      fetched: events.length,
+      inserted: created,
+      skipped: events.length - created,
+    },
+    'Targeted performer ingest complete',
+  );
   return { events: created };
 }
 
@@ -552,13 +561,15 @@ export async function runDiscoverIngest(): Promise<{
     (p): p is typeof p & { tmAttractionId: string } => p.tmAttractionId !== null,
   );
 
-  console.log(JSON.stringify({
-    msg: '[discover/ingest]',
-    phase: 0,
-    venues: followedVenues.length,
-    regions: regionRows.length,
-    performers: followedPerformers.length,
-  }));
+  log.info(
+    {
+      event: 'discover.ingest.phase0',
+      venues: followedVenues.length,
+      regions: regionRows.length,
+      performers: followedPerformers.length,
+    },
+    'Phase 0: collected targets',
+  );
 
   // ==========================================================================
   // Phase 1: Followed venue events (per-venue, grouped to runs as needed)
@@ -574,13 +585,16 @@ export async function runDiscoverIngest(): Promise<{
       });
       phase1Events += await ingestTmEvents(events, existingSourceIds);
     } catch (err) {
-      console.error(
-        `[discover/ingest] Phase 1 error for venue ${tmVenueId}:`,
-        err,
+      log.error(
+        { err, event: 'discover.ingest.phase1.venue_failed', tmVenueId },
+        'Phase 1 venue error',
       );
     }
   }
-  console.log(JSON.stringify({ msg: '[discover/ingest]', phase: 1, inserted: phase1Events }));
+  log.info(
+    { event: 'discover.ingest.phase1', inserted: phase1Events },
+    'Phase 1 complete',
+  );
 
   // ==========================================================================
   // Phase 2: Near-you events (per-region, excluding followed venues)
@@ -603,13 +617,21 @@ export async function runDiscoverIngest(): Promise<{
       });
       phase2Events += await ingestTmEvents(filtered, existingSourceIds);
     } catch (err) {
-      console.error(
-        `[discover/ingest] Phase 2 error for region (${region.latitude},${region.longitude}):`,
-        err,
+      log.error(
+        {
+          err,
+          event: 'discover.ingest.phase2.region_failed',
+          latitude: region.latitude,
+          longitude: region.longitude,
+        },
+        'Phase 2 region error',
       );
     }
   }
-  console.log(JSON.stringify({ msg: '[discover/ingest]', phase: 2, inserted: phase2Events }));
+  log.info(
+    { event: 'discover.ingest.phase2', inserted: phase2Events },
+    'Phase 2 complete',
+  );
 
   // ==========================================================================
   // Phase 3: Tracked-performer events (per-attraction, filtered to user
@@ -660,13 +682,16 @@ export async function runDiscoverIngest(): Promise<{
       });
       phase3Events += await ingestTmEvents(relevant, existingSourceIds);
     } catch (err) {
-      console.error(
-        `[discover/ingest] Phase 3 error for attraction ${tmAttractionId}:`,
-        err,
+      log.error(
+        { err, event: 'discover.ingest.phase3.performer_failed', tmAttractionId },
+        'Phase 3 performer error',
       );
     }
   }
-  console.log(JSON.stringify({ msg: '[discover/ingest]', phase: 3, inserted: phase3Events }));
+  log.info(
+    { event: 'discover.ingest.phase3', inserted: phase3Events },
+    'Phase 3 complete',
+  );
 
   // Quiet "unused import" — followedVenueIdSet is referenced for clarity.
   void followedVenueIdSet;
@@ -685,7 +710,10 @@ export async function runDiscoverIngest(): Promise<{
     .where(lt(announcements.showDate, cutoffDate))
     .returning({ id: announcements.id });
   const pruned = deleted.length;
-  console.log(JSON.stringify({ msg: '[discover/ingest]', phase: 4, pruned }));
+  log.info(
+    { event: 'discover.ingest.phase4', pruned },
+    'Phase 4 (cleanup) complete',
+  );
 
   return {
     phase1Events,

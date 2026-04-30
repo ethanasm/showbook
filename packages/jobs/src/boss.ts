@@ -1,4 +1,7 @@
 import PgBoss from 'pg-boss';
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'jobs.boss' });
 
 let boss: PgBoss | null = null;
 
@@ -20,7 +23,7 @@ export function getBoss(): PgBoss {
 export async function startBoss(): Promise<PgBoss> {
   const b = getBoss();
   await b.start();
-  console.log('pg-boss started');
+  log.info({ event: 'pgboss.started' }, 'pg-boss started');
   return b;
 }
 
@@ -28,6 +31,6 @@ export async function stopBoss(): Promise<void> {
   if (boss) {
     await boss.stop();
     boss = null;
-    console.log('pg-boss stopped');
+    log.info({ event: 'pgboss.stopped' }, 'pg-boss stopped');
   }
 }

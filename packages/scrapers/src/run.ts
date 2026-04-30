@@ -11,6 +11,9 @@ import { matchOrCreatePerformer, parseScrapeConfig } from '@showbook/api';
 import { loadAndExtract } from './extract';
 import { extractEventsFromPage, type ExtractedEvent } from './llm';
 import { isAllowedByRobots } from './runtime';
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'scrapers.run' });
 
 /**
  * Run scrapers for every venue with `scrapeConfig.type === 'llm'`.
@@ -46,8 +49,13 @@ export async function runScrapers(): Promise<{
       .values({ venueId: venue.id, status: 'running' })
       .returning();
 
+    const venueLog = log.child({ venueId: venue.id, venueName: venue.name, url: cfg.url });
+    const startedAt = Date.now();
+    venueLog.info({ event: 'scrape.venue.start' }, 'Scrape started');
+
     try {
       if (!(await isAllowedByRobots(cfg.url))) {
+        venueLog.warn({ event: 'scrape.venue.robots_disallowed' }, 'Disallowed by robots.txt');
         await db
           .update(venueScrapeRuns)
           .set({
@@ -89,6 +97,23 @@ export async function runScrapers(): Promise<{
 
       succeeded++;
       eventsCreated += created;
+      venueLog.info(
+        {
+          event: 'scrape.venue.complete',
+          eventsFound: llm.events.length,
+          eventsRejected: llm.rejected.length,
+          eventsCreated: created,
+          tokensUsed: llm.tokensUsed,
+          durationMs: Date.now() - startedAt,
+        },
+        'Scrape complete',
+      );
+      if (llm.rejected.length > 0) {
+        venueLog.warn(
+          { event: 'scrape.venue.quotes_rejected', rejected: llm.rejected.length },
+          'Some events rejected by sourceQuote check',
+        );
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       await db
@@ -100,7 +125,7 @@ export async function runScrapers(): Promise<{
         })
         .where(eq(venueScrapeRuns.id, run!.id));
       failed++;
-      console.error(`[scrapers/run] venue=${venue.id} failed:`, err);
+      venueLog.error({ err, event: 'scrape.venue.failed', durationMs: Date.now() - startedAt }, 'Scrape failed');
     }
   }
 

@@ -15,6 +15,7 @@
     "@showbook/api": "workspace:*",
     "@showbook/db": "workspace:*",
     "@showbook/jobs": "workspace:*",
+    "@showbook/observability": "workspace:*",
     "@showbook/shared": "workspace:*",
     "@tanstack/react-query": "^5.99.2",
     "@trpc/client": "^11.16.0",

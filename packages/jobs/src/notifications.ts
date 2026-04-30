@@ -14,6 +14,9 @@ import {
 } from '@showbook/db';
 import { and, eq, gte, lte, isNotNull, asc } from 'drizzle-orm';
 import { renderDailyDigest } from '@showbook/emails';
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'notifications' });
 
 const FROM_ADDRESS = 'Showbook <digest@ethanasm.me>';
 const FALLBACK_CUTOFF_DAYS = 7;
@@ -22,8 +25,9 @@ const ANNOUNCEMENT_CAP = 50;
 function getResend(): Resend | null {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
-    console.warn(
-      '[notifications/daily-digest] RESEND_API_KEY not set — emails will be skipped',
+    log.warn(
+      { event: 'notifications.digest.no_resend_key' },
+      'RESEND_API_KEY not set — emails will be skipped',
     );
     return null;
   }
@@ -349,8 +353,15 @@ export async function runDailyDigest(): Promise<{
         .slice(0, 32);
 
       if (!resend) {
-        console.log(
-          `[notifications/daily-digest] Would send to ${user.email} (${todayShows.length} today, ${upcomingShows.length} upcoming, ${newAnnouncements.length} new)`,
+        log.info(
+          {
+            event: 'notifications.digest.dry_run',
+            userId: user.userId,
+            todayShows: todayShows.length,
+            upcomingShows: upcomingShows.length,
+            newAnnouncements: newAnnouncements.length,
+          },
+          'Would send digest (no Resend key)',
         );
         skipped++;
         continue;
@@ -370,13 +381,20 @@ export async function runDailyDigest(): Promise<{
         .where(eq(userPreferences.userId, user.userId));
 
       sent++;
-      console.log(
-        `[notifications/daily-digest] Sent to ${user.email} (${todayShows.length} today, ${upcomingShows.length} upcoming, ${newAnnouncements.length} new)`,
+      log.info(
+        {
+          event: 'notifications.digest.sent',
+          userId: user.userId,
+          todayShows: todayShows.length,
+          upcomingShows: upcomingShows.length,
+          newAnnouncements: newAnnouncements.length,
+        },
+        'Digest sent',
       );
     } catch (err) {
-      console.error(
-        `[notifications/daily-digest] Failed for user ${user.userId}:`,
-        err,
+      log.error(
+        { err, event: 'notifications.digest.failed', userId: user.userId },
+        'Digest failed for user',
       );
       skipped++;
     }

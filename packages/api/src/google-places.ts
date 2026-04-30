@@ -1,3 +1,7 @@
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'api.google-places' });
+
 const BASE_URL = 'https://places.googleapis.com/v1';
 
 function getApiKey() {
@@ -41,7 +45,7 @@ export async function autocomplete(
 
   if (!res.ok) {
     const errorText = await res.text();
-    console.error('[google-places] autocomplete error:', res.status, errorText.substring(0, 200));
+    log.error({ event: 'places.autocomplete.error', status: res.status, body: errorText.substring(0, 200) }, 'autocomplete error');
     return [];
   }
 
