@@ -828,7 +828,6 @@ export default function AddPage() {
           const opts = {
             showId: created.id,
             file: item.file,
-            caption: item.caption || undefined,
             performerIds: performerIds.length > 0 ? performerIds : undefined,
             createIntent: (input: Parameters<typeof createUploadIntent.mutateAsync>[0]) =>
               createUploadIntent.mutateAsync(input),

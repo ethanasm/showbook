@@ -9,7 +9,6 @@ export type StagedMediaItem = {
   file: File;
   kind: "photo" | "video";
   previewUrl: string;
-  caption: string;
   performerNames: string[];
 };
 
@@ -82,7 +81,6 @@ export function AddShowMediaStaging({
         file,
         kind,
         previewUrl: heic ? "" : URL.createObjectURL(file),
-        caption: "",
         performerNames: defaultPerformerNames,
       });
       if (heic) heicJobs.push({ id, file });
@@ -127,10 +125,6 @@ export function AddShowMediaStaging({
     const item = staged.find((s) => s.id === id);
     if (item) URL.revokeObjectURL(item.previewUrl);
     onChange(staged.filter((s) => s.id !== id));
-  }
-
-  function updateCaption(id: string, caption: string) {
-    onChange(staged.map((s) => (s.id === id ? { ...s, caption } : s)));
   }
 
   return (
@@ -207,20 +201,6 @@ export function AddShowMediaStaging({
                 )}
               </div>
               <div className="media-card__meta" style={{ flexDirection: "column", alignItems: "stretch", gap: 6 }}>
-                <input
-                  type="text"
-                  placeholder="Caption (optional)"
-                  value={item.caption}
-                  onChange={(e) => updateCaption(item.id, e.target.value)}
-                  style={{
-                    width: "100%",
-                    background: "transparent",
-                    border: "1px solid var(--rule)",
-                    padding: "4px 6px",
-                    fontSize: 12,
-                    color: "var(--ink)",
-                  }}
-                />
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span className="media-card__label" title={item.file.name}>
                     {item.file.name} · {formatBytes(item.file.size)}
