@@ -6,8 +6,6 @@
   1. Upload photos for shows; group photos at venue → venue detail, photos at artist → artist detail.
   2. For longer videos, investigate cheap/free storage (Drive?) and how to play them back inline.
 - **Security audit.**
-- **Langfuse integration for observability.**
-- **Better structured logging.** (S1 added it to `discover-ingest`; not project-wide.)
 - **Critical code smells.** (Run `/ultrareview` to surface specifics.)
 
 ### Mobile App
@@ -17,6 +15,10 @@
 ---
 
 ## Completed (kept for reference)
+
+### Observability
+1. ~~**Langfuse integration for observability.**~~ *(Done — every Groq call is wrapped via `traceLLM` in `@showbook/observability`; LLM-invoking tRPC procedures and pg-boss handlers wrap their entry points with `withTrace` so generations nest under user/job traces. No-op when `LANGFUSE_*` env unset.)*
+2. ~~**Better structured logging (project-wide).**~~ *(Done — pino logger in `@showbook/observability` with optional `@axiomhq/pino` transport when `AXIOM_TOKEN` set. ~60 ad-hoc `console.*` calls across api/jobs/scrapers and Next.js handlers replaced with structured logs (component bindings, dotted `event` field, `err` serializer). New logs added at previously silent boundaries: TM/setlist.fm/Gmail requests with status + duration, venue/performer follow + unfollow, auth signin/signout, scraper per-venue, digest per-user.)*
 
 ### General Improvements
 1. ~~Views need to look ok when the screen size is half of full width. Rows should have certain columns omitted at this width to fit properly, stuff should still look clean. Some pages are better than otthers. All should be reviewed but pages that don't look good:~~
