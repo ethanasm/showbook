@@ -704,6 +704,7 @@ export default function HomeView() {
                 const headliner = getHeadliner(s);
                 const headlinerId = getHeadlinerId(s);
                 const support = getSupport(s);
+                const supportPerformers = getSupportPerformers(s);
                 const paidDisplay = s.pricePaid
                   ? `$${parseFloat(s.pricePaid)}`
                   : "—";
@@ -823,7 +824,28 @@ export default function HomeView() {
                             textOverflow: "ellipsis",
                           }}
                         >
-                          + {support.join(", ")}
+                          +{" "}
+                          {support.map((name, i) => {
+                            const id = supportPerformers.find((p) => p.name === name)?.id;
+                            return (
+                              <span key={`${name}-${i}`}>
+                                {id ? (
+                                  <Link
+                                    href={`/artists/${id}`}
+                                    style={{ color: "inherit", textDecoration: "none" }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+                                    onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                                  >
+                                    {name}
+                                  </Link>
+                                ) : (
+                                  name
+                                )}
+                                {i < support.length - 1 ? ", " : ""}
+                              </span>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

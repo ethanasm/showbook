@@ -23,6 +23,7 @@ import {
   getHeadlinerId,
   getHeadlinerImageUrl,
   getSupport,
+  getSupportPerformers,
 } from "@/lib/show-accessors";
 
 type Performer = {
@@ -349,6 +350,7 @@ export default function ArtistDetailPage() {
                     headlinerId: getHeadlinerId(s),
                     imageUrl: getHeadlinerImageUrl(s),
                     support: getSupport(s),
+                    supportPerformers: getSupportPerformers(s),
                     venue: s.venue.name,
                     venueId: s.venue.id,
                     showId: s.id,
