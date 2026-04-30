@@ -104,6 +104,37 @@ test.describe('Discover improvements', () => {
     await expect(page.locator('text=Radiohead')).toBeVisible({ timeout: 5000 });
   });
 
+  test('followed venue and artist feed sections collapse and expand', async ({ page }) => {
+    await page.goto('/discover');
+    await page.waitForLoadState('networkidle');
+
+    for (const tabName of [/Followed venues/i, /Followed artists/i]) {
+      await page.getByRole('button', { name: tabName }).click();
+      await page.waitForLoadState('networkidle');
+
+      const groupsWithRows = page.locator('.discover-venue-group').filter({
+        has: page.locator('.discover-row'),
+      });
+      const count = await groupsWithRows.count();
+      if (count === 0) {
+        test.skip();
+        return;
+      }
+
+      const group = groupsWithRows.first();
+      const toggle = group.locator('.discover-venue-group__toggle').first();
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      await expect(group.locator('.discover-row')).toHaveCount(0);
+
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      await expect.poll(() => group.locator('.discover-row').count()).toBeGreaterThan(0);
+    }
+  });
+
   test('Near You tab shows items grouped under region headers when regions exist', async ({ page }) => {
     // Add a region via the seed to ensure we have nearby data
     // The seed adds a NYC region, so just check the Near You tab
