@@ -123,3 +123,10 @@ the active database name is `showbook_e2e`.
 |---------|-----------|------|
 | PostgreSQL 16 | showbook-db | 5433 |
 | Next.js | showbook-web | 3001 |
+
+Named volumes:
+
+| Volume | Purpose |
+|--------|---------|
+| `showbook_pgdata` | Postgres data directory |
+| `showbook_next_cache` | Webpack persistent cache (`.next/cache`) — kept off the macOS bind mount so it survives container rebuilds and avoids ENOENT rename errors that otherwise force full cold compiles |

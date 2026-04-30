@@ -47,9 +47,11 @@ services:
       - /app/packages/observability/node_modules
       - /app/packages/scrapers/node_modules
       - /app/packages/shared/node_modules
+      - showbook_next_cache:/app/apps/web/.next/cache
     depends_on:
       postgres:
         condition: service_healthy
 
 volumes:
   showbook_pgdata:
+  showbook_next_cache:
