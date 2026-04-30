@@ -15,7 +15,11 @@ import {
 import { and, eq, gte, lte, isNotNull, asc } from 'drizzle-orm';
 import { renderDailyDigest } from '@showbook/emails';
 
-const FROM_ADDRESS = 'Showbook <digest@ethanasm.me>';
+const DEFAULT_FROM_ADDRESS = 'Showbook <digest@ethanasm.me>';
+
+function getFromAddress(): string {
+  return process.env.EMAIL_FROM ?? DEFAULT_FROM_ADDRESS;
+}
 const FALLBACK_CUTOFF_DAYS = 7;
 const ANNOUNCEMENT_CAP = 50;
 
@@ -357,7 +361,7 @@ export async function runDailyDigest(): Promise<{
       }
 
       await resend.emails.send({
-        from: FROM_ADDRESS,
+        from: getFromAddress(),
         to: user.email,
         subject,
         html,
