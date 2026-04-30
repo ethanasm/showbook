@@ -85,7 +85,11 @@ export function HeroCard({ show }: HeroCardProps) {
             alt=""
             fill
             sizes="(max-width: 768px) 100vw, 560px"
-            style={{ objectFit: "cover" }}
+            // Bias the crop toward the top of the source image — band/artist
+            // photos almost always have faces in the upper third, and the
+            // hero's wide aspect ratio cuts off the top with the default
+            // center-center position.
+            style={{ objectFit: "cover", objectPosition: "center 25%" }}
             priority
           />
           <div
