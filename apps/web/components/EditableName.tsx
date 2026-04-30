@@ -38,12 +38,12 @@ export function EditableName({
   }
 
   const sharedStyle: React.CSSProperties = {
-    fontFamily: "var(--font-geist-sans), sans-serif",
+    fontFamily: "var(--font-display)",
     fontSize: 48,
-    fontWeight: 600,
+    fontWeight: 700,
     color: "var(--ink)",
-    letterSpacing: -1.6,
-    lineHeight: 0.98,
+    letterSpacing: "-0.01em",
+    lineHeight: 1.1,
     marginTop: 10,
   };
 

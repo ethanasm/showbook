@@ -703,11 +703,12 @@ export default function ShowsView() {
             All shows &middot; one stream
           </div>
           <div style={{
-            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontFamily: "var(--font-display)",
             fontSize: 26,
-            fontWeight: 600,
+            fontWeight: 700,
             color: "var(--ink)",
-            letterSpacing: -0.9,
+            letterSpacing: "-0.01em",
+            lineHeight: 1.1,
             marginTop: 4,
           }}>
             Shows
@@ -2284,11 +2285,12 @@ export default function ShowsView() {
             }}>
               <div>
                 <div style={{
-                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontFamily: "var(--font-display)",
                   fontSize: 17,
-                  fontWeight: 600,
+                  fontWeight: 700,
                   color: "var(--ink)",
-                  letterSpacing: -0.3,
+                  letterSpacing: "-0.01em",
+                  lineHeight: 1.1,
                 }}>
                   Import from Gmail
                 </div>

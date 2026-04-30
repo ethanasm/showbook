@@ -21,6 +21,11 @@
   --kind-festival: #2A9D8F;
   --kind-sports: #E8772E;
 
+  /* Display serif — used for screen titles, headliner/show titles,
+     venue/artist hero names, empty-state and modal headings. Geist Sans
+     stays the default for body, controls, eyebrows, numerics, chrome. */
+  --font-display: Georgia, "Times New Roman", serif;
+
   /* Backward-compatible aliases */
   --background: var(--bg);
   --foreground: var(--ink);
@@ -75,4 +80,14 @@ body {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+/* Display serif — for names: page titles, headliner/show names,
+   venue/artist hero, empty-state + modal headings. Names get Georgia;
+   labels, controls, numbers, and UI chrome stay Geist. */
+.display-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
 }

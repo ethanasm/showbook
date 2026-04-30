@@ -220,7 +220,7 @@ export default function VenuesView() {
           <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", letterSpacing: ".1em", textTransform: "uppercase" }}>
             Places you&apos;ve been
           </div>
-          <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 26, fontWeight: 600, color: "var(--ink)", letterSpacing: -0.9, marginTop: 4 }}>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 700, color: "var(--ink)", letterSpacing: "-0.01em", lineHeight: 1.1, marginTop: 4 }}>
             Venues
           </div>
         </div>

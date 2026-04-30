@@ -202,12 +202,12 @@ export default function ShowDetailPage() {
           </div>
           <h1
             style={{
-              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontFamily: "var(--font-display)",
               fontSize: 44,
-              fontWeight: 600,
+              fontWeight: 700,
               color: "var(--ink)",
-              letterSpacing: -1.4,
-              lineHeight: 1.0,
+              letterSpacing: "-0.01em",
+              lineHeight: 1.1,
               marginTop: 10,
               marginBottom: 0,
             }}
