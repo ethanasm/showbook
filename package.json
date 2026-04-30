@@ -14,6 +14,7 @@
     "db:prepare:e2e": "pnpm db:reset:e2e && pnpm db:migrate:e2e",
     "db:studio": "DATABASE_URL=postgresql://showbook:showbook_dev@localhost:5433/showbook pnpm --filter @showbook/db drizzle-kit studio",
     "test:e2e": "pnpm db:prepare:e2e && pnpm --filter web test:e2e",
+    "test:integration": "pnpm db:prepare:e2e && DATABASE_URL=postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e pnpm --filter @showbook/api test:integration",
     "test:unit": "pnpm --filter @showbook/api --filter @showbook/jobs --filter @showbook/shared --filter web run test",
     "verify": "bash scripts/verify.sh",
     "verify:e2e": "bash scripts/verify.sh --e2e",

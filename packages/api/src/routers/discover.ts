@@ -300,10 +300,22 @@ export const discoverRouter = router({
       }
 
       // Walk rows in (date, id) order, assigning each to its smallest
-      // matching region. The first row past a region's cap becomes that
-      // region's nextCursor; further rows for that region are dropped.
+      // matching region. We track the last emitted row per region; if a
+      // region has more rows past its cap we emit a cursor that advances
+      // strictly past the last emitted row, so page N+1 picks up exactly
+      // where page N stopped.
+      //
+      // Cursor filtering also runs in JS: a row that satisfies the OR'd
+      // SQL because it falls in another region's bbox could still be
+      // assigned to a region whose cursor it precedes (because it shares
+      // both bboxes). We skip those here so cursor pagination is correct
+      // when regions overlap.
       const perRegionCounts = new Map<string, number>();
-      const nextCursors: Record<string, string> = {};
+      const lastEmitted = new Map<
+        string,
+        { showDate: string; id: string }
+      >();
+      const overflowed = new Set<string>();
       const items: Array<
         (typeof announcements.$inferSelect) & {
           ticketUrl: string | null;
@@ -314,20 +326,36 @@ export const discoverRouter = router({
         }
       > = [];
 
+      function pastCursor(
+        regionId: string,
+        showDate: string,
+        id: string,
+      ): boolean {
+        const c = decodeCursor(cursors[regionId]);
+        if (!c) return true;
+        if (showDate > c.showDate) return true;
+        if (showDate < c.showDate) return false;
+        return id > c.id;
+      }
+
       for (const r of rows) {
         const match = findRegionForVenue(r.venue.latitude, r.venue.longitude);
         if (!match) continue;
+        if (
+          !pastCursor(match.region.id, r.announcement.showDate, r.announcement.id)
+        ) {
+          continue;
+        }
         const count = perRegionCounts.get(match.region.id) ?? 0;
         if (count >= perRegionLimit) {
-          if (!nextCursors[match.region.id]) {
-            nextCursors[match.region.id] = encodeCursor(
-              r.announcement.showDate,
-              r.announcement.id,
-            );
-          }
+          overflowed.add(match.region.id);
           continue;
         }
         perRegionCounts.set(match.region.id, count + 1);
+        lastEmitted.set(match.region.id, {
+          showDate: r.announcement.showDate,
+          id: r.announcement.id,
+        });
         items.push({
           ...r.announcement,
           ticketUrl:
@@ -340,6 +368,12 @@ export const discoverRouter = router({
           regionCityName: match.region.cityName,
           regionRadiusMiles: match.region.radiusMiles,
         });
+      }
+
+      const nextCursors: Record<string, string> = {};
+      for (const regionId of overflowed) {
+        const last = lastEmitted.get(regionId);
+        if (last) nextCursors[regionId] = encodeCursor(last.showDate, last.id);
       }
 
       return { items, nextCursors, hasRegions: true };
