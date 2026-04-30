@@ -394,9 +394,10 @@ export const discoverRouter = router({
    * Add an announcement to the user's watchlist by creating a show
    * with state='watching' and linking it to the announcement.
    *
-   * For a multi-night run (runEndDate > runStartDate), the show is created
-   * with date=NULL — the user picks a specific performance later from the
-   * Shows list. For single-night announcements, the date is set to showDate.
+   * For a multi-night non-festival run (runEndDate > runStartDate), the show
+   * is created with date=NULL — the user picks a specific performance later
+   * from the Shows list. Festivals are a single experience, so they keep
+   * date=endpoints: date=start, endDate=end.
    */
   watchlist: protectedProcedure
     .input(
@@ -431,12 +432,18 @@ export const discoverRouter = router({
         announcement.runStartDate !== null &&
         announcement.runEndDate !== null &&
         announcement.runStartDate !== announcement.runEndDate;
+      const isDatePickingRun = isRun && announcement.kind !== 'festival';
 
       const showDate: string | null = input.performanceDate
         ? input.performanceDate
-        : isRun
+        : isDatePickingRun
           ? null
-          : announcement.showDate;
+          : announcement.runStartDate ?? announcement.showDate;
+
+      const showEndDate =
+        announcement.kind === 'festival'
+          ? announcement.runEndDate ?? announcement.runStartDate ?? announcement.showDate
+          : null;
 
       let performerId = announcement.headlinerPerformerId;
       if (!performerId) {
@@ -454,7 +461,11 @@ export const discoverRouter = router({
           state: 'watching',
           venueId: announcement.venueId,
           date: showDate,
-          productionName: isRun ? announcement.headliner : null,
+          endDate: showEndDate,
+          productionName:
+            isRun || announcement.kind === 'festival'
+              ? announcement.productionName ?? announcement.headliner
+              : null,
           ticketUrl: announcement.ticketUrl,
         })
         .returning();
