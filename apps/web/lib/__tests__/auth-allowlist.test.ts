@@ -1,6 +1,11 @@
-import { describe, it } from 'node:test';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { isEmailAllowed, parseAllowlist } from '../auth-allowlist';
+import {
+  isEmailAllowed,
+  parseAllowlist,
+  readAllowlistFromEnv,
+  shouldAllowSignIn,
+} from '../auth-allowlist';
 
 describe('parseAllowlist', () => {
   it('returns [] for undefined or empty', () => {
@@ -81,5 +86,98 @@ describe('isEmailAllowed', () => {
       }),
       true,
     );
+  });
+});
+
+describe('shouldAllowSignIn', () => {
+  it('rejects when emailVerified is explicitly false, even if the email is on the list', () => {
+    // Workspace external aliases / send-as can present any email with
+    // email_verified=false. Without this guard the allowlist would accept
+    // a spoofed address.
+    assert.equal(
+      shouldAllowSignIn({
+        email: 'alice@acme.com',
+        emailVerified: false,
+        emails: [],
+        domains: ['acme.com'],
+      }),
+      false,
+    );
+  });
+
+  it('allows when emailVerified is true and the email matches', () => {
+    assert.equal(
+      shouldAllowSignIn({
+        email: 'alice@acme.com',
+        emailVerified: true,
+        emails: [],
+        domains: ['acme.com'],
+      }),
+      true,
+    );
+  });
+
+  it('allows when emailVerified is undefined (non-OIDC providers omit the claim)', () => {
+    assert.equal(
+      shouldAllowSignIn({
+        email: 'alice@acme.com',
+        emailVerified: undefined,
+        emails: [],
+        domains: ['acme.com'],
+      }),
+      true,
+    );
+  });
+
+  it('still applies the allowlist when emailVerified is true', () => {
+    assert.equal(
+      shouldAllowSignIn({
+        email: 'mallory@evil.com',
+        emailVerified: true,
+        emails: [],
+        domains: ['acme.com'],
+      }),
+      false,
+    );
+  });
+});
+
+describe('readAllowlistFromEnv', () => {
+  const originalEmails = process.env.AUTH_ALLOWED_EMAILS;
+  const originalDomains = process.env.AUTH_ALLOWED_DOMAINS;
+
+  beforeEach(() => {
+    delete process.env.AUTH_ALLOWED_EMAILS;
+    delete process.env.AUTH_ALLOWED_DOMAINS;
+  });
+
+  afterEach(() => {
+    if (originalEmails === undefined) delete process.env.AUTH_ALLOWED_EMAILS;
+    else process.env.AUTH_ALLOWED_EMAILS = originalEmails;
+    if (originalDomains === undefined) delete process.env.AUTH_ALLOWED_DOMAINS;
+    else process.env.AUTH_ALLOWED_DOMAINS = originalDomains;
+  });
+
+  it('reads both env vars and normalizes them through parseAllowlist', () => {
+    process.env.AUTH_ALLOWED_EMAILS = ' Foo@Bar.com , baz@qux.com ';
+    process.env.AUTH_ALLOWED_DOMAINS = 'ACME.com';
+    assert.deepEqual(readAllowlistFromEnv(), {
+      emails: ['foo@bar.com', 'baz@qux.com'],
+      domains: ['acme.com'],
+    });
+  });
+
+  it('returns empty lists when neither env var is set (open-mode)', () => {
+    assert.deepEqual(readAllowlistFromEnv(), { emails: [], domains: [] });
+  });
+
+  it('reflects mutations on the next call (no in-process cache)', () => {
+    // The jwt callback re-checks the allowlist on every request to revoke
+    // sessions when an email is removed. That contract requires the read
+    // helper to be uncached.
+    process.env.AUTH_ALLOWED_EMAILS = 'alice@acme.com';
+    assert.deepEqual(readAllowlistFromEnv().emails, ['alice@acme.com']);
+    process.env.AUTH_ALLOWED_EMAILS = '';
+    assert.deepEqual(readAllowlistFromEnv().emails, []);
   });
 });

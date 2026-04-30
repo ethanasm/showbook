@@ -1,6 +1,10 @@
 import type { NextAuthConfig } from 'next-auth';
 import Google from 'next-auth/providers/google';
-import { isEmailAllowed, parseAllowlist } from './lib/auth-allowlist';
+import {
+  isEmailAllowed,
+  readAllowlistFromEnv,
+  shouldAllowSignIn,
+} from './lib/auth-allowlist';
 
 export const authConfig = {
   providers: [
@@ -14,16 +18,28 @@ export const authConfig = {
   },
   session: { strategy: 'jwt' },
   callbacks: {
-    signIn({ user }) {
+    signIn({ user, profile }) {
       // Edge-safe: reads env + pure string ops only. Both lists empty = open mode.
       // Denial surface: NextAuth redirects to /signin?error=AccessDenied.
-      return isEmailAllowed(user.email, {
-        emails: parseAllowlist(process.env.AUTH_ALLOWED_EMAILS),
-        domains: parseAllowlist(process.env.AUTH_ALLOWED_DOMAINS),
+      return shouldAllowSignIn({
+        email: user.email,
+        emailVerified:
+          typeof profile?.email_verified === 'boolean'
+            ? profile.email_verified
+            : undefined,
+        ...readAllowlistFromEnv(),
       });
     },
     jwt({ token, user }) {
       if (user) token.id = user.id;
+      // Re-check the allowlist on every JWT decode. JWT sessions live for
+      // 30 days (NextAuth default), so without this an email removed from
+      // AUTH_ALLOWED_* would keep working until the token expired.
+      // Returning null tells NextAuth to drop the session cookie.
+      const email = typeof token.email === 'string' ? token.email : null;
+      if (!isEmailAllowed(email, readAllowlistFromEnv())) {
+        return null;
+      }
       return token;
     },
     session({ session, token }) {
