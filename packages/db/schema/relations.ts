@@ -9,6 +9,7 @@ import { userRegions } from './regions';
 import { enrichmentQueue } from './enrichment';
 import { userPreferences } from './preferences';
 import { venueScrapeRuns } from './scrape-runs';
+import { mediaAssets, mediaAssetPerformers } from './media';
 
 // ── User relations ──────────────────────────────────────────────────
 export const usersRelations = relations(users, ({ many, one }) => ({
@@ -17,6 +18,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   performerFollows: many(userPerformerFollows),
   regions: many(userRegions),
   preferences: one(userPreferences),
+  mediaAssets: many(mediaAssets),
 }));
 
 // ── Venue relations ─────────────────────────────────────────────────
@@ -41,6 +43,7 @@ export const venueScrapeRunsRelations = relations(
 export const performersRelations = relations(performers, ({ many }) => ({
   showPerformers: many(showPerformers),
   followers: many(userPerformerFollows),
+  mediaAssetPerformers: many(mediaAssetPerformers),
 }));
 
 // ── Show relations ──────────────────────────────────────────────────
@@ -56,7 +59,35 @@ export const showsRelations = relations(shows, ({ one, many }) => ({
   showPerformers: many(showPerformers),
   announcementLinks: many(showAnnouncementLinks),
   enrichmentQueue: many(enrichmentQueue),
+  mediaAssets: many(mediaAssets),
 }));
+
+// ── Media relations ─────────────────────────────────────────────────
+export const mediaAssetsRelations = relations(mediaAssets, ({ one, many }) => ({
+  user: one(users, {
+    fields: [mediaAssets.userId],
+    references: [users.id],
+  }),
+  show: one(shows, {
+    fields: [mediaAssets.showId],
+    references: [shows.id],
+  }),
+  mediaAssetPerformers: many(mediaAssetPerformers),
+}));
+
+export const mediaAssetPerformersRelations = relations(
+  mediaAssetPerformers,
+  ({ one }) => ({
+    asset: one(mediaAssets, {
+      fields: [mediaAssetPerformers.assetId],
+      references: [mediaAssets.id],
+    }),
+    performer: one(performers, {
+      fields: [mediaAssetPerformers.performerId],
+      references: [performers.id],
+    }),
+  }),
+);
 
 // ── ShowPerformer relations ─────────────────────────────────────────
 export const showPerformersRelations = relations(

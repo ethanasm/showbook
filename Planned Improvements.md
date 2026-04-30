@@ -1,9 +1,6 @@
 ## Remaining (not yet addressed)
 
 ### General
-- **Photo and video support.**
-  1. Upload photos for shows; group photos at venue → venue detail, photos at artist → artist detail.
-  2. For longer videos, investigate cheap/free storage (Drive?) and how to play them back inline.
 - **Security audit.**
 - **Critical code smells.** (Run `/ultrareview` to surface specifics.)
 - **Discover - Near You** - Right click on regions on the side bar to unfollow, same as artists and venues on Discover. Add a Add a Region button on the top of the side bar in the same format as venues tab (same google places UX as preferences - same limit on number of regions). On artists tab, move the add artist to follow button to the top of the sidebar like it will be on the other two tabs. 
@@ -22,17 +19,18 @@
 
 ### General Improvements
 1. ~~**Friendlier UX with better imagery and layouts.**~~ *(Done — editorial UX pass across home, shows, venues, artists, discover, map, add, signin and venue/artist detail pages. New shared `design-system` primitives: `HeroCard` (with top-biased headliner crop), `EmptyState`, `PulseLabel`, `StackedCards`, `RemoteImage`. Venue photos: `venues.photo_url` column (`0015_venue_photos.sql`), Google Places-backed `/api/venue-photo/[venueId]` proxy, and `backfill-venue-photos` job. Subsequent fixes in `Fix four UX-pass bugs` and `Venue detail: compress middle third, prioritise user's own history`.)*
-2. ~~Views need to look ok when the screen size is half of full width. Rows should have certain columns omitted at this width to fit properly, stuff should still look clean. Some pages are better than otthers. All should be reviewed but pages that don't look good:~~
+2. ~~**Photo and video support.**~~ *(Done — app-managed Cloudflare R2 media storage with hard app-level quotas below the free tier; `media_assets` + `media_asset_performers` schema (`0016_media_assets.sql`), R2 presigned upload/read helpers, local dev upload mode, and `media` tRPC procedures for quota, upload intent, completion, listing, and delete. Show detail now has polished photo/video upload, quota, gallery, error, and playback states; venue and artist detail pages aggregate media from shows. `.env.example` documents required R2 and media quota variables. Verified by API typecheck/tests, web build, migration, and Playwright screenshot/upload check.)*
+3. ~~Views need to look ok when the screen size is half of full width. Rows should have certain columns omitted at this width to fit properly, stuff should still look clean. Some pages are better than otthers. All should be reviewed but pages that don't look good:~~
 	- ~~Shows list~~
 	- ~~Add a show~~
 	- ~~Discover~~
 	- ~~Map (header)~~
-3. ~~MusicBrainz (high priority) - what are we using these ids for? Where are they stored?~~ *(Cached MusicBrainz IDs on `performers`; populated by TM `externalLinks.musicbrainz` and setlist.fm artist search; used to skip the artist lookup step when fetching setlists. Column renamed `setlistfm_mbid` → `musicbrainz_id` since both sources populate it.)*
-4. ~~Ingestion for regions - limit should be increased from 100 to 1000. Verify that we are properly deduping ticketmaster venue ids and/or google place ids.~~
-5. ~~In compact view, There is a button that directs to /me but that gives 404. It should go to preferences instead. Alos instead of add button in the middle that should open a dropdown to get to the other pages (discvoer, vneues, artists, etc. )~~
-6. ~~A few of these pages take a long time to load. When I click on different pages, it takes a while for anything to respond and it feels like a sluggish UX. Can we go to the page quicker and have a frame that shows while APIs are loading?~~ *(Done — Shows/Venues/Artists/Discover/Preferences now render layout-shaped skeletons and use `staleTime: 60_000` on their primary queries, matching Home + sidebar.)*
-7. ~~Notes support for shows.~~ *(Done — `shows.notes text` column in 0012, accepted by create/update, textarea on Add/Edit, rendered on show detail.)*
-8. ~~Email notifications. What's needed to enable for free, and what should the email content look like (functional + sleek + modern).~~ *(Done — Resend-backed daily digest job (`packages/jobs/src/notifications.ts`) renders a sleek dark editorial email matching the Showbook UI (cream ink on near-black, gold accent, tracked uppercase labels, contextual hero, on-sale chip, CTA). Sender is env-driven via `EMAIL_FROM`; `apps/web/.env.example` documents `RESEND_API_KEY`, `EMAIL_FROM`, `NEXT_PUBLIC_APP_URL`. Free tier of Resend covers typical personal usage. Toggle lives in Preferences.)*
+4. ~~MusicBrainz (high priority) - what are we using these ids for? Where are they stored?~~ *(Cached MusicBrainz IDs on `performers`; populated by TM `externalLinks.musicbrainz` and setlist.fm artist search; used to skip the artist lookup step when fetching setlists. Column renamed `setlistfm_mbid` → `musicbrainz_id` since both sources populate it.)*
+5. ~~Ingestion for regions - limit should be increased from 100 to 1000. Verify that we are properly deduping ticketmaster venue ids and/or google place ids.~~
+6. ~~In compact view, There is a button that directs to /me but that gives 404. It should go to preferences instead. Alos instead of add button in the middle that should open a dropdown to get to the other pages (discvoer, vneues, artists, etc. )~~
+7. ~~A few of these pages take a long time to load. When I click on different pages, it takes a while for anything to respond and it feels like a sluggish UX. Can we go to the page quicker and have a frame that shows while APIs are loading?~~ *(Done — Shows/Venues/Artists/Discover/Preferences now render layout-shaped skeletons and use `staleTime: 60_000` on their primary queries, matching Home + sidebar.)*
+8. ~~Notes support for shows.~~ *(Done — `shows.notes text` column in 0012, accepted by create/update, textarea on Add/Edit, rendered on show detail.)*
+9. ~~Email notifications. What's needed to enable for free, and what should the email content look like (functional + sleek + modern).~~ *(Done — Resend-backed daily digest job (`packages/jobs/src/notifications.ts`) renders a sleek dark editorial email matching the Showbook UI (cream ink on near-black, gold accent, tracked uppercase labels, contextual hero, on-sale chip, CTA). Sender is env-driven via `EMAIL_FROM`; `apps/web/.env.example` documents `RESEND_API_KEY`, `EMAIL_FROM`, `NEXT_PUBLIC_APP_URL`. Free tier of Resend covers typical personal usage. Toggle lives in Preferences.)*
 
 ### Home Page
 1. ~~Remove Godo evening and date from header. Replace with some image or icon that would be appropriate there.~~

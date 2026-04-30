@@ -23,6 +23,7 @@ import {
   type ShowKind,
   type ShowState,
 } from "@/components/design-system";
+import { MediaSection } from "@/components/media";
 
 type Performer = {
   id: string;
@@ -607,6 +608,8 @@ export default function VenueDetailPage() {
             </div>
           )}
         </section>
+
+        <MediaSection scope="venue" venueId={venue.id} />
 
         {/* Upcoming announcements — secondary; render as discovery feed */}
         <section>

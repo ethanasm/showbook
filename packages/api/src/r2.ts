@@ -2,6 +2,8 @@ import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
@@ -68,6 +70,29 @@ export async function deleteFromR2(key: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Read object metadata from R2
+// ---------------------------------------------------------------------------
+
+export async function headFromR2(
+  key: string
+): Promise<{ bytes: number; contentType: string | null }> {
+  const s3 = getR2Client();
+  const bucket = process.env.R2_BUCKET_NAME ?? 'showbook';
+
+  const response = await s3.send(
+    new HeadObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    })
+  );
+
+  return {
+    bytes: response.ContentLength ?? 0,
+    contentType: response.ContentType ?? null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Generate presigned upload URL (for direct client uploads, future use)
 // ---------------------------------------------------------------------------
 
@@ -83,6 +108,25 @@ export async function getPresignedUploadUrl(
     Bucket: bucket,
     Key: key,
     ContentType: contentType,
+  });
+
+  return getSignedUrl(s3, command, { expiresIn });
+}
+
+// ---------------------------------------------------------------------------
+// Generate presigned read URL
+// ---------------------------------------------------------------------------
+
+export async function getPresignedReadUrl(
+  key: string,
+  expiresIn = 3600
+): Promise<string> {
+  const s3 = getR2Client();
+  const bucket = process.env.R2_BUCKET_NAME ?? 'showbook';
+
+  const command = new GetObjectCommand({
+    Bucket: bucket,
+    Key: key,
   });
 
   return getSignedUrl(s3, command, { expiresIn });

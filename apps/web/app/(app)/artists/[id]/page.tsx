@@ -17,6 +17,7 @@ import {
   type ShowState,
 } from "@/components/design-system";
 import { EditableName } from "@/components/EditableName";
+import { MediaSection } from "@/components/media";
 
 type Performer = {
   id: string;
@@ -386,6 +387,8 @@ export default function ArtistDetailPage() {
           gap: 36,
         }}
       >
+        <MediaSection scope="performer" performerId={performer.id} />
+
         <section>
           <SectionHeader
             label={`Your shows · ${userShows.length}`}

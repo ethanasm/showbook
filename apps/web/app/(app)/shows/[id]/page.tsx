@@ -21,6 +21,7 @@ import {
   type ShowKind,
   type ShowState,
 } from "@/components/design-system";
+import { MediaSection } from "@/components/media";
 
 const KIND_ICONS: Record<
   ShowKind,
@@ -169,6 +170,11 @@ export default function ShowDetailPage() {
   const lineup = [...show.showPerformers].sort(
     (a, b) => a.sortOrder - b.sortOrder,
   );
+  const defaultMediaPerformerIds = headlinerSP?.performer.id
+    ? [headlinerSP.performer.id]
+    : lineup[0]?.performer.id
+      ? [lineup[0].performer.id]
+      : [];
 
   async function handleStateTransition() {
     if (!transition) return;
@@ -406,6 +412,12 @@ export default function ShowDetailPage() {
           gap: 36,
         }}
       >
+        <MediaSection
+          scope="show"
+          showId={show.id}
+          defaultPerformerIds={defaultMediaPerformerIds}
+        />
+
         {/* Lineup */}
         {lineup.length > 0 && (
           <section>

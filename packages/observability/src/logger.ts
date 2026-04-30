@@ -1,9 +1,9 @@
 import { PassThrough } from 'node:stream';
-import pino, { type Logger, type LoggerOptions, type StreamEntry } from 'pino';
+import pino, { type Level, type Logger, type LoggerOptions, type StreamEntry } from 'pino';
 import buildAxiomTransport from '@axiomhq/pino';
 import pretty from 'pino-pretty';
 
-const level = process.env.LOG_LEVEL ?? (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
+const level: Level = (process.env.LOG_LEVEL ?? (process.env.NODE_ENV === 'production' ? 'info' : 'debug')) as Level;
 const isProd = process.env.NODE_ENV === 'production';
 
 const baseOptions: LoggerOptions = {

@@ -23,7 +23,7 @@ export default defineConfig({
     { name: 'mobile', use: { viewport: { width: 390, height: 844 } } },
   ],
   webServer: {
-    command: 'pnpm dev:e2e',
+    command: 'MEDIA_STORAGE_MODE=local pnpm dev:e2e',
     port,
     reuseExistingServer: false,
   },

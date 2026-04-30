@@ -7,6 +7,7 @@ export * from './follows';
 export * from './regions';
 export * from './enrichment';
 export * from './preferences';
+export * from './media';
 export * from './relations';
 export * from './auth';
 export * from './scrape-runs';

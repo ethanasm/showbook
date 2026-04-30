@@ -28,3 +28,4 @@ export {
   parseScrapeConfig,
   type ScrapeConfig,
 } from './scrape-config';
+export { storeLocalObject } from './media-storage';
