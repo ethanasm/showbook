@@ -141,6 +141,13 @@
       "when": 1778559600000,
       "tag": "0019_unique_external_ids",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1778646000000,
+      "tag": "0020_auth_user_fks",
+      "breakpoints": true
     }
   ]
 }

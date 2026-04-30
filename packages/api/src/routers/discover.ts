@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { eq, and, inArray, asc, sql, notInArray, or } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc';
 import {
   db,
@@ -181,10 +182,18 @@ export const discoverRouter = router({
 
   /**
    * Feed of upcoming announcements at nearby (but not followed) venues.
-   * Runs one bounding-box query per active region (capped at 250 closest-
-   * upcoming shows each), so regions with sparser data aren't crowded out by
-   * regions with dense data. Each item is tagged with the smallest-radius
-   * matching region. Cursors are returned per region.
+   *
+   * Single OR'd bbox query against announcements ⨝ venues, then per-region
+   * assignment in JS (smallest matching radius wins). Replaces the earlier
+   * one-query-per-region implementation, which could drop announcements at
+   * an overlapping bbox edge: rows fetched by a larger region's 250-row cap
+   * but later reassigned to a smaller region used up the larger region's
+   * window without contributing to it.
+   *
+   * Cursors are still per-region so the client can scroll regions
+   * independently. Each region gets up to perRegionLimit items in this
+   * page; the (perRegionLimit+1)th row that lands in a region becomes its
+   * nextCursor.
    */
   nearbyFeed: protectedProcedure
     .input(
@@ -235,46 +244,43 @@ export const discoverRouter = router({
         };
       });
 
-      // Run one query per region in parallel. Each gets up to perRegionLimit
-      // upcoming announcements ordered by show_date ASC.
-      const perRegionResults = await Promise.all(
-        regionBboxes.map(async ({ region, minLat, maxLat, minLng, maxLng }) => {
-          const conditions = [
+      // OR every region's (bbox AND its own cursor). A row qualifies if it
+      // lies in at least one region whose cursor it is past.
+      const regionClauses: SQL[] = regionBboxes.map(
+        ({ region, minLat, maxLat, minLng, maxLng }) => {
+          const clauses: SQL[] = [
             sql`${venues.latitude} BETWEEN ${minLat} AND ${maxLat}`,
             sql`${venues.longitude} BETWEEN ${minLng} AND ${maxLng}`,
-            sql`${announcements.showDate} >= CURRENT_DATE`,
           ];
-          if (followedVenueIds.length > 0) {
-            conditions.push(notInArray(announcements.venueId, followedVenueIds));
-          }
           const decoded = decodeCursor(cursors[region.id]);
-          if (decoded) {
-            conditions.push(cursorCondition(decoded));
-          }
-
-          const rows = await db
-            .select({ announcement: announcements, venue: venues })
-            .from(announcements)
-            .innerJoin(venues, eq(announcements.venueId, venues.id))
-            .where(and(...conditions))
-            .orderBy(asc(announcements.showDate), asc(announcements.id))
-            .limit(perRegionLimit + 1);
-
-          let nextCursor: string | undefined;
-          if (rows.length > perRegionLimit) {
-            const extra = rows.pop()!;
-            nextCursor = encodeCursor(
-              extra.announcement.showDate,
-              extra.announcement.id,
-            );
-          }
-          return { region, rows, nextCursor };
-        }),
+          if (decoded) clauses.push(cursorCondition(decoded));
+          return and(...clauses)!;
+        },
       );
 
-      // Assign each item to its smallest-radius matching region. Items can
-      // appear in multiple region bboxes when regions overlap; we de-dup by
-      // announcement id, keeping the smallest-radius region's copy.
+      const conditions: SQL[] = [
+        sql`${announcements.showDate} >= CURRENT_DATE`,
+        or(...regionClauses)!,
+      ];
+      if (followedVenueIds.length > 0) {
+        conditions.push(notInArray(announcements.venueId, followedVenueIds));
+      }
+
+      // Generous global cap (regions × perRegionLimit + 1) capped at 1500 so
+      // a dense region can't starve others while still not blowing memory.
+      const globalLimit = Math.min(
+        regions.length * (perRegionLimit + 1),
+        1500,
+      );
+
+      const rows = await db
+        .select({ announcement: announcements, venue: venues })
+        .from(announcements)
+        .innerJoin(venues, eq(announcements.venueId, venues.id))
+        .where(and(...conditions))
+        .orderBy(asc(announcements.showDate), asc(announcements.id))
+        .limit(globalLimit);
+
       function findRegionForVenue(lat: number | null, lng: number | null) {
         if (lat == null || lng == null) return null;
         let best: (typeof regionBboxes)[0] | null = null;
@@ -293,8 +299,11 @@ export const discoverRouter = router({
         return best;
       }
 
+      // Walk rows in (date, id) order, assigning each to its smallest
+      // matching region. The first row past a region's cap becomes that
+      // region's nextCursor; further rows for that region are dropped.
+      const perRegionCounts = new Map<string, number>();
       const nextCursors: Record<string, string> = {};
-      const seenIds = new Set<string>();
       const items: Array<
         (typeof announcements.$inferSelect) & {
           ticketUrl: string | null;
@@ -305,41 +314,33 @@ export const discoverRouter = router({
         }
       > = [];
 
-      for (const { region, rows, nextCursor } of perRegionResults) {
-        if (nextCursor) nextCursors[region.id] = nextCursor;
-        for (const r of rows) {
-          if (seenIds.has(r.announcement.id)) continue;
-          const match = findRegionForVenue(
-            r.venue.latitude,
-            r.venue.longitude,
-          );
-          if (match && match.region.id !== region.id) {
-            // Belongs to a smaller-radius region; skip here, it will be
-            // emitted from that region's batch.
-            continue;
+      for (const r of rows) {
+        const match = findRegionForVenue(r.venue.latitude, r.venue.longitude);
+        if (!match) continue;
+        const count = perRegionCounts.get(match.region.id) ?? 0;
+        if (count >= perRegionLimit) {
+          if (!nextCursors[match.region.id]) {
+            nextCursors[match.region.id] = encodeCursor(
+              r.announcement.showDate,
+              r.announcement.id,
+            );
           }
-          seenIds.add(r.announcement.id);
-          items.push({
-            ...r.announcement,
-            ticketUrl:
-              r.announcement.ticketUrl ||
-              (r.announcement.sourceEventId
-                ? `https://www.ticketmaster.com/event/${r.announcement.sourceEventId}`
-                : null),
-            venue: r.venue,
-            regionId: match?.region.id ?? region.id,
-            regionCityName: match?.region.cityName ?? region.cityName,
-            regionRadiusMiles: match?.region.radiusMiles ?? region.radiusMiles,
-          });
+          continue;
         }
+        perRegionCounts.set(match.region.id, count + 1);
+        items.push({
+          ...r.announcement,
+          ticketUrl:
+            r.announcement.ticketUrl ||
+            (r.announcement.sourceEventId
+              ? `https://www.ticketmaster.com/event/${r.announcement.sourceEventId}`
+              : null),
+          venue: r.venue,
+          regionId: match.region.id,
+          regionCityName: match.region.cityName,
+          regionRadiusMiles: match.region.radiusMiles,
+        });
       }
-
-      // Stable ordering across the whole feed by show_date, id.
-      items.sort((a, b) => {
-        if (a.showDate < b.showDate) return -1;
-        if (a.showDate > b.showDate) return 1;
-        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-      });
 
       return { items, nextCursors, hasRegions: true };
     }),
