@@ -67,7 +67,7 @@ export default function SignInPage() {
             }}>
               <button type="submit" className="gsi-button" aria-label="Sign in with Google">
                 <span className="gsi-button__icon">
-                  <Image src="/google-g.svg" alt="" width={18} height={18} priority />
+                  <Image src="/google-g.svg" alt="" width={16} height={16} priority />
                 </span>
                 Sign in with Google
               </button>
