@@ -23,6 +23,7 @@ playwright-report/
 apps/web/test-results/
 apps/web/playwright-report/
 apps/web/public/media-uploads/
+walkthrough-screenshots/
 
 # Docker
 showbook_pgdata/
