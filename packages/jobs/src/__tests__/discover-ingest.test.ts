@@ -12,7 +12,13 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchAllEvents } from '../discover-ingest';
+import {
+  fetchAllEvents,
+  determineOnSaleStatus,
+  parseOnSaleDate,
+  nowISO,
+  futureISO,
+} from '../discover-ingest';
 import type { TMEvent } from '@showbook/api';
 
 function makeEvent(id: string): TMEvent {
@@ -89,6 +95,130 @@ test('fetchAllEvents: respects maxEvents cap smaller than totalElements', async 
   assert.equal(result.length, 400, 'capped at maxEvents=400');
   // Should stop after 2 pages (400 events)
   assert.ok(calls.length <= 2, `expected ≤2 pages, got ${calls.length}`);
+});
+
+// ---------------------------------------------------------------------------
+// determineOnSaleStatus
+// ---------------------------------------------------------------------------
+
+function eventWithSales(opts: {
+  statusCode?: string;
+  saleStart?: string | null;
+  saleEnd?: string | null;
+}): TMEvent {
+  return {
+    id: 'x',
+    name: 'x',
+    url: null,
+    dates: { start: { localDate: '2026-08-01' }, status: opts.statusCode ? { code: opts.statusCode } : undefined },
+    classifications: [],
+    sales: opts.saleStart || opts.saleEnd
+      ? {
+          public: {
+            startDateTime: opts.saleStart ?? undefined,
+            endDateTime: opts.saleEnd ?? undefined,
+          },
+        }
+      : null,
+    images: [],
+    _embedded: { venues: [], attractions: [] },
+  } as unknown as TMEvent;
+}
+
+test('determineOnSaleStatus: offsale status → sold_out', () => {
+  assert.equal(
+    determineOnSaleStatus(eventWithSales({ statusCode: 'offsale' })),
+    'sold_out',
+  );
+});
+
+test('determineOnSaleStatus: cancelled status → sold_out', () => {
+  assert.equal(
+    determineOnSaleStatus(eventWithSales({ statusCode: 'cancelled' })),
+    'sold_out',
+  );
+});
+
+test('determineOnSaleStatus: future saleStart → announced', () => {
+  const future = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
+  assert.equal(
+    determineOnSaleStatus(eventWithSales({ saleStart: future })),
+    'announced',
+  );
+});
+
+test('determineOnSaleStatus: past saleEnd → sold_out', () => {
+  const past = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString();
+  assert.equal(
+    determineOnSaleStatus(
+      eventWithSales({ saleStart: '2020-01-01T00:00:00Z', saleEnd: past }),
+    ),
+    'sold_out',
+  );
+});
+
+test('determineOnSaleStatus: ongoing window → on_sale', () => {
+  const past = new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString();
+  const future = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
+  assert.equal(
+    determineOnSaleStatus(eventWithSales({ saleStart: past, saleEnd: future })),
+    'on_sale',
+  );
+});
+
+test('determineOnSaleStatus: no sales info defaults to on_sale', () => {
+  assert.equal(determineOnSaleStatus(eventWithSales({})), 'on_sale');
+});
+
+// ---------------------------------------------------------------------------
+// parseOnSaleDate
+// ---------------------------------------------------------------------------
+
+test('parseOnSaleDate: returns null when missing', () => {
+  assert.equal(parseOnSaleDate(eventWithSales({})), null);
+});
+
+test('parseOnSaleDate: returns null for unparseable date', () => {
+  assert.equal(
+    parseOnSaleDate(eventWithSales({ saleStart: 'not-a-date' })),
+    null,
+  );
+});
+
+test('parseOnSaleDate: filters TM 1900 placeholder', () => {
+  assert.equal(
+    parseOnSaleDate(eventWithSales({ saleStart: '1900-01-01T00:00:00Z' })),
+    null,
+  );
+});
+
+test('parseOnSaleDate: returns parsed Date for real date', () => {
+  const d = parseOnSaleDate(eventWithSales({ saleStart: '2026-08-15T10:00:00Z' }));
+  assert.ok(d instanceof Date);
+  assert.equal(d?.getUTCFullYear(), 2026);
+  assert.equal(d?.getUTCMonth(), 7); // August
+});
+
+// ---------------------------------------------------------------------------
+// nowISO / futureISO
+// ---------------------------------------------------------------------------
+
+test('nowISO: returns ISO string without milliseconds', () => {
+  const s = nowISO();
+  assert.match(s, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+});
+
+test('futureISO: returns a date `months` in the future', () => {
+  const now = new Date();
+  const future = new Date(futureISO(6));
+  // 6 months ahead, allow ±1 day for time-of-call drift.
+  const diffMs = future.getTime() - now.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  assert.ok(diffDays > 170 && diffDays < 200, `expected ~180 days, got ${diffDays}`);
+});
+
+test('futureISO: format matches nowISO', () => {
+  assert.match(futureISO(1), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
 });
 
 test('fetchAllEvents: stops early when a page returns 0 events', async () => {
