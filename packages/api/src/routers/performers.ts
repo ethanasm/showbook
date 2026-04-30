@@ -7,6 +7,7 @@ import { enqueueIngestPerformer } from '../job-queue';
 import { computePerformerAnnouncementsToDelete } from './preferences';
 import { searchAttractions, selectBestImage } from '../ticketmaster';
 import { matchOrCreatePerformer } from '../performer-matcher';
+import { enforceRateLimit } from '../rate-limit';
 import { child } from '@showbook/observability';
 
 const log = child({ component: 'api.performers' });
@@ -46,8 +47,12 @@ export const performersRouter = router({
   }),
 
   search: protectedProcedure
-    .input(z.object({ query: z.string().min(1) }))
+    .input(z.object({ query: z.string().min(1).max(200) }))
     .query(async ({ ctx, input }) => {
+      enforceRateLimit(`performers.search:${ctx.session.user.id}`, {
+        max: 60,
+        windowMs: 60_000,
+      });
       return ctx.db
         .select()
         .from(performers)
@@ -62,8 +67,12 @@ export const performersRouter = router({
    * actual match-or-create + follow.
    */
   searchExternal: protectedProcedure
-    .input(z.object({ query: z.string().min(1) }))
-    .query(async ({ input }) => {
+    .input(z.object({ query: z.string().min(1).max(200) }))
+    .query(async ({ ctx, input }) => {
+      enforceRateLimit(`performers.searchExternal:${ctx.session.user.id}`, {
+        max: 30,
+        windowMs: 60_000,
+      });
       try {
         const attractions = await searchAttractions(input.query);
         return attractions.slice(0, 10).map((a) => ({
@@ -280,6 +289,37 @@ export const performersRouter = router({
   rename: protectedProcedure
     .input(z.object({ performerId: z.string().uuid(), name: z.string().min(1).max(300) }))
     .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      // Authorize: user must follow this performer OR have a show featuring them.
+      const [follow] = await ctx.db
+        .select({ performerId: userPerformerFollows.performerId })
+        .from(userPerformerFollows)
+        .where(
+          and(
+            eq(userPerformerFollows.userId, userId),
+            eq(userPerformerFollows.performerId, input.performerId),
+          ),
+        )
+        .limit(1);
+
+      if (!follow) {
+        const [show] = await ctx.db
+          .select({ id: shows.id })
+          .from(showPerformers)
+          .innerJoin(shows, eq(showPerformers.showId, shows.id))
+          .where(
+            and(
+              eq(shows.userId, userId),
+              eq(showPerformers.performerId, input.performerId),
+            ),
+          )
+          .limit(1);
+        if (!show) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Not authorized to rename this performer' });
+        }
+      }
+
       const [updated] = await ctx.db
         .update(performers)
         .set({ name: input.name.trim() })

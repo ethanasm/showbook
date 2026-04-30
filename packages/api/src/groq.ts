@@ -1,5 +1,46 @@
 import Groq from 'groq-sdk';
+import { z } from 'zod';
 import { traceLLM, groqUsage } from '@showbook/observability';
+
+// ---------------------------------------------------------------------------
+// Runtime-validation schemas for LLM JSON output. We never trust Groq output
+// shape blindly — a jailbroken or model-changed response could deliver
+// unexpected fields that would otherwise flow into the DB.
+// ---------------------------------------------------------------------------
+
+const kindHintSchema = z
+  .enum(['concert', 'theatre', 'comedy', 'festival'])
+  .nullable();
+
+const parsedShowInputSchema = z.object({
+  headliner: z.string(),
+  venue_hint: z.string().nullable(),
+  date_hint: z.string().nullable(),
+  seat_hint: z.string().nullable(),
+  kind_hint: kindHintSchema,
+});
+
+const extractedTicketInfoSchema = z.object({
+  headliner: z.string(),
+  production_name: z.string().nullable(),
+  venue_name: z.string().nullable(),
+  venue_city: z.string().nullable(),
+  venue_state: z.string().nullable(),
+  date: z.string().nullable(),
+  seat: z.string().nullable(),
+  price: z.string().nullable(),
+  ticket_count: z.number().nullable(),
+  kind_hint: kindHintSchema,
+  confidence: z.enum(['high', 'medium', 'low']),
+});
+
+const castMemberSchema = z.object({
+  actor: z.string().min(1).max(200),
+  role: z.string().min(1).max(200),
+});
+const castResponseSchema = z.object({
+  cast: z.array(castMemberSchema).default([]),
+});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -89,13 +130,21 @@ export async function parseShowInput(
     throw new Error('No response from Groq');
   }
 
+  let raw: unknown;
   try {
-    return JSON.parse(content) as ParsedShowInput;
+    raw = JSON.parse(content);
   } catch {
     throw new Error(
       `Failed to parse Groq response as JSON: ${content.slice(0, 200)}`,
     );
   }
+  const parsed = parsedShowInputSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Error(
+      `Groq response failed schema validation: ${parsed.error.message}`,
+    );
+  }
+  return parsed.data;
 }
 
 // ---------------------------------------------------------------------------
@@ -180,13 +229,16 @@ export async function extractShowFromEmail(
   const content = result ? pickContent(result) : null;
   if (!content) return null;
 
+  let raw: unknown;
   try {
-    const parsed = JSON.parse(content) as ExtractedTicketInfo;
-    if (!parsed.headliner || parsed.confidence === 'low') return null;
-    return parsed;
+    raw = JSON.parse(content);
   } catch {
     return null;
   }
+  const parsed = extractedTicketInfoSchema.safeParse(raw);
+  if (!parsed.success) return null;
+  if (!parsed.data.headliner || parsed.data.confidence === 'low') return null;
+  return parsed.data;
 }
 
 // ---------------------------------------------------------------------------
@@ -288,11 +340,19 @@ export async function extractShowFromPdfText(
   const raw = pickContent(result);
   if (!raw) throw new Error('No response from Groq');
 
+  let parsedJson: unknown;
   try {
-    return JSON.parse(raw) as ExtractedTicketInfo;
+    parsedJson = JSON.parse(raw);
   } catch {
     throw new Error(`Failed to parse Groq response: ${raw.slice(0, 200)}`);
   }
+  const parsed = extractedTicketInfoSchema.safeParse(parsedJson);
+  if (!parsed.success) {
+    throw new Error(
+      `Groq response failed schema validation: ${parsed.error.message}`,
+    );
+  }
+  return parsed.data;
 }
 
 function detectImageMime(b64: string): string {
@@ -363,12 +423,17 @@ export async function extractCast(
     throw new Error('No response from Groq');
   }
 
+  let raw: unknown;
   try {
-    const parsed = JSON.parse(content);
-    return (parsed.cast || []) as CastMember[];
+    raw = JSON.parse(content);
   } catch {
     throw new Error(
       `Failed to parse Groq response as JSON: ${content.slice(0, 200)}`,
     );
   }
+  const parsed = castResponseSchema.safeParse(raw);
+  if (!parsed.success) {
+    return [];
+  }
+  return parsed.data.cast;
 }

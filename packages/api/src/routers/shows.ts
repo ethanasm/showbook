@@ -176,7 +176,7 @@ export const showsRouter = router({
         ticketCount: z.number().int().min(1).default(1),
         tourName: z.string().optional(),
         productionName: z.string().optional(),
-        notes: z.string().optional(),
+        notes: z.string().max(5000).optional(),
         performers: z.array(performerInputSchema).optional(),
         sourceRefs: z.any().optional(),
       })
@@ -390,7 +390,7 @@ export const showsRouter = router({
       const [updated] = await ctx.db
         .update(shows)
         .set(updates)
-        .where(eq(shows.id, input.showId))
+        .where(and(eq(shows.id, input.showId), eq(shows.userId, userId)))
         .returning();
 
       return updated;
@@ -416,7 +416,7 @@ export const showsRouter = router({
         ticketCount: z.number().int().min(1).default(1),
         tourName: z.string().optional(),
         productionName: z.string().optional(),
-        notes: z.string().nullable().optional(),
+        notes: z.string().max(5000).nullable().optional(),
         performers: z.array(performerInputSchema).optional(),
         sourceRefs: z.any().optional(),
       })
@@ -523,7 +523,7 @@ export const showsRouter = router({
           sourceRefs: input.sourceRefs ?? null,
           updatedAt: new Date(),
         })
-        .where(eq(shows.id, input.showId));
+        .where(and(eq(shows.id, input.showId), eq(shows.userId, userId)));
 
       return ctx.db.query.shows.findFirst({
         where: eq(shows.id, input.showId),
@@ -552,7 +552,9 @@ export const showsRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
       }
 
-      await ctx.db.delete(shows).where(eq(shows.id, input.showId));
+      await ctx.db
+        .delete(shows)
+        .where(and(eq(shows.id, input.showId), eq(shows.userId, userId)));
 
       return { success: true };
     }),

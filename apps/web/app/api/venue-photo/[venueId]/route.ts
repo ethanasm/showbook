@@ -51,11 +51,18 @@ export async function GET(
     });
   }
 
-  const contentType = upstream.headers.get('content-type') ?? 'image/jpeg';
+  const upstreamContentType = upstream.headers.get('content-type') ?? '';
+  if (!upstreamContentType.toLowerCase().startsWith('image/')) {
+    return new NextResponse('Upstream error', {
+      status: 502,
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  }
   return new NextResponse(upstream.body, {
     status: 200,
     headers: {
-      'Content-Type': contentType,
+      'Content-Type': upstreamContentType,
+      'X-Content-Type-Options': 'nosniff',
       'Cache-Control': 'public, max-age=86400, s-maxage=86400',
     },
   });
