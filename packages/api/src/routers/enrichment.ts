@@ -247,7 +247,7 @@ export const enrichmentRouter = router({
       withTrace(
         'trpc.enrichment.extractFromPdf',
         async () => {
-          const pdfParse = (await import('pdf-parse')).default;
+          const pdfParse = (await import('pdf-parse/lib/pdf-parse.js')).default;
           const buffer = Buffer.from(input.fileBase64, 'base64');
           const result = await pdfParse(buffer);
           if (!result.text.trim()) {
