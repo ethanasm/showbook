@@ -7,8 +7,14 @@ name: showbook-prod
 # from the dev compose (project `showbook`), so they have independent
 # postgres data, networks, and containers.
 #
-# Both composes bind to host port 3001 (postgres on 5433), so stop one
-# before starting the other:
+# Prod postgres binds to host port 5434 (vs dev's 5433) and uses a
+# distinct database name and role (`showbook_prod`) so that workspace
+# scripts hardcoded to `localhost:5433/showbook` cannot accidentally
+# touch prod data. The `scripts/guard-not-prod-db.mjs` check is the
+# CLI-side counterpart to apps/web/app/api/test/_guard.ts.
+#
+# Both composes still bind host port 3001 for the web app, so stop dev
+# before starting prod:
 #   docker compose down                              # stop dev
 #   docker compose -f docker-compose.prod.yml up -d  # start prod
 #
@@ -16,7 +22,7 @@ name: showbook-prod
 #   docker compose -f docker-compose.prod.yml up -d --build
 #
 # Required env (in .env.prod):
-#   POSTGRES_PASSWORD       Strong unique password for the postgres role.
+#   POSTGRES_PASSWORD       Strong unique password for the showbook_prod role.
 #   AUTH_SECRET             `openssl rand -base64 48`
 #   NEXTAUTH_URL            https://<your-tunnel-hostname>
 #   AUTH_ALLOWED_EMAILS     and/or AUTH_ALLOWED_DOMAINS — leaving both unset
@@ -30,15 +36,15 @@ services:
     container_name: showbook-prod-db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: showbook
-      POSTGRES_USER: showbook
+      POSTGRES_DB: showbook_prod
+      POSTGRES_USER: showbook_prod
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.prod}
     ports:
-      - "127.0.0.1:5433:5432"
+      - "127.0.0.1:5434:5432"
     volumes:
       - showbook_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U showbook"]
+      test: ["CMD-SHELL", "pg_isready -U showbook_prod -d showbook_prod"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -55,7 +61,7 @@ services:
         required: true
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://showbook:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.prod}@postgres:5432/showbook
+      DATABASE_URL: postgresql://showbook_prod:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.prod}@postgres:5432/showbook_prod
       PORT: "3001"
       NODE_OPTIONS: "--max-old-space-size=4096"
     ports:

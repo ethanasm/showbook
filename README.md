@@ -45,7 +45,12 @@ The prod path uses a separate compose that builds a sealed image (no source
 bind-mounts), runs Next.js with `NODE_ENV=production`, and binds web +
 Postgres to `127.0.0.1` so only loopback (e.g. cloudflared) can reach
 them. Project name `showbook-prod` namespaces volumes/containers so
-prod data doesn't share storage with dev.
+prod data doesn't share storage with dev. Prod postgres also runs on
+a different host port (`5434` vs dev's `5433`) and uses a distinct
+database name and role (`showbook_prod`) so dev/test workspace
+scripts cannot reach it — `scripts/guard-not-prod-db.mjs` refuses any
+`db:*` / `test:integration*` command whose DATABASE_URL points at
+`showbook_prod`.
 
 ```bash
 cp apps/web/.env.example .env.prod
@@ -65,8 +70,10 @@ pnpm prod:logs      # tail web logs
 pnpm prod:down      # stop
 ```
 
-Both composes bind host port 3001, so stop one before starting the other:
-`pnpm dev:down` before `pnpm prod:up` (and vice versa).
+Both composes bind host port 3001 for the web app, so stop one before
+starting the other: `pnpm dev:down` before `pnpm prod:up` (and vice
+versa). Postgres is on different host ports (dev `5433`, prod `5434`)
+so the `localhost:<port>/<db>` pair is unambiguous.
 
 ## Environment Variables
 
@@ -191,12 +198,13 @@ runs on the same host and reaches the web service via loopback.
 
 | Service | Container | Host port |
 |---------|-----------|-----------|
-| PostgreSQL 16 | showbook-prod-db | 127.0.0.1:5433 |
+| PostgreSQL 16 | showbook-prod-db | 127.0.0.1:5434 |
 | Next.js (prod build, NODE_ENV=production) | showbook-prod-web | 127.0.0.1:3001 |
 
-The two projects' postgres volumes are namespaced separately
-(`showbook_pgdata` vs `showbook-prod_pgdata`), so dev and prod databases
-do not share data.
+Prod uses database `showbook_prod` and role `showbook_prod` (vs dev's
+`showbook`/`showbook`), and the postgres volumes are namespaced
+separately (`showbook_pgdata` vs `showbook-prod_pgdata`), so dev and
+prod databases do not share data, credentials, or a host port.
 
 Named volumes:
 

@@ -86,15 +86,21 @@ falsify the behaviour.
 Two compose files, two env files. Both bind to `127.0.0.1` only — the
 Cloudflare Tunnel reaches web via loopback.
 - **Dev** — `docker-compose.yml` (project `showbook`), reads `.env.dev`,
-  source bind-mounted, Next.js in dev mode. Start with `pnpm dev:up`.
+  source bind-mounted, Next.js in dev mode. Postgres on host port `5433`,
+  db `showbook`, role `showbook`. Start with `pnpm dev:up`.
   `apps/web/.env.local` is for `pnpm dev` outside Docker.
 - **Prod** — `docker-compose.prod.yml` (project `showbook-prod`), reads
   `.env.prod`, sealed image with `next build` baked in,
-  `NODE_ENV=production`. Start with `pnpm prod:up`, then `pnpm prod:migrate`
+  `NODE_ENV=production`. Postgres on host port `5434`, db `showbook_prod`,
+  role `showbook_prod`. Start with `pnpm prod:up`, then `pnpm prod:migrate`
   once after first up. `.env.prod` must set `POSTGRES_PASSWORD` — the
   compose builds `DATABASE_URL` from it (don't set both).
-- Both composes bind host port 3001, so stop one before starting the
-  other. See README.md "Production deployment" for the env checklist.
+- Both composes bind host port 3001 for the web app, so stop one before
+  starting the other. Postgres ports differ (5433 vs 5434), and
+  `scripts/guard-not-prod-db.mjs` refuses any dev/test workspace
+  command whose `DATABASE_URL` points at a `showbook_prod*` database —
+  prod migrations must go through `pnpm prod:migrate`. See README.md
+  "Production deployment" for the env checklist.
 
 ## Observability and logging
 
