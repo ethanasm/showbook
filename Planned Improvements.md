@@ -1,7 +1,6 @@
 ## Remaining (not yet addressed)
 
 ### General
-- **Security audit.**
 - **Critical code smells.** (Run `/ultrareview` to surface specifics.)
 
 ### Mobile App
@@ -11,6 +10,9 @@
 ---
 
 ## Completed (kept for reference)
+
+### Security
+1. ~~**Security audit.**~~ *(Done — full audit of code + dependencies on `claude/security-audit-ADdpW`. Critical IDORs fixed: `venues.rename` and `performers.rename` now require the user to follow the entity or have a show featuring it; `/api/gmail/scan` now gates on `auth()` and is per-user rate-limited. Defense-in-depth: `shows.update`/`updateState`/`delete` carry `userId` in their WHERE clauses. Announcement ICAL requires the user to follow the venue or headlining performer. Inputs hardened: 5000-char cap on `notes`, 200-char cap on search; new shared in-memory rate limiter (`packages/api/src/rate-limit.ts`) on search + Ticketmaster + Gmail scan; all Groq LLM JSON outputs zod-validated. R2 read URL TTL 3600 → 600s. Venue-photo proxy rejects non-`image/*` upstream and sets `X-Content-Type-Options: nosniff`. Dependencies: `drizzle-orm` ^0.45.2 (SQLi advisory), `drizzle-kit` ^0.31.10, plus pnpm overrides for `fast-xml-parser`, `postcss`, `svix`, `nx>minimatch`, and `@esbuild-kit/core-utils>esbuild`. `pnpm audit` is now clean (0 vulnerabilities).)*
 
 ### Observability
 1. ~~**Langfuse integration for observability.**~~ *(Done — every Groq call is wrapped via `traceLLM` in `@showbook/observability`; LLM-invoking tRPC procedures and pg-boss handlers wrap their entry points with `withTrace` so generations nest under user/job traces. No-op when `LANGFUSE_*` env unset.)*

@@ -6,6 +6,7 @@ import { trpc } from "@/lib/trpc";
 import { type ShowKind } from "@/components/design-system";
 import {
   AddShowMediaStaging,
+  StagedMediaPreview,
   type StagedMediaItem,
   uploadPhotoForShow,
   uploadVideoForShow,
@@ -793,25 +794,30 @@ export default function AddPage() {
         performers: performersWithSetlists.length > 0 ? performersWithSetlists : undefined,
       };
 
+      let targetShowId: string;
+      let targetShowPerformers: Array<{ performer?: { id?: string; name?: string } | null } | null | undefined>;
       if (isEditMode && editId) {
-        await updateShow.mutateAsync({ showId: editId, ...payload });
-        return;
-      }
-
-      const created = await createShow.mutateAsync(payload);
-      if (!created) {
-        router.push("/shows");
-        return;
+        const updated = await updateShow.mutateAsync({ showId: editId, ...payload });
+        targetShowId = editId;
+        targetShowPerformers = updated?.showPerformers ?? editQuery.data?.showPerformers ?? [];
+      } else {
+        const created = await createShow.mutateAsync(payload);
+        if (!created) {
+          router.push("/shows");
+          return;
+        }
+        targetShowId = created.id;
+        targetShowPerformers = created.showPerformers ?? [];
       }
 
       if (stagedMedia.length === 0) {
-        router.push(`/shows/${created.id}`);
+        router.push(`/shows/${targetShowId}`);
         return;
       }
 
-      // Map performer names (used in staging) → newly-created performer ids.
+      // Map performer names (used in staging) → performer ids.
       const nameToPerformerId = new Map<string, string>();
-      for (const sp of created.showPerformers ?? []) {
+      for (const sp of targetShowPerformers) {
         if (sp?.performer?.name && sp.performer.id) {
           nameToPerformerId.set(sp.performer.name, sp.performer.id);
         }
@@ -826,7 +832,7 @@ export default function AddPage() {
           .filter((id): id is string => Boolean(id));
         try {
           const opts = {
-            showId: created.id,
+            showId: targetShowId,
             file: item.file,
             performerIds: performerIds.length > 0 ? performerIds : undefined,
             createIntent: (input: Parameters<typeof createUploadIntent.mutateAsync>[0]) =>
@@ -847,10 +853,10 @@ export default function AddPage() {
       setMediaUploadStatus(null);
       if (errors.length > 0) {
         setMediaUploadErrors(errors);
-        // Show is created; let user see the partial-failure summary before navigating.
+        // Show is saved; let user see the partial-failure summary before navigating.
         return;
       }
-      router.push(`/shows/${created.id}`);
+      router.push(`/shows/${targetShowId}`);
     } catch {
       // Error is surfaced via mutation isError in the UI
       setMediaUploadStatus(null);
@@ -874,6 +880,7 @@ export default function AddPage() {
     updateShow,
     isEditMode,
     editId,
+    editQuery.data,
     utils,
     stagedMedia,
     createUploadIntent,
@@ -1791,7 +1798,7 @@ export default function AddPage() {
       </div>
 
       {/* Photos & videos (staged for upload after save) */}
-      {!isEditMode && (
+      {(
         <div style={{ marginBottom: 26 }}>
           <FieldLabel optional>Photos & videos</FieldLabel>
           <AddShowMediaStaging
@@ -2537,22 +2544,28 @@ export default function AddPage() {
             </div>
           )}
 
-          {/* Photo strip placeholder */}
-          <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
-            {[1, 2, 3].map((i) => (
-              <div key={i} style={{
-                aspectRatio: "4/3",
-                background: `repeating-linear-gradient(135deg, var(--surface2) 0 6px, var(--bg) 6px 12px)`,
-                border: `1px solid var(--rule)`,
-                display: "flex",
-                alignItems: "flex-end",
-                padding: 5,
-              }}>
-                <div style={{ fontFamily: mono, fontSize: 9, color: "var(--faint)", letterSpacing: ".06em" }}>
-                  IMG_{String(i).padStart(2, "0")}
-                </div>
+          {/* Photo strip — staged thumbs if any, else placeholders */}
+          <div style={{ marginTop: 16 }}>
+            {stagedMedia.length > 0 ? (
+              <StagedMediaPreview staged={stagedMedia} />
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+                {[1, 2, 3].map((i) => (
+                  <div key={i} style={{
+                    aspectRatio: "4/3",
+                    background: `repeating-linear-gradient(135deg, var(--surface2) 0 6px, var(--bg) 6px 12px)`,
+                    border: `1px solid var(--rule)`,
+                    display: "flex",
+                    alignItems: "flex-end",
+                    padding: 5,
+                  }}>
+                    <div style={{ fontFamily: mono, fontSize: 9, color: "var(--faint)", letterSpacing: ".06em" }}>
+                      IMG_{String(i).padStart(2, "0")}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         </div>
 

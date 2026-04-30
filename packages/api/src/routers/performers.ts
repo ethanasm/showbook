@@ -7,6 +7,7 @@ import { enqueueIngestPerformer } from '../job-queue';
 import { computePerformerAnnouncementsToDelete } from './preferences';
 import { searchAttractions, selectBestImage } from '../ticketmaster';
 import { matchOrCreatePerformer } from '../performer-matcher';
+import { enforceRateLimit } from '../rate-limit';
 import { child } from '@showbook/observability';
 
 const log = child({ component: 'api.performers' });
@@ -63,8 +64,12 @@ export const performersRouter = router({
   }),
 
   search: protectedProcedure
-    .input(z.object({ query: z.string().min(1) }))
+    .input(z.object({ query: z.string().min(1).max(200) }))
     .query(async ({ ctx, input }) => {
+      enforceRateLimit(`performers.search:${ctx.session.user.id}`, {
+        max: 60,
+        windowMs: 60_000,
+      });
       return ctx.db
         .select()
         .from(performers)
@@ -79,8 +84,12 @@ export const performersRouter = router({
    * actual match-or-create + follow.
    */
   searchExternal: protectedProcedure
-    .input(z.object({ query: z.string().min(1) }))
-    .query(async ({ input }) => {
+    .input(z.object({ query: z.string().min(1).max(200) }))
+    .query(async ({ ctx, input }) => {
+      enforceRateLimit(`performers.searchExternal:${ctx.session.user.id}`, {
+        max: 30,
+        windowMs: 60_000,
+      });
       try {
         const attractions = await searchAttractions(input.query);
         return attractions.slice(0, 10).map((a) => ({
@@ -297,41 +306,37 @@ export const performersRouter = router({
   rename: protectedProcedure
     .input(z.object({ performerId: z.string().uuid(), name: z.string().min(1).max(300) }))
     .mutation(async ({ ctx, input }) => {
-      // Performers are a shared global record — anyone can resolve the same
-      // artist. Require the caller to actually have a stake (an attended/
-      // ticketed show featuring this performer, or a follow) before letting
-      // them mutate the canonical name. Otherwise a user could rename any
-      // artist for everyone else.
       const userId = ctx.session.user.id;
 
-      const [stake] = await ctx.db
-        .select({ id: shows.id })
-        .from(shows)
-        .innerJoin(showPerformers, eq(showPerformers.showId, shows.id))
+      // Performers are a shared global record. Require the caller to have a
+      // stake (a follow OR a show featuring them) before mutating the
+      // canonical name. Otherwise any user could rename any artist for
+      // everyone else.
+      const [follow] = await ctx.db
+        .select({ performerId: userPerformerFollows.performerId })
+        .from(userPerformerFollows)
         .where(
           and(
-            eq(shows.userId, userId),
-            eq(showPerformers.performerId, input.performerId),
+            eq(userPerformerFollows.userId, userId),
+            eq(userPerformerFollows.performerId, input.performerId),
           ),
         )
         .limit(1);
 
-      if (!stake) {
-        const [follow] = await ctx.db
-          .select({ performerId: userPerformerFollows.performerId })
-          .from(userPerformerFollows)
+      if (!follow) {
+        const [show] = await ctx.db
+          .select({ id: shows.id })
+          .from(showPerformers)
+          .innerJoin(shows, eq(showPerformers.showId, shows.id))
           .where(
             and(
-              eq(userPerformerFollows.userId, userId),
-              eq(userPerformerFollows.performerId, input.performerId),
+              eq(shows.userId, userId),
+              eq(showPerformers.performerId, input.performerId),
             ),
           )
           .limit(1);
-        if (!follow) {
-          throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: 'You can only rename performers you have shows or follows for',
-          });
+        if (!show) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Not authorized to rename this performer' });
         }
       }
 

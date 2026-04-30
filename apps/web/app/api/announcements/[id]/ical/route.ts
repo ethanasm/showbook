@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { db, announcements, eq } from '@showbook/db';
+import {
+  db,
+  announcements,
+  userVenueFollows,
+  userPerformerFollows,
+  eq,
+  and,
+} from '@showbook/db';
 import {
   buildIcs,
   defaultShowTime,
@@ -16,6 +23,7 @@ export async function GET(
   if (!session?.user?.id) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
+  const userId = session.user.id;
   const { id } = await params;
 
   const announcement = await db.query.announcements.findFirst({
@@ -24,6 +32,35 @@ export async function GET(
   });
 
   if (!announcement) return new NextResponse('Not Found', { status: 404 });
+
+  // Authorize: user must follow the venue or the headlining performer.
+  const [venueFollow] = await db
+    .select({ venueId: userVenueFollows.venueId })
+    .from(userVenueFollows)
+    .where(
+      and(
+        eq(userVenueFollows.userId, userId),
+        eq(userVenueFollows.venueId, announcement.venueId),
+      ),
+    )
+    .limit(1);
+
+  let allowed = Boolean(venueFollow);
+  if (!allowed && announcement.headlinerPerformerId) {
+    const [performerFollow] = await db
+      .select({ performerId: userPerformerFollows.performerId })
+      .from(userPerformerFollows)
+      .where(
+        and(
+          eq(userPerformerFollows.userId, userId),
+          eq(userPerformerFollows.performerId, announcement.headlinerPerformerId),
+        ),
+      )
+      .limit(1);
+    allowed = Boolean(performerFollow);
+  }
+
+  if (!allowed) return new NextResponse('Not Found', { status: 404 });
 
   const venueLine = [
     announcement.venue.name,

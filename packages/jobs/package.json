@@ -16,7 +16,7 @@
     "@showbook/emails": "workspace:*",
     "@showbook/observability": "workspace:*",
     "@showbook/scrapers": "workspace:*",
-    "drizzle-orm": "^0.39.0",
+    "drizzle-orm": "^0.45.2",
     "pg-boss": "^10.1.0",
     "resend": "^6.12.2"
   },

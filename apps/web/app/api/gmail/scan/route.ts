@@ -1,10 +1,11 @@
+import { auth } from '@/auth';
 import {
   searchMessages,
   getMessageBody,
   buildBulkScanQueries,
   extractShowFromEmail,
+  isRateLimited,
 } from '@showbook/api';
-import { auth } from '@/auth';
 import { child } from '@showbook/observability';
 
 const log = child({ component: 'web.gmail.scan' });
@@ -100,6 +101,15 @@ export async function POST(request: Request) {
   const userId = session?.user?.id;
   if (!userId) {
     return new Response('Unauthorized', { status: 401 });
+  }
+
+  if (
+    isRateLimited(`gmail.scan:${userId}`, {
+      max: 5,
+      windowMs: 60 * 60 * 1000,
+    })
+  ) {
+    return new Response('Too Many Requests', { status: 429 });
   }
 
   const { accessToken } = await request.json();
