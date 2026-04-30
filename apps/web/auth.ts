@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import NextAuth from 'next-auth';
 import { DrizzleAdapter } from '@auth/drizzle-adapter';
 import { db, users, accounts, sessions, verificationTokens } from '@showbook/db';
@@ -6,7 +7,7 @@ import { authConfig } from './auth.config';
 
 const log = child({ component: 'web.auth' });
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export const { handlers, signIn, signOut, auth: authUncached } = NextAuth({
   ...authConfig,
   adapter: DrizzleAdapter(db, {
     usersTable: users,
@@ -27,3 +28,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
   },
 });
+
+// Per-request memoized session lookup. Multiple `auth()` calls within a single
+// server request (layout + page + tRPC route) reuse the same result instead
+// of re-decoding the JWT and re-touching the session table on every nav.
+export const auth = cache(authUncached);
