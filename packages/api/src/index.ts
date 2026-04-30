@@ -29,4 +29,5 @@ export {
   type ScrapeConfig,
 } from './scrape-config';
 export { storeLocalObject } from './media-storage';
+export { getMediaConfig } from './media-config';
 export { enforceRateLimit, isRateLimited } from './rate-limit';

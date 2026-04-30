@@ -2,6 +2,8 @@ FROM node:20-alpine AS base
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 WORKDIR /app
 
+# ---------- deps: install pnpm workspace deps once, reused by dev + prod ----------
+FROM base AS deps
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
 COPY apps/web/package.json apps/web/
 COPY apps/mobile/package.json apps/mobile/
@@ -14,7 +16,16 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/observability/package.json packages/observability/
 RUN pnpm install --frozen-lockfile
 
+# ---------- dev: source bind-mounted at runtime; server.mjs runs `next dev` ----------
+FROM deps AS dev
 COPY . .
+EXPOSE 3001
+CMD ["node", "apps/web/server.mjs"]
 
+# ---------- prod: source baked in, `next build` artifacts included ----------
+FROM deps AS prod
+COPY . .
+RUN pnpm --filter web build
+ENV NODE_ENV=production
 EXPOSE 3001
 CMD ["node", "apps/web/server.mjs"]

@@ -14,6 +14,8 @@ dist/
 # Environment
 .env.local
 .env*.local
+.env.dev
+.env.prod
 
 # Testing
 test-results/

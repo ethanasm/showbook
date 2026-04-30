@@ -1,0 +1,68 @@
+name: showbook-prod
+
+# Production compose: built image, no source mounts, NODE_ENV=production,
+# loopback-only port bindings (Cloudflare Tunnel reaches web via 127.0.0.1).
+#
+# Project name `showbook-prod` namespaces volumes and containers separately
+# from the dev compose (project `showbook`), so they have independent
+# postgres data, networks, and containers.
+#
+# Both composes bind to host port 3001 (postgres on 5433), so stop one
+# before starting the other:
+#   docker compose down                              # stop dev
+#   docker compose -f docker-compose.prod.yml up -d  # start prod
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Required env (in .env.prod):
+#   POSTGRES_PASSWORD       Strong unique password for the postgres role.
+#   AUTH_SECRET             `openssl rand -base64 48`
+#   NEXTAUTH_URL            https://<your-tunnel-hostname>
+#   AUTH_ALLOWED_EMAILS     and/or AUTH_ALLOWED_DOMAINS — leaving both unset
+#                           opens sign-up to anyone with a Google account.
+#   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+#   plus any data-source / R2 / observability keys actually used.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: showbook-prod-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: showbook
+      POSTGRES_USER: showbook
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.prod}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - showbook_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U showbook"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: prod
+    container_name: showbook-prod-web
+    restart: unless-stopped
+    env_file:
+      - path: .env.prod
+        required: true
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://showbook:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.prod}@postgres:5432/showbook
+      PORT: "3001"
+      NODE_OPTIONS: "--max-old-space-size=4096"
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  showbook_pgdata:

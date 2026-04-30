@@ -1,5 +1,8 @@
 name: showbook
 
+# Dev compose: source bind-mounted, Next.js in dev mode.
+# For production deployments use `docker-compose.prod.yml`.
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -10,7 +13,7 @@ services:
       POSTGRES_USER: showbook
       POSTGRES_PASSWORD: showbook_dev
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - showbook_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -23,17 +26,18 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      target: dev
     container_name: showbook-web
     restart: unless-stopped
     env_file:
-      - path: .env.local
+      - path: .env.dev
         required: false
     environment:
       DATABASE_URL: postgresql://showbook:showbook_dev@postgres:5432/showbook
       PORT: "3001"
       NODE_OPTIONS: "--max-old-space-size=4096"
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     volumes:
       - ./apps:/app/apps
       - ./packages:/app/packages
