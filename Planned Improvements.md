@@ -3,7 +3,6 @@
 ### General
 - **Security audit.**
 - **Critical code smells.** (Run `/ultrareview` to surface specifics.)
-- **Discover - Near You** - Right click on regions on the side bar to unfollow, same as artists and venues on Discover. Add a Add a Region button on the top of the side bar in the same format as venues tab (same google places UX as preferences - same limit on number of regions). On artists tab, move the add artist to follow button to the top of the sidebar like it will be on the other two tabs. 
 
 ### Mobile App
 - We have some hifi designs of mobile app through claude design, but we need to do a deep dive on a design for the mobile app now that we've added more features.
@@ -50,6 +49,7 @@
 2. ~~On the followed artists page, check if there is a ticketmaster API to search for artists. See if we can follow an artist this way and have a FOllow another artist button on the left list of this page.~~
 3. ~~Near You tab should have the venues grouped by region. The region header should be able to be rlght clicked to see an option to unfollow. Unfollowing should remove it server-side and update the current display. The announcements should only be removed if they arent for existing followed venues or artists.~~
 4. ~~Remove the hyperlink to nothing on the rows.~~
+5. ~~Discover - Near You sidebar region management.~~ *(Done — region headers in the Near You rail now support right-click unfollow, the rail has a top Add a region action using the same Google Places city search/manual-coordinate fallback as Preferences, and the 5-region cap is mirrored in the UI. Follow venue and Follow artist rail actions now sit at the top of their sidebars.)*
 
 ### Venue Details Page
 1. ~~TM linked venues do not need scrape config section on this page.~~

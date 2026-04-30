@@ -606,6 +606,246 @@ function VenueSearchModal({
 }
 
 // ---------------------------------------------------------------------------
+// Region Search Modal
+// ---------------------------------------------------------------------------
+
+function RegionSearchModal({
+  onClose,
+  onAdded,
+}: {
+  onClose: () => void;
+  onAdded: (regionId: string) => void;
+}) {
+  const [cityQuery, setCityQuery] = useState("");
+  const [cityName, setCityName] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
+  const [radius, setRadius] = useState("25");
+  const [manualMode, setManualMode] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [debouncedCity, setDebouncedCity] = useState("");
+  const cityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const utils = trpc.useUtils();
+
+  const citySearch = trpc.enrichment.searchPlaces.useQuery(
+    { query: debouncedCity, types: "city" },
+    { enabled: debouncedCity.length >= 2 && !manualMode, retry: false },
+  );
+
+  const addRegion = trpc.preferences.addRegion.useMutation({
+    onSuccess: (region) => {
+      onAdded(region.id);
+      onClose();
+    },
+  });
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const handleCityInput = (value: string) => {
+    setCityQuery(value);
+    if (!manualMode) {
+      setCityName("");
+      setLatitude("");
+      setLongitude("");
+    } else {
+      setCityName(value);
+    }
+    setDetailsError(null);
+    if (cityTimerRef.current) clearTimeout(cityTimerRef.current);
+    if (value.length >= 2 && !manualMode) {
+      cityTimerRef.current = setTimeout(() => setDebouncedCity(value), 400);
+    } else {
+      setDebouncedCity("");
+    }
+  };
+
+  const handleSelectCity = async (placeId: string) => {
+    try {
+      const details = await utils.enrichment.placeDetails.fetch({ placeId });
+      if (details) {
+        setCityName(details.city || details.name);
+        setCityQuery(details.city || details.name);
+        setLatitude(String(details.latitude));
+        setLongitude(String(details.longitude));
+        setDebouncedCity("");
+        setDetailsError(null);
+      }
+    } catch {
+      setDetailsError(
+        "Couldn't load location details. Try again, or enter coordinates manually below.",
+      );
+    }
+  };
+
+  const canSubmit =
+    cityName.trim() !== "" &&
+    latitude !== "" &&
+    longitude !== "" &&
+    !Number.isNaN(parseFloat(latitude)) &&
+    !Number.isNaN(parseFloat(longitude)) &&
+    radius !== "" &&
+    !addRegion.isPending;
+
+  return (
+    <div className="discover-modal-overlay" onClick={onClose}>
+      <div
+        className="discover-modal discover-modal--region"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="discover-modal__header">
+          <div className="discover-modal__title">Add a region</div>
+          <button
+            type="button"
+            className="discover-modal__close"
+            onClick={onClose}
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="discover-region-form">
+          <div className="discover-region-form__row">
+            <label className="discover-region-form__field">
+              <span className="discover-region-form__label">City</span>
+              <div className="discover-modal__search discover-region-form__search">
+                <Search size={13} color="var(--muted)" />
+                <input
+                  ref={inputRef}
+                  value={cityQuery}
+                  onChange={(e) => handleCityInput(e.target.value)}
+                  placeholder="e.g. Nashville"
+                  className="discover-modal__input"
+                />
+              </div>
+            </label>
+            <label className="discover-region-form__field discover-region-form__field--radius">
+              <span className="discover-region-form__label">Radius</span>
+              <input
+                type="number"
+                value={radius}
+                onChange={(e) => setRadius(e.target.value)}
+                min="1"
+                max="200"
+                className="discover-region-form__input"
+              />
+            </label>
+          </div>
+
+          {!manualMode && debouncedCity.length >= 2 && (
+            <div className="discover-region-form__places">
+              {citySearch.isLoading && (
+                <div className="discover-modal__hint">Searching...</div>
+              )}
+              {citySearch.isError && (
+                <div className="discover-region-form__error">
+                  Search unavailable. Use manual entry below.
+                </div>
+              )}
+              {citySearch.data?.length === 0 && !citySearch.isLoading && (
+                <div className="discover-modal__hint">No matches</div>
+              )}
+              {citySearch.data?.map((place) => (
+                <button
+                  key={place.placeId}
+                  type="button"
+                  className="discover-modal__result"
+                  onClick={() => handleSelectCity(place.placeId)}
+                >
+                  <div className="discover-modal__result-body">
+                    <div className="discover-modal__result-name">{place.displayName}</div>
+                    <div className="discover-modal__result-meta">{place.formattedAddress}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {(detailsError || addRegion.isError) && (
+            <div className="discover-region-form__error">
+              {detailsError ?? `Couldn't add region: ${addRegion.error?.message ?? "unknown error"}`}
+            </div>
+          )}
+
+          {manualMode && (
+            <div className="discover-region-form__row">
+              <label className="discover-region-form__field">
+                <span className="discover-region-form__label">Latitude</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="any"
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value)}
+                  placeholder="36.1627"
+                  className="discover-region-form__input"
+                />
+              </label>
+              <label className="discover-region-form__field">
+                <span className="discover-region-form__label">Longitude</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="any"
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value)}
+                  placeholder="-86.7816"
+                  className="discover-region-form__input"
+                />
+              </label>
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="discover-region-form__manual"
+            onClick={() => {
+              setManualMode((prev) => {
+                const next = !prev;
+                if (next) {
+                  setCityName(cityQuery);
+                  setDebouncedCity("");
+                }
+                return next;
+              });
+            }}
+          >
+            {manualMode ? "Use city search instead" : "Enter coordinates manually"}
+          </button>
+
+          <div className="discover-region-form__actions">
+            <button
+              type="button"
+              className="discover-region-form__add"
+              disabled={!canSubmit}
+              onClick={() =>
+                addRegion.mutate({
+                  cityName: cityName.trim(),
+                  latitude: parseFloat(latitude),
+                  longitude: parseFloat(longitude),
+                  radiusMiles: parseInt(radius, 10),
+                })
+              }
+            >
+              {addRegion.isPending ? "Adding..." : "Add Region"}
+            </button>
+            <button
+              type="button"
+              className="discover-region-form__cancel"
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Venue Rail (left sidebar filter)
 // ---------------------------------------------------------------------------
 
@@ -619,6 +859,11 @@ function VenueRail({
   showFollowLink,
   onFollowVenue,
   onUnfollowItem,
+  showAddRegion,
+  onAddRegion,
+  addRegionDisabled,
+  addRegionHint,
+  onUnfollowRegion,
   showArtistSearch,
 }: {
   venues: {
@@ -640,9 +885,15 @@ function VenueRail({
   showFollowLink: boolean;
   onFollowVenue?: () => void;
   onUnfollowItem?: (id: string) => void;
+  showAddRegion?: boolean;
+  onAddRegion?: () => void;
+  addRegionDisabled?: boolean;
+  addRegionHint?: string;
+  onUnfollowRegion?: (regionId: string) => void;
   showArtistSearch?: boolean;
 }) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  const [railRegionContextMenu, setRailRegionContextMenu] = useState<{ x: number; y: number; regionId: string } | null>(null);
   const [collapsedRailRegions, setCollapsedRailRegions] = useState<Set<string>>(new Set());
   const [artistSearchOpen, setArtistSearchOpen] = useState(false);
   const [artistQuery, setArtistQuery] = useState("");
@@ -691,11 +942,38 @@ function VenueRail({
     <aside className="discover-rail">
       <div className="discover-rail__title">{tabLabel}</div>
 
+      {showFollowLink && (
+        <div className="discover-rail__follow discover-rail__follow--top">
+          <button type="button" className="discover-rail__follow-link" onClick={onFollowVenue}>
+            <Plus size={11} />
+            Follow another venue
+          </button>
+        </div>
+      )}
+
+      {showAddRegion && (
+        <div className="discover-rail__follow discover-rail__follow--top">
+          <button
+            type="button"
+            className="discover-rail__follow-link"
+            onClick={onAddRegion}
+            disabled={addRegionDisabled}
+            title={addRegionHint}
+          >
+            <Plus size={11} />
+            Add a region
+          </button>
+          {addRegionHint && (
+            <div className="discover-rail__follow-hint">{addRegionHint}</div>
+          )}
+        </div>
+      )}
+
       {/* "Follow another artist" affordance */}
       {showArtistSearch && (
-        <div className="discover-rail__follow" style={{ marginTop: 0, marginBottom: 4 }}>
+        <div className="discover-rail__follow discover-rail__follow--top">
           {artistSearchOpen ? (
-            <div style={{ padding: "8px 18px 4px" }}>
+            <div>
               <div style={{ display: "flex", alignItems: "center", gap: 6, borderBottom: "1px solid var(--rule)", paddingBottom: 6 }}>
                 <Search size={11} color="var(--muted)" />
                 <input
@@ -761,6 +1039,11 @@ function VenueRail({
                 <button
                   type="button"
                   className="discover-rail__section-header"
+                  onContextMenu={(e) => {
+                    if (!onUnfollowRegion || region.id === "__unknown") return;
+                    e.preventDefault();
+                    setRailRegionContextMenu({ x: e.clientX, y: e.clientY, regionId: region.id });
+                  }}
                   onClick={() =>
                     setCollapsedRailRegions((prev) => {
                       const next = new Set(prev);
@@ -828,21 +1111,24 @@ function VenueRail({
             </button>
           ))}
 
-      {showFollowLink && (
-        <div className="discover-rail__follow">
-          <button type="button" className="discover-rail__follow-link" onClick={onFollowVenue}>
-            <Plus size={11} />
-            Follow another venue
-          </button>
-        </div>
-      )}
-
       {contextMenu && onUnfollowItem && (
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
           items={[{ label: "Unfollow", onClick: () => onUnfollowItem(contextMenu.id), danger: true }]}
           onClose={() => setContextMenu(null)}
+        />
+      )}
+      {railRegionContextMenu && onUnfollowRegion && (
+        <ContextMenu
+          x={railRegionContextMenu.x}
+          y={railRegionContextMenu.y}
+          items={[{
+            label: "Unfollow region",
+            onClick: () => onUnfollowRegion(railRegionContextMenu.regionId),
+            danger: true,
+          }]}
+          onClose={() => setRailRegionContextMenu(null)}
         />
       )}
     </aside>
@@ -906,6 +1192,8 @@ function FeedSection({
   hasRegions,
   pendingIngestRegionIds,
   activeRegions,
+  regionCount,
+  onRegionAdded,
 }: {
   items: Announcement[] | undefined;
   isLoading: boolean;
@@ -919,9 +1207,12 @@ function FeedSection({
   hasRegions?: boolean;
   pendingIngestRegionIds?: Set<string>;
   activeRegions?: { id: string; cityName: string; radiusMiles: number }[];
+  regionCount?: number;
+  onRegionAdded?: (regionId: string) => void;
 }) {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [showFollowModal, setShowFollowModal] = useState(false);
+  const [showRegionModal, setShowRegionModal] = useState(false);
   const [collapsedRegions, setCollapsedRegions] = useState<Set<string>>(new Set());
   const [regionContextMenu, setRegionContextMenu] = useState<{ x: number; y: number; regionId: string } | null>(null);
 
@@ -948,6 +1239,15 @@ function FeedSection({
   });
 
   const removeRegionMutation = trpc.preferences.removeRegion.useMutation({
+    onMutate: ({ regionId }) => {
+      setSelectedGroupId(null);
+      setCollapsedRegions((prev) => {
+        if (!prev.has(regionId)) return prev;
+        const next = new Set(prev);
+        next.delete(regionId);
+        return next;
+      });
+    },
     onSuccess: () => {
       utils.discover.nearbyFeed.invalidate();
       utils.preferences.get.invalidate();
@@ -1064,12 +1364,27 @@ function FeedSection({
     onVenueFollowed();
   }
 
+  function handleRegionAdded(regionId: string) {
+    utils.preferences.get.invalidate();
+    utils.discover.nearbyFeed.invalidate();
+    setShowRegionModal(false);
+    onRegionAdded?.(regionId);
+  }
+
   const followModal = showFollowModal && (
     <VenueSearchModal
       onClose={() => setShowFollowModal(false)}
       onFollowed={handleVenueFollowed}
     />
   );
+  const regionModal = showRegionModal && (
+    <RegionSearchModal
+      onClose={() => setShowRegionModal(false)}
+      onAdded={handleRegionAdded}
+    />
+  );
+  const totalRegionCount = regionCount ?? activeRegions?.length ?? 0;
+  const regionLimitReached = totalRegionCount >= 5;
 
   const venueRail = (
     <VenueRail
@@ -1082,6 +1397,11 @@ function FeedSection({
       showFollowLink={isFollowed}
       onFollowVenue={handleFollowVenue}
       onUnfollowItem={(isFollowed || isArtists) ? handleUnfollowItem : undefined}
+      showAddRegion={isNearby}
+      onAddRegion={() => setShowRegionModal(true)}
+      addRegionDisabled={regionLimitReached}
+      addRegionHint={regionLimitReached ? "Maximum 5 regions" : `${totalRegionCount} / 5 regions`}
+      onUnfollowRegion={isNearby ? (regionId) => removeRegionMutation.mutate({ regionId }) : undefined}
       showArtistSearch={isArtists}
     />
   );
@@ -1112,6 +1432,7 @@ function FeedSection({
           ))}
         </div>
         {followModal}
+        {regionModal}
       </div>
     );
   }
@@ -1153,14 +1474,16 @@ function FeedSection({
         Follow a venue
       </button>
     ) : isNearby && !hasRegions ? (
-      <Link
-        href="/preferences"
+      <button
+        type="button"
+        onClick={() => setShowRegionModal(true)}
         style={{
           padding: "10px 18px",
           background: "var(--accent)",
           color: "var(--accent-text)",
+          border: "none",
           borderRadius: 8,
-          textDecoration: "none",
+          cursor: "pointer",
           fontFamily: "var(--font-geist-mono), monospace",
           fontSize: 11,
           letterSpacing: ".06em",
@@ -1169,7 +1492,7 @@ function FeedSection({
         }}
       >
         Add region
-      </Link>
+      </button>
     ) : null;
 
     return (
@@ -1184,6 +1507,7 @@ function FeedSection({
           />
         </div>
         {followModal}
+        {regionModal}
       </div>
     );
   }
@@ -1345,6 +1669,7 @@ function FeedSection({
       )}
 
       {followModal}
+      {regionModal}
     </div>
   );
 }
@@ -1621,6 +1946,14 @@ export default function DiscoverPage() {
           hasRegions={nearbyFeed.data?.hasRegions}
           pendingIngestRegionIds={pendingIngestRegionIds}
           activeRegions={activeRegions}
+          regionCount={preferences.data?.regions?.length ?? 0}
+          onRegionAdded={(regionId) => {
+            setPendingIngestRegionIds((prev) => {
+              const next = new Set(prev);
+              next.add(regionId);
+              return next;
+            });
+          }}
         />
       )}
     </div>

@@ -178,6 +178,7 @@ const ALL_KINDS: ShowKind[] = ["concert", "theatre", "comedy", "festival"];
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const SHOW_LIST_GRID_TEMPLATE = "14px 32px 80px 110px 1.02fr 1.03fr 110px 0.15fr 64px 88px";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1300,11 +1301,11 @@ export default function ShowsPage() {
         </div>
 
         {/* Show list */}
-        <div style={{ margin: "4px 36px 0", background: "var(--surface)" }}>
+        <div className="shows-list-table" style={{ margin: "4px 36px 0", background: "var(--surface)" }}>
           {/* Column headers */}
           <div style={{
             display: "grid",
-            gridTemplateColumns: "14px 32px 80px 110px 1.2fr 1fr 110px 64px 88px",
+            gridTemplateColumns: SHOW_LIST_GRID_TEMPLATE,
             columnGap: 16,
             padding: "10px 20px 10px 10px",
             borderBottom: "1px solid var(--rule)",
@@ -1321,6 +1322,7 @@ export default function ShowsPage() {
             <SortHeader field="headliner" label="Headline" sort={sort} onToggle={toggleSort} />
             <SortHeader field="venue" label="Venue" sort={sort} onToggle={toggleSort} />
             <SortHeader field="seat" label="Seat" sort={sort} onToggle={toggleSort} />
+            <div />
             <SortHeader field="paid" label="Paid" sort={sort} onToggle={toggleSort} align="right" />
             <SortHeader field="state" label="State" sort={sort} onToggle={toggleSort} align="right" />
           </div>
