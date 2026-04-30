@@ -41,6 +41,9 @@ Thumbs.db
 # Nx
 .nx/
 
-# SSL certs
-certs/*.pem
+# SSL certs — local-only, never committed.
+certs/
 apps/web/certificates/
+# Defense-in-depth catch-all for stray TLS material anywhere in the tree.
+**/*.pem
+**/*-key.pem
