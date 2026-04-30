@@ -134,10 +134,10 @@ React components in `apps/web/components/design-system/`:
 ### T06: Postgres migrations
 **Depends on:** T01, T02
 **Build:**
-- Verify Docker Postgres is running: `docker compose exec showbook-db pg_isready -U showbook`
+- Verify Docker Postgres is running: `docker compose exec showbook-dev-db pg_isready -U showbook`
 - `packages/db/client.ts` — exports configured Drizzle client. Inside the web container, uses `postgresql://showbook:showbook_dev@postgres:5432/showbook` (Docker internal). From host, uses `localhost:5433`.
 - Run migrations from host: `DATABASE_URL=postgresql://showbook:showbook_dev@localhost:5433/showbook npx drizzle-kit migrate`
-**Verify:** `docker compose exec showbook-db psql -U showbook -c '\dt'` lists all expected tables. All columns, types, and constraints match `schema.md`.
+**Verify:** `docker compose exec showbook-dev-db psql -U showbook -c '\dt'` lists all expected tables. All columns, types, and constraints match `schema.md`.
 
 ### T07: Google OAuth with Auth.js
 **Depends on:** T01, T06
@@ -455,11 +455,11 @@ React components in `apps/web/components/design-system/`:
 
 ## Docker
 
-Two containers: `showbook-db` (Postgres on 5433) and `showbook-web` (Next.js on 3001). Ports 5432 and 3000 are used by vacation-price-tracker — never use them.
+Two containers: `showbook-dev-db` (Postgres on 5433) and `showbook-web` (Next.js on 3001). Ports 5432 and 3000 are used by vacation-price-tracker — never use them.
 
 ```bash
 docker compose up -d                    # start both
-docker compose exec showbook-db pg_isready -U showbook  # check Postgres
+docker compose exec showbook-dev-db pg_isready -U showbook  # check Postgres
 curl http://localhost:3001              # check Next.js
 ```
 

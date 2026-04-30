@@ -54,7 +54,7 @@ Two containers. Postgres on port 5433, Next.js web on port 3001.
 ```bash
 docker compose up -d              # start both
 docker compose logs web           # check Next.js
-docker compose exec showbook-db pg_isready -U showbook  # check Postgres
+docker compose exec showbook-dev-db pg_isready -U showbook  # check Postgres
 ```
 
 Port 5432 and 3000 are used by vacation-price-tracker. Do NOT use those ports.
@@ -132,9 +132,9 @@ Do not stop between waves.
 ## Acceptance criteria — DONE when ALL pass:
 
 ### Infrastructure
-- [ ] `docker compose up -d` starts showbook-db and showbook-web, both healthy
+- [ ] `docker compose up -d` starts showbook-dev-db and showbook-web, both healthy
 - [ ] `http://localhost:3001` loads the app
-- [ ] All database tables exist (verify via docker compose exec showbook-db psql -U showbook -c '\dt')
+- [ ] All database tables exist (verify via docker compose exec showbook-dev-db psql -U showbook -c '\dt')
 
 ### Auth
 - [ ] Google OAuth sign-in completes end to end

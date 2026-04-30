@@ -33,7 +33,7 @@ name: showbook
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: showbook-db
+    container_name: showbook-dev-db
     restart: unless-stopped
     environment:
       POSTGRES_DB: showbook
@@ -151,7 +151,7 @@ pnpm db:prepare:e2e
 
 # Verify
 docker compose logs web       # Next.js output
-docker compose exec showbook-db pg_isready -U showbook
+docker compose exec showbook-dev-db pg_isready -U showbook
 
 # Rebuild after code changes (if hot reload misses something)
 docker compose up -d --build web
@@ -199,7 +199,7 @@ Cloudflare Edge (TLS)
 Your Desktop
    │
    ├── showbook docker compose
-   │   ├── showbook-db   (postgres, port 5433)
+   │   ├── showbook-dev-db   (postgres, port 5433)
    │   └── showbook-web  (next.js + trpc + pg-boss, port 3001)
    │
    └── vacation-price-tracker docker compose (independent)

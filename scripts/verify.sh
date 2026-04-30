@@ -64,7 +64,7 @@ run_step "Lint"       pnpm lint
 run_step "Unit tests" pnpm exec nx run-many -t test
 
 if [ "$RUN_E2E" = "1" ]; then
-  if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^showbook-postgres\|^showbook-db'; then
+  if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^showbook-postgres\|^showbook-dev-db'; then
     skip_step "E2E (Playwright)" "postgres container not running — run 'docker compose up -d postgres' first"
     FAILED=1
   else

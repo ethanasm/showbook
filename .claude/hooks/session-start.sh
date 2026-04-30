@@ -50,7 +50,7 @@ docker compose up -d postgres
 
 log "Waiting for postgres to be healthy..."
 for i in {1..60}; do
-  status=$(docker inspect -f '{{.State.Health.Status}}' showbook-db 2>/dev/null || echo "starting")
+  status=$(docker inspect -f '{{.State.Health.Status}}' showbook-dev-db 2>/dev/null || echo "starting")
   if [ "$status" = "healthy" ]; then
     log "postgres is healthy."
     break
@@ -58,7 +58,7 @@ for i in {1..60}; do
   sleep 1
 done
 
-if [ "$(docker inspect -f '{{.State.Health.Status}}' showbook-db 2>/dev/null)" != "healthy" ]; then
+if [ "$(docker inspect -f '{{.State.Health.Status}}' showbook-dev-db 2>/dev/null)" != "healthy" ]; then
   log "ERROR: postgres did not become healthy in time."
   docker compose logs postgres | tail -40 || true
   exit 1
