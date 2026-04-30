@@ -61,11 +61,12 @@ interface ShowSeed {
   productionName?: string;
   setlist?: string[];
   supportSetlist?: string[];
+  notes?: string;
 }
 
 const SHOWS: ShowSeed[] = [
   // Past concerts (5)
-  { kind: 'concert', state: 'past', headliner: 'Radiohead', support: ['LCD Soundsystem'], venueName: 'Madison Square Garden', date: '2024-06-15', seat: 'FLOOR B · 12', pricePaid: '370.00', ticketCount: 2, tourName: 'In Rainbows Anniversary', setlist: ['15 Step', 'Bodysnatchers', 'Nude', 'Weird Fishes/Arpeggi', 'All I Need', 'Faust Arp', 'Reckoner', 'House of Cards', 'Jigsaw Falling into Place', 'Videotape'], supportSetlist: ['Daft Punk Is Playing at My House', 'All My Friends', 'Someone Great'] },
+  { kind: 'concert', state: 'past', headliner: 'Radiohead', support: ['LCD Soundsystem'], venueName: 'Madison Square Garden', date: '2024-06-15', seat: 'FLOOR B · 12', pricePaid: '370.00', ticketCount: 2, tourName: 'In Rainbows Anniversary', setlist: ['15 Step', 'Bodysnatchers', 'Nude', 'Weird Fishes/Arpeggi', 'All I Need', 'Faust Arp', 'Reckoner', 'House of Cards', 'Jigsaw Falling into Place', 'Videotape'], supportSetlist: ['Daft Punk Is Playing at My House', 'All My Friends', 'Someone Great'], notes: 'Incredible night — Thom dedicated Videotape to the crowd.\nLCD opening set was tighter than expected.' },
   { kind: 'concert', state: 'past', headliner: 'LCD Soundsystem', venueName: 'Brooklyn Steel', date: '2024-08-22', seat: 'GA', pricePaid: '75.00' },
   { kind: 'concert', state: 'past', headliner: 'The National', venueName: 'The Beacon Theatre', date: '2024-09-10', seat: 'MEZZ · H22', pricePaid: '95.00' },
   { kind: 'concert', state: 'past', headliner: 'Japanese Breakfast', support: ['Phoebe Bridgers'], venueName: 'Irving Plaza', date: '2024-11-03', seat: 'GA', pricePaid: '45.00' },
@@ -215,6 +216,7 @@ export async function GET(request: Request) {
         productionName,
         setlist: s.setlist ?? null,
         setlists: Object.keys(setlistsMap).length > 0 ? setlistsMap : null,
+        notes: s.notes ?? null,
       }).returning();
 
       if (!show) continue;

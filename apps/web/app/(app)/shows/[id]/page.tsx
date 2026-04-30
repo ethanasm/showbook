@@ -480,9 +480,10 @@ export default function ShowDetailPage() {
 
         {/* Notes */}
         {show.notes && show.notes.trim().length > 0 && (
-          <section>
+          <section data-testid="notes-section">
             <SectionHeader label="Notes" />
             <div
+              data-testid="notes-content"
               style={{
                 fontFamily: "var(--font-sans, ui-sans-serif, system-ui, sans-serif)",
                 fontSize: 14,
