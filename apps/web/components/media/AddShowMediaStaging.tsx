@@ -19,7 +19,22 @@ const VIDEO_ACCEPT = "video/mp4";
 function classify(file: File): "photo" | "video" | null {
   if (file.type.startsWith("image/")) return "photo";
   if (file.type.startsWith("video/")) return "video";
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".heic") || name.endsWith(".heif")) return "photo";
   return null;
+}
+
+function isHeic(file: File): boolean {
+  const type = file.type.toLowerCase();
+  if (type === "image/heic" || type === "image/heif") return true;
+  const name = file.name.toLowerCase();
+  return name.endsWith(".heic") || name.endsWith(".heif");
+}
+
+async function heicPreviewUrl(file: File): Promise<string> {
+  const { heicTo } = await import("heic-to");
+  const blob = await heicTo({ blob: file, type: "image/jpeg", quality: 0.7 });
+  return URL.createObjectURL(blob);
 }
 
 function formatBytes(bytes: number): string {
@@ -56,20 +71,41 @@ export function AddShowMediaStaging({
     const defaultPerformerNames =
       lineupNames.length === 1 && lineupNames[0] ? [lineupNames[0]] : [];
     const next: StagedMediaItem[] = [];
+    const heicJobs: { id: string; file: File }[] = [];
     for (const file of Array.from(files)) {
       const kind = classify(file);
       if (!kind) continue;
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const heic = kind === "photo" && isHeic(file);
       next.push({
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        id,
         file,
         kind,
-        previewUrl: URL.createObjectURL(file),
+        previewUrl: heic ? "" : URL.createObjectURL(file),
         caption: "",
         performerNames: defaultPerformerNames,
       });
+      if (heic) heicJobs.push({ id, file });
     }
     if (next.length === 0) return;
     onChange([...staged, ...next]);
+
+    for (const job of heicJobs) {
+      heicPreviewUrl(job.file)
+        .then((url) => {
+          const current = stagedRef.current;
+          if (!current.some((s) => s.id === job.id)) {
+            URL.revokeObjectURL(url);
+            return;
+          }
+          onChange(
+            current.map((s) => (s.id === job.id ? { ...s, previewUrl: url } : s)),
+          );
+        })
+        .catch(() => {
+          // leave previewUrl empty; img will show broken icon, item still uploads
+        });
+    }
   }
 
   function togglePerformer(id: string, name: string) {
