@@ -19,11 +19,8 @@ import {
   Plus,
   Filter,
   X,
-  Music,
-  Theater,
-  Laugh,
-  Tent,
 } from "lucide-react";
+import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import "./map.css";
 
 // ---------------------------------------------------------------------------
@@ -43,20 +40,6 @@ const KIND_COLORS_HEX: Record<string, string> = {
   theatre: "#E63946",
   comedy: "#9D4EDD",
   festival: "#2A9D8F",
-};
-
-const KIND_LABELS: Record<string, string> = {
-  concert: "Concert",
-  theatre: "Theatre",
-  comedy: "Comedy",
-  festival: "Festival",
-};
-
-const KIND_ICONS: Record<string, typeof Music> = {
-  concert: Music,
-  theatre: Theater,
-  comedy: Laugh,
-  festival: Tent,
 };
 
 const KINDS = [
@@ -105,45 +88,6 @@ interface VenueGroup {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function getHeadliner(show: {
-  kind?: string;
-  productionName?: string | null;
-  showPerformers: {
-    role: string;
-    sortOrder: number;
-    performer: { name: string };
-  }[];
-}): string {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return show.productionName;
-  }
-  const headliner = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0
-  );
-  if (headliner) return headliner.performer.name;
-  const fallback = show.showPerformers.find((sp) => sp.role === "headliner");
-  if (fallback) return fallback.performer.name;
-  return show.showPerformers[0]?.performer.name ?? "Unknown Artist";
-}
-
-function getHeadlinerId(show: {
-  kind?: string;
-  productionName?: string | null;
-  showPerformers: {
-    role: string;
-    sortOrder: number;
-    performer: { id: string };
-  }[];
-}): string | null {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return null;
-  }
-  const headliner = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0
-  );
-  return headliner?.performer.id ?? null;
-}
 
 function dotRadius(count: number): number {
   return Math.max(4, Math.min(18, 3 + count * 1.2));
@@ -613,7 +557,7 @@ function VenueInspector({
       <div className="venue-inspector__kindmix">
         <div className="venue-inspector__kindmix-label">Kind mix</div>
         {Object.entries(venue.kindBreakdown).map(([k, count]) => {
-          const KindIcon = KIND_ICONS[k];
+          const KindIcon = KIND_ICONS[k as keyof typeof KIND_ICONS];
           const color = KIND_COLORS[k] ?? "var(--muted)";
           return (
             <div
@@ -622,7 +566,7 @@ function VenueInspector({
               style={{ color }}
             >
               {KindIcon && <KindIcon size={12} />}
-              {KIND_LABELS[k] ?? k} &middot; {count}
+              {KIND_LABELS[k as keyof typeof KIND_LABELS] ?? k} &middot; {count}
             </div>
           );
         })}
@@ -736,7 +680,7 @@ export default function MapView() {
   const [kindFilter, setKindFilter] = useState("all");
   const [activeView, setActiveView] = useState<number | null>(null);
 
-  const { data: shows, isLoading } = trpc.shows.list.useQuery({});
+  const { data: shows, isLoading } = trpc.shows.listForMap.useQuery();
 
   const yearOptions = useMemo(() => {
     if (!shows) return ["All-time"];
@@ -769,8 +713,8 @@ export default function MapView() {
         kind: show.kind as ShowKind,
         state: show.state,
         date: show.date,
-        headliner: getHeadliner(show),
-        headlinerId: getHeadlinerId(show),
+        headliner: show.headlinerName ?? "Unknown Artist",
+        headlinerId: show.headlinerId,
         seat: show.seat,
         pricePaid: show.pricePaid,
         ticketCount: show.ticketCount ?? 1,

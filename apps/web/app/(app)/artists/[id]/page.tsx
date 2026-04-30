@@ -4,20 +4,26 @@ import { useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
+import { ChevronLeft } from "lucide-react";
+import { FollowButton } from "@/components/FollowButton";
 import {
-  Plus,
-  Check,
-  ChevronLeft,
-} from "lucide-react";
-import {
+  CenteredMessage,
   EmptyState,
   RemoteImage,
+  SectionHeader,
   ShowRow as ShowRowComponent,
   type ShowKind,
   type ShowState,
 } from "@/components/design-system";
 import { EditableName } from "@/components/EditableName";
 import { MediaSection } from "@/components/media";
+import { formatDateMedium as formatDateLong, formatDateParts } from "@showbook/shared";
+import {
+  getHeadliner,
+  getHeadlinerId,
+  getHeadlinerImageUrl,
+  getSupport,
+} from "@/lib/show-accessors";
 
 type Performer = {
   id: string;
@@ -55,34 +61,6 @@ type ShowData = {
   showPerformers: ShowPerformer[];
 };
 
-function formatDateLong(dateStr: string | null): string {
-  if (!dateStr) return "—";
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatDateParts(dateStr: string | null): {
-  month: string;
-  day: string;
-  year: string;
-  dow: string;
-} {
-  if (!dateStr) {
-    return { month: "TBD", day: "", year: "—", dow: "date" };
-  }
-  const d = new Date(dateStr + "T00:00:00");
-  return {
-    month: d.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
-    day: String(d.getDate()),
-    year: String(d.getFullYear()),
-    dow: d.toLocaleDateString("en-US", { weekday: "short" }).toLowerCase(),
-  };
-}
-
 function formatShowDateParts(show: ShowData): {
   month: string;
   day: string;
@@ -108,40 +86,6 @@ function formatShowDateParts(show: ShowData): {
   };
 }
 
-function getHeadliner(show: ShowData): string {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return show.productionName;
-  }
-  const hl = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0,
-  );
-  return (
-    hl?.performer.name ??
-    show.showPerformers.find((sp) => sp.role === "headliner")?.performer.name ??
-    "Unknown"
-  );
-}
-
-function getHeadlinerId(show: ShowData): string | undefined {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return undefined;
-  }
-  const hl = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0,
-  );
-  return hl?.performer.id;
-}
-
-function getHeadlinerImageUrl(show: ShowData): string | null {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return null;
-  }
-  const hl = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0,
-  );
-  return hl?.performer.imageUrl ?? null;
-}
-
 function gradientLastWord(name: string) {
   const words = name.trim().split(/\s+/);
   if (words.length <= 1) return <span className="gradient-emphasis">{name}</span>;
@@ -151,13 +95,6 @@ function gradientLastWord(name: string) {
       {words.join(" ")} <span className="gradient-emphasis">{last}</span>
     </>
   );
-}
-
-function getSupport(show: ShowData): string[] {
-  return show.showPerformers
-    .filter((sp) => sp.role === "support")
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((sp) => sp.performer.name);
 }
 
 export default function ArtistDetailPage() {
@@ -318,38 +255,11 @@ export default function ArtistDetailPage() {
           </div>
         </div>
 
-        {/* Follow button */}
-        <button
-          type="button"
-          onClick={toggleFollow}
-          disabled={followBusy}
-          style={{
-            padding: "8px 14px",
-            border: `1px solid ${
-              performer.isFollowed ? "var(--accent)" : "var(--rule-strong)"
-            }`,
-            background: performer.isFollowed ? "var(--accent)" : "transparent",
-            color: performer.isFollowed ? "var(--bg)" : "var(--ink)",
-            fontFamily: "var(--font-geist-sans), sans-serif",
-            fontSize: 12.5,
-            fontWeight: 500,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            cursor: followBusy ? "default" : "pointer",
-            opacity: followBusy ? 0.6 : 1,
-          }}
-        >
-          {performer.isFollowed ? (
-            <>
-              <Check size={13} /> Following
-            </>
-          ) : (
-            <>
-              <Plus size={13} /> Follow
-            </>
-          )}
-        </button>
+        <FollowButton
+          isFollowed={performer.isFollowed}
+          isLoading={followBusy}
+          onToggle={toggleFollow}
+        />
       </div>
 
       {/* Stat strip */}
@@ -487,44 +397,6 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function SectionHeader({ label, note }: { label: string; note?: string }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "baseline",
-        justifyContent: "space-between",
-        marginBottom: 12,
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
-          color: "var(--ink)",
-          letterSpacing: ".1em",
-          textTransform: "uppercase",
-          fontWeight: 500,
-        }}
-      >
-        {label}
-      </div>
-      {note && (
-        <div
-          style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
-            color: "var(--faint)",
-            letterSpacing: ".04em",
-          }}
-        >
-          {note}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function CardMessage({ children }: { children: React.ReactNode }) {
   return (
     <div
@@ -543,26 +415,3 @@ function CardMessage({ children }: { children: React.ReactNode }) {
   );
 }
 
-function CenteredMessage({
-  children,
-  tone,
-}: {
-  children: React.ReactNode;
-  tone?: "error";
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: 300,
-        fontFamily: "var(--font-geist-mono), monospace",
-        fontSize: 11,
-        color: tone === "error" ? "var(--kind-theatre)" : "var(--muted)",
-      }}
-    >
-      {children}
-    </div>
-  );
-}

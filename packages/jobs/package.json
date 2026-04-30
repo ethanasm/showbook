@@ -7,7 +7,9 @@
   "scripts": {
     "run-daily-digest": "tsx scripts/run-daily-digest.ts",
     "email:smoke": "tsx scripts/email-smoke.ts",
-    "test": "node --import tsx --test src/__tests__/*.test.ts",
+    "bootstrap-pgboss": "node scripts/bootstrap-pgboss.mjs",
+    "test": "find src/__tests__ -name '*.test.ts' -not -name '*.integration.test.ts' -print0 | xargs -0 node --import tsx --test",
+    "test:integration": "node --import tsx --test src/__tests__/*.integration.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

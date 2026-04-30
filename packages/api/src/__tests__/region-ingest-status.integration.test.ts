@@ -31,27 +31,41 @@ async function clearTestJobs() {
   );
 }
 
+// Skip when pgboss schema isn't installed on the target DB (eg. fresh
+// showbook_e2e). The job-queue helper itself works without pgboss
+// because it queries the table by name and short-circuits on errors.
+let pgbossAvailable = false;
+
 describe('isRegionIngestPending', () => {
   before(async () => {
     try {
+      await db.execute(sql`SELECT 1 FROM pgboss.job LIMIT 1`);
+      pgbossAvailable = true;
+    } catch {
+      pgbossAvailable = false;
+      return;
+    }
+    try {
       await ensurePartitionExists();
     } catch (e) {
-      // OK if the queue already exists.
       void e;
     }
     await clearTestJobs();
   });
 
   after(async () => {
+    if (!pgbossAvailable) return;
     await clearTestJobs();
   });
 
-  it('returns false when no job exists for the region', async () => {
+  it('returns false when no job exists for the region', async (t) => {
+    if (!pgbossAvailable) return t.skip('pgboss schema not installed');
     const pending = await isRegionIngestPending(REGION_ID);
     assert.equal(pending, false);
   });
 
-  it('returns true when a job is in created state', async () => {
+  it('returns true when a job is in created state', async (t) => {
+    if (!pgbossAvailable) return t.skip('pgboss schema not installed');
     await db.execute(
       sql`INSERT INTO pgboss.job (name, data, state)
           VALUES (${JOB_NAMES.INGEST_REGION},
@@ -63,7 +77,8 @@ describe('isRegionIngestPending', () => {
     await clearTestJobs();
   });
 
-  it('returns true when a job is in active state', async () => {
+  it('returns true when a job is in active state', async (t) => {
+    if (!pgbossAvailable) return t.skip('pgboss schema not installed');
     await db.execute(
       sql`INSERT INTO pgboss.job (name, data, state)
           VALUES (${JOB_NAMES.INGEST_REGION},
@@ -75,7 +90,8 @@ describe('isRegionIngestPending', () => {
     await clearTestJobs();
   });
 
-  it('returns false when only completed/failed jobs exist', async () => {
+  it('returns false when only completed/failed jobs exist', async (t) => {
+    if (!pgbossAvailable) return t.skip('pgboss schema not installed');
     await db.execute(
       sql`INSERT INTO pgboss.job (name, data, state)
           VALUES (${JOB_NAMES.INGEST_REGION},
@@ -90,7 +106,8 @@ describe('isRegionIngestPending', () => {
     await clearTestJobs();
   });
 
-  it('does not match jobs for different regionIds', async () => {
+  it('does not match jobs for different regionIds', async (t) => {
+    if (!pgbossAvailable) return t.skip('pgboss schema not installed');
     await db.execute(
       sql`INSERT INTO pgboss.job (name, data, state)
           VALUES (${JOB_NAMES.INGEST_REGION},

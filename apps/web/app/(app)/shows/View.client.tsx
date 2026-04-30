@@ -19,14 +19,8 @@ import {
   Archive,
   Calendar,
   ArrowDownUp,
-  ChevronRight,
-  ChevronLeft,
   MoreHorizontal,
   Ticket,
-  Music,
-  Clapperboard,
-  Laugh,
-  Tent,
   Square,
   Trash2,
   Mail,
@@ -40,6 +34,18 @@ import {
 } from "lucide-react";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { useCompactMode } from "@/lib/useCompactMode";
+import { daysUntil, formatDateParts } from "@showbook/shared";
+import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
+import { STATE_TRANSITIONS } from "@/lib/show-state";
+import { PaginationFooter } from "@/components/PaginationFooter";
+import { compareNullable } from "@/lib/sort";
+import {
+  getHeadliner,
+  getHeadlinerId,
+  getHeadlinerImageUrl,
+  getSupport,
+  getSupportPerformers,
+} from "@/lib/show-accessors";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -73,19 +79,6 @@ const STATE_ORDER: Record<ShowState, number> = {
 
 function defaultDirFor(field: SortField): "asc" | "desc" {
   return field === "date" || field === "paid" ? "desc" : "asc";
-}
-
-function compareNullable<T>(
-  a: T | null | undefined,
-  b: T | null | undefined,
-  cmp: (x: T, y: T) => number,
-): number {
-  const aNull = a == null;
-  const bNull = b == null;
-  if (aNull && bNull) return 0;
-  if (aNull) return 1;
-  if (bNull) return -1;
-  return cmp(a as T, b as T);
 }
 
 function compareShows(a: ShowData, b: ShowData, sort: SortConfig): number {
@@ -160,20 +153,6 @@ interface ShowData {
 // Constants
 // ---------------------------------------------------------------------------
 
-const KIND_ICONS: Record<ShowKind, React.ComponentType<{ size?: number; color?: string; style?: React.CSSProperties }>> = {
-  concert: Music,
-  theatre: Clapperboard,
-  comedy: Laugh,
-  festival: Tent,
-};
-
-const KIND_LABELS: Record<ShowKind, string> = {
-  concert: "concert",
-  theatre: "theatre",
-  comedy: "comedy",
-  festival: "festival",
-};
-
 const ALL_KINDS: ShowKind[] = ["concert", "theatre", "comedy", "festival"];
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
@@ -184,43 +163,6 @@ const SHOW_LIST_GRID_TEMPLATE = "14px 32px 80px 110px 1.02fr 1.03fr 110px 0.15fr
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getHeadliner(show: ShowData): string {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return show.productionName;
-  }
-  const headliner = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0
-  );
-  return headliner?.performer.name ?? "Unknown Artist";
-}
-
-function getHeadlinerId(show: ShowData): string | undefined {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return undefined;
-  }
-  const headliner = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0
-  );
-  return headliner?.performer.id;
-}
-
-function getHeadlinerImageUrl(show: ShowData): string | null {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return null;
-  }
-  const headliner = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0
-  );
-  return headliner?.performer.imageUrl ?? null;
-}
-
-function getSupportPerformers(show: ShowData): { id: string; name: string }[] {
-  return show.showPerformers
-    .filter((sp) => sp.role === "support")
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((sp) => ({ id: sp.performer.id, name: sp.performer.name }));
-}
-
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString("en-US", {
@@ -230,27 +172,9 @@ function formatDate(dateStr: string): string {
   });
 }
 
-function toDateParts(dateStr: string): {
-  month: string;
-  day: string;
-  year: string;
-  dow: string;
-} {
-  const d = new Date(dateStr + "T00:00:00");
-  return {
-    month: d.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
-    day: String(d.getDate()),
-    year: String(d.getFullYear()),
-    dow: d.toLocaleDateString("en-US", { weekday: "short" }),
-  };
-}
-
-function getSupport(show: ShowData): string[] {
-  return show.showPerformers
-    .filter((sp) => sp.role === "support")
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((sp) => sp.performer.name);
-}
+// Re-exported from shared as `formatDateParts` — keep the local alias so the
+// existing call sites read naturally (`toDateParts(show.date)`).
+const toDateParts = formatDateParts;
 
 function getNeighborhood(show: ShowData): string | undefined {
   const parts: string[] = [];
@@ -276,21 +200,11 @@ function getFirstDayOfWeek(year: number, month: number): number {
   return new Date(year, month, 1).getDay();
 }
 
-function daysUntil(dateStr: string): number {
-  const now = new Date();
-  const d = new Date(dateStr + "T00:00:00");
-  return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-}
 
 // ---------------------------------------------------------------------------
 // State transition labels
 // ---------------------------------------------------------------------------
 
-const STATE_TRANSITIONS: Record<string, { label: string; target: ShowState }> =
-  {
-    watching: { label: "Got tickets", target: "ticketed" },
-    ticketed: { label: "Mark as attended", target: "past" },
-  };
 
 // ---------------------------------------------------------------------------
 // Main Page
@@ -950,6 +864,7 @@ export default function ShowsView() {
                   background: active ? "var(--ink)" : "transparent",
                   letterSpacing: ".04em",
                   cursor: "pointer",
+                  textTransform: "lowercase",
                 }}
               >
                 <KIcon size={12} color={active ? "var(--bg)" : `var(--kind-${k})`} />
@@ -1358,67 +1273,14 @@ export default function ShowsView() {
           ))}
         </div>
 
-        {/* Pagination footer */}
-        <div style={{
-          margin: "0 36px 36px",
-          background: "var(--surface)",
-          borderTop: "1px solid var(--rule)",
-          padding: "12px 20px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}>
-          <button
-            onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-            disabled={currentPage === 0}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              border: "1px solid var(--rule-strong)",
-              background: "transparent",
-              color: currentPage === 0 ? "var(--faint)" : "var(--ink)",
-              padding: "5px 11px",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 11,
-              cursor: currentPage === 0 ? "not-allowed" : "pointer",
-              opacity: currentPage === 0 ? 0.4 : 1,
-            }}
-            data-testid="pagination-prev"
-          >
-            <ChevronLeft size={12} /> Prev
-          </button>
-          <span style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
-            color: "var(--faint)",
-            letterSpacing: ".06em",
-          }}>
-            {filteredShows.length === 0
-              ? "0 shows"
-              : `${currentPage * PAGE_SIZE + 1}–${Math.min((currentPage + 1) * PAGE_SIZE, filteredShows.length)} of ${filteredShows.length}`}
-          </span>
-          <button
-            onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
-            disabled={currentPage >= totalPages - 1}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              border: "1px solid var(--rule-strong)",
-              background: "transparent",
-              color: currentPage >= totalPages - 1 ? "var(--faint)" : "var(--ink)",
-              padding: "5px 11px",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 11,
-              cursor: currentPage >= totalPages - 1 ? "not-allowed" : "pointer",
-              opacity: currentPage >= totalPages - 1 ? 0.4 : 1,
-            }}
-            data-testid="pagination-next"
-          >
-            Next <ChevronRight size={12} />
-          </button>
-        </div>
+        <PaginationFooter
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageSize={PAGE_SIZE}
+          totalItems={filteredShows.length}
+          itemLabel="shows"
+          onPageChange={setCurrentPage}
+        />
       </div>
     );
   }

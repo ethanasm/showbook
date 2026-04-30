@@ -10,10 +10,6 @@ import {
 import { EmptyState, type ShowKind } from "@/components/design-system";
 import {
   Music,
-  Clapperboard,
-  Laugh,
-  Tent,
-  Trophy,
   Eye,
   Check,
   ArrowUpRight,
@@ -26,90 +22,12 @@ import {
   groupAnnouncementsByRegion,
   groupVenuesByRegion,
 } from "./region-helpers";
+import { DISCOVER_KIND_ICONS as KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
+import { ContextMenu } from "@/components/ContextMenu";
+import { VenueSearchModal } from "@/components/VenueSearchModal";
+import { RegionSearchModal } from "@/components/RegionSearchModal";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import "./discover.css";
-
-// ---------------------------------------------------------------------------
-// Lightweight context menu (local; a shared one is coming post-merge)
-// ---------------------------------------------------------------------------
-
-function ContextMenu({
-  x,
-  y,
-  items,
-  onClose,
-}: {
-  x: number;
-  y: number;
-  items: { label: string; onClick: () => void; danger?: boolean }[];
-  onClose: () => void;
-}) {
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
-
-  useEffect(() => {
-    const handler = () => onClose();
-    document.addEventListener("scroll", handler, true);
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") onClose();
-    });
-    return () => {
-      document.removeEventListener("scroll", handler, true);
-    };
-  }, [onClose]);
-
-  return (
-    <div
-      ref={menuRef}
-      style={{
-        position: "fixed",
-        top: y,
-        left: x,
-        background: "var(--surface)",
-        border: "1px solid var(--rule-strong)",
-        zIndex: 1000,
-        minWidth: 140,
-        boxShadow: "0 4px 16px rgba(0,0,0,.2)",
-      }}
-    >
-      {items.map((item) => (
-        <button
-          key={item.label}
-          type="button"
-          onClick={() => {
-            item.onClick();
-            onClose();
-          }}
-          style={{
-            display: "block",
-            width: "100%",
-            padding: "10px 14px",
-            background: "none",
-            border: "none",
-            color: item.danger ? "#E63946" : "var(--ink)",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
-            textAlign: "left",
-            cursor: "pointer",
-            letterSpacing: ".04em",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface2)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-        >
-          {item.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 type DiscoverKind = ShowKind | "sports";
 type DiscoverSortField =
@@ -171,25 +89,6 @@ function formatRunRange(start: string, end: string): string {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const KIND_ICONS: Record<
-  DiscoverKind,
-  React.ComponentType<{ size?: number; className?: string }>
-> = {
-  concert: Music,
-  theatre: Clapperboard,
-  comedy: Laugh,
-  festival: Tent,
-  sports: Trophy,
-};
-
-const KIND_LABELS: Record<DiscoverKind, string> = {
-  concert: "Concert",
-  theatre: "Theatre",
-  comedy: "Comedy",
-  festival: "Festival",
-  sports: "Sports",
-};
 
 const REASON_LABELS: Record<string, string> = {
   "followed-venue": "followed venue",
@@ -567,382 +466,6 @@ function AnnouncementRow({
 }
 
 // ---------------------------------------------------------------------------
-// Venue Search Modal
-// ---------------------------------------------------------------------------
-
-function VenueSearchModal({
-  onClose,
-  onFollowed,
-}: {
-  onClose: () => void;
-  onFollowed: () => void;
-}) {
-  const [query, setQuery] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const searchResults = trpc.venues.search.useQuery(
-    { query },
-    { enabled: query.length >= 2 },
-  );
-
-  const placesResults = trpc.enrichment.searchPlaces.useQuery(
-    { query, types: "venue" },
-    { enabled: query.length >= 2 },
-  );
-
-  const followMutation = trpc.venues.follow.useMutation({
-    onSuccess: () => {
-      onFollowed();
-      onClose();
-    },
-  });
-
-  const createAndFollow = trpc.venues.createFromPlace.useMutation({
-    onSuccess: (venue) => {
-      followMutation.mutate({ venueId: venue.id });
-    },
-  });
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  const localVenues = searchResults.data ?? [];
-  const places = placesResults.data ?? [];
-  const localIds = new Set(localVenues.map((v) => v.googlePlaceId).filter(Boolean));
-  const filteredPlaces = places.filter((p) => !localIds.has(p.placeId));
-  const isPending = followMutation.isPending || createAndFollow.isPending;
-
-  return (
-    <div className="discover-modal-overlay" onClick={onClose}>
-      <div
-        className="discover-modal"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="discover-modal__header">
-          <div className="discover-modal__title">Follow a venue</div>
-          <button
-            type="button"
-            className="discover-modal__close"
-            onClick={onClose}
-          >
-            <X size={14} />
-          </button>
-        </div>
-
-        <div className="discover-modal__search">
-          <Search size={13} color="var(--muted)" />
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search venues..."
-            className="discover-modal__input"
-          />
-        </div>
-
-        <div className="discover-modal__results">
-          {query.length < 2 && (
-            <div className="discover-modal__hint">
-              Type at least 2 characters to search
-            </div>
-          )}
-          {query.length >= 2 && searchResults.isLoading && (
-            <div className="discover-modal__hint">Searching...</div>
-          )}
-          {localVenues.map((venue) => (
-            <button
-              key={venue.id}
-              type="button"
-              className="discover-modal__result"
-              onClick={() => followMutation.mutate({ venueId: venue.id })}
-              disabled={isPending}
-            >
-              <div className="discover-modal__result-body">
-                <div className="discover-modal__result-name">{venue.name}</div>
-                <div className="discover-modal__result-meta">
-                  {[venue.city, venue.stateRegion].filter(Boolean).join(", ")}
-                </div>
-              </div>
-              <div className="discover-modal__result-action">
-                <Plus size={12} />
-                Follow
-              </div>
-            </button>
-          ))}
-          {filteredPlaces.length > 0 && localVenues.length > 0 && (
-            <div className="discover-modal__hint" style={{ borderBottom: "1px solid var(--rule)" }}>
-              From Google Places
-            </div>
-          )}
-          {filteredPlaces.map((place) => (
-            <button
-              key={place.placeId}
-              type="button"
-              className="discover-modal__result"
-              onClick={() => createAndFollow.mutate({ placeId: place.placeId })}
-              disabled={isPending}
-            >
-              <div className="discover-modal__result-body">
-                <div className="discover-modal__result-name">{place.displayName}</div>
-                <div className="discover-modal__result-meta">{place.formattedAddress}</div>
-              </div>
-              <div className="discover-modal__result-action">
-                <Plus size={12} />
-                Follow
-              </div>
-            </button>
-          ))}
-          {query.length >= 2 && !searchResults.isLoading && localVenues.length === 0 && filteredPlaces.length === 0 && (
-            <div className="discover-modal__hint">No venues found</div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Region Search Modal
-// ---------------------------------------------------------------------------
-
-function RegionSearchModal({
-  onClose,
-  onAdded,
-}: {
-  onClose: () => void;
-  onAdded: (regionId: string) => void;
-}) {
-  const [cityQuery, setCityQuery] = useState("");
-  const [cityName, setCityName] = useState("");
-  const [latitude, setLatitude] = useState("");
-  const [longitude, setLongitude] = useState("");
-  const [radius, setRadius] = useState("25");
-  const [manualMode, setManualMode] = useState(false);
-  const [detailsError, setDetailsError] = useState<string | null>(null);
-  const [debouncedCity, setDebouncedCity] = useState("");
-  const cityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const utils = trpc.useUtils();
-
-  const citySearch = trpc.enrichment.searchPlaces.useQuery(
-    { query: debouncedCity, types: "city" },
-    { enabled: debouncedCity.length >= 2 && !manualMode, retry: false },
-  );
-
-  const addRegion = trpc.preferences.addRegion.useMutation({
-    onSuccess: (region) => {
-      onAdded(region.id);
-      onClose();
-    },
-  });
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  const handleCityInput = (value: string) => {
-    setCityQuery(value);
-    if (!manualMode) {
-      setCityName("");
-      setLatitude("");
-      setLongitude("");
-    } else {
-      setCityName(value);
-    }
-    setDetailsError(null);
-    if (cityTimerRef.current) clearTimeout(cityTimerRef.current);
-    if (value.length >= 2 && !manualMode) {
-      cityTimerRef.current = setTimeout(() => setDebouncedCity(value), 400);
-    } else {
-      setDebouncedCity("");
-    }
-  };
-
-  const handleSelectCity = async (placeId: string) => {
-    try {
-      const details = await utils.enrichment.placeDetails.fetch({ placeId });
-      if (details) {
-        setCityName(details.city || details.name);
-        setCityQuery(details.city || details.name);
-        setLatitude(String(details.latitude));
-        setLongitude(String(details.longitude));
-        setDebouncedCity("");
-        setDetailsError(null);
-      }
-    } catch {
-      setDetailsError(
-        "Couldn't load location details. Try again, or enter coordinates manually below.",
-      );
-    }
-  };
-
-  const canSubmit =
-    cityName.trim() !== "" &&
-    latitude !== "" &&
-    longitude !== "" &&
-    !Number.isNaN(parseFloat(latitude)) &&
-    !Number.isNaN(parseFloat(longitude)) &&
-    radius !== "" &&
-    !addRegion.isPending;
-
-  return (
-    <div className="discover-modal-overlay" onClick={onClose}>
-      <div
-        className="discover-modal discover-modal--region"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="discover-modal__header">
-          <div className="discover-modal__title">Follow a region</div>
-          <button
-            type="button"
-            className="discover-modal__close"
-            onClick={onClose}
-          >
-            <X size={14} />
-          </button>
-        </div>
-
-        <div className="discover-region-form">
-          <div className="discover-region-form__row">
-            <label className="discover-region-form__field">
-              <span className="discover-region-form__label">City</span>
-              <div className="discover-modal__search discover-region-form__search">
-                <Search size={13} color="var(--muted)" />
-                <input
-                  ref={inputRef}
-                  value={cityQuery}
-                  onChange={(e) => handleCityInput(e.target.value)}
-                  placeholder="e.g. Nashville"
-                  className="discover-modal__input"
-                />
-              </div>
-            </label>
-            <label className="discover-region-form__field discover-region-form__field--radius">
-              <span className="discover-region-form__label">Radius</span>
-              <input
-                type="number"
-                value={radius}
-                onChange={(e) => setRadius(e.target.value)}
-                min="1"
-                max="200"
-                className="discover-region-form__input"
-              />
-            </label>
-          </div>
-
-          {!manualMode && debouncedCity.length >= 2 && (
-            <div className="discover-region-form__places">
-              {citySearch.isLoading && (
-                <div className="discover-modal__hint">Searching...</div>
-              )}
-              {citySearch.isError && (
-                <div className="discover-region-form__error">
-                  Search unavailable. Use manual entry below.
-                </div>
-              )}
-              {citySearch.data?.length === 0 && !citySearch.isLoading && (
-                <div className="discover-modal__hint">No matches</div>
-              )}
-              {citySearch.data?.map((place) => (
-                <button
-                  key={place.placeId}
-                  type="button"
-                  className="discover-modal__result"
-                  onClick={() => handleSelectCity(place.placeId)}
-                >
-                  <div className="discover-modal__result-body">
-                    <div className="discover-modal__result-name">{place.displayName}</div>
-                    <div className="discover-modal__result-meta">{place.formattedAddress}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {(detailsError || addRegion.isError) && (
-            <div className="discover-region-form__error">
-              {detailsError ?? `Couldn't add region: ${addRegion.error?.message ?? "unknown error"}`}
-            </div>
-          )}
-
-          {manualMode && (
-            <div className="discover-region-form__row">
-              <label className="discover-region-form__field">
-                <span className="discover-region-form__label">Latitude</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  step="any"
-                  value={latitude}
-                  onChange={(e) => setLatitude(e.target.value)}
-                  placeholder="36.1627"
-                  className="discover-region-form__input"
-                />
-              </label>
-              <label className="discover-region-form__field">
-                <span className="discover-region-form__label">Longitude</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  step="any"
-                  value={longitude}
-                  onChange={(e) => setLongitude(e.target.value)}
-                  placeholder="-86.7816"
-                  className="discover-region-form__input"
-                />
-              </label>
-            </div>
-          )}
-
-          <button
-            type="button"
-            className="discover-region-form__manual"
-            onClick={() => {
-              setManualMode((prev) => {
-                const next = !prev;
-                if (next) {
-                  setCityName(cityQuery);
-                  setDebouncedCity("");
-                }
-                return next;
-              });
-            }}
-          >
-            {manualMode ? "Use city search instead" : "Enter coordinates manually"}
-          </button>
-
-          <div className="discover-region-form__actions">
-            <button
-              type="button"
-              className="discover-region-form__add"
-              disabled={!canSubmit}
-              onClick={() =>
-                addRegion.mutate({
-                  cityName: cityName.trim(),
-                  latitude: parseFloat(latitude),
-                  longitude: parseFloat(longitude),
-                  radiusMiles: parseInt(radius, 10),
-                })
-              }
-            >
-              {addRegion.isPending ? "Following..." : "Follow Region"}
-            </button>
-            <button
-              type="button"
-              className="discover-region-form__cancel"
-              onClick={onClose}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Venue Rail (left sidebar filter)
 // ---------------------------------------------------------------------------
 
@@ -994,10 +517,12 @@ function VenueRail({
   const [collapsedRailRegions, setCollapsedRailRegions] = useState<Set<string>>(new Set());
   const [artistSearchOpen, setArtistSearchOpen] = useState(false);
   const [artistQuery, setArtistQuery] = useState("");
-  const [debouncedArtistQuery, setDebouncedArtistQuery] = useState("");
-  const artistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const artistInputRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
+  const debouncedArtistQuery = useDebouncedValue(
+    artistQuery.length >= 2 ? artistQuery : "",
+    350,
+  );
 
   const artistSearchResults = trpc.discover.searchArtists.useQuery(
     { keyword: debouncedArtistQuery },
@@ -1009,7 +534,6 @@ function VenueRail({
       utils.discover.followedArtistsFeed.invalidate();
       setArtistSearchOpen(false);
       setArtistQuery("");
-      setDebouncedArtistQuery("");
     },
   });
 
@@ -1021,12 +545,6 @@ function VenueRail({
 
   const handleArtistQueryChange = (value: string) => {
     setArtistQuery(value);
-    if (artistTimerRef.current) clearTimeout(artistTimerRef.current);
-    if (value.length >= 2) {
-      artistTimerRef.current = setTimeout(() => setDebouncedArtistQuery(value), 350);
-    } else {
-      setDebouncedArtistQuery("");
-    }
   };
 
   const handleContextMenu = (e: React.MouseEvent, id: string) => {
@@ -1080,7 +598,7 @@ function VenueRail({
                   placeholder="Search artists..."
                   style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--ink)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11 }}
                 />
-                <button type="button" onClick={() => { setArtistSearchOpen(false); setArtistQuery(""); setDebouncedArtistQuery(""); }} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", padding: 0 }}>
+                <button type="button" onClick={() => { setArtistSearchOpen(false); setArtistQuery(""); }} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", padding: 0 }}>
                   <X size={11} />
                 </button>
               </div>
@@ -1210,16 +728,14 @@ function VenueRail({
 
       {contextMenu && onUnfollowItem && (
         <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
           items={[{ label: "Unfollow", onClick: () => onUnfollowItem(contextMenu.id), danger: true }]}
           onClose={() => setContextMenu(null)}
         />
       )}
       {railRegionContextMenu && onUnfollowRegion && (
         <ContextMenu
-          x={railRegionContextMenu.x}
-          y={railRegionContextMenu.y}
+          position={{ x: railRegionContextMenu.x, y: railRegionContextMenu.y }}
           items={[{
             label: "Unfollow region",
             onClick: () => onUnfollowRegion(railRegionContextMenu.regionId),
@@ -1828,8 +1344,7 @@ function FeedSection({
       {/* Region right-click context menu */}
       {regionContextMenu && (
         <ContextMenu
-          x={regionContextMenu.x}
-          y={regionContextMenu.y}
+          position={{ x: regionContextMenu.x, y: regionContextMenu.y }}
           items={[{
             label: "Unfollow region",
             danger: true,

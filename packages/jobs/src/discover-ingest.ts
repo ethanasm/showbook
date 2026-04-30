@@ -29,17 +29,17 @@ const log = child({ component: 'discover-ingest' });
 // Helpers
 // ---------------------------------------------------------------------------
 
-function nowISO(): string {
+export function nowISO(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
-function futureISO(months: number): string {
+export function futureISO(months: number): string {
   const d = new Date();
   d.setMonth(d.getMonth() + months);
   return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
-function determineOnSaleStatus(
+export function determineOnSaleStatus(
   event: TMEvent,
 ): 'announced' | 'on_sale' | 'sold_out' {
   const now = new Date();
@@ -58,7 +58,7 @@ function determineOnSaleStatus(
   return 'on_sale';
 }
 
-function parseOnSaleDate(event: TMEvent): Date | null {
+export function parseOnSaleDate(event: TMEvent): Date | null {
   const startDateTime = event.sales?.public?.startDateTime;
   if (!startDateTime) return null;
 

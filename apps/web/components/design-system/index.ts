@@ -9,3 +9,6 @@ export { PulseLabel } from "./PulseLabel";
 export { StackedCards, type StackedCardItem } from "./StackedCards";
 export { EmptyState } from "./EmptyState";
 export { RemoteImage, MonogramFallback } from "./RemoteImage";
+export { SectionHeader } from "./SectionHeader";
+export { Toggle } from "./Toggle";
+export { CenteredMessage } from "./CenteredMessage";

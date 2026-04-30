@@ -9,7 +9,7 @@ import MapPageView from "./View.client";
 export default async function MapPage() {
   const caller = await getServerCaller();
   await Promise.all([
-    prefetch("shows.list", {}, () => caller.shows.list({})),
+    prefetch("shows.listForMap", undefined, () => caller.shows.listForMap()),
     prefetch("venues.followed", undefined, () => caller.venues.followed()),
   ]);
 

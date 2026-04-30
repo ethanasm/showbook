@@ -579,12 +579,25 @@ export const mediaRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      const asset = await ctx.db.query.mediaAssets.findFirst({
-        where: and(eq(mediaAssets.id, input.assetId), eq(mediaAssets.userId, userId)),
-      });
-      if (!asset) {
+      // Verify ownership of both the asset AND its show in one query.
+      // Without the show join an attacker who somehow owned an asset row
+      // could mutate show_performers on a show they don't own.
+      const [row] = await ctx.db
+        .select({ assetId: mediaAssets.id, showId: mediaAssets.showId })
+        .from(mediaAssets)
+        .innerJoin(shows, eq(mediaAssets.showId, shows.id))
+        .where(
+          and(
+            eq(mediaAssets.id, input.assetId),
+            eq(mediaAssets.userId, userId),
+            eq(shows.userId, userId),
+          ),
+        )
+        .limit(1);
+      if (!row) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Media asset not found' });
       }
+      const asset = { id: row.assetId, showId: row.showId };
 
       const requested = [...new Set(input.performerIds)];
       let validIds: string[] = [];

@@ -11,139 +11,20 @@ import {
   ArrowRight,
   ChevronRight,
   Music,
-  Clapperboard,
-  Laugh,
-  Tent,
   Eye,
   Square,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { formatDateParts as toDateParts } from "@showbook/shared";
+import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
+import {
+  getHeadliner,
+  getHeadlinerId,
+  getHeadlinerImageUrl,
+  getSupport,
+  getSupportPerformers,
+} from "@/lib/show-accessors";
 
 // ── Helpers ──────────────────────────────────────────────────────────────
-
-const KIND_ICONS: Record<ShowKind, LucideIcon> = {
-  concert: Music,
-  theatre: Clapperboard,
-  comedy: Laugh,
-  festival: Tent,
-};
-
-const KIND_LABELS: Record<ShowKind, string> = {
-  concert: "Concert",
-  theatre: "Theatre",
-  comedy: "Comedy",
-  festival: "Festival",
-};
-
-function getHeadliner(
-  show: {
-    kind?: string;
-    productionName?: string | null;
-    showPerformers: {
-      role: string;
-      sortOrder: number;
-      performer: { name: string };
-    }[];
-  }
-): string {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return show.productionName;
-  }
-  const headliner = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 1
-  );
-  if (headliner) return headliner.performer.name;
-  const fallback = show.showPerformers.find((sp) => sp.role === "headliner");
-  if (fallback) return fallback.performer.name;
-  return show.showPerformers[0]?.performer.name ?? "Unknown Artist";
-}
-
-function getHeadlinerId(
-  show: {
-    kind?: string;
-    productionName?: string | null;
-    showPerformers: {
-      role: string;
-      sortOrder: number;
-      performer: { id: string };
-    }[];
-  }
-): string | undefined {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return undefined;
-  }
-  const headliner = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 1
-  );
-  if (headliner) return headliner.performer.id;
-  const fallback = show.showPerformers.find((sp) => sp.role === "headliner");
-  if (fallback) return fallback.performer.id;
-  return show.showPerformers[0]?.performer.id;
-}
-
-function getHeadlinerImageUrl(
-  show: {
-    kind?: string;
-    productionName?: string | null;
-    showPerformers: {
-      role: string;
-      sortOrder: number;
-      performer: { imageUrl: string | null };
-    }[];
-  }
-): string | null {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return null;
-  }
-  const headliner = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 1
-  );
-  if (headliner) return headliner.performer.imageUrl;
-  const fallback = show.showPerformers.find((sp) => sp.role === "headliner");
-  return fallback?.performer.imageUrl ?? show.showPerformers[0]?.performer.imageUrl ?? null;
-}
-
-function getSupport(
-  showPerformers: {
-    role: string;
-    sortOrder: number;
-    performer: { name: string };
-  }[]
-): string[] {
-  return showPerformers
-    .filter((sp) => sp.role === "support")
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((sp) => sp.performer.name);
-}
-
-function getSupportPerformers(
-  showPerformers: {
-    role: string;
-    sortOrder: number;
-    performer: { id: string; name: string };
-  }[]
-): { id: string; name: string }[] {
-  return showPerformers
-    .filter((sp) => sp.role === "support")
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((sp) => ({ id: sp.performer.id, name: sp.performer.name }));
-}
-
-function toDateParts(dateStr: string | null): {
-  month: string;
-  day: string;
-  year: string;
-  dow: string;
-} {
-  if (!dateStr) return { month: "TBD", day: "—", year: "", dow: "" };
-  const d = new Date(dateStr);
-  return {
-    month: d.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
-    day: String(d.getDate()),
-    year: String(d.getFullYear()),
-    dow: d.toLocaleDateString("en-US", { weekday: "short" }),
-  };
-}
 
 function countdownText(dateStr: string | null): string {
   if (!dateStr) return "date TBD";
@@ -503,8 +384,8 @@ export default function HomeView() {
               show={{
                 headliner: getHeadliner(heroShow),
                 headlinerId: getHeadlinerId(heroShow),
-                support: getSupport(heroShow.showPerformers),
-                supportPerformers: getSupportPerformers(heroShow.showPerformers),
+                support: getSupport(heroShow),
+                supportPerformers: getSupportPerformers(heroShow),
                 venue: heroShow.venue.name,
                 venueId: heroShow.venue.id,
                 city: [heroShow.venue.city, heroShow.venue.stateRegion]
@@ -515,7 +396,14 @@ export default function HomeView() {
                   ? parseFloat(heroShow.pricePaid)
                   : 0,
                 kind: heroShow.kind as ShowKind,
-                date: toDateParts(heroShow.date),
+                // Hero card has its own null-date display style — preserve
+                // the prior fallback so a date-less hero looks unchanged.
+                date: toDateParts(heroShow.date, {
+                  month: "TBD",
+                  day: "—",
+                  year: "",
+                  dow: "",
+                }),
                 countdown: countdownText(heroShow.date),
                 hasTix: heroShow.state === "ticketed",
                 headlinerImageUrl: getHeadlinerImageUrl(heroShow),
@@ -786,7 +674,7 @@ export default function HomeView() {
                 const dateParts = toDateParts(s.date);
                 const headliner = getHeadliner(s);
                 const headlinerId = getHeadlinerId(s);
-                const support = getSupport(s.showPerformers);
+                const support = getSupport(s);
                 const paidDisplay = s.pricePaid
                   ? `$${parseFloat(s.pricePaid)}`
                   : "—";

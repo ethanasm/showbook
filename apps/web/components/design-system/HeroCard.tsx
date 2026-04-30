@@ -6,16 +6,12 @@ import "./design-system.css";
 import type { ShowKind } from "./KindBadge";
 import { PulseLabel } from "./PulseLabel";
 import {
-  Music,
-  Clapperboard,
-  Laugh,
-  Tent,
   MapPin,
   Ticket,
   Clock,
   Check,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 
 export interface HeroShow {
   headliner: string;
@@ -37,20 +33,6 @@ export interface HeroShow {
 interface HeroCardProps {
   show: HeroShow;
 }
-
-const KIND_ICONS: Record<ShowKind, LucideIcon> = {
-  concert: Music,
-  theatre: Clapperboard,
-  comedy: Laugh,
-  festival: Tent,
-};
-
-const KIND_LABELS: Record<ShowKind, string> = {
-  concert: "Concert",
-  theatre: "Theatre",
-  comedy: "Comedy",
-  festival: "Festival",
-};
 
 export function HeroCard({ show }: HeroCardProps) {
   const KindIcon = KIND_ICONS[show.kind];

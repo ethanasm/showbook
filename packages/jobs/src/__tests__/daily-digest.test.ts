@@ -11,6 +11,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   bucketAnnouncementsForUser,
+  whenLabel,
   type AnnouncementInput,
 } from '../notifications';
 
@@ -221,4 +222,60 @@ test('formats single-date show as "Day, Mon DD"', () => {
     SEVEN_OUT,
   );
   assert.match(result[0]!.whenLabel, /Aug 15/);
+});
+
+// ── whenLabel ───────────────────────────────────────────────────────────
+
+test('whenLabel: single show (no run) renders "Mon, Mon DD"', () => {
+  const out = whenLabel({
+    showDate: '2026-08-15',
+    runStartDate: null,
+    runEndDate: null,
+    performanceDates: null,
+  });
+  assert.match(out, /Aug 15/);
+  assert.equal(out.includes('('), false);
+});
+
+test('whenLabel: multi-night run renders start – end (N dates)', () => {
+  const out = whenLabel({
+    showDate: '2026-09-12',
+    runStartDate: '2026-09-12',
+    runEndDate: '2026-09-14',
+    performanceDates: ['2026-09-12', '2026-09-13', '2026-09-14'],
+  });
+  assert.match(out, /Sep 12/);
+  assert.match(out, /Sep 14/);
+  assert.match(out, /\(3 dates\)/);
+});
+
+test('whenLabel: defaults performanceDates length to 1 when null', () => {
+  const out = whenLabel({
+    showDate: '2026-09-12',
+    runStartDate: '2026-09-12',
+    runEndDate: '2026-09-14',
+    performanceDates: null,
+  });
+  assert.match(out, /\(1 dates\)/);
+});
+
+test('whenLabel: collapses to single-date when start === end', () => {
+  const out = whenLabel({
+    showDate: '2026-08-15',
+    runStartDate: '2026-08-15',
+    runEndDate: '2026-08-15',
+    performanceDates: ['2026-08-15'],
+  });
+  assert.match(out, /Aug 15/);
+  assert.equal(out.includes('–'), false);
+});
+
+test('whenLabel: falls back to showDate when run dates are null', () => {
+  const out = whenLabel({
+    showDate: '2026-12-31',
+    runStartDate: null,
+    runEndDate: null,
+    performanceDates: null,
+  });
+  assert.match(out, /Dec 31/);
 });

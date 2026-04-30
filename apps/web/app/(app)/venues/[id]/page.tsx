@@ -7,23 +7,38 @@ import { trpc } from "@/lib/trpc";
 import { EditableName } from "@/components/EditableName";
 import {
   Music,
-  Clapperboard,
-  Laugh,
-  Tent,
   ArrowUpRight,
-  Plus,
-  Check,
   MoreHorizontal,
   Trash2,
   Ticket,
 } from "lucide-react";
+import { FollowButton } from "@/components/FollowButton";
+import { ShowDetailPanel } from "@/components/ShowDetailPanel";
+import { ScrapeConfigSection } from "@/components/ScrapeConfigSection";
+import { STATE_TRANSITIONS } from "@/lib/show-state";
+import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import {
+  getHeadliner,
+  getHeadlinerId,
+  getHeadlinerImageUrl,
+  getSupport,
+  getSupportPerformers,
+} from "@/lib/show-accessors";
+import {
+  CenteredMessage,
   RemoteImage,
+  SectionHeader,
   ShowRow as ShowRowComponent,
   type ShowKind,
   type ShowState,
 } from "@/components/design-system";
 import { MediaSection } from "@/components/media";
+import {
+  daysUntil,
+  formatDateMedium as formatDateLong,
+  formatDateParts,
+  formatOnSaleDate,
+} from "@showbook/shared";
 
 type Performer = {
   id: string;
@@ -52,110 +67,12 @@ type ShowData = {
   showPerformers: ShowPerformer[];
 };
 
-const KIND_ICONS: Record<
-  ShowKind,
-  React.ComponentType<{ size?: number; color?: string; className?: string }>
-> = {
-  concert: Music,
-  theatre: Clapperboard,
-  comedy: Laugh,
-  festival: Tent,
-};
-
-const KIND_LABELS: Record<ShowKind, string> = {
-  concert: "Concert",
-  theatre: "Theatre",
-  comedy: "Comedy",
-  festival: "Festival",
-};
-
 const ON_SALE_STATUS_LABELS: Record<string, string> = {
   announced: "announced",
   on_sale: "on sale",
   sold_out: "sold out",
 };
 
-function formatDateLong(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatDateParts(dateStr: string): {
-  month: string;
-  day: string;
-  year: string;
-  dow: string;
-} {
-  const d = new Date(dateStr + "T00:00:00");
-  return {
-    month: d.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
-    day: String(d.getDate()),
-    year: String(d.getFullYear()),
-    dow: d.toLocaleDateString("en-US", { weekday: "short" }).toLowerCase(),
-  };
-}
-
-function formatOnSaleDate(value: Date | string | null): string {
-  if (!value) return "—";
-  const d = typeof value === "string" ? new Date(value) : value;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function getHeadliner(show: ShowData): string {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return show.productionName;
-  }
-  const hl = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0,
-  );
-  return (
-    hl?.performer.name ??
-    show.showPerformers.find((sp) => sp.role === "headliner")?.performer.name ??
-    "Unknown"
-  );
-}
-
-function daysUntil(dateStr: string): number {
-  const now = new Date();
-  const d = new Date(dateStr + "T00:00:00");
-  return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-const STATE_TRANSITIONS: Record<string, { label: string; target: ShowState }> = {
-  watching: { label: "Got tickets", target: "ticketed" },
-  ticketed: { label: "Mark as attended", target: "past" },
-};
-
-function getSupport(show: ShowData): string[] {
-  return show.showPerformers
-    .filter((sp) => sp.role === "support")
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((sp) => sp.performer.name);
-}
-
-function getHeadlinerId(show: ShowData): string | undefined {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return undefined;
-  }
-  const hl = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0,
-  );
-  return hl?.performer.id;
-}
-
-function getHeadlinerImageUrl(show: ShowData): string | null {
-  if ((show.kind === "theatre" || show.kind === "festival") && show.productionName) {
-    return null;
-  }
-  const hl = show.showPerformers.find(
-    (sp) => sp.role === "headliner" && sp.sortOrder === 0,
-  );
-  return hl?.performer.imageUrl ?? null;
-}
 
 function gradientLastWord(name: string) {
   const words = name.trim().split(/\s+/);
@@ -166,13 +83,6 @@ function gradientLastWord(name: string) {
       {words.join(" ")} <span className="gradient-emphasis">{last}</span>
     </>
   );
-}
-
-function getSupportPerformers(show: ShowData): { id: string; name: string }[] {
-  return show.showPerformers
-    .filter((sp) => sp.role === "support")
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((sp) => ({ id: sp.performer.id, name: sp.performer.name }));
 }
 
 export default function VenueDetailPage() {
@@ -481,36 +391,12 @@ export default function VenueDetailPage() {
           </div>
         </div>
 
-        {/* Follow button */}
-        <button
-          type="button"
-          onClick={toggleFollow}
-          disabled={followBusy}
-          style={{
-            padding: "8px 14px",
-            border: `1px solid ${venue.isFollowed ? "var(--accent)" : "var(--rule-strong)"}`,
-            background: venue.isFollowed ? "var(--accent)" : "transparent",
-            color: venue.isFollowed ? "var(--bg)" : "var(--ink)",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
-            letterSpacing: ".04em",
-            cursor: followBusy ? "default" : "pointer",
-            opacity: followBusy ? 0.6 : 1,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
-          {venue.isFollowed ? (
-            <>
-              <Check size={12} /> Following
-            </>
-          ) : (
-            <>
-              <Plus size={12} /> Follow
-            </>
-          )}
-        </button>
+        <FollowButton
+          isFollowed={venue.isFollowed}
+          isLoading={followBusy}
+          onToggle={toggleFollow}
+          variant="mono"
+        />
       </div>
 
       {/* Body */}
@@ -680,6 +566,7 @@ export default function VenueDetailPage() {
                           fontSize: 10,
                           color: "var(--muted)",
                           marginTop: 2,
+                          textTransform: "lowercase",
                         }}
                       >
                         {date.year} &middot; {date.dow}
@@ -785,253 +672,6 @@ export default function VenueDetailPage() {
   );
 }
 
-function ShowDetailPanel({
-  show,
-  venueName,
-  venueId,
-  onEdit,
-  onDelete,
-  onStateTransition,
-}: {
-  show: ShowData;
-  venueName: string;
-  venueId: string;
-  onEdit: () => void;
-  onDelete: () => void;
-  onStateTransition: () => void;
-}) {
-  const support = getSupport(show);
-  const dateParts = formatDateParts(show.date);
-  const days = daysUntil(show.date);
-  const countdown = show.state !== "past" && days > 0 ? `in ${days} day${days !== 1 ? "s" : ""}` : null;
-  const transition = STATE_TRANSITIONS[show.state];
-
-  return (
-    <div style={{
-      background: "var(--surface2)",
-      borderBottom: "1px solid var(--rule)",
-      padding: "20px 24px 20px 34px",
-      display: "grid",
-      gridTemplateColumns: "1fr 1fr 1fr 1fr",
-      gap: 24,
-    }}>
-      {/* Column 1: Details */}
-      <div>
-        <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 6 }}>
-          Details
-        </div>
-        <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 20, fontWeight: 600, color: "var(--ink)", letterSpacing: -0.5, lineHeight: 1.1 }}>
-          {(() => {
-            const hlId = getHeadlinerId(show);
-            const name = getHeadliner(show);
-            return hlId ? (
-              <Link
-                href={`/artists/${hlId}`}
-                style={{ color: "inherit", textDecoration: "none" }}
-                onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
-                onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
-              >
-                {name}
-              </Link>
-            ) : name;
-          })()}
-        </div>
-        {support.length > 0 && (
-          <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 12.5, color: "var(--muted)", marginTop: 5 }}>
-            with{" "}
-            {(() => {
-              const supportRich = getSupportPerformers(show);
-              return support.map((name, i) => {
-                const id = supportRich.find((p) => p.name === name)?.id;
-                return (
-                  <span key={`${name}-${i}`}>
-                    {id ? (
-                      <Link
-                        href={`/artists/${id}`}
-                        style={{ color: "inherit", textDecoration: "none" }}
-                        onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
-                        onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
-                      >
-                        {name}
-                      </Link>
-                    ) : (
-                      name
-                    )}
-                    {i < support.length - 1 ? ", " : ""}
-                  </span>
-                );
-              });
-            })()}
-          </div>
-        )}
-        {show.tourName && (
-          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", marginTop: 8, letterSpacing: ".04em" }}>
-            {show.tourName}
-          </div>
-        )}
-      </div>
-
-      {/* Column 2: Venue */}
-      <div>
-        <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 6 }}>
-          Venue
-        </div>
-        <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 14, fontWeight: 500, color: "var(--ink)" }}>
-          {venueName}
-        </div>
-        {show.seat && (
-          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", marginTop: 6 }}>
-            <span style={{ color: "var(--faint)" }}>seat</span> {show.seat}
-          </div>
-        )}
-      </div>
-
-      {/* Column 3: Date */}
-      <div>
-        <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 6 }}>
-          Date
-        </div>
-        <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 14, fontWeight: 500, color: "var(--ink)", fontFeatureSettings: '"tnum"' }}>
-          {dateParts.dow}, {dateParts.month} {dateParts.day}, {dateParts.year}
-        </div>
-        {countdown && (
-          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--accent)", marginTop: 4 }}>
-            {countdown}
-          </div>
-        )}
-        {show.pricePaid && (
-          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", marginTop: 6 }}>
-            <span style={{ color: "var(--faint)" }}>paid</span> ${parseFloat(show.pricePaid).toFixed(0)}
-            {show.ticketCount > 1 && (
-              <span style={{ color: "var(--faint)" }}> · ${(parseFloat(show.pricePaid) / show.ticketCount).toFixed(0)}/ea × {show.ticketCount}</span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Column 4: Actions */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
-        <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 2 }}>
-          Actions
-        </div>
-        {show.state === "watching" && (
-          <button
-            onClick={onStateTransition}
-            style={{
-              padding: "8px 14px",
-              background: "var(--accent)",
-              color: "var(--accent-text)",
-              border: "none",
-              fontFamily: "var(--font-geist-sans), sans-serif",
-              fontSize: 12.5,
-              fontWeight: 500,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              cursor: "pointer",
-            }}
-          >
-            <Ticket size={13} /> Buy tickets
-          </button>
-        )}
-        {transition && show.state === "ticketed" && (
-          <button
-            onClick={onStateTransition}
-            style={{
-              padding: "8px 14px",
-              background: "var(--accent)",
-              color: "var(--accent-text)",
-              border: "none",
-              fontFamily: "var(--font-geist-sans), sans-serif",
-              fontSize: 12.5,
-              fontWeight: 500,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              cursor: "pointer",
-            }}
-          >
-            {transition.label}
-          </button>
-        )}
-        <button
-          onClick={onEdit}
-          style={{
-            padding: "8px 14px",
-            background: "transparent",
-            border: "1px solid var(--rule-strong)",
-            color: "var(--ink)",
-            fontFamily: "var(--font-geist-sans), sans-serif",
-            fontSize: 12.5,
-            fontWeight: 500,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            cursor: "pointer",
-          }}
-        >
-          <MoreHorizontal size={13} /> Edit
-        </button>
-        <button
-          onClick={onDelete}
-          style={{
-            padding: "8px 14px",
-            background: "transparent",
-            border: "1px solid var(--rule-strong)",
-            color: "#E63946",
-            fontFamily: "var(--font-geist-sans), sans-serif",
-            fontSize: 12.5,
-            fontWeight: 500,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            cursor: "pointer",
-          }}
-        >
-          <Trash2 size={13} /> Delete
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function SectionHeader({ label, note }: { label: string; note?: string }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "baseline",
-        justifyContent: "space-between",
-        marginBottom: 12,
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
-          color: "var(--ink)",
-          letterSpacing: ".1em",
-          textTransform: "uppercase",
-          fontWeight: 500,
-        }}
-      >
-        {label}
-      </div>
-      {note && (
-        <div
-          style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
-            color: "var(--faint)",
-            letterSpacing: ".04em",
-          }}
-        >
-          {note}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function CardMessage({ children }: { children: React.ReactNode }) {
   return (
@@ -1050,261 +690,6 @@ function CardMessage({ children }: { children: React.ReactNode }) {
   );
 }
 
-function CenteredMessage({
-  children,
-  tone,
-}: {
-  children: React.ReactNode;
-  tone?: "error";
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: 300,
-        fontFamily: "var(--font-geist-mono), monospace",
-        fontSize: "0.85rem",
-        color: tone === "error" ? "var(--kind-theatre)" : "var(--muted)",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
 
 // ── Scrape config section ─────────────────────────────────────────────────
 
-function formatRelative(d: Date | null | string): string {
-  if (!d) return "never";
-  const date = typeof d === "string" ? new Date(d) : d;
-  const ms = Date.now() - date.getTime();
-  if (ms < 60_000) return "just now";
-  const mins = Math.round(ms / 60_000);
-  if (mins < 60) return `${mins} min${mins === 1 ? "" : "s"} ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 48) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
-  const days = Math.round(hours / 24);
-  return `${days} day${days === 1 ? "" : "s"} ago`;
-}
-
-function ScrapeConfigSection({
-  venueId,
-  venueName,
-}: {
-  venueId: string;
-  venueName: string;
-}) {
-  const utils = trpc.useUtils();
-  const statusQuery = trpc.venues.scrapeStatus.useQuery(
-    { venueId },
-    { enabled: Boolean(venueId) },
-  );
-
-  const [url, setUrl] = useState("");
-  const [frequency, setFrequency] = useState<number>(7);
-  const [editing, setEditing] = useState(false);
-
-  useEffect(() => {
-    if (statusQuery.data?.config) {
-      setUrl(statusQuery.data.config.url);
-      setFrequency(statusQuery.data.config.frequencyDays);
-    }
-  }, [statusQuery.data]);
-
-  const saveMutation = trpc.venues.saveScrapeConfig.useMutation({
-    onSuccess: () => {
-      utils.venues.scrapeStatus.invalidate({ venueId });
-      setEditing(false);
-    },
-  });
-
-  const config = statusQuery.data?.config;
-  const lastRun = statusQuery.data?.lastRun;
-  const hasConfig = !!config;
-  const showForm = editing || !hasConfig;
-
-  return (
-    <section>
-      <SectionHeader
-        label="Scrape config"
-        note="for venues that aren't on Ticketmaster"
-      />
-      <div
-        style={{
-          background: "var(--surface)",
-          padding: "16px 20px",
-          borderTop: "1px solid var(--rule)",
-          borderBottom: "1px solid var(--rule)",
-          fontFamily: "var(--font-geist-sans), sans-serif",
-          fontSize: 13,
-          color: "var(--ink)",
-        }}
-      >
-        {!showForm && config ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ wordBreak: "break-all" }}>
-              <strong>URL:</strong>{" "}
-              <a href={config.url} target="_blank" rel="noreferrer">
-                {config.url}
-              </a>
-            </div>
-            <div>
-              <strong>Frequency:</strong> every {config.frequencyDays} day
-              {config.frequencyDays === 1 ? "" : "s"}
-            </div>
-            <div style={{ color: "var(--muted)", fontSize: 12 }}>
-              {lastRun ? (
-                <>
-                  Last scrape: {formatRelative(lastRun.completedAt ?? lastRun.startedAt)}{" "}
-                  {lastRun.status === "success"
-                    ? `— ${lastRun.eventsCreated} new events (${lastRun.eventsFound} found)`
-                    : lastRun.status === "error"
-                      ? `— failed: ${lastRun.errorMessage ?? "unknown error"}`
-                      : "— still running"}
-                </>
-              ) : (
-                <>No scrape has run yet — the next weekly run will pick this up.</>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <button
-                type="button"
-                onClick={() => setEditing(true)}
-                style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
-                  padding: "4px 10px",
-                  border: "1px solid var(--rule)",
-                  background: "transparent",
-                  color: "var(--ink)",
-                  cursor: "pointer",
-                }}
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (
-                    confirm(
-                      `Stop scraping ${venueName}? You can re-add the URL anytime.`,
-                    )
-                  ) {
-                    saveMutation.mutate({ venueId, config: null });
-                  }
-                }}
-                disabled={saveMutation.isPending}
-                style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
-                  padding: "4px 10px",
-                  border: "1px solid var(--rule)",
-                  background: "transparent",
-                  color: "var(--muted)",
-                  cursor: "pointer",
-                }}
-              >
-                Remove
-              </button>
-            </div>
-          </div>
-        ) : (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!url.trim()) return;
-              saveMutation.mutate({
-                venueId,
-                config: { url: url.trim(), frequencyDays: frequency },
-              });
-            }}
-            style={{ display: "flex", flexDirection: "column", gap: 10 }}
-          >
-            <p style={{ color: "var(--muted)", fontSize: 12, margin: 0 }}>
-              Paste the URL of {venueName}&apos;s upcoming-events page. We&apos;ll
-              fetch the page weekly and use AI to extract upcoming shows.
-            </p>
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://example.com/upcoming"
-              required
-              style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 12,
-                padding: "8px 10px",
-                border: "1px solid var(--rule)",
-                background: "var(--surface2)",
-                color: "var(--ink)",
-              }}
-            />
-            <label
-              style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}
-            >
-              Check every
-              <select
-                value={frequency}
-                onChange={(e) => setFrequency(Number(e.target.value))}
-                style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 12,
-                  padding: "4px 8px",
-                  border: "1px solid var(--rule)",
-                  background: "var(--surface2)",
-                  color: "var(--ink)",
-                }}
-              >
-                <option value={1}>day</option>
-                <option value={7}>week</option>
-                <option value={14}>2 weeks</option>
-                <option value={30}>month</option>
-              </select>
-            </label>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                type="submit"
-                disabled={saveMutation.isPending || !url.trim()}
-                style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
-                  padding: "6px 12px",
-                  border: "1px solid var(--accent)",
-                  background: "var(--accent)",
-                  color: "var(--bg)",
-                  cursor: saveMutation.isPending ? "default" : "pointer",
-                }}
-              >
-                {saveMutation.isPending ? "Saving…" : "Save"}
-              </button>
-              {hasConfig && (
-                <button
-                  type="button"
-                  onClick={() => setEditing(false)}
-                  style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11,
-                    padding: "6px 12px",
-                    border: "1px solid var(--rule)",
-                    background: "transparent",
-                    color: "var(--muted)",
-                    cursor: "pointer",
-                  }}
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
-            {saveMutation.error && (
-              <div style={{ color: "var(--kind-theatre)", fontSize: 12 }}>
-                {saveMutation.error.message}
-              </div>
-            )}
-          </form>
-        )}
-      </div>
-    </section>
-  );
-}

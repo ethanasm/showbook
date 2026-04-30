@@ -51,7 +51,7 @@ function formatDate(dateStr: string): string {
   });
 }
 
-function whenLabel(row: {
+export function whenLabel(row: {
   showDate: string;
   runStartDate: string | null;
   runEndDate: string | null;

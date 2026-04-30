@@ -545,6 +545,7 @@
   font-size: 10px;
   color: var(--faint);
   line-height: 1.4;
+  text-transform: lowercase;
 }
 
 /* 3. Kind icon + label */

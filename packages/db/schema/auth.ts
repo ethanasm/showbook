@@ -1,8 +1,11 @@
 import { pgTable, text, timestamp, integer, primaryKey } from 'drizzle-orm/pg-core';
+import { users } from './users';
 
 export const accounts = pgTable('accounts', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  userId: text('user_id').notNull(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
   type: text('type').notNull(),
   provider: text('provider').notNull(),
   providerAccountId: text('provider_account_id').notNull(),
@@ -17,7 +20,9 @@ export const accounts = pgTable('accounts', {
 
 export const sessions = pgTable('sessions', {
   sessionToken: text('session_token').primaryKey(),
-  userId: text('user_id').notNull(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
   expires: timestamp('expires', { mode: 'date' }).notNull(),
 });
 

@@ -30,7 +30,7 @@ import {
 } from '../gmail';
 import { geocodeVenue } from '../geocode';
 
-function correctExtractedYear(
+export function correctExtractedYear(
   extractedDate: string | null,
   emailDateHeader: string,
 ): string | null {
@@ -64,7 +64,7 @@ function correctExtractedYear(
   return `${correctedYear}-${month}-${day}`;
 }
 
-function mapEventToResult(event: TMEvent) {
+export function mapEventToResult(event: TMEvent) {
   const venue = event._embedded?.venues?.[0];
   const attractions = event._embedded?.attractions ?? [];
   return {

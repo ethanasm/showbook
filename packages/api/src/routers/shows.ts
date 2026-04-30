@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { eq, and, sql, desc, inArray, isNotNull } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
 import {
@@ -7,6 +7,8 @@ import {
   showPerformers,
   showAnnouncementLinks,
   announcements,
+  venues,
+  performers,
 } from '@showbook/db';
 import { matchOrCreateVenue, type VenueInput } from '../venue-matcher';
 import {
@@ -137,6 +139,166 @@ export const showsRouter = router({
         },
       });
     }),
+
+  /**
+   * Slim per-show shape: { id, date, kind, state, performerIds }. Used by
+   * callsites that need to filter / index shows by performer or year but
+   * don't render the full venue and performer object graph (the artists
+   * page right-click menu, for example).
+   */
+  listSlim: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const baseRows = await ctx.db
+      .select({
+        id: shows.id,
+        date: shows.date,
+        kind: shows.kind,
+        state: shows.state,
+      })
+      .from(shows)
+      .where(eq(shows.userId, userId))
+      .orderBy(desc(shows.date));
+
+    if (baseRows.length === 0) return [];
+
+    const performerRows = await ctx.db
+      .select({
+        showId: showPerformers.showId,
+        performerId: showPerformers.performerId,
+      })
+      .from(showPerformers)
+      .innerJoin(shows, eq(showPerformers.showId, shows.id))
+      .where(eq(shows.userId, userId));
+
+    const idsByShow = new Map<string, string[]>();
+    for (const row of performerRows) {
+      const arr = idsByShow.get(row.showId);
+      if (arr) arr.push(row.performerId);
+      else idsByShow.set(row.showId, [row.performerId]);
+    }
+
+    return baseRows.map((row) => ({
+      ...row,
+      performerIds: idsByShow.get(row.id) ?? [],
+    }));
+  }),
+
+  /**
+   * Map-shaped projection: every show with its venue's geo fields plus a
+   * single denormalized headliner (name, id, imageUrl). The map view
+   * needs all shows to compute "unmapped" counts but never iterates
+   * showPerformers — denormalizing lets us drop the array-of-N join.
+   */
+  listForMap: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const rows = await ctx.db
+      .select({
+        id: shows.id,
+        kind: shows.kind,
+        state: shows.state,
+        date: shows.date,
+        seat: shows.seat,
+        pricePaid: shows.pricePaid,
+        ticketCount: shows.ticketCount,
+        productionName: shows.productionName,
+        venue: {
+          id: venues.id,
+          name: venues.name,
+          city: venues.city,
+          stateRegion: venues.stateRegion,
+          latitude: venues.latitude,
+          longitude: venues.longitude,
+          photoUrl: venues.photoUrl,
+        },
+      })
+      .from(shows)
+      .innerJoin(venues, eq(shows.venueId, venues.id))
+      .where(eq(shows.userId, userId))
+      .orderBy(desc(shows.date));
+
+    if (rows.length === 0) return [];
+
+    const headlinerName = new Map<string, string>();
+    const headlinerId = new Map<string, string>();
+    const headlinerImageUrl = new Map<string, string | null>();
+    const nonProductionIds: string[] = [];
+
+    // Theatre/festival rows that have a productionName render the production
+    // as the "headliner" — match the legacy getHeadliner behaviour exactly.
+    for (const r of rows) {
+      if (
+        (r.kind === 'theatre' || r.kind === 'festival') &&
+        r.productionName
+      ) {
+        headlinerName.set(r.id, r.productionName);
+      } else {
+        nonProductionIds.push(r.id);
+      }
+    }
+
+    if (nonProductionIds.length > 0) {
+      // Pull every showPerformer (not just role='headliner') so we can
+      // mirror the 3-tier fallback in apps/web/lib/show-accessors.ts:
+      //   1) headliner with sortOrder === 0
+      //   2) any headliner
+      //   3) first showPerformer regardless of role
+      const performerRows = await ctx.db
+        .select({
+          showId: showPerformers.showId,
+          performerId: performers.id,
+          name: performers.name,
+          imageUrl: performers.imageUrl,
+          role: showPerformers.role,
+          sortOrder: showPerformers.sortOrder,
+        })
+        .from(showPerformers)
+        .innerJoin(performers, eq(showPerformers.performerId, performers.id))
+        .where(inArray(showPerformers.showId, nonProductionIds));
+
+      type Best = {
+        tier: 0 | 1 | 2;
+        sortOrder: number;
+        name: string;
+        performerId: string;
+        imageUrl: string | null;
+      };
+      const best = new Map<string, Best>();
+      for (const row of performerRows) {
+        const tier: Best['tier'] =
+          row.role === 'headliner' && row.sortOrder === 0
+            ? 0
+            : row.role === 'headliner'
+              ? 1
+              : 2;
+        const cur = best.get(row.showId);
+        if (
+          !cur ||
+          tier < cur.tier ||
+          (tier === cur.tier && row.sortOrder < cur.sortOrder)
+        ) {
+          best.set(row.showId, {
+            tier,
+            sortOrder: row.sortOrder,
+            name: row.name,
+            performerId: row.performerId,
+            imageUrl: row.imageUrl,
+          });
+        }
+      }
+      for (const [showId, b] of best) {
+        headlinerName.set(showId, b.name);
+        headlinerId.set(showId, b.performerId);
+        headlinerImageUrl.set(showId, b.imageUrl);
+      }
+    }
+
+    return rows.map(({ productionName: _pn, ...show }) => ({
+      ...show,
+      headlinerName: headlinerName.get(show.id) ?? null,
+      headlinerId: headlinerId.get(show.id) ?? null,
+      headlinerImageUrl: headlinerImageUrl.get(show.id) ?? null,
+    }));
+  }),
 
   /**
    * Lightweight count for sidebar badges. Avoids shipping the full show

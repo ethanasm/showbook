@@ -5,10 +5,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import {
-  Music,
-  Clapperboard,
-  Laugh,
-  Tent,
   MapPin,
   MoreHorizontal,
   Trash2,
@@ -16,85 +12,28 @@ import {
   ChevronLeft,
   CalendarPlus,
 } from "lucide-react";
+import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import {
+  CenteredMessage,
+  SectionHeader,
   StateChip,
   type ShowKind,
   type ShowState,
 } from "@/components/design-system";
 import { MediaSection } from "@/components/media";
+import {
+  daysUntil,
+  formatDateLong,
+  formatDateRangeLong,
+} from "@showbook/shared";
+import { STATE_TRANSITIONS } from "@/lib/show-state";
 
-const KIND_ICONS: Record<
-  ShowKind,
-  React.ComponentType<{ size?: number; color?: string; className?: string }>
-> = {
-  concert: Music,
-  theatre: Clapperboard,
-  comedy: Laugh,
-  festival: Tent,
-};
-
-const KIND_LABELS: Record<ShowKind, string> = {
-  concert: "Concert",
-  theatre: "Theatre",
-  comedy: "Comedy",
-  festival: "Festival",
-};
-
-const STATE_TRANSITIONS: Record<string, { label: string; target: ShowState }> = {
-  watching: { label: "Got tickets", target: "ticketed" },
-  ticketed: { label: "Mark as attended", target: "past" },
-};
 
 const ROLE_LABEL: Record<string, string> = {
   headliner: "Headliner",
   support: "Support",
   cast: "Cast",
 };
-
-function formatDateLong(dateStr: string | null): string {
-  if (!dateStr) return "Date TBD";
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatDateRangeLong(
-  dateStr: string | null,
-  endDateStr: string | null,
-): string {
-  if (!dateStr) return "Date TBD";
-  if (!endDateStr || endDateStr === dateStr) return formatDateLong(dateStr);
-
-  const start = new Date(dateStr + "T00:00:00");
-  const end = new Date(endDateStr + "T00:00:00");
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-    return formatDateLong(dateStr);
-  }
-
-  const startLabel = start.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-  const endLabel = end.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-  return `${startLabel} - ${endLabel}`;
-}
-
-function daysUntil(dateStr: string | null): number {
-  if (!dateStr) return 0;
-  const now = new Date();
-  const d = new Date(dateStr + "T00:00:00");
-  return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-}
 
 export default function ShowDetailPage() {
   const params = useParams<{ id: string }>();
@@ -652,67 +591,6 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function SectionHeader({ label, note }: { label: string; note?: string }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "baseline",
-        justifyContent: "space-between",
-        marginBottom: 12,
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
-          color: "var(--ink)",
-          letterSpacing: ".1em",
-          textTransform: "uppercase",
-          fontWeight: 500,
-        }}
-      >
-        {label}
-      </div>
-      {note && (
-        <div
-          style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
-            color: "var(--faint)",
-            letterSpacing: ".04em",
-          }}
-        >
-          {note}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CenteredMessage({
-  children,
-  tone,
-}: {
-  children: React.ReactNode;
-  tone?: "error";
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: 300,
-        fontFamily: "var(--font-geist-mono), monospace",
-        fontSize: 11,
-        color: tone === "error" ? "var(--kind-theatre)" : "var(--muted)",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
 
 // ── Per-performer setlist section ────────────────────────────────────────
 
