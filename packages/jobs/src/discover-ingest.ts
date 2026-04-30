@@ -131,7 +131,7 @@ async function normalizeTmEvent(event: TMEvent): Promise<NormalizedEvent | null>
   return {
     sourceEventId: event.id,
     date: event.dates.start.localDate,
-    kind: inferKind(event.classifications),
+    kind: inferKind(event.classifications, { eventName: event.name }),
     headliner: headlinerName,
     headlinerPerformerId,
     venueId: venue.id,
