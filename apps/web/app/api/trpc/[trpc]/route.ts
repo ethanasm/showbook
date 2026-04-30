@@ -1,6 +1,9 @@
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { appRouter, createContext } from '@showbook/api';
+import { child } from '@showbook/observability';
 import { auth } from '@/auth';
+
+const log = child({ component: 'web.trpc' });
 
 const handler = async (req: Request) => {
   const session = await auth();
@@ -14,7 +17,10 @@ const handler = async (req: Request) => {
         session: session?.user?.id ? { user: { id: session.user.id } } : null,
       }),
     onError: ({ path, error }) => {
-      console.error(`[tRPC] ${path ?? 'unknown'}:`, error);
+      log.error(
+        { err: error, event: 'trpc.error', path: path ?? 'unknown', userId: session?.user?.id },
+        'tRPC procedure error',
+      );
     },
   });
 };

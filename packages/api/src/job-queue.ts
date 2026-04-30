@@ -8,6 +8,9 @@
 
 import PgBoss from 'pg-boss';
 import { db, sql } from '@showbook/db';
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'api.job-queue' });
 
 // Cache pg-boss on globalThis so Next.js HMR doesn't leak connection pools.
 // pg-boss opens its own pool of ~5 connections per instance; without
@@ -45,7 +48,7 @@ export async function enqueueIngestVenue(venueId: string): Promise<void> {
   } catch (err) {
     // Don't fail the user-facing follow mutation if the queue is unavailable
     // — the weekly cron will catch up. Log loudly so we notice.
-    console.error('[job-queue] enqueueIngestVenue failed:', err);
+    log.error({ err, event: 'job_queue.enqueue.failed', queue: JOB_NAMES.INGEST_VENUE, venueId }, 'enqueueIngestVenue failed');
   }
 }
 
@@ -54,7 +57,7 @@ export async function enqueueIngestPerformer(performerId: string): Promise<void>
     const boss = await getSender();
     await boss.send(JOB_NAMES.INGEST_PERFORMER, { performerId });
   } catch (err) {
-    console.error('[job-queue] enqueueIngestPerformer failed:', err);
+    log.error({ err, event: 'job_queue.enqueue.failed', queue: JOB_NAMES.INGEST_PERFORMER, performerId }, 'enqueueIngestPerformer failed');
   }
 }
 
@@ -65,7 +68,7 @@ export async function enqueueIngestRegion(
     const boss = await getSender();
     return await boss.send(JOB_NAMES.INGEST_REGION, { regionId });
   } catch (err) {
-    console.error('[job-queue] enqueueIngestRegion failed:', err);
+    log.error({ err, event: 'job_queue.enqueue.failed', queue: JOB_NAMES.INGEST_REGION, regionId }, 'enqueueIngestRegion failed');
     return null;
   }
 }
@@ -88,7 +91,7 @@ export async function isRegionIngestPending(
     );
     return rows.length > 0;
   } catch (err) {
-    console.error('[job-queue] isRegionIngestPending failed:', err);
+    log.error({ err, event: 'job_queue.poll.failed', regionId }, 'isRegionIngestPending failed');
     return false;
   }
 }

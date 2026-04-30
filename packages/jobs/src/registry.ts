@@ -1,4 +1,5 @@
 import PgBoss from 'pg-boss';
+import { child, withTrace, flushObservability } from '@showbook/observability';
 import {
   runDiscoverIngest,
   ingestVenue,
@@ -23,72 +24,133 @@ export const JOBS = {
   NOTIFICATIONS_DAILY_DIGEST: 'notifications/daily-digest',
 } as const;
 
-// Pre-1.0 cron names that have been removed and must be unscheduled on startup
-// so we don't keep firing handlers that no longer exist.
 const STALE_SCHEDULES = [
   'notifications/digest',
   'notifications/weekly-digest',
 ] as const;
 
+const log = child({ component: 'jobs.registry' });
+
+/**
+ * Wrap a single pg-boss job execution with structured logging,
+ * a Langfuse trace, timing, and observability flush. Errors are logged
+ * and re-thrown so pg-boss applies its retry policy.
+ */
+async function runJob<T = unknown>(
+  jobName: string,
+  job: PgBoss.Job<T>,
+  fn: () => Promise<unknown>,
+): Promise<void> {
+  const child = log.child({ job: jobName, jobId: job.id });
+  const startedAt = Date.now();
+  child.info({ event: 'job.start', data: job.data }, 'Job started');
+
+  try {
+    await withTrace(
+      jobName,
+      async () => {
+        const result = await fn();
+        child.info(
+          {
+            event: 'job.complete',
+            durationMs: Date.now() - startedAt,
+            result,
+          },
+          'Job complete',
+        );
+      },
+      { tags: ['pg-boss'], metadata: { jobId: job.id, data: job.data } },
+    );
+  } catch (err) {
+    child.error(
+      {
+        event: 'job.failed',
+        err,
+        durationMs: Date.now() - startedAt,
+      },
+      'Job failed',
+    );
+    throw err;
+  } finally {
+    await flushObservability();
+  }
+}
+
 async function showsNightlyHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
-    console.log(`[${JOBS.SHOWS_NIGHTLY}] Running nightly state transitions...`, job.id);
-    const result = await runShowsNightly();
-    console.log(
-      `[${JOBS.SHOWS_NIGHTLY}] Done: ${result.transitioned} transitioned, ${result.queued} queued for enrichment, ${result.deleted} deleted`
-    );
+    await runJob(JOBS.SHOWS_NIGHTLY, job, async () => {
+      const result = await runShowsNightly();
+      log.info(
+        {
+          event: 'shows.nightly.summary',
+          transitioned: result.transitioned,
+          queued: result.queued,
+          deleted: result.deleted,
+        },
+        'Shows nightly complete',
+      );
+      return result;
+    });
   }
 }
 
 async function setlistRetryHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
-    console.log(`[${JOBS.SETLIST_RETRY}] Starting setlist enrichment retry...`, job.id);
-    try {
+    await runJob(JOBS.SETLIST_RETRY, job, async () => {
       const result = await runSetlistRetry();
-      console.log(
-        `[${JOBS.SETLIST_RETRY}] Complete: ${result.processed} processed, ` +
-        `${result.enriched} enriched, ${result.failed} failed, ${result.givenUp} given up`,
+      log.info(
+        {
+          event: 'setlist.retry.summary',
+          processed: result.processed,
+          enriched: result.enriched,
+          failed: result.failed,
+          givenUp: result.givenUp,
+        },
+        'Setlist retry complete',
       );
-    } catch (error) {
-      console.error(`[${JOBS.SETLIST_RETRY}] Fatal error:`, error);
-      throw error;
-    }
+      return result;
+    });
   }
 }
 
-/**
- * Weekly discovery ingestion + scraping. Announcements land in the DB and
- * the daily digest job picks them up via discoveredAt > lastDigestSentAt.
- */
 async function discoverIngestHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
-    console.log(`[${JOBS.DISCOVER_INGEST}] Running weekly discovery ingestion...`, job.id);
-    try {
+    await runJob(JOBS.DISCOVER_INGEST, job, async () => {
       const ingest = await runDiscoverIngest();
-      console.log(
-        `[${JOBS.DISCOVER_INGEST}] TM: ${ingest.phase1Events} venue events, ` +
-        `${ingest.phase2Events} region events, ${ingest.phase3Events} performer events, ` +
-        `${ingest.pruned} pruned`,
+      log.info(
+        {
+          event: 'discover.ingest.tm.summary',
+          phase1Events: ingest.phase1Events,
+          phase2Events: ingest.phase2Events,
+          phase3Events: ingest.phase3Events,
+          pruned: ingest.pruned,
+        },
+        'Ticketmaster ingest complete',
       );
 
       try {
         const scrapers: ScrapersModule = await import('@showbook/scrapers');
         try {
           const scrape = await scrapers.runScrapers();
-          console.log(
-            `[${JOBS.DISCOVER_INGEST}] Scrapers: attempted=${scrape.attempted} ` +
-            `succeeded=${scrape.succeeded} failed=${scrape.failed} created=${scrape.eventsCreated}`,
+          log.info(
+            {
+              event: 'discover.ingest.scrapers.summary',
+              attempted: scrape.attempted,
+              succeeded: scrape.succeeded,
+              failed: scrape.failed,
+              eventsCreated: scrape.eventsCreated,
+            },
+            'Scrapers complete',
           );
         } finally {
           await scrapers.closeBrowser();
         }
       } catch (err) {
-        console.error(`[${JOBS.DISCOVER_INGEST}] Scrapers failed:`, err);
+        log.error({ err, event: 'discover.ingest.scrapers.failed' }, 'Scrapers failed');
       }
-    } catch (error) {
-      console.error(`[${JOBS.DISCOVER_INGEST}] Fatal error:`, error);
-      throw error;
-    }
+
+      return ingest;
+    });
   }
 }
 
@@ -97,18 +159,14 @@ async function discoverIngestVenueHandler(
 ) {
   for (const job of jobs) {
     if (!job.data?.venueId) continue;
-    try {
+    await runJob(JOBS.DISCOVER_INGEST_VENUE, job, async () => {
       const { events } = await ingestVenue(job.data.venueId);
-      console.log(
-        `[${JOBS.DISCOVER_INGEST_VENUE}] venue=${job.data.venueId} created=${events}`,
+      log.info(
+        { event: 'discover.ingest.venue.complete', venueId: job.data.venueId, events },
+        'Venue ingest complete',
       );
-    } catch (err) {
-      console.error(
-        `[${JOBS.DISCOVER_INGEST_VENUE}] error venue=${job.data.venueId}:`,
-        err,
-      );
-      throw err;
-    }
+      return { events };
+    });
   }
 }
 
@@ -117,18 +175,14 @@ async function discoverIngestPerformerHandler(
 ) {
   for (const job of jobs) {
     if (!job.data?.performerId) continue;
-    try {
+    await runJob(JOBS.DISCOVER_INGEST_PERFORMER, job, async () => {
       const { events } = await ingestPerformer(job.data.performerId);
-      console.log(
-        `[${JOBS.DISCOVER_INGEST_PERFORMER}] performer=${job.data.performerId} created=${events}`,
+      log.info(
+        { event: 'discover.ingest.performer.complete', performerId: job.data.performerId, events },
+        'Performer ingest complete',
       );
-    } catch (err) {
-      console.error(
-        `[${JOBS.DISCOVER_INGEST_PERFORMER}] error performer=${job.data.performerId}:`,
-        err,
-      );
-      throw err;
-    }
+      return { events };
+    });
   }
 }
 
@@ -137,43 +191,35 @@ async function discoverIngestRegionHandler(
 ) {
   for (const job of jobs) {
     if (!job.data?.regionId) continue;
-    try {
+    await runJob(JOBS.DISCOVER_INGEST_REGION, job, async () => {
       const { events } = await ingestRegion(job.data.regionId);
-      console.log(
-        `[${JOBS.DISCOVER_INGEST_REGION}] region=${job.data.regionId} created=${events}`,
+      log.info(
+        { event: 'discover.ingest.region.complete', regionId: job.data.regionId, events },
+        'Region ingest complete',
       );
-    } catch (err) {
-      console.error(
-        `[${JOBS.DISCOVER_INGEST_REGION}] error region=${job.data.regionId}:`,
-        err,
-      );
-      throw err;
-    }
+      return { events };
+    });
   }
 }
 
 async function notificationsDailyDigestHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
-    console.log(`[${JOBS.NOTIFICATIONS_DAILY_DIGEST}] Running daily digest...`, job.id);
-    try {
+    await runJob(JOBS.NOTIFICATIONS_DAILY_DIGEST, job, async () => {
       const result = await runDailyDigest();
-      console.log(
-        `[${JOBS.NOTIFICATIONS_DAILY_DIGEST}] Complete: ${result.sent} sent, ${result.skipped} skipped`,
+      log.info(
+        { event: 'notifications.digest.summary', sent: result.sent, skipped: result.skipped },
+        'Daily digest complete',
       );
-    } catch (error) {
-      console.error(`[${JOBS.NOTIFICATIONS_DAILY_DIGEST}] Fatal error:`, error);
-      throw error;
-    }
+      return result;
+    });
   }
 }
 
 export async function registerAllJobs(boss: PgBoss): Promise<void> {
-  // Idempotently remove pre-1.0 schedules. The 0012 migration also runs a
-  // SQL DELETE against pgboss.schedule, but this guards against fresh DBs
-  // restored from a snapshot that predates the migration.
   for (const stale of STALE_SCHEDULES) {
     try {
       await boss.unschedule(stale);
+      log.info({ event: 'pgboss.unschedule_stale', name: stale }, 'Unscheduled stale cron');
     } catch {
       // unschedule throws if no schedule exists — safe to ignore
     }
@@ -196,5 +242,8 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   await boss.schedule(JOBS.DISCOVER_INGEST, '0 6 * * 1', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.NOTIFICATIONS_DAILY_DIGEST, '0 8 * * *', {}, { tz: 'America/New_York' });
 
-  console.log('All jobs registered and scheduled');
+  log.info(
+    { event: 'pgboss.registered', jobs: Object.values(JOBS) },
+    'All jobs registered and scheduled',
+  );
 }

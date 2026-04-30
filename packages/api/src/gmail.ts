@@ -1,3 +1,7 @@
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'api.gmail', provider: 'gmail' });
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -55,10 +59,18 @@ async function rateLimitedFetch(
   }
   lastRequestTime = Date.now();
 
+  const startedAt = Date.now();
   const response = await fetch(url, { headers });
+  const durationMs = Date.now() - startedAt;
   if (response.status === 429) {
+    log.warn({ event: 'gmail.request.rate_limited', durationMs }, 'Gmail 429, retrying');
     await new Promise((resolve) => setTimeout(resolve, 2000));
     return rateLimitedFetch(url, headers);
+  }
+  if (!response.ok) {
+    log.warn({ event: 'gmail.request.error', status: response.status, durationMs }, 'Gmail non-OK response');
+  } else {
+    log.debug({ event: 'gmail.request.ok', status: response.status, durationMs }, 'Gmail request');
   }
   return response;
 }

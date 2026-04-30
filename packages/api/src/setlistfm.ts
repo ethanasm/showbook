@@ -1,6 +1,10 @@
 // setlist.fm API client
 // Docs: https://api.setlist.fm/docs/1.0/
 
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'api.setlistfm', provider: 'setlistfm' });
+
 const BASE_URL = "https://api.setlist.fm/rest/1.0";
 const MIN_REQUEST_INTERVAL_MS = 500;
 
@@ -120,15 +124,18 @@ async function apiFetch<T>(path: string): Promise<T> {
   await rateLimit();
 
   const url = `${BASE_URL}${path}`;
+  const startedAt = Date.now();
   const res = await fetch(url, {
     headers: {
       "x-api-key": apiKey,
       Accept: "application/json",
     },
   });
+  log.debug({ event: 'setlistfm.request', path, status: res.status, durationMs: Date.now() - startedAt }, 'setlist.fm request');
 
   // 429 – retry once after a longer delay
   if (res.status === 429) {
+    log.warn({ event: 'setlistfm.request.rate_limited', path }, 'setlist.fm 429, retrying');
     await new Promise((resolve) => setTimeout(resolve, 2000));
     lastRequestTime = Date.now();
     const retry = await fetch(url, {
