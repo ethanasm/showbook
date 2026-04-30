@@ -2,6 +2,7 @@
 // Docs: https://api.setlist.fm/docs/1.0/
 
 import { child } from '@showbook/observability';
+import type { PerformerSetlist, SetlistSection } from '@showbook/shared';
 
 const log = child({ component: 'api.setlistfm', provider: 'setlistfm' });
 
@@ -51,7 +52,8 @@ interface SetlistFmSetlist {
 // ---------------------------------------------------------------------------
 
 export interface SetlistResult {
-  songs: string[];
+  /** Setlist organized into sections (main set + optional encore). */
+  setlist: PerformerSetlist;
   tourName?: string;
   setlistId: string;
 }
@@ -251,13 +253,32 @@ export async function searchSetlist(
 
   const setlist = data.setlist[0]!;
 
-  // Flatten all songs across all sets (main + encores) in order
-  const songs: string[] = (setlist.sets?.set ?? []).flatMap((s) =>
-    (s.song ?? []).map((song) => song.name).filter((name) => name.length > 0),
-  );
+  // Map each set to a section, preserving the encore boundary. setlist.fm
+  // marks encores at the set level (`encore: 1` for the first encore, etc.);
+  // we collapse all encore sets into a single `kind: 'encore'` section
+  // because the product currently supports one encore per show.
+  const mainSongs: SetlistSection['songs'] = [];
+  const encoreSongs: SetlistSection['songs'] = [];
+  for (const s of setlist.sets?.set ?? []) {
+    const target = s.encore != null ? encoreSongs : mainSongs;
+    for (const song of s.song ?? []) {
+      if (!song.name || song.name.length === 0) continue;
+      target.push({
+        title: song.name,
+        ...(song.info && song.info.length > 0 ? { note: song.info } : {}),
+      });
+    }
+  }
+
+  const sections: SetlistSection[] = [];
+  if (mainSongs.length > 0) sections.push({ kind: 'set', songs: mainSongs });
+  if (encoreSongs.length > 0)
+    sections.push({ kind: 'encore', songs: encoreSongs });
+
+  if (sections.length === 0) return null;
 
   return {
-    songs,
+    setlist: { sections },
     tourName: setlist.tour?.name,
     setlistId: setlist.id,
   };

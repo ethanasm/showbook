@@ -1,6 +1,7 @@
 import { and, eq, lte } from 'drizzle-orm';
 import { db, enrichmentQueue, shows, showPerformers, performers } from '@showbook/db';
 import { searchArtist, searchSetlist } from '@showbook/api';
+import type { PerformerSetlistsMap } from '@showbook/shared';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -115,8 +116,9 @@ export async function runSetlistRetry(): Promise<{
         // Without a transaction, a crash between the two writes leaves the
         // queue entry orphaned (queued forever) or the setlist saved while
         // the queue still re-tries it.
-        const setlistsUpdate: Record<string, string[]> = {};
-        setlistsUpdate[headlinerRow.performerId] = result.songs;
+        const setlistsUpdate: PerformerSetlistsMap = {
+          [headlinerRow.performerId]: result.setlist,
+        };
         await db.transaction(async (tx) => {
           await tx
             .update(shows)

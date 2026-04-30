@@ -172,14 +172,14 @@ export const enrichmentRouter = router({
         mbid = artists[0]!.mbid;
       }
 
-      const setlist = await searchSetlist(mbid, input.date);
-      if (!setlist) {
+      const result = await searchSetlist(mbid, input.date);
+      if (!result) {
         return null;
       }
 
       return {
-        songs: setlist.songs,
-        tourName: setlist.tourName,
+        setlist: result.setlist,
+        tourName: result.tourName,
         mbid,
       };
     }),

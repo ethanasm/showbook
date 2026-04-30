@@ -88,6 +88,36 @@ test.describe('Show detail page', () => {
     await page.getByTestId('action-edit-show').click();
     await page.waitForURL(/\/add\?editId=[0-9a-f-]+/);
   });
+
+  test('marking the last song as encore round-trips through save', async ({ page }) => {
+    await gotoRadioheadMSG(page);
+
+    // Enter edit mode on the setlist section.
+    await page.getByTestId('setlist-edit-toggle').click();
+    const editor = page.getByTestId('setlist-editor-radiohead');
+    await expect(editor).toBeVisible();
+
+    // No encore yet.
+    await expect(editor.getByTestId('setlist-encore-divider')).toHaveCount(0);
+
+    // Mark the last seeded song ("Videotape") as the encore.
+    await editor.getByTestId('setlist-mark-last-as-encore').click();
+    await expect(editor.getByTestId('setlist-encore-divider')).toBeVisible();
+
+    // Save and re-render in view mode.
+    await editor.getByTestId('setlist-save').click();
+    await page.getByTestId('setlist-edit-toggle').click(); // exit edit
+    const setlist = page.getByTestId('setlist-section');
+    await expect(setlist.getByTestId('setlist-encore-marker')).toBeVisible();
+    // The encore section now contains the last song.
+    await expect(
+      setlist.getByTestId('setlist-section-encore').getByText('Videotape'),
+    ).toBeVisible();
+    // And the main set keeps the rest.
+    await expect(
+      setlist.getByTestId('setlist-section-main').getByText('15 Step'),
+    ).toBeVisible();
+  });
 });
 
 test.describe('Shows list — row click navigates', () => {

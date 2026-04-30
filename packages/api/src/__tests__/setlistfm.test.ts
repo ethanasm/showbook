@@ -175,7 +175,7 @@ test('searchSetlist: returns null without hitting the API when mbid is empty', a
 
 // ── searchSetlist ───────────────────────────────────────────────────────
 
-test('searchSetlist: returns flattened songs across sets and encores in order', async () => {
+test('searchSetlist: returns sections preserving the encore boundary and per-song notes', async () => {
   let urlSeen = '';
   stubFetch(async (url) => {
     urlSeen = String(url);
@@ -193,7 +193,12 @@ test('searchSetlist: returns flattened songs across sets and encores in order', 
           tour: { name: 'Hail to the Thief' },
           sets: {
             set: [
-              { song: [{ name: 'Song A' }, { name: 'Song B' }] },
+              {
+                song: [
+                  { name: 'Song A' },
+                  { name: 'Song B', info: 'extended intro' },
+                ],
+              },
               { encore: 1, song: [{ name: 'Song C' }] },
             ],
           },
@@ -207,13 +212,60 @@ test('searchSetlist: returns flattened songs across sets and encores in order', 
 
   const result = await searchSetlist('mb-1', '2024-08-02');
   assert.deepEqual(result, {
-    songs: ['Song A', 'Song B', 'Song C'],
+    setlist: {
+      sections: [
+        {
+          kind: 'set',
+          songs: [
+            { title: 'Song A' },
+            { title: 'Song B', note: 'extended intro' },
+          ],
+        },
+        {
+          kind: 'encore',
+          songs: [{ title: 'Song C' }],
+        },
+      ],
+    },
     tourName: 'Hail to the Thief',
     setlistId: 'set-123',
   });
   // toSetlistFmDate produces dd-MM-yyyy; check the date in URL
   assert.ok(urlSeen.includes('date=02-08-2024'));
   assert.ok(urlSeen.includes('artistMbid=mb-1'));
+});
+
+test('searchSetlist: collapses multiple encore sets into a single encore section', async () => {
+  stubFetch(async () =>
+    jsonResponse({
+      setlist: [
+        {
+          id: 's-multi',
+          eventDate: '02-08-2024',
+          artist: { mbid: 'mb-1', name: 'X' },
+          venue: { id: 'v', name: 'V', city: { id: 'c', name: 'C', country: { code: 'US', name: 'US' } } },
+          sets: {
+            set: [
+              { song: [{ name: 'Main 1' }] },
+              { encore: 1, song: [{ name: 'E1' }] },
+              { encore: 2, song: [{ name: 'E2' }] },
+            ],
+          },
+        },
+      ],
+      total: 1,
+      page: 1,
+      itemsPerPage: 30,
+    }),
+  );
+  const result = await searchSetlist('mb-1', '2024-08-02');
+  assert.equal(result?.setlist.sections.length, 2);
+  assert.equal(result?.setlist.sections[0]!.kind, 'set');
+  assert.equal(result?.setlist.sections[1]!.kind, 'encore');
+  assert.deepEqual(
+    result?.setlist.sections[1]!.songs.map((s) => s.title),
+    ['E1', 'E2'],
+  );
 });
 
 test('searchSetlist: accepts a Date object', async () => {
@@ -238,7 +290,7 @@ test('searchSetlist: accepts a Date object', async () => {
   // Use UTC noon to avoid TZ-day-rollover affecting padded dd-MM-yyyy.
   const d = new Date('2024-01-05T12:00:00Z');
   const result = await searchSetlist('mb-1', d);
-  assert.equal(result?.songs[0], 'OnlySong');
+  assert.equal(result?.setlist.sections[0]!.songs[0]!.title, 'OnlySong');
   // dd should be padded
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -292,11 +344,14 @@ test('searchSetlist: tourName undefined when missing; songs filter empties', asy
     }),
   );
   const result = await searchSetlist('mb', '2024-08-02');
-  assert.deepEqual(result?.songs, ['Real']);
+  assert.deepEqual(
+    result?.setlist.sections[0]!.songs.map((s) => s.title),
+    ['Real'],
+  );
   assert.equal(result?.tourName, undefined);
 });
 
-test('searchSetlist: handles missing sets entirely', async () => {
+test('searchSetlist: returns null when sets are missing entirely (no songs to map)', async () => {
   stubFetch(async () =>
     jsonResponse({
       setlist: [
@@ -313,7 +368,7 @@ test('searchSetlist: handles missing sets entirely', async () => {
     }),
   );
   const result = await searchSetlist('mb', '2024-08-02');
-  assert.deepEqual(result?.songs, []);
+  assert.equal(result, null);
 });
 
 // ── 429 retry ───────────────────────────────────────────────────────────

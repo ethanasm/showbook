@@ -1,11 +1,19 @@
 import { db } from '@showbook/db';
 import { shows, enrichmentQueue } from '@showbook/db';
 import { and, eq, lt, sql, inArray } from 'drizzle-orm';
+import {
+  type PerformerSetlistsMap,
+  normalizePerformerSetlist,
+  setlistTotalSongs,
+} from '@showbook/shared';
 
-function hasSetlist(setlists: Record<string, string[]> | null | undefined): boolean {
+function hasSetlist(setlists: PerformerSetlistsMap | null | undefined): boolean {
   if (!setlists) return false;
-  for (const songs of Object.values(setlists)) {
-    if (Array.isArray(songs) && songs.length > 0) return true;
+  // Tolerate the legacy `Record<performerId, string[]>` shape that may still
+  // be present on un-migrated rows: normalize each value before counting.
+  for (const raw of Object.values(setlists)) {
+    const normalized = normalizePerformerSetlist(raw);
+    if (normalized && setlistTotalSongs(normalized) > 0) return true;
   }
   return false;
 }

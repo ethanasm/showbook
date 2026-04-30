@@ -148,6 +148,13 @@
       "when": 1778646000000,
       "tag": "0020_auth_user_fks",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1779302400000,
+      "tag": "0021_setlist_sections",
+      "breakpoints": true
     }
   ]
 }

@@ -17,6 +17,12 @@ import {
 } from '../performer-matcher';
 import { searchEvents } from '../ticketmaster';
 import { child } from '@showbook/observability';
+import {
+  type PerformerSetlist,
+  type PerformerSetlistsMap,
+  isSetlistEmpty,
+  singleMainSet,
+} from '@showbook/shared';
 
 const log = child({ component: 'api.shows' });
 
@@ -36,6 +42,49 @@ const venueInputSchema = z.object({
   photoUrl: z.string().optional(),
 });
 
+// Per-performer setlist payload. Sections preserve the encore boundary;
+// caps prevent absurd payloads. Total-song cap is enforced in code below
+// because Zod can't conveniently sum across nested arrays.
+const SETLIST_MAX_SONGS = 200;
+const SETLIST_MAX_TITLE_LEN = 300;
+const SETLIST_MAX_NOTE_LEN = 200;
+
+const setlistSongSchema = z.object({
+  title: z.string().min(1).max(SETLIST_MAX_TITLE_LEN),
+  note: z.string().max(SETLIST_MAX_NOTE_LEN).optional(),
+});
+
+const setlistSectionSchema = z.object({
+  kind: z.enum(['set', 'encore']),
+  name: z.string().max(80).optional(),
+  songs: z.array(setlistSongSchema),
+});
+
+const performerSetlistSchema = z
+  .object({
+    sections: z.array(setlistSectionSchema),
+  })
+  .superRefine((value, ctx) => {
+    let total = 0;
+    let encoreCount = 0;
+    for (const section of value.sections) {
+      total += section.songs.length;
+      if (section.kind === 'encore') encoreCount += 1;
+    }
+    if (total > SETLIST_MAX_SONGS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Setlist exceeds ${SETLIST_MAX_SONGS} songs total`,
+      });
+    }
+    if (encoreCount > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Only one encore section is supported',
+      });
+    }
+  });
+
 const performerInputSchema = z.object({
   name: z.string().min(1),
   role: z.enum(['headliner', 'support', 'cast']),
@@ -44,8 +93,45 @@ const performerInputSchema = z.object({
   tmAttractionId: z.string().optional(),
   musicbrainzId: z.string().optional(),
   imageUrl: z.string().optional(),
-  setlist: z.array(z.string()).optional(),
+  setlist: performerSetlistSchema.optional(),
 });
+
+const headlinerInputSchema = z.object({
+  name: z.string().min(1),
+  tmAttractionId: z.string().optional(),
+  musicbrainzId: z.string().optional(),
+  imageUrl: z.string().optional(),
+  setlist: performerSetlistSchema.optional(),
+});
+
+/**
+ * Trim song titles + notes, drop empty songs, drop sections that end up
+ * with no songs. Returns null if the whole setlist is empty after cleanup.
+ */
+function cleanSetlist(input: PerformerSetlist): PerformerSetlist | null {
+  const sections = [];
+  for (const section of input.sections) {
+    const songs = [];
+    for (const song of section.songs) {
+      const title = song.title.trim();
+      if (title.length === 0) continue;
+      const note = song.note?.trim();
+      songs.push({
+        title,
+        ...(note && note.length > 0 ? { note } : {}),
+      });
+    }
+    if (songs.length === 0) continue;
+    const name = section.name?.trim();
+    sections.push({
+      kind: section.kind,
+      ...(name && name.length > 0 ? { name } : {}),
+      songs,
+    });
+  }
+  if (sections.length === 0) return null;
+  return { sections };
+}
 
 // ---------------------------------------------------------------------------
 // State machine transitions
@@ -340,13 +426,7 @@ export const showsRouter = router({
     .input(
       z.object({
         kind: z.enum(['concert', 'theatre', 'comedy', 'festival']),
-        headliner: z.object({
-          name: z.string().min(1),
-          tmAttractionId: z.string().optional(),
-          musicbrainzId: z.string().optional(),
-          imageUrl: z.string().optional(),
-          setlist: z.array(z.string()).optional(),
-        }),
+        headliner: headlinerInputSchema,
         venue: venueInputSchema,
         date: z.string(), // ISO date string YYYY-MM-DD
         endDate: z.string().optional(),
@@ -388,7 +468,7 @@ export const showsRouter = router({
           : input.productionName ?? null;
 
       // Resolve performers first so we can build the setlists map by ID.
-      const setlistsMap: Record<string, string[]> = {};
+      const setlistsMap: PerformerSetlistsMap = {};
 
       let headlinerId: string | null = null;
       if (input.kind !== 'theatre') {
@@ -399,8 +479,9 @@ export const showsRouter = router({
           imageUrl: input.headliner.imageUrl,
         });
         headlinerId = headlinerResult.performer.id;
-        if (input.headliner.setlist?.length) {
-          setlistsMap[headlinerId] = input.headliner.setlist;
+        if (input.headliner.setlist) {
+          const cleaned = cleanSetlist(input.headliner.setlist);
+          if (cleaned) setlistsMap[headlinerId] = cleaned;
         }
       }
 
@@ -414,8 +495,9 @@ export const showsRouter = router({
             imageUrl: p.imageUrl,
           });
           resolvedPerformers.push({ id: result.performer.id, input: p });
-          if (p.setlist?.length) {
-            setlistsMap[result.performer.id] = p.setlist;
+          if (p.setlist) {
+            const cleaned = cleanSetlist(p.setlist);
+            if (cleaned) setlistsMap[result.performer.id] = cleaned;
           }
         }
       }
@@ -595,13 +677,7 @@ export const showsRouter = router({
       z.object({
         showId: z.string().uuid(),
         kind: z.enum(['concert', 'theatre', 'comedy', 'festival']),
-        headliner: z.object({
-          name: z.string().min(1),
-          tmAttractionId: z.string().optional(),
-          musicbrainzId: z.string().optional(),
-          imageUrl: z.string().optional(),
-          setlist: z.array(z.string()).optional(),
-        }),
+        headliner: headlinerInputSchema,
         venue: venueInputSchema,
         date: z.string(),
         endDate: z.string().optional(),
@@ -652,7 +728,7 @@ export const showsRouter = router({
           : input.productionName ?? null;
 
       let resolvedHeadlinerId: string | null = null;
-      const setlistsMap: Record<string, string[]> = {};
+      const setlistsMap: PerformerSetlistsMap = {};
       if (input.kind !== 'theatre') {
         const headlinerResult = await matchOrCreatePerformer({
           name: input.headliner.name,
@@ -661,8 +737,9 @@ export const showsRouter = router({
           imageUrl: input.headliner.imageUrl,
         });
         resolvedHeadlinerId = headlinerResult.performer.id;
-        if (input.headliner.setlist?.length) {
-          setlistsMap[resolvedHeadlinerId] = input.headliner.setlist;
+        if (input.headliner.setlist) {
+          const cleaned = cleanSetlist(input.headliner.setlist);
+          if (cleaned) setlistsMap[resolvedHeadlinerId] = cleaned;
         }
       }
 
@@ -679,8 +756,9 @@ export const showsRouter = router({
             imageUrl: p.imageUrl,
           });
           resolvedSupport.push({ id: result.performer.id, input: p });
-          if (p.setlist?.length) {
-            setlistsMap[result.performer.id] = p.setlist;
+          if (p.setlist) {
+            const cleaned = cleanSetlist(p.setlist);
+            if (cleaned) setlistsMap[result.performer.id] = cleaned;
           }
         }
       }
@@ -861,18 +939,18 @@ export const showsRouter = router({
     }),
 
   /**
-   * Replace the songs for one performer's setlist on a show. Passing an
-   * empty array clears that performer's setlist. The legacy single-array
-   * `setlist` column is left untouched — the page renderer falls back to
-   * it only when the new map is empty, so callers should ignore it once
-   * `setlists` has any keys.
+   * Replace the setlist for one performer on a show. Passing a setlist
+   * with no songs (or an empty `sections` array) clears that performer's
+   * setlist. The legacy single-array `setlist` column is left untouched —
+   * the page renderer falls back to it only when the new map is empty,
+   * so callers should ignore it once `setlists` has any keys.
    */
   setSetlist: protectedProcedure
     .input(
       z.object({
         showId: z.string().uuid(),
         performerId: z.string().uuid(),
-        songs: z.array(z.string().min(1).max(300)).max(200),
+        setlist: performerSetlistSchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -906,12 +984,12 @@ export const showsRouter = router({
         });
       }
 
-      const trimmed = input.songs.map((s) => s.trim()).filter((s) => s.length > 0);
-      const next: Record<string, string[]> = { ...(existing.setlists ?? {}) };
-      if (trimmed.length === 0) {
+      const cleaned = cleanSetlist(input.setlist);
+      const next: PerformerSetlistsMap = { ...(existing.setlists ?? {}) };
+      if (!cleaned || isSetlistEmpty(cleaned)) {
         delete next[input.performerId];
       } else {
-        next[input.performerId] = trimmed;
+        next[input.performerId] = cleaned;
       }
 
       await ctx.db

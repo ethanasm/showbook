@@ -12,7 +12,14 @@ import {
   uploadVideoForShow,
 } from "@/components/media";
 import { PerformerSetlistBlock } from "@/components/PerformerSetlistBlock";
-import { isDatePast } from "@showbook/shared";
+import {
+  isDatePast,
+  flattenSetlistTitles,
+  setlistTotalSongs,
+  singleMainSet,
+  normalizePerformerSetlist,
+  type PerformerSetlist,
+} from "@showbook/shared";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -146,8 +153,10 @@ export default function AddPage() {
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
   // Kind-specific enrichment
-  // setlistsByPerformer: keyed by performer name (headliner or support)
-  const [setlistsByPerformer, setSetlistsByPerformer] = useState<Record<string, string[]>>({});
+  // setlistsByPerformer: keyed by performer name (headliner or support).
+  // Stores the section-shaped PerformerSetlist so an encore returned from
+  // setlist.fm survives a round-trip through the form.
+  const [setlistsByPerformer, setSetlistsByPerformer] = useState<Record<string, PerformerSetlist>>({});
   const [tourName, setTourName] = useState("");
   const [performers, setPerformers] = useState<PerformerData[]>([]);
   const [castMembers, setCastMembers] = useState<CastMember[]>([]);
@@ -305,22 +314,33 @@ export default function AddPage() {
     if (s.pricePaid) setPricePaid(s.pricePaid);
     if (s.ticketCount) setTicketCount(String(s.ticketCount));
     if (s.tourName) setTourName(s.tourName);
-    // Prefill setlists from existing show (setlists map or legacy setlist array)
+    // Prefill setlists from an existing show. Tolerate both the new
+    // sections shape and the legacy `string[]` per-performer shape via
+    // normalizePerformerSetlist; fall back to the very-old top-level
+    // `setlist text[]` for un-migrated rows.
     if (s.setlists && typeof s.setlists === 'object') {
-      // Map performerId → songs, but we need names; build name-keyed version
-      const byName: Record<string, string[]> = {};
+      const byName: Record<string, PerformerSetlist> = {};
       const allPerfs = s.showPerformers ?? [];
-      for (const [pid, songs] of Object.entries(s.setlists as Record<string, string[]>)) {
-        const perf = allPerfs.find((sp: { performer: { id: string } }) => sp.performer.id === pid);
-        if (perf) byName[perf.performer.name] = songs;
+      for (const [pid, raw] of Object.entries(
+        s.setlists as Record<string, unknown>,
+      )) {
+        const setlist = normalizePerformerSetlist(raw);
+        if (!setlist) continue;
+        const perf = allPerfs.find(
+          (sp: { performer: { id: string } }) => sp.performer.id === pid,
+        );
+        if (perf) byName[perf.performer.name] = setlist;
       }
       if (Object.keys(byName).length > 0) setSetlistsByPerformer(byName);
     } else if (s.setlist && s.setlist.length > 0) {
       const headlinerPerf = s.showPerformers.find(
-        (sp: { role: string; sortOrder: number }) => sp.role === 'headliner' && sp.sortOrder === 0,
+        (sp: { role: string; sortOrder: number }) =>
+          sp.role === 'headliner' && sp.sortOrder === 0,
       );
       if (headlinerPerf) {
-        setSetlistsByPerformer({ [headlinerPerf.performer.name]: s.setlist });
+        setSetlistsByPerformer({
+          [headlinerPerf.performer.name]: singleMainSet(s.setlist),
+        });
       }
     }
 
@@ -642,7 +662,7 @@ export default function AddPage() {
     if (setlistQuery.data && headliner.name) {
       setSetlistsByPerformer((prev) => ({
         ...prev,
-        [headliner.name]: setlistQuery.data!.songs,
+        [headliner.name]: setlistQuery.data!.setlist,
       }));
       if (setlistQuery.data.tourName) {
         setTourName(setlistQuery.data.tourName);
@@ -667,8 +687,11 @@ export default function AddPage() {
       utils.enrichment.fetchSetlist
         .fetch({ performerName, date })
         .then((result) => {
-          if (result?.songs?.length) {
-            setSetlistsByPerformer((prev) => ({ ...prev, [performerName]: result.songs }));
+          if (result && setlistTotalSongs(result.setlist) > 0) {
+            setSetlistsByPerformer((prev) => ({
+              ...prev,
+              [performerName]: result.setlist,
+            }));
           }
         })
         .finally(() => {
@@ -966,7 +989,10 @@ export default function AddPage() {
       {
         source: "setlist.fm",
         what: (() => {
-          const total = Object.values(setlistsByPerformer).reduce((s, songs) => s + songs.length, 0);
+          const total = Object.values(setlistsByPerformer).reduce(
+            (sum, sl) => sum + setlistTotalSongs(sl),
+            0,
+          );
           return total > 0 ? `${total} songs${tourName ? ` · ${tourName}` : ""}` : "tour, setlist";
         })(),
         status: setlistQuery.isLoading ? "pending" : Object.keys(setlistsByPerformer).length > 0 ? "ok" : setlistQuery.isFetched ? "skipped" : isPastConcert ? "pending" : "skipped",
@@ -1952,7 +1978,7 @@ export default function AddPage() {
           {headliner.name && (
             <PerformerSetlistBlock
               performerName={headliner.name}
-              songs={setlistsByPerformer[headliner.name] ?? null}
+              setlist={setlistsByPerformer[headliner.name] ?? null}
               loading={setlistQuery.isLoading}
               fetchingFor={fetchingSetlistFor}
               onFetch={async () => {
@@ -1962,16 +1988,19 @@ export default function AddPage() {
                     performerName: headliner.name,
                     date,
                   });
-                  if (result?.songs?.length) {
-                    setSetlistsByPerformer((prev) => ({ ...prev, [headliner.name]: result.songs }));
+                  if (result && setlistTotalSongs(result.setlist) > 0) {
+                    setSetlistsByPerformer((prev) => ({
+                      ...prev,
+                      [headliner.name]: result.setlist,
+                    }));
                     if (result.tourName) setTourName(result.tourName);
                   }
                 } finally {
                   setFetchingSetlistFor((prev) => ({ ...prev, [headliner.name]: false }));
                 }
               }}
-              onChange={(songs) =>
-                setSetlistsByPerformer((prev) => ({ ...prev, [headliner.name]: songs }))
+              onChange={(next) =>
+                setSetlistsByPerformer((prev) => ({ ...prev, [headliner.name]: next }))
               }
             />
           )}
@@ -1982,7 +2011,7 @@ export default function AddPage() {
               <PerformerSetlistBlock
                 key={p.name}
                 performerName={p.name}
-                songs={setlistsByPerformer[p.name] ?? null}
+                setlist={setlistsByPerformer[p.name] ?? null}
                 loading={false}
                 fetchingFor={fetchingSetlistFor}
                 onFetch={async () => {
@@ -1992,15 +2021,18 @@ export default function AddPage() {
                       performerName: p.name,
                       date,
                     });
-                    if (result?.songs?.length) {
-                      setSetlistsByPerformer((prev) => ({ ...prev, [p.name]: result.songs }));
+                    if (result && setlistTotalSongs(result.setlist) > 0) {
+                      setSetlistsByPerformer((prev) => ({
+                        ...prev,
+                        [p.name]: result.setlist,
+                      }));
                     }
                   } finally {
                     setFetchingSetlistFor((prev) => ({ ...prev, [p.name]: false }));
                   }
                 }}
-                onChange={(songs) =>
-                  setSetlistsByPerformer((prev) => ({ ...prev, [p.name]: songs }))
+                onChange={(next) =>
+                  setSetlistsByPerformer((prev) => ({ ...prev, [p.name]: next }))
                 }
               />
             ))}
@@ -2421,7 +2453,10 @@ export default function AddPage() {
       detailRows.push(["Paid", `$${pricePaid}${count > 1 ? ` ($${perTicket}/ea × ${count})` : ""}`]);
     }
     if (tourName) detailRows.push(["Tour", tourName]);
-    const totalSongs = Object.values(setlistsByPerformer).reduce((s, songs) => s + songs.length, 0);
+    const totalSongs = Object.values(setlistsByPerformer).reduce(
+      (sum, sl) => sum + setlistTotalSongs(sl),
+      0,
+    );
     if (totalSongs > 0) detailRows.push(["Setlist", `${totalSongs} songs`]);
 
     return (

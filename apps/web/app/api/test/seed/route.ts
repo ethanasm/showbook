@@ -14,6 +14,10 @@ import {
   userRegions,
   userPreferences,
 } from '@showbook/db';
+import {
+  type PerformerSetlistsMap,
+  singleMainSet,
+} from '@showbook/shared';
 
 const TEST_EMAIL = 'test@showbook.dev';
 
@@ -192,14 +196,14 @@ export async function GET(request: Request) {
         s.kind === 'theatre' ? s.productionName ?? s.headliner : s.productionName ?? null;
 
       // Build setlists map from performer IDs so the per-performer UI works.
-      const setlistsMap: Record<string, string[]> = {};
+      const setlistsMap: PerformerSetlistsMap = {};
       if (s.setlist?.length && s.kind !== 'theatre') {
         const headlinerId = performerMap.get(s.headliner);
-        if (headlinerId) setlistsMap[headlinerId] = s.setlist;
+        if (headlinerId) setlistsMap[headlinerId] = singleMainSet(s.setlist);
       }
       if (s.supportSetlist?.length && s.support?.[0]) {
         const supportId = performerMap.get(s.support[0]);
-        if (supportId) setlistsMap[supportId] = s.supportSetlist;
+        if (supportId) setlistsMap[supportId] = singleMainSet(s.supportSetlist);
       }
 
       const [show] = await db.insert(shows).values({
