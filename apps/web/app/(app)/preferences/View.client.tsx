@@ -1,0 +1,1187 @@
+"use client";
+
+import { useState, useRef, useEffect } from "react";
+import { useSession, signOut } from "next-auth/react";
+import { MapPin, Check, Plus, Search, X, LogOut } from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import { useTheme } from "@/components/design-system/ThemeProvider";
+import { SegmentedControl } from "@/components/design-system/SegmentedControl";
+
+// ── Toggle Switch ──────────────────────────────────────────
+
+function Toggle({
+  checked,
+  onChange,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      style={{
+        ...toggleStyles.track,
+        background: checked ? "var(--accent)" : "rgba(128,128,128,.3)",
+        opacity: disabled ? 0.5 : 1,
+        cursor: disabled ? "not-allowed" : "pointer",
+      }}
+    >
+      <span
+        style={{
+          ...toggleStyles.thumb,
+          transform: checked ? "translateX(16px)" : "translateX(0px)",
+          background: checked ? "var(--accent-text)" : "rgba(255,255,255,.7)",
+        }}
+      />
+    </button>
+  );
+}
+
+const toggleStyles = {
+  track: {
+    position: "relative" as const,
+    width: 36,
+    height: 20,
+    borderRadius: 10,
+    border: "none",
+    padding: 2,
+    transition: "background 0.15s ease",
+    flexShrink: 0,
+    display: "flex",
+    alignItems: "center" as const,
+  },
+  thumb: {
+    display: "block",
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    transition: "all 0.15s ease",
+  },
+};
+
+// ── Section Header ────────────────────────────────────────
+
+function SectionHead({
+  label,
+  sub,
+}: {
+  label: string;
+  sub?: string;
+}) {
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div
+        style={{
+          fontFamily: "var(--font-geist-mono)",
+          fontSize: 11,
+          color: "var(--ink)",
+          letterSpacing: ".1em",
+          textTransform: "uppercase",
+          fontWeight: 500,
+        }}
+      >
+        {label}
+      </div>
+      {sub && (
+        <div
+          style={{
+            fontFamily: "var(--font-geist-mono)",
+            fontSize: 10.5,
+            color: "var(--faint)",
+            marginTop: 3,
+            letterSpacing: ".04em",
+          }}
+        >
+          {sub}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Setting Row ────────────────────────────────────────────
+
+function SettingRow({
+  label,
+  description,
+  last,
+  children,
+}: {
+  label: string;
+  description?: string;
+  last?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 16,
+        padding: "14px 0",
+        borderBottom: last ? "none" : "1px solid var(--rule)",
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontFamily: "var(--font-geist-sans)",
+            fontSize: 14,
+            fontWeight: 500,
+            color: "var(--ink)",
+            letterSpacing: -0.15,
+          }}
+        >
+          {label}
+        </div>
+        {description && (
+          <div
+            style={{
+              fontFamily: "var(--font-geist-mono)",
+              fontSize: 10.5,
+              color: "var(--muted)",
+              marginTop: 3,
+              letterSpacing: ".04em",
+            }}
+          >
+            {description}
+          </div>
+        )}
+      </div>
+      <div style={{ flexShrink: 0 }}>{children}</div>
+    </div>
+  );
+}
+
+// ── Region Chip ───────────────────────────────────────────
+
+function RegionChip({
+  name,
+  radius,
+  active,
+  onToggle,
+  onRemove,
+  disabled,
+}: {
+  name: string;
+  radius: number;
+  active: boolean;
+  onToggle: () => void;
+  onRemove: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        padding: "10px 14px",
+        border: active
+          ? "1.5px solid var(--accent)"
+          : "1px solid var(--rule-strong)",
+        background: active ? "var(--accent-faded)" : "transparent",
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.5 : 1,
+      }}
+      onClick={() => !disabled && onToggle()}
+    >
+      <MapPin
+        size={14}
+        color={active ? "var(--accent)" : "var(--faint)"}
+      />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontFamily: "var(--font-geist-sans)",
+            fontSize: 13,
+            fontWeight: active ? 600 : 500,
+            color: "var(--ink)",
+            letterSpacing: -0.1,
+          }}
+        >
+          {name}
+        </div>
+        <div
+          style={{
+            fontFamily: "var(--font-geist-mono)",
+            fontSize: 10,
+            color: "var(--faint)",
+            marginTop: 2,
+          }}
+        >
+          {radius}mi radius
+        </div>
+      </div>
+      {active && <Check size={14} color="var(--accent)" />}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!disabled) onRemove();
+        }}
+        disabled={disabled}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 24,
+          height: 24,
+          border: "none",
+          background: "transparent",
+          color: "var(--faint)",
+          cursor: disabled ? "not-allowed" : "pointer",
+          padding: 0,
+        }}
+        aria-label={`Remove ${name}`}
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+// ── Add Region Form ────────────────────────────────────────
+
+function AddRegionForm({ onAdd }: { onAdd: () => void }) {
+  const [cityQuery, setCityQuery] = useState("");
+  const [cityName, setCityName] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
+  const [radius, setRadius] = useState("25");
+  const [expanded, setExpanded] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [debouncedCity, setDebouncedCity] = useState("");
+  const cityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const utils = trpc.useUtils();
+
+  const citySearch = trpc.enrichment.searchPlaces.useQuery(
+    { query: debouncedCity, types: "city" },
+    { enabled: debouncedCity.length >= 2 && !manualMode, retry: false },
+  );
+
+  const addRegion = trpc.preferences.addRegion.useMutation({
+    onSuccess: () => {
+      setCityQuery("");
+      setCityName("");
+      setLatitude("");
+      setLongitude("");
+      setRadius("25");
+      setExpanded(false);
+      setManualMode(false);
+      setDetailsError(null);
+      onAdd();
+    },
+  });
+
+  const handleCityInput = (value: string) => {
+    setCityQuery(value);
+    if (!manualMode) {
+      setCityName("");
+      setLatitude("");
+      setLongitude("");
+    } else {
+      setCityName(value);
+    }
+    setDetailsError(null);
+    if (cityTimerRef.current) clearTimeout(cityTimerRef.current);
+    if (value.length >= 2 && !manualMode) {
+      cityTimerRef.current = setTimeout(() => setDebouncedCity(value), 400);
+    } else {
+      setDebouncedCity("");
+    }
+  };
+
+  const handleSelectCity = async (placeId: string) => {
+    try {
+      const details = await utils.enrichment.placeDetails.fetch({ placeId });
+      if (details) {
+        setCityName(details.city || details.name);
+        setCityQuery(details.city || details.name);
+        setLatitude(String(details.latitude));
+        setLongitude(String(details.longitude));
+        setDebouncedCity("");
+        setDetailsError(null);
+      }
+    } catch (e) {
+      setDetailsError(
+        "Couldn't load location details. Try again, or enter coordinates manually below.",
+      );
+    }
+  };
+
+  const searchFailed = !manualMode && citySearch.isError;
+
+  const canSubmit =
+    cityName.trim() !== "" &&
+    latitude !== "" &&
+    longitude !== "" &&
+    !Number.isNaN(parseFloat(latitude)) &&
+    !Number.isNaN(parseFloat(longitude)) &&
+    radius !== "" &&
+    !addRegion.isPending;
+
+  if (!expanded) {
+    return (
+      <div
+        onClick={() => setExpanded(true)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          fontFamily: "var(--font-geist-mono)",
+          fontSize: 10.5,
+          color: "var(--accent)",
+          letterSpacing: ".04em",
+          cursor: "pointer",
+          marginTop: 12,
+        }}
+      >
+        <Plus size={11} color="var(--accent)" /> Add a region
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, position: "relative" }}>
+          <label style={formStyles.inputLabel}>City</label>
+          <input
+            type="text"
+            value={cityQuery}
+            onChange={(e) => handleCityInput(e.target.value)}
+            placeholder="e.g. Nashville"
+            style={formStyles.input}
+          />
+          {!manualMode && debouncedCity.length >= 2 && (
+            <div style={{
+              position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20,
+              background: "var(--surface)", border: "1px solid var(--rule-strong)",
+              maxHeight: 200, overflow: "auto",
+            }}>
+              {citySearch.isLoading && (
+                <div style={{ padding: "8px 12px", fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--muted)" }}>Searching...</div>
+              )}
+              {citySearch.isError && (
+                <div style={{ padding: "8px 12px", fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "#E63946" }}>
+                  Search unavailable. Use manual entry below.
+                </div>
+              )}
+              {citySearch.data?.length === 0 && !citySearch.isLoading && (
+                <div style={{ padding: "8px 12px", fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)" }}>No matches</div>
+              )}
+              {citySearch.data?.map((p) => (
+                <button key={p.placeId} type="button" onClick={() => handleSelectCity(p.placeId)} style={{
+                  display: "block", width: "100%", padding: "8px 12px", background: "none", border: "none",
+                  borderBottom: "1px solid var(--rule)", textAlign: "left", cursor: "pointer",
+                }}>
+                  <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 13, color: "var(--ink)" }}>{p.displayName}</div>
+                  <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10, color: "var(--muted)" }}>{p.formattedAddress}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <label style={formStyles.inputLabel}>Radius (miles)</label>
+          <input
+            type="number"
+            value={radius}
+            onChange={(e) => setRadius(e.target.value)}
+            min="1"
+            max="200"
+            style={formStyles.input}
+          />
+        </div>
+      </div>
+
+      {detailsError && (
+        <div style={formStyles.errorMessage}>{detailsError}</div>
+      )}
+      {searchFailed && !manualMode && (
+        <div style={formStyles.errorMessage}>
+          City search is unavailable right now.
+        </div>
+      )}
+
+      {manualMode && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={formStyles.inputLabel}>Latitude</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="any"
+              value={latitude}
+              onChange={(e) => setLatitude(e.target.value)}
+              placeholder="36.1627"
+              style={formStyles.input}
+            />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={formStyles.inputLabel}>Longitude</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="any"
+              value={longitude}
+              onChange={(e) => setLongitude(e.target.value)}
+              placeholder="-86.7816"
+              style={formStyles.input}
+            />
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+        <button
+          type="button"
+          onClick={() => {
+            setManualMode((prev) => {
+              const next = !prev;
+              if (next) {
+                setCityName(cityQuery);
+                setDebouncedCity("");
+              }
+              return next;
+            });
+          }}
+          style={formStyles.linkButton}
+        >
+          {manualMode ? "Use city search instead" : "Enter coordinates manually"}
+        </button>
+      </div>
+
+      {addRegion.isError && (
+        <div style={formStyles.errorMessage}>
+          Couldn&apos;t add region: {addRegion.error?.message ?? "unknown error"}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button
+          type="button"
+          disabled={!canSubmit}
+          onClick={() =>
+            addRegion.mutate({
+              cityName: cityName.trim(),
+              latitude: parseFloat(latitude),
+              longitude: parseFloat(longitude),
+              radiusMiles: parseInt(radius, 10),
+            })
+          }
+          style={{
+            ...formStyles.addButton,
+            opacity: canSubmit ? 1 : 0.4,
+            cursor: canSubmit ? "pointer" : "not-allowed",
+          }}
+        >
+          {addRegion.isPending ? "Adding..." : "Add Region"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setExpanded(false);
+            setManualMode(false);
+            setDetailsError(null);
+          }}
+          style={formStyles.cancelButton}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const formStyles: Record<string, React.CSSProperties> = {
+  inputLabel: {
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: "0.7rem",
+    fontWeight: 500,
+    color: "var(--muted)",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+  input: {
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: "0.85rem",
+    color: "var(--ink)",
+    background: "var(--surface2)",
+    border: "1px solid var(--rule)",
+    borderRadius: 0,
+    padding: "8px 12px",
+    outline: "none",
+    width: "100%",
+  },
+  addButton: {
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    color: "var(--accent-text)",
+    background: "var(--accent)",
+    border: "none",
+    borderRadius: 0,
+    padding: "8px 16px",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    transition: "opacity 0.15s ease",
+  },
+  cancelButton: {
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: "0.75rem",
+    fontWeight: 500,
+    color: "var(--muted)",
+    background: "transparent",
+    border: "1px solid var(--rule-strong)",
+    borderRadius: 0,
+    padding: "8px 16px",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    cursor: "pointer",
+    transition: "opacity 0.15s ease",
+  },
+  errorMessage: {
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: "0.7rem",
+    color: "#E63946",
+    marginTop: 8,
+    letterSpacing: "0.04em",
+  },
+  linkButton: {
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: "0.7rem",
+    fontWeight: 500,
+    color: "var(--accent)",
+    background: "transparent",
+    border: "none",
+    padding: "6px 0 0",
+    cursor: "pointer",
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+  },
+};
+
+// ── Data Source Row ────────────────────────────────────────
+
+const DATA_SOURCES = [
+  { name: "setlist.fm", desc: "Setlists, tour info, song data", connected: true },
+  { name: "Ticketmaster", desc: "Venue, date, seat, pricing", connected: true },
+  { name: "Playbill", desc: "Theatre cast on the night", connected: true },
+] as const;
+
+// ── Main Page ──────────────────────────────────────────────
+
+const THEME_OPTIONS = ["System", "Light", "Dark"];
+
+function themeToDisplay(theme: string): string {
+  return theme.charAt(0).toUpperCase() + theme.slice(1);
+}
+
+function displayToTheme(display: string): "system" | "light" | "dark" {
+  return display.toLowerCase() as "system" | "light" | "dark";
+}
+
+function VenueFollowModal({ onClose, onFollowed }: { onClose: () => void; onFollowed: () => void }) {
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const searchResults = trpc.venues.search.useQuery({ query }, { enabled: query.length >= 2 });
+  const placesResults = trpc.enrichment.searchPlaces.useQuery(
+    { query, types: "venue" },
+    { enabled: query.length >= 2, retry: false },
+  );
+  const followMutation = trpc.venues.follow.useMutation({
+    onSuccess: () => { setQuery(""); onFollowed(); },
+  });
+  const createAndFollow = trpc.venues.createFromPlace.useMutation({
+    onSuccess: (venue) => { followMutation.mutate({ venueId: venue.id }); },
+  });
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const localVenues = searchResults.data ?? [];
+  const places = placesResults.data ?? [];
+  const localIds = new Set(localVenues.map((v) => v.googlePlaceId).filter(Boolean));
+  const filteredPlaces = places.filter((p) => !localIds.has(p.placeId));
+  const isPending = followMutation.isPending || createAndFollow.isPending;
+  const mono = "var(--font-geist-mono)";
+
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 1000,
+      display: "flex", alignItems: "center", justifyContent: "center",
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: "var(--surface)", border: "1px solid var(--rule-strong)",
+        width: 420, maxHeight: "70vh", display: "flex", flexDirection: "column",
+      }}>
+        <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--rule)" }}>
+          <span style={{ fontFamily: mono, fontSize: 12, color: "var(--ink)", letterSpacing: ".08em", textTransform: "uppercase", fontWeight: 500 }}>Follow a venue</span>
+          <button type="button" onClick={onClose} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer" }}><X size={14} /></button>
+        </div>
+        <div style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid var(--rule)" }}>
+          <Search size={13} color="var(--muted)" />
+          <input ref={inputRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search venues..."
+            style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--ink)", fontFamily: "var(--font-geist-sans)", fontSize: 14 }} />
+        </div>
+        <div style={{ overflow: "auto", maxHeight: 300 }}>
+          {query.length < 2 && <div style={{ padding: "20px", color: "var(--faint)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>Type at least 2 characters</div>}
+          {(searchResults.isLoading || placesResults.isLoading) && <div style={{ padding: "20px", color: "var(--muted)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>Searching...</div>}
+          {placesResults.isError && query.length >= 2 && (
+            <div style={{ padding: "10px 20px", color: "#E63946", fontFamily: mono, fontSize: 11 }}>
+              Google Places search is unavailable. Showing local matches only.
+            </div>
+          )}
+          {(followMutation.isError || createAndFollow.isError) && (
+            <div style={{ padding: "10px 20px", color: "#E63946", fontFamily: mono, fontSize: 11 }}>Failed to follow venue</div>
+          )}
+          {localVenues.map((v) => (
+            <button key={v.id} type="button" disabled={isPending} onClick={() => followMutation.mutate({ venueId: v.id })} style={{
+              display: "block", width: "100%", padding: "12px 20px", background: "none", border: "none", borderBottom: "1px solid var(--rule)",
+              textAlign: "left", cursor: isPending ? "wait" : "pointer", opacity: isPending ? 0.5 : 1,
+            }}>
+              <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 14, color: "var(--ink)", fontWeight: 500 }}>{v.name}</div>
+              <div style={{ fontFamily: mono, fontSize: 10.5, color: "var(--muted)", marginTop: 2 }}>{v.city}{v.stateRegion ? `, ${v.stateRegion}` : ""}</div>
+            </button>
+          ))}
+          {filteredPlaces.length > 0 && localVenues.length > 0 && (
+            <div style={{ padding: "10px 20px", color: "var(--faint)", fontFamily: mono, fontSize: 10, letterSpacing: ".06em", textTransform: "uppercase", borderBottom: "1px solid var(--rule)" }}>Google Places</div>
+          )}
+          {filteredPlaces.map((p) => (
+            <button key={p.placeId} type="button" disabled={isPending} onClick={() => createAndFollow.mutate({ placeId: p.placeId })} style={{
+              display: "block", width: "100%", padding: "12px 20px", background: "none", border: "none", borderBottom: "1px solid var(--rule)",
+              textAlign: "left", cursor: isPending ? "wait" : "pointer", opacity: isPending ? 0.5 : 1,
+            }}>
+              <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 14, color: "var(--ink)", fontWeight: 500 }}>{p.displayName}</div>
+              <div style={{ fontFamily: mono, fontSize: 10.5, color: "var(--muted)", marginTop: 2 }}>{p.formattedAddress}</div>
+            </button>
+          ))}
+          {query.length >= 2 && !searchResults.isLoading && !placesResults.isLoading && localVenues.length === 0 && filteredPlaces.length === 0 && !placesResults.isError && (
+            <div style={{ padding: "20px", color: "var(--faint)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>No venues found</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const VENUES_PER_PAGE = 10;
+
+export default function PreferencesView() {
+  const { theme: currentTheme, setTheme } = useTheme();
+  const { data: session } = useSession();
+  const utils = trpc.useUtils();
+  const [venuePage, setVenuePage] = useState(0);
+
+  const prefsQuery = trpc.preferences.get.useQuery(undefined, {
+    staleTime: 60_000,
+  });
+  const venuesQuery = trpc.venues.followed.useQuery(undefined, {
+    staleTime: 60_000,
+  });
+
+  const updatePrefs = trpc.preferences.update.useMutation({
+    onSuccess: () => prefsQuery.refetch(),
+  });
+  const toggleRegion = trpc.preferences.toggleRegion.useMutation({
+    onSuccess: () => prefsQuery.refetch(),
+  });
+  const removeRegion = trpc.preferences.removeRegion.useMutation({
+    onSuccess: () => prefsQuery.refetch(),
+  });
+  const unfollowVenue = trpc.venues.unfollow.useMutation({
+    onSuccess: () => {
+      venuesQuery.refetch();
+      utils.discover.followedFeed.invalidate();
+      utils.discover.nearbyFeed.invalidate();
+    },
+  });
+  const [showFollowModal, setShowFollowModal] = useState(false);
+
+  if (prefsQuery.isLoading || venuesQuery.isLoading) {
+    return (
+      <div style={styles.container}>
+        {/* skeleton header */}
+        <div style={{ padding: "16px 36px", borderBottom: "1px solid var(--rule)", height: 52 }} />
+        {/* skeleton sections */}
+        <div style={{ padding: "28px 36px", display: "grid", gap: 28, alignContent: "start" }}>
+          {Array.from({ length: 3 }).map((_, sectionIdx) => (
+            <div key={sectionIdx} style={{ display: "grid", gap: 10 }}>
+              <div style={{ height: 14, width: 140, background: "var(--rule)" }} />
+              <div style={{ display: "grid", gap: 1, background: "var(--rule)" }}>
+                <div style={{ height: 40, background: "var(--surface)" }} />
+                <div style={{ height: 40, background: "var(--surface)" }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const prefs = prefsQuery.data?.preferences;
+  const regions = prefsQuery.data?.regions ?? [];
+  const venues = venuesQuery.data ?? [];
+  const userEmail = session?.user?.email ?? "";
+  const userName = session?.user?.name ?? "";
+
+  return (
+    <div style={styles.container}>
+      {/* Header */}
+      <div style={styles.header}>
+        <div style={styles.headerLabel}>Settings</div>
+        <h1 style={styles.pageTitle}>Preferences</h1>
+      </div>
+
+      <div style={styles.content}>
+        <div style={styles.contentInner}>
+
+          {/* ── Account ─────────────────────────────── */}
+          <SectionHead label="Account" sub="your login" />
+          <div style={styles.card}>
+            {userName && (
+              <SettingRow label="Name" description="from your Google account">
+                <span style={styles.emailDisplay}>{userName}</span>
+              </SettingRow>
+            )}
+            <SettingRow label="Email" description="for digests and account recovery">
+              <span style={styles.emailDisplay}>{userEmail}</span>
+            </SettingRow>
+            <SettingRow label="Sign out" description="end this session on this device" last>
+              <button
+                type="button"
+                onClick={() => signOut({ callbackUrl: "/signin" })}
+                style={styles.signOutButton}
+                aria-label="Sign out"
+              >
+                <LogOut size={12} />
+                <span>Sign out</span>
+              </button>
+            </SettingRow>
+          </div>
+
+          {/* ── Appearance ───────────────────────────── */}
+          <SectionHead label="Appearance" sub="theme and display" />
+          <div style={styles.card}>
+            <SettingRow label="Theme" description="applies to all pages">
+              <SegmentedControl
+                options={THEME_OPTIONS}
+                selected={themeToDisplay(currentTheme)}
+                onChange={(value) => {
+                  const t = displayToTheme(value);
+                  setTheme(t);
+                  updatePrefs.mutate({ theme: t });
+                }}
+              />
+            </SettingRow>
+
+            <SettingRow
+              label="Compact mode"
+              description="denser rows in list views"
+              last
+            >
+              <Toggle
+                checked={prefs?.compactMode ?? false}
+                onChange={(value) => updatePrefs.mutate({ compactMode: value })}
+                disabled={updatePrefs.isPending}
+              />
+            </SettingRow>
+          </div>
+
+          {/* ── Notifications ────────────────────────── */}
+          <SectionHead label="Notifications" sub="how and when we reach you" />
+          <div style={styles.card}>
+            <SettingRow
+              label="Email notifications"
+              description="daily digest of your shows and new announcements at 8 AM ET"
+            >
+              <Toggle
+                checked={prefs?.emailNotifications ?? false}
+                onChange={(value) =>
+                  updatePrefs.mutate({ emailNotifications: value })
+                }
+                disabled={updatePrefs.isPending}
+              />
+            </SettingRow>
+
+            <SettingRow
+              label="Push notifications"
+              description="mobile app alerts"
+              last
+            >
+              <Toggle
+                checked={prefs?.pushNotifications ?? false}
+                onChange={(value) =>
+                  updatePrefs.mutate({ pushNotifications: value })
+                }
+                disabled={updatePrefs.isPending}
+              />
+            </SettingRow>
+          </div>
+
+          {/* ── Regions ──────────────────────────────── */}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 18 }}>
+            <div>
+              <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 11, color: "var(--ink)", letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 500 }}>
+                Regions
+              </div>
+              <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)", marginTop: 3, letterSpacing: ".04em" }}>
+                where to look for nearby shows
+              </div>
+            </div>
+            <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: regions.length >= 5 ? "#E63946" : "var(--muted)", letterSpacing: ".04em", marginLeft: "auto" }}>
+              {regions.length} / 5 regions
+            </div>
+          </div>
+          <div style={{ ...styles.card, padding: "16px 20px", marginBottom: 36 }}>
+            {regions.length > 0 ? (
+              <>
+                <div style={styles.regionGrid}>
+                  {regions.map((region) => (
+                    <RegionChip
+                      key={region.id}
+                      name={region.cityName}
+                      radius={region.radiusMiles}
+                      active={region.active}
+                      onToggle={() =>
+                        toggleRegion.mutate({ regionId: region.id })
+                      }
+                      onRemove={() =>
+                        removeRegion.mutate({ regionId: region.id })
+                      }
+                      disabled={
+                        toggleRegion.isPending || removeRegion.isPending
+                      }
+                    />
+                  ))}
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginTop: 12,
+                  }}
+                >
+                  {regions.length < 5 ? (
+                    <AddRegionForm onAdd={() => prefsQuery.refetch()} />
+                  ) : (
+                    <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)", letterSpacing: ".04em", marginTop: 12 }}>
+                      Maximum 5 regions — remove one to add another
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      fontFamily: "var(--font-geist-mono)",
+                      fontSize: 10.5,
+                      color: "var(--faint)",
+                      letterSpacing: ".04em",
+                    }}
+                  >
+                    active regions appear in Discover
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={styles.emptyText}>No regions configured</p>
+                <AddRegionForm onAdd={() => prefsQuery.refetch()} />
+              </>
+            )}
+          </div>
+
+          {/* ── Followed Venues ──────────────────────── */}
+          <SectionHead
+            label="Followed venues"
+            sub="announcements from these venues appear in Discover"
+          />
+          <div style={styles.card}>
+            {venues.length > 0 ? (
+              <>
+                {venues
+                  .slice(venuePage * VENUES_PER_PAGE, (venuePage + 1) * VENUES_PER_PAGE)
+                  .map(
+                    (
+                      venue: { id: string; name: string; city?: string },
+                      i: number,
+                      pageVenues: { id: string; name: string; city?: string }[]
+                    ) => (
+                      <div
+                        key={venue.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          padding: "12px 0",
+                          borderBottom:
+                            i < pageVenues.length - 1
+                              ? "1px solid var(--rule)"
+                              : "none",
+                        }}
+                      >
+                        <MapPin size={14} color="var(--faint)" />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontFamily: "var(--font-geist-sans)",
+                              fontSize: 13.5,
+                              fontWeight: 500,
+                              color: "var(--ink)",
+                              letterSpacing: -0.15,
+                            }}
+                          >
+                            {venue.name}
+                          </div>
+                          {venue.city && (
+                            <div
+                              style={{
+                                fontFamily: "var(--font-geist-mono)",
+                                fontSize: 10,
+                                color: "var(--faint)",
+                                marginTop: 2,
+                              }}
+                            >
+                              {venue.city.toLowerCase()}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            unfollowVenue.mutate({ venueId: venue.id })
+                          }
+                          disabled={unfollowVenue.isPending}
+                          style={styles.unfollowButton}
+                        >
+                          {unfollowVenue.isPending ? "..." : "Unfollow"}
+                        </button>
+                      </div>
+                    )
+                  )}
+                {venues.length > VENUES_PER_PAGE && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderTop: "1px solid var(--rule)", marginTop: 4 }}>
+                    <button
+                      type="button"
+                      onClick={() => setVenuePage((p) => Math.max(0, p - 1))}
+                      disabled={venuePage === 0}
+                      style={{ ...styles.unfollowButton, opacity: venuePage === 0 ? 0.3 : 1 }}
+                    >
+                      &larr; Prev
+                    </button>
+                    <span style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)" }}>
+                      {venuePage * VENUES_PER_PAGE + 1}–{Math.min((venuePage + 1) * VENUES_PER_PAGE, venues.length)} of {venues.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setVenuePage((p) => p + 1)}
+                      disabled={(venuePage + 1) * VENUES_PER_PAGE >= venues.length}
+                      style={{ ...styles.unfollowButton, opacity: (venuePage + 1) * VENUES_PER_PAGE >= venues.length ? 0.3 : 1 }}
+                    >
+                      Next &rarr;
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p style={styles.emptyText}>
+                You&apos;re not following any venues yet
+              </p>
+            )}
+            <div
+              onClick={() => setShowFollowModal(true)}
+              style={{
+                padding: "12px 0",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontFamily: "var(--font-geist-mono)",
+                fontSize: 10.5,
+                color: "var(--accent)",
+                letterSpacing: ".04em",
+                cursor: "pointer",
+              }}
+            >
+              <Plus size={11} color="var(--accent)" /> Follow a venue
+            </div>
+          </div>
+
+          {showFollowModal && (
+            <VenueFollowModal
+              onClose={() => setShowFollowModal(false)}
+              onFollowed={() => {
+                venuesQuery.refetch();
+                utils.discover.followedFeed.invalidate();
+                utils.discover.nearbyFeed.invalidate();
+                setShowFollowModal(false);
+              }}
+            />
+          )}
+
+          {/* ── Data Sources ─────────────────────────── */}
+          <SectionHead label="Data sources" sub="auto-enrichment for show details" />
+          <div style={styles.card}>
+            {DATA_SOURCES.map((source, i) => (
+              <SettingRow
+                key={source.name}
+                label={source.name}
+                description={source.desc}
+                last={i === DATA_SOURCES.length - 1}
+              >
+                {source.connected ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <Check size={12} color="var(--accent)" />
+                    <span
+                      style={{
+                        fontFamily: "var(--font-geist-mono)",
+                        fontSize: 10.5,
+                        color: "var(--accent)",
+                        fontWeight: 500,
+                      }}
+                    >
+                      Connected
+                    </span>
+                  </div>
+                ) : (
+                  <span
+                    style={{
+                      fontFamily: "var(--font-geist-mono)",
+                      fontSize: 10.5,
+                      color: "var(--faint)",
+                    }}
+                  >
+                    Disconnected
+                  </span>
+                )}
+              </SettingRow>
+            ))}
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Styles ─────────────────────────────────────────────────
+
+const styles: Record<string, React.CSSProperties> = {
+  container: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
+  },
+  header: {
+    padding: "16px 36px",
+    borderBottom: "1px solid var(--rule)",
+  },
+  headerLabel: {
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: 10.5,
+    color: "var(--muted)",
+    letterSpacing: ".1em",
+    textTransform: "uppercase",
+  },
+  pageTitle: {
+    fontFamily: "var(--font-geist-sans)",
+    fontWeight: 600,
+    fontSize: 26,
+    color: "var(--ink)",
+    letterSpacing: -0.9,
+    marginTop: 4,
+  },
+  content: {
+    flex: 1,
+    overflow: "auto",
+    padding: "28px 36px 60px",
+  },
+  contentInner: {
+    maxWidth: 720,
+  },
+  card: {
+    background: "var(--surface)",
+    padding: "4px 20px 4px",
+    marginBottom: 36,
+  },
+  loading: {
+    color: "var(--muted)",
+    fontFamily: "var(--font-geist-sans)",
+    textAlign: "center",
+    padding: "48px 0",
+  },
+  emptyText: {
+    color: "var(--faint)",
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: "0.85rem",
+    padding: "8px 0",
+  },
+  emailDisplay: {
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: 12,
+    color: "var(--muted)",
+  },
+  regionGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    gap: 10,
+  },
+  unfollowButton: {
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: 10,
+    fontWeight: 500,
+    color: "var(--muted)",
+    background: "transparent",
+    border: "1px solid var(--rule-strong)",
+    borderRadius: 0,
+    padding: "5px 10px",
+    cursor: "pointer",
+    letterSpacing: ".06em",
+    textTransform: "uppercase",
+    transition: "all 0.15s ease",
+    flexShrink: 0,
+  },
+  signOutButton: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: 10.5,
+    fontWeight: 500,
+    color: "var(--ink)",
+    background: "transparent",
+    border: "1px solid var(--rule-strong)",
+    borderRadius: 0,
+    padding: "6px 12px",
+    cursor: "pointer",
+    letterSpacing: ".06em",
+    textTransform: "uppercase",
+    flexShrink: 0,
+  },
+};
