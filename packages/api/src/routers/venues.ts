@@ -75,12 +75,7 @@ export const venuesRouter = router({
 
       log.info({ event: 'venue.follow', userId, venueId: input.venueId }, 'Venue followed');
 
-      try {
-        const { ingestVenue } = await import('@showbook/jobs');
-        await ingestVenue(input.venueId);
-      } catch (err) {
-        log.error({ err, event: 'venue.follow.ingest_failed', userId, venueId: input.venueId }, 'Venue follow ingestion failed');
-      }
+      await enqueueIngestVenue(input.venueId);
 
       // Auto-fill googlePlaceId for venues created via TM ingestion (which
       // skip the venue-matcher geocoding path).
