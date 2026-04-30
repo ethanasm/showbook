@@ -44,6 +44,7 @@ services:
       - /app/packages/api/node_modules
       - /app/packages/jobs/node_modules
       - /app/packages/emails/node_modules
+      - /app/packages/observability/node_modules
       - /app/packages/scrapers/node_modules
       - /app/packages/shared/node_modules
     depends_on:
