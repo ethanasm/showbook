@@ -88,8 +88,6 @@ export function computePerformerAnnouncementsToDelete(
 const updatePreferencesSchema = z.object({
   theme: z.enum(['system', 'light', 'dark']).optional(),
   compactMode: z.boolean().optional(),
-  digestFrequency: z.enum(['daily', 'weekly', 'off']).optional(),
-  digestTime: z.string().optional(),
   emailNotifications: z.boolean().optional(),
   pushNotifications: z.boolean().optional(),
 });

@@ -594,7 +594,6 @@ const DATA_SOURCES = [
 // ── Main Page ──────────────────────────────────────────────
 
 const THEME_OPTIONS = ["System", "Light", "Dark"];
-const DIGEST_OPTIONS = ["Daily", "Weekly", "Off"];
 
 function themeToDisplay(theme: string): string {
   return theme.charAt(0).toUpperCase() + theme.slice(1);
@@ -602,14 +601,6 @@ function themeToDisplay(theme: string): string {
 
 function displayToTheme(display: string): "system" | "light" | "dark" {
   return display.toLowerCase() as "system" | "light" | "dark";
-}
-
-function digestToDisplay(freq: string): string {
-  return freq.charAt(0).toUpperCase() + freq.slice(1);
-}
-
-function displayToDigest(display: string): string {
-  return display.toLowerCase();
 }
 
 function VenueFollowModal({ onClose, onFollowed }: { onClose: () => void; onFollowed: () => void }) {
@@ -805,40 +796,8 @@ export default function PreferencesPage() {
           <SectionHead label="Notifications" sub="how and when we reach you" />
           <div style={styles.card}>
             <SettingRow
-              label="Discover digest"
-              description="summary of new announcements from followed venues"
-            >
-              <SegmentedControl
-                options={DIGEST_OPTIONS}
-                selected={digestToDisplay(prefs?.digestFrequency ?? "off")}
-                onChange={(value) =>
-                  updatePrefs.mutate({
-                    digestFrequency: displayToDigest(value) as
-                      | "daily"
-                      | "weekly"
-                      | "off",
-                  })
-                }
-              />
-            </SettingRow>
-
-            <SettingRow label="Digest time" description="sent at this hour, your local time, every day">
-              <input
-                type="time"
-                step={3600}
-                value={(prefs?.digestTime ?? "09:00:00").slice(0, 5)}
-                onChange={(e) => {
-                  // Cron is hourly — quantize to HH:00 so picker, storage, and dispatch agree.
-                  const hh = e.target.value.slice(0, 2);
-                  updatePrefs.mutate({ digestTime: `${hh}:00` });
-                }}
-                style={styles.timeInput}
-              />
-            </SettingRow>
-
-            <SettingRow
               label="Email notifications"
-              description="new shows, on-sale alerts, venue updates"
+              description="daily digest of your shows and new announcements at 8 AM ET"
             >
               <Toggle
                 checked={prefs?.emailNotifications ?? false}
@@ -1207,15 +1166,5 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: ".06em",
     textTransform: "uppercase",
     flexShrink: 0,
-  },
-  timeInput: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 13,
-    color: "var(--accent)",
-    background: "transparent",
-    border: "none",
-    padding: "4px 0",
-    outline: "none",
-    fontWeight: 500,
   },
 };

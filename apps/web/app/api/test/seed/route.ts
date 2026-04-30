@@ -254,8 +254,6 @@ export async function GET(request: Request) {
       userId: user.id,
       theme: 'dark',
       compactMode: false,
-      digestFrequency: 'weekly',
-      digestTime: '09:00',
       emailNotifications: true,
       pushNotifications: true,
     }).onConflictDoNothing();

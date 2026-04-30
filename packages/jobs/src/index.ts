@@ -6,4 +6,4 @@ export {
   ingestPerformer,
   ingestRegion,
 } from './discover-ingest';
-export { runWeeklyDiscoveryDigest } from './notifications';
+export { runDailyDigest } from './notifications';
