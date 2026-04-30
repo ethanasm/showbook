@@ -61,6 +61,33 @@ function formatDateLong(dateStr: string | null): string {
   });
 }
 
+function formatDateRangeLong(
+  dateStr: string | null,
+  endDateStr: string | null,
+): string {
+  if (!dateStr) return "Date TBD";
+  if (!endDateStr || endDateStr === dateStr) return formatDateLong(dateStr);
+
+  const start = new Date(dateStr + "T00:00:00");
+  const end = new Date(endDateStr + "T00:00:00");
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    return formatDateLong(dateStr);
+  }
+
+  const startLabel = start.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+  const endLabel = end.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+  return `${startLabel} - ${endLabel}`;
+}
+
 function daysUntil(dateStr: string | null): number {
   if (!dateStr) return 0;
   const now = new Date();
@@ -267,7 +294,7 @@ export default function ShowDetailPage() {
               flexWrap: "wrap",
             }}
           >
-            <span>{formatDateLong(show.date)}</span>
+            <span>{formatDateRangeLong(show.date, show.endDate)}</span>
             {countdown && (
               <span
                 style={{
@@ -857,4 +884,3 @@ function PickDateBanner({ showId }: { showId: string }) {
     </div>
   );
 }
-

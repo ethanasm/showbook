@@ -3,8 +3,9 @@
  *   pnpm --filter @showbook/jobs exec node --import tsx --test src/__tests__/run-grouping.test.ts
  *
  * No DB or browser required — these protect the most consequential new
- * logic (theatre always groups; concerts only group as residencies; comedy
- * never groups; run dates / source IDs / on-sale status aggregate correctly).
+ * logic (theatre always groups; concerts only group as residencies; festivals
+ * collapse duplicate pass/day listings; comedy never groups; run dates /
+ * source IDs / on-sale status aggregate correctly).
  */
 
 import { test } from 'node:test';
@@ -55,14 +56,14 @@ test('shouldGroup: concerts group only with 3+ dates within 30 days', () => {
   );
 });
 
-test('shouldGroup: comedy and festival never group', () => {
+test('shouldGroup: comedy never groups, festivals group duplicate listings', () => {
   assert.equal(
     shouldGroup('comedy', ['2026-08-01', '2026-08-02', '2026-08-03']),
     false,
   );
   assert.equal(
     shouldGroup('festival', ['2026-08-01', '2026-08-02']),
-    false,
+    true,
   );
 });
 
@@ -199,6 +200,69 @@ test('groupEventsIntoRuns: comedy nights stay separate even at the same venue', 
   const { runs, singles } = groupEventsIntoRuns(events);
   assert.equal(runs.length, 0);
   assert.equal(singles.length, 3);
+});
+
+test('groupEventsIntoRuns: festival pass and day listings collapse into one representative run', () => {
+  const events = [
+    makeEvent({
+      date: '2026-08-07',
+      kind: 'festival',
+      headliner: 'Outside Lands',
+      headlinerPerformerId: 'outside-lands',
+      sourceEventId: 'three-day-friday',
+      support: ['Charli xcx', 'Turnstile', 'GloRilla'],
+      onSaleDate: new Date('2026-03-05T20:00:00Z'),
+      onSaleStatus: 'sold_out',
+      ticketUrl: 'https://on.fgtix.com/trk/sILM',
+    }),
+    makeEvent({
+      date: '2026-08-07',
+      kind: 'festival',
+      headliner: 'Outside Lands',
+      headlinerPerformerId: 'outside-lands',
+      sourceEventId: 'friday-platinum',
+      support: null,
+      onSaleDate: new Date('2026-03-25T00:00:00Z'),
+      onSaleStatus: 'on_sale',
+      ticketUrl: 'https://ticketmaster.example/friday-platinum',
+    }),
+    makeEvent({
+      date: '2026-08-08',
+      kind: 'festival',
+      headliner: 'Outside Lands',
+      headlinerPerformerId: 'outside-lands',
+      sourceEventId: 'three-day-saturday',
+      support: ['The Strokes', 'The xx', 'Ethel Cain'],
+      onSaleDate: new Date('2026-03-05T20:00:00Z'),
+      onSaleStatus: 'sold_out',
+      ticketUrl: 'https://on.fgtix.com/trk/sILM',
+    }),
+    makeEvent({
+      date: '2026-08-09',
+      kind: 'festival',
+      headliner: 'Outside Lands',
+      headlinerPerformerId: 'outside-lands',
+      sourceEventId: 'three-day-sunday',
+      support: ['RUFUS DU SOL', 'Baby Keem'],
+      onSaleDate: new Date('2026-03-05T20:00:00Z'),
+      onSaleStatus: 'sold_out',
+      ticketUrl: 'https://on.fgtix.com/trk/sILM',
+    }),
+  ];
+
+  const { runs, singles } = groupEventsIntoRuns(events);
+
+  assert.equal(runs.length, 1);
+  assert.equal(singles.length, 0);
+  assert.deepEqual(runs[0]!.performanceDates, [
+    '2026-08-07',
+    '2026-08-08',
+    '2026-08-09',
+  ]);
+  assert.equal(runs[0]!.kind, 'festival');
+  assert.equal(runs[0]!.onSaleStatus, 'sold_out');
+  assert.equal(runs[0]!.ticketUrl, 'https://on.fgtix.com/trk/sILM');
+  assert.equal(runs[0]!.sourceEventIds.length, 4);
 });
 
 test('groupEventsIntoRuns: different venues for same artist do not merge', () => {

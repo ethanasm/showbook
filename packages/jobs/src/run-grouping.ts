@@ -56,10 +56,12 @@ export interface EventRun {
  * - concert: group only when 3+ dates within 30 days (residency heuristic).
  *            Otherwise emit individual events (touring concerts at the same
  *            venue weeks/months apart should stay separate).
- * - comedy/festival: never group.
+ * - comedy: never group.
+ * - festival: group duplicate pass/day/tier listings into one festival row.
  */
 export function shouldGroup(kind: Kind, dates: string[]): boolean {
   if (kind === 'theatre') return dates.length >= 2;
+  if (kind === 'festival') return dates.length >= 2;
   if (kind === 'concert') {
     if (dates.length < 3) return false;
     const sorted = [...dates].sort();
@@ -109,6 +111,7 @@ export function groupEventsIntoRuns(events: NormalizedEvent[]): {
 }
 
 function makeRun(cluster: NormalizedEvent[]): EventRun {
+  const representative = pickRepresentativeEvent(cluster);
   const sortedDates = [...new Set(cluster.map((e) => e.date))].sort();
   const sortedSourceIds = cluster
     .slice()
@@ -119,32 +122,66 @@ function makeRun(cluster: NormalizedEvent[]): EventRun {
     .filter((d): d is Date => d !== null)
     .sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
 
-  // Pick the most "live" status across the run — if any date is on_sale, the
-  // run is on_sale; if all are sold_out, the run is sold_out; else announced.
+  // Festivals should reflect the representative pass/listing status. If a
+  // 3-day pass is sold out but day/platinum listings remain on sale, the
+  // canonical festival row should still show sold out.
   const statuses = new Set(cluster.map((e) => e.onSaleStatus));
-  const onSaleStatus: 'announced' | 'on_sale' | 'sold_out' = statuses.has(
-    'on_sale',
-  )
-    ? 'on_sale'
-    : statuses.size === 1 && statuses.has('sold_out')
-      ? 'sold_out'
-      : 'announced';
+  const onSaleStatus: 'announced' | 'on_sale' | 'sold_out' =
+    representative.kind === 'festival'
+      ? representative.onSaleStatus
+      : statuses.has('on_sale')
+        ? 'on_sale'
+        : statuses.size === 1 && statuses.has('sold_out')
+          ? 'sold_out'
+          : 'announced';
 
-  const first = cluster[0]!;
   return {
     runStartDate: sortedDates[0]!,
     runEndDate: sortedDates[sortedDates.length - 1]!,
     performanceDates: sortedDates,
     sourceEventIds: sortedSourceIds,
-    productionName: first.headliner,
-    kind: first.kind,
-    headliner: first.headliner,
-    headlinerPerformerId: first.headlinerPerformerId,
-    venueId: first.venueId,
-    support: first.support,
-    onSaleDate: earliestOnSale,
+    productionName: representative.headliner,
+    kind: representative.kind,
+    headliner: representative.headliner,
+    headlinerPerformerId: representative.headlinerPerformerId,
+    venueId: representative.venueId,
+    support: representative.support,
+    onSaleDate:
+      representative.kind === 'festival'
+        ? representative.onSaleDate
+        : earliestOnSale,
     onSaleStatus,
-    source: first.source,
-    ticketUrl: first.ticketUrl,
+    source: representative.source,
+    ticketUrl: representative.ticketUrl,
   };
+}
+
+function pickRepresentativeEvent(cluster: NormalizedEvent[]): NormalizedEvent {
+  const first = cluster[0]!;
+  if (first.kind !== 'festival') return first;
+
+  const datesByTicketUrl = new Map<string, Set<string>>();
+  for (const event of cluster) {
+    if (!event.ticketUrl) continue;
+    const dates = datesByTicketUrl.get(event.ticketUrl) ?? new Set<string>();
+    dates.add(event.date);
+    datesByTicketUrl.set(event.ticketUrl, dates);
+  }
+
+  return cluster
+    .slice()
+    .sort((a, b) => {
+      const bTicketDates = b.ticketUrl
+        ? (datesByTicketUrl.get(b.ticketUrl)?.size ?? 0)
+        : 0;
+      const aTicketDates = a.ticketUrl
+        ? (datesByTicketUrl.get(a.ticketUrl)?.size ?? 0)
+        : 0;
+      if (bTicketDates !== aTicketDates) return bTicketDates - aTicketDates;
+
+      const supportDiff = (b.support?.length ?? 0) - (a.support?.length ?? 0);
+      if (supportDiff !== 0) return supportDiff;
+
+      return a.date.localeCompare(b.date);
+    })[0]!;
 }

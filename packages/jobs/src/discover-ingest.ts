@@ -7,7 +7,7 @@ import {
   venues,
   performers,
 } from '@showbook/db';
-import { eq, lt, isNotNull, and, inArray } from 'drizzle-orm';
+import { eq, lt, isNotNull, and, inArray, sql } from 'drizzle-orm';
 import {
   searchEvents,
   inferKind,
@@ -53,6 +53,20 @@ function determineOnSaleStatus(
     if (saleEnd < now) return 'sold_out';
   }
   return 'on_sale';
+}
+
+function parseOnSaleDate(event: TMEvent): Date | null {
+  const startDateTime = event.sales?.public?.startDateTime;
+  if (!startDateTime) return null;
+
+  const date = new Date(startDateTime);
+  if (Number.isNaN(date.getTime())) return null;
+
+  // Ticketmaster sometimes uses 1900-01-01 as a placeholder. Treat it as
+  // missing so the UI does not show a bogus on-sale date.
+  if (date.getUTCFullYear() < 2000) return null;
+
+  return date;
 }
 
 /**
@@ -131,14 +145,12 @@ async function normalizeTmEvent(event: TMEvent): Promise<NormalizedEvent | null>
   return {
     sourceEventId: event.id,
     date: event.dates.start.localDate,
-    kind: inferKind(event.classifications),
+    kind: inferKind(event.classifications, { eventName: event.name }),
     headliner: headlinerName,
     headlinerPerformerId,
     venueId: venue.id,
     support,
-    onSaleDate: event.sales?.public?.startDateTime
-      ? new Date(event.sales.public.startDateTime)
-      : null,
+    onSaleDate: parseOnSaleDate(event),
     onSaleStatus: determineOnSaleStatus(event),
     source: 'ticketmaster',
     ticketUrl: event.url ?? null,
@@ -177,8 +189,10 @@ async function insertSingleEvent(
 
 /**
  * Insert a grouped run, OR extend an existing run row if one with the same
- * (productionName, venueId, kind) already exists. Extending merges the new
- * dates into the existing performanceDates and updates run start/end.
+ * (productionName, venueId, kind) already exists. Festival runs may also
+ * upgrade an existing concert run for the same production/venue that was
+ * created before festival inference was strong enough. Extending merges the
+ * new dates into the existing performanceDates and updates run start/end.
  *
  * Returns 1 if a row was inserted or extended (i.e., new dates appeared),
  * 0 if nothing changed.
@@ -201,7 +215,9 @@ async function upsertRun(
     .where(
       and(
         eq(announcements.venueId, run.venueId),
-        eq(announcements.kind, run.kind),
+        run.kind === 'festival'
+          ? sql`${announcements.kind} in ('festival', 'concert')`
+          : eq(announcements.kind, run.kind),
         eq(announcements.productionName, run.productionName),
       ),
     )
@@ -217,23 +233,26 @@ async function upsertRun(
         extended = true;
       }
     }
-    if (!extended) {
-      // Track all source IDs so subsequent calls dedup correctly.
-      for (const id of newSourceIds) existingSourceIds.add(id);
-      return 0;
-    }
     const merged = Array.from(existingDates).sort();
     await db
       .update(announcements)
       .set({
+        kind: run.kind,
         runStartDate: merged[0]!,
         runEndDate: merged[merged.length - 1]!,
         performanceDates: merged,
         showDate: merged[0]!,
+        support: run.support ?? existing.support,
+        onSaleDate:
+          run.kind === 'festival'
+            ? run.onSaleDate
+            : run.onSaleDate ?? existing.onSaleDate,
+        onSaleStatus: run.onSaleStatus,
+        ticketUrl: run.ticketUrl ?? existing.ticketUrl,
       })
       .where(eq(announcements.id, existing.id));
     for (const id of newSourceIds) existingSourceIds.add(id);
-    return 1;
+    return extended ? 1 : 0;
   }
 
   // Fresh run row.
@@ -259,6 +278,26 @@ async function upsertRun(
   });
   for (const id of newSourceIds) existingSourceIds.add(id);
   return 1;
+}
+
+async function pruneDuplicateFestivalSinglesForRun(run: EventRun): Promise<void> {
+  if (run.kind !== 'festival') return;
+
+  await db.execute(
+    sql`DELETE FROM announcements a
+        WHERE a.source = 'ticketmaster'
+          AND a.kind = 'festival'
+          AND a.source_event_id IS NOT NULL
+          AND a.venue_id = ${run.venueId}
+          AND lower(a.headliner) = lower(${run.headliner})
+          AND a.show_date >= ${run.runStartDate}
+          AND a.show_date <= ${run.runEndDate}
+          AND NOT EXISTS (
+            SELECT 1
+            FROM show_announcement_links sal
+            WHERE sal.announcement_id = a.id
+          )`,
+  );
 }
 
 /**
@@ -290,6 +329,7 @@ async function ingestTmEvents(
   for (const run of runs) {
     try {
       count += await upsertRun(run, existingSourceIds);
+      await pruneDuplicateFestivalSinglesForRun(run);
     } catch (err) {
       console.error(
         `[discover/ingest] Failed to upsert run "${run.productionName}" at venue ${run.venueId}:`,

@@ -76,7 +76,7 @@ function mapEventToResult(event: TMEvent) {
     venueTmId: venue?.id ?? null,
     venueLat: venue?.location?.latitude ? parseFloat(venue.location.latitude) : null,
     venueLng: venue?.location?.longitude ? parseFloat(venue.location.longitude) : null,
-    kind: inferKind(event.classifications),
+    kind: inferKind(event.classifications, { eventName: event.name }),
     performers: attractions.map((attraction) => ({
       name: attraction.name,
       tmAttractionId: attraction.id,
