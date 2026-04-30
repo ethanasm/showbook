@@ -63,15 +63,19 @@ services:
     volumes:
       - ./apps:/app/apps
       - ./packages:/app/packages
+      - showbook_next_cache:/app/apps/web/.next/cache
     depends_on:
       postgres:
         condition: service_healthy
 
 volumes:
   showbook_pgdata:
+  showbook_next_cache:
 ```
 
 The `web` container runs Next.js which serves everything: pages, tRPC API, and pg-boss background jobs. No separate API or worker container — it's all one process. Volume mounts give hot reload.
+
+`.next/cache` is mounted as a named Docker volume so webpack's persistent cache lives on the Docker VM filesystem instead of the macOS bind mount. On the bind mount we hit ENOENT rename errors that silently corrupt the cache, which made every container rebuild a full cold compile. With the named volume the cache survives `docker compose up --build web`.
 
 The `DATABASE_URL` inside the container uses `postgres` (the Docker service name) not `localhost`, since containers talk to each other via Docker's internal network. The host-exposed port 5433 is only for running migrations and psql from outside Docker.
 
