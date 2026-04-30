@@ -375,57 +375,70 @@ export default function HomePage() {
         </div>
 
         {stats && (
-          <div data-testid="home-stats" style={{ display: "flex", gap: 28, alignItems: "center" }}>
+          <div
+            data-testid="home-stats"
+            aria-label="This year summary"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 0,
+              padding: 4,
+              border: "1px solid var(--rule)",
+              borderRadius: 999,
+              background: "rgba(245,245,243,.035)",
+              boxShadow: "inset 0 1px 0 rgba(245,245,243,.04)",
+            }}
+          >
+            <div
+              style={{
+                padding: "0 12px 0 10px",
+                fontFamily: MONO,
+                fontSize: 9.5,
+                color: "var(--faint)",
+                lineHeight: 1,
+                letterSpacing: ".08em",
+                textTransform: "uppercase",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {new Date().getFullYear()}
+            </div>
             {[
-              { label: "Shows", value: String(stats.shows), subtitle: "this year" },
-              { label: "Venues", value: String(stats.venues), subtitle: "" },
-              { label: "Artists", value: String(stats.artists), subtitle: "" },
-            ].map(({ label, value, subtitle }) => (
+              { label: "Shows", value: String(stats.shows) },
+              { label: "Venues", value: String(stats.venues) },
+              { label: "Artists", value: String(stats.artists) },
+            ].map(({ label, value }) => (
               <div
                 key={label}
-                style={{ display: "flex", flexDirection: "column" }}
+                style={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: 6,
+                  padding: "6px 13px",
+                  borderLeft: "1px solid var(--rule)",
+                  whiteSpace: "nowrap",
+                }}
               >
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "baseline",
-                    gap: 6,
+                    fontFamily: MONO,
+                    fontSize: 16,
+                    fontWeight: 650,
+                    color: "var(--ink)",
+                    lineHeight: 1,
+                    letterSpacing: 0,
+                    fontFeatureSettings: '"tnum"',
                   }}
                 >
-                  <div
-                    style={{
-                      fontFamily: SANS,
-                      fontSize: 22,
-                      fontWeight: 500,
-                      color: "var(--ink)",
-                      letterSpacing: -0.6,
-                      lineHeight: 1,
-                      fontFeatureSettings: '"tnum"',
-                    }}
-                  >
-                    {value}
-                  </div>
-                  {subtitle && (
-                    <div
-                      style={{
-                        fontFamily: MONO,
-                        fontSize: 10,
-                        color: "var(--faint)",
-                        letterSpacing: ".04em",
-                      }}
-                    >
-                      {subtitle}
-                    </div>
-                  )}
+                  {value}
                 </div>
                 <div
                   style={{
                     fontFamily: MONO,
-                    fontSize: 10,
+                    fontSize: 9.5,
                     color: "var(--muted)",
-                    letterSpacing: ".08em",
-                    textTransform: "uppercase",
-                    marginTop: 4,
+                    letterSpacing: ".06em",
+                    lineHeight: 1,
                   }}
                 >
                   {label}
