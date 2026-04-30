@@ -355,6 +355,30 @@
   letter-spacing: -0.3px;
 }
 
+.discover-venue-group__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.discover-venue-group__toggle:hover {
+  color: var(--accent);
+}
+
+.discover-venue-group__chevron {
+  display: inline-block;
+  width: 12px;
+  flex: 0 0 12px;
+  font-size: 11px;
+  line-height: 1;
+  color: currentColor;
+}
+
 .discover-venue-group__name--link {
   text-decoration: none;
   cursor: pointer;

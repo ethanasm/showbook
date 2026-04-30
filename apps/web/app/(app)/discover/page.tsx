@@ -1310,7 +1310,7 @@ function FeedSection({
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [showFollowModal, setShowFollowModal] = useState(false);
   const [showRegionModal, setShowRegionModal] = useState(false);
-  const [collapsedRegions, setCollapsedRegions] = useState<Set<string>>(new Set());
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(new Set());
   const [regionContextMenu, setRegionContextMenu] = useState<{ x: number; y: number; regionId: string } | null>(null);
   const [sort, setSort] = useState<DiscoverSortConfig>(DISCOVER_DEFAULT_SORT);
 
@@ -1339,7 +1339,7 @@ function FeedSection({
   const removeRegionMutation = trpc.preferences.removeRegion.useMutation({
     onMutate: ({ regionId }) => {
       setSelectedGroupId(null);
-      setCollapsedRegions((prev) => {
+      setCollapsedGroupIds((prev) => {
         if (!prev.has(regionId)) return prev;
         const next = new Set(prev);
         next.delete(regionId);
@@ -1366,6 +1366,15 @@ function FeedSection({
         ? { field, dir: prev.dir === "asc" ? "desc" : "asc" }
         : { field, dir: "asc" },
     );
+  }, []);
+
+  const toggleCollapsedGroup = useCallback((groupId: string) => {
+    setCollapsedGroupIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
   }, []);
 
   function getGroupKey(item: Announcement): string | null {
@@ -1693,7 +1702,7 @@ function FeedSection({
               || (pendingIngestRegionIds?.has(region.id) ?? false),
             )
             .map((region) => {
-            const collapsed = collapsedRegions.has(region.id);
+            const collapsed = collapsedGroupIds.has(region.id);
             const isPendingIngest = pendingIngestRegionIds?.has(region.id) ?? false;
             return (
               <div key={region.id} className="discover-venue-group">
@@ -1707,16 +1716,15 @@ function FeedSection({
                 >
                   <button
                     type="button"
-                    className="discover-venue-group__name"
-                    style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 6 }}
-                    onClick={() => setCollapsedRegions((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(region.id)) next.delete(region.id);
-                      else next.add(region.id);
-                      return next;
-                    })}
+                    className="discover-venue-group__name discover-venue-group__toggle"
+                    onClick={() => toggleCollapsedGroup(region.id)}
+                    aria-expanded={!collapsed}
+                    aria-controls={`discover-group-${region.id}`}
                   >
-                    {collapsed ? "▶" : "▼"} {region.cityName}
+                    <span className="discover-venue-group__chevron" aria-hidden="true">
+                      {collapsed ? "▶" : "▼"}
+                    </span>
+                    {region.cityName}
                   </button>
                   <span className="discover-venue-group__meta">
                     {region.radiusMiles}mi · {region.items.length} upcoming
@@ -1731,58 +1739,78 @@ function FeedSection({
                   </span>
                   <div className="discover-venue-group__rule" />
                 </div>
-                {!collapsed && region.items.map((item) => (
-                  <AnnouncementRow
-                    key={item.id}
-                    announcement={item}
-                    isWatching={watchedIds.has(item.id)}
-                    onToggleWatch={onToggleWatch}
-                    showReason={false}
-                    groupBy={groupBy}
-                  />
-                ))}
+                {!collapsed && (
+                  <div id={`discover-group-${region.id}`}>
+                    {region.items.map((item) => (
+                      <AnnouncementRow
+                        key={item.id}
+                        announcement={item}
+                        isWatching={watchedIds.has(item.id)}
+                        onToggleWatch={onToggleWatch}
+                        showReason={false}
+                        groupBy={groupBy}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })
         ) : (
           /* Followed venues / Artists: standard grouping */
-          groups.map(({ group, items: groupItems }) => (
-            <div key={group.id || "flat"} className="discover-venue-group">
-              {/* Group header (only when "All" is selected) */}
-              {showAllGrouped && group.id && (
-                <div className="discover-venue-group__header">
-                  <span className="discover-venue-group__name">
-                    {group.name}
-                  </span>
-                  <span className="discover-venue-group__meta">
-                    {group.label
-                      ? group.label.toLowerCase() + " · "
-                      : ""}
-                    {groupItems.length} upcoming
-                  </span>
-                  <div className="discover-venue-group__rule" />
-                  <Link
-                    href={`/${groupRoute}/${group.id}`}
-                    className="discover-venue-group__link"
-                  >
-                    {groupPageLabel} &rarr;
-                  </Link>
-                </div>
-              )}
+          groups.map(({ group, items: groupItems }) => {
+            const collapsed = group.id ? collapsedGroupIds.has(group.id) : false;
+            return (
+              <div key={group.id || "flat"} className="discover-venue-group">
+                {/* Group header (only when "All" is selected) */}
+                {showAllGrouped && group.id && (
+                  <div className="discover-venue-group__header">
+                    <button
+                      type="button"
+                      className="discover-venue-group__name discover-venue-group__toggle"
+                      onClick={() => toggleCollapsedGroup(group.id)}
+                      aria-expanded={!collapsed}
+                      aria-controls={`discover-group-${group.id}`}
+                    >
+                      <span className="discover-venue-group__chevron" aria-hidden="true">
+                        {collapsed ? "▶" : "▼"}
+                      </span>
+                      {group.name}
+                    </button>
+                    <span className="discover-venue-group__meta">
+                      {group.label
+                        ? group.label.toLowerCase() + " · "
+                        : ""}
+                      {groupItems.length} upcoming
+                    </span>
+                    <div className="discover-venue-group__rule" />
+                    <Link
+                      href={`/${groupRoute}/${group.id}`}
+                      className="discover-venue-group__link"
+                    >
+                      {groupPageLabel} &rarr;
+                    </Link>
+                  </div>
+                )}
 
-              {/* Announcement rows */}
-              {groupItems.map((item) => (
-                <AnnouncementRow
-                  key={item.id}
-                  announcement={item}
-                  isWatching={watchedIds.has(item.id)}
-                  onToggleWatch={onToggleWatch}
-                  showReason={showAllGrouped}
-                  groupBy={groupBy}
-                />
-              ))}
-            </div>
-          ))
+                {/* Announcement rows */}
+                {(!showAllGrouped || !group.id || !collapsed) && (
+                  <div id={group.id ? `discover-group-${group.id}` : undefined}>
+                    {groupItems.map((item) => (
+                      <AnnouncementRow
+                        key={item.id}
+                        announcement={item}
+                        isWatching={watchedIds.has(item.id)}
+                        onToggleWatch={onToggleWatch}
+                        showReason={showAllGrouped}
+                        groupBy={groupBy}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
 
         {/* Footer */}
