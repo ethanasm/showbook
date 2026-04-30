@@ -11,6 +11,7 @@ COPY packages/jobs/package.json packages/jobs/
 COPY packages/emails/package.json packages/emails/
 COPY packages/scrapers/package.json packages/scrapers/
 COPY packages/shared/package.json packages/shared/
+COPY packages/observability/package.json packages/observability/
 RUN pnpm install --frozen-lockfile
 
 COPY . .
