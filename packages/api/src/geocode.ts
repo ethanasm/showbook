@@ -63,7 +63,7 @@ export async function geocodeVenue(
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1`;
     try {
       await rateLimit();
-      const res = await fetch(url, { headers });
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(8_000) });
       if (!res.ok) continue;
       const results = (await res.json()) as NominatimResult[];
       if (results.length > 0) {

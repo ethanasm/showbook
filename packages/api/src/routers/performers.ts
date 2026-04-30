@@ -280,6 +280,44 @@ export const performersRouter = router({
   rename: protectedProcedure
     .input(z.object({ performerId: z.string().uuid(), name: z.string().min(1).max(300) }))
     .mutation(async ({ ctx, input }) => {
+      // Performers are a shared global record — anyone can resolve the same
+      // artist. Require the caller to actually have a stake (an attended/
+      // ticketed show featuring this performer, or a follow) before letting
+      // them mutate the canonical name. Otherwise a user could rename any
+      // artist for everyone else.
+      const userId = ctx.session.user.id;
+
+      const [stake] = await ctx.db
+        .select({ id: shows.id })
+        .from(shows)
+        .innerJoin(showPerformers, eq(showPerformers.showId, shows.id))
+        .where(
+          and(
+            eq(shows.userId, userId),
+            eq(showPerformers.performerId, input.performerId),
+          ),
+        )
+        .limit(1);
+
+      if (!stake) {
+        const [follow] = await ctx.db
+          .select({ performerId: userPerformerFollows.performerId })
+          .from(userPerformerFollows)
+          .where(
+            and(
+              eq(userPerformerFollows.userId, userId),
+              eq(userPerformerFollows.performerId, input.performerId),
+            ),
+          )
+          .limit(1);
+        if (!follow) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'You can only rename performers you have shows or follows for',
+          });
+        }
+      }
+
       const [updated] = await ctx.db
         .update(performers)
         .set({ name: input.name.trim() })
@@ -294,31 +332,36 @@ export const performersRouter = router({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
-      const userShowIds = await ctx.db
-        .select({ id: shows.id })
-        .from(shows)
-        .where(eq(shows.userId, userId));
+      // Atomic: detach performer from all of the user's shows AND drop the
+      // follow in one go. A partial failure would leave the user thinking
+      // they unfollowed but the performer still tagged on past shows.
+      await ctx.db.transaction(async (tx) => {
+        const userShowIds = await tx
+          .select({ id: shows.id })
+          .from(shows)
+          .where(eq(shows.userId, userId));
 
-      if (userShowIds.length > 0) {
-        const ids = userShowIds.map((s) => s.id);
-        await ctx.db
-          .delete(showPerformers)
+        if (userShowIds.length > 0) {
+          const ids = userShowIds.map((s) => s.id);
+          await tx
+            .delete(showPerformers)
+            .where(
+              and(
+                eq(showPerformers.performerId, input.performerId),
+                inArray(showPerformers.showId, ids),
+              ),
+            );
+        }
+
+        await tx
+          .delete(userPerformerFollows)
           .where(
             and(
-              eq(showPerformers.performerId, input.performerId),
-              inArray(showPerformers.showId, ids),
+              eq(userPerformerFollows.userId, userId),
+              eq(userPerformerFollows.performerId, input.performerId),
             ),
           );
-      }
-
-      await ctx.db
-        .delete(userPerformerFollows)
-        .where(
-          and(
-            eq(userPerformerFollows.userId, userId),
-            eq(userPerformerFollows.performerId, input.performerId),
-          ),
-        );
+      });
 
       return { deleted: 1 };
     }),

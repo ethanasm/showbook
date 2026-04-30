@@ -42,7 +42,10 @@ export async function GET(
   // Proxy the bytes ourselves rather than 302-redirect. Next.js's image
   // optimizer can't follow cross-origin redirects (returns "received null")
   // and the Google Places API key must stay server-side anyway.
-  const upstream = await fetch(mediaUrl, { cache: 'no-store' });
+  const upstream = await fetch(mediaUrl, {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(15_000),
+  });
 
   if (!upstream.ok || !upstream.body) {
     return new NextResponse('Upstream error', {

@@ -48,6 +48,7 @@ export async function isAllowedByRobots(targetUrl: string): Promise<boolean> {
     const robotsUrl = `${url.protocol}//${url.host}/robots.txt`;
     const res = await fetch(robotsUrl, {
       headers: { 'User-Agent': POLITE_USER_AGENT },
+      signal: AbortSignal.timeout(5_000),
     });
     if (!res.ok) return true;
     const body = await res.text();

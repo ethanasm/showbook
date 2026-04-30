@@ -42,6 +42,7 @@ export async function autocomplete(
       input,
       includedPrimaryTypes: types,
     }),
+    signal: AbortSignal.timeout(8_000),
   });
 
   if (!res.ok) {
@@ -74,6 +75,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
         'X-Goog-Api-Key': API_KEY,
         'X-Goog-FieldMask': fieldMask,
       },
+      signal: AbortSignal.timeout(8_000),
     },
   );
 

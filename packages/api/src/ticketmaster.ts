@@ -127,7 +127,7 @@ async function rateLimitedFetch(url: string): Promise<Response> {
   lastRequestTime = Date.now();
 
   const startedAt = Date.now();
-  const response = await fetch(url);
+  const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
   const durationMs = Date.now() - startedAt;
   if (response.status === 429) {
     log.warn({ event: 'tm.request.rate_limited', durationMs }, 'Ticketmaster 429, retrying');

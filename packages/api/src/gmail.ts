@@ -60,7 +60,7 @@ async function rateLimitedFetch(
   lastRequestTime = Date.now();
 
   const startedAt = Date.now();
-  const response = await fetch(url, { headers });
+  const response = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) });
   const durationMs = Date.now() - startedAt;
   if (response.status === 429) {
     log.warn({ event: 'gmail.request.rate_limited', durationMs }, 'Gmail 429, retrying');

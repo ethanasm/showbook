@@ -111,19 +111,22 @@ export async function runSetlistRetry(): Promise<{
       const result = await searchSetlist(mbid, show.date);
 
       if (result) {
-        // 2g. Found — update the show and delete the queue entry.
-        // Write to setlists (per-performer) keyed by headliner's performerId.
+        // 2g. Found — update the show and delete the queue entry atomically.
+        // Without a transaction, a crash between the two writes leaves the
+        // queue entry orphaned (queued forever) or the setlist saved while
+        // the queue still re-tries it.
         const setlistsUpdate: Record<string, string[]> = {};
         setlistsUpdate[headlinerRow.performerId] = result.songs;
-        await db
-          .update(shows)
-          .set({
-            setlists: setlistsUpdate,
-            tourName: result.tourName ?? undefined,
-          })
-          .where(eq(shows.id, item.showId));
-
-        await db.delete(enrichmentQueue).where(eq(enrichmentQueue.id, item.id));
+        await db.transaction(async (tx) => {
+          await tx
+            .update(shows)
+            .set({
+              setlists: setlistsUpdate,
+              tourName: result.tourName ?? undefined,
+            })
+            .where(eq(shows.id, item.showId));
+          await tx.delete(enrichmentQueue).where(eq(enrichmentQueue.id, item.id));
+        });
         counts.enriched++;
       } else {
         // 2h. Not found — increment attempts

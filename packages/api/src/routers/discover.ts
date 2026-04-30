@@ -447,39 +447,48 @@ export const discoverRouter = router({
 
       let performerId = announcement.headlinerPerformerId;
       if (!performerId) {
+        // matchOrCreatePerformer can hit external APIs and may take its own
+        // db connection. Run it before opening the transaction to avoid
+        // holding a tx open while waiting on Ticketmaster.
         const { performer } = await matchOrCreatePerformer({
           name: announcement.headliner,
         });
         performerId = performer.id;
       }
 
-      const [show] = await db
-        .insert(shows)
-        .values({
-          userId,
-          kind: announcement.kind,
-          state: 'watching',
-          venueId: announcement.venueId,
-          date: showDate,
-          endDate: showEndDate,
-          productionName:
-            isRun || announcement.kind === 'festival'
-              ? announcement.productionName ?? announcement.headliner
-              : null,
-          ticketUrl: announcement.ticketUrl,
-        })
-        .returning();
+      // Atomic: show + headliner row + announcement link all-or-nothing.
+      // Without this, a failure mid-flight leaves a show with no performer.
+      const show = await db.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(shows)
+          .values({
+            userId,
+            kind: announcement.kind,
+            state: 'watching',
+            venueId: announcement.venueId,
+            date: showDate,
+            endDate: showEndDate,
+            productionName:
+              isRun || announcement.kind === 'festival'
+                ? announcement.productionName ?? announcement.headliner
+                : null,
+            ticketUrl: announcement.ticketUrl,
+          })
+          .returning();
 
-      await db.insert(showPerformers).values({
-        showId: show.id,
-        performerId,
-        role: 'headliner',
-        sortOrder: 0,
-      });
+        await tx.insert(showPerformers).values({
+          showId: created.id,
+          performerId,
+          role: 'headliner',
+          sortOrder: 0,
+        });
 
-      await db.insert(showAnnouncementLinks).values({
-        showId: show.id,
-        announcementId: input.announcementId,
+        await tx.insert(showAnnouncementLinks).values({
+          showId: created.id,
+          announcementId: input.announcementId,
+        });
+
+        return created;
       });
 
       return show;

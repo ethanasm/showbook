@@ -1,5 +1,6 @@
 import {
   date,
+  index,
   pgEnum,
   pgTable,
   primaryKey,
@@ -24,29 +25,37 @@ export const announcementSourceEnum = pgEnum('announcement_source', [
   'scraped',
 ]);
 
-export const announcements = pgTable('announcements', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  venueId: uuid('venue_id')
-    .notNull()
-    .references(() => venues.id),
-  kind: kindEnum('kind').notNull(),
-  headliner: text('headliner').notNull(),
-  headlinerPerformerId: uuid('headliner_performer_id').references(
-    () => performers.id
-  ),
-  support: text('support').array(),
-  productionName: text('production_name'),
-  showDate: date('show_date').notNull(),
-  runStartDate: date('run_start_date'),
-  runEndDate: date('run_end_date'),
-  performanceDates: date('performance_dates').array(),
-  onSaleDate: timestamp('on_sale_date'),
-  onSaleStatus: onSaleStatusEnum('on_sale_status').notNull(),
-  source: announcementSourceEnum('source').notNull(),
-  sourceEventId: text('source_event_id'),
-  ticketUrl: text('ticket_url'),
-  discoveredAt: timestamp('discovered_at').defaultNow().notNull(),
-});
+export const announcements = pgTable(
+  'announcements',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    venueId: uuid('venue_id')
+      .notNull()
+      .references(() => venues.id),
+    kind: kindEnum('kind').notNull(),
+    headliner: text('headliner').notNull(),
+    headlinerPerformerId: uuid('headliner_performer_id').references(
+      () => performers.id
+    ),
+    support: text('support').array(),
+    productionName: text('production_name'),
+    showDate: date('show_date').notNull(),
+    runStartDate: date('run_start_date'),
+    runEndDate: date('run_end_date'),
+    performanceDates: date('performance_dates').array(),
+    onSaleDate: timestamp('on_sale_date'),
+    onSaleStatus: onSaleStatusEnum('on_sale_status').notNull(),
+    source: announcementSourceEnum('source').notNull(),
+    sourceEventId: text('source_event_id'),
+    ticketUrl: text('ticket_url'),
+    discoveredAt: timestamp('discovered_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('announcements_headliner_idx').on(table.headlinerPerformerId),
+    index('announcements_show_date_idx').on(table.showDate),
+    index('announcements_venue_date_idx').on(table.venueId, table.showDate),
+  ]
+);
 
 export const showAnnouncementLinks = pgTable(
   'show_announcement_links',

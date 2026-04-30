@@ -20,6 +20,9 @@ import {
   getMediaUploadUrl,
   headMediaObject,
 } from '../media-storage';
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'api.media' });
 
 const pendingOrReady: Array<'pending' | 'ready' | 'failed'> = ['pending', 'ready'];
 
@@ -433,11 +436,24 @@ export const mediaRouter = router({
       const actualBytes = checkedEntries.reduce((sum, [, variant]) => sum + variant.bytes, 0);
 
       if (actualBytes <= 0 || actualBytes > asset.bytes) {
-        await Promise.all(Object.values(variants).map((variant) => deleteMediaObject(variant.key)));
+        // Mark failed FIRST so the DB is always consistent. R2 cleanup is
+        // best-effort — if it fails we have an orphan we can sweep later,
+        // but we must never leave the asset in 'pending' with bytes gone.
         await ctx.db
           .update(mediaAssets)
           .set({ status: 'failed', updatedAt: new Date() })
           .where(eq(mediaAssets.id, asset.id));
+        const cleanupResults = await Promise.allSettled(
+          Object.values(variants).map((variant) => deleteMediaObject(variant.key)),
+        );
+        for (const r of cleanupResults) {
+          if (r.status === 'rejected') {
+            log.warn(
+              { err: r.reason, event: 'media.complete.cleanup_failed', assetId: asset.id },
+              'Failed to delete oversize media object',
+            );
+          }
+        }
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: 'Uploaded media exceeded its reserved size',

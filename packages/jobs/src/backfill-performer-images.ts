@@ -9,7 +9,9 @@ import {
   selectBestImage,
   getAttraction,
 } from '@showbook/api/ticketmaster';
+import { child, flushObservability } from '@showbook/observability';
 
+const log = child({ component: 'jobs.backfill-performer-images' });
 const WAIT_MS = 250; // TM allows ~5 req/sec on the discovery API
 
 function sleep(ms: number) {
@@ -83,7 +85,7 @@ async function main() {
 
       if (!imageUrl) {
         missing++;
-        console.log(`[performer-images] no match: ${performer.name}`);
+        log.info({ event: 'performer.image.no_match', performerId: performer.id, performerName: performer.name }, 'No TM match');
         continue;
       }
 
@@ -107,7 +109,7 @@ async function main() {
           .set(updates)
           .where(eq(performers.id, performer.id));
         updated++;
-        console.log(`[performer-images] updated: ${performer.name}`);
+        log.info({ event: 'performer.image.updated', performerId: performer.id, performerName: performer.name }, 'Updated performer image');
       } catch (err) {
         // Likely a unique-constraint conflict on musicbrainzId — retry without
         // setting it.
@@ -117,13 +119,11 @@ async function main() {
           .set(updates)
           .where(eq(performers.id, performer.id));
         updated++;
-        console.log(
-          `[performer-images] updated (image-only): ${performer.name}`,
-        );
+        log.warn({ err, event: 'performer.image.updated_image_only', performerId: performer.id, performerName: performer.name }, 'Updated image but skipped MBID write');
       }
     } catch (err) {
       failed++;
-      console.error(`[performer-images] failed: ${performer.name}`, err);
+      log.error({ err, event: 'performer.image.failed', performerId: performer.id, performerName: performer.name }, 'Image lookup failed');
     }
   }
 
@@ -143,15 +143,19 @@ async function main() {
       and p.image_url is null;
   `);
 
-  console.log(
-    `[performer-images] done total=${rows.length} updated=${updated} ` +
-      `missing=${missing} skipped=${skipped} failed=${failed}`,
+  log.info(
+    { event: 'performer.image.done', total: rows.length, updated, missing, skipped, failed },
+    'Backfill complete',
   );
 }
 
 main()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error(err);
+  .then(async () => {
+    await flushObservability();
+    process.exit(0);
+  })
+  .catch(async (err) => {
+    log.error({ err, event: 'performer.image.fatal' }, 'Backfill failed');
+    await flushObservability();
     process.exit(1);
   });

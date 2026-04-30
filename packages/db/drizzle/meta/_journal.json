@@ -120,6 +120,13 @@
       "when": 1778300400000,
       "tag": "0016_media_assets",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1778386800000,
+      "tag": "0017_add_missing_indexes",
+      "breakpoints": true
     }
   ]
 }

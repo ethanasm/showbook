@@ -5,7 +5,9 @@ import './load-env-local';
 import { db, venues } from '@showbook/db';
 import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { getPlaceDetails } from '@showbook/api/google-places';
+import { child, flushObservability } from '@showbook/observability';
 
+const log = child({ component: 'jobs.backfill-venue-photos' });
 const WAIT_MS = 1100;
 
 function sleep(ms: number) {
@@ -34,7 +36,7 @@ async function main() {
       const details = await getPlaceDetails(venue.googlePlaceId);
       if (!details?.photoUrl) {
         missing++;
-        console.log(`[venue-photos] no photo: ${venue.name}`);
+        log.info({ event: 'venue.photo.missing', venueId: venue.id, venueName: venue.name }, 'No photo on Place');
         continue;
       }
 
@@ -43,21 +45,26 @@ async function main() {
         .set({ photoUrl: details.photoUrl })
         .where(eq(venues.id, venue.id));
       updated++;
-      console.log(`[venue-photos] updated: ${venue.name}`);
+      log.info({ event: 'venue.photo.updated', venueId: venue.id, venueName: venue.name }, 'Updated venue photo');
     } catch (err) {
       failed++;
-      console.error(`[venue-photos] failed: ${venue.name}`, err);
+      log.error({ err, event: 'venue.photo.failed', venueId: venue.id, venueName: venue.name }, 'Photo lookup failed');
     }
   }
 
-  console.log(
-    `[venue-photos] done total=${rows.length} updated=${updated} missing=${missing} failed=${failed}`,
+  log.info(
+    { event: 'venue.photo.done', total: rows.length, updated, missing, failed },
+    'Backfill complete',
   );
 }
 
 main()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error(err);
+  .then(async () => {
+    await flushObservability();
+    process.exit(0);
+  })
+  .catch(async (err) => {
+    log.error({ err, event: 'venue.photo.fatal' }, 'Backfill failed');
+    await flushObservability();
     process.exit(1);
   });

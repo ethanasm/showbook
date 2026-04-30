@@ -12,7 +12,7 @@ import {
   userPerformerFollows,
   venues,
 } from '@showbook/db';
-import { and, eq, gte, lte, isNotNull, asc } from 'drizzle-orm';
+import { and, eq, gte, lte, isNotNull, inArray, asc } from 'drizzle-orm';
 import { renderDailyDigest } from '@showbook/emails';
 import { child } from '@showbook/observability';
 
@@ -64,30 +64,57 @@ function whenLabel(row: {
   return `${formatDate(start)} – ${formatDate(end)} (${count} dates)`;
 }
 
-async function getHeadlinerForShow(showId: string): Promise<string | null> {
-  const [showRow] = await db
-    .select({ kind: shows.kind, productionName: shows.productionName })
-    .from(shows)
-    .where(eq(shows.id, showId))
-    .limit(1);
+/**
+ * Resolve the headliner label for a batch of shows in two queries total
+ * (one for show kind/productionName, one for the headliner performer rows).
+ * The previous per-show variant fanned out 2 queries per show inside a
+ * Promise.all; for a user with 50 shows that's 100 unbounded parallel
+ * queries that starve the connection pool.
+ */
+async function getHeadlinersForShows(
+  showIds: string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (showIds.length === 0) return out;
 
-  if (showRow?.kind === 'theatre') {
-    return showRow.productionName ?? null;
+  const showRows = await db
+    .select({
+      id: shows.id,
+      kind: shows.kind,
+      productionName: shows.productionName,
+    })
+    .from(shows)
+    .where(inArray(shows.id, showIds));
+
+  const nonTheatreIds: string[] = [];
+  for (const row of showRows) {
+    if (row.kind === 'theatre' && row.productionName) {
+      out.set(row.id, row.productionName);
+    } else {
+      nonTheatreIds.push(row.id);
+    }
   }
 
-  const rows = await db
-    .select({ name: performers.name })
+  if (nonTheatreIds.length === 0) return out;
+
+  const performerRows = await db
+    .select({ showId: showPerformers.showId, name: performers.name })
     .from(showPerformers)
     .innerJoin(performers, eq(showPerformers.performerId, performers.id))
     .where(
       and(
-        eq(showPerformers.showId, showId),
+        inArray(showPerformers.showId, nonTheatreIds),
         eq(showPerformers.role, 'headliner'),
       ),
-    )
-    .limit(1);
+    );
 
-  return rows[0]?.name ?? null;
+  // Multiple headliners per show are possible (festivals); first one wins,
+  // matching the prior limit(1) behaviour.
+  for (const row of performerRows) {
+    if (!out.has(row.showId)) out.set(row.showId, row.name);
+  }
+
+  return out;
 }
 
 // ── Pure helper exposed for tests ──────────────────────────────────────
@@ -249,13 +276,14 @@ export async function runDailyDigest(): Promise<{
           ),
         );
 
-      const todayShows = await Promise.all(
-        todayRows.map(async (row) => ({
-          headliner: (await getHeadlinerForShow(row.id)) ?? 'Unknown Artist',
-          venueName: row.venueName,
-          seat: row.seat,
-        })),
+      const todayHeadliners = await getHeadlinersForShows(
+        todayRows.map((r) => r.id),
       );
+      const todayShows = todayRows.map((row) => ({
+        headliner: todayHeadliners.get(row.id) ?? 'Unknown Artist',
+        venueName: row.venueName,
+        seat: row.seat,
+      }));
 
       // Upcoming ticketed shows (next 7 days, excluding today)
       const upcomingRows = await db
@@ -276,26 +304,25 @@ export async function runDailyDigest(): Promise<{
         )
         .orderBy(shows.date);
 
-      const upcomingShows = (
-        await Promise.all(
-          upcomingRows.map(async (row) => {
-            if (row.date === null || row.date === todayStr) return null;
-            const headliner = await getHeadlinerForShow(row.id);
-            const showDate = new Date(row.date + 'T00:00:00');
-            const daysUntil = Math.round(
-              (showDate.getTime() -
-                new Date(todayStr + 'T00:00:00').getTime()) /
-                (1000 * 60 * 60 * 24),
-            );
-            return {
-              headliner: headliner ?? 'Unknown Artist',
-              venueName: row.venueName,
-              dateLabel: formatDate(row.date),
-              daysUntil,
-            };
-          }),
-        )
-      ).filter(<T,>(x: T | null): x is T => x !== null);
+      const upcomingFiltered = upcomingRows.filter(
+        (row) => row.date !== null && row.date !== todayStr,
+      );
+      const upcomingHeadliners = await getHeadlinersForShows(
+        upcomingFiltered.map((r) => r.id),
+      );
+      const upcomingShows = upcomingFiltered.map((row) => {
+        const showDate = new Date(row.date! + 'T00:00:00');
+        const daysUntil = Math.round(
+          (showDate.getTime() - new Date(todayStr + 'T00:00:00').getTime()) /
+            (1000 * 60 * 60 * 24),
+        );
+        return {
+          headliner: upcomingHeadliners.get(row.id) ?? 'Unknown Artist',
+          venueName: row.venueName,
+          dateLabel: formatDate(row.date!),
+          daysUntil,
+        };
+      });
 
       // New announcements since last digest, matching follows
       const venueRows = await db

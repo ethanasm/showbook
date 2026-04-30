@@ -130,6 +130,7 @@ async function apiFetch<T>(path: string): Promise<T> {
       "x-api-key": apiKey,
       Accept: "application/json",
     },
+    signal: AbortSignal.timeout(10_000),
   });
   log.debug({ event: 'setlistfm.request', path, status: res.status, durationMs: Date.now() - startedAt }, 'setlist.fm request');
 
@@ -143,6 +144,7 @@ async function apiFetch<T>(path: string): Promise<T> {
         "x-api-key": apiKey,
         Accept: "application/json",
       },
+      signal: AbortSignal.timeout(10_000),
     });
     if (!retry.ok) {
       throw new SetlistFmError(

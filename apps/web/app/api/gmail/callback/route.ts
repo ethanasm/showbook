@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { child } from '@showbook/observability';
+
+const logger = child({ component: 'web.gmail.callback' });
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get('code');
@@ -20,17 +23,26 @@ export async function GET(req: NextRequest) {
       redirect_uri: `${process.env.NEXTAUTH_URL}/api/gmail/callback`,
       grant_type: 'authorization_code',
     }),
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!tokenRes.ok) {
+    // Don't echo Google's response body into HTML — it can contain hostile
+    // content and embeds in a <pre> that would interpret </pre><script>… as
+    // markup. The popup just signals failure to the opener; details are
+    // logged server-side.
     const errBody = await tokenRes.text();
+    logger.warn(
+      { event: 'gmail.callback.token_exchange_failed', status: tokenRes.status, body: errBody.slice(0, 500) },
+      'Gmail token exchange failed',
+    );
     return new NextResponse(
       `<html><body><p>Token exchange failed.</p><script>
         if (window.opener) {
           window.opener.postMessage({type:"gmail-auth-error"}, window.location.origin);
           setTimeout(function() { window.close(); }, 500);
         }
-      </script><pre>${errBody}</pre></body></html>`,
+      </script></body></html>`,
       { headers: { 'Content-Type': 'text/html' } },
     );
   }
