@@ -373,7 +373,7 @@ test('searchSetlist: returns null when sets are missing entirely (no songs to ma
 
 // ── 429 retry ───────────────────────────────────────────────────────────
 
-test('apiFetch: retries once after 429 and returns the retry body', async () => {
+test('apiFetch: retries once after 429 and returns the retry body', { timeout: 10_000 }, async () => {
   let n = 0;
   stubFetch(async () => {
     n++;
@@ -389,9 +389,9 @@ test('apiFetch: retries once after 429 and returns the retry body', async () => 
   const result = await searchArtist('X');
   assert.equal(n, 2);
   assert.equal(result.length, 1);
-}, { timeout: 10_000 });
+});
 
-test('apiFetch: rethrows when 429 retry also fails', async () => {
+test('apiFetch: rethrows when 429 retry also fails', { timeout: 10_000 }, async () => {
   let n = 0;
   stubFetch(async () => {
     n++;
@@ -405,11 +405,11 @@ test('apiFetch: rethrows when 429 retry also fails', async () => {
     return true;
   });
   assert.equal(n, 2);
-}, { timeout: 10_000 });
+});
 
 // ── rate limit branch ──────────────────────────────────────────────────
 
-test('apiFetch: rate-limit waits between back-to-back calls (covers MIN_INTERVAL branch)', async () => {
+test('apiFetch: rate-limit waits between back-to-back calls (covers MIN_INTERVAL branch)', { timeout: 10_000 }, async () => {
   // Two calls fired sequentially; the second should be delayed by ~500ms.
   stubFetch(async () =>
     jsonResponse({
@@ -428,4 +428,4 @@ test('apiFetch: rate-limit waits between back-to-back calls (covers MIN_INTERVAL
     elapsed >= 300,
     `expected rate-limit delay of >=300ms, got ${elapsed}ms`,
   );
-}, { timeout: 10_000 });
+});

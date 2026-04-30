@@ -61,17 +61,27 @@ function stubSend(impl?: (cmd: unknown) => Promise<unknown>): unknown[] {
   return captured;
 }
 
+// Re-evaluate `r2.ts` so the module-level cached `client` starts null.
+// Appending a unique query string forces tsx/Node's ESM loader to resolve a
+// distinct module URL and run the file again. The query suffix is opaque
+// to TypeScript, so the cast through `string` + the helper's typed return
+// keeps callers strongly typed without an `// @ts-expect-error` per call.
+async function freshR2(tag: string): Promise<typeof import('../r2')> {
+  const spec = `../r2?bust=${tag}` as string;
+  return (await import(spec)) as typeof import('../r2');
+}
+
 // ── getR2Client ─────────────────────────────────────────────────────────
 
 test('getR2Client: throws when R2_ACCOUNT_ID is missing', async () => {
   delete process.env.R2_ACCOUNT_ID;
   // Fresh module (cache-bust) so the cached client is null.
-  const mod = await import('../r2?bust=missing-id');
+  const mod = await freshR2('missing-id');
   assert.throws(() => mod.getR2Client(), /R2_ACCOUNT_ID is not set/);
 });
 
 test('getR2Client: returns a singleton on repeated calls', async () => {
-  const mod = await import('../r2?bust=singleton');
+  const mod = await freshR2('singleton');
   const a = mod.getR2Client();
   const b = mod.getR2Client();
   assert.equal(a, b);
@@ -80,7 +90,7 @@ test('getR2Client: returns a singleton on repeated calls', async () => {
 // ── uploadToR2 ──────────────────────────────────────────────────────────
 
 test('uploadToR2: sends a PutObjectCommand with the right inputs', async () => {
-  const mod = await import('../r2?bust=upload');
+  const mod = await freshR2('upload');
   const captured = stubSend();
 
   await mod.uploadToR2('media/abc.png', Buffer.from('hello'), 'image/png');
@@ -97,7 +107,7 @@ test('uploadToR2: sends a PutObjectCommand with the right inputs', async () => {
 
 test('uploadToR2: defaults bucket to "showbook" when R2_BUCKET_NAME unset', async () => {
   delete process.env.R2_BUCKET_NAME;
-  const mod = await import('../r2?bust=upload-default-bucket');
+  const mod = await freshR2('upload-default-bucket');
   const captured = stubSend();
   await mod.uploadToR2('k', Buffer.from(''), 'text/plain');
   const cmd = captured[0] as PutObjectCommand;
@@ -107,7 +117,7 @@ test('uploadToR2: defaults bucket to "showbook" when R2_BUCKET_NAME unset', asyn
 // ── deleteFromR2 ────────────────────────────────────────────────────────
 
 test('deleteFromR2: sends a DeleteObjectCommand with the right inputs', async () => {
-  const mod = await import('../r2?bust=delete');
+  const mod = await freshR2('delete');
   const captured = stubSend();
 
   await mod.deleteFromR2('media/old.png');
@@ -121,7 +131,7 @@ test('deleteFromR2: sends a DeleteObjectCommand with the right inputs', async ()
 
 test('deleteFromR2: defaults bucket when R2_BUCKET_NAME unset', async () => {
   delete process.env.R2_BUCKET_NAME;
-  const mod = await import('../r2?bust=delete-default-bucket');
+  const mod = await freshR2('delete-default-bucket');
   const captured = stubSend();
   await mod.deleteFromR2('k');
   assert.equal((captured[0] as DeleteObjectCommand).input.Bucket, 'showbook');
@@ -130,7 +140,7 @@ test('deleteFromR2: defaults bucket when R2_BUCKET_NAME unset', async () => {
 // ── headFromR2 ──────────────────────────────────────────────────────────
 
 test('headFromR2: returns parsed metadata from a HeadObjectCommand response', async () => {
-  const mod = await import('../r2?bust=head');
+  const mod = await freshR2('head');
   const captured = stubSend(async () => ({
     ContentLength: 4096,
     ContentType: 'image/jpeg',
@@ -146,7 +156,7 @@ test('headFromR2: returns parsed metadata from a HeadObjectCommand response', as
 });
 
 test('headFromR2: defaults bytes to 0 and contentType to null when missing', async () => {
-  const mod = await import('../r2?bust=head-defaults');
+  const mod = await freshR2('head-defaults');
   stubSend(async () => ({}));
   const result = await mod.headFromR2('media/missing.png');
   assert.deepEqual(result, { bytes: 0, contentType: null });
@@ -154,7 +164,7 @@ test('headFromR2: defaults bytes to 0 and contentType to null when missing', asy
 
 test('headFromR2: defaults bucket when R2_BUCKET_NAME unset', async () => {
   delete process.env.R2_BUCKET_NAME;
-  const mod = await import('../r2?bust=head-default-bucket');
+  const mod = await freshR2('head-default-bucket');
   const captured = stubSend(async () => ({}));
   await mod.headFromR2('k');
   assert.equal((captured[0] as HeadObjectCommand).input.Bucket, 'showbook');
@@ -163,7 +173,7 @@ test('headFromR2: defaults bucket when R2_BUCKET_NAME unset', async () => {
 // ── getPresignedUploadUrl ───────────────────────────────────────────────
 
 test('getPresignedUploadUrl: returns a signed URL pointing at the bucket+key', async () => {
-  const mod = await import('../r2?bust=presign-upload');
+  const mod = await freshR2('presign-upload');
   const url = await mod.getPresignedUploadUrl('photos/foo.png', 'image/png', 600);
   assert.ok(url.startsWith('https://'));
   assert.ok(url.includes('showbook-test'));
@@ -174,14 +184,14 @@ test('getPresignedUploadUrl: returns a signed URL pointing at the bucket+key', a
 });
 
 test('getPresignedUploadUrl: uses default 3600s expiry when omitted', async () => {
-  const mod = await import('../r2?bust=presign-upload-default-ttl');
+  const mod = await freshR2('presign-upload-default-ttl');
   const url = await mod.getPresignedUploadUrl('photos/foo.png', 'image/png');
   assert.ok(url.includes('X-Amz-Expires=3600'));
 });
 
 test('getPresignedUploadUrl: defaults bucket when env unset', async () => {
   delete process.env.R2_BUCKET_NAME;
-  const mod = await import('../r2?bust=presign-upload-default-bucket');
+  const mod = await freshR2('presign-upload-default-bucket');
   const url = await mod.getPresignedUploadUrl('k', 'text/plain', 60);
   assert.ok(url.includes('showbook'));
 });
@@ -189,7 +199,7 @@ test('getPresignedUploadUrl: defaults bucket when env unset', async () => {
 // ── getPresignedReadUrl ─────────────────────────────────────────────────
 
 test('getPresignedReadUrl: returns a signed GET URL', async () => {
-  const mod = await import('../r2?bust=presign-read');
+  const mod = await freshR2('presign-read');
   const url = await mod.getPresignedReadUrl('photos/foo.png', 120);
   assert.ok(url.startsWith('https://'));
   assert.ok(url.includes('showbook-test'));
@@ -199,7 +209,7 @@ test('getPresignedReadUrl: returns a signed GET URL', async () => {
 });
 
 test('getPresignedReadUrl: uses default 3600s expiry', async () => {
-  const mod = await import('../r2?bust=presign-read-default-ttl');
+  const mod = await freshR2('presign-read-default-ttl');
   const url = await mod.getPresignedReadUrl('photos/foo.png');
   assert.ok(url.includes('X-Amz-Expires=3600'));
 });
@@ -209,7 +219,7 @@ test('getPresignedReadUrl: command is a GetObjectCommand under the hood', async 
   // getPresignedReadUrl — we already know presigner builds a request.
   // Add a stub so we don't accidentally net-call when the fn changes.
   stubSend();
-  const mod = await import('../r2?bust=presign-read-cmd-import');
+  const mod = await freshR2('presign-read-cmd-import');
   // import unused but ensures coverage hits the GetObjectCommand line
   void GetObjectCommand;
   const url = await mod.getPresignedReadUrl('a/b');
@@ -219,13 +229,13 @@ test('getPresignedReadUrl: command is a GetObjectCommand under the hood', async 
 // ── getPublicUrl ────────────────────────────────────────────────────────
 
 test('getPublicUrl: concatenates R2_PUBLIC_URL and key', async () => {
-  const mod = await import('../r2?bust=public');
+  const mod = await freshR2('public');
   assert.equal(mod.getPublicUrl('media/foo.png'), 'https://r2.example.com/media/foo.png');
 });
 
 test('getPublicUrl: still concatenates when R2_PUBLIC_URL is unset (yields "undefined/key")', async () => {
   delete process.env.R2_PUBLIC_URL;
-  const mod = await import('../r2?bust=public-unset');
+  const mod = await freshR2('public-unset');
   // Pure-string concat: documents current behaviour, not a guarantee.
   assert.equal(mod.getPublicUrl('foo'), 'undefined/foo');
 });
