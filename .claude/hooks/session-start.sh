@@ -46,7 +46,7 @@ pnpm install --prefer-offline
 # 3. Bring up the Postgres container (the web container needs .env.local and is
 #    not required for tests — Playwright spins up its own dev server).
 log "Starting postgres container..."
-docker compose up -d postgres
+docker compose up -d db
 
 log "Waiting for postgres to be healthy..."
 for i in {1..60}; do
@@ -60,7 +60,7 @@ done
 
 if [ "$(docker inspect -f '{{.State.Health.Status}}' showbook-dev-db 2>/dev/null)" != "healthy" ]; then
   log "ERROR: postgres did not become healthy in time."
-  docker compose logs postgres | tail -40 || true
+  docker compose logs db | tail -40 || true
   exit 1
 fi
 

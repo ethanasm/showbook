@@ -28,10 +28,10 @@ Self-hosted on desktop. Two Docker containers (Postgres + Next.js). Accessible a
 Two containers. That's it.
 
 ```yaml
-name: showbook
+name: showbook-dev
 
 services:
-  postgres:
+  db:
     image: postgres:16-alpine
     container_name: showbook-dev-db
     restart: unless-stopped
@@ -53,11 +53,11 @@ services:
     build:
       context: showbook-specs
       dockerfile: apps/web/Dockerfile
-    container_name: showbook-web
+    container_name: showbook-dev-web
     restart: unless-stopped
     env_file: .env.local
     environment:
-      DATABASE_URL: postgresql://showbook:showbook_dev@postgres:5432/showbook
+      DATABASE_URL: postgresql://showbook:showbook_dev@db:5432/showbook
     ports:
       - "3001:3001"
     volumes:
@@ -65,7 +65,7 @@ services:
       - ./packages:/app/packages
       - showbook_next_cache:/app/apps/web/.next/cache
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
 
 volumes:
@@ -77,7 +77,7 @@ The `web` container runs Next.js which serves everything: pages, tRPC API, and p
 
 `.next/cache` is mounted as a named Docker volume so webpack's persistent cache lives on the Docker VM filesystem instead of the macOS bind mount. On the bind mount we hit ENOENT rename errors that silently corrupt the cache, which made every container rebuild a full cold compile. With the named volume the cache survives `docker compose up --build web`.
 
-The `DATABASE_URL` inside the container uses `postgres` (the Docker service name) not `localhost`, since containers talk to each other via Docker's internal network. The host-exposed port 5433 is only for running migrations and psql from outside Docker.
+The `DATABASE_URL` inside the container uses `db` (the Docker service name) not `localhost`, since containers talk to each other via Docker's internal network. The host-exposed port 5433 is only for running migrations and psql from outside Docker.
 
 ### E2E database isolation
 
@@ -200,7 +200,7 @@ Your Desktop
    │
    ├── showbook docker compose
    │   ├── showbook-dev-db   (postgres, port 5433)
-   │   └── showbook-web  (next.js + trpc + pg-boss, port 3001)
+   │   └── showbook-dev-web  (next.js + trpc + pg-boss, port 3001)
    │
    └── vacation-price-tracker docker compose (independent)
        └── db:5432, redis, temporal, api:8000, web:3000
@@ -209,7 +209,7 @@ Your Desktop
 External services:
 
 ```
-showbook-web ──→ Cloudflare R2 (photos)
+showbook-dev-web ──→ Cloudflare R2 (photos)
              ──→ Ticketmaster API (events, venues, performers)
              ──→ setlist.fm API (setlists)
              ──→ Google OAuth (auth)
@@ -223,7 +223,7 @@ Expo mobile → `showbook.example.com` → same tunnel → same container.
 
 ## Background Jobs (pg-boss)
 
-Runs inside the Next.js process in the `showbook-web` container. Uses a jobs table in Postgres.
+Runs inside the Next.js process in the `showbook-dev-web` container. Uses a jobs table in Postgres.
 
 | Job | Schedule | What it does |
 |-----|----------|-------------|

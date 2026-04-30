@@ -232,19 +232,19 @@ For the operational guardrails (rate limits, per-user LLM caps, auth allowlist, 
 Both composes bind to `127.0.0.1` only — Cloudflare Tunnel (cloudflared)
 runs on the same host and reaches the web service via loopback.
 
-### Dev (`docker-compose.yml`, project `showbook`)
+### Dev (`docker-compose.yml`, project `showbook-dev`)
 
 | Service | Container | Host port |
 |---------|-----------|-----------|
-| PostgreSQL 16 | showbook-dev-db | 127.0.0.1:5433 |
-| Next.js (dev mode, source bind-mounted) | showbook-web | 127.0.0.1:3001 |
+| db (PostgreSQL 16) | showbook-dev-db | 127.0.0.1:5433 |
+| web (Next.js dev mode, source bind-mounted) | showbook-dev-web | 127.0.0.1:3001 |
 
 ### Prod (`docker-compose.prod.yml`, project `showbook-prod`)
 
 | Service | Container | Host port |
 |---------|-----------|-----------|
-| PostgreSQL 16 | showbook-prod-db | 127.0.0.1:5434 |
-| Next.js (prod build, NODE_ENV=production) | showbook-prod-web | 127.0.0.1:3002 |
+| db (PostgreSQL 16) | showbook-prod-db | 127.0.0.1:5434 |
+| web (Next.js prod build, NODE_ENV=production) | showbook-prod-web | 127.0.0.1:3002 |
 
 Prod uses database `showbook_prod` and role `showbook_prod` (vs dev's
 `showbook`/`showbook`), and the postgres volumes are namespaced

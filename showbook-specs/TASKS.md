@@ -455,7 +455,7 @@ React components in `apps/web/components/design-system/`:
 
 ## Docker
 
-Two containers: `showbook-dev-db` (Postgres on 5433) and `showbook-web` (Next.js on 3001). Ports 5432 and 3000 are used by vacation-price-tracker — never use them.
+Two containers: `showbook-dev-db` (Postgres on 5433) and `showbook-dev-web` (Next.js on 3001). Ports 5432 and 3000 are used by vacation-price-tracker — never use them.
 
 ```bash
 docker compose up -d                    # start both

@@ -85,7 +85,7 @@ falsify the behaviour.
 ## Running (dev vs prod)
 Two compose files, two env files. Both bind to `127.0.0.1` only — the
 Cloudflare Tunnel reaches web via loopback.
-- **Dev** — `docker-compose.yml` (project `showbook`), reads `.env.dev`,
+- **Dev** — `docker-compose.yml` (project `showbook-dev`), reads `.env.dev`,
   source bind-mounted, Next.js in dev mode. Postgres on host port `5433`,
   web on `3001`, db `showbook`, role `showbook`. Start with `pnpm dev:up`.
   `apps/web/.env.local` is for `pnpm dev` outside Docker.
