@@ -87,6 +87,13 @@ function groq(): Groq {
   return _groq;
 }
 
+export const __test = {
+  setClient(client: unknown): void {
+    _groq = client as Groq | null;
+  },
+  detectImageMime,
+};
+
 const MODEL_TEXT = 'llama-3.3-70b-versatile';
 const MODEL_VISION = 'meta-llama/llama-4-scout-17b-16e-instruct';
 

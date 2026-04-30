@@ -18,17 +18,21 @@
     "db:migrate:e2e": "DATABASE_URL=\"${E2E_DATABASE_URL:-postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e}\" pnpm --filter @showbook/db drizzle-kit migrate",
     "db:prepare:e2e": "pnpm db:reset:e2e && pnpm db:migrate:e2e && DATABASE_URL=\"${E2E_DATABASE_URL:-postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e}\" pnpm --filter @showbook/jobs bootstrap-pgboss",
     "db:studio": "DATABASE_URL=\"${DEV_DATABASE_URL:-postgresql://showbook:showbook_dev@localhost:5433/showbook}\" pnpm --filter @showbook/db drizzle-kit studio",
-    "test:e2e": "pnpm db:prepare:e2e && pnpm --filter web test:e2e",
-    "test:integration": "pnpm db:prepare:e2e && DATABASE_URL=\"${E2E_DATABASE_URL:-postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e}\" pnpm --filter @showbook/api test:integration",
-    "test:unit": "pnpm --filter @showbook/api --filter @showbook/jobs --filter @showbook/shared --filter web run test",
+    "test:e2e": "pnpm db:prepare:e2e && nx run web:test:e2e",
+    "test:integration": "pnpm db:prepare:e2e && DATABASE_URL=\"${E2E_DATABASE_URL:-postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e}\" nx run-many -t test:integration --parallel=1",
+    "test:integration:coverage": "pnpm db:prepare:e2e && DATABASE_URL=\"${E2E_DATABASE_URL:-postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e}\" nx run-many -t test:integration:coverage --parallel=1",
+    "test:unit": "nx run-many -t test",
+    "test:coverage": "nx run-many -t test:coverage",
     "verify": "bash scripts/verify.sh",
     "verify:e2e": "bash scripts/verify.sh --e2e",
+    "verify:coverage": "bash scripts/verify-coverage.sh",
     "email:smoke": "pnpm --filter @showbook/jobs run email:smoke",
     "email:preview": "pnpm --filter @showbook/emails dev"
   },
   "devDependencies": {
     "@types/node": "^22.19.17",
     "nx": "^20.4.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.0"
   },
   "pnpm": {
