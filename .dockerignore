@@ -2,3 +2,15 @@
 **/.next/**
 *.png
 .git
+
+# Never bake env files into the image — secrets land in layer cache
+# and any registry push.
+.env
+.env.local
+.env.*.local
+.env.dev
+.env.prod
+.env.production
+.env.production.*
+.env.development
+.env.development.*
