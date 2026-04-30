@@ -196,8 +196,12 @@ export function AddShowMediaStaging({
             <article className="media-card" key={item.id}>
               <div className="media-card__frame">
                 {item.kind === "photo" ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.previewUrl} alt="" />
+                  item.previewUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.previewUrl} alt="" />
+                  ) : (
+                    <div className="media-staging__preview-placeholder">Decoding…</div>
+                  )
                 ) : (
                   <video src={item.previewUrl} controls preload="metadata" />
                 )}
