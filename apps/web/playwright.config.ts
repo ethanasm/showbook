@@ -1,5 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
+const customChromium = process.env.PLAYWRIGHT_CHROMIUM_PATH;
+
 export default defineConfig({
   testDir: './tests',
   outputDir: './test-results',
@@ -11,6 +13,9 @@ export default defineConfig({
     ignoreHTTPSErrors: true,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
+    ...(customChromium
+      ? { launchOptions: { executablePath: customChromium } }
+      : {}),
   },
   projects: [
     { name: 'desktop-dark', use: { viewport: { width: 1440, height: 900 } } },
