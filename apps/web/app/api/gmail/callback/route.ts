@@ -1,15 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { child } from '@showbook/observability';
+import { auth } from '@/auth';
 
 const logger = child({ component: 'web.gmail.callback' });
+const STATE_COOKIE = 'gmail_oauth_state';
+
+// Backslash-escape any '</' in a JSON-encoded value so the embedded literal
+// can't break out of the surrounding <script> tag.
+function escapeForScript(value: string): string {
+  return JSON.stringify(value).replace(/<\//g, '<\\/');
+}
+
+function clearStateCookie(response: NextResponse, isSecure: boolean): NextResponse {
+  response.cookies.set(STATE_COOKIE, '', {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: isSecure,
+    path: '/api/gmail',
+    maxAge: 0,
+  });
+  return response;
+}
 
 export async function GET(req: NextRequest) {
-  const code = req.nextUrl.searchParams.get('code');
+  const session = await auth();
+  if (!session?.user?.id) {
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
 
-  if (!code) {
-    return new NextResponse(
-      '<html><body><script>window.close();</script></body></html>',
-      { headers: { 'Content-Type': 'text/html' } },
+  const baseUrl = process.env.NEXTAUTH_URL ?? '';
+  const isSecure = baseUrl.startsWith('https');
+
+  const code = req.nextUrl.searchParams.get('code');
+  const state = req.nextUrl.searchParams.get('state');
+  const expectedState = req.cookies.get(STATE_COOKIE)?.value;
+
+  if (!code || !state || !expectedState || state !== expectedState) {
+    logger.warn(
+      {
+        event: 'gmail.callback.state_mismatch',
+        userId: session.user.id,
+        hasCode: !!code,
+        hasState: !!state,
+        hasExpected: !!expectedState,
+      },
+      'Gmail callback rejected: state mismatch',
+    );
+    return clearStateCookie(
+      new NextResponse(
+        '<html><body><script>window.close();</script></body></html>',
+        { headers: { 'Content-Type': 'text/html' } },
+      ),
+      isSecure,
     );
   }
 
@@ -20,7 +62,7 @@ export async function GET(req: NextRequest) {
       code,
       client_id: process.env.GOOGLE_CLIENT_ID!,
       client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-      redirect_uri: `${process.env.NEXTAUTH_URL}/api/gmail/callback`,
+      redirect_uri: `${baseUrl}/api/gmail/callback`,
       grant_type: 'authorization_code',
     }),
     signal: AbortSignal.timeout(10_000),
@@ -36,22 +78,26 @@ export async function GET(req: NextRequest) {
       { event: 'gmail.callback.token_exchange_failed', status: tokenRes.status, body: errBody.slice(0, 500) },
       'Gmail token exchange failed',
     );
-    return new NextResponse(
-      `<html><body><p>Token exchange failed.</p><script>
+    return clearStateCookie(
+      new NextResponse(
+        `<html><body><p>Token exchange failed.</p><script>
         if (window.opener) {
           window.opener.postMessage({type:"gmail-auth-error"}, window.location.origin);
           setTimeout(function() { window.close(); }, 500);
         }
       </script></body></html>`,
-      { headers: { 'Content-Type': 'text/html' } },
+        { headers: { 'Content-Type': 'text/html' } },
+      ),
+      isSecure,
     );
   }
 
   const tokens = (await tokenRes.json()) as { access_token: string };
-  const accessToken = JSON.stringify(tokens.access_token);
+  const accessToken = escapeForScript(tokens.access_token);
 
-  return new NextResponse(
-    `<html><body><p>Authenticated. This window will close.</p><script>
+  return clearStateCookie(
+    new NextResponse(
+      `<html><body><p>Authenticated. This window will close.</p><script>
       try {
         if (window.opener) {
           window.opener.postMessage({type:"gmail-auth",accessToken:${accessToken}}, window.location.origin);
@@ -63,6 +109,8 @@ export async function GET(req: NextRequest) {
         document.body.innerText = "Error: " + e.message;
       }
     </script></body></html>`,
-    { headers: { 'Content-Type': 'text/html' } },
+      { headers: { 'Content-Type': 'text/html' } },
+    ),
+    isSecure,
   );
 }
