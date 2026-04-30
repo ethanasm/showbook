@@ -1,79 +1,21 @@
 /**
  * Unit tests for the performers tRPC router. Replaces the integration
- * variant that hung during cleanup against the e2e DB.
+ * variant that hung against the e2e DB during cleanup.
  *
- * The router is mostly thin SQL glue; the meaty business rule
- * (`computePerformerAnnouncementsToDelete`) is already exercised by
- * `performer-unfollow-cleanup.test.ts`. What this file covers:
- *   - the early-throw paths (NOT_FOUND, FORBIDDEN, zod-min(1))
- *   - the `searchExternal` swallow-error path
- *   - the rename-trim behaviour
- *
- * `ctx.db` is replaced by a lightweight chainable proxy that returns
- * scripted results for each terminal `select`. We never touch the real
- * postgres pool, so tests are deterministic and fast.
+ * Coverage focus: the early-throw paths (NOT_FOUND, FORBIDDEN, zod
+ * min(1)), the rename trim, and the searchExternal swallow-error path.
+ * The orphan-announcement cleanup logic is already exercised in
+ * performer-unfollow-cleanup.test.ts.
  */
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { TRPCError } from '@trpc/server';
 import { performersRouter } from '../routers/performers';
+import { makeFakeDb, fakeCtx, type FakeDb } from './_fake-db';
 
-type SelectScript = unknown[];
-
-function makeFakeDb(opts: {
-  selectResults: SelectScript;
-  updateResult?: unknown[];
-}) {
-  const results = [...opts.selectResults];
-  const updateResult = opts.updateResult ?? [];
-
-  // A chainable thenable: every method returns `this`, awaiting yields the
-  // next scripted result.
-  function chain(getResult: () => unknown) {
-    const handler: ProxyHandler<object> = {
-      get(_target, prop) {
-        if (prop === 'then') {
-          const value = getResult();
-          return (resolve: (v: unknown) => unknown) =>
-            Promise.resolve(value).then(resolve);
-        }
-        return () => proxy;
-      },
-    };
-    const proxy: object = new Proxy({}, handler);
-    return proxy;
-  }
-
-  return {
-    select: () =>
-      chain(() => {
-        if (results.length === 0) {
-          throw new Error('fake db: select called more times than scripted');
-        }
-        return results.shift();
-      }),
-    insert: () => chain(() => undefined),
-    delete: () => chain(() => undefined),
-    update: () => chain(() => updateResult),
-    transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({
-      select: () => chain(() => (results.length ? results.shift() : [])),
-      delete: () => chain(() => undefined),
-      insert: () => chain(() => undefined),
-      update: () => chain(() => updateResult),
-    }),
-    query: {
-      shows: { findMany: async () => [] },
-    },
-    _remaining: () => results.length,
-  };
-}
-
-function callerWith(db: unknown, userId = 'test-user') {
-  return performersRouter.createCaller({
-    db: db as never,
-    session: { user: { id: userId } },
-  } as never);
+function caller(db: FakeDb, userId = 'test-user') {
+  return performersRouter.createCaller(fakeCtx(db, userId) as never);
 }
 
 describe('performersRouter (unit)', () => {
@@ -82,7 +24,7 @@ describe('performersRouter (unit)', () => {
       const db = makeFakeDb({ selectResults: [[]] });
       await assert.rejects(
         () =>
-          callerWith(db).detail({
+          caller(db).detail({
             performerId: '00000000-0000-0000-0000-000000000000',
           }),
         (err: unknown) =>
@@ -100,14 +42,12 @@ describe('performersRouter (unit)', () => {
       };
       const db = makeFakeDb({
         selectResults: [
-          [performer], // performer lookup
-          [{ performerId: performer.id }], // follow row
+          [performer],
+          [{ performerId: performer.id }],
           [{ showCount: 3, firstSeen: '2020-01-01', lastSeen: '2024-01-01' }],
         ],
       });
-      const result = await callerWith(db).detail({
-        performerId: performer.id,
-      });
+      const result = await caller(db).detail({ performerId: performer.id });
       assert.equal(result.id, performer.id);
       assert.equal(result.isFollowed, true);
       assert.equal(result.showCount, 3);
@@ -126,31 +66,24 @@ describe('performersRouter (unit)', () => {
       const db = makeFakeDb({
         selectResults: [[performer], [], [{ showCount: 0 }]],
       });
-      const result = await callerWith(db).detail({
-        performerId: performer.id,
-      });
+      const result = await caller(db).detail({ performerId: performer.id });
       assert.equal(result.isFollowed, false);
     });
   });
 
   describe('search', () => {
     it('rejects empty query (zod min(1))', async () => {
-      const db = makeFakeDb({ selectResults: [] });
-      await assert.rejects(() => callerWith(db).search({ query: '' }));
+      const db = makeFakeDb();
+      await assert.rejects(() => caller(db).search({ query: '' }));
     });
   });
 
   describe('rename', () => {
     it('throws FORBIDDEN when caller has no follow and no show stake', async () => {
-      const db = makeFakeDb({
-        selectResults: [
-          [], // no follow row
-          [], // no show stake
-        ],
-      });
+      const db = makeFakeDb({ selectResults: [[], []] });
       await assert.rejects(
         () =>
-          callerWith(db).rename({
+          caller(db).rename({
             performerId: '33333333-3333-4333-8333-333333333333',
             name: 'New Name',
           }),
@@ -163,12 +96,10 @@ describe('performersRouter (unit)', () => {
       const performerId = '44444444-4444-4444-8444-444444444444';
       const updated = { id: performerId, name: 'Trimmed' };
       const db = makeFakeDb({
-        selectResults: [
-          [{ performerId }], // follow row exists, skips show check
-        ],
-        updateResult: [updated],
+        selectResults: [[{ performerId }]],
+        updateResults: [[updated]],
       });
-      const result = await callerWith(db).rename({
+      const result = await caller(db).rename({
         performerId,
         name: '   Trimmed   ',
       });
@@ -179,10 +110,10 @@ describe('performersRouter (unit)', () => {
       const performerId = '55555555-5555-4555-8555-555555555555';
       const db = makeFakeDb({
         selectResults: [[{ performerId }]],
-        updateResult: [],
+        updateResults: [[]],
       });
       await assert.rejects(
-        () => callerWith(db).rename({ performerId, name: 'x' }),
+        () => caller(db).rename({ performerId, name: 'x' }),
         (err: unknown) =>
           err instanceof TRPCError && err.code === 'NOT_FOUND',
       );
@@ -196,8 +127,8 @@ describe('performersRouter (unit)', () => {
         throw new Error('network down (test stub)');
       }) as typeof globalThis.fetch;
       try {
-        const db = makeFakeDb({ selectResults: [] });
-        const result = await callerWith(db).searchExternal({
+        const db = makeFakeDb();
+        const result = await caller(db).searchExternal({
           query: 'unique-test-query',
         });
         assert.deepEqual(result, []);
@@ -209,12 +140,8 @@ describe('performersRouter (unit)', () => {
 
   describe('userShows', () => {
     it('returns [] without hydrating when no shows match', async () => {
-      const db = makeFakeDb({
-        selectResults: [
-          [], // showIds query returns nothing
-        ],
-      });
-      const result = await callerWith(db).userShows({
+      const db = makeFakeDb({ selectResults: [[]] });
+      const result = await caller(db).userShows({
         performerId: '66666666-6666-4666-8666-666666666666',
       });
       assert.deepEqual(result, []);
