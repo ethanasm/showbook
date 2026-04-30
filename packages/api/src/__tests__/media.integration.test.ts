@@ -50,6 +50,7 @@ const VENUE_ID = fakeUuid(PREFIX, 'venue');
 const SHOW_ID = fakeUuid(PREFIX, 'show');
 const SHOW_2 = fakeUuid(PREFIX, 'show2');
 const SHOW_OTHER = fakeUuid(PREFIX, 'showo');
+const SHOW_FUTURE = fakeUuid(PREFIX, 'showf');
 const PERFORMER_ID = fakeUuid(PREFIX, 'perf');
 
 let tmpRoot: string;
@@ -128,6 +129,14 @@ describe('media router', () => {
       kind: 'concert',
       state: 'past',
       date: '2024-05-03',
+    });
+    await createTestShow({
+      id: SHOW_FUTURE,
+      userId: USER,
+      venueId: VENUE_ID,
+      kind: 'concert',
+      state: 'ticketed',
+      date: '2099-01-01',
     });
     await db.insert(performers).values({
       id: PERFORMER_ID,
@@ -270,6 +279,23 @@ describe('media router', () => {
         variants: [{ name: 'source', mimeType: 'video/mp4', bytes: 200_000_000 }],
       }),
       (err: unknown) => err instanceof TRPCError && err.code === 'BAD_REQUEST',
+    );
+  });
+
+  it('createUploadIntent rejects when the event has not happened yet', async () => {
+    await assert.rejects(
+      () => callerFor(USER).media.createUploadIntent({
+        showId: SHOW_FUTURE,
+        mediaType: 'photo',
+        mimeType: 'image/jpeg',
+        sourceBytes: 1000,
+        storedBytes: 1000,
+        variants: [{ name: 'source', mimeType: 'image/webp', bytes: 1000 }],
+      }),
+      (err: unknown) =>
+        err instanceof TRPCError &&
+        err.code === 'BAD_REQUEST' &&
+        /past/i.test(err.message),
     );
   });
 

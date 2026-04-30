@@ -12,6 +12,7 @@ import {
   uploadVideoForShow,
 } from "@/components/media";
 import { PerformerSetlistBlock } from "@/components/PerformerSetlistBlock";
+import { isDatePast } from "@showbook/shared";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -241,6 +242,14 @@ export default function AddPage() {
   // Auto-fetch headliner setlist for past concerts
   const isPastConcert =
     kind === "concert" && date && new Date(date) < new Date();
+
+  // Media uploads are gated to events that have already happened. Use the
+  // run's last day so a multi-night festival isn't "past" until after the
+  // closing night.
+  const isPastEvent = useMemo(() => {
+    const lastDay = endDate || date;
+    return Boolean(lastDay && isDatePast(lastDay));
+  }, [date, endDate]);
   const setlistQuery = trpc.enrichment.fetchSetlist.useQuery(
     { performerName: headliner.name, date },
     {
@@ -268,6 +277,15 @@ export default function AddPage() {
   const [stagedMedia, setStagedMedia] = useState<StagedMediaItem[]>([]);
   const [mediaUploadStatus, setMediaUploadStatus] = useState<string | null>(null);
   const [mediaUploadErrors, setMediaUploadErrors] = useState<string[]>([]);
+
+  // If the user moves the date out of the past, the staging UI hides — drop
+  // any already-picked files so they don't sneak through on save.
+  useEffect(() => {
+    if (isPastEvent || stagedMedia.length === 0) return;
+    for (const item of stagedMedia) URL.revokeObjectURL(item.previewUrl);
+    setStagedMedia([]);
+    setMediaUploadErrors([]);
+  }, [isPastEvent, stagedMedia]);
 
   // Fetch existing show for edit mode
   const editQuery = trpc.shows.detail.useQuery(
@@ -1798,8 +1816,8 @@ export default function AddPage() {
         </div>
       </div>
 
-      {/* Photos & videos (staged for upload after save) */}
-      {(
+      {/* Photos & videos (staged for upload after save) — only for past events */}
+      {isPastEvent && (
         <div style={{ marginBottom: 26 }}>
           <FieldLabel optional>Photos & videos</FieldLabel>
           <AddShowMediaStaging

@@ -21,6 +21,7 @@ import {
   headMediaObject,
 } from '../media-storage';
 import { child } from '@showbook/observability';
+import { isDatePast } from '@showbook/shared';
 
 const log = child({ component: 'api.media' });
 
@@ -237,7 +238,18 @@ export const mediaRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Media uploads are disabled' });
       }
 
-      await getShowOwnedByUser(ctx.db, input.showId, userId);
+      const show = await getShowOwnedByUser(ctx.db, input.showId, userId);
+
+      // Media may only be attached to events the user has actually attended.
+      // Use the run's last day (endDate ?? date) so a multi-night run isn't
+      // "past" until after the final night.
+      const lastDay = show.endDate ?? show.date;
+      if (!lastDay || !isDatePast(lastDay)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Media can only be added to events that are in the past',
+        });
+      }
 
       const mimeType = input.mimeType.toLowerCase();
       const allowed =

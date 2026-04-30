@@ -44,12 +44,16 @@ export function MediaSection({
   venueId,
   performerId,
   lineup = [],
+  canUpload = true,
 }: {
   scope: MediaScope;
   showId?: string;
   venueId?: string;
   performerId?: string;
   lineup?: MediaPerformer[];
+  // Only meaningful for scope === "show". When false, the upload UI is
+  // hidden — the server also rejects uploads for non-past events.
+  canUpload?: boolean;
 }) {
   const utils = trpc.useUtils();
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -207,7 +211,7 @@ export function MediaSection({
         </div>
       </div>
 
-      {scope === "show" && (
+      {scope === "show" && canUpload && (
         <>
           <div className="media-uploader">
             <div>
