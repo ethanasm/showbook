@@ -779,6 +779,15 @@ a.show-row__support-link:hover {
   font-weight: 600;
   letter-spacing: -0.5px;
   color: var(--ink);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sidebar__logo:hover {
+  opacity: 0.7;
 }
 
 .sidebar__version {
@@ -991,6 +1000,17 @@ a.show-row__support-link:hover {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  display: block;
+  max-width: 100%;
+}
+
+.sidebar__user-name:hover {
+  opacity: 0.7;
 }
 
 .sidebar__user-sync {
