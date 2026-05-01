@@ -39,10 +39,10 @@
     "setup:runner": "bash scripts/setup-runner.sh"
   },
   "devDependencies": {
-    "@types/node": "^22.19.17",
-    "nx": "^20.8.4",
+    "@types/node": "^25.6.0",
+    "nx": "^22.7.1",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   },
   "pnpm": {
     "overrides": {
