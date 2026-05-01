@@ -21,6 +21,6 @@
     "@types/react-dom": "^19.1.0",
     "react-email": "^6.0.5",
     "tsx": "^4.21.0",
-    "typescript": "^5.7.0"
+    "typescript": "^6.0.3"
   }
 }
