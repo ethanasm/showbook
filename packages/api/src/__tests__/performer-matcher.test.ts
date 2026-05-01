@@ -85,3 +85,20 @@ test('isUniqueViolation: false for object without code', () => {
   assert.equal(isUniqueViolation({}), false);
   assert.equal(isUniqueViolation({ message: 'oops' }), false);
 });
+
+// drizzle-orm 0.45 wraps postgres errors in DrizzleQueryError, so the SQLSTATE
+// lives on err.cause.code, not err.code. Walk the chain or the matcher's
+// catch(isUniqueViolation) recovery branch silently goes dead.
+test('isUniqueViolation: true when 23505 sits on err.cause (drizzle wrap)', () => {
+  assert.equal(
+    isUniqueViolation({ message: 'Failed query…', cause: { code: '23505' } }),
+    true,
+  );
+});
+
+test('isUniqueViolation: true when 23505 is two cause-levels deep', () => {
+  assert.equal(
+    isUniqueViolation({ cause: { cause: { code: '23505' } } }),
+    true,
+  );
+});
