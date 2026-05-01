@@ -34,12 +34,17 @@ export function isDatePast(date: string | Date): boolean {
   return d < today;
 }
 
-// Convert Date to setlist.fm format dd-MM-yyyy
+// Convert Date to setlist.fm format dd-MM-yyyy. ISO date strings (YYYY-MM-DD)
+// are zone-less calendar dates and must not go through `new Date`, which parses
+// them as UTC midnight and shifts the day in zones west of UTC.
 export function toSetlistFmDate(date: string | Date): string {
-  const d = new Date(date);
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
+  if (typeof date === 'string') {
+    const [y, m, d] = date.slice(0, 10).split('-');
+    return `${d}-${m}-${y}`;
+  }
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
   return `${day}-${month}-${year}`;
 }
 

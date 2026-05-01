@@ -235,6 +235,37 @@ test('searchSetlist: returns sections preserving the encore boundary and per-son
   assert.ok(urlSeen.includes('artistMbid=mb-1'));
 });
 
+// Regression: `new Date('2024-08-02').getDate()` returns `1` in zones west
+// of UTC because the string parses as UTC midnight, then local accessors
+// roll the day back. searchSetlist must reformat ISO date strings as pure
+// calendar dates so the URL date is timezone-independent. We assert the
+// behaviour twice — once under the test runner's ambient zone, and once
+// after forcing PT — to catch regressions on UTC CI runners too.
+test('searchSetlist: ISO date string is timezone-stable in dd-MM-yyyy URL', async () => {
+  const urls: string[] = [];
+  stubFetch(async (url) => {
+    urls.push(String(url));
+    return jsonResponse({ setlist: [], total: 0, page: 1, itemsPerPage: 30 });
+  });
+
+  await searchSetlist('mb-1', '2024-08-02');
+  const originalTz = process.env.TZ;
+  process.env.TZ = 'America/Los_Angeles';
+  try {
+    await searchSetlist('mb-1', '2024-08-02');
+  } finally {
+    if (originalTz === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTz;
+  }
+
+  for (const u of urls) {
+    assert.ok(
+      u.includes('date=02-08-2024'),
+      `expected URL to contain date=02-08-2024, got ${u}`,
+    );
+  }
+});
+
 test('searchSetlist: collapses multiple encore sets into a single encore section', async () => {
   stubFetch(async () =>
     jsonResponse({
