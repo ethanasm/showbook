@@ -17,6 +17,9 @@ export default async function DiscoverPage() {
     ),
     prefetch("discover.nearbyFeed", {}, () => caller.discover.nearbyFeed({})),
     prefetch("venues.followed", undefined, () => caller.venues.followed()),
+    prefetch("performers.followed", undefined, () =>
+      caller.performers.followed(),
+    ),
     prefetch("preferences.get", undefined, () => caller.preferences.get()),
   ]);
 

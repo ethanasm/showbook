@@ -63,6 +63,20 @@ export const performersRouter = router({
     return row?.count ?? 0;
   }),
 
+  /**
+   * Followed performers, mirroring venues.followed: returns the bare
+   * performer rows the user follows so the Discover artist rail can show
+   * a freshly-followed artist (with count=0) before its first ingest lands.
+   */
+  followed: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const follows = await ctx.db.query.userPerformerFollows.findMany({
+      where: eq(userPerformerFollows.userId, userId),
+      with: { performer: true },
+    });
+    return follows.map((f) => f.performer);
+  }),
+
   search: protectedProcedure
     .input(z.object({ query: z.string().min(1).max(200) }))
     .query(async ({ ctx, input }) => {

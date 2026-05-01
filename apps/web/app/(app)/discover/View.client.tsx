@@ -536,6 +536,9 @@ function VenueRail({
   const followAttraction = trpc.performers.followAttraction.useMutation({
     onSuccess: () => {
       utils.discover.followedArtistsFeed.invalidate();
+      // Refresh the rail seed so the new artist (count=0) shows up
+      // immediately, before its first ingest lands.
+      utils.performers.followed.invalidate();
       // Light up the loading indicator on the next poll round-trip.
       utils.discover.ingestStatus.invalidate();
       setArtistSearchOpen(false);
@@ -841,6 +844,7 @@ function FeedSection({
   onVenueFollowed,
   groupBy,
   allFollowedVenues,
+  allFollowedArtists,
   hasRegions,
   pendingIngestRegionIds,
   pendingIngestVenueIds,
@@ -858,6 +862,7 @@ function FeedSection({
   onVenueFollowed: () => void;
   groupBy: "venue" | "artist" | "region";
   allFollowedVenues?: { id: string; name: string; city: string }[];
+  allFollowedArtists?: { id: string; name: string }[];
   hasRegions?: boolean;
   pendingIngestRegionIds?: Set<string>;
   pendingIngestVenueIds?: Set<string>;
@@ -903,6 +908,7 @@ function FeedSection({
     },
     onSuccess: () => {
       utils.discover.followedArtistsFeed.invalidate();
+      utils.performers.followed.invalidate();
     },
   });
 
@@ -966,6 +972,15 @@ function FeedSection({
       }
     }
 
+    // Mirror the venue seeding for artists: a freshly-followed artist
+    // shows up in the rail (count=0) before its first ingest lands so the
+    // ingest-pending dot has something to attach to.
+    if (groupBy === "artist" && allFollowedArtists) {
+      for (const a of allFollowedArtists) {
+        seen.set(a.id, { id: a.id, name: a.name, count: 0 });
+      }
+    }
+
     if (items) {
       for (const item of items) {
         const key = getGroupKey(item);
@@ -983,7 +998,7 @@ function FeedSection({
     }
     return Array.from(seen.values());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, groupBy, allFollowedVenues]);
+  }, [items, groupBy, allFollowedVenues, allFollowedArtists]);
 
   // Filter items by selected group
   const filteredItems = useMemo(() => {
@@ -1477,6 +1492,7 @@ function IngestStatusPoller({
     }
     if (performerDone) {
       utils.discover.followedArtistsFeed.invalidate();
+      utils.performers.followed.invalidate();
     }
     if (regionDone) {
       utils.discover.nearbyFeed.invalidate();
@@ -1524,6 +1540,9 @@ export default function DiscoverView() {
     { staleTime: 60_000 }
   );
   const followedVenuesList = trpc.venues.followed.useQuery(undefined, {
+    staleTime: 60_000,
+  });
+  const followedArtistsList = trpc.performers.followed.useQuery(undefined, {
     staleTime: 60_000,
   });
   const preferences = trpc.preferences.get.useQuery();
@@ -1638,15 +1657,12 @@ export default function DiscoverView() {
   const currentCount = currentItems?.length ?? 0;
 
   // Counts for tabs — show number of followed venues/artists, not announcements
-  const followedVenueCount = useMemo(() => {
-    if (!followedItems) return 0;
-    return new Set(followedItems.map((a) => a.venueId)).size;
-  }, [followedItems]);
+  // Tab badges count followed targets (not announcements). For venues +
+  // artists we lean on the followed-list queries so a freshly-followed
+  // entry bumps the count immediately, before its first ingest lands.
+  const followedVenueCount = followedVenuesList.data?.length ?? 0;
   const nearbyCount = activeRegions.length;
-  const artistsCount = useMemo(() => {
-    if (!artistItems) return 0;
-    return new Set(artistItems.map((a) => a.headlinerPerformerId).filter(Boolean)).size;
-  }, [artistItems]);
+  const artistsCount = followedArtistsList.data?.length ?? 0;
   const tabCounts: Record<string, number> = {
     Followed: followedVenueCount,
     Artists: artistsCount,
@@ -1776,6 +1792,7 @@ export default function DiscoverView() {
           activeTab={activeTab}
           onVenueFollowed={handleVenueFollowed}
           groupBy="artist"
+          allFollowedArtists={followedArtistsList.data}
           pendingIngestPerformerIds={pendingIngest.performerIds}
         />
       )}
