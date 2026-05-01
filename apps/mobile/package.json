@@ -28,6 +28,7 @@
     "expo-location": "~55.1.8",
     "expo-media-library": "~55.0.15",
     "expo-notifications": "~55.0.21",
+    "expo-router": "~55.0.13",
     "expo-secure-store": "~55.0.13",
     "expo-splash-screen": "~55.0.19",
     "expo-status-bar": "~55.0.5",
@@ -40,14 +41,15 @@
     "react-native-reanimated": "~3.19.5",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.24.0",
-    "superjson": "^2.2.6",
-    "expo-router": "~55.0.13"
+    "superjson": "^2.2.6"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
     "@types/node": "^22.19.17",
     "@types/react": "^19.1.0",
     "babel-preset-expo": "~55.0.18",
+    "eslint": "^9.18.0",
+    "eslint-config-expo": "~55.0.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
