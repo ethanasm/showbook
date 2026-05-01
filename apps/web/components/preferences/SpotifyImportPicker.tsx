@@ -1,8 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Search } from "lucide-react";
 import type { useSpotifyImport } from "./useSpotifyImport";
+
+const LOADING_STAGES = [
+  "Fetching your followed artists",
+  "Matching with Ticketmaster",
+  "Almost ready",
+];
 
 const mono = "var(--font-geist-mono)";
 
@@ -27,34 +33,7 @@ export function SpotifyImportPicker({
   }, [flow.artists, trimmedQuery]);
 
   if (flow.phase === "loading") {
-    return (
-      <div
-        style={{
-          padding: "40px 20px",
-          textAlign: "center",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 12,
-        }}
-      >
-        <div style={loadingDotsStyle}>
-          <span style={{ ...dotStyle, animationDelay: "0s" }} />
-          <span style={{ ...dotStyle, animationDelay: ".15s" }} />
-          <span style={{ ...dotStyle, animationDelay: ".3s" }} />
-        </div>
-        <div
-          style={{
-            fontFamily: mono,
-            fontSize: 11,
-            color: "var(--muted)",
-            letterSpacing: ".04em",
-          }}
-        >
-          Loading your Spotify followed artists…
-        </div>
-      </div>
-    );
+    return <SpotifyImportLoading compact={compact} />;
   }
 
   if (!flow.artists) return null;
@@ -85,8 +64,6 @@ export function SpotifyImportPicker({
 
   return (
     <>
-      <style>{loadingKeyframes}</style>
-
       {/* ── Search ─────────────────────────────────────── */}
       <div
         style={{
@@ -499,24 +476,164 @@ const importButtonStyle: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-const dotStyle: React.CSSProperties = {
-  width: 7,
-  height: 7,
-  borderRadius: "50%",
-  background: "var(--muted)",
-  display: "inline-block",
-  animation: "spotify-pick-pulse 1.2s ease-in-out infinite",
+function SpotifyImportLoading({ compact }: { compact?: boolean }) {
+  const [stageIndex, setStageIndex] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setStageIndex((i) => Math.min(i + 1, LOADING_STAGES.length - 1));
+    }, 1800);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const rowCount = compact ? 5 : 6;
+
+  return (
+    <>
+      <style>{loadingKeyframes}</style>
+      <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+        {/* Indeterminate shimmer bar */}
+        <div
+          style={{
+            position: "relative",
+            height: 2,
+            overflow: "hidden",
+            background: "var(--rule)",
+          }}
+          aria-hidden
+        >
+          <div style={shimmerBarStyle} />
+        </div>
+
+        {/* Skeleton rows */}
+        <div
+          role="status"
+          aria-live="polite"
+          aria-label="Loading your Spotify followed artists"
+          style={{
+            maxHeight: compact ? 360 : 400,
+            overflow: "hidden",
+            minHeight: 0,
+          }}
+        >
+          {Array.from({ length: rowCount }).map((_, i) => (
+            <SkeletonRow key={i} index={i} />
+          ))}
+        </div>
+
+        {/* Status caption */}
+        <div
+          style={{
+            padding: "14px 20px 18px",
+            borderTop: "1px solid var(--rule)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            background: "var(--surface)",
+          }}
+        >
+          <span style={spinnerStyle} aria-hidden />
+          <span
+            key={stageIndex}
+            style={{
+              fontFamily: mono,
+              fontSize: 11,
+              color: "var(--muted)",
+              letterSpacing: ".04em",
+              animation: "spotify-load-fade .35s ease-out",
+            }}
+          >
+            {LOADING_STAGES[stageIndex]}…
+          </span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function SkeletonRow({ index }: { index: number }) {
+  const delay = `${index * 0.08}s`;
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "11px 20px",
+        borderBottom: "1px solid var(--rule)",
+      }}
+    >
+      <div style={{ ...skeletonBoxStyle, width: 18, height: 18, borderRadius: 3, animationDelay: delay }} />
+      <div style={{ ...skeletonBoxStyle, width: 36, height: 36, borderRadius: 4, animationDelay: delay }} />
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div
+          style={{
+            ...skeletonBoxStyle,
+            height: 11,
+            width: `${45 + ((index * 13) % 35)}%`,
+            borderRadius: 2,
+            animationDelay: delay,
+          }}
+        />
+        <div
+          style={{
+            ...skeletonBoxStyle,
+            height: 8,
+            width: `${22 + ((index * 7) % 20)}%`,
+            borderRadius: 2,
+            animationDelay: delay,
+            opacity: 0.6,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+const skeletonBoxStyle: React.CSSProperties = {
+  background:
+    "linear-gradient(90deg, var(--surface2) 0%, var(--rule-strong) 50%, var(--surface2) 100%)",
+  backgroundSize: "200% 100%",
+  animation: "spotify-load-shimmer 1.4s ease-in-out infinite",
+  flexShrink: 0,
 };
 
-const loadingDotsStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 6,
-  alignItems: "center",
+const shimmerBarStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  height: "100%",
+  width: "40%",
+  background:
+    "linear-gradient(90deg, transparent 0%, var(--accent) 50%, transparent 100%)",
+  animation: "spotify-load-bar 1.4s ease-in-out infinite",
+};
+
+const spinnerStyle: React.CSSProperties = {
+  width: 10,
+  height: 10,
+  borderRadius: "50%",
+  border: "1.5px solid var(--rule-strong)",
+  borderTopColor: "var(--accent)",
+  display: "inline-block",
+  animation: "spotify-load-spin .9s linear infinite",
 };
 
 const loadingKeyframes = `
-@keyframes spotify-pick-pulse {
-  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
-  40% { opacity: 1; transform: scale(1); }
+@keyframes spotify-load-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@keyframes spotify-load-bar {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+@keyframes spotify-load-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes spotify-load-fade {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 `;
