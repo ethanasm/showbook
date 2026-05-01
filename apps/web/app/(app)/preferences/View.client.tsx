@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
-import { MapPin, Check, Plus, Search, X, LogOut } from "lucide-react";
+import { MapPin, Check, Plus, Search, X, LogOut, Music } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useTheme } from "@/components/design-system/ThemeProvider";
 import { SegmentedControl } from "@/components/design-system/SegmentedControl";
@@ -536,18 +536,84 @@ function VenueFollowModal({ onClose, onFollowed }: { onClose: () => void; onFoll
   );
 }
 
+function ArtistFollowModal({ onClose, onFollowed }: { onClose: () => void; onFollowed: () => void }) {
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const trimmed = query.trim();
+  const searchResults = trpc.discover.searchArtists.useQuery(
+    { keyword: trimmed },
+    { enabled: trimmed.length >= 2, retry: false },
+  );
+  const followMutation = trpc.performers.followAttraction.useMutation({
+    onSuccess: () => { setQuery(""); onFollowed(); },
+  });
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const results = searchResults.data ?? [];
+  const isPending = followMutation.isPending;
+  const mono = "var(--font-geist-mono)";
+
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 1000,
+      display: "flex", alignItems: "center", justifyContent: "center",
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: "var(--surface)", border: "1px solid var(--rule-strong)",
+        width: 420, maxHeight: "70vh", display: "flex", flexDirection: "column",
+      }}>
+        <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--rule)" }}>
+          <span style={{ fontFamily: mono, fontSize: 12, color: "var(--ink)", letterSpacing: ".08em", textTransform: "uppercase", fontWeight: 500 }}>Follow an artist</span>
+          <button type="button" onClick={onClose} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer" }}><X size={14} /></button>
+        </div>
+        <div style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid var(--rule)" }}>
+          <Search size={13} color="var(--muted)" />
+          <input ref={inputRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search artists..."
+            style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--ink)", fontFamily: "var(--font-geist-sans)", fontSize: 14 }} />
+        </div>
+        <div style={{ overflow: "auto", maxHeight: 300 }}>
+          {trimmed.length < 2 && <div style={{ padding: "20px", color: "var(--faint)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>Type at least 2 characters</div>}
+          {searchResults.isLoading && <div style={{ padding: "20px", color: "var(--muted)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>Searching...</div>}
+          {followMutation.isError && (
+            <div style={{ padding: "10px 20px", color: "#E63946", fontFamily: mono, fontSize: 11 }}>Failed to follow artist</div>
+          )}
+          {results.map((a) => (
+            <button key={a.id} type="button" disabled={isPending}
+              onClick={() => followMutation.mutate({ tmAttractionId: a.id, name: a.name, imageUrl: a.imageUrl ?? undefined })}
+              style={{
+                display: "block", width: "100%", padding: "12px 20px", background: "none", border: "none", borderBottom: "1px solid var(--rule)",
+                textAlign: "left", cursor: isPending ? "wait" : "pointer", opacity: isPending ? 0.5 : 1,
+              }}>
+              <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 14, color: "var(--ink)", fontWeight: 500 }}>{a.name}</div>
+            </button>
+          ))}
+          {trimmed.length >= 2 && !searchResults.isLoading && results.length === 0 && (
+            <div style={{ padding: "20px", color: "var(--faint)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>No artists found</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const VENUES_PER_PAGE = 10;
+const ARTISTS_PER_PAGE = 10;
 
 export default function PreferencesView() {
   const { theme: currentTheme, setTheme } = useTheme();
   const { data: session } = useSession();
   const utils = trpc.useUtils();
   const [venuePage, setVenuePage] = useState(0);
+  const [artistPage, setArtistPage] = useState(0);
 
   const prefsQuery = trpc.preferences.get.useQuery(undefined, {
     staleTime: 60_000,
   });
   const venuesQuery = trpc.venues.followed.useQuery(undefined, {
+    staleTime: 60_000,
+  });
+  const followedArtistsQuery = trpc.performers.followed.useQuery(undefined, {
     staleTime: 60_000,
   });
 
@@ -567,7 +633,15 @@ export default function PreferencesView() {
       utils.discover.nearbyFeed.invalidate();
     },
   });
+  const unfollowArtist = trpc.performers.unfollow.useMutation({
+    onSuccess: () => {
+      followedArtistsQuery.refetch();
+      utils.discover.followedArtistsFeed.invalidate();
+      utils.performers.followed.invalidate();
+    },
+  });
   const [showFollowModal, setShowFollowModal] = useState(false);
+  const [showArtistFollowModal, setShowArtistFollowModal] = useState(false);
 
   if (prefsQuery.isLoading || venuesQuery.isLoading) {
     return (
@@ -593,6 +667,7 @@ export default function PreferencesView() {
   const prefs = prefsQuery.data?.preferences;
   const regions = prefsQuery.data?.regions ?? [];
   const venues = venuesQuery.data ?? [];
+  const followedArtists = followedArtistsQuery.data ?? [];
   const userEmail = session?.user?.email ?? "";
   const userName = session?.user?.name ?? "";
 
@@ -891,9 +966,112 @@ export default function PreferencesView() {
           {/* ── Spotify import ───────────────────────── */}
           <SectionHead
             label="Followed artists"
-            sub="import the artists you follow on Spotify"
+            sub="import from Spotify or follow individual artists"
           />
           <SpotifyImport />
+          <div style={styles.card}>
+            {followedArtists.length > 0 ? (
+              <>
+                {followedArtists
+                  .slice(artistPage * ARTISTS_PER_PAGE, (artistPage + 1) * ARTISTS_PER_PAGE)
+                  .map((artist, i, pageArtists) => (
+                    <div
+                      key={artist.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        padding: "12px 0",
+                        borderBottom:
+                          i < pageArtists.length - 1
+                            ? "1px solid var(--rule)"
+                            : "none",
+                      }}
+                    >
+                      <Music size={14} color="var(--faint)" />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontFamily: "var(--font-geist-sans)",
+                            fontSize: 13.5,
+                            fontWeight: 500,
+                            color: "var(--ink)",
+                            letterSpacing: -0.15,
+                          }}
+                        >
+                          {artist.name}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          unfollowArtist.mutate({ performerId: artist.id })
+                        }
+                        disabled={unfollowArtist.isPending}
+                        style={styles.unfollowButton}
+                      >
+                        {unfollowArtist.isPending ? "..." : "Unfollow"}
+                      </button>
+                    </div>
+                  ))}
+                {followedArtists.length > ARTISTS_PER_PAGE && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderTop: "1px solid var(--rule)", marginTop: 4 }}>
+                    <button
+                      type="button"
+                      onClick={() => setArtistPage((p) => Math.max(0, p - 1))}
+                      disabled={artistPage === 0}
+                      style={{ ...styles.unfollowButton, opacity: artistPage === 0 ? 0.3 : 1 }}
+                    >
+                      &larr; Prev
+                    </button>
+                    <span style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)" }}>
+                      {artistPage * ARTISTS_PER_PAGE + 1}–{Math.min((artistPage + 1) * ARTISTS_PER_PAGE, followedArtists.length)} of {followedArtists.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setArtistPage((p) => p + 1)}
+                      disabled={(artistPage + 1) * ARTISTS_PER_PAGE >= followedArtists.length}
+                      style={{ ...styles.unfollowButton, opacity: (artistPage + 1) * ARTISTS_PER_PAGE >= followedArtists.length ? 0.3 : 1 }}
+                    >
+                      Next &rarr;
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p style={styles.emptyText}>
+                You&apos;re not following any artists yet
+              </p>
+            )}
+            <div
+              onClick={() => setShowArtistFollowModal(true)}
+              style={{
+                padding: "12px 0",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontFamily: "var(--font-geist-mono)",
+                fontSize: 10.5,
+                color: "var(--accent)",
+                letterSpacing: ".04em",
+                cursor: "pointer",
+              }}
+            >
+              <Plus size={11} color="var(--accent)" /> Follow an artist
+            </div>
+          </div>
+
+          {showArtistFollowModal && (
+            <ArtistFollowModal
+              onClose={() => setShowArtistFollowModal(false)}
+              onFollowed={() => {
+                followedArtistsQuery.refetch();
+                utils.discover.followedArtistsFeed.invalidate();
+                utils.performers.followed.invalidate();
+                setShowArtistFollowModal(false);
+              }}
+            />
+          )}
 
           {/* ── Data Sources ─────────────────────────── */}
           <SectionHead label="Data sources" sub="auto-enrichment for show details" />
