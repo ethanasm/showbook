@@ -166,8 +166,15 @@
     {
       "idx": 23,
       "version": "7",
+      "when": 1782086400000,
+      "tag": "0023_orphan_announcement_cleanup",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
       "when": 1788000000000,
-      "tag": "0023_accounts_provider_unique",
+      "tag": "0024_accounts_provider_unique",
       "breakpoints": true
     }
   ]

@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   doublePrecision,
   index,
@@ -5,6 +6,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -25,11 +27,17 @@ export const venues = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [
-    // matchOrCreateVenue looks up by these IDs on every show creation, every
-    // discover ingest, and every backfill. Without an index that's a seq
-    // scan. Not unique because today's data may already contain duplicates.
-    index('venues_tm_venue_id_idx').on(table.ticketmasterVenueId),
-    index('venues_google_place_id_idx').on(table.googlePlaceId),
+    // Partial UNIQUE on the external IDs: a single TM venue id / Google
+    // place id should map to exactly one row. The IS NOT NULL predicate
+    // keeps the constraint from forcing every row to fill the column.
+    // matchOrCreateVenue's catch(isUniqueViolation) branch relies on
+    // these indexes to fall back to the existing row under a race.
+    uniqueIndex('venues_tm_venue_uniq')
+      .on(table.ticketmasterVenueId)
+      .where(sql`${table.ticketmasterVenueId} IS NOT NULL`),
+    uniqueIndex('venues_google_place_uniq')
+      .on(table.googlePlaceId)
+      .where(sql`${table.googlePlaceId} IS NOT NULL`),
     index('venues_name_city_idx').on(table.name, table.city),
   ]
 );
