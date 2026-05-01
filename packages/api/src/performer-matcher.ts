@@ -117,15 +117,21 @@ export async function matchOrCreatePerformer(
     }
 
     try {
-      const [created] = await tx
-        .insert(performers)
-        .values({
-          name: input.name,
-          ticketmasterAttractionId: input.tmAttractionId ?? null,
-          musicbrainzId: input.musicbrainzId ?? null,
-          imageUrl: input.imageUrl ?? null,
-        })
-        .returning();
+      // Wrap the INSERT in a savepoint (nested tx) so a unique-violation
+      // doesn't poison the outer transaction. Without this, the SELECT in
+      // the catch block would fail with 25P02 ("current transaction is
+      // aborted") and we couldn't recover.
+      const [created] = await tx.transaction(async (sp) =>
+        sp
+          .insert(performers)
+          .values({
+            name: input.name,
+            ticketmasterAttractionId: input.tmAttractionId ?? null,
+            musicbrainzId: input.musicbrainzId ?? null,
+            imageUrl: input.imageUrl ?? null,
+          })
+          .returning(),
+      );
       // Track create rate by external-ID coverage. A spike in `created` events
       // with all three flags false means the Add flow is dropping enrichment
       // before it gets here (which is exactly what Brandon hit on 2026-04-30
@@ -177,9 +183,13 @@ export async function matchOrCreatePerformer(
 }
 
 export function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    (err as { code?: string }).code === '23505'
-  );
+  // drizzle-orm wraps the underlying postgres error in DrizzleQueryError,
+  // moving the SQLSTATE off `err.code` and onto `err.cause.code`. Walk the
+  // cause chain so callers don't have to care which layer threw.
+  let cur = err;
+  while (cur != null && typeof cur === 'object') {
+    if ((cur as { code?: string }).code === '23505') return true;
+    cur = (cur as { cause?: unknown }).cause;
+  }
+  return false;
 }

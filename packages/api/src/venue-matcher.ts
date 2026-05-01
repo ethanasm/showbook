@@ -164,20 +164,26 @@ export async function matchOrCreateVenue(
     }
 
     try {
-      const [created] = await tx
-        .insert(venues)
-        .values({
-          name: input.name,
-          city: input.city,
-          stateRegion,
-          country,
-          ticketmasterVenueId: tmVenueId,
-          latitude: lat,
-          longitude: lng,
-          googlePlaceId,
-          photoUrl,
-        })
-        .returning();
+      // Wrap the INSERT in a savepoint (nested tx) so a unique-violation
+      // doesn't poison the outer transaction. Without this, the SELECT in
+      // the catch block would fail with 25P02 ("current transaction is
+      // aborted") and we couldn't recover.
+      const [created] = await tx.transaction(async (sp) =>
+        sp
+          .insert(venues)
+          .values({
+            name: input.name,
+            city: input.city,
+            stateRegion,
+            country,
+            ticketmasterVenueId: tmVenueId,
+            latitude: lat,
+            longitude: lng,
+            googlePlaceId,
+            photoUrl,
+          })
+          .returning(),
+      );
       return { venue: created, created: true };
     } catch (err) {
       // External-ID unique-violation. Fires when two concurrent calls have
@@ -209,11 +215,15 @@ export async function matchOrCreateVenue(
 }
 
 export function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    (err as { code?: string }).code === '23505'
-  );
+  // drizzle-orm wraps the underlying postgres error in DrizzleQueryError,
+  // moving the SQLSTATE off `err.code` and onto `err.cause.code`. Walk the
+  // cause chain so callers don't have to care which layer threw.
+  let cur = err;
+  while (cur != null && typeof cur === 'object') {
+    if ((cur as { code?: string }).code === '23505') return true;
+    cur = (cur as { cause?: unknown }).cause;
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------

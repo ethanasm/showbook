@@ -17,7 +17,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { db, performers, venues } from '@showbook/db';
 import { eq, sql } from 'drizzle-orm';
-import { matchOrCreateVenue } from '../venue-matcher';
+import { matchOrCreateVenue, isUniqueViolation } from '../venue-matcher';
 import { matchOrCreatePerformer } from '../performer-matcher';
 import { withTimeout } from './_test-helpers';
 
@@ -56,7 +56,10 @@ describe('partial UNIQUE indexes on external IDs', () => {
         err = e;
       }
       assert.ok(err, 'expected duplicate insert to throw');
-      assert.equal((err as { code?: string }).code, '23505');
+      assert.ok(
+        isUniqueViolation(err),
+        'expected unique-violation (23505) on the partial UNIQUE index',
+      );
     });
 
     it('allows multiple rows with NULL ticketmaster_venue_id (partial)', async () => {
@@ -95,7 +98,10 @@ describe('partial UNIQUE indexes on external IDs', () => {
       } catch (e) {
         err = e;
       }
-      assert.equal((err as { code?: string }).code, '23505');
+      assert.ok(
+        isUniqueViolation(err),
+        'expected unique-violation (23505) on the partial UNIQUE index',
+      );
     });
   });
 
@@ -116,7 +122,10 @@ describe('partial UNIQUE indexes on external IDs', () => {
       } catch (e) {
         err = e;
       }
-      assert.equal((err as { code?: string }).code, '23505');
+      assert.ok(
+        isUniqueViolation(err),
+        'expected unique-violation (23505) on the partial UNIQUE index',
+      );
     });
 
     it('rejects a duplicate musicbrainz_id with code 23505', async () => {
@@ -135,7 +144,10 @@ describe('partial UNIQUE indexes on external IDs', () => {
       } catch (e) {
         err = e;
       }
-      assert.equal((err as { code?: string }).code, '23505');
+      assert.ok(
+        isUniqueViolation(err),
+        'expected unique-violation (23505) on the partial UNIQUE index',
+      );
     });
   });
 
@@ -235,14 +247,19 @@ describe('partial UNIQUE indexes on external IDs', () => {
     });
 
     it('two parallel calls with the same musicbrainzId converge on a single row', async () => {
+      // Names must not collide with the earlier "rejects a duplicate
+      // musicbrainz_id" test (which leaves a `${PREFIX} MB A` row behind):
+      // matchOrCreatePerformer matches existing rows case-insensitively by
+      // name, so reusing those names would short-circuit step 3 and never
+      // exercise the race recovery branch.
       const mbid = `${PREFIX}-race-mb`;
       const [a, b] = await Promise.all([
         matchOrCreatePerformer({
-          name: `${PREFIX} MB A`,
+          name: `${PREFIX} Race MB A`,
           musicbrainzId: mbid,
         }),
         matchOrCreatePerformer({
-          name: `${PREFIX} MB B`,
+          name: `${PREFIX} Race MB B`,
           musicbrainzId: mbid,
         }),
       ]);
