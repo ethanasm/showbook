@@ -43,7 +43,7 @@ Update this table when each milestone ships.
 - TanStack Query in-memory cache (M1) — `expo-sqlite` adds in M2
 - Icons via `lucide-react-native`
 - Geist Sans loaded via `expo-font`; Georgia is iOS system + serif fallback elsewhere
-- Backend URL via `EXPO_PUBLIC_API_URL` (defaults to the prod tunnel)
+- Backend URL via `EXPO_PUBLIC_API_URL` (defaults to the prod Cloudflare tunnel hostname documented in `infrastructure.md`)
 
 ## Why this supersedes the old T31 / T32 tasks
 

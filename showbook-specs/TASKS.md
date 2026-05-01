@@ -51,8 +51,8 @@ T04 Design ────┤                                                      
           └── Playwright tests per page (T05) ────────────────────────┘   │
                                                                           │
        T30 Caddy + Tunnel ────────────────────────────────────────────────┘
-       T31 Expo scaffold
-       T32 Offline caching
+       T31 Expo scaffold      [superseded → mobile-roadmap.md]
+       T32 Offline caching    [superseded → mobile-roadmap.md]
 ```
 
 ---
@@ -433,7 +433,7 @@ list rendering. See the roadmap for the current milestone status.
 | 2 | T06, T07, T08, T09, T10, T11, T12, T13 | 8 agents (T06 blocks T07/T11/T12/T13) |
 | 3 | T14, T15, T16, T17 | 4 agents |
 | 4 | T18–T29 | 12 agents (all independent) |
-| 5 | T30, T31, T32 | 3 agents (sequential chain) |
+| 5 | T30 | 1 agent (T31/T32 superseded — see mobile-roadmap.md) |
 
 **Critical path:** T01 → T06 → T07 → T14 → T19 (Add flow). Everything else can happen around this spine.
 
