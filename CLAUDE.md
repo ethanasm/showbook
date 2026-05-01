@@ -2,6 +2,14 @@
 
 Personal entertainment tracker for live shows — concerts, theatre, comedy, festivals.
 
+## Working environment (Claude on the web)
+
+When you're running in the Claude Code web sandbox, this checkout is a **shallow clone** (`git rev-parse --is-shallow-repository` → `true`) of a single branch. As a result:
+
+- `git log` and `git status` will show the local branch sitting tens or hundreds of commits "behind" `origin/main` — that's the shallow history, not real divergence. Don't raise it as a concern, don't try to "catch up" by merging or rebasing onto `origin/main`, and don't unshallow the repo.
+- After merging your PR to `main`, the branch you were working on is done. Treat the merge as success even if local refs still look out of date.
+- Only worry about divergence if `git log origin/<your-branch>..HEAD` or `git log HEAD..origin/<your-branch>` shows unexpected commits on the branch you actually pushed.
+
 ## Project structure
 - `showbook-specs/` — All specs: schema, data sources, pipelines, infrastructure, decisions
 - `showbook-specs/phases/TASKS.md` — Master task list with dependency DAG (30 tasks + mobile roadmap, 5 waves)
