@@ -21,8 +21,13 @@ export type SpotifyImportPhase =
   | "done";
 
 export interface UseSpotifyImportOptions {
-  /** Called once an import succeeds; receives the count of newly-followed artists. */
-  onImported?: (count: number) => void;
+  /**
+   * Called once an import succeeds. Receives the count of newly-followed
+   * artists and their performer IDs so callers can drive a "still
+   * importing…" UI that polls `discover.ingestStatus` until the
+   * background ingest jobs for those performers finish.
+   */
+  onImported?: (result: { count: number; performerIds: string[] }) => void;
 }
 
 export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
@@ -67,7 +72,10 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
       utils.performers.list.invalidate();
       utils.performers.count.invalidate();
       utils.discover.followedFeed.invalidate();
-      opts.onImported?.(data.imported.length);
+      opts.onImported?.({
+        count: data.imported.length,
+        performerIds: data.imported.map((i) => i.performerId),
+      });
     },
     onError: (err) => setError(err.message),
   });

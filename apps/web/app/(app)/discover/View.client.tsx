@@ -14,8 +14,6 @@ import {
   Check,
   ArrowUpRight,
   Plus,
-  Search,
-  X,
   CalendarPlus,
 } from "lucide-react";
 import {
@@ -26,7 +24,8 @@ import { DISCOVER_KIND_ICONS as KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons
 import { ContextMenu } from "@/components/ContextMenu";
 import { VenueSearchModal } from "@/components/VenueSearchModal";
 import { RegionSearchModal } from "@/components/RegionSearchModal";
-import { useDebouncedValue } from "@/lib/useDebouncedValue";
+import { SpotifyImportModal } from "@/components/preferences/SpotifyImportModal";
+import { FollowArtistSearch } from "@/components/discover/FollowArtistSearch";
 import "./discover.css";
 
 type DiscoverKind = ShowKind | "sports";
@@ -519,43 +518,6 @@ function VenueRail({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [railRegionContextMenu, setRailRegionContextMenu] = useState<{ x: number; y: number; regionId: string } | null>(null);
   const [collapsedRailRegions, setCollapsedRailRegions] = useState<Set<string>>(new Set());
-  const [artistSearchOpen, setArtistSearchOpen] = useState(false);
-  const [artistQuery, setArtistQuery] = useState("");
-  const artistInputRef = useRef<HTMLInputElement>(null);
-  const utils = trpc.useUtils();
-  const debouncedArtistQuery = useDebouncedValue(
-    artistQuery.length >= 2 ? artistQuery : "",
-    350,
-  );
-
-  const artistSearchResults = trpc.discover.searchArtists.useQuery(
-    { keyword: debouncedArtistQuery },
-    { enabled: debouncedArtistQuery.length >= 2 },
-  );
-
-  const followAttraction = trpc.performers.followAttraction.useMutation({
-    onSuccess: () => {
-      utils.discover.followedArtistsFeed.invalidate();
-      // Refresh the rail seed so the new artist (count=0) shows up
-      // immediately, before its first ingest lands.
-      utils.performers.followed.invalidate();
-      // Light up the loading indicator on the next poll round-trip.
-      utils.discover.ingestStatus.invalidate();
-      setArtistSearchOpen(false);
-      setArtistQuery("");
-    },
-  });
-
-  useEffect(() => {
-    if (artistSearchOpen) {
-      artistInputRef.current?.focus();
-    }
-  }, [artistSearchOpen]);
-
-  const handleArtistQueryChange = (value: string) => {
-    setArtistQuery(value);
-  };
-
   const handleContextMenu = (e: React.MouseEvent, id: string) => {
     if (!onUnfollowItem) return;
     e.preventDefault();
@@ -596,47 +558,7 @@ function VenueRail({
       {/* "Follow another artist" affordance */}
       {showArtistSearch && (
         <div className="discover-rail__follow discover-rail__follow--top">
-          {artistSearchOpen ? (
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, borderBottom: "1px solid var(--rule)", paddingBottom: 6 }}>
-                <Search size={11} color="var(--muted)" />
-                <input
-                  ref={artistInputRef}
-                  value={artistQuery}
-                  onChange={(e) => handleArtistQueryChange(e.target.value)}
-                  placeholder="Search artists..."
-                  style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--ink)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11 }}
-                />
-                <button type="button" onClick={() => { setArtistSearchOpen(false); setArtistQuery(""); }} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", padding: 0 }}>
-                  <X size={11} />
-                </button>
-              </div>
-              <div style={{ maxHeight: 200, overflowY: "auto" }}>
-                {debouncedArtistQuery.length >= 2 && artistSearchResults.isLoading && (
-                  <div style={{ padding: "6px 0", fontFamily: "var(--font-geist-mono), monospace", fontSize: 10, color: "var(--muted)" }}>Searching...</div>
-                )}
-                {artistSearchResults.data?.map((a) => (
-                  <button
-                    key={a.id}
-                    type="button"
-                    onClick={() => followAttraction.mutate({ tmAttractionId: a.id, name: a.name, imageUrl: a.imageUrl ?? undefined })}
-                    disabled={followAttraction.isPending}
-                    style={{ display: "block", width: "100%", padding: "6px 0", background: "none", border: "none", borderBottom: "1px solid var(--rule)", textAlign: "left", cursor: "pointer", opacity: followAttraction.isPending ? 0.5 : 1 }}
-                  >
-                    <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 12, color: "var(--ink)", fontWeight: 500 }}>{a.name}</div>
-                  </button>
-                ))}
-                {debouncedArtistQuery.length >= 2 && !artistSearchResults.isLoading && (artistSearchResults.data?.length ?? 0) === 0 && (
-                  <div style={{ padding: "6px 0", fontFamily: "var(--font-geist-mono), monospace", fontSize: 10, color: "var(--muted)" }}>No artists found</div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <button type="button" className="discover-rail__follow-link" onClick={() => setArtistSearchOpen(true)}>
-              <Plus size={11} />
-              Follow another artist
-            </button>
-          )}
+          <FollowArtistSearch variant="rail" />
         </div>
       )}
 
@@ -885,6 +807,7 @@ function FeedSection({
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [showFollowModal, setShowFollowModal] = useState(false);
   const [showRegionModal, setShowRegionModal] = useState(false);
+  const [spotifyModalOpen, setSpotifyModalOpen] = useState(false);
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(new Set());
   const [regionContextMenu, setRegionContextMenu] = useState<{ x: number; y: number; regionId: string } | null>(null);
   const [sort, setSort] = useState<DiscoverSortConfig>(DISCOVER_DEFAULT_SORT);
@@ -1088,6 +1011,12 @@ function FeedSection({
       onAdded={handleRegionAdded}
     />
   );
+  const spotifyModal = (
+    <SpotifyImportModal
+      open={spotifyModalOpen}
+      onClose={() => setSpotifyModalOpen(false)}
+    />
+  );
   const totalRegionCount = regionCount ?? activeRegions?.length ?? 0;
   const regionLimitReached = totalRegionCount >= 5;
 
@@ -1140,6 +1069,7 @@ function FeedSection({
         </div>
         {followModal}
         {regionModal}
+        {spotifyModal}
       </div>
     );
   }
@@ -1164,41 +1094,29 @@ function FeedSection({
       <button
         type="button"
         onClick={handleFollowVenue}
-        style={{
-          padding: "10px 18px",
-          background: "var(--accent)",
-          color: "var(--accent-text)",
-          border: "none",
-          borderRadius: 8,
-          cursor: "pointer",
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
-          letterSpacing: ".06em",
-          textTransform: "uppercase",
-          fontWeight: 500,
-        }}
+        style={emptyCtaStyle}
       >
         Follow a venue
       </button>
+    ) : isArtists ? (
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+        <FollowArtistSearch variant="cta" />
+        <button
+          type="button"
+          onClick={() => setSpotifyModalOpen(true)}
+          style={emptyCtaStyle}
+        >
+          <Music size={13} />
+          Import from Spotify
+        </button>
+      </div>
     ) : isNearby && !hasRegions ? (
       <button
         type="button"
         onClick={() => setShowRegionModal(true)}
-        style={{
-          padding: "10px 18px",
-          background: "var(--accent)",
-          color: "var(--accent-text)",
-          border: "none",
-          borderRadius: 8,
-          cursor: "pointer",
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
-          letterSpacing: ".06em",
-          textTransform: "uppercase",
-          fontWeight: 500,
-        }}
+        style={emptyCtaStyle}
       >
-        Add region
+        Follow a Region
       </button>
     ) : null;
 
@@ -1215,6 +1133,7 @@ function FeedSection({
         </div>
         {followModal}
         {regionModal}
+        {spotifyModal}
       </div>
     );
   }
@@ -1427,6 +1346,7 @@ function FeedSection({
 
       {followModal}
       {regionModal}
+      {spotifyModal}
     </div>
   );
 }
@@ -1512,6 +1432,23 @@ function IngestStatusPoller({
 // Main Page
 // ---------------------------------------------------------------------------
 
+const emptyCtaStyle: React.CSSProperties = {
+  padding: "10px 18px",
+  background: "var(--accent)",
+  color: "var(--accent-text)",
+  border: "none",
+  borderRadius: 8,
+  cursor: "pointer",
+  fontFamily: "var(--font-geist-mono), monospace",
+  fontSize: 11,
+  letterSpacing: ".06em",
+  textTransform: "uppercase",
+  fontWeight: 500,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+};
+
 const TABS = [
   { key: "Followed", label: "Followed venues" },
   { key: "Artists", label: "Followed artists" },
@@ -1522,6 +1459,7 @@ export default function DiscoverView() {
   const [activeTab, setActiveTab] = useState<string>("Followed");
   const [watchedIds, setWatchedIds] = useState<Set<string>>(new Set());
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [headerSpotifyModalOpen, setHeaderSpotifyModalOpen] = useState(false);
   const [pendingIngest, setPendingIngest] = useState<{
     venueIds: Set<string>;
     performerIds: Set<string>;
@@ -1698,6 +1636,26 @@ export default function DiscoverView() {
         <div className="discover-header__actions">
           <button
             type="button"
+            onClick={() => setHeaderSpotifyModalOpen(true)}
+            title="Import the artists you follow on Spotify"
+            style={{
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 11,
+              padding: "6px 10px",
+              border: "1px solid var(--rule)",
+              background: "transparent",
+              color: "var(--ink)",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <Music size={11} color="var(--accent)" />
+            Import from Spotify
+          </button>
+          <button
+            type="button"
             className="discover-refresh-btn"
             onClick={() => refreshNow.mutate()}
             disabled={refreshInFlight}
@@ -1817,6 +1775,10 @@ export default function DiscoverView() {
           }}
         />
       )}
+      <SpotifyImportModal
+        open={headerSpotifyModalOpen}
+        onClose={() => setHeaderSpotifyModalOpen(false)}
+      />
     </div>
   );
 }
