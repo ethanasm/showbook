@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { trpc } from "@/lib/trpc";
 import { Search, Eye, Pencil, Trash2, Ticket, Check, Music, Music2 } from "lucide-react";
 import { PaginationFooter } from "@/components/PaginationFooter";
@@ -327,7 +328,34 @@ export default function ArtistsView() {
             <EmptyState
               kind="artists"
               title={search ? "No artist matches" : "Artists await"}
-              body={search ? "Try another spelling or clear the filter." : "Artists populate from the shows you log."}
+              body={search ? "Try another spelling or clear the filter." : "Artists populate from the shows you log, or import the artists you follow on Spotify."}
+              action={
+                search ? undefined : (
+                  <button
+                    type="button"
+                    onClick={() => setSpotifyModalOpen(true)}
+                    style={{
+                      padding: "10px 18px",
+                      background: "var(--accent)",
+                      color: "var(--accent-text)",
+                      border: "none",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: 11,
+                      letterSpacing: ".06em",
+                      textTransform: "uppercase",
+                      fontWeight: 500,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <Image src="/spotify.svg" alt="" width={14} height={14} />
+                    Import from Spotify
+                  </button>
+                )
+              }
             />
           </div>
         ) : (

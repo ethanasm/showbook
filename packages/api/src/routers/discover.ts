@@ -449,12 +449,15 @@ export const discoverRouter = router({
     .query(async ({ input }) => {
       try {
         const attractions = await searchAttractions(input.keyword);
-        return attractions.slice(0, 10).map((a) => ({
-          id: a.id,
-          name: a.name,
-          imageUrl: selectBestImage(a.images) ?? null,
-          mbid: a.externalLinks?.musicbrainz?.[0]?.id ?? null,
-        }));
+        return attractions
+          .filter((a) => a.id || a.externalLinks?.musicbrainz?.[0]?.id)
+          .slice(0, 10)
+          .map((a) => ({
+            id: a.id,
+            name: a.name,
+            imageUrl: selectBestImage(a.images) ?? null,
+            mbid: a.externalLinks?.musicbrainz?.[0]?.id ?? null,
+          }));
       } catch {
         return [];
       }

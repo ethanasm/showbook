@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import {
@@ -1074,7 +1075,7 @@ export default function ShowsView() {
             action={
               <button
                 type="button"
-                onClick={() => router.push("/add")}
+                onClick={handleOpenGmailModal}
                 style={{
                   padding: "10px 18px",
                   background: "var(--accent)",
@@ -1087,9 +1088,13 @@ export default function ShowsView() {
                   letterSpacing: ".06em",
                   textTransform: "uppercase",
                   fontWeight: 500,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
                 }}
               >
-                Add a show
+                <Image src="/google-g.svg" alt="" width={14} height={14} />
+                Import from Gmail
               </button>
             }
           />
