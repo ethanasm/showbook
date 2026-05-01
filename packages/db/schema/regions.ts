@@ -15,7 +15,7 @@ export const userRegions = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     userId: text('user_id')
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: 'cascade' }),
     cityName: text('city_name').notNull(),
     latitude: doublePrecision('latitude').notNull(),
     longitude: doublePrecision('longitude').notNull(),

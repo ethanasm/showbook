@@ -38,7 +38,7 @@ export const shows = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     userId: text('user_id')
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: 'cascade' }),
     kind: kindEnum('kind').notNull(),
     state: stateEnum('state').notNull(),
     venueId: uuid('venue_id')
