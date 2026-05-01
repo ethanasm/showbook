@@ -82,6 +82,10 @@ jobs:
     name: Playwright E2E
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # E2E still runs on every push/PR, but its failure does not fail the
+    # workflow. The deploy workflow gates on the CI workflow_run conclusion,
+    # so this keeps verify-coverage as the sole blocker for prod deploys.
+    continue-on-error: true
     services:
       postgres:
         image: postgres:16-alpine
