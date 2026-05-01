@@ -9,6 +9,8 @@ import {
 import { runDailyDigest } from './notifications';
 import { runSetlistRetry } from './setlist-retry';
 import { runShowsNightly } from './shows-nightly';
+import { runBackfillPerformerImages } from './backfill-performer-images';
+import { runBackfillVenuePhotos } from './backfill-venue-photos';
 // @showbook/scrapers pulls in Playwright, which the Next.js dev server
 // tries to bundle. Import it lazily inside the handler so it stays out of
 // the web app's static dependency graph.
@@ -22,6 +24,8 @@ export const JOBS = {
   DISCOVER_INGEST_PERFORMER: 'discover/ingest-performer',
   DISCOVER_INGEST_REGION: 'discover/ingest-region',
   NOTIFICATIONS_DAILY_DIGEST: 'notifications/daily-digest',
+  BACKFILL_PERFORMER_IMAGES: 'backfill/performer-images',
+  BACKFILL_VENUE_PHOTOS: 'backfill/venue-photos',
 } as const;
 
 const STALE_SCHEDULES = [
@@ -202,6 +206,45 @@ async function discoverIngestRegionHandler(
   }
 }
 
+async function backfillPerformerImagesHandler(jobs: PgBoss.Job[]) {
+  for (const job of jobs) {
+    await runJob(JOBS.BACKFILL_PERFORMER_IMAGES, job, async () => {
+      const result = await runBackfillPerformerImages();
+      log.info(
+        {
+          event: 'backfill.performer_images.summary',
+          total: result.total,
+          updated: result.updated,
+          missing: result.missing,
+          skipped: result.skipped,
+          failed: result.failed,
+        },
+        'Performer image backfill complete',
+      );
+      return result;
+    });
+  }
+}
+
+async function backfillVenuePhotosHandler(jobs: PgBoss.Job[]) {
+  for (const job of jobs) {
+    await runJob(JOBS.BACKFILL_VENUE_PHOTOS, job, async () => {
+      const result = await runBackfillVenuePhotos();
+      log.info(
+        {
+          event: 'backfill.venue_photos.summary',
+          total: result.total,
+          updated: result.updated,
+          missing: result.missing,
+          failed: result.failed,
+        },
+        'Venue photo backfill complete',
+      );
+      return result;
+    });
+  }
+}
+
 async function notificationsDailyDigestHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
     await runJob(JOBS.NOTIFICATIONS_DAILY_DIGEST, job, async () => {
@@ -236,9 +279,15 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   await boss.work(JOBS.DISCOVER_INGEST_PERFORMER, discoverIngestPerformerHandler);
   await boss.work(JOBS.DISCOVER_INGEST_REGION, discoverIngestRegionHandler);
   await boss.work(JOBS.NOTIFICATIONS_DAILY_DIGEST, notificationsDailyDigestHandler);
+  await boss.work(JOBS.BACKFILL_PERFORMER_IMAGES, backfillPerformerImagesHandler);
+  await boss.work(JOBS.BACKFILL_VENUE_PHOTOS, backfillVenuePhotosHandler);
 
   await boss.schedule(JOBS.SHOWS_NIGHTLY, '0 3 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.SETLIST_RETRY, '0 4 * * *', {}, { tz: 'America/New_York' });
+  // Backfills run after setlist-retry so any MBIDs persisted on the setlist
+  // pass are available when we look up TM attractions by name.
+  await boss.schedule(JOBS.BACKFILL_PERFORMER_IMAGES, '30 5 * * *', {}, { tz: 'America/New_York' });
+  await boss.schedule(JOBS.BACKFILL_VENUE_PHOTOS, '45 5 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.DISCOVER_INGEST, '0 6 * * 1', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.NOTIFICATIONS_DAILY_DIGEST, '0 8 * * *', {}, { tz: 'America/New_York' });
 

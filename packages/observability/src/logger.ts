@@ -6,6 +6,28 @@ import pretty from 'pino-pretty';
 const level: Level = (process.env.LOG_LEVEL ?? (process.env.NODE_ENV === 'production' ? 'info' : 'debug')) as Level;
 const isProd = process.env.NODE_ENV === 'production';
 
+/**
+ * Custom err serializer. Pino's stdSerializer flattens an Error into
+ * `{ type, message, stack, code? }`, but it does NOT carry `err.cause`.
+ * That matters for any thrown wrapped postgres error: Drizzle / postgres-js
+ * surface the SQLSTATE code (e.g. `23505` for unique violations) and the
+ * server-side `detail` only on `err.cause`. Without this, Axiom shows
+ * `Failed query: …` with no way to tell why it failed. Walk the cause chain
+ * and surface `code` + `detail` from any level so production errors stay
+ * debuggable.
+ */
+export function serializeErr(err: unknown): unknown {
+  if (!(err instanceof Error)) return pino.stdSerializers.err(err as never);
+  const base = pino.stdSerializers.err(err) as Record<string, unknown>;
+  const e = err as Error & { code?: unknown; detail?: unknown; cause?: unknown };
+  if (e.code !== undefined) base.code = e.code;
+  if (e.detail !== undefined) base.detail = e.detail;
+  if (e.cause !== undefined && e.cause !== null) {
+    base.cause = serializeErr(e.cause);
+  }
+  return base;
+}
+
 const baseOptions: LoggerOptions = {
   level,
   base: {
@@ -24,6 +46,9 @@ const baseOptions: LoggerOptions = {
       'req.headers.cookie',
     ],
     censor: '[REDACTED]',
+  },
+  serializers: {
+    err: serializeErr,
   },
 };
 

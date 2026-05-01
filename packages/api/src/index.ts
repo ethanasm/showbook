@@ -7,6 +7,8 @@ export type { ArtistSearchResult, SetlistResult } from './setlistfm';
 export {
   searchEvents,
   getEvent,
+  searchAttractions,
+  getAttraction,
   inferKind,
   selectBestImage,
   type TMEvent,
@@ -15,7 +17,7 @@ export {
 } from './ticketmaster';
 export { matchOrCreateVenue } from './venue-matcher';
 export { matchOrCreatePerformer } from './performer-matcher';
-export { getPlacePhotoMediaUrl } from './google-places';
+export { getPlacePhotoMediaUrl, getPlaceDetails } from './google-places';
 export { extractShowFromEmail } from './groq';
 export type { ExtractedTicketInfo } from './groq';
 export {
@@ -23,6 +25,8 @@ export {
   getMessageBody,
   buildBulkScanQueries,
 } from './gmail';
+export { getFollowedArtists, SpotifyError } from './spotify';
+export type { SpotifyArtist } from './spotify';
 export {
   scrapeConfigSchema,
   parseScrapeConfig,

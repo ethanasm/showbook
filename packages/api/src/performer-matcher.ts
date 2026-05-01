@@ -1,5 +1,8 @@
 import { db, performers, type Database } from '@showbook/db';
 import { eq, sql } from 'drizzle-orm';
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'api.performer-matcher' });
 
 // ---------------------------------------------------------------------------
 // Types
@@ -123,6 +126,21 @@ export async function matchOrCreatePerformer(
           imageUrl: input.imageUrl ?? null,
         })
         .returning();
+      // Track create rate by external-ID coverage. A spike in `created` events
+      // with all three flags false means the Add flow is dropping enrichment
+      // before it gets here (which is exactly what Brandon hit on 2026-04-30
+      // for Royel Otis + STRFKR).
+      log.info(
+        {
+          event: 'performer.match.created',
+          performerId: created.id,
+          name: created.name,
+          hasTm: !!input.tmAttractionId,
+          hasMbid: !!input.musicbrainzId,
+          hasImage: !!input.imageUrl,
+        },
+        'Performer created',
+      );
       return { performer: created, created: true };
     } catch (err) {
       // External-ID unique-violation (different name but same TM/MBID) —
@@ -139,7 +157,18 @@ export async function matchOrCreatePerformer(
                 : eq(performers.musicbrainzId, input.musicbrainzId!),
             )
             .limit(1);
-          if (existing) return { performer: existing, created: false };
+          if (existing) {
+            log.warn(
+              {
+                event: 'performer.match.race_recovered',
+                performerId: existing.id,
+                name: existing.name,
+                conflictKey: input.tmAttractionId ? 'tm' : 'mbid',
+              },
+              'Recovered from concurrent insert race via external-ID re-select',
+            );
+            return { performer: existing, created: false };
+          }
         }
       }
       throw err;

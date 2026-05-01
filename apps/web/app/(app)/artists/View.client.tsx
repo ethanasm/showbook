@@ -3,12 +3,13 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
-import { Search, Eye, Pencil, Trash2, Ticket, Check, Music2 } from "lucide-react";
+import { Search, Eye, Pencil, Trash2, Ticket, Check, Music, Music2 } from "lucide-react";
 import { PaginationFooter } from "@/components/PaginationFooter";
 import { SortHeader, type SortConfig } from "@/components/SortHeader";
 import { useCompactMode } from "@/lib/useCompactMode";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { EmptyState, RemoteImage } from "@/components/design-system";
+import { SpotifyImportModal } from "@/components/preferences/SpotifyImportModal";
 
 type SortField = "name" | "shows" | "past" | "future" | "firstSeen" | "lastSeen";
 
@@ -54,6 +55,8 @@ export default function ArtistsView() {
     isFollowed: boolean;
     position: { x: number; y: number };
   } | null>(null);
+
+  const [spotifyModalOpen, setSpotifyModalOpen] = useState(false);
 
   const { data: artists, isLoading, error } = trpc.performers.list.useQuery(undefined, {
     staleTime: 60_000,
@@ -268,6 +271,28 @@ export default function ArtistsView() {
             Artists
           </div>
         </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button
+            onClick={() => setSpotifyModalOpen(true)}
+            style={{
+              border: "1px solid var(--rule-strong)",
+              cursor: "pointer",
+              background: "transparent",
+              color: "var(--ink)",
+              padding: "10px 16px",
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 13,
+              fontWeight: 500,
+              letterSpacing: -0.2,
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+            }}
+          >
+            <Music size={14} />
+            <span>Import from Spotify</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter bar */}
@@ -393,6 +418,11 @@ export default function ArtistsView() {
           onClose={() => setContextMenu(null)}
         />
       )}
+
+      <SpotifyImportModal
+        open={spotifyModalOpen}
+        onClose={() => setSpotifyModalOpen(false)}
+      />
     </div>
   );
 }

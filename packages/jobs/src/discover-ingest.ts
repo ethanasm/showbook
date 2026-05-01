@@ -113,6 +113,25 @@ async function normalizeTmEvent(event: TMEvent): Promise<NormalizedEvent | null>
   const tmVenue = event._embedded?.venues?.[0];
   if (!tmVenue) return null;
 
+  // TM occasionally returns events with a venue object that has no `name`
+  // (observed for European venues where the city is the only text field —
+  // Düsseldorf, 2026-04-30). matchOrCreateVenue rejects empty names, so
+  // skip+log here rather than emitting a `tm.normalize.failed` error per
+  // event. Without a venue name there's no usable show row to create.
+  if (!tmVenue.name || tmVenue.name.trim().length === 0) {
+    log.warn(
+      {
+        event: 'tm.normalize.skipped',
+        reason: 'missing_venue_name',
+        tmEventId: event.id,
+        name: event.name,
+        city: tmVenue.city?.name,
+      },
+      'Skipping TM event with no venue name',
+    );
+    return null;
+  }
+
   const { venue } = await matchOrCreateVenue({
     name: tmVenue.name,
     city: tmVenue.city?.name ?? 'Unknown',

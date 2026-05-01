@@ -16,6 +16,15 @@ export default defineConfig({
   // All tests share a single test user + DB. Run serially so /api/test/seed
   // calls in one test don't wipe data another test is mid-way through using.
   workers: 1,
+  // CI: custom progress reporter prints `Executing X of Y tests (Z failed)`
+  // after each test; HTML report is kept for the artifact upload step.
+  // Local: default `list` reporter for full per-test detail.
+  reporter: isCI
+    ? [
+        ['./tests/reporters/progress-reporter.ts'],
+        ['html', { open: 'never' }],
+      ]
+    : 'list',
   use: {
     baseURL: `${protocol}://localhost:${port}`,
     ignoreHTTPSErrors: true,

@@ -6,11 +6,6 @@
  * branch, and 404→empty mapping.
  */
 
-// Pin the test process to a non-UTC timezone so we catch regressions where
-// `searchSetlist` formats the outgoing date with local-time accessors. Set
-// before importing the module under test so any module-level Date work uses it.
-process.env.TZ = 'America/Los_Angeles';
-
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { searchArtist, searchSetlist, SetlistFmError } from '../setlistfm';
@@ -240,6 +235,37 @@ test('searchSetlist: returns sections preserving the encore boundary and per-son
   assert.ok(urlSeen.includes('artistMbid=mb-1'));
 });
 
+// Regression: `new Date('2024-08-02').getDate()` returns `1` in zones west
+// of UTC because the string parses as UTC midnight, then local accessors
+// roll the day back. searchSetlist must reformat ISO date strings as pure
+// calendar dates so the URL date is timezone-independent. We assert the
+// behaviour twice — once under the test runner's ambient zone, and once
+// after forcing PT — to catch regressions on UTC CI runners too.
+test('searchSetlist: ISO date string is timezone-stable in dd-MM-yyyy URL', async () => {
+  const urls: string[] = [];
+  stubFetch(async (url) => {
+    urls.push(String(url));
+    return jsonResponse({ setlist: [], total: 0, page: 1, itemsPerPage: 30 });
+  });
+
+  await searchSetlist('mb-1', '2024-08-02');
+  const originalTz = process.env.TZ;
+  process.env.TZ = 'America/Los_Angeles';
+  try {
+    await searchSetlist('mb-1', '2024-08-02');
+  } finally {
+    if (originalTz === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTz;
+  }
+
+  for (const u of urls) {
+    assert.ok(
+      u.includes('date=02-08-2024'),
+      `expected URL to contain date=02-08-2024, got ${u}`,
+    );
+  }
+});
+
 test('searchSetlist: collapses multiple encore sets into a single encore section', async () => {
   stubFetch(async () =>
     jsonResponse({
@@ -302,24 +328,6 @@ test('searchSetlist: accepts a Date object', async () => {
   assert.ok(urlSeen.includes(`date=${dd}-${mm}-2024`));
 });
 
-// Regression: an ISO calendar date like '2024-08-02' parses as UTC midnight.
-// In a timezone behind UTC (this file pins TZ to America/Los_Angeles), local
-// accessors roll back to Aug 1, producing `date=01-08-2024` instead of
-// `date=02-08-2024`. searchSetlist must format from UTC accessors so the
-// caller's calendar date survives intact.
-test('searchSetlist: ISO date input is formatted in UTC, not local time', async () => {
-  let urlSeen = '';
-  stubFetch(async (url) => {
-    urlSeen = String(url);
-    return jsonResponse({ setlist: [], total: 0, page: 1, itemsPerPage: 30 });
-  });
-  await searchSetlist('mb-1', '2024-08-02');
-  assert.ok(
-    urlSeen.includes('date=02-08-2024'),
-    `expected date=02-08-2024 in URL, got: ${urlSeen}`,
-  );
-});
-
 test('searchSetlist: returns null on no results', async () => {
   stubFetch(async () => jsonResponse({ setlist: [], total: 0, page: 1, itemsPerPage: 30 }));
   const result = await searchSetlist('mb-1', '2024-08-02');
@@ -338,7 +346,17 @@ test('searchSetlist: returns null on 404', async () => {
   assert.equal(result, null);
 });
 
-test('searchSetlist: rethrows non-404 errors', async () => {
+// Setlist.fm has been observed returning 400 for valid MBID + date combos when
+// no setlist matches (rather than the documented 404 / empty result). Treat
+// 400 the same as 404 so a working artist match isn't lost just because
+// setlist.fm couldn't find the show — see plan §B.
+test('searchSetlist: returns null on 400 (treat as no-setlist-found)', async () => {
+  stubFetch(async () => new Response('Bad Request', { status: 400, statusText: 'Bad Request' }));
+  const result = await searchSetlist('mb-1', '2024-08-02');
+  assert.equal(result, null);
+});
+
+test('searchSetlist: rethrows 5xx errors', async () => {
   stubFetch(async () => new Response('oops', { status: 500, statusText: 'ISE' }));
   await assert.rejects(searchSetlist('mb-1', '2024-08-02'));
 });

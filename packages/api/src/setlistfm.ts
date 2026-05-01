@@ -85,13 +85,16 @@ export class SetlistFmError extends Error {
 // ---------------------------------------------------------------------------
 
 function toSetlistFmDate(date: string | Date): string {
-  // The input is an ISO calendar date, not a moment in time. `new Date('2024-08-02')`
-  // parses as UTC midnight; in timezones behind UTC, local accessors roll back to
-  // the previous day. Format from UTC accessors so the output matches the input date.
-  const d = typeof date === "string" ? new Date(date) : date;
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const year = d.getUTCFullYear();
+  // ISO date strings (YYYY-MM-DD) are zone-less calendar dates. Reformat
+  // directly without going through `new Date`, which would parse them as
+  // UTC midnight and shift the day in zones west of UTC.
+  if (typeof date === "string") {
+    const [y, m, d] = date.slice(0, 10).split("-");
+    return `${d}-${m}-${y}`;
+  }
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
   return `${day}-${month}-${year}`;
 }
 
@@ -246,7 +249,14 @@ export async function searchSetlist(
       `/search/setlists?artistMbid=${encoded}&date=${fmDate}`,
     );
   } catch (err) {
-    if (err instanceof SetlistFmError && err.status === 404) {
+    // 404 is the documented "no setlist for that artist+date" response. 400
+    // is sometimes returned for the same case in practice (observed in prod
+    // for valid artist+date combos on 2026-04-30); treat it the same so a
+    // working artist match isn't lost just because there's no setlist.
+    if (
+      err instanceof SetlistFmError &&
+      (err.status === 404 || err.status === 400)
+    ) {
       return null;
     }
     throw err;

@@ -36,6 +36,19 @@ export interface VenueMatchResult {
 export async function matchOrCreateVenue(
   input: VenueInput,
 ): Promise<VenueMatchResult> {
+  // Validate at the boundary so empty/whitespace-only inputs from upstream
+  // (e.g. TM events with a missing venue name like the Düsseldorf 2026-04-30
+  // discover-ingest crash) fail with a clear typed error instead of being
+  // interpolated into `lower(${input.name})` and producing the cryptic
+  // Postgres `function lower() does not exist`. Callers that may produce
+  // empty values (discover-ingest in particular) must skip + log first.
+  if (!input.name || input.name.trim().length === 0) {
+    throw new Error('matchOrCreateVenue: input.name is required (got empty/blank string)');
+  }
+  if (!input.city || input.city.trim().length === 0) {
+    throw new Error('matchOrCreateVenue: input.city is required (got empty/blank string)');
+  }
+
   // 1. TM venue ID match
   if (input.tmVenueId) {
     const [existing] = await db
@@ -100,7 +113,7 @@ export async function matchOrCreateVenue(
 
   if (lat == null && input.name && input.city) {
     try {
-      const geo = await geocodeVenue(input.name, input.city);
+      const geo = await geocodeVenue(input.name, input.city, stateRegion);
       if (geo) {
         lat = geo.lat;
         lng = geo.lng;
@@ -109,7 +122,18 @@ export async function matchOrCreateVenue(
         if (!googlePlaceId && geo.googlePlaceId) googlePlaceId = geo.googlePlaceId;
         if (!photoUrl && geo.photoUrl) photoUrl = geo.photoUrl;
       }
-    } catch { /* geocoding failed; save without coordinates */ }
+    } catch (err) {
+      log.warn(
+        {
+          err,
+          event: 'venue_matcher.geocode.failed',
+          name: input.name,
+          city: input.city,
+          stateRegion: stateRegion ?? null,
+        },
+        'geocodeVenue threw; saving venue without coordinates/Place ID',
+      );
+    }
   }
 
   if (!tmVenueId && input.name && input.city) {
@@ -270,7 +294,11 @@ async function maybeUpdate(
   }
   if (existing.latitude == null && input.lat == null) {
     try {
-      const geo = await geocodeVenue(existing.name, existing.city);
+      const geo = await geocodeVenue(
+        existing.name,
+        existing.city,
+        existing.stateRegion ?? input.stateRegion ?? null,
+      );
       if (geo) {
         updates.latitude = geo.lat;
         updates.longitude = geo.lng;
@@ -279,7 +307,17 @@ async function maybeUpdate(
         if (!existing.googlePlaceId && geo.googlePlaceId) updates.googlePlaceId = geo.googlePlaceId;
         if (!existing.photoUrl && geo.photoUrl) updates.photoUrl = geo.photoUrl;
       }
-    } catch { /* geocoding failed */ }
+    } catch (err) {
+      log.warn(
+        {
+          err,
+          event: 'venue_matcher.geocode_update.failed',
+          name: existing.name,
+          city: existing.city,
+        },
+        'geocodeVenue threw during maybeUpdate; leaving fields unchanged',
+      );
+    }
   }
   if (input.googlePlaceId && !existing.googlePlaceId) {
     updates.googlePlaceId = input.googlePlaceId;

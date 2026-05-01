@@ -108,7 +108,7 @@ Cloudflare Tunnel reaches web via loopback.
 
 ## Observability and logging
 
-All new code MUST use the shared `@showbook/observability` package — no `console.log/warn/error` and no direct `langfuse` / `pino` imports.
+All new code MUST use the shared `@showbook/observability` package — no `console.log/warn/error` and no direct `langfuse` / `pino` imports. This is enforced by review and applies to every package, including CLI scripts and pg-boss handlers. If you find yourself reaching for `console.*`, extend the observability package instead.
 
 **Structured logs (pino → Axiom):**
 - Import `logger` (or `child({ component, ... })`) from `@showbook/observability` for every log line.
@@ -117,6 +117,51 @@ All new code MUST use the shared `@showbook/observability` package — no `conso
 - Never log secrets, raw user PII, raw email bodies, or image bytes. Redaction covers `apiKey`/`authorization`/`token`/`password` but don't rely on it.
 - In jobs, bind `{ job, jobId }` on the child logger so Axiom queries can filter by run.
 - Logs go to stdout (pretty in dev, JSON in prod) and to Axiom when `AXIOM_TOKEN` is set; behaviour must work with the env unset (tests, offline dev).
+- **Caveat**: the pino err serializer currently does NOT include `err.cause`, so a thrown wrapped postgres error (Drizzle / postgres-js) loses the underlying SQLSTATE in Axiom. If you debug a `Failed query: …` and the cause matters, fix the serializer in `packages/observability/src/logger.ts` first rather than working around it.
+
+**Where logs go (per env):**
+- **dev / local** — stdout only, pretty-printed via `pino-pretty`. `AXIOM_TOKEN` and `AXIOM_DATASET` are intentionally unset in `.env.dev` / `apps/web/.env.local`, so dev runs never ship to Axiom. Tests rely on this — don't set `AXIOM_TOKEN` in CI.
+- **prod** — stdout (JSON via `pino`, captured by Docker) AND shipped to Axiom dataset `showbook-prod` via `@axiomhq/pino`. The `AXIOM_TOKEN` in `.env.prod` is **ingest-only by design** (it's a service token, not a query token), so reading prod logs requires a separate user-scoped token (see "Querying Axiom" below).
+
+**Querying Axiom from the CLI (read access):**
+The repo-side `AXIOM_TOKEN` cannot read logs. To query, use a Personal Access Token (PAT) you create in the Axiom UI under Settings → Profile → Personal Access Tokens (or an advanced API token with the `Query` capability granted on the `showbook-prod` dataset). PATs and most advanced API tokens require the `X-AXIOM-ORG-ID` header.
+
+```bash
+# Get the org id once: it's the slug shown in Axiom URLs and is also returned
+# from `GET /v1/orgs`.
+ORG=showbook-egap
+TOKEN=xapt-...  # PAT — never commit
+
+# APL query against the Brandon-window:
+curl -sS -X POST "https://api.axiom.co/v1/datasets/_apl?format=tabular" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-AXIOM-ORG-ID: $ORG" \
+  -H "Content-Type: application/json" \
+  -d '{"apl":"[\"showbook-prod\"] | where _time > ago(1h) and level in (\"warn\",\"error\") | project _time, level, event, msg | order by _time desc"}'
+```
+
+The stdout copy in the prod web container (`docker logs showbook-prod-web`) is also a useful fallback when you need recent logs but Axiom retention has rolled them off.
+
+**Structured event names worth knowing (curated list, prefix-grouped):**
+- `auth.user_created`, `auth.signin` — NextAuth lifecycle.
+- `tm.request.*`, `tm.normalize.failed` — Ticketmaster client + ingest normalizer.
+- `setlistfm.request.*` — setlist.fm client (rate-limit retries, errors).
+- `venue_matcher.tm_lookup.failed`, `venue_matcher.geocode.failed`, `venue_matcher.geocode_update.failed` — `matchOrCreateVenue` external-call boundaries.
+- `geocode.google.failed`, `geocode.google.no_lat_lng`, `geocode.nominatim.http_error`, `geocode.nominatim.failed` — `geocodeVenue` provider boundaries; were silent until 2026-04-30.
+- `performer.match.created`, `performer.match.race_recovered` — `matchOrCreatePerformer` writes (added 2026-04-30 to track external-ID coverage).
+- `performer.image.{updated,no_match,failed,updated_image_only,done,fatal}` — `backfill-performer-images` job.
+- `venue.photo.{updated,missing,failed,done,fatal}` — `backfill-venue-photos` job.
+- `venue.follow`, `venue.follow.place_backfill_failed` — `venues.follow` lazy backfill.
+- `discover.ingest.{performer,venue,region,targeted,*}.complete` — pg-boss discover-ingest jobs.
+- `shows.nightly.summary`, `setlist.retry.summary` — nightly transition + setlist-retry jobs.
+- `shows.create.{tm_enrichment_failed,venue_place_backfill_failed}` — `shows.create` non-blocking enrichments.
+- `backfill.performer_images.summary`, `backfill.venue_photos.summary` — scheduled backfill jobs (daily 05:30 / 05:45 ET).
+- `notifications.digest.summary` — daily email digest.
+- `pgboss.{started,registered,unschedule_stale}` — pg-boss lifecycle.
+- `trpc.error` — last-resort tRPC procedure error log.
+- `job.{start,complete,failed}` — pg-boss job wrapper from `runJob` in `packages/jobs/src/registry.ts`.
+
+When adding a new external-call boundary, follow the `<component>.<action>.<outcome>` shape and add it to this list.
 
 **LLM observability (Langfuse):**
 - Every LLM call goes through `traceLLM({ name, model, input, run })` from `@showbook/observability`. Do not call the Groq SDK directly from new code — extend `packages/api/src/groq.ts` (or the equivalent scrapers helper) so the wrapper is applied once.

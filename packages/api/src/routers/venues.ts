@@ -102,6 +102,7 @@ export const venuesRouter = router({
           .select({
             name: venues.name,
             city: venues.city,
+            stateRegion: venues.stateRegion,
             googlePlaceId: venues.googlePlaceId,
             photoUrl: venues.photoUrl,
           })
@@ -110,7 +111,7 @@ export const venuesRouter = router({
           .limit(1);
 
         if (venue && (!venue.googlePlaceId || !venue.photoUrl) && venue.name && venue.city) {
-          const geo = await geocodeVenue(venue.name, venue.city);
+          const geo = await geocodeVenue(venue.name, venue.city, venue.stateRegion ?? null);
           if (geo?.googlePlaceId || geo?.photoUrl) {
             const updates: Record<string, unknown> = {};
             if (geo.googlePlaceId && !venue.googlePlaceId) updates.googlePlaceId = geo.googlePlaceId;
@@ -452,7 +453,7 @@ export const venuesRouter = router({
 
     for (const venue of incomplete) {
       try {
-        const geo = await geocodeVenue(venue.name, venue.city);
+        const geo = await geocodeVenue(venue.name, venue.city, venue.stateRegion ?? null);
         if (geo) {
           const updates: Record<string, unknown> = {};
           if (venue.latitude == null) {

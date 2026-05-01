@@ -16,6 +16,7 @@ import {
   type PerformerInput,
 } from '../performer-matcher';
 import { searchEvents } from '../ticketmaster';
+import { geocodeVenue } from '../geocode';
 import { child } from '@showbook/observability';
 import {
   type PerformerSetlist,
@@ -551,6 +552,53 @@ export const showsRouter = router({
 
         return created;
       });
+
+      // Lazy Place ID + photo backfill for the venue. The matcher's geocode
+      // path can silently fall back to Nominatim (which doesn't return Place
+      // ID or photo) if Google's first autocomplete suggestion lacks
+      // coordinates — this is exactly the Warfield 2026-04-30 prod
+      // failure. After insert, if the venue still has no Place ID or photo,
+      // try geocoding once more here with the canonical name+city+state from
+      // the persisted row. This mirrors `venues.follow`'s lazy-backfill so
+      // the "add a show" path reaches parity with the "follow a venue" path.
+      if (
+        venueResult.venue.name &&
+        venueResult.venue.city &&
+        (!venueResult.venue.googlePlaceId || !venueResult.venue.photoUrl)
+      ) {
+        try {
+          const geo = await geocodeVenue(
+            venueResult.venue.name,
+            venueResult.venue.city,
+            venueResult.venue.stateRegion ?? null,
+          );
+          if (geo?.googlePlaceId || geo?.photoUrl) {
+            const updates: Record<string, unknown> = {};
+            if (geo.googlePlaceId && !venueResult.venue.googlePlaceId) {
+              updates.googlePlaceId = geo.googlePlaceId;
+            }
+            if (geo.photoUrl && !venueResult.venue.photoUrl) {
+              updates.photoUrl = geo.photoUrl;
+            }
+            if (Object.keys(updates).length > 0) {
+              await ctx.db
+                .update(venues)
+                .set(updates)
+                .where(eq(venues.id, venueResult.venue.id));
+            }
+          }
+        } catch (err) {
+          log.warn(
+            {
+              err,
+              event: 'shows.create.venue_place_backfill_failed',
+              venueId: venueResult.venue.id,
+              showId: show.id,
+            },
+            'Lazy Place ID backfill failed after shows.create',
+          );
+        }
+      }
 
       // TM ticket-URL enrichment is best-effort and non-blocking — it's a
       // nice-to-have, not part of the show's correctness, so it lives
