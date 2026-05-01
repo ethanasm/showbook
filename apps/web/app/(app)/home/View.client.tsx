@@ -215,7 +215,7 @@ export default function HomeView() {
         <EmptyState
           kind="shows"
           title="Start your logbook"
-          body="Add the first show you saw, the next one you are watching, or import ticket history from Gmail."
+          body="Add the first show you saw, the next one you are watching, or import your ticket history from Gmail."
           action={
             <button
               type="button"
