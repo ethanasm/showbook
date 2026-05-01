@@ -33,9 +33,6 @@ importers:
       '@gorhom/bottom-sheet':
         specifier: ^5.2.13
         version: 5.2.13(@types/react@19.2.14)(react-native-gesture-handler@2.31.1(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-reanimated@3.19.5(@babel/core@7.29.0)(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
-      '@showbook/api':
-        specifier: workspace:*
-        version: link:../../packages/api
       '@showbook/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -121,6 +118,9 @@ importers:
       '@babel/core':
         specifier: ^7.29.0
         version: 7.29.0
+      '@showbook/api':
+        specifier: workspace:*
+        version: link:../../packages/api
       '@types/node':
         specifier: ^22.19.17
         version: 22.19.17

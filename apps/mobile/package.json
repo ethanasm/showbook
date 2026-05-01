@@ -14,7 +14,6 @@
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.13",
-    "@showbook/api": "workspace:*",
     "@showbook/shared": "workspace:*",
     "@tanstack/react-query": "^5.99.2",
     "@trpc/client": "^11.16.0",
@@ -44,6 +43,7 @@
     "superjson": "^2.2.6"
   },
   "devDependencies": {
+    "@showbook/api": "workspace:*",
     "@babel/core": "^7.29.0",
     "@types/node": "^22.19.17",
     "@types/react": "^19.1.0",
