@@ -279,17 +279,26 @@ export default function ArtistsView() {
               cursor: "pointer",
               background: "transparent",
               color: "var(--ink)",
-              padding: "10px 16px",
+              padding: "9px 14px",
               fontFamily: "var(--font-geist-sans), sans-serif",
               fontSize: 13,
               fontWeight: 500,
-              letterSpacing: -0.2,
+              letterSpacing: -0.15,
               display: "flex",
               alignItems: "center",
-              gap: 7,
+              gap: 8,
+              transition: "border-color 0.12s, background 0.12s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "var(--ink)";
+              e.currentTarget.style.background = "var(--surface)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "var(--rule-strong)";
+              e.currentTarget.style.background = "transparent";
             }}
           >
-            <Music size={14} />
+            <Music size={13} color="var(--accent)" />
             <span>Import from Spotify</span>
           </button>
         </div>

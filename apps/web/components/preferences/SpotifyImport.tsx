@@ -12,7 +12,7 @@ export function SpotifyImport() {
   // ────── Picking / importing — render the picker inline ──────
   if (flow.phase === "picking" || flow.phase === "importing" || flow.phase === "loading") {
     return (
-      <div style={cardStyle}>
+      <div style={pickerCardStyle}>
         <SpotifyImportPicker flow={flow} />
       </div>
     );
@@ -97,6 +97,16 @@ const cardStyle: React.CSSProperties = {
   background: "var(--surface)",
   padding: "4px 20px 4px",
   marginBottom: 36,
+};
+
+const pickerCardStyle: React.CSSProperties = {
+  background: "var(--surface)",
+  border: "1px solid var(--rule)",
+  borderRadius: 8,
+  marginBottom: 36,
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
 };
 
 const connectButtonStyle: React.CSSProperties = {
