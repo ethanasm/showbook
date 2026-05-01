@@ -21,7 +21,7 @@ of high-fidelity mocks across the flows below.
 
 | Milestone | Status |
 |---|---|
-| M1 | In progress |
+| M1 | Ready to ship |
 | M2 | Not started |
 | M3 | Not started |
 | M4 | Not started |
