@@ -45,12 +45,12 @@
   "devDependencies": {
     "@showbook/api": "workspace:*",
     "@babel/core": "^7.29.0",
-    "@types/node": "^22.19.17",
+    "@types/node": "^25.6.0",
     "@types/react": "^19.1.0",
     "babel-preset-expo": "~55.0.18",
-    "eslint": "^9.18.0",
+    "eslint": "^10.2.1",
     "eslint-config-expo": "~55.0.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   }
 }
