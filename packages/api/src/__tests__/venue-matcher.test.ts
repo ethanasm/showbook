@@ -6,7 +6,41 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isUniqueViolation, toStateCode, venueNameVariants } from '../venue-matcher';
+import {
+  isUniqueViolation,
+  matchOrCreateVenue,
+  toStateCode,
+  venueNameVariants,
+} from '../venue-matcher';
+
+// ── matchOrCreateVenue input guards ─────────────────────────────────────
+
+// Plan §E: empty venue name reaches `matchOrCreateVenue` from `discover-ingest`
+// for TM events that come back with no `_embedded.venues[].name` (Düsseldorf,
+// 2026-04-30). The matcher used to interpolate the empty value into
+// `lower(${input.name})`, producing the 0-arg SQL `lower()` and a Postgres
+// `function lower() does not exist` error. Validate at the boundary so the
+// failure mode is a clear typed error, not cryptic SQL.
+test('matchOrCreateVenue: throws synchronously on empty name', async () => {
+  await assert.rejects(
+    () => matchOrCreateVenue({ name: '', city: 'Düsseldorf' }),
+    /name is required/i,
+  );
+});
+
+test('matchOrCreateVenue: throws synchronously on empty city', async () => {
+  await assert.rejects(
+    () => matchOrCreateVenue({ name: 'Warfield', city: '' }),
+    /city is required/i,
+  );
+});
+
+test('matchOrCreateVenue: throws synchronously on whitespace-only name', async () => {
+  await assert.rejects(
+    () => matchOrCreateVenue({ name: '   ', city: 'San Francisco' }),
+    /name is required/i,
+  );
+});
 
 // ── toStateCode ─────────────────────────────────────────────────────────
 

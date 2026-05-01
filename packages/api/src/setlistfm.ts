@@ -249,7 +249,14 @@ export async function searchSetlist(
       `/search/setlists?artistMbid=${encoded}&date=${fmDate}`,
     );
   } catch (err) {
-    if (err instanceof SetlistFmError && err.status === 404) {
+    // 404 is the documented "no setlist for that artist+date" response. 400
+    // is sometimes returned for the same case in practice (observed in prod
+    // for valid artist+date combos on 2026-04-30); treat it the same so a
+    // working artist match isn't lost just because there's no setlist.
+    if (
+      err instanceof SetlistFmError &&
+      (err.status === 404 || err.status === 400)
+    ) {
       return null;
     }
     throw err;
