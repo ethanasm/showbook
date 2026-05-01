@@ -8,7 +8,7 @@
     "start:e2e": "DATABASE_URL=\"${E2E_DATABASE_URL:-postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e}\" ENABLE_TEST_ROUTES=1 NEXTAUTH_URL=http://localhost:${PLAYWRIGHT_PORT:-3003} AUTH_SECRET=showbook-e2e-secret NEXTAUTH_SECRET=showbook-e2e-secret next start --port ${PLAYWRIGHT_PORT:-3003}",
     "build": "next build",
     "start": "next start --port 3001",
-    "lint": "next lint",
+    "lint": "eslint .",
     "test": "TSX_TSCONFIG_PATH=tsconfig.test.json find lib/__tests__ components/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' \\) -print0 | xargs -0 env TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./test-setup.ts --test",
     "test:coverage": "mkdir -p coverage && find lib/__tests__ components/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' \\) -print0 | xargs -0 env TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./test-setup.ts --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/unit.info --test-reporter=spec --test-reporter-destination=stdout",
     "test:e2e": "playwright test"
@@ -54,7 +54,7 @@
     "@types/node": "^25.6.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
-    "eslint": "^10.2.1",
+    "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.4",
     "global-jsdom": "^29.0.0",
     "jsdom": "^29.1.1",
