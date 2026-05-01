@@ -85,10 +85,16 @@ export class SetlistFmError extends Error {
 // ---------------------------------------------------------------------------
 
 function toSetlistFmDate(date: string | Date): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const year = d.getFullYear();
+  // ISO date strings (YYYY-MM-DD) are zone-less calendar dates. Reformat
+  // directly without going through `new Date`, which would parse them as
+  // UTC midnight and shift the day in zones west of UTC.
+  if (typeof date === "string") {
+    const [y, m, d] = date.slice(0, 10).split("-");
+    return `${d}-${m}-${y}`;
+  }
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
   return `${day}-${month}-${year}`;
 }
 
