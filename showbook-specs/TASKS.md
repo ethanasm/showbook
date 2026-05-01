@@ -416,26 +416,12 @@ React components in `apps/web/components/design-system/`:
 - Document setup in project `RUNNING.md`
 **Verify:** `https://showbook.example.com` loads the app from a phone on cellular (not WiFi).
 
-### T31: Expo mobile scaffold
-**Depends on:** T14, T30 (needs API + tunnel URL)
-**Read:** `infrastructure.md → Offline Strategy`
-**Build:**
-- Scaffold Expo app in `apps/mobile/`
-- Expo Router with tab bar (6 tabs)
-- tRPC client pointed at `https://showbook.example.com/api/trpc`
-- Auth via Expo AuthSession (Google OAuth)
-- Build mobile versions of: Home, Shows list, Add (form only)
-**Verify:** App builds with `npx expo start`. Connects to backend. Shows list renders same data as web.
+### T31 / T32: Superseded by mobile-roadmap.md
 
-### T32: Offline caching
-**Depends on:** T31
-**Read:** `infrastructure.md → Offline Strategy`
-**Build:**
-- expo-sqlite local cache
-- Sync on foreground: fetch shows updated since last sync
-- Shows list + Home read from SQLite, update from network in background
-- Add flow blocked when offline
-**Verify:** Load data while online. Go to airplane mode. Shows list still renders. Add flow shows offline message.
+These tasks are superseded by [`mobile-roadmap.md`](./mobile-roadmap.md),
+which decomposes the full mobile build into M1–M6. T31 (Expo scaffold) is
+absorbed into M1 + M2; T32 (offline caching) lands in M2 alongside the
+list rendering. See the roadmap for the current milestone status.
 
 ---
 

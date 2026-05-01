@@ -47,3 +47,6 @@ apps/web/certificates/
 # Defense-in-depth catch-all for stray TLS material anywhere in the tree.
 **/*.pem
 **/*-key.pem
+
+# Brainstorming companion server (Superpowers skill)
+.superpowers/
