@@ -156,9 +156,11 @@ export async function matchOrCreateVenue(
         .returning();
       return { venue: created, created: true };
     } catch (err) {
-      // External-ID unique-violation (someone else inserted with the same
-      // TM/Google id between our lookup and now). Fall back to the
-      // existing row for that ID.
+      // External-ID unique-violation. Fires when two concurrent calls have
+      // different name+city (so they hold different advisory locks and
+      // both pass the recheck) but resolve to the same TM/Google id —
+      // the partial UNIQUE index on those columns rejects the second
+      // INSERT with 23505. Fall back to the existing row.
       if (isUniqueViolation(err)) {
         if (tmVenueId) {
           const [existing] = await tx
