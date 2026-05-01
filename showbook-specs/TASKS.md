@@ -51,8 +51,8 @@ T04 Design ────┤                                                      
           └── Playwright tests per page (T05) ────────────────────────┘   │
                                                                           │
        T30 Caddy + Tunnel ────────────────────────────────────────────────┘
-       T31 Expo scaffold
-       T32 Offline caching
+       T31 Expo scaffold      [superseded → mobile-roadmap.md]
+       T32 Offline caching    [superseded → mobile-roadmap.md]
 ```
 
 ---
@@ -416,26 +416,12 @@ React components in `apps/web/components/design-system/`:
 - Document setup in project `RUNNING.md`
 **Verify:** `https://showbook.example.com` loads the app from a phone on cellular (not WiFi).
 
-### T31: Expo mobile scaffold
-**Depends on:** T14, T30 (needs API + tunnel URL)
-**Read:** `infrastructure.md → Offline Strategy`
-**Build:**
-- Scaffold Expo app in `apps/mobile/`
-- Expo Router with tab bar (6 tabs)
-- tRPC client pointed at `https://showbook.example.com/api/trpc`
-- Auth via Expo AuthSession (Google OAuth)
-- Build mobile versions of: Home, Shows list, Add (form only)
-**Verify:** App builds with `npx expo start`. Connects to backend. Shows list renders same data as web.
+### T31 / T32: Superseded by mobile-roadmap.md
 
-### T32: Offline caching
-**Depends on:** T31
-**Read:** `infrastructure.md → Offline Strategy`
-**Build:**
-- expo-sqlite local cache
-- Sync on foreground: fetch shows updated since last sync
-- Shows list + Home read from SQLite, update from network in background
-- Add flow blocked when offline
-**Verify:** Load data while online. Go to airplane mode. Shows list still renders. Add flow shows offline message.
+These tasks are superseded by [`mobile-roadmap.md`](./mobile-roadmap.md),
+which decomposes the full mobile build into M1–M6. T31 (Expo scaffold) is
+absorbed into M1 + M2; T32 (offline caching) lands in M2 alongside the
+list rendering. See the roadmap for the current milestone status.
 
 ---
 
@@ -447,7 +433,7 @@ React components in `apps/web/components/design-system/`:
 | 2 | T06, T07, T08, T09, T10, T11, T12, T13 | 8 agents (T06 blocks T07/T11/T12/T13) |
 | 3 | T14, T15, T16, T17 | 4 agents |
 | 4 | T18–T29 | 12 agents (all independent) |
-| 5 | T30, T31, T32 | 3 agents (sequential chain) |
+| 5 | T30 | 1 agent (T31/T32 superseded — see mobile-roadmap.md) |
 
 **Critical path:** T01 → T06 → T07 → T14 → T19 (Add flow). Everything else can happen around this spine.
 

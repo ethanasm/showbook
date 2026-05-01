@@ -1,5 +1,56 @@
 {
   "name": "mobile",
   "version": "0.1.0",
-  "private": true
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo start --ios",
+    "android": "expo start --android",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "lint": "expo lint",
+    "test": "find lib/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' \\) -print0 2>/dev/null | xargs -0 -I{} node --import tsx --test {}"
+  },
+  "dependencies": {
+    "@gorhom/bottom-sheet": "^5.2.13",
+    "@showbook/shared": "workspace:*",
+    "@tanstack/react-query": "^5.99.2",
+    "@trpc/client": "^11.16.0",
+    "@trpc/react-query": "^11.16.0",
+    "expo": "~55.0.18",
+    "expo-auth-session": "~55.0.15",
+    "expo-constants": "~55.0.15",
+    "expo-crypto": "~55.0.14",
+    "expo-font": "~55.0.6",
+    "expo-linking": "~55.0.14",
+    "expo-location": "~55.1.8",
+    "expo-media-library": "~55.0.15",
+    "expo-notifications": "~55.0.21",
+    "expo-router": "~55.0.13",
+    "expo-secure-store": "~55.0.13",
+    "expo-splash-screen": "~55.0.19",
+    "expo-status-bar": "~55.0.5",
+    "expo-web-browser": "~55.0.14",
+    "lucide-react-native": "^1.14.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-native": "0.79.7",
+    "react-native-gesture-handler": "~2.31.1",
+    "react-native-reanimated": "~3.19.5",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.24.0",
+    "superjson": "^2.2.6"
+  },
+  "devDependencies": {
+    "@showbook/api": "workspace:*",
+    "@babel/core": "^7.29.0",
+    "@types/node": "^22.19.17",
+    "@types/react": "^19.1.0",
+    "babel-preset-expo": "~55.0.18",
+    "eslint": "^9.18.0",
+    "eslint-config-expo": "~55.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
 }

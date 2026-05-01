@@ -4,7 +4,7 @@ Personal entertainment tracker for live shows — concerts, theatre, comedy, fes
 
 ## Project structure
 - `showbook-specs/` — All specs: schema, data sources, pipelines, infrastructure, decisions
-- `showbook-specs/phases/TASKS.md` — Master task list with dependency DAG (32 tasks, 5 waves)
+- `showbook-specs/phases/TASKS.md` — Master task list with dependency DAG (30 tasks + mobile roadmap, 5 waves)
 - `showbook-specs/phases/VERIFICATION.md` — Playwright testing + visual verification strategy
 - `design/` — Hi-fi prototypes from Claude Design (reference only, don't modify)
 
