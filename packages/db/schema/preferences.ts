@@ -6,7 +6,7 @@ export const themeEnum = pgEnum('theme', ['system', 'light', 'dark']);
 export const userPreferences = pgTable('user_preferences', {
   userId: text('user_id')
     .primaryKey()
-    .references(() => users.id),
+    .references(() => users.id, { onDelete: 'cascade' }),
   theme: themeEnum('theme').default('system'),
   compactMode: boolean('compact_mode').default(false),
   emailNotifications: boolean('email_notifications').default(true),
