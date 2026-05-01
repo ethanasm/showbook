@@ -115,10 +115,11 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   titleLarge: {
-    // Large variant uses Georgia (per design: large ? 'Georgia' : 'Geist Sans')
-    // Note: design AppHeader source shows fontFamily: "'Geist', system-ui, sans-serif"
-    // for large, but the spec says 28/700 Georgia — spec takes precedence.
-    fontFamily: 'Georgia',
+    // Same Geist Sans family as the regular variant — just larger/bolder.
+    // Matches the design source (showbook-appheader.jsx) where AppHeader's
+    // large variant uses 'Geist', not Georgia. Georgia is reserved for
+    // serif headlines on detail screens (heroTitle / headliner type ramp).
+    fontFamily: 'Geist Sans',
     fontSize: 28,
     fontWeight: '700',
     lineHeight: 31, // 28 × 1.1
