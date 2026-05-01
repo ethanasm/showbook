@@ -148,9 +148,9 @@ describe('multi-user isolation', () => {
 
   it('unauthenticated callers are rejected', async () => {
     const anon = callerFor('00000000-0000-0000-0000-000000000000');
-    // Even with a fabricated session, only data belonging to that user id
-    // surfaces (which is none).
-    const list = await anon.shows.list({});
-    assert.equal(list.length, 0);
+    await assert.rejects(
+      () => anon.shows.list({}),
+      (err: unknown) => err instanceof TRPCError && err.code === 'UNAUTHORIZED',
+    );
   });
 });

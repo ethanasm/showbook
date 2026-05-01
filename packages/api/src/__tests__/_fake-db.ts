@@ -23,6 +23,13 @@ export interface FakeDbOptions {
   deleteResults?: unknown[];
   /** Sequential results returned by terminal `insert().returning()` chains. */
   insertResults?: unknown[];
+  /**
+   * User id the protectedProcedure auth middleware will look up first.
+   * `makeFakeDb` prepends `[{ id: authUserId }]` to selectResults so the
+   * auth check passes; set to `null` to script that lookup yourself (e.g.
+   * to test the user-not-found rejection path).
+   */
+  authUserId?: string | null;
 }
 
 export interface FakeDb {
@@ -38,7 +45,11 @@ export interface FakeDb {
 }
 
 export function makeFakeDb(opts: FakeDbOptions = {}): FakeDb {
-  const selects = [...(opts.selectResults ?? [])];
+  const authUserId = opts.authUserId === undefined ? 'test-user' : opts.authUserId;
+  const selects = [
+    ...(authUserId !== null ? [[{ id: authUserId }]] : []),
+    ...(opts.selectResults ?? []),
+  ];
   const updates = [...(opts.updateResults ?? [])];
   const deletes = [...(opts.deleteResults ?? [])];
   const inserts = [...(opts.insertResults ?? [])];
