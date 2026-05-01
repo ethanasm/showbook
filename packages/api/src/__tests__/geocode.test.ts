@@ -39,6 +39,41 @@ afterEach(() => {
 
 // ── Google Places path ────────────────────────────────────────────────
 
+// Plan §C: pass the venue's stateRegion into the Google autocomplete query
+// so ambiguous names (e.g. "Warfield" — there are venues with that name in
+// multiple US states) disambiguate to the right place. Without this, prod
+// has been silently dropping the Place ID and photo for TM-picked venues.
+test('geocodeVenue: includes stateRegion in the autocomplete input when provided', async () => {
+  process.env.GOOGLE_PLACES_API_KEY = 'gk';
+  let autocompleteInput: string | null = null;
+  stubFetch(async (url, init) => {
+    const u = String(url);
+    if (u.includes('places:autocomplete')) {
+      const body =
+        init?.body && typeof init.body === 'string'
+          ? (JSON.parse(init.body) as { input?: string })
+          : null;
+      autocompleteInput = body?.input ?? null;
+      return jsonResponse({
+        suggestions: [{ placePrediction: { placeId: 'p-w' } }],
+      });
+    }
+    if (u.includes('/places/p-w')) {
+      return jsonResponse({
+        location: { latitude: 37.7795, longitude: -122.4195 },
+        addressComponents: [
+          { types: ['administrative_area_level_1'], longText: 'CA' },
+        ],
+        photos: [{ name: 'places/p-w/photos/abc' }],
+      });
+    }
+    throw new Error(`unexpected fetch: ${u}`);
+  });
+
+  await geocodeVenue('Warfield', 'San Francisco', 'CA');
+  assert.equal(autocompleteInput, 'Warfield, San Francisco, CA');
+});
+
 test('geocodeVenue: returns details from Google Places when available', async () => {
   process.env.GOOGLE_PLACES_API_KEY = 'gk';
   let calls = 0;

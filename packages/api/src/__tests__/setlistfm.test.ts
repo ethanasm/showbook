@@ -315,7 +315,17 @@ test('searchSetlist: returns null on 404', async () => {
   assert.equal(result, null);
 });
 
-test('searchSetlist: rethrows non-404 errors', async () => {
+// Setlist.fm has been observed returning 400 for valid MBID + date combos when
+// no setlist matches (rather than the documented 404 / empty result). Treat
+// 400 the same as 404 so a working artist match isn't lost just because
+// setlist.fm couldn't find the show — see plan §B.
+test('searchSetlist: returns null on 400 (treat as no-setlist-found)', async () => {
+  stubFetch(async () => new Response('Bad Request', { status: 400, statusText: 'Bad Request' }));
+  const result = await searchSetlist('mb-1', '2024-08-02');
+  assert.equal(result, null);
+});
+
+test('searchSetlist: rethrows 5xx errors', async () => {
   stubFetch(async () => new Response('oops', { status: 500, statusText: 'ISE' }));
   await assert.rejects(searchSetlist('mb-1', '2024-08-02'));
 });

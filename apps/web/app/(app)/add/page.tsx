@@ -41,6 +41,7 @@ interface VenueData {
 interface HeadlinerData {
   name: string;
   tmAttractionId?: string;
+  musicbrainzId?: string;
   imageUrl?: string;
 }
 
@@ -50,6 +51,7 @@ interface PerformerData {
   characterName?: string;
   sortOrder: number;
   tmAttractionId?: string;
+  musicbrainzId?: string;
   imageUrl?: string;
 }
 
@@ -355,6 +357,7 @@ export default function AddPage() {
       setHeadliner({
         name: headlinerPerf.performer.name,
         tmAttractionId: undefined,
+        musicbrainzId: headlinerPerf.performer.musicbrainzId ?? undefined,
         imageUrl: headlinerPerf.performer.imageUrl ?? undefined,
       });
     }
@@ -377,11 +380,12 @@ export default function AddPage() {
     const otherPerfs = s.showPerformers
       .filter((sp: { role: string; sortOrder: number }) => !(sp.role === "headliner" && sp.sortOrder === 0))
       .sort((a: { sortOrder: number }, b: { sortOrder: number }) => a.sortOrder - b.sortOrder)
-      .map((sp: { role: string; characterName: string | null; sortOrder: number; performer: { name: string; imageUrl: string | null } }) => ({
+      .map((sp: { role: string; characterName: string | null; sortOrder: number; performer: { name: string; imageUrl: string | null; musicbrainzId: string | null } }) => ({
         name: sp.performer.name,
         role: sp.role as "headliner" | "support" | "cast",
         characterName: sp.characterName ?? undefined,
         sortOrder: sp.sortOrder,
+        musicbrainzId: sp.performer.musicbrainzId ?? undefined,
         imageUrl: sp.performer.imageUrl ?? undefined,
       }));
     setPerformers(otherPerfs);
@@ -657,16 +661,29 @@ export default function AddPage() {
     [],
   );
 
-  // Auto-fill headliner setlist when query resolves
+  // Auto-fill headliner setlist + capture the resolved MusicBrainz ID when
+  // the query resolves. The MBID lands on the headliner row even if
+  // setlist.fm has no setlist for this date (in which case `data.setlist`
+  // is null) — without this, the Add flow loses every MBID for shows
+  // setlist.fm couldn't find a setlist for.
   useEffect(() => {
-    if (setlistQuery.data && headliner.name) {
+    if (!setlistQuery.data || !headliner.name) return;
+    const data = setlistQuery.data;
+    if (data.setlist) {
       setSetlistsByPerformer((prev) => ({
         ...prev,
-        [headliner.name]: setlistQuery.data!.setlist,
+        [headliner.name]: data.setlist!,
       }));
-      if (setlistQuery.data.tourName) {
-        setTourName(setlistQuery.data.tourName);
-      }
+    }
+    if (data.tourName) {
+      setTourName(data.tourName);
+    }
+    if (data.mbid) {
+      setHeadliner((prev) =>
+        prev.musicbrainzId === data.mbid
+          ? prev
+          : { ...prev, musicbrainzId: data.mbid },
+      );
     }
   }, [setlistQuery.data, headliner.name]);
 
@@ -687,10 +704,24 @@ export default function AddPage() {
       utils.enrichment.fetchSetlist
         .fetch({ performerName, date })
         .then((result) => {
-          if (result && setlistTotalSongs(result.setlist) > 0) {
+          if (!result) return;
+          if (result.mbid) {
+            // Persist the resolved MBID on the matching support performer
+            // even when no setlist was returned. Match on name (the user
+            // can't have two support performers with the same name in
+            // one show — the form prevents it).
+            setPerformers((prev) =>
+              prev.map((pp) =>
+                pp.name === performerName && !pp.musicbrainzId
+                  ? { ...pp, musicbrainzId: result.mbid }
+                  : pp,
+              ),
+            );
+          }
+          if (result.setlist && setlistTotalSongs(result.setlist) > 0) {
             setSetlistsByPerformer((prev) => ({
               ...prev,
-              [performerName]: result.setlist,
+              [performerName]: result.setlist!,
             }));
           }
         })
@@ -1413,7 +1444,7 @@ export default function AddPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setHeadliner({ name: headlinerName, tmAttractionId: undefined, imageUrl: undefined });
+                  setHeadliner({ name: headlinerName, tmAttractionId: undefined, musicbrainzId: undefined, imageUrl: undefined });
                   setTmEnriched(false);
                   setSelectedTmEvent(null);
                   setDebouncedQuery("");
@@ -1988,10 +2019,18 @@ export default function AddPage() {
                     performerName: headliner.name,
                     date,
                   });
-                  if (result && setlistTotalSongs(result.setlist) > 0) {
+                  if (!result) return;
+                  if (result.mbid) {
+                    setHeadliner((prev) =>
+                      prev.musicbrainzId === result.mbid
+                        ? prev
+                        : { ...prev, musicbrainzId: result.mbid },
+                    );
+                  }
+                  if (result.setlist && setlistTotalSongs(result.setlist) > 0) {
                     setSetlistsByPerformer((prev) => ({
                       ...prev,
-                      [headliner.name]: result.setlist,
+                      [headliner.name]: result.setlist!,
                     }));
                     if (result.tourName) setTourName(result.tourName);
                   }
@@ -2021,10 +2060,20 @@ export default function AddPage() {
                       performerName: p.name,
                       date,
                     });
-                    if (result && setlistTotalSongs(result.setlist) > 0) {
+                    if (!result) return;
+                    if (result.mbid) {
+                      setPerformers((prev) =>
+                        prev.map((pp) =>
+                          pp.name === p.name && !pp.musicbrainzId
+                            ? { ...pp, musicbrainzId: result.mbid }
+                            : pp,
+                        ),
+                      );
+                    }
+                    if (result.setlist && setlistTotalSongs(result.setlist) > 0) {
                       setSetlistsByPerformer((prev) => ({
                         ...prev,
-                        [p.name]: result.setlist,
+                        [p.name]: result.setlist!,
                       }));
                     }
                   } finally {

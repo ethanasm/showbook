@@ -1,18 +1,28 @@
-// MUST be the first import: loads .env.local from the workspace root before
-// anything reads process.env at module init time (DB client, TM key …).
+// `load-env-local` is a no-op when no .env.local is present (the prod
+// container case), so it's safe to import unconditionally even when this
+// module is loaded from the registry inside Next.js. Local CLI invocations
+// still get their .env.local merged.
 import './load-env-local';
 
 import { db, performers } from '@showbook/db';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { eq, isNull, sql } from 'drizzle-orm';
 import {
   searchAttractions,
   selectBestImage,
   getAttraction,
-} from '@showbook/api/ticketmaster';
+} from '@showbook/api';
 import { child, flushObservability } from '@showbook/observability';
 
 const log = child({ component: 'jobs.backfill-performer-images' });
 const WAIT_MS = 250; // TM allows ~5 req/sec on the discovery API
+
+export interface BackfillPerformerImagesSummary {
+  total: number;
+  updated: number;
+  missing: number;
+  skipped: number;
+  failed: number;
+}
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -32,9 +42,10 @@ function normalizeName(value: string): string {
  *      case-insensitive name match. Skip if no exact match — we don't
  *      want to attach a wrong photo.
  *
- * Run with: pnpm --filter @showbook/jobs exec tsx src/backfill-performer-images.ts
+ * Run via pg-boss schedule (daily 05:30 ET — see registry.ts) or as a CLI:
+ * `pnpm --filter @showbook/jobs exec tsx src/backfill-performer-images.ts`
  */
-async function main() {
+export async function runBackfillPerformerImages(): Promise<BackfillPerformerImagesSummary> {
   const rows = await db
     .select({
       id: performers.id,
@@ -147,15 +158,27 @@ async function main() {
     { event: 'performer.image.done', total: rows.length, updated, missing, skipped, failed },
     'Backfill complete',
   );
+
+  return { total: rows.length, updated, missing, skipped, failed };
 }
 
-main()
-  .then(async () => {
-    await flushObservability();
-    process.exit(0);
-  })
-  .catch(async (err) => {
-    log.error({ err, event: 'performer.image.fatal' }, 'Backfill failed');
-    await flushObservability();
-    process.exit(1);
-  });
+// CLI entry point: run only when invoked directly (e.g. `tsx
+// src/backfill-performer-images.ts`), not when imported by the registry.
+const isMain =
+  typeof process !== 'undefined' &&
+  Array.isArray(process.argv) &&
+  process.argv[1] !== undefined &&
+  import.meta.url === `file://${process.argv[1]}`;
+
+if (isMain) {
+  runBackfillPerformerImages()
+    .then(async () => {
+      await flushObservability();
+      process.exit(0);
+    })
+    .catch(async (err) => {
+      log.error({ err, event: 'performer.image.fatal' }, 'Backfill failed');
+      await flushObservability();
+      process.exit(1);
+    });
+}

@@ -1,10 +1,12 @@
-// MUST be the first import: loads .env.local from the workspace root before
-// anything reads process.env at module init time (DB client, Places key …).
+// `load-env-local` is a no-op when no .env.local is present (the prod
+// container case), so it's safe to import unconditionally even when this
+// module is loaded from the registry inside Next.js. Local CLI invocations
+// still get their .env.local merged.
 import './load-env-local';
 
 import { db, venues } from '@showbook/db';
 import { and, eq, isNotNull, isNull } from 'drizzle-orm';
-import { getPlaceDetails } from '@showbook/api/google-places';
+import { getPlaceDetails } from '@showbook/api';
 import { child, flushObservability } from '@showbook/observability';
 
 const log = child({ component: 'jobs.backfill-venue-photos' });
@@ -14,7 +16,14 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function main() {
+export interface BackfillVenuePhotosSummary {
+  total: number;
+  updated: number;
+  missing: number;
+  failed: number;
+}
+
+export async function runBackfillVenuePhotos(): Promise<BackfillVenuePhotosSummary> {
   const rows = await db
     .select({
       id: venues.id,
@@ -56,15 +65,25 @@ async function main() {
     { event: 'venue.photo.done', total: rows.length, updated, missing, failed },
     'Backfill complete',
   );
+
+  return { total: rows.length, updated, missing, failed };
 }
 
-main()
-  .then(async () => {
-    await flushObservability();
-    process.exit(0);
-  })
-  .catch(async (err) => {
-    log.error({ err, event: 'venue.photo.fatal' }, 'Backfill failed');
-    await flushObservability();
-    process.exit(1);
-  });
+const isMain =
+  typeof process !== 'undefined' &&
+  Array.isArray(process.argv) &&
+  process.argv[1] !== undefined &&
+  import.meta.url === `file://${process.argv[1]}`;
+
+if (isMain) {
+  runBackfillVenuePhotos()
+    .then(async () => {
+      await flushObservability();
+      process.exit(0);
+    })
+    .catch(async (err) => {
+      log.error({ err, event: 'venue.photo.fatal' }, 'Backfill failed');
+      await flushObservability();
+      process.exit(1);
+    });
+}

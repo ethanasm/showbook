@@ -174,12 +174,16 @@ export const enrichmentRouter = router({
 
       const result = await searchSetlist(mbid, input.date);
       if (!result) {
-        return null;
+        // Artist match succeeded — hand the resolved MBID back so the
+        // caller (Add page) can persist it on the performer row even when
+        // setlist.fm has no setlist for this date. Without this, the Add
+        // flow loses every MBID setlist.fm couldn't find a setlist for.
+        return { setlist: null, tourName: null, mbid };
       }
 
       return {
         setlist: result.setlist,
-        tourName: result.tourName,
+        tourName: result.tourName ?? null,
         mbid,
       };
     }),

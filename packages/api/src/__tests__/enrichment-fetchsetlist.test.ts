@@ -157,4 +157,81 @@ describe('enrichmentRouter.fetchSetlist', () => {
     });
     assert.equal(result, null);
   });
+
+  // Plan §A+§B: when the artist match resolves an MBID but the setlist
+  // search returns no result (404 or 400), we still want to hand the
+  // resolved MBID back to the UI so it can persist it on shows.create.
+  // Otherwise the UI loses the MBID just because setlist.fm has no setlist
+  // for that date — exactly Brandon's 2026-04-30 prod failure.
+  it('returns the resolved mbid even when no setlist is found (setlist 400)', async () => {
+    globalThis.fetch = (async (url: RequestInfo | URL) => {
+      const u = String(url);
+      if (u.includes('/search/artists')) {
+        return jsonResponse({
+          artist: [
+            {
+              mbid: 'mb-royel-otis',
+              name: 'Royel Otis',
+              sortName: 'Royel Otis',
+            },
+          ],
+          total: 1,
+          page: 1,
+          itemsPerPage: 30,
+        });
+      }
+      if (u.includes('/search/setlists')) {
+        // Reproduces Brandon's prod log: setlist.fm 400 even though the
+        // artist+date are valid.
+        return new Response('Bad Request', {
+          status: 400,
+          statusText: 'Bad Request',
+        });
+      }
+      return new Response('unexpected', { status: 500 });
+    }) as typeof globalThis.fetch;
+
+    const result = await caller('fetchsetlist-no-setlist').fetchSetlist({
+      performerName: 'Royel Otis',
+      date: '2026-04-16',
+    });
+
+    assert.deepEqual(result, {
+      setlist: null,
+      tourName: null,
+      mbid: 'mb-royel-otis',
+    });
+  });
+
+  it('returns the resolved mbid when no setlist is found (setlist 404)', async () => {
+    globalThis.fetch = (async (url: RequestInfo | URL) => {
+      const u = String(url);
+      if (u.includes('/search/artists')) {
+        return jsonResponse({
+          artist: [{ mbid: 'mb-strfkr', name: 'STRFKR', sortName: 'STRFKR' }],
+          total: 1,
+          page: 1,
+          itemsPerPage: 30,
+        });
+      }
+      if (u.includes('/search/setlists')) {
+        return new Response('Not Found', {
+          status: 404,
+          statusText: 'Not Found',
+        });
+      }
+      return new Response('unexpected', { status: 500 });
+    }) as typeof globalThis.fetch;
+
+    const result = await caller('fetchsetlist-no-setlist-404').fetchSetlist({
+      performerName: 'STRFKR',
+      date: '2026-04-16',
+    });
+
+    assert.deepEqual(result, {
+      setlist: null,
+      tourName: null,
+      mbid: 'mb-strfkr',
+    });
+  });
 });

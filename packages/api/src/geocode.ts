@@ -1,4 +1,7 @@
 import { autocomplete, getPlaceDetails } from './google-places';
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'api.geocode' });
 
 let lastRequestTime = 0;
 
@@ -32,10 +35,19 @@ interface NominatimResult {
 export async function geocodeVenue(
   venueName: string,
   city: string,
+  stateRegion?: string | null,
 ): Promise<GeocodeResult | null> {
+  // Build the autocomplete query. When the caller knows the state (e.g.
+  // because Ticketmaster told us so), pass it in so Google disambiguates
+  // common venue names worldwide. Without this, "Warfield, San Francisco"
+  // sometimes resolves to a Place without lat/lng and we silently fall
+  // through to Nominatim, losing the Place ID + photo.
+  const stateSuffix = stateRegion ? `, ${stateRegion}` : '';
+  const query = `${venueName}, ${city}${stateSuffix}`;
+
   // Google Places first — returns googlePlaceId for dedup
   try {
-    const suggestions = await autocomplete(`${venueName}, ${city}`, ['establishment']);
+    const suggestions = await autocomplete(query, ['establishment']);
     if (suggestions.length > 0) {
       const details = await getPlaceDetails(suggestions[0].placeId);
       if (details && details.latitude && details.longitude) {
@@ -48,10 +60,31 @@ export async function geocodeVenue(
           photoUrl: details.photoUrl ?? undefined,
         };
       }
+      log.warn(
+        {
+          event: 'geocode.google.no_lat_lng',
+          name: venueName,
+          city,
+          stateRegion: stateRegion ?? null,
+          placeId: suggestions[0].placeId,
+        },
+        'Google Places returned a result without lat/lng; falling back to Nominatim (Place ID + photo will be lost)',
+      );
     }
-  } catch { /* Google Places failed; try Nominatim */ }
+  } catch (err) {
+    log.warn(
+      {
+        err,
+        event: 'geocode.google.failed',
+        name: venueName,
+        city,
+        stateRegion: stateRegion ?? null,
+      },
+      'Google Places lookup failed; falling back to Nominatim',
+    );
+  }
 
-  // Fallback: Nominatim (no googlePlaceId)
+  // Fallback: Nominatim (no googlePlaceId / photoUrl)
   const headers = { 'User-Agent': 'Showbook/1.0' };
   const queries = [
     `${venueName}, ${city}`,
@@ -59,12 +92,22 @@ export async function geocodeVenue(
     `${venueName} ${city.split(',')[0]}`,
   ];
 
-  for (const query of queries) {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1`;
+  for (const q of queries) {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&addressdetails=1`;
     try {
       await rateLimit();
       const res = await fetch(url, { headers, signal: AbortSignal.timeout(8_000) });
-      if (!res.ok) continue;
+      if (!res.ok) {
+        log.warn(
+          {
+            event: 'geocode.nominatim.http_error',
+            status: res.status,
+            query: q,
+          },
+          'Nominatim HTTP error; trying next variant',
+        );
+        continue;
+      }
       const results = (await res.json()) as NominatimResult[];
       if (results.length > 0) {
         return {
@@ -74,7 +117,11 @@ export async function geocodeVenue(
           country: results[0].address?.country ?? undefined,
         };
       }
-    } catch {
+    } catch (err) {
+      log.warn(
+        { err, event: 'geocode.nominatim.failed', query: q },
+        'Nominatim fetch threw; trying next variant',
+      );
       continue;
     }
   }
