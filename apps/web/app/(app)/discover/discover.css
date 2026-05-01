@@ -464,6 +464,22 @@
   50% { opacity: 1; }
 }
 
+/* Reusable pulsing dot — header progress, refresh button, rail items. */
+.discover-ingest-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: discover-ingest-pulse 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.discover-ingest-dot--inline {
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 [data-compact="true"] .discover-row {
   padding: 5px 12px;
   column-gap: 12px;

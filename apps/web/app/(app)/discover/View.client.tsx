@@ -485,6 +485,8 @@ function VenueRail({
   addRegionHint,
   onUnfollowRegion,
   showArtistSearch,
+  pendingItemIds,
+  pendingRegionIds,
 }: {
   venues: {
     id: string;
@@ -511,6 +513,8 @@ function VenueRail({
   addRegionHint?: string;
   onUnfollowRegion?: (regionId: string) => void;
   showArtistSearch?: boolean;
+  pendingItemIds?: Set<string>;
+  pendingRegionIds?: Set<string>;
 }) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [railRegionContextMenu, setRailRegionContextMenu] = useState<{ x: number; y: number; regionId: string } | null>(null);
@@ -532,6 +536,8 @@ function VenueRail({
   const followAttraction = trpc.performers.followAttraction.useMutation({
     onSuccess: () => {
       utils.discover.followedArtistsFeed.invalidate();
+      // Light up the loading indicator on the next poll round-trip.
+      utils.discover.ingestStatus.invalidate();
       setArtistSearchOpen(false);
       setArtistQuery("");
     },
@@ -649,6 +655,8 @@ function VenueRail({
       {regionGroups
         ? regionGroups.map((region) => {
             const collapsed = collapsedRailRegions.has(region.id);
+            const regionPending =
+              pendingRegionIds?.has(region.id) ?? false;
             return (
               <div key={region.id} className="discover-rail__region">
                 <button
@@ -675,6 +683,13 @@ function VenueRail({
                       {collapsed ? "▶" : "▼"}
                     </span>
                     {region.cityName}
+                    {regionPending && (
+                      <span
+                        aria-label="Loading shows"
+                        className="discover-ingest-dot discover-ingest-dot--inline"
+                        data-testid="rail-region-ingest-dot"
+                      />
+                    )}
                   </span>
                   <span className="discover-rail__section-meta">
                     {region.radiusMiles}mi
@@ -682,49 +697,73 @@ function VenueRail({
                 </button>
                 {!collapsed && (
                   <div id={`rail-region-${region.id}`}>
-                    {region.venues.map((v) => (
-                      <button
-                        key={v.id}
-                        type="button"
-                        className={`discover-rail__item ${selected === v.id ? "discover-rail__item--active" : ""}`}
-                        onClick={() => onSelect(selected === v.id ? null : v.id)}
-                        onContextMenu={(e) => handleContextMenu(e, v.id)}
-                      >
-                        <div className="discover-rail__item-body">
-                          <div className="discover-rail__item-name">{v.name}</div>
-                          {v.label && (
-                            <div className="discover-rail__item-nbhd">
-                              {v.label.toLowerCase()}
+                    {region.venues.map((v) => {
+                      const itemPending =
+                        pendingItemIds?.has(v.id) ?? false;
+                      return (
+                        <button
+                          key={v.id}
+                          type="button"
+                          className={`discover-rail__item ${selected === v.id ? "discover-rail__item--active" : ""}`}
+                          onClick={() => onSelect(selected === v.id ? null : v.id)}
+                          onContextMenu={(e) => handleContextMenu(e, v.id)}
+                        >
+                          <div className="discover-rail__item-body">
+                            <div className="discover-rail__item-name">
+                              {v.name}
+                              {itemPending && (
+                                <span
+                                  aria-label="Loading shows"
+                                  className="discover-ingest-dot discover-ingest-dot--inline"
+                                />
+                              )}
                             </div>
-                          )}
-                        </div>
-                        <div className="discover-rail__item-count">{v.count}</div>
-                      </button>
-                    ))}
+                            {v.label && (
+                              <div className="discover-rail__item-nbhd">
+                                {v.label.toLowerCase()}
+                              </div>
+                            )}
+                          </div>
+                          <div className="discover-rail__item-count">{v.count}</div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
             );
           })
-        : venues.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              className={`discover-rail__item ${selected === v.id ? "discover-rail__item--active" : ""}`}
-              onClick={() => onSelect(selected === v.id ? null : v.id)}
-              onContextMenu={(e) => handleContextMenu(e, v.id)}
-            >
-              <div className="discover-rail__item-body">
-                <div className="discover-rail__item-name">{v.name}</div>
-                {v.label && (
-                  <div className="discover-rail__item-nbhd">
-                    {v.label.toLowerCase()}
+        : venues.map((v) => {
+            const itemPending = pendingItemIds?.has(v.id) ?? false;
+            return (
+              <button
+                key={v.id}
+                type="button"
+                className={`discover-rail__item ${selected === v.id ? "discover-rail__item--active" : ""}`}
+                onClick={() => onSelect(selected === v.id ? null : v.id)}
+                onContextMenu={(e) => handleContextMenu(e, v.id)}
+              >
+                <div className="discover-rail__item-body">
+                  <div className="discover-rail__item-name">
+                    {v.name}
+                    {itemPending && (
+                      <span
+                        aria-label="Loading shows"
+                        className="discover-ingest-dot discover-ingest-dot--inline"
+                        data-testid="rail-item-ingest-dot"
+                      />
+                    )}
                   </div>
-                )}
-              </div>
-              <div className="discover-rail__item-count">{v.count}</div>
-            </button>
-          ))}
+                  {v.label && (
+                    <div className="discover-rail__item-nbhd">
+                      {v.label.toLowerCase()}
+                    </div>
+                  )}
+                </div>
+                <div className="discover-rail__item-count">{v.count}</div>
+              </button>
+            );
+          })}
 
       {contextMenu && onUnfollowItem && (
         <ContextMenu
@@ -804,6 +843,8 @@ function FeedSection({
   allFollowedVenues,
   hasRegions,
   pendingIngestRegionIds,
+  pendingIngestVenueIds,
+  pendingIngestPerformerIds,
   activeRegions,
   regionCount,
   onRegionAdded,
@@ -819,10 +860,23 @@ function FeedSection({
   allFollowedVenues?: { id: string; name: string; city: string }[];
   hasRegions?: boolean;
   pendingIngestRegionIds?: Set<string>;
+  pendingIngestVenueIds?: Set<string>;
+  pendingIngestPerformerIds?: Set<string>;
   activeRegions?: { id: string; cityName: string; radiusMiles: number }[];
   regionCount?: number;
   onRegionAdded?: (regionId: string) => void;
 }) {
+  // The rail and the per-group headers consume a single pending set whose
+  // members depend on the tab: venues for Followed, performers for Artists,
+  // regions for Near You (regions cover the rail; per-group venue dots in
+  // Near You are out of scope since followed-venue announcements live in
+  // the Followed tab).
+  const pendingGroupIds: Set<string> | undefined =
+    groupBy === "venue"
+      ? pendingIngestVenueIds
+      : groupBy === "artist"
+        ? pendingIngestPerformerIds
+        : undefined;
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [showFollowModal, setShowFollowModal] = useState(false);
   const [showRegionModal, setShowRegionModal] = useState(false);
@@ -1039,6 +1093,8 @@ function FeedSection({
       addRegionHint={regionLimitReached ? "Maximum 5 regions" : `${totalRegionCount} / 5 regions`}
       onUnfollowRegion={isNearby ? (regionId) => removeRegionMutation.mutate({ regionId }) : undefined}
       showArtistSearch={isArtists}
+      pendingItemIds={pendingGroupIds}
+      pendingRegionIds={isNearby ? pendingIngestRegionIds : undefined}
     />
   );
 
@@ -1361,38 +1417,78 @@ function FeedSection({
 }
 
 // ---------------------------------------------------------------------------
-// Region Ingest Poller — invisible component that watches one region's
-// pg-boss ingest status and notifies the parent. Polls every 2s while
-// pending; stops polling when the job completes/fails. On the
-// pending→done transition, invalidates the nearbyFeed so just-ingested
-// shows appear without manual refresh.
+// Ingest Status Poller — invisible component that watches the user's pg-boss
+// ingest jobs (venues, performers, regions) and notifies the parent of which
+// ones are still queued/in-flight. Polls every 2s while anything is pending
+// and stops polling otherwise. On the pending→done transition for any item,
+// invalidates the corresponding feed so freshly-ingested shows + counts
+// appear without a manual refresh.
 // ---------------------------------------------------------------------------
 
-function RegionIngestPoller({
-  regionId,
-  onPendingChange,
+type PendingIngestSnapshot = {
+  venueIds: string[];
+  performerIds: string[];
+  regionIds: string[];
+};
+
+function IngestStatusPoller({
+  onUpdate,
 }: {
-  regionId: string;
-  onPendingChange: (regionId: string, pending: boolean) => void;
+  onUpdate: (pending: PendingIngestSnapshot) => void;
 }) {
   const utils = trpc.useUtils();
-  const status = trpc.discover.regionIngestStatus.useQuery(
-    { regionId },
-    {
-      refetchInterval: (query) =>
-        query.state.data?.pending ? 2000 : false,
-      refetchOnWindowFocus: false,
+  const status = trpc.discover.ingestStatus.useQuery(undefined, {
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      const total =
+        (data?.venueIds.length ?? 0) +
+        (data?.performerIds.length ?? 0) +
+        (data?.regionIds.length ?? 0);
+      return total > 0 ? 2000 : false;
     },
-  );
-  const pending = status.data?.pending ?? false;
-  const prevPendingRef = useRef(pending);
+    refetchOnWindowFocus: false,
+    staleTime: 0,
+  });
+
+  const data = status.data;
+  const prevRef = useRef<PendingIngestSnapshot>({
+    venueIds: [],
+    performerIds: [],
+    regionIds: [],
+  });
+
   useEffect(() => {
-    onPendingChange(regionId, pending);
-    if (prevPendingRef.current && !pending) {
+    if (!data) return;
+    onUpdate(data);
+
+    const prev = prevRef.current;
+    const venueDone = prev.venueIds.some((id) => !data.venueIds.includes(id));
+    const performerDone = prev.performerIds.some(
+      (id) => !data.performerIds.includes(id),
+    );
+    const regionDone = prev.regionIds.some(
+      (id) => !data.regionIds.includes(id),
+    );
+
+    if (venueDone) {
+      utils.discover.followedFeed.invalidate();
+      utils.venues.followed.invalidate();
       utils.discover.nearbyFeed.invalidate();
     }
-    prevPendingRef.current = pending;
-  }, [pending, regionId, onPendingChange, utils.discover.nearbyFeed]);
+    if (performerDone) {
+      utils.discover.followedArtistsFeed.invalidate();
+    }
+    if (regionDone) {
+      utils.discover.nearbyFeed.invalidate();
+    }
+
+    prevRef.current = {
+      venueIds: data.venueIds,
+      performerIds: data.performerIds,
+      regionIds: data.regionIds,
+    };
+  }, [data, onUpdate, utils]);
+
   return null;
 }
 
@@ -1409,8 +1505,17 @@ const TABS = [
 export default function DiscoverView() {
   const [activeTab, setActiveTab] = useState<string>("Followed");
   const [watchedIds, setWatchedIds] = useState<Set<string>>(new Set());
-  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
-  const [pendingIngestRegionIds, setPendingIngestRegionIds] = useState<Set<string>>(new Set());
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [pendingIngest, setPendingIngest] = useState<{
+    venueIds: Set<string>;
+    performerIds: Set<string>;
+    regionIds: Set<string>;
+  }>(() => ({
+    venueIds: new Set(),
+    performerIds: new Set(),
+    regionIds: new Set(),
+  }));
+  const [peakPending, setPeakPending] = useState(0);
 
   const utils = trpc.useUtils();
 
@@ -1428,19 +1533,49 @@ export default function DiscoverView() {
     { staleTime: 60_000 }
   );
 
-  const handlePendingChange = useCallback(
-    (regionId: string, pending: boolean) => {
-      setPendingIngestRegionIds((prev) => {
-        if (pending && prev.has(regionId)) return prev;
-        if (!pending && !prev.has(regionId)) return prev;
-        const next = new Set(prev);
-        if (pending) next.add(regionId);
-        else next.delete(regionId);
-        return next;
+  const handleIngestUpdate = useCallback(
+    (pending: PendingIngestSnapshot) => {
+      setPendingIngest((prev) => {
+        const sameVenues =
+          prev.venueIds.size === pending.venueIds.length &&
+          pending.venueIds.every((id) => prev.venueIds.has(id));
+        const samePerformers =
+          prev.performerIds.size === pending.performerIds.length &&
+          pending.performerIds.every((id) => prev.performerIds.has(id));
+        const sameRegions =
+          prev.regionIds.size === pending.regionIds.length &&
+          pending.regionIds.every((id) => prev.regionIds.has(id));
+        if (sameVenues && samePerformers && sameRegions) return prev;
+        return {
+          venueIds: new Set(pending.venueIds),
+          performerIds: new Set(pending.performerIds),
+          regionIds: new Set(pending.regionIds),
+        };
       });
     },
     [],
   );
+
+  const totalPending =
+    pendingIngest.venueIds.size +
+    pendingIngest.performerIds.size +
+    pendingIngest.regionIds.size;
+
+  // Peak watermark of the current "ingest burst": rises as new jobs appear,
+  // resets to 0 when everything finishes. Drives the X/Y progress label.
+  useEffect(() => {
+    setPeakPending((prev) => {
+      if (totalPending === 0) return 0;
+      return Math.max(prev, totalPending);
+    });
+  }, [totalPending]);
+
+  const ingestProgressLabel =
+    totalPending === 0
+      ? null
+      : peakPending > 1
+        ? `Loading shows… ${Math.max(0, peakPending - totalPending)}/${peakPending} done`
+        : "Loading shows…";
 
   const activeRegions = preferences.data?.regions?.filter((r) => r.active) ?? [];
 
@@ -1451,20 +1586,20 @@ export default function DiscoverView() {
 
   const refreshNow = trpc.discover.refreshNow.useMutation({
     onSuccess: (data) => {
-      setRefreshMessage(
-        `Looking for new shows at ${data.enqueuedVenues} venue${data.enqueuedVenues === 1 ? "" : "s"} and ${data.enqueuedPerformers} artist${data.enqueuedPerformers === 1 ? "" : "s"}…`,
-      );
-      // Invalidate after a short delay so the targeted ingestion has time to land.
-      setTimeout(() => {
-        utils.discover.followedFeed.invalidate();
-        utils.discover.followedArtistsFeed.invalidate();
-        utils.discover.nearbyFeed.invalidate();
-        setRefreshMessage(null);
-      }, 8000);
+      const enqueued = data.enqueuedVenues + data.enqueuedPerformers;
+      // Seed the watermark with the enqueue count so progress reflects
+      // jobs that finish before the first poll captures them.
+      if (enqueued > 0) {
+        setPeakPending((prev) => Math.max(prev, enqueued));
+      }
+      // Refresh ingestStatus immediately; the poller picks up pending jobs
+      // and lights up the loading indicators within ~one round-trip.
+      utils.discover.ingestStatus.invalidate();
+      setRefreshError(null);
     },
     onError: (err) => {
-      setRefreshMessage(err.message);
-      setTimeout(() => setRefreshMessage(null), 6000);
+      setRefreshError(err.message);
+      setTimeout(() => setRefreshError(null), 6000);
     },
   });
 
@@ -1472,6 +1607,7 @@ export default function DiscoverView() {
     utils.venues.followed.invalidate();
     utils.discover.followedFeed.invalidate();
     utils.discover.nearbyFeed.invalidate();
+    utils.discover.ingestStatus.invalidate();
   }
 
   function handleToggleWatch(announcementId: string, watching: boolean) {
@@ -1517,16 +1653,23 @@ export default function DiscoverView() {
     "Near You": nearbyCount,
   };
 
+  // Refresh button stays "in progress" while either the mutation is
+  // round-tripping or the ingest poller still sees pending jobs.
+  const refreshInFlight = refreshNow.isPending || totalPending > 0;
+  const refreshLabel =
+    totalPending > 0
+      ? peakPending > 1
+        ? `Refreshing ${Math.max(0, peakPending - totalPending)}/${peakPending}`
+        : "Refreshing…"
+      : refreshNow.isPending
+        ? "Refreshing…"
+        : "Refresh";
+
   return (
     <div className="discover-page">
-      {/* Hidden ingest-status pollers, one per active region */}
-      {activeRegions.map((r) => (
-        <RegionIngestPoller
-          key={r.id}
-          regionId={r.id}
-          onPendingChange={handlePendingChange}
-        />
-      ))}
+      {/* Hidden poller — single source of truth for ingest status across
+          venues, performers, and regions. */}
+      <IngestStatusPoller onUpdate={handleIngestUpdate} />
 
       {/* Header */}
       <header className="discover-header">
@@ -1541,7 +1684,7 @@ export default function DiscoverView() {
             type="button"
             className="discover-refresh-btn"
             onClick={() => refreshNow.mutate()}
-            disabled={refreshNow.isPending}
+            disabled={refreshInFlight}
             title="Pull the latest events from Ticketmaster + scraped venues for everything you follow"
             style={{
               fontFamily: "var(--font-geist-mono), monospace",
@@ -1549,25 +1692,41 @@ export default function DiscoverView() {
               padding: "6px 10px",
               border: "1px solid var(--rule)",
               background: "transparent",
-              color: refreshNow.isPending ? "var(--muted)" : "var(--ink)",
-              cursor: refreshNow.isPending ? "default" : "pointer",
+              color: refreshInFlight ? "var(--muted)" : "var(--ink)",
+              cursor: refreshInFlight ? "default" : "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
             }}
           >
-            {refreshNow.isPending ? "Refreshing…" : "Refresh"}
+            {totalPending > 0 && (
+              <span
+                aria-hidden="true"
+                className="discover-ingest-dot"
+              />
+            )}
+            {refreshLabel}
           </button>
         </div>
       </header>
-      {refreshMessage && (
+      {(ingestProgressLabel || refreshError) && (
         <div
           role="status"
+          aria-live="polite"
           style={{
             fontFamily: "var(--font-geist-mono), monospace",
             fontSize: 11,
             color: "var(--muted)",
             margin: "0 0 12px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
           }}
         >
-          {refreshMessage}
+          {ingestProgressLabel && (
+            <span aria-hidden="true" className="discover-ingest-dot" />
+          )}
+          {refreshError ?? ingestProgressLabel}
         </div>
       )}
 
@@ -1603,6 +1762,7 @@ export default function DiscoverView() {
           onVenueFollowed={handleVenueFollowed}
           groupBy="venue"
           allFollowedVenues={followedVenuesList.data}
+          pendingIngestVenueIds={pendingIngest.venueIds}
         />
       )}
 
@@ -1616,6 +1776,7 @@ export default function DiscoverView() {
           activeTab={activeTab}
           onVenueFollowed={handleVenueFollowed}
           groupBy="artist"
+          pendingIngestPerformerIds={pendingIngest.performerIds}
         />
       )}
 
@@ -1630,15 +1791,12 @@ export default function DiscoverView() {
           onVenueFollowed={handleVenueFollowed}
           groupBy="region"
           hasRegions={nearbyFeed.data?.hasRegions}
-          pendingIngestRegionIds={pendingIngestRegionIds}
+          pendingIngestRegionIds={pendingIngest.regionIds}
           activeRegions={activeRegions}
           regionCount={preferences.data?.regions?.length ?? 0}
-          onRegionAdded={(regionId) => {
-            setPendingIngestRegionIds((prev) => {
-              const next = new Set(prev);
-              next.add(regionId);
-              return next;
-            });
+          onRegionAdded={() => {
+            // Poller picks up the new region within ~one round-trip.
+            utils.discover.ingestStatus.invalidate();
           }}
         />
       )}

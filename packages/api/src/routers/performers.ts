@@ -126,7 +126,10 @@ export const performersRouter = router({
         .insert(userPerformerFollows)
         .values({ userId, performerId: performer.id })
         .onConflictDoNothing();
-      void enqueueIngestPerformer(performer.id);
+      // Await so the ingest job is visible to discover.ingestStatus by the
+      // time this mutation resolves; the client invalidates that query on
+      // success to light up the "ingesting…" indicator instantly.
+      await enqueueIngestPerformer(performer.id);
       return { performerId: performer.id };
     }),
 
@@ -142,10 +145,9 @@ export const performersRouter = router({
 
       log.info({ event: 'performer.follow', userId, performerId: input.performerId }, 'Performer followed');
 
-      // Fire-and-forget Phase 3 ingestion for this performer.
-      void enqueueIngestPerformer(input.performerId);
+      await enqueueIngestPerformer(input.performerId);
 
-      return { success: true };
+      return { success: true, performerId: input.performerId };
     }),
 
   unfollow: protectedProcedure

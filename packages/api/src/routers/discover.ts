@@ -19,6 +19,7 @@ import {
   enqueueIngestVenue,
   enqueueIngestPerformer,
   isRegionIngestPending,
+  getPendingIngests,
 } from '../job-queue';
 import { searchAttractions, selectBestImage } from '../ticketmaster';
 
@@ -407,6 +408,40 @@ export const discoverRouter = router({
     }),
 
   /**
+   * Snapshot of which followed venues / performers / regions have a queued
+   * or in-flight ingest job. The Discover view polls this every 2s while
+   * any ingest is running to drive the loading indicators and to refresh
+   * feeds the moment a job completes.
+   *
+   * Pending = created | retry | active (matches isRegionIngestPending).
+   */
+  ingestStatus: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const [followedVenues, followedPerformers, regionRows] = await Promise.all([
+      db
+        .select({ id: userVenueFollows.venueId })
+        .from(userVenueFollows)
+        .where(eq(userVenueFollows.userId, userId)),
+      db
+        .select({ id: userPerformerFollows.performerId })
+        .from(userPerformerFollows)
+        .where(eq(userPerformerFollows.userId, userId)),
+      db
+        .select({ id: userRegions.id })
+        .from(userRegions)
+        .where(
+          and(eq(userRegions.userId, userId), eq(userRegions.active, true)),
+        ),
+    ]);
+
+    return getPendingIngests({
+      venueIds: followedVenues.map((r) => r.id),
+      performerIds: followedPerformers.map((r) => r.id),
+      regionIds: regionRows.map((r) => r.id),
+    });
+  }),
+
+  /**
    * Search Ticketmaster for attractions to follow as artists.
    */
   searchArtists: protectedProcedure
@@ -579,25 +614,31 @@ export const discoverRouter = router({
 
     // Enqueue a targeted ingest for every venue and performer the user
     // follows. The weekly cron is the same logic at the cluster level;
-    // this just runs it for one user on demand.
+    // this just runs it for one user on demand. Await all sends so the
+    // jobs are visible to ingestStatus before this mutation resolves —
+    // the client invalidates ingestStatus on success and needs the jobs
+    // to be queryable for the loading indicator to light up immediately.
     const venueRows = await db
       .select({ venueId: userVenueFollows.venueId })
       .from(userVenueFollows)
       .where(eq(userVenueFollows.userId, userId));
-    for (const row of venueRows) {
-      void enqueueIngestVenue(row.venueId);
-    }
     const performerRows = await db
       .select({ performerId: userPerformerFollows.performerId })
       .from(userPerformerFollows)
       .where(eq(userPerformerFollows.userId, userId));
-    for (const row of performerRows) {
-      void enqueueIngestPerformer(row.performerId);
-    }
+
+    await Promise.all([
+      ...venueRows.map((row) => enqueueIngestVenue(row.venueId)),
+      ...performerRows.map((row) =>
+        enqueueIngestPerformer(row.performerId),
+      ),
+    ]);
 
     return {
       enqueuedVenues: venueRows.length,
       enqueuedPerformers: performerRows.length,
+      venueIds: venueRows.map((r) => r.venueId),
+      performerIds: performerRows.map((r) => r.performerId),
     };
   }),
 

@@ -161,6 +161,88 @@ test('isRegionIngestPending: false on db error (logs and short-circuits)', async
   }
 });
 
+// ── getPendingIngests ─────────────────────────────────────────────────
+
+test('getPendingIngests: returns empty when no candidates are passed', async () => {
+  const original = db.execute;
+  let called = false;
+  (db as unknown as { execute: unknown }).execute = async () => {
+    called = true;
+    return [] as unknown as ReturnType<typeof db.execute>;
+  };
+  try {
+    const pending = await mod.getPendingIngests({
+      venueIds: [],
+      performerIds: [],
+      regionIds: [],
+    });
+    assert.deepEqual(pending, { venueIds: [], performerIds: [], regionIds: [] });
+    assert.equal(called, false, 'must not query when there are no candidates');
+  } finally {
+    (db as unknown as { execute: unknown }).execute = original;
+  }
+});
+
+test('getPendingIngests: filters pgboss rows down to candidate IDs', async () => {
+  const original = db.execute;
+  (db as unknown as { execute: unknown }).execute = async () =>
+    [
+      { name: mod.JOB_NAMES.INGEST_VENUE, venue_id: 'v-1', performer_id: null, region_id: null },
+      { name: mod.JOB_NAMES.INGEST_VENUE, venue_id: 'v-other', performer_id: null, region_id: null },
+      { name: mod.JOB_NAMES.INGEST_PERFORMER, venue_id: null, performer_id: 'p-1', region_id: null },
+      { name: mod.JOB_NAMES.INGEST_REGION, venue_id: null, performer_id: null, region_id: 'r-1' },
+      { name: mod.JOB_NAMES.INGEST_REGION, venue_id: null, performer_id: null, region_id: 'r-skip' },
+    ] as unknown as ReturnType<typeof db.execute>;
+  try {
+    const pending = await mod.getPendingIngests({
+      venueIds: ['v-1', 'v-2'],
+      performerIds: ['p-1'],
+      regionIds: ['r-1'],
+    });
+    assert.deepEqual(pending.venueIds, ['v-1']);
+    assert.deepEqual(pending.performerIds, ['p-1']);
+    assert.deepEqual(pending.regionIds, ['r-1']);
+  } finally {
+    (db as unknown as { execute: unknown }).execute = original;
+  }
+});
+
+test('getPendingIngests: deduplicates repeated rows for the same target', async () => {
+  const original = db.execute;
+  (db as unknown as { execute: unknown }).execute = async () =>
+    [
+      { name: mod.JOB_NAMES.INGEST_VENUE, venue_id: 'v-1', performer_id: null, region_id: null },
+      { name: mod.JOB_NAMES.INGEST_VENUE, venue_id: 'v-1', performer_id: null, region_id: null },
+    ] as unknown as ReturnType<typeof db.execute>;
+  try {
+    const pending = await mod.getPendingIngests({
+      venueIds: ['v-1'],
+      performerIds: [],
+      regionIds: [],
+    });
+    assert.deepEqual(pending.venueIds, ['v-1']);
+  } finally {
+    (db as unknown as { execute: unknown }).execute = original;
+  }
+});
+
+test('getPendingIngests: returns empty on db error (logs and short-circuits)', async () => {
+  const original = db.execute;
+  (db as unknown as { execute: unknown }).execute = async () => {
+    throw new Error('pgboss schema missing');
+  };
+  try {
+    const pending = await mod.getPendingIngests({
+      venueIds: ['v-1'],
+      performerIds: [],
+      regionIds: [],
+    });
+    assert.deepEqual(pending, { venueIds: [], performerIds: [], regionIds: [] });
+  } finally {
+    (db as unknown as { execute: unknown }).execute = original;
+  }
+});
+
 // ── getSender caching path (covers the IIFE's "starting" branch) ──────
 
 test('getSender: reuses the in-flight starting promise when called twice', async () => {
