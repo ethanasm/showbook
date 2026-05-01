@@ -1,4 +1,12 @@
-import { index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import {
+  index,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 export const performers = pgTable(
   'performers',
@@ -11,10 +19,18 @@ export const performers = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [
-    // matchOrCreatePerformer looks up by these IDs first; without an index
-    // that's a seq scan per performer per show creation.
-    index('performers_tm_attraction_id_idx').on(table.ticketmasterAttractionId),
-    index('performers_musicbrainz_id_idx').on(table.musicbrainzId),
+    // Partial UNIQUE on the external IDs: a single TM attraction id /
+    // MusicBrainz id should map to exactly one row. The IS NOT NULL
+    // predicate keeps the constraint from forcing every row to fill the
+    // column. matchOrCreatePerformer's catch(isUniqueViolation) branch
+    // relies on these indexes to fall back to the existing row under a
+    // race.
+    uniqueIndex('performers_tm_attraction_uniq')
+      .on(table.ticketmasterAttractionId)
+      .where(sql`${table.ticketmasterAttractionId} IS NOT NULL`),
+    uniqueIndex('performers_musicbrainz_uniq')
+      .on(table.musicbrainzId)
+      .where(sql`${table.musicbrainzId} IS NOT NULL`),
     index('performers_name_idx').on(table.name),
   ]
 );
