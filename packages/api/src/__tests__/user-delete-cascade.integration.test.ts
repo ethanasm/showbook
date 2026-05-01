@@ -1,12 +1,17 @@
 /**
- * Verifies the cascade behavior added by drizzle migration 0022.
+ * Verifies the cascade behavior added by drizzle migrations 0022
+ * (user FK cascades + trigger gaps) and 0023 (announcement orphan
+ * cleanup).
  *
  * Deleting a user must:
  *   - Cascade their shows, follows, regions, preferences, and media.
- *   - Trigger orphan cleanup of venues / performers that no other user
- *     references (across shows, announcements, follows, and media tags).
- *   - Preserve venues / performers / announcements still referenced by
- *     anyone else (including just an announcement).
+ *   - Trigger orphan cleanup of venues / performers that no other
+ *     user references (across shows, announcements, follows, and
+ *     media tags).
+ *   - Cascade-clean announcements no one else is following or has a
+ *     show linked to.
+ *   - Preserve venues / performers / announcements still referenced
+ *     by another user (follow / region / show link).
  */
 
 import { describe, it, before, after } from 'node:test';
@@ -40,15 +45,18 @@ const SHARED_VENUE = fakeUuid(PREFIX, 'sharedvenue');
 const ALICE_VENUE = fakeUuid(PREFIX, 'alicevenue');
 const FOLLOW_ONLY_VENUE = fakeUuid(PREFIX, 'followvenue');
 const ANN_ONLY_VENUE = fakeUuid(PREFIX, 'annvenue');
+const ORPHAN_ANN_VENUE = fakeUuid(PREFIX, 'orphanannvenue');
 const SHARED_PERFORMER = fakeUuid(PREFIX, 'sharedperf');
 const ALICE_PERFORMER = fakeUuid(PREFIX, 'aliceperf');
 const FOLLOW_ONLY_PERFORMER = fakeUuid(PREFIX, 'followperf');
 const ANN_HEADLINER = fakeUuid(PREFIX, 'annheadliner');
+const ORPHAN_ANN_HEADLINER = fakeUuid(PREFIX, 'orphanannheadliner');
 const ALICE_SHOW_SHARED = fakeUuid(PREFIX, 'aliceshowshared');
 const ALICE_SHOW_ALICE_VENUE = fakeUuid(PREFIX, 'aliceshowalicevenue');
 const ALICE_SHOW_ANN_VENUE = fakeUuid(PREFIX, 'aliceshowannvenue');
 const BOB_SHOW = fakeUuid(PREFIX, 'bobshow');
 const ANN_ID = fakeUuid(PREFIX, 'announcement');
+const ORPHAN_ANN_ID = fakeUuid(PREFIX, 'orphanannouncement');
 
 describe('user delete cascade', () => {
   before(async () => {
@@ -61,6 +69,7 @@ describe('user delete cascade', () => {
     await createTestVenue({ id: ALICE_VENUE, name: `${PREFIX} Alice Only`, city: 'NYC' });
     await createTestVenue({ id: FOLLOW_ONLY_VENUE, name: `${PREFIX} Follow Only`, city: 'NYC' });
     await createTestVenue({ id: ANN_ONLY_VENUE, name: `${PREFIX} Ann Only`, city: 'NYC' });
+    await createTestVenue({ id: ORPHAN_ANN_VENUE, name: `${PREFIX} Orphan Ann`, city: 'NYC' });
 
     await db
       .insert(performers)
@@ -69,6 +78,7 @@ describe('user delete cascade', () => {
         { id: ALICE_PERFORMER, name: `${PREFIX} Alice Performer` },
         { id: FOLLOW_ONLY_PERFORMER, name: `${PREFIX} Follow Only Performer` },
         { id: ANN_HEADLINER, name: `${PREFIX} Ann Headliner` },
+        { id: ORPHAN_ANN_HEADLINER, name: `${PREFIX} Orphan Ann Headliner` },
       ])
       .onConflictDoNothing();
 
@@ -101,16 +111,42 @@ describe('user delete cascade', () => {
       .onConflictDoNothing();
     await db.insert(userPreferences).values({ userId: ALICE }).onConflictDoNothing();
 
-    // Announcement at the ann-only venue (preserves the venue + headliner).
+    // ANN_ID at ANN_ONLY_VENUE: Bob preserves both via venue + headliner
+    // follows, so nothing about it should change when Alice goes.
     await db
       .insert(announcements)
       .values({
         id: ANN_ID,
         venueId: ANN_ONLY_VENUE,
         kind: 'concert',
-        headliner: 'Some Band',
+        headliner: 'Preserved Band',
         headlinerPerformerId: ANN_HEADLINER,
         showDate: '2027-01-01',
+        onSaleStatus: 'on_sale',
+        source: 'ticketmaster',
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(userVenueFollows)
+      .values({ userId: BOB, venueId: ANN_ONLY_VENUE })
+      .onConflictDoNothing();
+    await db
+      .insert(userPerformerFollows)
+      .values({ userId: BOB, performerId: ANN_HEADLINER })
+      .onConflictDoNothing();
+
+    // ORPHAN_ANN_ID at ORPHAN_ANN_VENUE: nothing else references the
+    // venue or headliner. After Alice (the only user of any kind) is
+    // gone, the announcement, venue, and headliner must all chain-clean.
+    await db
+      .insert(announcements)
+      .values({
+        id: ORPHAN_ANN_ID,
+        venueId: ORPHAN_ANN_VENUE,
+        kind: 'concert',
+        headliner: 'Orphan Band',
+        headlinerPerformerId: ORPHAN_ANN_HEADLINER,
+        showDate: '2027-04-01',
         onSaleStatus: 'on_sale',
         source: 'ticketmaster',
       })
@@ -214,28 +250,55 @@ describe('user delete cascade', () => {
     assert.equal(followPerformerRows.length, 0, 'follow-only performer should be cleaned');
   });
 
-  it('preserves venues / performers / announcements held by an announcement only', async () => {
-    // Alice's show at this venue cascades, but the announcement still
-    // references both the venue and the headliner performer, so neither
-    // should be orphan-cleaned. The announcement itself has no FK to
-    // users and must remain.
+  it('preserves announcements (and their venue / headliner) when another user has a follow', async () => {
+    // ANN_ONLY_VENUE has only Alice's show on the show side, but Bob
+    // follows the venue + headliner, so the announcement's preservers
+    // survive Alice's delete. Trigger 0023 must NOT remove ANN_ID,
+    // and the existing venue / performer triggers must keep their
+    // rows alive because the announcement still holds them.
+    const annRows = await db
+      .select({ id: announcements.id })
+      .from(announcements)
+      .where(eq(announcements.id, ANN_ID));
+    assert.equal(annRows.length, 1, 'announcement preserved by Bob follows must stay');
+
     const annVenueRows = await db
       .select({ id: venues.id })
       .from(venues)
       .where(eq(venues.id, ANN_ONLY_VENUE));
-    assert.equal(annVenueRows.length, 1, 'venue with an announcement must stay');
+    assert.equal(annVenueRows.length, 1, 'venue with a preserved announcement must stay');
 
     const annHeadlinerRows = await db
       .select({ id: performers.id })
       .from(performers)
       .where(eq(performers.id, ANN_HEADLINER));
-    assert.equal(annHeadlinerRows.length, 1, 'headliner referenced by an announcement must stay');
+    assert.equal(annHeadlinerRows.length, 1, 'headliner with a preserved announcement must stay');
+  });
 
-    const annRows = await db
+  it('cascade-cleans orphan announcements with no surviving preserver', async () => {
+    // ORPHAN_ANN_ID's venue and headliner are not referenced by any
+    // show, follow, region, or other announcement once Alice is gone.
+    // The 0023 triggers (specifically the no-coords + no-active-regions
+    // path through the user_regions delete) must wipe the announcement,
+    // which then chains via the existing venue / performer cleanup
+    // triggers to remove ORPHAN_ANN_VENUE and ORPHAN_ANN_HEADLINER.
+    const orphanAnnRows = await db
       .select({ id: announcements.id })
       .from(announcements)
-      .where(eq(announcements.id, ANN_ID));
-    assert.equal(annRows.length, 1, 'shared announcement must not be deleted');
+      .where(eq(announcements.id, ORPHAN_ANN_ID));
+    assert.equal(orphanAnnRows.length, 0, 'orphan announcement must be cleaned');
+
+    const orphanVenueRows = await db
+      .select({ id: venues.id })
+      .from(venues)
+      .where(eq(venues.id, ORPHAN_ANN_VENUE));
+    assert.equal(orphanVenueRows.length, 0, 'venue held only by the orphan announcement must be cleaned');
+
+    const orphanHeadlinerRows = await db
+      .select({ id: performers.id })
+      .from(performers)
+      .where(eq(performers.id, ORPHAN_ANN_HEADLINER));
+    assert.equal(orphanHeadlinerRows.length, 0, 'headliner held only by the orphan announcement must be cleaned');
   });
 
   it('leaves no dangling rows referencing the deleted user', async () => {
