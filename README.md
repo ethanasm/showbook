@@ -88,32 +88,21 @@ runner connects out to GitHub, so this works behind Cloudflare Tunnel.
 
 One-time setup on the prod host:
 
-1. **Place the prod tree at a fixed path** (default `/opt/showbook`). Clone
-   the repo there and populate `.env.prod` (see above). Override the path
-   with a repo Variable named `PROD_DIR` if you keep it elsewhere.
+```bash
+pnpm setup:runner
+```
 
-   ```bash
-   sudo mkdir -p /opt/showbook && sudo chown "$USER" /opt/showbook
-   git clone <repo-url> /opt/showbook
-   cp apps/web/.env.example /opt/showbook/.env.prod   # then edit
-   ```
+This clones the repo to `/opt/showbook` (override with `$PROD_DIR`),
+downloads the GitHub Actions runner, registers it with the
+`showbook-prod` label, writes a `.env` so the service can find docker /
+pnpm / git, and installs it as a launchd (macOS) or systemd (Linux)
+service. The script is idempotent — rerun it safely after upgrades.
 
-2. **Install the GitHub Actions runner** with the labels
-   `self-hosted,showbook-prod`. Follow the registration steps under
-   *Settings → Actions → Runners → New self-hosted runner* and pass
-   `--labels showbook-prod` to `config.sh`. Install it as a service
-   (`sudo ./svc.sh install && sudo ./svc.sh start`) so it survives
-   reboots. Make sure docker, docker compose, git, and pnpm are on the
-   service's `PATH` (the runner inherits its env from systemd; for pnpm
-   under corepack you may need `corepack enable` in the runner user's
-   shell profile).
-
-3. **Lock down fork PRs.** Under *Settings → Actions → General* set
-   *Fork pull request workflows from outside collaborators* to
-   *Require approval for all outside collaborators*. The workflow also
-   refuses to deploy unless the upstream CI run was on `main` and was not
-   a `pull_request` event, but defence in depth matters when the runner
-   sits on your prod box.
+After the script finishes, edit `/opt/showbook/.env.prod` with real
+secrets (see the Environment Variables section below), then lock down
+fork PRs: under *Settings → Actions → General* set *Fork pull request
+workflows from outside collaborators* to *Require approval for all
+outside collaborators*.
 
 After that, every push to `main` that turns CI green will redeploy. To
 deploy a specific SHA on demand, use *Actions → Deploy (prod) → Run

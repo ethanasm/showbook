@@ -63,6 +63,20 @@ export const performersRouter = router({
     return row?.count ?? 0;
   }),
 
+  /**
+   * Followed performers, mirroring venues.followed: returns the bare
+   * performer rows the user follows so the Discover artist rail can show
+   * a freshly-followed artist (with count=0) before its first ingest lands.
+   */
+  followed: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const follows = await ctx.db.query.userPerformerFollows.findMany({
+      where: eq(userPerformerFollows.userId, userId),
+      with: { performer: true },
+    });
+    return follows.map((f) => f.performer);
+  }),
+
   search: protectedProcedure
     .input(z.object({ query: z.string().min(1).max(200) }))
     .query(async ({ ctx, input }) => {
@@ -126,7 +140,10 @@ export const performersRouter = router({
         .insert(userPerformerFollows)
         .values({ userId, performerId: performer.id })
         .onConflictDoNothing();
-      void enqueueIngestPerformer(performer.id);
+      // Await so the ingest job is visible to discover.ingestStatus by the
+      // time this mutation resolves; the client invalidates that query on
+      // success to light up the "ingesting…" indicator instantly.
+      await enqueueIngestPerformer(performer.id);
       return { performerId: performer.id };
     }),
 
@@ -142,10 +159,9 @@ export const performersRouter = router({
 
       log.info({ event: 'performer.follow', userId, performerId: input.performerId }, 'Performer followed');
 
-      // Fire-and-forget Phase 3 ingestion for this performer.
-      void enqueueIngestPerformer(input.performerId);
+      await enqueueIngestPerformer(input.performerId);
 
-      return { success: true };
+      return { success: true, performerId: input.performerId };
     }),
 
   unfollow: protectedProcedure

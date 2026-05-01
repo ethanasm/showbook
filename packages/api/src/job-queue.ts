@@ -95,3 +95,87 @@ export async function isRegionIngestPending(
     return false;
   }
 }
+
+export type PendingIngestCandidates = {
+  venueIds: string[];
+  performerIds: string[];
+  regionIds: string[];
+};
+
+/**
+ * Returns which of the candidate venue/performer/region IDs currently have a
+ * queued or in-flight ingest job. Used by the Discover view to drive the
+ * "ingesting…" indicator + progress for follow / add-region / refresh-now
+ * actions. Pending = created | retry | active.
+ *
+ * Single SQL roundtrip; the active set is small (< a few hundred jobs even
+ * during a refresh storm) so this scans pgboss.job by name+state and filters
+ * candidates in JS rather than building IN-clauses.
+ */
+export async function getPendingIngests(
+  candidates: PendingIngestCandidates,
+): Promise<PendingIngestCandidates> {
+  const total =
+    candidates.venueIds.length +
+    candidates.performerIds.length +
+    candidates.regionIds.length;
+  if (total === 0) {
+    return { venueIds: [], performerIds: [], regionIds: [] };
+  }
+  try {
+    const rows = await db.execute<{
+      name: string;
+      venue_id: string | null;
+      performer_id: string | null;
+      region_id: string | null;
+    }>(
+      sql`SELECT name,
+                 data->>'venueId' AS venue_id,
+                 data->>'performerId' AS performer_id,
+                 data->>'regionId' AS region_id
+            FROM pgboss.job
+            WHERE name IN (${JOB_NAMES.INGEST_VENUE},
+                           ${JOB_NAMES.INGEST_PERFORMER},
+                           ${JOB_NAMES.INGEST_REGION})
+              AND state IN ('created','retry','active')`,
+    );
+
+    const venueSet = new Set(candidates.venueIds);
+    const performerSet = new Set(candidates.performerIds);
+    const regionSet = new Set(candidates.regionIds);
+    const pendingVenues = new Set<string>();
+    const pendingPerformers = new Set<string>();
+    const pendingRegions = new Set<string>();
+
+    for (const r of rows) {
+      if (
+        r.name === JOB_NAMES.INGEST_VENUE &&
+        r.venue_id &&
+        venueSet.has(r.venue_id)
+      ) {
+        pendingVenues.add(r.venue_id);
+      } else if (
+        r.name === JOB_NAMES.INGEST_PERFORMER &&
+        r.performer_id &&
+        performerSet.has(r.performer_id)
+      ) {
+        pendingPerformers.add(r.performer_id);
+      } else if (
+        r.name === JOB_NAMES.INGEST_REGION &&
+        r.region_id &&
+        regionSet.has(r.region_id)
+      ) {
+        pendingRegions.add(r.region_id);
+      }
+    }
+
+    return {
+      venueIds: [...pendingVenues],
+      performerIds: [...pendingPerformers],
+      regionIds: [...pendingRegions],
+    };
+  } catch (err) {
+    log.error({ err, event: 'job_queue.poll.failed' }, 'getPendingIngests failed');
+    return { venueIds: [], performerIds: [], regionIds: [] };
+  }
+}

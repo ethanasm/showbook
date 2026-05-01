@@ -79,7 +79,13 @@ export function Sidebar({
     <aside className="sidebar">
       {/* Logo */}
       <div className="sidebar__header">
-        <span className="sidebar__logo">showbook</span>
+        <button
+          className="sidebar__logo"
+          type="button"
+          onClick={() => onNavigate?.("home")}
+        >
+          showbook
+        </button>
         <span className="sidebar__version">v2 &middot; 2026.04</span>
       </div>
 
@@ -158,6 +164,7 @@ export function Sidebar({
         userInitials={displayInitials}
         userName={displayName}
         syncStatus={syncStatus}
+        onNavigate={onNavigate}
       />
     </aside>
   );
@@ -167,10 +174,12 @@ function UserMenu({
   userInitials,
   userName,
   syncStatus,
+  onNavigate,
 }: {
   userInitials: string;
   userName: string;
   syncStatus: string;
+  onNavigate?: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -190,7 +199,13 @@ function UserMenu({
     <div className="sidebar__user" ref={menuRef}>
       <div className="sidebar__user-avatar">{userInitials}</div>
       <div className="sidebar__user-info">
-        <div className="sidebar__user-name">{userName}</div>
+        <button
+          className="sidebar__user-name"
+          type="button"
+          onClick={() => onNavigate?.("preferences")}
+        >
+          {userName}
+        </button>
         <div className="sidebar__user-sync">{syncStatus}</div>
       </div>
       <button

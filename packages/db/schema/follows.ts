@@ -8,7 +8,7 @@ export const userVenueFollows = pgTable(
   {
     userId: text('user_id')
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: 'cascade' }),
     venueId: uuid('venue_id')
       .notNull()
       .references(() => venues.id),
@@ -22,7 +22,7 @@ export const userPerformerFollows = pgTable(
   {
     userId: text('user_id')
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: 'cascade' }),
     performerId: uuid('performer_id')
       .notNull()
       .references(() => performers.id),
