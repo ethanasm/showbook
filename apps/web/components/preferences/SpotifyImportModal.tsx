@@ -10,11 +10,22 @@ const mono = "var(--font-geist-mono)";
 interface SpotifyImportModalProps {
   open: boolean;
   onClose: () => void;
+  /**
+   * Forwarded to `useSpotifyImport`. Fires once the import mutation
+   * resolves; lets the hosting view drive a post-close "still importing
+   * upcoming-show data…" indicator.
+   */
+  onImported?: (result: { count: number; performerIds: string[] }) => void;
 }
 
-export function SpotifyImportModal({ open, onClose }: SpotifyImportModalProps) {
+export function SpotifyImportModal({
+  open,
+  onClose,
+  onImported,
+}: SpotifyImportModalProps) {
   const flow = useSpotifyImport({
-    onImported: () => {
+    onImported: (result) => {
+      onImported?.(result);
       // Slight delay so users see the "Importing…" → success transition
       // before the modal disappears.
       setTimeout(onClose, 800);

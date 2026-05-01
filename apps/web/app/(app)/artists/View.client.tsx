@@ -58,6 +58,7 @@ export default function ArtistsView() {
   } | null>(null);
 
   const [spotifyModalOpen, setSpotifyModalOpen] = useState(false);
+  const [pendingImportIds, setPendingImportIds] = useState<string[]>([]);
 
   const { data: artists, isLoading, error } = trpc.performers.list.useQuery(undefined, {
     staleTime: 60_000,
@@ -91,6 +92,42 @@ export default function ArtistsView() {
       utils.performers.invalidate();
     },
   });
+
+  // Poll only while we're tracking a fresh Spotify import. Reuses the
+  // same endpoint the Discover view polls. We intersect with the IDs we
+  // just imported so the banner count reflects this import session, not
+  // any background ingest the user may have triggered elsewhere.
+  const ingestStatus = trpc.discover.ingestStatus.useQuery(undefined, {
+    enabled: pendingImportIds.length > 0,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data) return 2000;
+      const stillPending = data.performerIds.filter((id) =>
+        pendingImportIds.includes(id),
+      );
+      return stillPending.length > 0 ? 2000 : false;
+    },
+    refetchOnWindowFocus: false,
+    staleTime: 0,
+  });
+
+  const stillImportingCount = useMemo(() => {
+    if (pendingImportIds.length === 0) return 0;
+    const data = ingestStatus.data;
+    if (!data) return pendingImportIds.length;
+    return data.performerIds.filter((id) => pendingImportIds.includes(id))
+      .length;
+  }, [pendingImportIds, ingestStatus.data]);
+
+  // When pending drops to zero, clear local state and re-fetch the
+  // shows-based artists list so freshly-ingested performers appear.
+  useEffect(() => {
+    if (pendingImportIds.length > 0 && stillImportingCount === 0 && ingestStatus.data) {
+      setPendingImportIds([]);
+      utils.performers.list.invalidate();
+      utils.performers.count.invalidate();
+    }
+  }, [pendingImportIds.length, stillImportingCount, ingestStatus.data, utils]);
 
   const toggleSort = useCallback((field: SortField) => {
     setSort((prev) =>
@@ -305,6 +342,50 @@ export default function ArtistsView() {
         </div>
       </div>
 
+      {/* Spotify import progress banner */}
+      {pendingImportIds.length > 0 && (
+        <div
+          data-testid="spotify-import-banner"
+          style={{
+            padding: "10px 36px",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            background: "var(--surface)",
+            borderBottom: "1px solid var(--rule)",
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 11,
+            letterSpacing: ".04em",
+            color: "var(--muted)",
+          }}
+        >
+          <span
+            aria-hidden
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: "var(--accent)",
+              animation: "spotify-banner-pulse 1.2s ease-in-out infinite",
+              flexShrink: 0,
+            }}
+          />
+          <span>
+            Importing{" "}
+            <span style={{ color: "var(--ink)", fontWeight: 600 }}>
+              {stillImportingCount || pendingImportIds.length}
+            </span>{" "}
+            artist
+            {(stillImportingCount || pendingImportIds.length) === 1 ? "" : "s"}{" "}
+            from Spotify
+          </span>
+          <span style={{ color: "var(--faint)" }}>
+            checking Ticketmaster for upcoming shows…
+          </span>
+          <style>{`@keyframes spotify-banner-pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }`}</style>
+        </div>
+      )}
+
       {/* Filter bar */}
       <div style={{ padding: "11px 36px", display: "flex", alignItems: "center", gap: 18, background: "var(--surface)", borderBottom: "1px solid var(--rule)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", border: "1px solid var(--rule-strong)", minWidth: 200 }}>
@@ -459,6 +540,11 @@ export default function ArtistsView() {
       <SpotifyImportModal
         open={spotifyModalOpen}
         onClose={() => setSpotifyModalOpen(false)}
+        onImported={(result) => {
+          if (result.performerIds.length > 0) {
+            setPendingImportIds(result.performerIds);
+          }
+        }}
       />
     </div>
   );
