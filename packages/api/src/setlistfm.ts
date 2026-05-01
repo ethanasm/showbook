@@ -85,10 +85,13 @@ export class SetlistFmError extends Error {
 // ---------------------------------------------------------------------------
 
 function toSetlistFmDate(date: string | Date): string {
+  // The input is an ISO calendar date, not a moment in time. `new Date('2024-08-02')`
+  // parses as UTC midnight; in timezones behind UTC, local accessors roll back to
+  // the previous day. Format from UTC accessors so the output matches the input date.
   const d = typeof date === "string" ? new Date(date) : date;
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const year = d.getFullYear();
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const year = d.getUTCFullYear();
   return `${day}-${month}-${year}`;
 }
 
