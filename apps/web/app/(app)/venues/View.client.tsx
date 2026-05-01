@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { MapPin, Search, Eye, Pencil, Ticket } from "lucide-react";
 import { PaginationFooter } from "@/components/PaginationFooter";
@@ -35,6 +36,7 @@ function useWindowWidth() {
 }
 
 export default function VenuesView() {
+  const router = useRouter();
   const [sort, setSort] = useState<SortConfig<SortField>>({
     field: "past",
     dir: "desc",
@@ -257,6 +259,29 @@ export default function VenuesView() {
               kind="venues"
               title={search ? "No venue matches" : "Venues await"}
               body={search ? "Try another city or clear the filter." : "Venues populate from the shows you log."}
+              action={
+                search ? undefined : (
+                  <button
+                    type="button"
+                    onClick={() => router.push("/add")}
+                    style={{
+                      padding: "10px 18px",
+                      background: "var(--accent)",
+                      color: "var(--accent-text)",
+                      border: "none",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: 11,
+                      letterSpacing: ".06em",
+                      textTransform: "uppercase",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Add a Show
+                  </button>
+                )
+              }
             />
           </div>
         ) : (

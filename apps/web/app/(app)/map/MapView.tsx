@@ -673,6 +673,7 @@ function FlyToVenue({ venueId, venues }: { venueId: string | null; venues: Venue
 }
 
 export default function MapView() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const deepLinkVenueId = searchParams.get("venue");
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(deepLinkVenueId);
@@ -846,7 +847,15 @@ export default function MapView() {
               >
                 {backfilling ? "Geocoding..." : `Geocode ${unmappedCount} venue${unmappedCount !== 1 ? "s" : ""}`}
               </button>
-            ) : null
+            ) : (
+              <button
+                type="button"
+                className="map-backfill-banner__btn"
+                onClick={() => router.push("/add")}
+              >
+                Add a Show
+              </button>
+            )
           }
         />
       </div>

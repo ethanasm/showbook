@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
@@ -214,25 +215,29 @@ export default function HomeView() {
         <EmptyState
           kind="shows"
           title="Start your logbook"
-          body="Track concerts, theatre, comedy, and festivals. Import your ticket history from Gmail to get started."
+          body="Add the first show you saw, the next one you are watching, or import ticket history from Gmail."
           action={
             <button
               type="button"
               onClick={() => router.push("/shows?gmail=1")}
               style={{
-                padding: "10px 22px",
+                padding: "10px 18px",
                 background: "var(--accent)",
                 color: "var(--accent-text)",
                 border: "none",
                 borderRadius: 8,
                 cursor: "pointer",
                 fontFamily: MONO,
-                fontSize: 11.5,
+                fontSize: 11,
                 letterSpacing: ".06em",
                 textTransform: "uppercase",
                 fontWeight: 500,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
               }}
             >
+              <Image src="/google-g.svg" alt="" width={14} height={14} />
               Import from Gmail
             </button>
           }
