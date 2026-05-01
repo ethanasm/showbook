@@ -4,6 +4,7 @@ import { child } from '@showbook/observability';
 import { auth } from '@/auth';
 import { decodeMobileToken } from '@/lib/mobile-token';
 import { isEmailAllowed, readAllowlistFromEnv } from '@/lib/auth-allowlist';
+import { resolveTrpcSession } from './resolve-session';
 
 const log = child({ component: 'web.trpc' });
 
@@ -21,48 +22,22 @@ if (!AUTH_SECRET) {
 }
 
 const handler = async (req: Request) => {
-  // Resolve the session from either a Bearer token (mobile) or the NextAuth
-  // cookie (web). Bearer path takes precedence so the mobile app never needs
-  // cookies.
-  let session: { user: { id: string } } | null = null;
-
-  const authHeader = req.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ') && AUTH_SECRET) {
-    const rawToken = authHeader.slice(7);
-    const decoded = await decodeMobileToken({
-      token: rawToken,
-      secret: AUTH_SECRET,
-    });
-    if (decoded) {
-      // Re-check the email allowlist on every Bearer request, matching the
-      // cookie path which runs isEmailAllowed on every JWT decode in
-      // auth.config.ts. Without this check, a user removed from
-      // AUTH_ALLOWED_EMAILS would keep mobile access until their 30-day
-      // token expired.
-      const allowlist = readAllowlistFromEnv();
-      if (!isEmailAllowed(decoded.email, allowlist)) {
-        // Treat as unauthenticated — do NOT fall through to cookie path.
-        log.info(
-          { event: 'auth.mobile_session_denied' },
-          'Mobile bearer session denied by allowlist',
-        );
-        // session stays null
-      } else {
-        session = { user: { id: decoded.id } };
-      }
-    }
-    // If decoded is null (invalid/expired token), session stays null and
-    // we do NOT fall through to cookie auth — bearer and cookie are
-    // separate auth paths.
-  }
-
-  if (!session && !authHeader?.startsWith('Bearer ')) {
-    // Only attempt cookie auth if no Bearer header was presented.
-    // A presented-but-invalid Bearer token should not silently fall back
-    // to cookies (which could mask token tampering from server logs).
-    const cookieSession = await auth();
-    session = cookieSession?.user?.id ? { user: { id: cookieSession.user.id } } : null;
-  }
+  // Resolve the session via the pure helper. The helper deliberately
+  // doesn't call any IO so it can be unit-tested; this handler binds the
+  // real decoders and supplies the cookie session lazily so we only pay
+  // the auth() cost when bearer auth doesn't apply.
+  const session = await resolveTrpcSession({
+    authHeader: req.headers.get('authorization'),
+    secret: AUTH_SECRET,
+    decode: decodeMobileToken,
+    allowlist: readAllowlistFromEnv(),
+    isEmailAllowed,
+    getCookieSession: async () => {
+      const cookieSession = await auth();
+      return cookieSession?.user?.id ? { user: { id: cookieSession.user.id } } : null;
+    },
+    log,
+  });
 
   return fetchRequestHandler({
     endpoint: '/api/trpc',

@@ -106,6 +106,31 @@ Cloudflare Tunnel reaches web via loopback.
   prod migrations must go through `pnpm prod:migrate`. See README.md
   "Production deployment" for the env checklist.
 
+## Mobile
+
+The Expo app at `apps/mobile/` defaults to the prod tunnel for its
+backend (`EXPO_PUBLIC_API_URL=https://showbook.example.com`). For
+local dev against the running web stack, override that var to your
+LAN IP or `http://localhost:3001`.
+
+Commands from the repo root:
+- `pnpm mobile:start` — Metro bundler
+- `pnpm mobile:ios` — open in iOS Simulator
+- `pnpm mobile:android` — open in Android emulator
+- `pnpm mobile:typecheck`, `pnpm mobile:lint`, `pnpm mobile:test`
+
+The mobile build is staged across six milestones — see
+[`showbook-specs/mobile-roadmap.md`](showbook-specs/mobile-roadmap.md).
+M1 (Foundation) is complete: sign-in, first-run permissions, the
+5-tab shell, and a real Me tab. M2 (Read flows) brings real
+Home / Shows / Map / ShowDetail.
+
+The mobile auth bridge issues a NextAuth-compatible JWT via
+`POST /api/auth/mobile-token` (see `apps/web/lib/mobile-token.ts`).
+Set `GOOGLE_OAUTH_MOBILE_AUDIENCES` in the web env to the
+comma-separated list of iOS + Android Google OAuth client IDs that
+may mint mobile tokens.
+
 ## Observability and logging
 
 All new code MUST use the shared `@showbook/observability` package — no `console.log/warn/error` and no direct `langfuse` / `pino` imports. This is enforced by review and applies to every package, including CLI scripts and pg-boss handlers. If you find yourself reaching for `console.*`, extend the observability package instead.

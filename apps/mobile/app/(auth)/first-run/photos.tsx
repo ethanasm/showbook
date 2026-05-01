@@ -35,13 +35,16 @@ export default function FirstRunPhotos(): React.JSX.Element {
     }
   }, [advance, pending]);
 
-  // Stylized stacked-photos illustration (translated from the design source)
+  // Stylized stacked-photos illustration. Uses surfaceRaised across all
+  // three cards so the illustration adapts to dark/light theme. Original
+  // design used three distinct tones for visual flair; we trade that off
+  // for theme correctness — the rotations alone read as a stack.
   const illustration = (
     <View style={styles.illustration}>
       {[
-        { tone: '#3a1a2a', rotate: '-8deg', top: 10, left: 28 },
-        { tone: '#1a2a3a', rotate: '6deg', top: 18, left: 70 },
-        { tone: '#2a1a2a', rotate: '-3deg', top: 4, left: 110 },
+        { rotate: '-8deg', top: 10, left: 28 },
+        { rotate: '6deg', top: 18, left: 70 },
+        { rotate: '-3deg', top: 4, left: 110 },
       ].map((p, i) => (
         <View
           key={i}
@@ -50,7 +53,7 @@ export default function FirstRunPhotos(): React.JSX.Element {
             {
               top: p.top,
               left: p.left,
-              backgroundColor: p.tone,
+              backgroundColor: colors.surfaceRaised,
               transform: [{ rotate: p.rotate }],
               borderColor: colors.bg,
             },

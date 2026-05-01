@@ -29,6 +29,7 @@ export const DARK_COLORS = {
   accent: '#FFD166',
   accentFaded: 'rgba(255,209,102,0.14)',
   accentText: '#0C0C0C',
+  danger: '#E63946',
 } as const;
 
 export const LIGHT_COLORS = {
@@ -43,6 +44,7 @@ export const LIGHT_COLORS = {
   accent: '#E5A800',
   accentFaded: 'rgba(229,168,0,0.14)',
   accentText: '#FFFFFF',
+  danger: '#D42F3A',
 } as const;
 
 /** Spacing scale (4pt grid) */

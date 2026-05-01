@@ -14,6 +14,12 @@
  * The trpc client is created once per app session. Its `getToken` getter
  * reads from a ref that we keep in sync with useAuth().token, so the client
  * sees the latest token after sign-in/sign-out without being recreated.
+ *
+ * Font loading: loadAppFonts() is called during mount with the splash
+ * screen kept visible until fonts are ready. Today loadAppFonts is a no-op
+ * (system font fallbacks), so this gates the UI for one tick. When Geist
+ * is wired up later, the gate will hold the splash until the .ttf files
+ * are loaded — no other code change required.
  */
 
 import React from 'react';
@@ -23,12 +29,37 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Slot } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 
 import { ThemeProvider } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { trpc, createQueryClient, createTrpcClient } from '../lib/trpc';
+import { loadAppFonts } from '../lib/fonts';
+
+// Keep the splash screen up until fonts are ready. Errors here are
+// non-fatal — if preventAutoHideAsync rejects, the splash hides on its
+// own schedule and the UI still renders once fontsLoaded flips to true.
+SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 export default function RootLayout(): React.JSX.Element {
+  const [fontsLoaded, setFontsLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    loadAppFonts()
+      .catch(() => undefined)
+      .finally(() => {
+        if (cancelled) return;
+        setFontsLoaded(true);
+        SplashScreen.hideAsync().catch(() => undefined);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!fontsLoaded) return <></>;
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>

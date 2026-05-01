@@ -55,6 +55,7 @@ export interface ColorTokens {
   accent: string;
   accentFaded: string;
   accentText: string;
+  danger: string;
 }
 
 export interface TypeStyle {

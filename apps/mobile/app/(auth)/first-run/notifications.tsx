@@ -53,7 +53,7 @@ export default function FirstRunNotifications(): React.JSX.Element {
       }
       body="Showbook pings you the moment a watched artist announces tour dates or tickets drop. Nothing else — no marketing, no daily digests."
       icon={<Bell size={42} color={colors.accent} strokeWidth={1.75} />}
-      iconBg="rgba(217,128,90,0.2)"
+      iconBg={colors.accentFaded}
       footer={
         <View style={styles.tagRow}>
           {TAGS.map((tag) => (
