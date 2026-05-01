@@ -203,6 +203,7 @@ export default function HomeView() {
   if (noShows) {
     return (
       <div
+        data-testid="home-empty-state"
         style={{
           height: "100%",
           padding: "40px 24px",

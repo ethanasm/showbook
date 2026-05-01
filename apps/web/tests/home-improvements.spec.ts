@@ -16,12 +16,13 @@ async function loginSeeded(page: Page) {
 test.describe('Home page — empty state', () => {
   test('shows empty-state copy and Gmail import button when no shows exist', async ({ page }) => {
     await loginEmpty(page);
-    await page.waitForSelector('text=Start your logbook', { timeout: 10000 });
+    const empty = page.getByTestId('home-empty-state');
+    await expect(empty).toBeVisible({ timeout: 10000 });
 
-    await expect(page.getByText('Start your logbook')).toBeVisible();
-    await expect(page.getByText(/Import your ticket history from Gmail/i)).toBeVisible();
+    await expect(empty.getByRole('heading', { name: 'Start your logbook' })).toBeVisible();
+    await expect(empty.getByText(/Import your ticket history from Gmail/i)).toBeVisible();
 
-    const gmailBtn = page.getByRole('button', { name: /Import from Gmail/i });
+    const gmailBtn = empty.getByRole('button', { name: /Import from Gmail/i });
     await expect(gmailBtn).toBeVisible();
 
     await page.screenshot({
@@ -32,9 +33,10 @@ test.describe('Home page — empty state', () => {
 
   test('Gmail import button navigates to /shows with ?gmail=1', async ({ page }) => {
     await loginEmpty(page);
-    await page.waitForSelector('text=Start your logbook', { timeout: 10000 });
+    const empty = page.getByTestId('home-empty-state');
+    await expect(empty).toBeVisible({ timeout: 10000 });
 
-    const gmailBtn = page.getByRole('button', { name: /Import from Gmail/i });
+    const gmailBtn = empty.getByRole('button', { name: /Import from Gmail/i });
     await gmailBtn.click();
     // The shows page opens the Gmail modal — just verify navigation happened
     await page.waitForURL('**/shows*', { timeout: 8000 });
