@@ -134,7 +134,14 @@ describe('enrichmentRouter.fetchSetlist', () => {
     });
 
     assert.deepEqual(result, {
-      songs: ['Daydreaming', 'Idioteque'],
+      setlist: {
+        sections: [
+          {
+            kind: 'set',
+            songs: [{ title: 'Daydreaming' }, { title: 'Idioteque' }],
+          },
+        ],
+      },
       tourName: 'A Moon Shaped Pool',
       mbid: 'mb-radiohead',
     });

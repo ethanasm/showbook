@@ -292,7 +292,14 @@ describe('shows router', () => {
       kind: 'concert',
       headliner: {
         name: `${PREFIX} Setlist Headliner`,
-        setlist: ['Song 1', 'Song 2'],
+        setlist: {
+          sections: [
+            {
+              kind: 'set',
+              songs: [{ title: 'Song 1' }, { title: 'Song 2' }],
+            },
+          ],
+        },
       },
       venue: {
         name: `${PREFIX} Venue`,
@@ -310,7 +317,14 @@ describe('shows router', () => {
           name: `${PREFIX} Support Act`,
           role: 'support',
           sortOrder: 1,
-          setlist: ['Opener'],
+          setlist: {
+            sections: [
+              {
+                kind: 'set',
+                songs: [{ title: 'Opener' }],
+              },
+            ],
+          },
         },
       ],
     });
@@ -467,28 +481,62 @@ describe('shows router', () => {
     assert.ok(supportRow);
     assert.equal(supportRow!.role, 'support');
 
-    // Setting a setlist for the headliner.
+    // Setting a setlist for the headliner — main set + an encore section.
     await callerFor(USER).shows.setSetlist({
       showId,
       performerId: headlinerId,
-      songs: ['Song 1', '  Song 2  ', '   '],
+      setlist: {
+        sections: [
+          {
+            kind: 'set',
+            songs: [
+              { title: 'Song 1' },
+              { title: '  Song 2  ' },
+              { title: '   ' },
+            ],
+          },
+          {
+            kind: 'encore',
+            songs: [{ title: 'Encore A', note: '  crowd singalong  ' }],
+          },
+        ],
+      },
     });
     detail = await callerFor(USER).shows.detail({ showId });
-    assert.deepEqual(detail.setlists, { [headlinerId]: ['Song 1', 'Song 2'] });
+    assert.deepEqual(detail.setlists, {
+      [headlinerId]: {
+        sections: [
+          {
+            kind: 'set',
+            songs: [{ title: 'Song 1' }, { title: 'Song 2' }],
+          },
+          {
+            kind: 'encore',
+            songs: [{ title: 'Encore A', note: 'crowd singalong' }],
+          },
+        ],
+      },
+    });
 
-    // setSetlist with [] removes only that performer's entry.
+    // setSetlist with empty sections removes only that performer's entry.
     await callerFor(USER).shows.setSetlist({
       showId,
       performerId: added.performerId,
-      songs: ['Opener'],
+      setlist: {
+        sections: [{ kind: 'set', songs: [{ title: 'Opener' }] }],
+      },
     });
     await callerFor(USER).shows.setSetlist({
       showId,
       performerId: headlinerId,
-      songs: [],
+      setlist: { sections: [] },
     });
     detail = await callerFor(USER).shows.detail({ showId });
-    assert.deepEqual(detail.setlists, { [added.performerId]: ['Opener'] });
+    assert.deepEqual(detail.setlists, {
+      [added.performerId]: {
+        sections: [{ kind: 'set', songs: [{ title: 'Opener' }] }],
+      },
+    });
 
     // Removing a performer also clears their setlist.
     await callerFor(USER).shows.removePerformer({
@@ -524,7 +572,9 @@ describe('shows router', () => {
         callerFor(USER).shows.setSetlist({
           showId,
           performerId: strangerId,
-          songs: ['oops'],
+          setlist: {
+            sections: [{ kind: 'set', songs: [{ title: 'oops' }] }],
+          },
         }),
       (err: unknown) =>
         err instanceof TRPCError && err.code === 'BAD_REQUEST',
@@ -556,7 +606,7 @@ describe('shows router', () => {
         callerFor(USER).shows.setSetlist({
           showId: fakeShow,
           performerId: fakeShow,
-          songs: [],
+          setlist: { sections: [] },
         }),
       (err: unknown) => err instanceof TRPCError && err.code === 'NOT_FOUND',
     );

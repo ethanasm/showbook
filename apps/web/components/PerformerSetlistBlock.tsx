@@ -1,24 +1,39 @@
 "use client";
 
+import {
+  flattenSetlistTitles,
+  setlistTotalSongs,
+  singleMainSet,
+  type PerformerSetlist,
+} from "@showbook/shared";
+
 interface PerformerSetlistBlockProps {
   performerName: string;
-  songs: string[] | null;
+  setlist: PerformerSetlist | null;
   loading: boolean;
   fetchingFor: Record<string, boolean>;
   onFetch: () => Promise<void>;
-  onChange: (songs: string[]) => void;
+  /**
+   * Called when the user types in the textarea. Receives a single-main-set
+   * setlist built from the textarea lines. Encore + per-song notes are
+   * preserved when the data came from setlist.fm but cannot be edited from
+   * this block — that lives on the show detail page.
+   */
+  onChange: (next: PerformerSetlist) => void;
 }
 
 export function PerformerSetlistBlock({
   performerName,
-  songs,
+  setlist,
   loading,
   fetchingFor,
   onFetch,
   onChange,
 }: PerformerSetlistBlockProps) {
   const isFetching = fetchingFor[performerName] ?? loading;
-  const hasSongs = songs && songs.length > 0;
+  const songCount = setlist ? setlistTotalSongs(setlist) : 0;
+  const hasSongs = songCount > 0;
+  const flatTitles = setlist ? flattenSetlistTitles(setlist) : [];
 
   return (
     <div
@@ -69,41 +84,86 @@ export function PerformerSetlistBlock({
           {isFetching ? "fetching..." : "Search setlist.fm"}
         </button>
       </div>
-      {hasSongs && (
+      {hasSongs && setlist && (
         <div
           style={{
             padding: "8px 14px",
             display: "flex",
-            flexWrap: "wrap",
+            flexDirection: "column",
             gap: 6,
           }}
         >
-          {songs.map((song, i) => (
-            <span
-              key={i}
-              style={{
-                display: "inline-block",
-                padding: "3px 8px",
-                background: "var(--surface2)",
-                color: "var(--ink)",
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
-                letterSpacing: ".02em",
-              }}
-            >
-              {song}
-            </span>
-          ))}
+          {setlist.sections.map((section, sIdx) => {
+            const isEncore = section.kind === "encore";
+            return (
+              <div
+                key={`${section.kind}-${sIdx}`}
+                style={{ display: "flex", flexDirection: "column", gap: 4 }}
+              >
+                {isEncore && (
+                  <span
+                    data-testid="setlist-block-encore-marker"
+                    style={{
+                      alignSelf: "flex-start",
+                      background: "var(--surface2)",
+                      color: "var(--accent)",
+                      padding: "2px 8px",
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: 9,
+                      letterSpacing: ".1em",
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      borderRadius: 999,
+                      border: "1px solid var(--accent)",
+                    }}
+                  >
+                    Encore
+                  </span>
+                )}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {section.songs.map((song, i) => (
+                    <span
+                      key={`${sIdx}-${i}`}
+                      title={song.note}
+                      style={{
+                        display: "inline-block",
+                        padding: "3px 8px",
+                        background: isEncore ? "var(--surface2)" : "var(--surface2)",
+                        color: "var(--ink)",
+                        fontFamily: "var(--font-geist-mono), monospace",
+                        fontSize: 10.5,
+                        letterSpacing: ".02em",
+                        borderLeft: isEncore
+                          ? "2px solid var(--accent)"
+                          : undefined,
+                      }}
+                    >
+                      {song.title}
+                      {song.note && (
+                        <span style={{ color: "var(--muted)", marginLeft: 6 }}>
+                          · {song.note}
+                        </span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
       {!hasSongs && !isFetching && (
         <div style={{ padding: "8px 14px" }}>
           <textarea
             placeholder="Enter songs one per line..."
-            value={(songs ?? []).join("\n")}
-            onChange={(e) =>
-              onChange(e.target.value.split("\n").filter(Boolean))
-            }
+            value={flatTitles.join("\n")}
+            onChange={(e) => {
+              const lines = e.target.value
+                .split("\n")
+                .map((s) => s.trim())
+                .filter(Boolean);
+              onChange(singleMainSet(lines));
+            }}
             rows={3}
             style={{
               width: "100%",

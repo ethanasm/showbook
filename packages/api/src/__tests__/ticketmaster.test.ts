@@ -44,7 +44,10 @@ let TMError: typeof TMErrorClass;
 
 before(async () => {
   process.env.TICKETMASTER_API_KEY = 'test-tm-key';
-  const mod = await import('../ticketmaster?bust=primary');
+  // Cache-bust query string is opaque to TS; import-then-cast preserves
+  // the typed exports below without an `// @ts-expect-error` directive.
+  const spec = '../ticketmaster?bust=primary' as string;
+  const mod = (await import(spec)) as typeof import('../ticketmaster');
   searchEvents = mod.searchEvents;
   getVenue = mod.getVenue;
   getEvent = mod.getEvent;
@@ -191,7 +194,7 @@ test('getVenue: throws TMError on non-404 errors', async () => {
   stubFetch(async () => new Response('boom', { status: 500, statusText: 'ISE' }));
   await assert.rejects(getVenue('x'), (err: unknown) => {
     assert.ok(err instanceof TMError);
-    assert.equal((err as TMError).status, 500);
+    assert.equal((err as TMErrorClass).status, 500);
     return true;
   });
 });
@@ -338,7 +341,7 @@ test('searchAttractions: returns [] when _embedded is missing', async () => {
 
 // ── rate limiter / 429 retry ────────────────────────────────────────────
 
-test('rateLimitedFetch: retries on 429 and eventually returns the success body', async () => {
+test('rateLimitedFetch: retries on 429 and eventually returns the success body', { timeout: 10_000 }, async () => {
   let n = 0;
   stubFetch(async () => {
     n++;
@@ -349,7 +352,7 @@ test('rateLimitedFetch: retries on 429 and eventually returns the success body',
   const venue = await getVenue('V42');
   assert.equal(n, 2);
   assert.equal(venue?.id, 'V42');
-}, { timeout: 10_000 });
+});
 
 test('rateLimitedFetch: enforces MIN_INTERVAL between calls (covers wait branch)', async () => {
   stubFetch(async () => jsonResponse({ id: 'X', name: 'X' }));
@@ -462,8 +465,8 @@ test('tmFetch: TMError carries status and detail (response body)', async () => {
   stubFetch(async () => new Response('detailed error body', { status: 500, statusText: 'ISE' }));
   await assert.rejects(getVenue('x'), (err: unknown) => {
     assert.ok(err instanceof TMError);
-    assert.equal((err as TMError).status, 500);
-    assert.equal((err as TMError).detail, 'detailed error body');
+    assert.equal((err as TMErrorClass).status, 500);
+    assert.equal((err as TMErrorClass).detail, 'detailed error body');
     return true;
   });
 });

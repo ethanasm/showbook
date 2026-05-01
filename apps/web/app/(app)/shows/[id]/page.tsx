@@ -28,8 +28,14 @@ import {
   daysUntil,
   formatDateRangeLong,
   isDatePast,
+  normalizePerformerSetlistsMap,
+  setlistTotalSongs,
+  singleMainSet,
+  type PerformerSetlist,
+  type PerformerSetlistsMap,
 } from "@showbook/shared";
 import { STATE_TRANSITIONS } from "@/lib/show-state";
+import { SetlistSectionsEditor } from "@/components/SetlistSectionsEditor";
 
 
 const ROLE_LABEL: Record<string, string> = {
@@ -138,13 +144,16 @@ export default function ShowDetailPage() {
     await deleteShow.mutateAsync({ showId: show.id });
   }
 
-  // Build effective setlists: prefer new per-performer map; fall back to
-  // legacy setlist array placed under the headliner key for old rows.
-  const setlistsMap: Record<string, string[]> = (() => {
-    const raw = show.setlists as Record<string, string[]> | null | undefined;
-    if (raw && Object.keys(raw).length > 0) return raw;
+  // Build effective setlists: prefer the new per-performer map; fall back to
+  // the legacy `setlist text[]` placed under the headliner key for old rows.
+  // `normalizePerformerSetlistsMap` handles both new (sections) and legacy
+  // (string[]) per-performer values, so reads tolerate un-migrated rows.
+  const setlistsMap: PerformerSetlistsMap = (() => {
+    const raw = show.setlists;
+    const fromMap = normalizePerformerSetlistsMap(raw);
+    if (Object.keys(fromMap).length > 0) return fromMap;
     if (show.setlist && show.setlist.length > 0 && headlinerSP) {
-      return { [headlinerSP.performer.id]: show.setlist };
+      return { [headlinerSP.performer.id]: singleMainSet(show.setlist) };
     }
     return {};
   })();
@@ -978,7 +987,7 @@ function SetlistSection({
   headlinerPerformerId,
 }: {
   showId: string;
-  setlistsMap: Record<string, string[]>;
+  setlistsMap: PerformerSetlistsMap;
   lineup: ShowPerformerEntry[];
   headlinerPerformerId: string | null;
 }) {
@@ -1022,7 +1031,9 @@ function SetlistSection({
     );
   }
 
-  const activeSongs = selectedId ? (setlistsMap[selectedId] ?? []) : [];
+  const activeSetlist: PerformerSetlist =
+    (selectedId && setlistsMap[selectedId]) || { sections: [] };
+  const totalSongs = setlistTotalSongs(activeSetlist);
 
   const labelFor = (id: string) => {
     const sp = lineup.find((p) => p.performer.id === id);
@@ -1032,7 +1043,7 @@ function SetlistSection({
   return (
     <section data-testid="setlist-section">
       <EditableSectionHeader
-        label={`Setlist · ${activeSongs.length} song${activeSongs.length !== 1 ? "s" : ""}`}
+        label={`Setlist · ${totalSongs} song${totalSongs !== 1 ? "s" : ""}`}
         isEditing={editing}
         onToggle={() => setEditing((v) => !v)}
         testId="setlist-edit-toggle"
@@ -1074,226 +1085,128 @@ function SetlistSection({
         </div>
       )}
       {editing && selectedId ? (
-        <SetlistEditor
+        <SetlistSectionsEditor
           key={selectedId}
           showId={showId}
           performerId={selectedId}
           performerName={labelFor(selectedId)}
-          initialSongs={setlistsMap[selectedId] ?? []}
+          initialSetlist={activeSetlist}
         />
       ) : (
-        <ol
-          style={{
-            background: "var(--surface)",
-            listStyle: "none",
-            margin: 0,
-            padding: 0,
-          }}
-        >
-          {activeSongs.map((song, i) => (
-            <li
-              key={`${i}-${song}`}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "48px 1fr",
-                columnGap: 12,
-                padding: "10px 16px",
-                borderBottom: "1px solid var(--rule)",
-                alignItems: "baseline",
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
-                  color: "var(--faint)",
-                  letterSpacing: ".04em",
-                  fontFeatureSettings: '"tnum"',
-                }}
-              >
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <span
-                style={{
-                  fontFamily: "var(--font-geist-sans), sans-serif",
-                  fontSize: 14,
-                  color: "var(--ink)",
-                  letterSpacing: -0.1,
-                }}
-              >
-                {song}
-              </span>
-            </li>
-          ))}
-        </ol>
+        <SetlistView setlist={activeSetlist} />
       )}
     </section>
   );
 }
 
-function SetlistEditor({
-  showId,
-  performerId,
-  performerName,
-  initialSongs,
-}: {
-  showId: string;
-  performerId: string;
-  performerName: string;
-  initialSongs: string[];
-}) {
-  const utils = trpc.useUtils();
-  const [draft, setDraft] = useState(initialSongs.join("\n"));
-  const [error, setError] = useState<string | null>(null);
-
-  const setSetlist = trpc.shows.setSetlist.useMutation({
-    onSuccess: () => {
-      utils.shows.detail.invalidate({ showId });
-      utils.shows.invalidate();
-      setError(null);
-    },
-    onError: (err) => setError(err.message),
-  });
-
-  const songs = draft
-    .split("\n")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-  const initialJoined = initialSongs.join("\n");
-  const dirty = draft !== initialJoined;
-
-  async function save() {
-    await setSetlist.mutateAsync({ showId, performerId, songs });
-  }
-
-  function reset() {
-    setDraft(initialJoined);
-    setError(null);
-  }
-
-  async function clear() {
-    await setSetlist.mutateAsync({ showId, performerId, songs: [] });
-    setDraft("");
-  }
-
+// Read-only sections renderer. Mirrors the mockup: numbered rows with
+// optional dim subtitle for `note`, and an "ENCORE" pill divider above
+// the encore section. Numbering runs continuously across sections.
+function SetlistView({ setlist }: { setlist: PerformerSetlist }) {
+  if (setlist.sections.length === 0) return null;
+  let counter = 0;
   return (
     <div
-      data-testid={`setlist-editor-${performerName.replace(/\s+/g, "-").toLowerCase()}`}
       style={{
         background: "var(--surface)",
-        padding: "12px 14px",
-        border: "1px dashed var(--rule-strong)",
+        margin: 0,
+        padding: 0,
       }}
     >
-      <div
-        style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10,
-          color: "var(--faint)",
-          letterSpacing: ".06em",
-          textTransform: "uppercase",
-          marginBottom: 6,
-        }}
-      >
-        One song per line — {songs.length} song{songs.length !== 1 ? "s" : ""}
-      </div>
-      <textarea
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        rows={Math.max(6, Math.min(20, songs.length + 3))}
-        data-testid="setlist-textarea"
-        placeholder="Song one\nSong two\nSong three"
-        style={{
-          width: "100%",
-          background: "var(--bg)",
-          border: "1px solid var(--rule)",
-          padding: "8px 10px",
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 12,
-          color: "var(--ink)",
-          resize: "vertical",
-          boxSizing: "border-box",
-          outline: "none",
-        }}
-      />
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          marginTop: 10,
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => void save()}
-          disabled={setSetlist.isPending || !dirty}
-          data-testid="setlist-save"
-          style={{
-            padding: "7px 14px",
-            background: "var(--accent)",
-            color: "var(--accent-text)",
-            border: "none",
-            fontFamily: "var(--font-geist-sans), sans-serif",
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: setSetlist.isPending || !dirty ? "default" : "pointer",
-            opacity: setSetlist.isPending || !dirty ? 0.5 : 1,
-          }}
-        >
-          {setSetlist.isPending ? "Saving…" : "Save setlist"}
-        </button>
-        <button
-          type="button"
-          onClick={reset}
-          disabled={setSetlist.isPending || !dirty}
-          style={{
-            padding: "7px 14px",
-            background: "transparent",
-            border: "1px solid var(--rule-strong)",
-            color: "var(--muted)",
-            fontFamily: "var(--font-geist-sans), sans-serif",
-            fontSize: 12,
-            cursor: setSetlist.isPending || !dirty ? "default" : "pointer",
-            opacity: setSetlist.isPending || !dirty ? 0.5 : 1,
-          }}
-        >
-          Reset
-        </button>
-        {initialSongs.length > 0 && (
-          <button
-            type="button"
-            onClick={() => void clear()}
-            disabled={setSetlist.isPending}
-            data-testid="setlist-clear"
-            style={{
-              padding: "7px 14px",
-              background: "transparent",
-              border: "1px solid var(--rule-strong)",
-              color: "#E63946",
-              fontFamily: "var(--font-geist-sans), sans-serif",
-              fontSize: 12,
-              cursor: setSetlist.isPending ? "default" : "pointer",
-              marginLeft: "auto",
-            }}
+      {setlist.sections.map((section, sIdx) => {
+        const isEncore = section.kind === "encore";
+        return (
+          <div
+            key={`${section.kind}-${sIdx}`}
+            data-testid={
+              isEncore ? "setlist-section-encore" : "setlist-section-main"
+            }
           >
-            Clear setlist
-          </button>
-        )}
-      </div>
-      {error && (
-        <div
-          style={{
-            color: "#E63946",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
-            marginTop: 8,
-          }}
-        >
-          {error}
-        </div>
-      )}
+            {isEncore && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "10px 0",
+                }}
+                data-testid="setlist-encore-marker"
+              >
+                <span
+                  style={{
+                    background: "var(--surface2)",
+                    color: "var(--accent)",
+                    padding: "3px 12px",
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 10,
+                    letterSpacing: ".1em",
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    borderRadius: 999,
+                    border: "1px solid var(--accent)",
+                  }}
+                >
+                  Encore
+                </span>
+              </div>
+            )}
+            <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
+              {section.songs.map((song, i) => {
+                counter += 1;
+                return (
+                  <li
+                    key={`${sIdx}-${i}-${song.title}`}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "48px 1fr",
+                      columnGap: 12,
+                      padding: "10px 16px",
+                      borderBottom: "1px solid var(--rule)",
+                      alignItems: "baseline",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: "var(--font-geist-mono), monospace",
+                        fontSize: 11,
+                        color: "var(--faint)",
+                        letterSpacing: ".04em",
+                        fontFeatureSettings: '"tnum"',
+                      }}
+                    >
+                      {String(counter).padStart(2, "0")}
+                    </span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      <span
+                        style={{
+                          fontFamily: "var(--font-geist-sans), sans-serif",
+                          fontSize: 14,
+                          color: "var(--ink)",
+                          letterSpacing: -0.1,
+                          fontWeight: 500,
+                        }}
+                      >
+                        {song.title}
+                      </span>
+                      {song.note && (
+                        <span
+                          style={{
+                            fontFamily: "var(--font-geist-sans), sans-serif",
+                            fontSize: 12,
+                            color: "var(--muted)",
+                          }}
+                        >
+                          {song.note}
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        );
+      })}
     </div>
   );
 }

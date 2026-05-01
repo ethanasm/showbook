@@ -11,6 +11,7 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
+import type { PerformerSetlistsMap } from '@showbook/shared';
 import { users } from './users';
 import { venues } from './venues';
 import { performers } from './performers';
@@ -54,8 +55,9 @@ export const shows = pgTable(
     ticketCount: integer('ticket_count').notNull().default(1),
     tourName: text('tour_name'),
     productionName: text('production_name'),
+    // Legacy column — kept for historical rows. New writes go to `setlists`.
     setlist: text('setlist').array(),
-    setlists: jsonb('setlists').$type<Record<string, string[]>>(),
+    setlists: jsonb('setlists').$type<PerformerSetlistsMap>(),
     photos: text('photos').array(),
     sourceRefs: jsonb('source_refs'),
     ticketUrl: text('ticket_url'),
