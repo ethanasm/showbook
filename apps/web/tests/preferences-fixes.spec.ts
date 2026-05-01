@@ -35,7 +35,6 @@ test.describe('Preferences fixes', () => {
     await login(page);
     await gotoPrefs(page);
     const sidebarContent = await page.locator('.sidebar__user').innerText();
-    console.log('SIDEBAR_USER', sidebarContent);
     expect(sidebarContent).toContain('Test User');
     expect(sidebarContent).not.toContain('Ethan Smith');
   });
@@ -77,7 +76,6 @@ test.describe('Preferences fixes', () => {
     const hasError = bodyText.includes('Search unavailable') || bodyText.includes('unavailable right now');
     const hasNoMatches = bodyText.includes('No matches');
     const hasResults = await page.locator('button').filter({ hasText: /Boston/ }).count();
-    console.log('SEARCH_RESPONSE', { hasError, hasNoMatches, hasResults });
     expect(hasError || hasNoMatches || hasResults > 0).toBeTruthy();
   });
 
@@ -95,7 +93,6 @@ test.describe('Preferences fixes', () => {
     const hasNoVenuesMsg = bodyText.includes('No venues found');
     const hasResults = await page.locator('button').filter({ hasText: /Madison Square Garden/i }).count();
     const stillSearching = bodyText.includes('Searching…') || bodyText.includes('Searching...');
-    console.log('FOLLOW_MODAL_RESPONSE', { hasError, hasNoVenuesMsg, hasResults, stillSearching });
     expect(stillSearching).toBeFalsy();
     expect(hasError || hasNoVenuesMsg || hasResults > 0).toBeTruthy();
   });
@@ -119,7 +116,6 @@ test.describe('Preferences fixes', () => {
     await expect(page.locator('.show-row').first()).toBeVisible({ timeout: 10_000 });
     const looseHeight = (await page.locator('.show-row').first().boundingBox())!.height;
     const looseAttr = await page.locator('html').getAttribute('data-compact');
-    console.log('LOOSE', looseHeight, 'data-compact', looseAttr);
 
     // Turn compact mode ON.
     await gotoPrefs(page);
@@ -132,7 +128,6 @@ test.describe('Preferences fixes', () => {
     await expect(page.locator('.show-row').first()).toBeVisible({ timeout: 10_000 });
     const compactHeight = (await page.locator('.show-row').first().boundingBox())!.height;
     const compactAttr = await page.locator('html').getAttribute('data-compact');
-    console.log('COMPACT', compactHeight, 'data-compact', compactAttr);
 
     expect(compactAttr).toBe('true');
     expect(compactHeight).toBeLessThan(looseHeight);
@@ -167,7 +162,6 @@ test.describe('Preferences fixes', () => {
     await login(b);
     await b.waitForTimeout(2000);
     const dataTheme = await b.locator('html').getAttribute('data-theme');
-    console.log('FRESH_CONTEXT_DATA_THEME', dataTheme);
     expect(dataTheme).toBe('light');
     await ctxB.close();
   });
