@@ -8,6 +8,7 @@ import { useTheme } from "@/components/design-system/ThemeProvider";
 import { SegmentedControl } from "@/components/design-system/SegmentedControl";
 import { Toggle } from "@/components/design-system";
 import { SectionHead, SettingRow } from "@/components/PreferencesPrimitives";
+import { SpotifyImport } from "@/components/preferences/SpotifyImport";
 
 // ── Region Chip ───────────────────────────────────────────
 
@@ -886,6 +887,13 @@ export default function PreferencesView() {
               }}
             />
           )}
+
+          {/* ── Spotify import ───────────────────────── */}
+          <SectionHead
+            label="Followed artists"
+            sub="import the artists you follow on Spotify"
+          />
+          <SpotifyImport />
 
           {/* ── Data Sources ─────────────────────────── */}
           <SectionHead label="Data sources" sub="auto-enrichment for show details" />

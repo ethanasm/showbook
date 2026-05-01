@@ -23,6 +23,8 @@ export {
   getMessageBody,
   buildBulkScanQueries,
 } from './gmail';
+export { getFollowedArtists, SpotifyError } from './spotify';
+export type { SpotifyArtist } from './spotify';
 export {
   scrapeConfigSchema,
   parseScrapeConfig,

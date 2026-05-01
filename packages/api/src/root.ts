@@ -7,6 +7,7 @@ import { enrichmentRouter } from './routers/enrichment';
 import { preferencesRouter } from './routers/preferences';
 import { searchRouter } from './routers/search';
 import { mediaRouter } from './routers/media';
+import { spotifyImportRouter } from './routers/spotify-import';
 export const appRouter = router({
   shows: showsRouter,
   venues: venuesRouter,
@@ -16,6 +17,7 @@ export const appRouter = router({
   preferences: preferencesRouter,
   search: searchRouter,
   media: mediaRouter,
+  spotifyImport: spotifyImportRouter,
 });
 
 export type AppRouter = typeof appRouter;
