@@ -24,11 +24,12 @@ const TEST_SECRET = 'super-secret-for-tests-at-least-32-chars!!';
 // encodeMobileToken + decodeMobileToken — round-trip
 // ---------------------------------------------------------------------------
 describe('encodeMobileToken / decodeMobileToken', () => {
-  it('round-trip: encodes then decodes and returns the same id', async () => {
+  it('round-trip: encodes then decodes and returns the same id and email', async () => {
     const userId = 'user-abc-123';
+    const email = 'alice@example.com';
     const token = await encodeMobileToken({
       userId,
-      email: 'alice@example.com',
+      email,
       name: 'Alice',
       image: null,
       secret: TEST_SECRET,
@@ -40,13 +41,15 @@ describe('encodeMobileToken / decodeMobileToken', () => {
     const decoded = await decodeMobileToken({ token, secret: TEST_SECRET });
     assert.ok(decoded !== null, 'decoded should not be null');
     assert.equal(decoded!.id, userId);
+    assert.equal(decoded!.email, email);
   });
 
   it('round-trip includes correct user id even with null name/image', async () => {
     const userId = 'user-no-name';
+    const email = 'noname@example.com';
     const token = await encodeMobileToken({
       userId,
-      email: 'noname@example.com',
+      email,
       name: null,
       image: null,
       secret: TEST_SECRET,
@@ -54,6 +57,7 @@ describe('encodeMobileToken / decodeMobileToken', () => {
     const decoded = await decodeMobileToken({ token, secret: TEST_SECRET });
     assert.ok(decoded !== null);
     assert.equal(decoded!.id, userId);
+    assert.equal(decoded!.email, email);
   });
 
   it('returns null for a token signed with a different secret', async () => {
@@ -94,6 +98,34 @@ describe('encodeMobileToken / decodeMobileToken', () => {
     const decoded = await decodeMobileToken({ token: wrongSaltToken, secret: TEST_SECRET });
     // Should be null because salt mismatch means decryption fails
     assert.equal(decoded, null, 'token with wrong salt should not decode');
+  });
+
+  it('returns null when id claim is a non-string (e.g. a number) — tampered token', async () => {
+    // Craft a token where `id` is a number rather than a string
+    const { encode } = await import('next-auth/jwt');
+    const tamperedToken = await encode({
+      token: { sub: 'user-tampered', id: 42, email: 'x@x.com' } as unknown as Parameters<typeof encode>[0]['token'],
+      secret: TEST_SECRET,
+      salt: MOBILE_JWT_SALT,
+    });
+
+    const decoded = await decodeMobileToken({ token: tamperedToken, secret: TEST_SECRET });
+    assert.equal(decoded, null, 'non-string id should be rejected');
+  });
+
+  it('returns email: null when email claim is missing', async () => {
+    // Craft a token that has a valid id but no email field
+    const { encode } = await import('next-auth/jwt');
+    const noEmailToken = await encode({
+      token: { sub: 'user-no-email', id: 'user-no-email' },
+      secret: TEST_SECRET,
+      salt: MOBILE_JWT_SALT,
+    });
+
+    const decoded = await decodeMobileToken({ token: noEmailToken, secret: TEST_SECRET });
+    assert.ok(decoded !== null, 'token without email should still decode if id is valid');
+    assert.equal(decoded!.id, 'user-no-email');
+    assert.equal(decoded!.email, null, 'missing email should decode as null');
   });
 });
 
@@ -211,16 +243,30 @@ describe('verifyGoogleIdToken', () => {
 
 // ---------------------------------------------------------------------------
 // upsertUserFromGoogle — fake DB via dependency injection
+//
+// upsertUserFromGoogle now uses db.transaction(). The fake DB wraps the
+// inner callback with a passthrough `transaction` shim that passes the same
+// tx object (which is the inner fake tx) to the callback. This lets us test
+// the happy-path logic without a real Postgres connection.
 // ---------------------------------------------------------------------------
 describe('upsertUserFromGoogle', () => {
   /**
-   * Build a minimal fake Database object. Only the paths exercised by
-   * upsertUserFromGoogle need to be implemented; everything else can throw.
+   * Build a minimal fake transaction / Database object.
+   *
+   * `transaction(fn)` calls `fn(tx)` where `tx` has the same shape as the db
+   * object itself — this mirrors Drizzle's actual API.
    */
-  function makeFakeDb(opts: {
+  function makeFakeTx(opts: {
+    // For the first accounts findFirst call (determines if account exists)
     existingAccount?: { userId: string } | null;
+    // For the users findFirst call after existingAccount is found
     existingUser?: { id: string; email: string | null; name: string | null; image: string | null } | null;
+    // The user row returned from insert(users).values(...).returning()
     insertedUser?: { id: string; email: string | null; name: string | null; image: string | null };
+    // For the second accounts findFirst call (after the accounts insert)
+    // If not set, defaults to a row with userId = insertedUser.id
+    finalAccount?: { userId: string } | null;
+    onInsertUsers?: () => void;
     onInsertAccounts?: () => void;
   }) {
     const insertedUser = opts.insertedUser ?? {
@@ -230,39 +276,56 @@ describe('upsertUserFromGoogle', () => {
       image: null,
     };
 
-    // Track insert calls: first call = users table, second = accounts table
-    let insertCallIndex = 0;
+    let accountsFindFirstCallCount = 0;
+    let insertCallCount = 0;
 
-    return {
+    const tx = {
       query: {
         accounts: {
-          findFirst: async (_q: unknown) => opts.existingAccount ?? null,
+          findFirst: async (_q: unknown) => {
+            const callIdx = accountsFindFirstCallCount++;
+            if (callIdx === 0) return opts.existingAccount ?? null;
+            // Second call is the post-insert re-query
+            return opts.finalAccount ?? { userId: insertedUser.id };
+          },
         },
         users: {
           findFirst: async (_q: unknown) => opts.existingUser ?? null,
         },
       },
-      insert: (_table: unknown) => ({
-        values: (_values: unknown) => ({
-          returning: async () => {
-            const callIdx = insertCallIndex++;
-            if (callIdx === 0) {
-              // First insert: users table → return the new user
-              return [insertedUser];
-            }
-            // Subsequent inserts: accounts table → no returning needed
-            opts.onInsertAccounts?.();
-            return [];
-          },
-        }),
-      }),
+      insert: (_table: unknown) => {
+        const callIdx = insertCallCount++;
+        if (callIdx === 0) {
+          // users insert — needs .returning()
+          opts.onInsertUsers?.();
+          return {
+            values: (_v: unknown) => ({
+              returning: async () => [insertedUser],
+            }),
+          };
+        }
+        // accounts insert — uses .onConflictDoNothing()
+        opts.onInsertAccounts?.();
+        return {
+          values: (_v: unknown) => ({
+            onConflictDoNothing: () => Promise.resolve([]),
+          }),
+        };
+      },
+    };
+
+    const db = {
+      ...tx,
+      transaction: async (fn: (tx: typeof tx) => Promise<unknown>) => fn(tx),
     } as unknown as Database;
+
+    return { db, getTxInsertCallCount: () => insertCallCount };
   }
 
   it('returns existing user when account already exists (no insert)', async () => {
     let insertCalled = false;
 
-    const fakeDb = {
+    const tx = {
       query: {
         accounts: {
           findFirst: async (_q: unknown) => ({ userId: 'existing-user-id' }),
@@ -279,9 +342,17 @@ describe('upsertUserFromGoogle', () => {
       insert: (_t: unknown) => {
         insertCalled = true;
         return {
-          values: (_v: unknown) => ({ returning: async () => [] }),
+          values: (_v: unknown) => ({
+            returning: async () => [],
+            onConflictDoNothing: () => Promise.resolve([]),
+          }),
         };
       },
+    };
+
+    const fakeDb = {
+      ...tx,
+      transaction: async (fn: (tx: typeof tx) => Promise<unknown>) => fn(tx),
     } as unknown as Database;
 
     const result = await upsertUserFromGoogle({
@@ -300,31 +371,11 @@ describe('upsertUserFromGoogle', () => {
   });
 
   it('inserts user + account rows when no account exists', async () => {
-    let insertCallCount = 0;
-
     const insertedUser = { id: 'brand-new-user', email: 'henry@example.com', name: 'Henry', image: null };
-
-    const fakeDb = {
-      query: {
-        accounts: { findFirst: async (_q: unknown) => null },
-        users: { findFirst: async (_q: unknown) => null },
-      },
-      insert: (_table: unknown) => {
-        const callIdx = insertCallCount++;
-        if (callIdx === 0) {
-          // users insert — needs .returning()
-          return {
-            values: (_v: unknown) => ({
-              returning: async () => [insertedUser],
-            }),
-          };
-        }
-        // accounts insert — awaited directly (no .returning())
-        return {
-          values: (_v: unknown) => Promise.resolve([]),
-        };
-      },
-    } as unknown as Database;
+    const { db: fakeDb, getTxInsertCallCount } = makeFakeTx({
+      existingAccount: null,
+      insertedUser,
+    });
 
     const result = await upsertUserFromGoogle({
       db: fakeDb,
@@ -337,14 +388,14 @@ describe('upsertUserFromGoogle', () => {
 
     assert.equal(result.id, 'brand-new-user');
     assert.equal(result.email, 'henry@example.com');
-    assert.equal(insertCallCount, 2, 'should call insert twice (users + accounts)');
+    assert.equal(getTxInsertCallCount(), 2, 'should call insert twice (users + accounts)');
   });
 
   it('second call with same googleSub returns same userId without inserting', async () => {
     // Simulate the second call: account already exists after first insert
     let insertCalled = false;
 
-    const fakeDb = {
+    const tx = {
       query: {
         accounts: {
           findFirst: async (_q: unknown) => ({ userId: 'idempotent-user-id' }),
@@ -361,9 +412,17 @@ describe('upsertUserFromGoogle', () => {
       insert: (_t: unknown) => {
         insertCalled = true;
         return {
-          values: (_v: unknown) => ({ returning: async () => [] }),
+          values: (_v: unknown) => ({
+            returning: async () => [],
+            onConflictDoNothing: () => Promise.resolve([]),
+          }),
         };
       },
+    };
+
+    const fakeDb = {
+      ...tx,
+      transaction: async (fn: (tx: typeof tx) => Promise<unknown>) => fn(tx),
     } as unknown as Database;
 
     const result1 = await upsertUserFromGoogle({
@@ -390,7 +449,7 @@ describe('upsertUserFromGoogle', () => {
   });
 
   it('throws when account exists but user row is missing (data integrity failure)', async () => {
-    const fakeDb = {
+    const tx = {
       query: {
         accounts: {
           findFirst: async (_q: unknown) => ({ userId: 'orphan-account-user' }),
@@ -400,8 +459,16 @@ describe('upsertUserFromGoogle', () => {
         },
       },
       insert: (_t: unknown) => ({
-        values: (_v: unknown) => ({ returning: async () => [] }),
+        values: (_v: unknown) => ({
+          returning: async () => [],
+          onConflictDoNothing: () => Promise.resolve([]),
+        }),
       }),
+    };
+
+    const fakeDb = {
+      ...tx,
+      transaction: async (fn: (tx: typeof tx) => Promise<unknown>) => fn(tx),
     } as unknown as Database;
 
     await assert.rejects(

@@ -107,7 +107,7 @@ export async function POST(req: Request) {
   });
   if (!allowed) {
     log.info(
-      { event: 'auth.mobile_signin_denied', email: googlePayload.email },
+      { event: 'auth.mobile_signin_denied' },
       'Mobile sign-in denied by allowlist',
     );
     return NextResponse.json({ error: 'access_denied' }, { status: 403 });

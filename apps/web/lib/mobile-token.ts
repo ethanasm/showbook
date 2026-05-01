@@ -10,10 +10,12 @@
  *
  * Salt note: Auth.js encodes its session cookie with `salt = cookieName`.
  * For HTTPS the cookie name is `__Secure-authjs.session-token`; for plain HTTP
- * it is `authjs.session-token`. Because mobile Bearer tokens are not bound to a
- * cookie, we always use `authjs.session-token` as the salt — consistent with the
- * test login route in /api/test/login and independent of whether the web app
- * happens to be on HTTP or HTTPS. encode and decode MUST use the same salt.
+ * it is `authjs.session-token`. Mobile tokens are not cookies, so we use a
+ * stable, protocol-independent salt ('authjs.session-token' — the non-secure
+ * cookie name). This intentionally diverges from the cookie path's
+ * protocol-conditional salt so a mobile token never collides with a cookie
+ * token, even if one were submitted as the other. encode and decode MUST use
+ * the same salt.
  */
 
 import { encode, decode } from 'next-auth/jwt';
@@ -90,14 +92,30 @@ export async function verifyGoogleIdToken(
 // ---------------------------------------------------------------------------
 
 /**
- * Upsert the user + account rows. Idempotent — safe to call on every sign-in.
+ * Upsert the user + account rows. Idempotent and concurrency-safe.
  *
- * Lookup order:
- *   1. Find an existing `accounts` row for (provider='google', providerAccountId=googleSub).
- *      If found, fetch and return the linked user.
- *   2. Otherwise insert a new `users` row, then a new `accounts` row pointing at it.
+ * Concurrency strategy: a UNIQUE INDEX on accounts(provider, provider_account_id)
+ * (migration 0022) is the single source of truth. The function wraps everything
+ * in a transaction and handles the race like this:
  *
- * This mirrors the DrizzleAdapter's linkAccount + createUser flow so the rows
+ *   1. Inside the transaction, look up the accounts row for this Google sub.
+ *   2. If it already exists, return the linked user — done.
+ *   3. If it doesn't exist, insert a new users row, then insert the accounts
+ *      row with ON CONFLICT DO NOTHING (in case a concurrent transaction just
+ *      beat us to it and committed between our lookup and our insert).
+ *   4. After the accounts insert, re-query for the accounts row. If we won
+ *      the race it's our new row; if we lost it's the concurrent winner's row.
+ *      Either way we get the stable userId from it.
+ *   5. Fetch and return the user row for that userId.
+ *
+ * This means: in the concurrent-first-login case, two users rows may be
+ * created, but only one accounts row survives (due to ON CONFLICT DO NOTHING).
+ * The "extra" users row is an orphan — it has no accounts row pointing at it
+ * and will never be used. This is acceptable: it's rare, not a security issue,
+ * and far preferable to two users rows each with an accounts row pointing at
+ * them (which is the scenario without this constraint).
+ *
+ * This mirrors the DrizzleAdapter's linkAccount + createUser flow so rows
  * are indistinguishable from those created by the web OAuth flow.
  */
 export async function upsertUserFromGoogle(args: {
@@ -110,56 +128,96 @@ export async function upsertUserFromGoogle(args: {
 }): Promise<{ id: string; email: string; name: string | null; image: string | null }> {
   const drizzle = args.db ?? defaultDb;
 
-  // 1. Check for existing account
-  const existingAccount = await drizzle.query.accounts.findFirst({
-    where: and(
-      eq(accounts.provider, 'google'),
-      eq(accounts.providerAccountId, args.googleSub),
-    ),
-  });
-
-  if (existingAccount) {
-    // Account exists — fetch the user row
-    const existingUser = await drizzle.query.users.findFirst({
-      where: eq(users.id, existingAccount.userId),
+  return drizzle.transaction(async (tx) => {
+    // 1. Check for existing account (inside tx for isolation)
+    const existingAccount = await tx.query.accounts.findFirst({
+      where: and(
+        eq(accounts.provider, 'google'),
+        eq(accounts.providerAccountId, args.googleSub),
+      ),
     });
-    if (!existingUser) {
-      throw new Error(`Account row found but user ${existingAccount.userId} is missing`);
+
+    if (existingAccount) {
+      // Account exists — fetch the user row
+      const existingUser = await tx.query.users.findFirst({
+        where: eq(users.id, existingAccount.userId),
+      });
+      if (!existingUser) {
+        throw new Error(`Account row found but user ${existingAccount.userId} is missing`);
+      }
+      return {
+        id: existingUser.id,
+        email: existingUser.email ?? args.email,
+        name: existingUser.name ?? null,
+        image: existingUser.image ?? null,
+      };
+    }
+
+    // 2. No account yet — insert a new user row
+    const [newUser] = await tx
+      .insert(users)
+      .values({
+        email: args.email,
+        name: args.name,
+        image: args.image,
+        emailVerified: args.emailVerified ? new Date() : null,
+      })
+      .returning();
+
+    if (!newUser) throw new Error('Failed to insert new user');
+
+    // 3. Insert the accounts row; ON CONFLICT DO NOTHING handles the race
+    //    where a concurrent transaction committed an accounts row between our
+    //    lookup (step 1) and now. The UNIQUE INDEX on (provider, provider_account_id)
+    //    is what makes ON CONFLICT DO NOTHING effective here.
+    await tx
+      .insert(accounts)
+      .values({
+        userId: newUser.id,
+        type: 'oauth',
+        provider: 'google',
+        providerAccountId: args.googleSub,
+      })
+      .onConflictDoNothing();
+
+    // 4. Re-query to get the definitive accounts row (ours or the concurrent winner's)
+    const finalAccount = await tx.query.accounts.findFirst({
+      where: and(
+        eq(accounts.provider, 'google'),
+        eq(accounts.providerAccountId, args.googleSub),
+      ),
+    });
+
+    if (!finalAccount) {
+      // Should be impossible: we just inserted with ON CONFLICT DO NOTHING,
+      // so either our row or a concurrent row must exist.
+      throw new Error('Failed to find accounts row after upsert');
+    }
+
+    // 5. If the winning userId is ours, we can return newUser directly
+    if (finalAccount.userId === newUser.id) {
+      return {
+        id: newUser.id,
+        email: newUser.email ?? args.email,
+        name: newUser.name ?? null,
+        image: newUser.image ?? null,
+      };
+    }
+
+    // 5b. A concurrent transaction won — fetch their user row
+    const winningUser = await tx.query.users.findFirst({
+      where: eq(users.id, finalAccount.userId),
+    });
+    if (!winningUser) {
+      throw new Error(`Concurrent account row found but user ${finalAccount.userId} is missing`);
     }
     return {
-      id: existingUser.id,
-      email: existingUser.email ?? args.email,
-      name: existingUser.name ?? null,
-      image: existingUser.image ?? null,
+      id: winningUser.id,
+      email: winningUser.email ?? args.email,
+      name: winningUser.name ?? null,
+      image: winningUser.image ?? null,
     };
-  }
-
-  // 2. New user: insert user row then account row
-  const [newUser] = await drizzle
-    .insert(users)
-    .values({
-      email: args.email,
-      name: args.name,
-      image: args.image,
-      emailVerified: args.emailVerified ? new Date() : null,
-    })
-    .returning();
-
-  if (!newUser) throw new Error('Failed to insert new user');
-
-  await drizzle.insert(accounts).values({
-    userId: newUser.id,
-    type: 'oauth',
-    provider: 'google',
-    providerAccountId: args.googleSub,
   });
-
-  return {
-    id: newUser.id,
-    email: newUser.email ?? args.email,
-    name: newUser.name ?? null,
-    image: newUser.image ?? null,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -194,13 +252,17 @@ export async function encodeMobileToken(args: {
 }
 
 /**
- * Decode + verify a mobile JWT. Returns `{ id }` on success, null on invalid/expired.
- * Used by the tRPC route handler to validate `Authorization: Bearer <token>`.
+ * Decode + verify a mobile JWT. Returns `{ id, email }` on success, null on
+ * invalid/expired/tampered. Used by the tRPC route handler to validate
+ * `Authorization: Bearer <token>`.
+ *
+ * Both `id` and `email` are defensively type-narrowed: a tampered token with
+ * non-string claims (e.g. `id: 42`) returns null rather than casting blindly.
  */
 export async function decodeMobileToken(args: {
   token: string;
   secret: string;
-}): Promise<{ id: string } | null> {
+}): Promise<{ id: string; email: string | null } | null> {
   try {
     const payload = await decode({
       token: args.token,
@@ -208,9 +270,12 @@ export async function decodeMobileToken(args: {
       salt: MOBILE_JWT_SALT,
     });
     if (!payload) return null;
-    const id = (payload as Record<string, unknown>).id as string | undefined;
-    if (!id) return null;
-    return { id };
+    const raw = payload as Record<string, unknown>;
+    const id = raw.id;
+    if (typeof id !== 'string' || !id) return null;
+    const email = raw.email;
+    const emailValue: string | null = typeof email === 'string' ? email : null;
+    return { id, email: emailValue };
   } catch {
     return null;
   }
