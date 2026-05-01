@@ -162,6 +162,10 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
+    // Google brand white. Intentionally hardcoded — the user identifies
+    // this as the Google badge regardless of app theme, so the brand
+    // colors don't theme-swap. (Same reasoning for googleBadgeLetter
+    // below.)
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -170,6 +174,8 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist Sans',
     fontSize: 13,
     fontWeight: '700',
+    // Google brand blue (#4285F4). Intentionally hardcoded for brand
+    // recognition — not a theme token.
     color: '#4285F4',
   },
   titleBlock: {

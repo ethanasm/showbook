@@ -19,6 +19,25 @@
  * Set after the user finishes the last permission step. We expose
  * `isFirstRun` from useAuth so the consumer (sign-in screen) can route
  * appropriately after a successful sign-in.
+ *
+ * Why useIdTokenAuthRequest + a useEffect on response (not just
+ * `await promptAsync`):
+ *
+ *   On native (iOS/Android), expo-auth-session uses ResponseType.Code by
+ *   default and auto-exchanges the code for tokens *inside the hook*
+ *   (see node_modules/expo-auth-session/build/providers/Google.js, the
+ *   `setFullResult({ ...result, params: { id_token, access_token } })` block
+ *   in the useAuthRequest useEffect). The imperative result returned from
+ *   `promptAsync()` is the pre-exchange `result` — its `params` does NOT
+ *   contain `id_token` on native. The id_token only appears on the
+ *   *response* tuple element after the hook's internal exchange runs.
+ *
+ *   So we treat `promptAsync()` as a fire-and-forget trigger and watch the
+ *   `response` state for `type === 'success'`, then read `id_token` from
+ *   it and call exchangeGoogleIdTokenForSession from a useEffect.
+ *
+ *   useIdTokenAuthRequest also flips ResponseType to IdToken on web so the
+ *   flow is direct there.
  */
 
 import React from 'react';
@@ -66,7 +85,7 @@ const AuthContext = React.createContext<AuthContextValue>({
   token: null,
   isLoading: true,
   isSigningIn: false,
-  isFirstRun: false,
+  isFirstRun: true,
   error: null,
   signIn: async () => undefined,
   signOut: async () => undefined,
@@ -82,24 +101,33 @@ export function AuthProvider({
   const [token, setToken] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSigningIn, setIsSigningIn] = React.useState(false);
-  const [isFirstRun, setIsFirstRun] = React.useState(false);
+  // Default true: absence of the SecureStore flag means first-run not done.
+  // The mount effect overwrites this after reading the stored value.
+  const [isFirstRun, setIsFirstRun] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
   // expo-auth-session's hook MUST be called in the render body.
-  // If a client ID is missing for the current platform, pass undefined and
-  // surface a config error when signIn is invoked.
-  const [, , promptAsync] = Google.useAuthRequest({
+  // We use useIdTokenAuthRequest (not useAuthRequest) because it asks the
+  // hook to populate `response.params.id_token` after the internal code
+  // exchange completes. See the note at the top of this file.
+  const [, response, promptAsync] = Google.useIdTokenAuthRequest({
     iosClientId: GOOGLE_OAUTH_CLIENT_ID_IOS,
     androidClientId: GOOGLE_OAUTH_CLIENT_ID_ANDROID,
     webClientId: GOOGLE_OAUTH_CLIENT_ID_WEB,
   });
 
   // Keep a ref to promptAsync so signIn (returned in context) reads the
-  // latest version after re-renders.
+  // latest version after re-renders, even though signIn's useCallback deps
+  // are empty.
   const promptAsyncRef = React.useRef(promptAsync);
   React.useEffect(() => {
     promptAsyncRef.current = promptAsync;
   }, [promptAsync]);
+
+  // signIn's "in-flight" guard. Held in a ref so the callback's deps stay
+  // empty (avoiding callback identity churn that would force consumers to
+  // re-render).
+  const isSigningInRef = React.useRef(false);
 
   // Restore cached session on mount.
   React.useEffect(() => {
@@ -136,39 +164,11 @@ export function AuthProvider({
     };
   }, []);
 
-  const signIn = React.useCallback(async () => {
-    if (isSigningIn) return;
-    setError(null);
-
-    const platform: 'ios' | 'android' | 'web' =
-      Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';
-    const configError = describeGoogleOAuthMisconfiguration(platform);
-    if (configError) {
-      setError(`Sign-in is not configured: ${configError}`);
-      return;
-    }
-
-    setIsSigningIn(true);
+  // Helper that takes a Google ID token, exchanges it for a Showbook
+  // session, persists it, and updates state. Called from the response
+  // useEffect below.
+  const exchangeAndPersist = React.useCallback(async (idToken: string) => {
     try {
-      const result = await promptAsyncRef.current();
-      if (result.type === 'cancel' || result.type === 'dismiss') {
-        // User cancelled — silent, no error
-        return;
-      }
-      if (result.type === 'error') {
-        setError(describeSignInError(new Error('oauth_error')));
-        return;
-      }
-      if (result.type !== 'success') {
-        setError(describeSignInError(new Error('oauth_error')));
-        return;
-      }
-      const idToken = result.params?.id_token;
-      if (!idToken || typeof idToken !== 'string') {
-        setError(describeSignInError(new Error('invalid_response')));
-        return;
-      }
-
       const session = await exchangeGoogleIdTokenForSession({
         idToken,
         apiUrl: API_URL,
@@ -189,9 +189,72 @@ export function AuthProvider({
     } catch (err) {
       setError(describeSignInError(err));
     } finally {
+      isSigningInRef.current = false;
       setIsSigningIn(false);
     }
-  }, [isSigningIn]);
+  }, []);
+
+  // Watch the auth-session response for success. The id_token is only
+  // available here (not from the imperative promptAsync return value) on
+  // native, because the hook auto-exchanges the code-flow result inside
+  // its own useEffect.
+  React.useEffect(() => {
+    if (!response) return;
+    if (response.type !== 'success') {
+      // cancel/dismiss/error are handled in signIn after promptAsync
+      // returns. Don't double-handle here.
+      return;
+    }
+    const idToken = response.params?.id_token;
+    if (typeof idToken !== 'string' || !idToken) {
+      setError(describeSignInError(new Error('invalid_response')));
+      isSigningInRef.current = false;
+      setIsSigningIn(false);
+      return;
+    }
+    void exchangeAndPersist(idToken);
+  }, [response, exchangeAndPersist]);
+
+  const signIn = React.useCallback(async () => {
+    if (isSigningInRef.current) return;
+    setError(null);
+
+    const platform: 'ios' | 'android' | 'web' =
+      Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';
+    const configError = describeGoogleOAuthMisconfiguration(platform);
+    if (configError) {
+      setError(`Sign-in is not configured: ${configError}`);
+      return;
+    }
+
+    isSigningInRef.current = true;
+    setIsSigningIn(true);
+    try {
+      const result = await promptAsyncRef.current();
+      // result.type ∈ 'cancel' | 'dismiss' | 'success' | 'error' | 'opened' | 'locked'.
+      // We don't read `result.params.id_token` here because on native that
+      // value isn't populated yet — the response useEffect handles 'success'.
+      if (result?.type === 'cancel' || result?.type === 'dismiss') {
+        // User cancelled — silent, no error
+        isSigningInRef.current = false;
+        setIsSigningIn(false);
+        return;
+      }
+      if (result?.type === 'error') {
+        setError(describeSignInError(new Error('oauth_error')));
+        isSigningInRef.current = false;
+        setIsSigningIn(false);
+        return;
+      }
+      // For 'success', the response useEffect picks it up and calls
+      // exchangeAndPersist. signIn intentionally does not await it —
+      // isSigningIn stays true until exchangeAndPersist runs to completion.
+    } catch (err) {
+      setError(describeSignInError(err));
+      isSigningInRef.current = false;
+      setIsSigningIn(false);
+    }
+  }, []);
 
   const signOut = React.useCallback(async () => {
     await Promise.all([
@@ -201,6 +264,9 @@ export function AuthProvider({
     setToken(null);
     setUser(null);
     setError(null);
+    // Sign-out invalidates the session — by definition the next sign-in
+    // (whether the same user or a different one) needs to redo first-run.
+    setIsFirstRun(true);
   }, []);
 
   const markFirstRunComplete = React.useCallback(async () => {
