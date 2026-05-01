@@ -160,7 +160,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
   const mode: ThemeMode = preference === 'system' ? deviceScheme : preference;
   const tokens = mode === 'dark' ? DARK_TOKENS : LIGHT_TOKENS;
 
-  const value: ThemeContextValue = { mode, preference, setPreference, tokens };
+  const value = React.useMemo<ThemeContextValue>(
+    () => ({ mode, preference, setPreference, tokens }),
+    [mode, preference, setPreference, tokens],
+  );
 
   return React.createElement(ThemeContext.Provider, { value }, children);
 }

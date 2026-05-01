@@ -11,8 +11,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Check, Eye, Bookmark } from 'lucide-react-native';
-import { useTheme } from '../lib/theme';
-import type { ShowState } from '../lib/theme';
+import { useTheme, type ColorTokens, type ShowState } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 
 // Extended state includes wishlist for UI display
 type ChipState = ShowState | 'wishlist';
@@ -21,44 +21,50 @@ interface StateChipProps {
   state: ChipState;
 }
 
+// Module-scope interface — not rebuilt per render
+interface ChipConfig {
+  label: string;
+  bg: string;
+  textColor: string;
+  borderColor?: string;
+  icon: React.JSX.Element;
+}
+
+function getChipConfig(state: Exclude<ChipState, 'past'>, colors: ColorTokens): ChipConfig {
+  switch (state) {
+    case 'ticketed':
+      return {
+        label: 'TICKETED',
+        bg: colors.accent,
+        textColor: colors.accentText,
+        icon: <Check size={9} color={colors.accentText} strokeWidth={2.5} />,
+      };
+    case 'watching':
+      return {
+        label: 'WATCHING',
+        bg: 'transparent',
+        textColor: colors.ink,
+        borderColor: colors.ruleStrong,
+        icon: <Eye size={9} color={colors.ink} strokeWidth={2.5} />,
+      };
+    case 'wishlist':
+      return {
+        label: 'WISHLIST',
+        bg: 'transparent',
+        textColor: colors.ink,
+        borderColor: colors.ruleStrong,
+        icon: <Bookmark size={9} color={colors.ink} strokeWidth={2.5} />,
+      };
+  }
+}
+
 export function StateChip({ state }: StateChipProps): React.JSX.Element | null {
   const { tokens } = useTheme();
   const { colors } = tokens;
 
   if (state === 'past') return null;
 
-  interface ChipConfig {
-    label: string;
-    bg: string;
-    textColor: string;
-    borderColor?: string;
-    icon: React.JSX.Element;
-  }
-
-  const config: Record<Exclude<ChipState, 'past'>, ChipConfig> = {
-    ticketed: {
-      label: 'TICKETED',
-      bg: colors.accent,
-      textColor: colors.accentText,
-      icon: <Check size={9} color={colors.accentText} strokeWidth={2.5} />,
-    },
-    watching: {
-      label: 'WATCHING',
-      bg: 'transparent',
-      textColor: colors.ink,
-      borderColor: colors.ruleStrong,
-      icon: <Eye size={9} color={colors.ink} strokeWidth={2.5} />,
-    },
-    wishlist: {
-      label: 'WISHLIST',
-      bg: 'transparent',
-      textColor: colors.ink,
-      borderColor: colors.ruleStrong,
-      icon: <Bookmark size={9} color={colors.ink} strokeWidth={2.5} />,
-    },
-  };
-
-  const chip = config[state as Exclude<ChipState, 'past'>];
+  const chip = getChipConfig(state, colors);
 
   return (
     <View
@@ -82,7 +88,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     paddingVertical: 2,
     paddingHorizontal: 10,
     alignSelf: 'flex-start',

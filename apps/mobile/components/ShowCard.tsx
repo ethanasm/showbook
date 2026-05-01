@@ -59,6 +59,7 @@ export function ShowCard({ show, onPress, compact = false }: ShowCardProps): Rea
         styles.container,
         compact ? styles.compact : styles.card,
         { backgroundColor: compact ? 'transparent' : colors.surface },
+        compact && { borderBottomColor: colors.rule },
         pressed && styles.pressed,
       ]}
     >
@@ -123,7 +124,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingRight: 0,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(245,245,243,0.10)', // rule — static fallback; dynamic per useTheme above
   },
   pressed: {
     opacity: 0.85,

@@ -16,6 +16,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Music, Drama, Smile, Tent, Trophy } from 'lucide-react-native';
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 import type { Kind } from '../lib/theme';
 
 interface KindBadgeProps {
@@ -91,7 +92,7 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     alignSelf: 'flex-start',
   },
   label: {
