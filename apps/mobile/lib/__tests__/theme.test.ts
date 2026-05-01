@@ -104,6 +104,10 @@ describe('dark color tokens', () => {
   it('accentText = #0C0C0C (dark bg)', () => {
     assert.equal(DARK_COLORS.accentText, '#0C0C0C');
   });
+
+  it('danger = #E63946 (destructive red, dark mode)', () => {
+    assert.equal(DARK_COLORS.danger, '#E63946');
+  });
 });
 
 describe('light color tokens', () => {
@@ -117,6 +121,10 @@ describe('light color tokens', () => {
 
   it('accentText = #FFFFFF (white on amber)', () => {
     assert.equal(LIGHT_COLORS.accentText, '#FFFFFF');
+  });
+
+  it('danger = #D42F3A (destructive red, light mode)', () => {
+    assert.equal(LIGHT_COLORS.danger, '#D42F3A');
   });
 });
 

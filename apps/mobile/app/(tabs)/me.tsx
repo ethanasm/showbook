@@ -2,7 +2,8 @@
  * Me tab — account, theme preference, sign out.
  *
  * The only fully wired tab in M1. Layout follows the design source
- * (screens/me-and-modals.jsx PreferencesScreen):
+ * (design_handoff_showbook_mobile/screens/me-and-modals.jsx
+ * PreferencesScreen):
  *   - User card row (avatar circle + name + signed-in email)
  *   - APPEARANCE section: Theme segmented control (Light / Dark / System)
  *   - ACCOUNT section: Sign out (destructive, red)
@@ -117,7 +118,7 @@ export default function MeScreen(): React.JSX.Element {
               pressed && styles.pressed,
             ]}
           >
-            <Text style={styles.signOutLabel}>Sign out</Text>
+            <Text style={[styles.signOutLabel, { color: colors.danger }]}>Sign out</Text>
           </Pressable>
         </View>
 
@@ -272,7 +273,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist Sans',
     fontSize: 14,
     fontWeight: '500',
-    color: '#E63946',
   },
   pressed: {
     opacity: 0.85,
