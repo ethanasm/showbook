@@ -35,7 +35,8 @@
     "prod:up": "docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build",
     "prod:down": "docker compose --env-file .env.prod -f docker-compose.prod.yml down",
     "prod:logs": "docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f web",
-    "prod:migrate": "docker compose --env-file .env.prod -f docker-compose.prod.yml exec web pnpm --filter @showbook/db drizzle-kit migrate"
+    "prod:migrate": "docker compose --env-file .env.prod -f docker-compose.prod.yml exec web pnpm --filter @showbook/db drizzle-kit migrate",
+    "setup:runner": "bash scripts/setup-runner.sh"
   },
   "devDependencies": {
     "@types/node": "^22.19.17",
