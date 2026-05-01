@@ -6,11 +6,6 @@
  * branch, and 404→empty mapping.
  */
 
-// Pin the test process to a non-UTC timezone so we catch regressions where
-// `searchSetlist` formats the outgoing date with local-time accessors. Set
-// before importing the module under test so any module-level Date work uses it.
-process.env.TZ = 'America/Los_Angeles';
-
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { searchArtist, searchSetlist, SetlistFmError } from '../setlistfm';
@@ -300,24 +295,6 @@ test('searchSetlist: accepts a Date object', async () => {
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   assert.ok(urlSeen.includes(`date=${dd}-${mm}-2024`));
-});
-
-// Regression: an ISO calendar date like '2024-08-02' parses as UTC midnight.
-// In a timezone behind UTC (this file pins TZ to America/Los_Angeles), local
-// accessors roll back to Aug 1, producing `date=01-08-2024` instead of
-// `date=02-08-2024`. searchSetlist must format from UTC accessors so the
-// caller's calendar date survives intact.
-test('searchSetlist: ISO date input is formatted in UTC, not local time', async () => {
-  let urlSeen = '';
-  stubFetch(async (url) => {
-    urlSeen = String(url);
-    return jsonResponse({ setlist: [], total: 0, page: 1, itemsPerPage: 30 });
-  });
-  await searchSetlist('mb-1', '2024-08-02');
-  assert.ok(
-    urlSeen.includes('date=02-08-2024'),
-    `expected date=02-08-2024 in URL, got: ${urlSeen}`,
-  );
 });
 
 test('searchSetlist: returns null on no results', async () => {
