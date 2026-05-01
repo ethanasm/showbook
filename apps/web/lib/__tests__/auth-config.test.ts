@@ -34,6 +34,17 @@ const callJwt = (args: {
   user?: { id: string };
 }) => callbacks.jwt!(args as unknown as JwtArgs);
 
+describe('authConfig.pages', () => {
+  it('routes auth errors to /signin so AccessDenied lands on the themed page', () => {
+    // Without `pages.error`, NextAuth renders its own unstyled
+    // `/api/auth/error` page for AccessDenied (and the "Sign in" link on
+    // it loops back into `/api/auth/*`). Pointing `error` at /signin keeps
+    // the user on the themed page, which reads `?error=` and shows a banner.
+    assert.equal(authConfig.pages?.signIn, '/signin');
+    assert.equal(authConfig.pages?.error, '/signin');
+  });
+});
+
 describe('authConfig.signIn', () => {
   beforeEach(() => {
     process.env.AUTH_ALLOWED_EMAILS = '';

@@ -6,16 +6,36 @@ import './signin.css';
 
 const log = child({ component: 'web.signin' });
 
+// Maps NextAuth's `?error=` codes to user-facing copy. Anything not listed
+// falls through to a generic message so unknown codes still render the
+// themed banner instead of nothing.
+function errorMessage(error: string | undefined): string | null {
+  if (!error) return null;
+  switch (error) {
+    case 'AccessDenied':
+      return "This Google account isn't on the allowlist. If you think it should be, reach out to the owner.";
+    case 'Verification':
+      return 'Your sign-in link is no longer valid. Please try signing in again.';
+    case 'Configuration':
+      return "There's a problem with the sign-in configuration. Please try again later.";
+    case 'OAuthAccountNotLinked':
+    case 'AccountNotLinked':
+      return 'This account is already linked to a different sign-in method.';
+    default:
+      return "Something went wrong signing you in. Please try again.";
+  }
+}
+
 export default async function SignInPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
-  const accessDenied = error === 'AccessDenied';
+  const errorText = errorMessage(error);
   const year = new Date().getFullYear();
 
-  if (accessDenied) {
+  if (error === 'AccessDenied') {
     // NextAuth redirects allowlist-rejected users here. The URL is user-craftable
     // so a fake denial is possible — acceptable noise for a side project.
     log.warn({ event: 'auth.denied' }, 'Sign-in denied by allowlist');
@@ -76,9 +96,9 @@ export default async function SignInPage({
           </ul>
 
           <div className="signin__cta">
-            {accessDenied ? (
+            {errorText ? (
               <div className="signin__error" role="alert">
-                This Google account isn&apos;t on the allowlist. If you think it should be, reach out to the owner.
+                {errorText}
               </div>
             ) : null}
             <form action={async () => {

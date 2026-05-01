@@ -15,6 +15,11 @@ export const authConfig = {
   ],
   pages: {
     signIn: '/signin',
+    // Without this, NextAuth's catch-all error handler renders its own
+    // unstyled `/api/auth/error` page (and its "Sign in" link points back
+    // into `/api/auth/*`, looping). Routing to `/signin` keeps the user
+    // on our themed page, which renders an error banner from `?error=`.
+    error: '/signin',
   },
   session: { strategy: 'jwt' },
   callbacks: {
