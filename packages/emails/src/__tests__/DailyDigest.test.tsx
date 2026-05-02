@@ -106,4 +106,29 @@ describe('renderDailyDigest', () => {
     const html = await renderDailyDigest(fullProps);
     assert.match(html, new RegExp(APP.replace(/\./g, '\\.')));
   });
+
+  it('renders preamble paragraphs when provided', async () => {
+    const html = await renderDailyDigest({
+      ...fullProps,
+      preamble:
+        'Tonight you trade the office for the Greek — Phoebe Bridgers, GA, lights down soon.\n\nLater this week Hamilton is waiting at the Richard Rodgers, and Olivia Rodrigo just popped up at MSG.',
+    });
+    assert.match(html, /trade the office for the Greek/);
+    assert.match(html, /Hamilton is waiting/);
+    // The static greeting should be replaced when a preamble is present.
+    // (react-email encodes apostrophes as &#x27; in the rendered HTML.)
+    assert.doesNotMatch(html, /here(?:'|&#x27;)s what(?:'|&#x27;)s on\./);
+  });
+
+  it('falls back to static greeting when preamble is null', async () => {
+    const html = await renderDailyDigest({ ...fullProps, preamble: null });
+    assert.match(html, /Hi <!-- -->Ethan<!-- --> — here&#x27;s what&#x27;s on\./);
+  });
+
+  it('renders the at-a-glance summary strip with counts', async () => {
+    const html = await renderDailyDigest(fullProps);
+    assert.match(html, /tonight/);
+    assert.match(html, /this week/);
+    assert.match(html, /new for you/);
+  });
 });
