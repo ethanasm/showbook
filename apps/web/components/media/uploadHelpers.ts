@@ -105,6 +105,14 @@ export function readVideoMetadata(file: File): Promise<{
 }> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
+    // URL.createObjectURL always returns a same-origin `blob:` URL, but make
+    // the contract explicit so user-supplied File data can't reach video.src
+    // as anything other than a blob reference.
+    if (!url.startsWith("blob:")) {
+      URL.revokeObjectURL(url);
+      resolve({});
+      return;
+    }
     const video = document.createElement("video");
     video.preload = "metadata";
     video.onloadedmetadata = () => {

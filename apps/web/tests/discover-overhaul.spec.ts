@@ -48,6 +48,15 @@ test.describe('Discover overhaul', () => {
     await page.goto('/discover');
     await page.waitForLoadState('networkidle');
 
+    // Slow down the refreshNow tRPC response so we can deterministically
+    // observe the in-flight UI. In CI, the mutation + ingest jobs can both
+    // complete before Playwright's polling catches the "Refreshing" /
+    // "Loading shows" state, making the assertions flake.
+    await page.route('**/api/trpc/discover.refreshNow**', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.continue();
+    });
+
     const btn = page.getByRole('button', { name: /^Refresh$/ });
     await btn.click();
 
@@ -136,11 +145,23 @@ test.describe('Date TBD UX on show detail page', () => {
     });
 
     // The row's underlying mutation creates a shows row with date=NULL.
-    // We verify the UX by looking up the show id via a tiny test endpoint
-    // and navigating directly to /shows/<id>.
-    const lookup = await page.request.get('/api/test/show-id?productionName=Hamilton&state=watching');
-    expect(lookup.ok()).toBeTruthy();
-    const { id } = await lookup.json();
+    // The Watching button flips optimistically on click, so we poll the
+    // test endpoint until the server-side write has actually landed.
+    let id: string | null = null;
+    await expect
+      .poll(
+        async () => {
+          const res = await page.request.get(
+            '/api/test/show-id?productionName=Hamilton&state=watching',
+          );
+          if (!res.ok()) return null;
+          const body = await res.json();
+          id = (body.id as string | null) ?? null;
+          return id;
+        },
+        { timeout: 8000 },
+      )
+      .toBeTruthy();
     expect(id).toBeTruthy();
 
     await page.goto(`/shows/${id}`);

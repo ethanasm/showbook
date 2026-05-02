@@ -152,7 +152,7 @@ test('getMediaUploadUrl: returns presigned R2 URL in r2 mode', async () => {
   process.env.R2_ACCESS_KEY_ID = 'AK';
   process.env.R2_SECRET_ACCESS_KEY = 'SK';
   const url = await getMediaUploadUrl('showbook/x.jpg', 'image/jpeg');
-  assert.match(url, /^https:\/\/.*r2\.cloudflarestorage\.com\/showbook\/x\.jpg/);
+  assert.match(url, /^https:\/\/[^/]+\.r2\.cloudflarestorage\.com\/showbook\/x\.jpg/);
   assert.match(url, /X-Amz-Algorithm=AWS4-HMAC-SHA256/);
 });
 
@@ -162,7 +162,7 @@ test('getMediaReadUrl: returns presigned R2 URL in r2 mode', async () => {
   process.env.R2_ACCESS_KEY_ID = 'AK';
   process.env.R2_SECRET_ACCESS_KEY = 'SK';
   const url = await getMediaReadUrl('showbook/x.jpg');
-  assert.match(url, /^https:\/\/.*r2\.cloudflarestorage\.com\/showbook\/x\.jpg/);
+  assert.match(url, /^https:\/\/[^/]+\.r2\.cloudflarestorage\.com\/showbook\/x\.jpg/);
 });
 
 // ── r2 mode: head + delete via stubbed S3Client.send ──────────────────

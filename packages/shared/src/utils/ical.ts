@@ -97,8 +97,12 @@ export function defaultShowTime(dateStr: string): { start: Date; end: Date } {
 }
 
 export function slugifyForFilename(value: string): string {
+  // Cap input before any regex pass so unbounded user-supplied strings can't
+  // drive worst-case backtracking; the final slice is just to enforce the
+  // output cap after collapsing runs of non-alphanumerics.
+  const bounded = value.slice(0, 200);
   return (
-    value
+    bounded
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')

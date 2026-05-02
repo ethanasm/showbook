@@ -63,7 +63,11 @@ function setupFetchMock(opts: {
   const calls: { url: string }[] = [];
   globalThis.fetch = (async (url: string) => {
     calls.push({ url });
-    if (url.includes('api.spotify.com')) {
+    // Parse the URL and dispatch by hostname rather than substring-matching,
+    // so an attacker-controlled path segment couldn't masquerade as an
+    // upstream API in some future caller.
+    const hostname = new URL(url).hostname;
+    if (hostname === 'api.spotify.com') {
       if (opts.spotifyStatus && opts.spotifyStatus !== 200) {
         return new Response('err', { status: opts.spotifyStatus });
       }
@@ -78,7 +82,7 @@ function setupFetchMock(opts: {
         },
       });
     }
-    if (url.includes('app.ticketmaster.com')) {
+    if (hostname === 'app.ticketmaster.com') {
       const m = url.match(/keyword=([^&]+)/);
       const keyword = m ? decodeURIComponent(m[1]!.replace(/\+/g, ' ')) : '';
       const attractions = opts.tmAttractionsByQuery[keyword] ?? [];

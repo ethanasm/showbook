@@ -20,7 +20,7 @@
     "@trpc/server": "^11.0.0",
     "drizzle-orm": "^0.45.2",
     "groq-sdk": "^1.1.2",
-    "pdf-parse": "1.1.1",
+    "pdf-parse": "2.4.5",
     "pg-boss": "^10.1.0",
     "superjson": "^2.2.6",
     "zod": "^4.3.6"
