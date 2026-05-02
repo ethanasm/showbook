@@ -35,6 +35,21 @@ const config: ExpoConfig = {
     config: GOOGLE_MAPS_API_KEY
       ? { googleMapsApiKey: GOOGLE_MAPS_API_KEY }
       : undefined,
+    // iPhone stays portrait-locked (matches the top-level `orientation`
+    // above); iPad gets all four orientations so the M6.C three-pane
+    // landscape layout has somewhere to live. The `~ipad` suffix is the
+    // standard Info.plist device-class override.
+    infoPlist: {
+      UISupportedInterfaceOrientations: [
+        'UIInterfaceOrientationPortrait',
+      ],
+      'UISupportedInterfaceOrientations~ipad': [
+        'UIInterfaceOrientationPortrait',
+        'UIInterfaceOrientationPortraitUpsideDown',
+        'UIInterfaceOrientationLandscapeLeft',
+        'UIInterfaceOrientationLandscapeRight',
+      ],
+    },
   },
   android: {
     package: 'com.showbook.app',
