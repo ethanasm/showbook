@@ -15,6 +15,10 @@ import assert from 'node:assert/strict';
 import {
   exchangeGoogleIdTokenForSession,
   describeSignInError,
+  isE2EMode,
+  loadE2ETestSession,
+  E2E_TOKEN_KEY,
+  E2E_USER_KEY,
 } from '../auth-helpers.js';
 
 const VALID_BODY = {
@@ -241,5 +245,110 @@ describe('describeSignInError', () => {
   it('handles non-Error throwables', () => {
     const msg = describeSignInError('string thrown');
     assert.match(msg, /couldn'?t sign you in/i);
+  });
+});
+
+describe('isE2EMode', () => {
+  it("returns true when EXPO_PUBLIC_E2E_MODE === '1'", () => {
+    assert.equal(isE2EMode('1'), true);
+  });
+
+  it('returns false for any other truthy string', () => {
+    assert.equal(isE2EMode('true'), false);
+    assert.equal(isE2EMode('yes'), false);
+    assert.equal(isE2EMode('0'), false);
+    assert.equal(isE2EMode(''), false);
+  });
+
+  // Production-build safety: an unset env var must NEVER be interpreted
+  // as E2E mode. If this assertion ever flips, every signed release would
+  // bypass Google OAuth — guard it explicitly.
+  it('returns false when env var is undefined (production-build safety)', () => {
+    assert.equal(isE2EMode(undefined), false);
+  });
+
+  it('reads from process.env by default', () => {
+    const original = process.env.EXPO_PUBLIC_E2E_MODE;
+    try {
+      delete process.env.EXPO_PUBLIC_E2E_MODE;
+      assert.equal(isE2EMode(), false);
+      process.env.EXPO_PUBLIC_E2E_MODE = '1';
+      assert.equal(isE2EMode(), true);
+    } finally {
+      if (original === undefined) {
+        delete process.env.EXPO_PUBLIC_E2E_MODE;
+      } else {
+        process.env.EXPO_PUBLIC_E2E_MODE = original;
+      }
+    }
+  });
+});
+
+describe('loadE2ETestSession', () => {
+  function makeStore(map: Record<string, string | null>) {
+    const calls: string[] = [];
+    return {
+      calls,
+      getItemAsync: async (key: string) => {
+        calls.push(key);
+        return map[key] ?? null;
+      },
+    };
+  }
+
+  it('returns the session when both keys are present and valid', async () => {
+    const user = {
+      id: 'u_e2e',
+      email: 'e2e@showbook.test',
+      name: 'E2E User',
+      image: null,
+    };
+    const store = makeStore({
+      [E2E_TOKEN_KEY]: 'jwt-from-maestro',
+      [E2E_USER_KEY]: JSON.stringify(user),
+    });
+    const session = await loadE2ETestSession(store);
+    assert.deepEqual(session, { token: 'jwt-from-maestro', user });
+    assert.deepEqual(store.calls.sort(), [E2E_TOKEN_KEY, E2E_USER_KEY].sort());
+  });
+
+  it('returns null when token is missing', async () => {
+    const store = makeStore({
+      [E2E_USER_KEY]: JSON.stringify({
+        id: 'u',
+        email: 'a@b.co',
+        name: null,
+        image: null,
+      }),
+    });
+    assert.equal(await loadE2ETestSession(store), null);
+  });
+
+  it('returns null when user blob is missing', async () => {
+    const store = makeStore({ [E2E_TOKEN_KEY]: 'jwt' });
+    assert.equal(await loadE2ETestSession(store), null);
+  });
+
+  it('returns null when user blob is not valid JSON', async () => {
+    const store = makeStore({
+      [E2E_TOKEN_KEY]: 'jwt',
+      [E2E_USER_KEY]: '{not json',
+    });
+    assert.equal(await loadE2ETestSession(store), null);
+  });
+
+  it('returns null when user blob is missing required fields', async () => {
+    const store = makeStore({
+      [E2E_TOKEN_KEY]: 'jwt',
+      [E2E_USER_KEY]: JSON.stringify({ email: 'a@b.co' }),
+    });
+    assert.equal(await loadE2ETestSession(store), null);
+  });
+
+  it('uses the documented SecureStore keys', () => {
+    // Maestro flows reference these literal strings; if they ever change
+    // the e2e flow YAML must change too. Pin them here as a safety net.
+    assert.equal(E2E_TOKEN_KEY, 'e2e.test-token');
+    assert.equal(E2E_USER_KEY, 'e2e.test-user');
   });
 });

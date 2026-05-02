@@ -1,0 +1,27 @@
+# Maestro project-level config for the Showbook mobile app.
+#
+# Discovery: every YAML under flows/ is a flow file Maestro will execute
+# when this directory is passed to `maestro test`. The CI workflow at
+# .github/workflows/mobile-e2e.yml runs the whole directory against
+# Maestro Cloud nightly + on push to main; per-PR runs are intentionally
+# disabled (mobile-testing-strategy.md § Wave F).
+#
+# Bundle id: must match `ios.bundleIdentifier` and `android.package` in
+# apps/mobile/app.config.ts. They are kept in sync manually — if either
+# id changes, update this file too.
+#
+# `e2e` builds set EXPO_PUBLIC_E2E_MODE=1 (see apps/mobile/eas.json),
+# which flips apps/mobile/lib/auth.ts into the Maestro bypass branch:
+# the sign-in tap reads a pre-baked Showbook JWT from SecureStore keys
+# `e2e.test-token` + `e2e.test-user` instead of running real Google
+# OAuth. Production builds ship with the var unset, so this branch is
+# dead code there.
+flows:
+  - flows/
+
+appId: com.showbook.app
+
+# Increase the implicit waitFor budget — Showbook's first launch warms a
+# tRPC connection and restores the SecureStore session, both of which
+# can take a few seconds on a cold start in CI.
+defaultTimeout: 30000

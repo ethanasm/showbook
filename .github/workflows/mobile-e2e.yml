@@ -1,0 +1,112 @@
+name: Mobile E2E (Maestro)
+
+# Per mobile-testing-strategy.md § Wave F: Maestro flows are gated to
+# nightly + push-to-main only. They're slow (EAS build + Maestro Cloud
+# upload) and per-PR runs would block the fast feedback loop the unit /
+# component / integration tiers provide.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/mobile-e2e.yml'
+  schedule:
+    # 09:00 UTC = 04:00 ET — runs after the nightly cron jobs settle.
+    - cron: '0 9 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-test:
+    name: EAS build + Maestro Cloud
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      MAESTRO_CLOUD_API_KEY: ${{ secrets.MAESTRO_CLOUD_API_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # iOS simulator builds run on EAS infra; we just trigger and wait
+      # for the artifact URL. The `e2e` profile (apps/mobile/eas.json)
+      # bakes EXPO_PUBLIC_E2E_MODE=1 so apps/mobile/lib/auth.ts uses
+      # the SecureStore bypass instead of real Google OAuth.
+      - name: Build iOS app for e2e
+        id: build
+        working-directory: apps/mobile
+        run: |
+          eas build \
+            --platform ios \
+            --profile e2e \
+            --non-interactive \
+            --no-wait \
+            --json > /tmp/eas-build.json
+          BUILD_URL=$(node -e "const b=require('/tmp/eas-build.json'); console.log(Array.isArray(b)?b[0].artifacts.buildUrl:b.artifacts.buildUrl)")
+          echo "build_url=$BUILD_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for EAS build to finish
+        working-directory: apps/mobile
+        run: |
+          BUILD_ID=$(node -e "const b=require('/tmp/eas-build.json'); console.log(Array.isArray(b)?b[0].id:b.id)")
+          eas build:view "$BUILD_ID" --json > /dev/null
+          # Poll until status is 'finished' or 'errored'.
+          for i in $(seq 1 60); do
+            STATUS=$(eas build:view "$BUILD_ID" --json | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const b=JSON.parse(d);console.log(b.status)})")
+            echo "build status: $STATUS"
+            case "$STATUS" in
+              finished) exit 0 ;;
+              errored|canceled) exit 1 ;;
+            esac
+            sleep 30
+          done
+          echo "EAS build timed out" >&2
+          exit 1
+
+      - name: Install Maestro CLI
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Validate Maestro flow YAML
+        run: |
+          maestro test --dry-run apps/mobile/e2e/flows/
+
+      # Maestro Cloud accepts an .ipa / .app.zip URL; we hand it the EAS
+      # artifact directly. MAESTRO_CLOUD_API_KEY is the project token
+      # configured in repo Settings → Secrets.
+      - name: Run flows on Maestro Cloud
+        env:
+          BUILD_URL: ${{ steps.build.outputs.build_url }}
+          MAESTRO_E2E_TOKEN: ${{ secrets.MAESTRO_E2E_TOKEN }}
+          MAESTRO_E2E_USER_JSON: ${{ secrets.MAESTRO_E2E_USER_JSON }}
+        run: |
+          maestro cloud \
+            --apiKey "$MAESTRO_CLOUD_API_KEY" \
+            --env MAESTRO_E2E_TOKEN="$MAESTRO_E2E_TOKEN" \
+            --env MAESTRO_E2E_USER_JSON="$MAESTRO_E2E_USER_JSON" \
+            "$BUILD_URL" \
+            apps/mobile/e2e/flows/
