@@ -5,8 +5,8 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "test": "find src/__tests__ -name '*.test.ts' -not -name '*.integration.test.ts' -print0 | xargs -0 node --import tsx --test",
-    "test:coverage": "mkdir -p coverage && find src/__tests__ -name '*.test.ts' -not -name '*.integration.test.ts' -print0 | xargs -0 node --import tsx --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/unit.info --test-reporter=spec --test-reporter-destination=stdout",
+    "test": "find src/__tests__ -name '*.test.ts' -not -name '*.integration.test.ts' -print0 | xargs -0 node --import tsx --test --experimental-test-module-mocks",
+    "test:coverage": "mkdir -p coverage && find src/__tests__ -name '*.test.ts' -not -name '*.integration.test.ts' -print0 | xargs -0 node --import tsx --test --experimental-test-module-mocks --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/unit.info --test-reporter=spec --test-reporter-destination=stdout",
     "test:integration": "node ../../scripts/run-integration.mjs packages/api",
     "test:integration:coverage": "mkdir -p coverage && LCOV_OUT=$PWD/coverage/integration.info node ../../scripts/run-integration.mjs packages/api --coverage",
     "typecheck": "tsc --noEmit -p tsconfig.json"

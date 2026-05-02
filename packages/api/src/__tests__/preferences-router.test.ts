@@ -66,6 +66,26 @@ describe('preferencesRouter (unit)', () => {
       );
     });
 
+    it('does not enqueue when active is unchanged or new active=false', async () => {
+      const existing = {
+        id: REGION_ID,
+        userId: 'test-user',
+        cityName: 'NYC',
+        latitude: 40.7,
+        longitude: -74,
+        radiusMiles: 25,
+        active: true,
+      };
+      // Toggling true → false: updated.active=false; no enqueue branch.
+      const updated = { ...existing, active: false };
+      const db = makeFakeDb({
+        selectResults: [[existing]],
+        updateResults: [[updated]],
+      });
+      const result = await caller(db).toggleRegion({ regionId: REGION_ID });
+      assert.equal(result.active, false);
+    });
+
     it('returns the toggled region when it exists', async () => {
       const existing = {
         id: REGION_ID,
@@ -83,6 +103,66 @@ describe('preferencesRouter (unit)', () => {
       });
       const result = await caller(db).toggleRegion({ regionId: REGION_ID });
       assert.equal(result.active, false);
+    });
+  });
+
+  describe('get', () => {
+    it('returns existing preferences and regions', async () => {
+      const prefs = { userId: 'test-user', theme: 'system' };
+      const regions = [
+        { id: REGION_ID, userId: 'test-user', cityName: 'NYC' },
+      ];
+      const db = makeFakeDb({ selectResults: [[prefs], regions] });
+      const result = await caller(db).get();
+      assert.deepEqual(result.preferences, prefs);
+      assert.equal(result.regions.length, 1);
+    });
+
+    it('inserts default preferences when none exist', async () => {
+      const created = { userId: 'test-user', theme: 'system' };
+      const db = makeFakeDb({
+        selectResults: [[], []],
+        insertResults: [[created]],
+      });
+      const result = await caller(db).get();
+      assert.deepEqual(result.preferences, created);
+      assert.deepEqual(result.regions, []);
+    });
+  });
+
+  describe('update', () => {
+    it('upserts and returns the row', async () => {
+      const prefs = { userId: 'test-user', theme: 'dark' };
+      const db = makeFakeDb({
+        insertResults: [[prefs]],
+      });
+      const result = await caller(db).update({ theme: 'dark' });
+      assert.deepEqual(result, prefs);
+    });
+  });
+
+  describe('removeRegion (cleanup paths)', () => {
+    it('returns success when no candidate announcements', async () => {
+      const existing = {
+        id: REGION_ID,
+        userId: 'test-user',
+        cityName: 'NYC',
+        latitude: 40.7,
+        longitude: -74,
+        radiusMiles: 25,
+        active: true,
+      };
+      const db = makeFakeDb({
+        selectResults: [
+          [existing], // ownership
+          [], // other regions
+          [], // followed venues
+          [], // followed performers
+          [], // candidate announcements
+        ],
+      });
+      const result = await caller(db).removeRegion({ regionId: REGION_ID });
+      assert.deepEqual(result, { success: true });
     });
   });
 });

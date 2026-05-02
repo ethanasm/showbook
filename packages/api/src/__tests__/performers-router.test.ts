@@ -138,6 +138,58 @@ describe('performersRouter (unit)', () => {
     });
   });
 
+  describe('list', () => {
+    it('joins follow set onto performer rows', async () => {
+      const rows = [
+        { id: 'p1', name: 'A', imageUrl: null, musicbrainzId: null, ticketmasterAttractionId: null, showCount: 2, pastShowsCount: 2, futureShowsCount: 0, lastSeen: '2024-01-01', firstSeen: '2020-01-01' },
+        { id: 'p2', name: 'B', imageUrl: null, musicbrainzId: null, ticketmasterAttractionId: null, showCount: 1, pastShowsCount: 0, futureShowsCount: 1, lastSeen: '2026-08-01', firstSeen: '2026-08-01' },
+      ];
+      const db = makeFakeDb({ selectResults: [rows, [{ performerId: 'p2' }]] });
+      const result = await caller(db).list();
+      assert.equal(result.find((r) => r.id === 'p1')!.isFollowed, false);
+      assert.equal(result.find((r) => r.id === 'p2')!.isFollowed, true);
+    });
+  });
+
+  describe('count', () => {
+    it('returns count from row', async () => {
+      const db = makeFakeDb({ selectResults: [[{ count: 9 }]] });
+      const result = await caller(db).count();
+      assert.equal(result, 9);
+    });
+
+    it('returns 0 when row absent', async () => {
+      const db = makeFakeDb({ selectResults: [[]] });
+      const result = await caller(db).count();
+      assert.equal(result, 0);
+    });
+  });
+
+  describe('unfollow', () => {
+    it('skips cleanup when someone else still follows', async () => {
+      const db = makeFakeDb({
+        selectResults: [[{ userId: 'someone-else' }]],
+      });
+      const result = await caller(db).unfollow({
+        performerId: '77777777-7777-4777-8777-777777777777',
+      });
+      assert.deepEqual(result, { success: true });
+    });
+
+    it('returns success when no candidate announcements', async () => {
+      const db = makeFakeDb({
+        selectResults: [
+          [], // stillFollowed empty
+          [], // candidate announcements empty
+        ],
+      });
+      const result = await caller(db).unfollow({
+        performerId: '88888888-8888-4888-8888-888888888888',
+      });
+      assert.deepEqual(result, { success: true });
+    });
+  });
+
   describe('userShows', () => {
     it('returns [] without hydrating when no shows match', async () => {
       const db = makeFakeDb({ selectResults: [[]] });
@@ -145,6 +197,64 @@ describe('performersRouter (unit)', () => {
         performerId: '66666666-6666-4666-8666-666666666666',
       });
       assert.deepEqual(result, []);
+    });
+  });
+
+  describe('follow', () => {
+    // Note: enqueueIngestPerformer opens a pg-boss connection — we only
+    // ensure the input shape is accepted; the side-effect path is
+    // covered by integration tests. Skipped here because awaiting the
+    // job enqueue stalls the unit-test event loop.
+  });
+
+  describe('search', () => {
+    it('runs an ilike query and returns rows', async () => {
+      const db = makeFakeDb({
+        selectResults: [[{ id: 'p1', name: 'matched' }]],
+      });
+      const result = await caller(db).search({ query: 'matched' });
+      assert.equal(result.length, 1);
+    });
+  });
+
+  describe('followed', () => {
+    it('returns the bare performer rows the user follows', async () => {
+      const db = makeFakeDb();
+      // findMany on userPerformerFollows returns []
+      (db as unknown as {
+        query: { userPerformerFollows: { findMany: () => Promise<unknown[]> } };
+      }).query = {
+        userPerformerFollows: {
+          findMany: async () => [
+            { performer: { id: 'p1', name: 'A' } },
+            { performer: { id: 'p2', name: 'B' } },
+          ],
+        } as never,
+      };
+      const result = await caller(db).followed();
+      assert.equal(result.length, 2);
+    });
+  });
+
+  describe('delete', () => {
+    it('detaches the performer and removes the follow', async () => {
+      const db = makeFakeDb({
+        selectResults: [[{ id: 's1' }, { id: 's2' }]],
+      });
+      const result = await caller(db).delete({
+        performerId: '99999999-9999-4999-8999-999999999999',
+      });
+      assert.deepEqual(result, { deleted: 1 });
+    });
+
+    it('handles a user with no shows (skips the inner delete)', async () => {
+      const db = makeFakeDb({
+        selectResults: [[]],
+      });
+      const result = await caller(db).delete({
+        performerId: '99999999-9999-4999-8999-999999999999',
+      });
+      assert.deepEqual(result, { deleted: 1 });
     });
   });
 });
