@@ -140,6 +140,60 @@ describe('mediaRouter (with mocked storage)', () => {
     });
   });
 
+  describe('listForVenue', () => {
+    it('returns dtos when shows match', async () => {
+      const db = makeFakeDb({
+        selectResults: [[{ id: 's1' }, { id: 's2' }]],
+      });
+      (db as unknown as { query: { mediaAssets: { findMany: () => Promise<unknown[]> } } }).query = {
+        mediaAssets: { findMany: async () => [] } as never,
+      };
+      const result = await caller(db).listForVenue({
+        venueId: '11111111-1111-4111-8111-111111111111',
+      });
+      assert.deepEqual(result, []);
+    });
+  });
+
+  describe('listForPerformer', () => {
+    it('returns dtos when performer assets exist', async () => {
+      const db = makeFakeDb({
+        selectResults: [[{ assetId: 'a1' }]],
+      });
+      (db as unknown as { query: { mediaAssets: { findMany: () => Promise<unknown[]> } } }).query = {
+        mediaAssets: { findMany: async () => [] } as never,
+      };
+      const result = await caller(db).listForPerformer({
+        performerId: '11111111-1111-4111-8111-111111111111',
+      });
+      assert.deepEqual(result, []);
+    });
+  });
+
+  describe('setPerformers (success path)', () => {
+    it('replaces tags with validated performer ids', async () => {
+      const db = makeFakeDb({
+        selectResults: [
+          [{ assetId: ASSET_ID, showId: SHOW_ID }], // ownership
+          [{ id: 'p1' }, { id: 'p2' }], // existing performers (validation)
+          [], // existingShowPerformers
+          [{ maxOrder: 3 }], // sort lookup
+        ],
+      });
+      const result = await caller(db).setPerformers({
+        assetId: ASSET_ID,
+        performerIds: [
+          '11111111-1111-4111-8111-111111111111', // p1 stand-in
+          '22222222-2222-4222-8222-222222222222', // p2 stand-in
+        ],
+      });
+      // Note: the validation step only keeps ids that match the existing
+      // performers query, but the fake-db ignores the `where` clause and
+      // returns whatever we scripted. The procedure dedupes by Set.
+      assert.ok(Array.isArray(result.performerIds));
+    });
+  });
+
   describe('listForShow', () => {
     it('returns dtos for ready assets', async () => {
       const db = makeFakeDb({

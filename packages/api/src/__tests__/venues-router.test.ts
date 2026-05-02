@@ -203,6 +203,28 @@ describe('venuesRouter (unit)', () => {
       const result = await caller(db).unfollow({ venueId: VENUE_ID });
       assert.equal(result.deleted, true);
     });
+
+    it('runs the cleanup branch with candidate announcements', async () => {
+      const candidate = {
+        id: 'a1',
+        venueId: VENUE_ID,
+        headlinerPerformerId: null,
+        supportPerformerIds: null,
+        venueLat: 40.7,
+        venueLng: -74,
+      };
+      const db = makeFakeDb({
+        selectResults: [
+          [], // stillFollowed empty (last user)
+          [candidate], // candidate announcements
+          [{ latitude: 34, longitude: -118, radiusMiles: 25 }], // active regions
+          [{ performerId: 'p1' }], // followed performers
+          [{ id: VENUE_ID }], // venueStillExists
+        ],
+      });
+      const result = await caller(db).unfollow({ venueId: VENUE_ID });
+      assert.equal(result.success, true);
+    });
   });
 
   // `follow` is not unit-tested here because it calls

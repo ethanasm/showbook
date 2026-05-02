@@ -246,4 +246,16 @@ describe('enrichmentRouter procedures (mocked)', () => {
     });
     assert.deepEqual(result, []);
   });
+
+  it('bulkScanGmail returns a result when no messages found', async () => {
+    const result = await caller().bulkScanGmail({ accessToken: 'tok' });
+    assert.ok(result);
+  });
+
+  it('extractFromPdf rejects when PDF text extraction yields empty', async () => {
+    // pdf-parse reads the buffer; an invalid base64 will throw inside.
+    await assert.rejects(() =>
+      caller().extractFromPdf({ fileBase64: 'a' }),
+    );
+  });
 });

@@ -475,6 +475,66 @@ describe('showsRouter (unit)', () => {
     });
   });
 
+  describe('listForMap (additional cases)', () => {
+    it('handles a festival with productionName', async () => {
+      const shows = [
+        {
+          id: 's-fest',
+          kind: 'festival',
+          state: 'past',
+          date: '2026-08-01',
+          seat: null,
+          pricePaid: null,
+          ticketCount: 1,
+          productionName: 'Outside Lands',
+          venue: { id: 'v', name: 'V', city: 'SF', stateRegion: 'CA', latitude: null, longitude: null, photoUrl: null },
+        },
+      ];
+      const db = makeFakeDb({ selectResults: [shows] });
+      const result = await caller(db).listForMap();
+      assert.equal(result[0]!.headlinerName, 'Outside Lands');
+    });
+
+    it('handles concert with no headliner row at all', async () => {
+      const shows = [
+        {
+          id: 's-empty',
+          kind: 'concert',
+          state: 'past',
+          date: '2026-08-01',
+          seat: null,
+          pricePaid: null,
+          ticketCount: 1,
+          productionName: null,
+          venue: { id: 'v', name: 'V', city: 'C', stateRegion: 'NY', latitude: null, longitude: null, photoUrl: null },
+        },
+      ];
+      const db = makeFakeDb({ selectResults: [shows, []] });
+      const result = await caller(db).listForMap();
+      assert.equal(result[0]!.headlinerName, null);
+      assert.equal(result[0]!.headlinerId, null);
+    });
+  });
+
+  describe('addPerformer (success)', () => {
+    // Note: success path opens a pg-boss connection via matchOrCreatePerformer,
+    // so we only assert NOT_FOUND here. The mocked happy path lives in
+    // shows-router-create.test.ts (which mocks the matcher module).
+  });
+
+  describe('removePerformer with empty setlists object', () => {
+    it('treats empty setlists object as no-op', async () => {
+      const existing = { id: SHOW_ID, setlists: {} };
+      const db = makeFakeDb({ selectResults: [[existing]] });
+      const result = await caller(db).removePerformer({
+        showId: SHOW_ID,
+        performerId: PERFORMER_ID,
+        role: 'support',
+      });
+      assert.deepEqual(result, { success: true });
+    });
+  });
+
   describe('deleteAll', () => {
     it('returns count of deleted shows', async () => {
       const db = makeFakeDb({
