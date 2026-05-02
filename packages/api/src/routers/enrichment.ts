@@ -280,9 +280,10 @@ export const enrichmentRouter = router({
       return withTrace(
         'trpc.enrichment.extractFromPdf',
         async () => {
-          const pdfParse = (await import(/* webpackIgnore: true */ 'pdf-parse')).default;
+          const { PDFParse } = await import(/* webpackIgnore: true */ 'pdf-parse');
           const buffer = Buffer.from(input.fileBase64, 'base64');
-          const result = await pdfParse(buffer);
+          const parser = new PDFParse({ data: new Uint8Array(buffer) });
+          const result = await parser.getText();
           if (!result.text.trim()) {
             throw new TRPCError({ code: 'BAD_REQUEST', message: 'Could not extract text from PDF' });
           }
