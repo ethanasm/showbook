@@ -255,8 +255,12 @@ export function toStateCode(stateRegion: string | undefined | null): string | un
 
 export function venueNameVariants(name: string): string[] {
   const variants: string[] = [name];
-  // Google Places often appends " at <parent>" or " - <org>"
-  const stripped = name.replace(/\s+at\s+.+$/i, '').replace(/\s+-\s+.+$/, '');
+  // Google Places often appends " at <parent>" or " - <org>". Use single-
+  // whitespace matchers (no `\s+` quantifier) to avoid polynomial backtracking
+  // on adversarial inputs.
+  const stripped = name
+    .replace(/\sat\s.+$/i, '')
+    .replace(/\s-\s.+$/, '');
   if (stripped !== name && stripped.length >= 3) variants.push(stripped);
   return variants;
 }

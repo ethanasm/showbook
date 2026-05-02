@@ -26,7 +26,14 @@ export function getLocalMediaRoot(): string {
 
 function localPathForKey(key: string): string {
   assertSafeKey(key);
-  return path.join(getLocalMediaRoot(), key);
+  const root = path.resolve(getLocalMediaRoot());
+  const target = path.resolve(root, key);
+  // Defence in depth: even after assertSafeKey, verify the resolved path is
+  // contained inside the media root before any fs operation runs against it.
+  if (target !== root && !target.startsWith(root + path.sep)) {
+    throw new Error('Invalid media key');
+  }
+  return target;
 }
 
 export async function storeLocalObject(
