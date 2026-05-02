@@ -32,6 +32,9 @@ export interface DailyDigestProps {
     reason: 'venue' | 'artist';
     onSaleSoon: boolean;
   }>;
+  /** Optional 1–2 paragraph LLM-generated opener. Falls back to a static
+   *  greeting when null. Paragraphs are separated by a blank line. */
+  preamble?: string | null;
   appUrl: string;
 }
 
@@ -116,6 +119,38 @@ const styles = {
     color: C.muted,
     margin: '12px 0 0',
     lineHeight: '20px',
+  },
+  preamble: {
+    fontSize: '15px',
+    color: C.ink,
+    margin: '16px 0 0',
+    lineHeight: '24px',
+    letterSpacing: '-0.005em',
+  },
+  preambleBreak: {
+    fontSize: '15px',
+    color: C.ink,
+    margin: '10px 0 0',
+    lineHeight: '24px',
+    letterSpacing: '-0.005em',
+  },
+  summaryStrip: {
+    margin: '20px 0 0',
+    padding: '10px 14px',
+    backgroundColor: 'rgba(255,209,102,0.06)',
+    borderLeft: `2px solid ${C.accent}`,
+    fontSize: '12px',
+    color: C.muted,
+    letterSpacing: '0.04em',
+    lineHeight: '16px',
+  },
+  summaryDot: {
+    color: C.faint,
+    margin: '0 8px',
+  },
+  summaryCount: {
+    color: C.ink,
+    fontWeight: 700,
   },
   section: {
     padding: '0 32px',
@@ -238,11 +273,20 @@ function todayDateLabel(): string {
   });
 }
 
+function splitPreamble(text: string): string[] {
+  return text
+    .split(/\n{2,}|\r\n\r\n/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
+    .slice(0, 2);
+}
+
 export function DailyDigest({
   displayName,
   todayShows,
   upcomingShows,
   newAnnouncements,
+  preamble,
   appUrl,
 }: DailyDigestProps) {
   const todayCount = todayShows.length;
@@ -296,7 +340,45 @@ export function DailyDigest({
           <Section style={styles.hero}>
             <Text style={styles.heroEyebrow}>{eyebrow}</Text>
             <Heading style={styles.heroHeadline}>{headline}</Heading>
-            <Text style={styles.greet}>Hi {displayName} — here's what's on.</Text>
+            {preamble ? (
+              splitPreamble(preamble).map((para, i) => (
+                <Text
+                  key={`preamble-${i}`}
+                  style={i === 0 ? styles.preamble : styles.preambleBreak}
+                >
+                  {para}
+                </Text>
+              ))
+            ) : (
+              <Text style={styles.greet}>
+                Hi {displayName} — here's what's on.
+              </Text>
+            )}
+            {todayCount + upcomingCount + announcementCount > 0 ? (
+              <Text style={styles.summaryStrip}>
+                {todayCount > 0 ? (
+                  <>
+                    <span style={styles.summaryCount}>{todayCount}</span> tonight
+                  </>
+                ) : null}
+                {todayCount > 0 && upcomingCount > 0 ? (
+                  <span style={styles.summaryDot}>·</span>
+                ) : null}
+                {upcomingCount > 0 ? (
+                  <>
+                    <span style={styles.summaryCount}>{upcomingCount}</span> this week
+                  </>
+                ) : null}
+                {(todayCount > 0 || upcomingCount > 0) && announcementCount > 0 ? (
+                  <span style={styles.summaryDot}>·</span>
+                ) : null}
+                {announcementCount > 0 ? (
+                  <>
+                    <span style={styles.summaryCount}>{announcementCount}</span> new for you
+                  </>
+                ) : null}
+              </Text>
+            ) : null}
           </Section>
 
           {todayCount > 0 ? (

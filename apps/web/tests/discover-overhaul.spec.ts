@@ -50,9 +50,21 @@ test.describe('Discover overhaul', () => {
 
     const btn = page.getByRole('button', { name: /^Refresh$/ });
     await btn.click();
-    // Either becomes "Refreshing…" or status message appears.
+
+    // The button flips to disabled the moment the mutation is in flight
+    // (refreshNow.isPending) AND stays disabled while the ingest poller
+    // sees pending jobs (totalPending > 0). Either is a reliable signal
+    // that the click was handled.
+    const refreshing = page.getByRole('button', { name: /Refresh(ing)?/i });
+    await expect(refreshing).toBeDisabled({ timeout: 5000 });
+
+    // While work is in flight the label is "Refreshing…" on the button;
+    // once the mutation resolves and the poller picks up enqueued jobs,
+    // a "Loading shows…" status line appears next to it. Either is fine —
+    // we just need to see one of them within the window.
     await expect(
-      page.getByRole('button', { name: /Refreshing/i }).or(page.getByText(/Looking for new shows/i)),
+      page.getByRole('button', { name: /Refreshing/i })
+        .or(page.getByText(/Loading shows/i)),
     ).toBeVisible({ timeout: 5000 });
   });
 

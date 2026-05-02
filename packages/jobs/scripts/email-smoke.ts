@@ -52,6 +52,11 @@ async function main() {
         onSaleSoon: false,
       },
     ],
+    preamble:
+      'Tonight you slip into Orch G 14 for Hadestown — that long descent again. ' +
+      'Wear the good shoes.\n\n' +
+      'Then Caroline Polachek lands at Brooklyn Steel in three days, and a Phoebe ' +
+      'Bridgers date at Forest Hills just dropped — on sale soon.',
     appUrl,
   });
 
