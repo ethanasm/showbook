@@ -16,7 +16,10 @@ async function loginSeeded(page: Page) {
 test.describe('Home page — empty state', () => {
   test('shows empty-state copy and Gmail import button when no shows exist', async ({ page }) => {
     await loginEmpty(page);
-    const empty = page.getByTestId('home-empty-state');
+    // Scope to <main>: React 18 streaming SSR leaves a hidden suspense
+    // template (`<div hidden id="S:0">`) that contains a duplicate copy of
+    // the rendered subtree, which trips strict-mode locators.
+    const empty = page.getByRole('main').getByTestId('home-empty-state');
     await expect(empty).toBeVisible({ timeout: 10000 });
 
     await expect(empty.getByRole('heading', { name: 'Start your logbook' })).toBeVisible();
@@ -33,7 +36,7 @@ test.describe('Home page — empty state', () => {
 
   test('Gmail import button navigates to /shows with ?gmail=1', async ({ page }) => {
     await loginEmpty(page);
-    const empty = page.getByTestId('home-empty-state');
+    const empty = page.getByRole('main').getByTestId('home-empty-state');
     await expect(empty).toBeVisible({ timeout: 10000 });
 
     const gmailBtn = empty.getByRole('button', { name: /Import from Gmail/i });
