@@ -426,6 +426,61 @@ describe('discoverRouter (with mocked db)', () => {
     });
   });
 
+  describe('watchlist (festival)', () => {
+    it('uses runStartDate/runEndDate for festival', async () => {
+      reset({
+        selectResults: [
+          [
+            {
+              id: 'a-fest',
+              kind: 'festival',
+              headliner: 'Outside Lands',
+              venueId: 'v-park',
+              showDate: '2026-08-08',
+              runStartDate: '2026-08-08',
+              runEndDate: '2026-08-10',
+              headlinerPerformerId: 'p-fest',
+              ticketUrl: null,
+              productionName: 'Outside Lands 2026',
+            },
+          ],
+        ],
+      });
+      const result = await caller().call((c) =>
+        c.watchlist({ announcementId: '11111111-1111-4111-8111-111111111111' }),
+      );
+      assert.ok(result);
+    });
+
+    it('uses an explicit performance date when provided', async () => {
+      reset({
+        selectResults: [
+          [
+            {
+              id: 'a-multi',
+              kind: 'theatre',
+              headliner: 'Hamilton',
+              venueId: 'v-richard',
+              showDate: '2026-09-01',
+              runStartDate: '2026-09-01',
+              runEndDate: '2026-09-30',
+              headlinerPerformerId: null,
+              ticketUrl: null,
+              productionName: 'Hamilton',
+            },
+          ],
+        ],
+      });
+      const result = await caller().call((c) =>
+        c.watchlist({
+          announcementId: '11111111-1111-4111-8111-111111111111',
+          performanceDate: '2026-09-15',
+        }),
+      );
+      assert.ok(result);
+    });
+  });
+
   describe('unwatchlist', () => {
     it('throws when no watchlist entry found', async () => {
       reset({ selectResults: [[]] });
