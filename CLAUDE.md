@@ -2,6 +2,14 @@
 
 Personal entertainment tracker for live shows — concerts, theatre, comedy, festivals.
 
+## Commit and PR hygiene
+
+Do **not** include `https://claude.ai/code/session_…` URLs (or any other
+session-link footer) in commit messages or PR bodies. Strip the line from
+the default template before committing. Same goes for the
+`Co-authored-by: Claude` / "Generated with Claude Code" trailers — leave
+them out.
+
 ## Working environment (Claude on the web)
 
 When you're running in the Claude Code web sandbox, this checkout is a **shallow clone** (`git rev-parse --is-shallow-repository` → `true`) of a single branch. As a result:
