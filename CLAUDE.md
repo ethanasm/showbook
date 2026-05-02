@@ -135,11 +135,9 @@ Commands from the repo root:
 - `pnpm mobile:android` — open in Android emulator
 - `pnpm mobile:typecheck`, `pnpm mobile:lint`, `pnpm mobile:test`
 
-The mobile build is staged across six milestones — see
-[`showbook-specs/mobile-roadmap.md`](showbook-specs/mobile-roadmap.md).
-M1 (Foundation) is complete: sign-in, first-run permissions, the
-5-tab shell, and a real Me tab. M2 (Read flows) brings real
-Home / Shows / Map / ShowDetail.
+The mobile build is staged — see
+[`showbook-specs/mobile-roadmap.md`](showbook-specs/mobile-roadmap.md)
+for the milestone plan and current status.
 
 The mobile auth bridge issues a NextAuth-compatible JWT via
 `POST /api/auth/mobile-token` (see `apps/web/lib/mobile-token.ts`).
