@@ -200,6 +200,7 @@ The stdout copy in the prod web container (`docker logs showbook-prod-web`) is a
 - `notifications.digest.summary` — daily email digest.
 - `pgboss.{started,registered,unschedule_stale}` — pg-boss lifecycle.
 - `trpc.error` — last-resort tRPC procedure error log.
+- `admin.backfill_coordinates.{start,complete}`, `admin.backfill_ticketmaster.{start,complete}` — operator-triggered global venue backfills via the `/admin` page.
 - `job.{start,complete,failed}` — pg-boss job wrapper from `runJob` in `packages/jobs/src/registry.ts`.
 
 When adding a new external-call boundary, follow the `<component>.<action>.<outcome>` shape and add it to this list.
