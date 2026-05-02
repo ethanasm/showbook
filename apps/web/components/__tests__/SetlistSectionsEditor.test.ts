@@ -87,6 +87,25 @@ test('an empty rows array produces an empty setlist', () => {
   assert.deepEqual(rowsToSetlist([]), { sections: [] });
 });
 
+test('rowsToSetlist preserves notes on songs', () => {
+  const rows: Row[] = [
+    { kind: 'song', id: 'r1', title: 'A', note: 'extended' },
+    { kind: 'song', id: 'r2', title: 'B' },
+  ];
+  const result = rowsToSetlist(rows);
+  assert.equal(result.sections[0]!.songs[0]!.note, 'extended');
+  assert.equal(result.sections[0]!.songs[1]!.note, undefined);
+});
+
+test('setlistToRows handles encore-only setlists by inserting divider first', () => {
+  const setlist: PerformerSetlist = {
+    sections: [{ kind: 'encore', songs: [{ title: 'Encore' }] }],
+  };
+  const rows = setlistToRows(setlist);
+  assert.equal(rows[0]!.kind, 'divider');
+  assert.equal(rows.length, 2);
+});
+
 test('a divider at the front produces an encore-only setlist', () => {
   const rows: Row[] = [
     { kind: 'divider', id: DIVIDER_ID },
