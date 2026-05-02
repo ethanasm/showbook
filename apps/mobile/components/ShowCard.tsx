@@ -37,10 +37,16 @@ export interface ShowCardShow {
 export interface ShowCardProps {
   show: ShowCardShow;
   onPress?: () => void;
+  onLongPress?: () => void;
   compact?: boolean;
 }
 
-export function ShowCard({ show, onPress, compact = false }: ShowCardProps): React.JSX.Element {
+export function ShowCard({
+  show,
+  onPress,
+  onLongPress,
+  compact = false,
+}: ShowCardProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
 
@@ -55,6 +61,8 @@ export function ShowCard({ show, onPress, compact = false }: ShowCardProps): Rea
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={300}
       style={({ pressed }) => [
         styles.container,
         compact ? styles.compact : styles.card,
