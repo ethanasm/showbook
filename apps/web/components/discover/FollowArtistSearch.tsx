@@ -133,6 +133,7 @@ export function FollowArtistSearch({
                 tmAttractionId: a.id,
                 name: a.name,
                 imageUrl: a.imageUrl ?? undefined,
+                musicbrainzId: a.mbid ?? undefined,
               })
             }
             disabled={followAttraction.isPending}

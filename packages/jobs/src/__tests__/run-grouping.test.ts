@@ -21,6 +21,7 @@ function makeEvent(overrides: Partial<NormalizedEvent>): NormalizedEvent {
     headlinerPerformerId: overrides.headlinerPerformerId ?? 'hamilton-perf',
     venueId: overrides.venueId ?? 'majestic-venue',
     support: overrides.support ?? null,
+    supportPerformerIds: overrides.supportPerformerIds ?? null,
     onSaleDate: overrides.onSaleDate ?? null,
     onSaleStatus: overrides.onSaleStatus ?? 'on_sale',
     source: overrides.source ?? 'ticketmaster',

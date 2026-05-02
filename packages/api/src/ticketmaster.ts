@@ -342,6 +342,10 @@ export function inferKind(
   return "concert";
 }
 
+export function extractMusicbrainzId(attraction: TMAttraction): string | undefined {
+  return attraction.externalLinks?.musicbrainz?.[0]?.id;
+}
+
 export function selectBestImage(images?: TMImage[]): string | null {
   if (!images || images.length === 0) return null;
 

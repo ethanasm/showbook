@@ -17,6 +17,7 @@ const annSfNoPerformer: AnnouncementCandidate = {
   id: 'ann-1',
   venueId: 'venue-sf',
   headlinerPerformerId: null,
+  supportPerformerIds: null,
   venueLat: sfVenueLat,
   venueLng: sfVenueLng,
 };
@@ -26,6 +27,7 @@ const annSfFollowedPerformer: AnnouncementCandidate = {
   id: 'ann-2',
   venueId: 'venue-sf',
   headlinerPerformerId: 'performer-followed',
+  supportPerformerIds: null,
   venueLat: sfVenueLat,
   venueLng: sfVenueLng,
 };
@@ -35,6 +37,7 @@ const annSfUnfollowedPerformer: AnnouncementCandidate = {
   id: 'ann-3',
   venueId: 'venue-sf',
   headlinerPerformerId: 'performer-unknown',
+  supportPerformerIds: null,
   venueLat: sfVenueLat,
   venueLng: sfVenueLng,
 };
@@ -90,6 +93,7 @@ describe('computeVenueUnfollowAnnouncementsToDelete', () => {
       id: 'ann-null',
       venueId: 'venue-x',
       headlinerPerformerId: null,
+      supportPerformerIds: null,
       venueLat: null,
       venueLng: null,
     };
@@ -108,5 +112,22 @@ describe('computeVenueUnfollowAnnouncementsToDelete', () => {
       ['performer-followed'],
     );
     assert.deepEqual(toDelete.sort(), ['ann-1', 'ann-3']);
+  });
+
+  it('preserves announcements whose support performer is followed', () => {
+    const annSfFollowedSupport: AnnouncementCandidate = {
+      id: 'ann-support',
+      venueId: 'venue-sf',
+      headlinerPerformerId: 'unknown-headliner',
+      supportPerformerIds: ['support-followed'],
+      venueLat: sfVenueLat,
+      venueLng: sfVenueLng,
+    };
+    const toDelete = computeVenueUnfollowAnnouncementsToDelete(
+      [annSfFollowedSupport],
+      [],
+      ['support-followed'],
+    );
+    assert.deepEqual(toDelete, []);
   });
 });
