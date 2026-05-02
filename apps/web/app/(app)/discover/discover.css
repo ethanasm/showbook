@@ -17,6 +17,12 @@
   border-bottom: 1px solid var(--rule);
 }
 
+.discover-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .discover-header__subtitle {
   font-family: var(--font-geist-mono), monospace;
   font-size: 10.5px;

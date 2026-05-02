@@ -2,15 +2,13 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { trpc } from "@/lib/trpc";
-import { Search, Eye, Pencil, Trash2, Ticket, Check, Music, Music2 } from "lucide-react";
+import { Search, Eye, Pencil, Trash2, Ticket, Check, Music2 } from "lucide-react";
 import { PaginationFooter } from "@/components/PaginationFooter";
 import { SortHeader, type SortConfig } from "@/components/SortHeader";
 import { useCompactMode } from "@/lib/useCompactMode";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { EmptyState, RemoteImage } from "@/components/design-system";
-import { SpotifyImportModal } from "@/components/preferences/SpotifyImportModal";
 
 type SortField = "name" | "shows" | "past" | "future" | "firstSeen" | "lastSeen";
 
@@ -57,9 +55,6 @@ export default function ArtistsView() {
     position: { x: number; y: number };
   } | null>(null);
 
-  const [spotifyModalOpen, setSpotifyModalOpen] = useState(false);
-  const [pendingImportIds, setPendingImportIds] = useState<string[]>([]);
-
   const { data: artists, isLoading, error } = trpc.performers.list.useQuery(undefined, {
     staleTime: 60_000,
   });
@@ -92,42 +87,6 @@ export default function ArtistsView() {
       utils.performers.invalidate();
     },
   });
-
-  // Poll only while we're tracking a fresh Spotify import. Reuses the
-  // same endpoint the Discover view polls. We intersect with the IDs we
-  // just imported so the banner count reflects this import session, not
-  // any background ingest the user may have triggered elsewhere.
-  const ingestStatus = trpc.discover.ingestStatus.useQuery(undefined, {
-    enabled: pendingImportIds.length > 0,
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data) return 2000;
-      const stillPending = data.performerIds.filter((id) =>
-        pendingImportIds.includes(id),
-      );
-      return stillPending.length > 0 ? 2000 : false;
-    },
-    refetchOnWindowFocus: false,
-    staleTime: 0,
-  });
-
-  const stillImportingCount = useMemo(() => {
-    if (pendingImportIds.length === 0) return 0;
-    const data = ingestStatus.data;
-    if (!data) return pendingImportIds.length;
-    return data.performerIds.filter((id) => pendingImportIds.includes(id))
-      .length;
-  }, [pendingImportIds, ingestStatus.data]);
-
-  // When pending drops to zero, clear local state and re-fetch the
-  // shows-based artists list so freshly-ingested performers appear.
-  useEffect(() => {
-    if (pendingImportIds.length > 0 && stillImportingCount === 0 && ingestStatus.data) {
-      setPendingImportIds([]);
-      utils.performers.list.invalidate();
-      utils.performers.count.invalidate();
-    }
-  }, [pendingImportIds.length, stillImportingCount, ingestStatus.data, utils]);
 
   const toggleSort = useCallback((field: SortField) => {
     setSort((prev) =>
@@ -309,82 +268,7 @@ export default function ArtistsView() {
             Artists
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button
-            onClick={() => setSpotifyModalOpen(true)}
-            style={{
-              border: "1px solid var(--rule-strong)",
-              cursor: "pointer",
-              background: "transparent",
-              color: "var(--ink)",
-              padding: "9px 14px",
-              fontFamily: "var(--font-geist-sans), sans-serif",
-              fontSize: 13,
-              fontWeight: 500,
-              letterSpacing: -0.15,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              transition: "border-color 0.12s, background 0.12s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = "var(--ink)";
-              e.currentTarget.style.background = "var(--surface)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = "var(--rule-strong)";
-              e.currentTarget.style.background = "transparent";
-            }}
-          >
-            <Music size={13} color="var(--accent)" />
-            <span>Import from Spotify</span>
-          </button>
-        </div>
       </div>
-
-      {/* Spotify import progress banner */}
-      {pendingImportIds.length > 0 && (
-        <div
-          data-testid="spotify-import-banner"
-          style={{
-            padding: "10px 36px",
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            background: "var(--surface)",
-            borderBottom: "1px solid var(--rule)",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
-            letterSpacing: ".04em",
-            color: "var(--muted)",
-          }}
-        >
-          <span
-            aria-hidden
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              background: "var(--accent)",
-              animation: "spotify-banner-pulse 1.2s ease-in-out infinite",
-              flexShrink: 0,
-            }}
-          />
-          <span>
-            Importing{" "}
-            <span style={{ color: "var(--ink)", fontWeight: 600 }}>
-              {stillImportingCount || pendingImportIds.length}
-            </span>{" "}
-            artist
-            {(stillImportingCount || pendingImportIds.length) === 1 ? "" : "s"}{" "}
-            from Spotify
-          </span>
-          <span style={{ color: "var(--faint)" }}>
-            checking Ticketmaster for upcoming shows…
-          </span>
-          <style>{`@keyframes spotify-banner-pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }`}</style>
-        </div>
-      )}
 
       {/* Filter bar */}
       <div style={{ padding: "11px 36px", display: "flex", alignItems: "center", gap: 18, background: "var(--surface)", borderBottom: "1px solid var(--rule)" }}>
@@ -418,34 +302,7 @@ export default function ArtistsView() {
             <EmptyState
               kind="artists"
               title={search ? "No artist matches" : "Artists await"}
-              body={search ? "Try another spelling or clear the filter." : "Artists populate from the shows you log, or import the artists you follow on Spotify."}
-              action={
-                search ? undefined : (
-                  <button
-                    type="button"
-                    onClick={() => setSpotifyModalOpen(true)}
-                    style={{
-                      padding: "10px 18px",
-                      background: "var(--accent)",
-                      color: "var(--accent-text)",
-                      border: "none",
-                      borderRadius: 8,
-                      cursor: "pointer",
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 11,
-                      letterSpacing: ".06em",
-                      textTransform: "uppercase",
-                      fontWeight: 500,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <Image src="/spotify.svg" alt="" width={14} height={14} />
-                    Import from Spotify
-                  </button>
-                )
-              }
+              body={search ? "Try another spelling or clear the filter." : "Artists populate from the shows you log."}
             />
           </div>
         ) : (
@@ -537,15 +394,6 @@ export default function ArtistsView() {
         />
       )}
 
-      <SpotifyImportModal
-        open={spotifyModalOpen}
-        onClose={() => setSpotifyModalOpen(false)}
-        onImported={(result) => {
-          if (result.performerIds.length > 0) {
-            setPendingImportIds(result.performerIds);
-          }
-        }}
-      />
     </div>
   );
 }
