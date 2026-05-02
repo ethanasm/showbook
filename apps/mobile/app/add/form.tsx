@@ -32,6 +32,8 @@ import { VenueTypeahead, type VenueSuggestion } from '../../components/VenueType
 import { useTheme } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
 import { useFeedback } from '../../lib/feedback';
+import { runOptimisticMutation } from '../../lib/mutations';
+import { getCacheOutbox } from '../../lib/cache';
 
 // Local kind union; the theme's Kind includes 'sports' which the
 // create mutation's input doesn't accept yet. Until the API ships it,
@@ -128,11 +130,7 @@ export default function AddFormScreen(): React.JSX.Element {
     [utils],
   );
 
-  const create = trpc.shows.create.useMutation({
-    onSuccess: () => {
-      void utils.shows.list.invalidate();
-    },
-  });
+  const [submitting, setSubmitting] = React.useState(false);
 
   const submit = React.useCallback(async () => {
     if (!values.headliner.trim()) {
@@ -167,19 +165,36 @@ export default function AddFormScreen(): React.JSX.Element {
         sortOrder: i + 1,
       }));
 
+    setSubmitting(true);
     try {
-      const result = await create.mutateAsync({
-        kind: values.kind,
-        headliner: { name: values.headliner.trim() },
-        venue: venuePayload,
-        date: values.date,
-        seat: values.seat.trim() || undefined,
-        pricePaid: values.pricePaid.trim() || undefined,
-        ticketCount: Math.max(1, Number(values.ticketCount) || 1),
-        tourName: values.tourName.trim() || undefined,
-        productionName: values.productionName.trim() || undefined,
-        notes: values.notes.trim() || undefined,
-        performers: supports.length > 0 ? supports : undefined,
+      // Route through the optimistic runner so a failed Create persists
+      // in the SQLite outbox instead of vanishing with the form. The
+      // shows.list cache slot is invalidated on success in `reconcile`,
+      // matching the previous useMutation onSuccess behavior.
+      const { result } = await runOptimisticMutation<
+        Parameters<typeof utils.client.shows.create.mutate>[0],
+        void,
+        Awaited<ReturnType<typeof utils.client.shows.create.mutate>>
+      >({
+        mutation: 'shows.create',
+        input: {
+          kind: values.kind,
+          headliner: { name: values.headliner.trim() },
+          venue: venuePayload,
+          date: values.date,
+          seat: values.seat.trim() || undefined,
+          pricePaid: values.pricePaid.trim() || undefined,
+          ticketCount: Math.max(1, Number(values.ticketCount) || 1),
+          tourName: values.tourName.trim() || undefined,
+          productionName: values.productionName.trim() || undefined,
+          notes: values.notes.trim() || undefined,
+          performers: supports.length > 0 ? supports : undefined,
+        },
+        outbox: getCacheOutbox(),
+        call: (input) => utils.client.shows.create.mutate(input),
+        reconcile: () => {
+          void utils.shows.list.invalidate();
+        },
       });
       const newId = result?.id;
       showToast({ kind: 'success', text: 'Show added' });
@@ -191,8 +206,10 @@ export default function AddFormScreen(): React.JSX.Element {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not save';
       showToast({ kind: 'error', text: message });
+    } finally {
+      setSubmitting(false);
     }
-  }, [values, create, router, showToast]);
+  }, [values, utils, router, showToast]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
@@ -212,11 +229,11 @@ export default function AddFormScreen(): React.JSX.Element {
           <Pressable
             onPress={() => void submit()}
             hitSlop={10}
-            disabled={create.isPending}
+            disabled={submitting}
             accessibilityRole="button"
             accessibilityLabel="Save"
           >
-            {create.isPending ? (
+            {submitting ? (
               <ActivityIndicator size="small" color={colors.accent} />
             ) : (
               <Check size={22} color={colors.accent} strokeWidth={2.4} />

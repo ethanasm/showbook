@@ -36,21 +36,20 @@ import {
   ListMusic,
   AlertCircle,
   MoreHorizontal,
-  Pencil,
-  CheckCircle,
-  Trash2,
+  Sparkles,
 } from 'lucide-react-native';
+import type { PerformerSetlist } from '@showbook/shared';
 
 import { TopBar } from '../../components/TopBar';
 import { KindBadge } from '../../components/KindBadge';
 import { StateChip } from '../../components/StateChip';
 import { EmptyState } from '../../components/EmptyState';
 import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
-import { Sheet } from '../../components/Sheet';
+import { ShowActionSheet } from '../../components/ShowActionSheet';
+import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
 import { CACHE_DEFAULTS } from '../../lib/cache';
-import { useFeedback } from '../../lib/feedback';
 
 // The @showbook/api package isn't a runtime dep of mobile (it's a type-only
 // import via `lib/trpc`), so `inferRouterOutputs` from `@trpc/server` isn't
@@ -85,6 +84,7 @@ interface ShowDetail {
   notes: string | null;
   venue: ShowDetailVenue;
   showPerformers: ShowDetailShowPerformer[];
+  setlists: Record<string, PerformerSetlist> | null;
 }
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -116,13 +116,21 @@ function parseShowDate(date: string | null | undefined): DateParts | null {
   };
 }
 
-export default function ShowDetailScreen(): React.JSX.Element {
+export interface ShowDetailScreenProps {
+  /** Override the route param — used by the iPad three-pane layout. */
+  showIdProp?: string;
+}
+
+export default function ShowDetailScreen(
+  props: ShowDetailScreenProps = {},
+): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ id: string }>();
-  const showId = typeof params.id === 'string' ? params.id : '';
+  const paramId = typeof params.id === 'string' ? params.id : '';
+  const showId = props.showIdProp ?? paramId;
 
   const query = trpc.shows.detail.useQuery(
     { showId },
@@ -134,6 +142,12 @@ export default function ShowDetailScreen(): React.JSX.Element {
   );
 
   const show = query.data as ShowDetail | undefined;
+  const refreshControl = useThemedRefreshControl(
+    query.isFetching && !query.isLoading,
+    () => {
+      void query.refetch();
+    },
+  );
 
   const back = (
     <Pressable
@@ -188,12 +202,13 @@ export default function ShowDetailScreen(): React.JSX.Element {
         <ScrollView
           contentContainerStyle={{ paddingBottom: 48 }}
           showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
         >
           <Hero show={show} />
           <Facts show={show} />
           <Lineup show={show} />
           {show.notes ? <Notes notes={show.notes} /> : null}
-          <SetlistStub />
+          <Setlists show={show} />
           <Photos showId={show.id} canUpload={isShowPast(show)} />
           <View style={styles.endRule}>
             <Text style={[styles.endText, { color: colors.faint }]}>— END —</Text>
@@ -207,176 +222,12 @@ export default function ShowDetailScreen(): React.JSX.Element {
           onClose={() => setActionSheetOpen(false)}
           showId={show.id}
           state={show.state as ShowState}
+          popAfterDelete
         />
       ) : null}
     </View>
   );
 }
-
-function ShowActionSheet({
-  open,
-  onClose,
-  showId,
-  state,
-}: {
-  open: boolean;
-  onClose: () => void;
-  showId: string;
-  state: ShowState;
-}): React.JSX.Element {
-  const { tokens } = useTheme();
-  const { colors } = tokens;
-  const router = useRouter();
-  const utils = trpc.useUtils();
-  const { showToast } = useFeedback();
-  const [confirmingDelete, setConfirmingDelete] = React.useState(false);
-
-  const updateState = trpc.shows.updateState.useMutation({
-    onSuccess: () => {
-      void utils.shows.list.invalidate();
-      void utils.shows.detail.invalidate({ showId });
-    },
-  });
-  const remove = trpc.shows.delete.useMutation({
-    onSuccess: () => {
-      void utils.shows.list.invalidate();
-    },
-  });
-
-  const closeAndReset = React.useCallback(() => {
-    setConfirmingDelete(false);
-    onClose();
-  }, [onClose]);
-
-  const goEdit = () => {
-    closeAndReset();
-    router.push(`/show/${showId}/edit`);
-  };
-  const goSetlist = () => {
-    closeAndReset();
-    router.push(`/show/${showId}/setlist`);
-  };
-  const markWatched = async () => {
-    if (state === 'past') {
-      showToast({ kind: 'info', text: 'Already marked as watched' });
-      closeAndReset();
-      return;
-    }
-    try {
-      await updateState.mutateAsync({ showId, newState: 'past' });
-      showToast({ kind: 'success', text: 'Marked as watched' });
-    } catch (err) {
-      showToast({ kind: 'error', text: err instanceof Error ? err.message : 'Failed' });
-    } finally {
-      closeAndReset();
-    }
-  };
-  const doDelete = async () => {
-    try {
-      await remove.mutateAsync({ showId });
-      showToast({ kind: 'success', text: 'Show deleted' });
-      closeAndReset();
-      router.replace('/(tabs)/shows');
-    } catch (err) {
-      showToast({ kind: 'error', text: err instanceof Error ? err.message : 'Failed' });
-    }
-  };
-
-  return (
-    <Sheet open={open} onClose={closeAndReset} snapPoints={['44%']}>
-      <View style={sheetStyles.body}>
-        <ActionRow
-          icon={<Pencil size={18} color={colors.ink} strokeWidth={2} />}
-          label="Edit show"
-          onPress={goEdit}
-        />
-        <ActionRow
-          icon={<ListMusic size={18} color={colors.ink} strokeWidth={2} />}
-          label="Edit setlist"
-          onPress={goSetlist}
-        />
-        <ActionRow
-          icon={<CheckCircle size={18} color={colors.ink} strokeWidth={2} />}
-          label="Mark as watched"
-          onPress={() => void markWatched()}
-          disabled={state === 'past'}
-        />
-        <ActionRow
-          icon={<Trash2 size={18} color={colors.danger} strokeWidth={2} />}
-          label={confirmingDelete ? 'Tap again to confirm' : 'Delete show'}
-          onPress={() => {
-            if (!confirmingDelete) {
-              setConfirmingDelete(true);
-              return;
-            }
-            void doDelete();
-          }}
-          danger
-        />
-      </View>
-    </Sheet>
-  );
-}
-
-function ActionRow({
-  icon,
-  label,
-  onPress,
-  danger = false,
-  disabled = false,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  onPress: () => void;
-  danger?: boolean;
-  disabled?: boolean;
-}): React.JSX.Element {
-  const { tokens } = useTheme();
-  const { colors } = tokens;
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => [
-        sheetStyles.row,
-        { borderBottomColor: colors.rule, opacity: disabled ? 0.4 : 1 },
-        pressed && { backgroundColor: colors.surface },
-      ]}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      {icon}
-      <Text
-        style={[
-          sheetStyles.label,
-          { color: danger ? colors.danger : colors.ink },
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-const sheetStyles = StyleSheet.create({
-  body: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  label: {
-    fontFamily: 'Geist Sans',
-    fontSize: 15,
-    fontWeight: '500',
-  },
-});
 
 // ---------------------------------------------------------------------------
 // Sub-sections
@@ -586,18 +437,108 @@ function Notes({ notes }: { notes: string }): React.JSX.Element {
   );
 }
 
-function SetlistStub(): React.JSX.Element {
+function Setlists({ show }: { show: ShowDetail }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const router = useRouter();
+
+  // Setlists are keyed by performer id; only show entries whose
+  // performer is still on the lineup (catches stale rows after a
+  // performer is removed).
+  const performerById = React.useMemo(() => {
+    const map = new Map<string, { name: string }>();
+    for (const sp of show.showPerformers) {
+      map.set(sp.performer.id, { name: sp.performer.name });
+    }
+    return map;
+  }, [show.showPerformers]);
+
+  const entries = React.useMemo(() => {
+    const out: { performerId: string; name: string; sl: PerformerSetlist }[] = [];
+    if (!show.setlists) return out;
+    for (const [performerId, sl] of Object.entries(show.setlists)) {
+      const meta = performerById.get(performerId);
+      if (!meta) continue;
+      const hasAnySong = sl.sections.some((sec) => sec.songs.length > 0);
+      if (!hasAnySong) continue;
+      out.push({ performerId, name: meta.name, sl });
+    }
+    return out;
+  }, [show.setlists, performerById]);
+
+  const goEdit = (performerId?: string) => {
+    const params = performerId ? `?performerId=${encodeURIComponent(performerId)}` : '';
+    router.push(`/show/${show.id}/setlist${params}`);
+  };
+
   return (
     <Section title="Setlist" icon={<ListMusic size={13} color={colors.ink} strokeWidth={2} />}>
-      <View style={[styles.stubCard, { backgroundColor: colors.surface, borderColor: colors.rule }]}>
-        <EmptyState
-          icon={<ListMusic size={32} color={colors.faint} strokeWidth={1.5} />}
-          title="Coming in M3"
-          subtitle="Setlist editing and setlist.fm sync arrive in the next milestone."
-        />
-      </View>
+      {entries.length === 0 ? (
+        <Pressable
+          onPress={() => goEdit()}
+          accessibilityRole="button"
+          accessibilityLabel="Add setlist"
+          style={({ pressed }) => [
+            styles.stubCard,
+            { backgroundColor: colors.surface, borderColor: colors.rule },
+            pressed && { opacity: 0.85 },
+          ]}
+        >
+          <EmptyState
+            icon={<ListMusic size={32} color={colors.faint} strokeWidth={1.5} />}
+            title="No setlist yet"
+            subtitle="Tap to add the songs you heard, then drag to reorder."
+          />
+        </Pressable>
+      ) : (
+        entries.map(({ performerId, name, sl }) => (
+          <Pressable
+            key={performerId}
+            onPress={() => goEdit(performerId)}
+            accessibilityRole="button"
+            accessibilityLabel={`Edit setlist for ${name}`}
+            style={({ pressed }) => [
+              styles.setlistCard,
+              { backgroundColor: colors.surface, borderColor: colors.rule },
+              pressed && { opacity: 0.9 },
+            ]}
+          >
+            {entries.length > 1 ? (
+              <Text style={[styles.setlistPerformer, { color: colors.muted }]}>
+                {name.toUpperCase()}
+              </Text>
+            ) : null}
+            {sl.sections.map((sec, sIdx) => (
+              <View key={`${sIdx}:${sec.kind}`} style={styles.setlistSection}>
+                {sec.kind === 'encore' ? (
+                  <View style={styles.encoreLabelRow}>
+                    <Sparkles size={11} color={colors.accent} strokeWidth={2} />
+                    <Text
+                      style={[styles.encoreLabel, { color: colors.accent }]}
+                    >
+                      ENCORE
+                    </Text>
+                  </View>
+                ) : null}
+                {sec.songs.map((song, songIdx) => (
+                  <View key={`${sIdx}:${songIdx}`} style={styles.setlistSongRow}>
+                    <Text style={[styles.setlistTrackNum, { color: colors.faint }]}>
+                      {songIdx + 1}
+                    </Text>
+                    <Text
+                      style={[styles.setlistSongTitle, { color: colors.ink }]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {song.title || 'Untitled'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ))}
+          </Pressable>
+        ))
+      )}
     </Section>
   );
 }
@@ -837,6 +778,55 @@ const styles = StyleSheet.create({
   },
   stubCard: {
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  setlistCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    gap: 8,
+    marginBottom: 8,
+  },
+  setlistPerformer: {
+    fontFamily: 'Geist Sans',
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  setlistSection: {
+    gap: 4,
+  },
+  setlistSongRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  setlistTrackNum: {
+    fontFamily: 'Geist Sans',
+    fontSize: 11,
+    fontWeight: '500',
+    width: 22,
+    textAlign: 'right',
+    letterSpacing: 0.4,
+  },
+  setlistSongTitle: {
+    flex: 1,
+    fontFamily: 'Geist Sans',
+    fontSize: 13.5,
+    fontWeight: '500',
+  },
+  encoreLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingTop: 4,
+    paddingBottom: 2,
+  },
+  encoreLabel: {
+    fontFamily: 'Geist Sans',
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 1,
   },
   endRule: {
     paddingTop: 30,

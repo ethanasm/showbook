@@ -7,6 +7,13 @@ export {
   type SqliteStorageOptions,
   type SQLiteLike,
 } from './sqlite-storage';
+export {
+  closeCacheDatabase,
+  deleteCacheDatabase,
+  getCacheOutbox,
+  lazyCacheSqliteLike,
+  openCacheDatabase,
+} from './db';
 export { attachQueryPersister, hydrateQueryClient, type PersisterOptions } from './persister';
 export { triggerForegroundSync } from './sync';
 export { useForegroundSync, type UseForegroundSyncOptions } from './useForegroundSync';

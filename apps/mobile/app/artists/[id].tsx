@@ -29,6 +29,7 @@ import { ChevronLeft, AlertCircle, Image as ImageIcon, Music } from 'lucide-reac
 import { TopBar } from '../../components/TopBar';
 import { EmptyState } from '../../components/EmptyState';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
+import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { trpc } from '../../lib/trpc';
@@ -153,6 +154,13 @@ export default function ArtistDetailScreen(): React.JSX.Element {
 
   const performer = detailQuery.data;
   const shows = showsQuery.data ?? [];
+  const refreshControl = useThemedRefreshControl(
+    (detailQuery.isFetching || showsQuery.isFetching) &&
+      !(detailQuery.isLoading && showsQuery.isLoading),
+    () => {
+      void Promise.all([detailQuery.refetch(), showsQuery.refetch()]);
+    },
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
@@ -176,7 +184,11 @@ export default function ArtistDetailScreen(): React.JSX.Element {
           />
         </View>
       ) : performer ? (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
+        >
           <Hero performer={performer} />
           <YourShows shows={shows} loading={showsQuery.isLoading} />
           <PhotosStub />

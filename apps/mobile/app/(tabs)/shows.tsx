@@ -16,8 +16,16 @@
  */
 
 import React from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  SectionList,
+  StyleSheet,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Link } from 'expo-router';
 import { ChevronLeft, ChevronRight, List as ListIcon } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { SegmentedControl } from '../../components/SegmentedControl';
@@ -25,8 +33,12 @@ import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { EmptyState } from '../../components/EmptyState';
 import { ShowCardListSkeleton } from '../../components/skeletons';
 import { CalendarGrid, type CalendarEvent } from '../../components/CalendarGrid';
+import { ShowActionSheet } from '../../components/ShowActionSheet';
+import { useSelectedShow } from '../../components/ThreePaneLayout';
+import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
+import { useCachedQuery } from '../../lib/cache';
 import { useAuth } from '../../lib/auth';
 
 type Mode = 'timeline' | 'month' | 'stats';
@@ -117,17 +129,31 @@ function toShowCard(row: ShowRow): ShowCardShow {
   };
 }
 
+// Mirror the tRPC vanilla return shape so we don't drop type safety when
+// reading via useCachedQuery. The dependency on a tRPC `useUtils` client
+// is type-only — Metro does not bundle it.
+type ShowsListData = Awaited<
+  ReturnType<ReturnType<typeof trpc.useUtils>['client']['shows']['list']['query']>
+>;
+type ShowsListItem = ShowsListData[number];
+
 export default function ShowsScreen(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
+  const utils = trpc.useUtils();
   const [mode, setMode] = React.useState<Mode>('timeline');
+  const [actionSheetFor, setActionSheetFor] = React.useState<{
+    id: string;
+    state: ShowState;
+  } | null>(null);
 
-  const showsQuery = trpc.shows.list.useQuery(
-    {},
-    { enabled: Boolean(token) },
-  );
+  const showsQuery = useCachedQuery<ShowsListItem[]>({
+    queryKey: ['mobile', 'shows.list'],
+    queryFn: () => utils.client.shows.list.query({}),
+    enabled: Boolean(token),
+  });
 
   // Normalize the tRPC payload into the small shape our views need. Memoize
   // so re-renders from mode/selection changes don't reshape the list.
@@ -154,6 +180,23 @@ export default function ShowsScreen(): React.JSX.Element {
   const eyebrow =
     mode === 'timeline' ? 'ALL · TIMELINE' : mode === 'month' ? 'ALL · MONTH' : 'ALL · STATS';
 
+  const refreshControl = useThemedRefreshControl(
+    showsQuery.isFetching && !showsQuery.isLoading,
+    () => {
+      void showsQuery.refetch();
+    },
+  );
+
+  const onLongPressShow = React.useCallback((row: ShowRow) => {
+    setActionSheetFor({ id: row.id, state: row.state });
+  }, []);
+
+  // On iPad three-pane the tap selects the row in the middle pane via
+  // the SelectedShow context; on phone we fall back to the existing
+  // `<Link>` push to /show/[id]. The branch is local to each row so
+  // the same TimelineView / MonthView code works in both layouts.
+  const { showId: selectedShowId, setShowId, isThreePane } = useSelectedShow();
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
       <TopBar title="Shows" eyebrow={eyebrow} large />
@@ -173,7 +216,10 @@ export default function ShowsScreen(): React.JSX.Element {
       {showsQuery.isLoading ? (
         <ShowCardListSkeleton count={6} />
       ) : showsQuery.isError ? (
-        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+          refreshControl={refreshControl}
+        >
           <EmptyState
             title="Couldn't load shows"
             subtitle={showsQuery.error.message}
@@ -181,7 +227,10 @@ export default function ShowsScreen(): React.JSX.Element {
           />
         </ScrollView>
       ) : rows.length === 0 ? (
-        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+          refreshControl={refreshControl}
+        >
           <EmptyState
             icon={<ListIcon size={40} color={colors.faint} strokeWidth={1.5} />}
             title="No shows yet"
@@ -189,12 +238,35 @@ export default function ShowsScreen(): React.JSX.Element {
           />
         </ScrollView>
       ) : mode === 'timeline' ? (
-        <TimelineView rows={rows} />
+        <TimelineView
+          rows={rows}
+          refreshControl={refreshControl}
+          onLongPressShow={onLongPressShow}
+          isThreePane={isThreePane}
+          selectedShowId={selectedShowId}
+          onSelect={setShowId}
+        />
       ) : mode === 'month' ? (
-        <MonthView rows={rows} />
+        <MonthView
+          rows={rows}
+          refreshControl={refreshControl}
+          onLongPressShow={onLongPressShow}
+          isThreePane={isThreePane}
+          selectedShowId={selectedShowId}
+          onSelect={setShowId}
+        />
       ) : (
-        <StatsView rows={rows} />
+        <StatsView rows={rows} refreshControl={refreshControl} />
       )}
+
+      {actionSheetFor ? (
+        <ShowActionSheet
+          open
+          onClose={() => setActionSheetFor(null)}
+          showId={actionSheetFor.id}
+          state={actionSheetFor.state}
+        />
+      ) : null}
     </View>
   );
 }
@@ -239,31 +311,106 @@ function buildTimelineSections(rows: ShowRow[]): TimelineSection[] {
   return sections;
 }
 
-function TimelineView({ rows }: { rows: ShowRow[] }): React.JSX.Element {
+function TimelineView({
+  rows,
+  refreshControl,
+  onLongPressShow,
+  isThreePane,
+  selectedShowId,
+  onSelect,
+}: {
+  rows: ShowRow[];
+  refreshControl: React.ReactElement<import('react-native').RefreshControlProps>;
+  onLongPressShow: (row: ShowRow) => void;
+  isThreePane: boolean;
+  selectedShowId: string | null;
+  onSelect: (id: string) => void;
+}): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const sections = React.useMemo(() => buildTimelineSections(rows), [rows]);
 
+  // SectionList virtualises rows, so a power user with hundreds of past
+  // shows doesn't pay a per-row mount on first render. Sticky headers
+  // keep the year / "Upcoming" label visible while scrolling.
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-      {sections.map((section) => (
-        <View key={section.key}>
-          <View style={[styles.sectionHeader, { borderBottomColor: colors.rule }]}>
-            <Text style={[styles.sectionLabel, { color: colors.muted }]}>
-              {section.label.toUpperCase()}
-            </Text>
-            <Text style={[styles.sectionCount, { color: colors.faint }]}>
-              {section.rows.length}
-            </Text>
-          </View>
-          <View style={{ paddingHorizontal: 20 }}>
-            {section.rows.map((row) => (
-              <ShowCard key={row.id} show={toShowCard(row)} compact />
-            ))}
-          </View>
+    <SectionList<ShowRow, TimelineSection>
+      sections={sections.map((s) => ({ ...s, data: s.rows }))}
+      keyExtractor={(item) => item.id}
+      stickySectionHeadersEnabled
+      contentContainerStyle={{ paddingBottom: 32 }}
+      refreshControl={refreshControl}
+      renderSectionHeader={({ section }) => (
+        <View
+          style={[
+            styles.sectionHeader,
+            {
+              borderBottomColor: colors.rule,
+              backgroundColor: colors.bg,
+            },
+          ]}
+        >
+          <Text style={[styles.sectionLabel, { color: colors.muted }]}>
+            {section.label.toUpperCase()}
+          </Text>
+          <Text style={[styles.sectionCount, { color: colors.faint }]}>
+            {section.rows.length}
+          </Text>
         </View>
-      ))}
-    </ScrollView>
+      )}
+      renderItem={({ item }) => (
+        <View style={{ paddingHorizontal: 20 }}>
+          <RowCard
+            row={item}
+            isThreePane={isThreePane}
+            selected={selectedShowId === item.id}
+            onSelect={onSelect}
+            onLongPress={() => onLongPressShow(item)}
+            compact
+          />
+        </View>
+      )}
+    />
+  );
+}
+
+/**
+ * Single row that branches navigation based on whether we're inside the
+ * iPad three-pane shell. On iPad: tap → context selection. On phone:
+ * tap → push the /show/[id] route via expo-router's Link.
+ */
+function RowCard({
+  row,
+  isThreePane,
+  selected,
+  onSelect,
+  onLongPress,
+  compact,
+}: {
+  row: ShowRow;
+  isThreePane: boolean;
+  selected: boolean;
+  onSelect: (id: string) => void;
+  onLongPress: () => void;
+  compact?: boolean;
+}): React.JSX.Element {
+  const card = toShowCard(row);
+  if (isThreePane) {
+    return (
+      <ShowCard
+        show={card}
+        compact={compact}
+        onPress={() => onSelect(row.id)}
+        onLongPress={onLongPress}
+      />
+    );
+  }
+  // Suppress the unused-selected warning on phone — selection is iPad-only.
+  void selected;
+  return (
+    <Link href={`/show/${row.id}`} asChild>
+      <ShowCard show={card} compact={compact} onLongPress={onLongPress} />
+    </Link>
   );
 }
 
@@ -271,7 +418,21 @@ function TimelineView({ rows }: { rows: ShowRow[] }): React.JSX.Element {
 // Month
 // ---------------------------------------------------------------------------
 
-function MonthView({ rows }: { rows: ShowRow[] }): React.JSX.Element {
+function MonthView({
+  rows,
+  refreshControl,
+  onLongPressShow,
+  isThreePane,
+  selectedShowId,
+  onSelect,
+}: {
+  rows: ShowRow[];
+  refreshControl: React.ReactElement<import('react-native').RefreshControlProps>;
+  onLongPressShow: (row: ShowRow) => void;
+  isThreePane: boolean;
+  selectedShowId: string | null;
+  onSelect: (id: string) => void;
+}): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const today = todayISO();
@@ -326,7 +487,10 @@ function MonthView({ rows }: { rows: ShowRow[] }): React.JSX.Element {
   };
 
   return (
-    <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32, gap: 14 }}>
+    <ScrollView
+      contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32, gap: 14 }}
+      refreshControl={refreshControl}
+    >
       <View style={styles.monthBar}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.monthTitle, { color: colors.ink }]}>
@@ -382,7 +546,16 @@ function MonthView({ rows }: { rows: ShowRow[] }): React.JSX.Element {
             {selected ? 'No shows on this day.' : 'No shows this month.'}
           </Text>
         ) : (
-          visibleRows.map((row) => <ShowCard key={row.id} show={toShowCard(row)} />)
+          visibleRows.map((row) => (
+            <RowCard
+              key={row.id}
+              row={row}
+              isThreePane={isThreePane}
+              selected={selectedShowId === row.id}
+              onSelect={onSelect}
+              onLongPress={() => onLongPressShow(row)}
+            />
+          ))
         )}
       </View>
     </ScrollView>
@@ -450,7 +623,13 @@ function formatMoney(dollars: number): string {
   return `$${dollars.toLocaleString('en-US')}`;
 }
 
-function StatsView({ rows }: { rows: ShowRow[] }): React.JSX.Element {
+function StatsView({
+  rows,
+  refreshControl,
+}: {
+  rows: ShowRow[];
+  refreshControl: React.ReactElement<import('react-native').RefreshControlProps>;
+}): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const stats = React.useMemo(() => buildStats(rows), [rows]);
@@ -458,7 +637,10 @@ function StatsView({ rows }: { rows: ShowRow[] }): React.JSX.Element {
   const maxVenue = stats.topVenues[0]?.count ?? 1;
 
   return (
-    <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32, gap: 16 }}>
+    <ScrollView
+      contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32, gap: 16 }}
+      refreshControl={refreshControl}
+    >
       <View style={[styles.statGrid, { backgroundColor: colors.rule }]}>
         <StatTile value={String(stats.total)} label="shows" />
         <StatTile value={formatMoney(stats.spent)} label="spent" />

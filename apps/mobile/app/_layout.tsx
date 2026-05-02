@@ -25,7 +25,7 @@
 import React from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Slot } from 'expo-router';
@@ -35,6 +35,7 @@ import { ThemeProvider } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { trpc, createQueryClient, createTrpcClient } from '../lib/trpc';
 import { CacheBridge } from '../lib/cache/CacheBridge';
+import { deleteCacheDatabase } from '../lib/cache';
 import { loadAppFonts } from '../lib/fonts';
 import { FeedbackProvider } from '../lib/feedback';
 import {
@@ -157,7 +158,7 @@ function PendingWritesDrawerHost(): React.JSX.Element {
 }
 
 function TrpcProviders({ children }: { children: React.ReactNode }): React.JSX.Element {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const tokenRef = React.useRef<string | null>(token);
   React.useEffect(() => {
     tokenRef.current = token;
@@ -171,9 +172,31 @@ function TrpcProviders({ children }: { children: React.ReactNode }): React.JSX.E
     createTrpcClient(() => tokenRef.current),
   );
 
+  useSignOutCleanup(queryClient, user?.id ?? null);
+
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </trpc.Provider>
   );
+}
+
+/**
+ * Watches the `user` transition. When the previous render had a user and
+ * the current render has none, drop everything tied to the old session:
+ * the React Query in-memory cache, the SQLite-backed persisted cache,
+ * and the pending-writes outbox. Without this the next user — same
+ * device, different account — sees the previous user's shows / venues /
+ * outbox until each query refetches over the new bearer.
+ */
+function useSignOutCleanup(queryClient: QueryClient, userId: string | null): void {
+  const previousUserId = React.useRef<string | null>(userId);
+  React.useEffect(() => {
+    const prev = previousUserId.current;
+    previousUserId.current = userId;
+    if (prev && !userId) {
+      queryClient.clear();
+      void deleteCacheDatabase();
+    }
+  }, [queryClient, userId]);
 }

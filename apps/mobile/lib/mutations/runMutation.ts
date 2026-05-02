@@ -44,8 +44,13 @@ export interface MutationResult<TResult> {
 export async function runOptimisticMutation<TInput, TSnapshot, TResult>(
   ctx: MutationContext<TInput, TSnapshot, TResult>,
 ): Promise<MutationResult<TResult>> {
-  const snapshot = ctx.optimistic?.snapshot();
-  ctx.optimistic?.apply(ctx.input);
+  // Capture whether we took a snapshot in a separate boolean so a
+  // legitimate `undefined` snapshot (e.g. "the cache had no entry yet")
+  // still triggers rollback on failure. Gating on `snapshot !== undefined`
+  // would silently skip rollback in that case.
+  const hasOptimistic = Boolean(ctx.optimistic);
+  const snapshot = hasOptimistic ? ctx.optimistic!.snapshot() : undefined;
+  if (hasOptimistic) ctx.optimistic!.apply(ctx.input);
 
   const pending = await ctx.outbox.enqueue({
     id: ctx.pendingId,
@@ -59,8 +64,8 @@ export async function runOptimisticMutation<TInput, TSnapshot, TResult>(
     ctx.reconcile?.(result, ctx.input);
     return { result, pendingId: pending.id };
   } catch (err) {
-    if (ctx.optimistic && snapshot !== undefined) {
-      ctx.optimistic.rollback(snapshot as TSnapshot);
+    if (hasOptimistic) {
+      ctx.optimistic!.rollback(snapshot as TSnapshot);
     }
     const message = err instanceof Error ? err.message : String(err);
     await ctx.outbox.recordFailure(pending.id, message);

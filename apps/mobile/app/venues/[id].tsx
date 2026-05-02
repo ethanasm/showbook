@@ -37,6 +37,7 @@ import { TopBar } from '../../components/TopBar';
 import { EmptyState } from '../../components/EmptyState';
 import { KindBadge } from '../../components/KindBadge';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
+import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { trpc } from '../../lib/trpc';
@@ -168,6 +169,17 @@ export default function VenueDetailScreen(): React.JSX.Element {
   const venue = detailQuery.data;
   const upcoming = upcomingQuery.data ?? [];
   const shows = showsQuery.data ?? [];
+  const refreshControl = useThemedRefreshControl(
+    (detailQuery.isFetching || upcomingQuery.isFetching || showsQuery.isFetching) &&
+      !(detailQuery.isLoading && upcomingQuery.isLoading && showsQuery.isLoading),
+    () => {
+      void Promise.all([
+        detailQuery.refetch(),
+        upcomingQuery.refetch(),
+        showsQuery.refetch(),
+      ]);
+    },
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
@@ -191,7 +203,11 @@ export default function VenueDetailScreen(): React.JSX.Element {
           />
         </View>
       ) : venue ? (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
+        >
           <Hero venue={venue} />
           <Upcoming items={upcoming} loading={upcomingQuery.isLoading} />
           <YourShows
