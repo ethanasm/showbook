@@ -176,6 +176,30 @@ describe('performersRouter (unit)', () => {
       assert.deepEqual(result, { success: true });
     });
 
+    it('runs the cleanup branch with candidate announcements', async () => {
+      const candidate = {
+        id: 'a1',
+        venueId: 'v1',
+        headlinerPerformerId: 'p-removed',
+        supportPerformerIds: null,
+        venueLat: 40.7,
+        venueLng: -74,
+      };
+      const db = makeFakeDb({
+        selectResults: [
+          [], // stillFollowed empty (last user)
+          [candidate], // candidate announcements
+          [{ venueId: 'v-other' }], // followedVenueRows
+          [{ latitude: 34, longitude: -118, radiusMiles: 25, active: true }], // active regions
+          [{ performerId: 'p-other' }], // other followed performers
+        ],
+      });
+      const result = await caller(db).unfollow({
+        performerId: '99999999-9999-4999-8999-999999999999',
+      });
+      assert.deepEqual(result, { success: true });
+    });
+
     it('returns success when no candidate announcements', async () => {
       const db = makeFakeDb({
         selectResults: [
