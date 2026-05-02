@@ -21,14 +21,17 @@ of high-fidelity mocks across the flows below.
 
 | Milestone | Status |
 |---|---|
-| M1 | Ready to ship |
-| M2 | Not started |
-| M3 | Not started |
-| M4 | Not started |
-| M5 | Not started |
-| M6 | Not started |
+| M1 | Shipped |
+| M2 | Shipped |
+| M3 | Shipped |
+| M4 | Shipped |
+| M5 | Shipped |
+| M6 | Shipped (offline + pending-writes drawer, Toast/Banner, iPad three-pane, Maestro Cloud E2E flows, 80% coverage gate scoped to `apps/mobile/lib/**`) |
 
-Update this table when each milestone ships.
+The mobile app is feature-complete against the design handoff. Open
+follow-ups (push notifications wiring, post-M5 review items) live in
+the root [`Planned Improvements.md`](../Planned%20Improvements.md) and
+[`reviews/mobile-review-2026-05-02.md`](reviews/mobile-review-2026-05-02.md).
 
 ## Stack decisions (locked for M1, may extend in later milestones)
 
