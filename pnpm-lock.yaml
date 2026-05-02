@@ -81,6 +81,9 @@ importers:
       expo-splash-screen:
         specifier: ~55.0.19
         version: 55.0.19(expo@55.0.18)(typescript@5.9.3)
+      expo-sqlite:
+        specifier: ~55.0.15
+        version: 55.0.15(expo@55.0.18)(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
       expo-status-bar:
         specifier: ~55.0.5
         version: 55.0.5(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
@@ -304,7 +307,7 @@ importers:
         version: 11.16.0(typescript@6.0.3)
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(gel@2.2.0)(pg@8.20.0)(postgres@3.4.9)
+        version: 0.45.2(expo-sqlite@55.0.15(expo@55.0.18)(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(gel@2.2.0)(pg@8.20.0)(postgres@3.4.9)
       groq-sdk:
         specifier: ^1.1.2
         version: 1.1.2
@@ -341,7 +344,7 @@ importers:
         version: link:../shared
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(gel@2.2.0)(pg@8.20.0)(postgres@3.4.9)
+        version: 0.45.2(expo-sqlite@55.0.15(expo@55.0.18)(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(gel@2.2.0)(pg@8.20.0)(postgres@3.4.9)
       postgres:
         specifier: ^3.4.5
         version: 3.4.9
@@ -409,7 +412,7 @@ importers:
         version: link:../shared
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(gel@2.2.0)(pg@8.20.0)(postgres@3.4.9)
+        version: 0.45.2(expo-sqlite@55.0.15(expo@55.0.18)(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(gel@2.2.0)(pg@8.20.0)(postgres@3.4.9)
       pg-boss:
         specifier: ^10.1.0
         version: 10.4.2
@@ -459,7 +462,7 @@ importers:
         version: link:../observability
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(gel@2.2.0)(pg@8.20.0)(postgres@3.4.9)
+        version: 0.45.2(expo-sqlite@55.0.15(expo@55.0.18)(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(gel@2.2.0)(pg@8.20.0)(postgres@3.4.9)
       groq-sdk:
         specifier: ^1.1.2
         version: 1.1.2
@@ -3114,6 +3117,7 @@ packages:
   '@smithy/util-retry@4.3.6':
     resolution: {integrity: sha512-p6/FO1n2KxMeQyna067i0uJ6TSbb165ZhnRtCpWh4Foxqbfc6oW+XITaL8QkFJj3KFnDe2URt4gOhgU06EP9ew==}
     engines: {node: '>=18.0.0'}
+    deprecated: '@smithy/util-retry v4.3.6 contains a bug in Adaptive Retry, see https://github.com/smithy-lang/smithy-typescript/issues/1993. Upgrade to 4.3.7+'
 
   '@smithy/util-stream@4.5.25':
     resolution: {integrity: sha512-/PFpG4k8Ze8Ei+mMKj3oiPICYekthuzePZMgZbCqMiXIHHf4n2aZ4Ps0aSRShycFTGuj/J6XldmC0x0DwednIA==}
@@ -3614,6 +3618,9 @@ packages:
   available-typed-arrays@1.0.7:
     resolution: {integrity: sha512-wvUjBtSGN7+7SjNpq/9M2Tg350UZD3q62IFZLbRAR1bSMlCo1ZaeW+BJ+D090e4hIIZLBcTDWe4Mh4jvUDajzQ==}
     engines: {node: '>= 0.4'}
+
+  await-lock@2.2.2:
+    resolution: {integrity: sha512-aDczADvlvTGajTDjcjpJMqRkOF6Qdz3YbPZm/PyW6tKPkx2hlYBzxMhEywM/tU72HrVZjgl5VCdRuMlA7pZ8Gw==}
 
   axe-core@4.11.3:
     resolution: {integrity: sha512-zBQouZixDTbo3jMGqHKyePxYxr1e5W8UdTmBQ7sNtaA9M2bE32daxxPLS/jojhKOHxQ7LWwPjfiwf/fhaJWzlg==}
@@ -4683,6 +4690,13 @@ packages:
     resolution: {integrity: sha512-l8BWI/inLJW46Ojz5NgwvaM8LftrdXeFfZBUXhAoZxg44Qo2xKY76s0S1h3WIxWXT4sRKwK8YQzGr4k+zHubxQ==}
     peerDependencies:
       expo: '*'
+
+  expo-sqlite@55.0.15:
+    resolution: {integrity: sha512-vxE5fs6l953QSIyievQ8TuSstj62eC7zUREjNzbUOwRWaHGGnhnlPJM1HLoTIv+oIt3+b1m7k2fmcDGkpK5t3w==}
+    peerDependencies:
+      expo: '*'
+      react: '*'
+      react-native: '*'
 
   expo-status-bar@55.0.5:
     resolution: {integrity: sha512-qb0c3rJO2b7CC0gUVGi1JYp92oLenWdYGyk8l4YQs6U+uaXUTPv6aaFa3KkT2HON10re3AxxPNJci8rsz6kPxg==}
@@ -11047,6 +11061,8 @@ snapshots:
     dependencies:
       possible-typed-array-names: 1.1.0
 
+  await-lock@2.2.2: {}
+
   axe-core@4.11.3: {}
 
   axios@1.15.0:
@@ -11647,8 +11663,9 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.21.0
 
-  drizzle-orm@0.45.2(gel@2.2.0)(pg@8.20.0)(postgres@3.4.9):
+  drizzle-orm@0.45.2(expo-sqlite@55.0.15(expo@55.0.18)(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(gel@2.2.0)(pg@8.20.0)(postgres@3.4.9):
     optionalDependencies:
+      expo-sqlite: 55.0.15(expo@55.0.18)(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
       gel: 2.2.0
       pg: 8.20.0
       postgres: 3.4.9
@@ -12398,6 +12415,13 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
       - typescript
+
+  expo-sqlite@55.0.15(expo@55.0.18)(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5):
+    dependencies:
+      await-lock: 2.2.2
+      expo: 55.0.18(@babel/core@7.29.0)(@expo/dom-webview@55.0.5)(@expo/metro-runtime@55.0.10)(expo-router@55.0.13)(react-dom@19.2.5(react@19.2.5))(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)(typescript@5.9.3)
+      react: 19.2.5
+      react-native: 0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5)
 
   expo-status-bar@55.0.5(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5):
     dependencies:
