@@ -25,6 +25,23 @@ concurrency:
 jobs:
   build-and-test:
     name: EAS build + Maestro Cloud
+    # Gated on a repo variable so the job reports as **skipped** (not
+    # success, not failure) until the prereqs are in place. Without this
+    # gate the workflow failed every nightly cron with "An Expo user
+    # account is required to proceed", which buried real signal.
+    #
+    # To enable this workflow:
+    #   1. Add secrets under Settings → Secrets and variables → Actions:
+    #        - EXPO_TOKEN
+    #        - MAESTRO_CLOUD_API_KEY
+    #        - MAESTRO_E2E_TOKEN, MAESTRO_E2E_USER_JSON (used by the run step)
+    #   2. Set the repo variable `MOBILE_E2E_ENABLED` to `true`
+    #      (Settings → Secrets and variables → Actions → Variables tab).
+    #
+    # `secrets` can't be referenced in a job-level `if:` (only github /
+    # needs / vars / inputs are available there), which is why the gate
+    # is on `vars` instead.
+    if: vars.MOBILE_E2E_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
