@@ -23,14 +23,19 @@ The runbook below turns a vague prod report into the next concrete query. CLAUDE
 - **LLM regressions** (bad output, slow generations, missing tool calls) → Langfuse, not Axiom. Traces from `traceLLM` / `withTrace` are not in this dataset.
 - **Local/dev debugging** → `AXIOM_TOKEN` is intentionally unset in `.env.dev`; just read stdout.
 - **Schema / migration issues** → run `pnpm db:studio` against prod (read-only) or check `pnpm prod:migrate` output.
+- **Cloud / web-sandbox sessions** (Claude Code on the web, hosted runners, etc.) → the skill relies on `AXIUM_QUERY_TOKEN` exported from the user's local `~/.zshrc`, which isn't reachable from cloud envs, and the Axiom API isn't part of the sandbox network anyway. Ask the user to run the recipes locally and paste results back instead.
 
 ## Pre-flight
 
+Each Bash tool call starts a fresh shell that doesn't inherit the user's
+exported env, so the token has to be sourced inline. Run this first — it
+re-sources `~/.zshrc` and reports whether the token is now in scope:
+
 ```bash
-test -n "$AXIUM_QUERY_TOKEN" && echo "ok" || echo "AXIUM_QUERY_TOKEN missing — create a PAT at Axiom → Settings → Profile → Personal Access Tokens"
+source ~/.zshrc; test -n "$AXIUM_QUERY_TOKEN" && echo "ok" || echo "AXIUM_QUERY_TOKEN missing — add it to ~/.zshrc as a PAT from Axiom → Settings → Profile → Personal Access Tokens"
 ```
 
-If unset, ask the user to export it for the session. Never commit it.
+If still unset after sourcing, ask the user to export it. Never commit it.
 
 ## Decision tree
 
@@ -55,11 +60,13 @@ Symptom from user
 
 ## Query template
 
-All queries use the same curl wrapper. Substitute the APL string in `<<APL>>`:
+All queries use the same curl wrapper. Substitute the APL string in `<<APL>>`.
+The `source ~/.zshrc` prefix is required on every call — each Bash tool
+invocation is a fresh shell and won't have `AXIUM_QUERY_TOKEN` in scope
+otherwise:
 
 ```bash
-ORG=showbook-egap
-curl -sS -X POST "https://api.axiom.co/v1/datasets/_apl?format=tabular" \
+source ~/.zshrc; ORG=showbook-egap; curl -sS -X POST "https://api.axiom.co/v1/datasets/_apl?format=tabular" \
   -H "Authorization: Bearer $AXIUM_QUERY_TOKEN" \
   -H "X-AXIOM-ORG-ID: $ORG" \
   -H "Content-Type: application/json" \
