@@ -16,7 +16,7 @@
     "@gorhom/bottom-sheet": "^5.2.13",
     "@showbook/shared": "workspace:*",
     "@tanstack/react-query": "^5.99.2",
-    "@trpc/client": "^11.16.0",
+    "@trpc/client": "^11.17.0",
     "@trpc/react-query": "^11.17.0",
     "expo": "~55.0.18",
     "expo-auth-session": "~55.0.15",

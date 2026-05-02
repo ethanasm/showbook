@@ -29,7 +29,7 @@
     "@showbook/observability": "workspace:*",
     "@showbook/shared": "workspace:*",
     "@tanstack/react-query": "^5.100.6",
-    "@trpc/client": "^11.16.0",
+    "@trpc/client": "^11.17.0",
     "@trpc/react-query": "^11.17.0",
     "@trpc/server": "^11.0.0",
     "geist": "^1.4.1",
