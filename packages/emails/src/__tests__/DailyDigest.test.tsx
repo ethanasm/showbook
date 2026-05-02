@@ -104,7 +104,10 @@ describe('renderDailyDigest', () => {
 
   it('uses appUrl in CTA links', async () => {
     const html = await renderDailyDigest(fullProps);
-    assert.match(html, new RegExp(APP.replace(/\./g, '\\.')));
+    // Escape every regex metacharacter, not just `.`, so the assertion stays
+    // robust if APP gains a `+`, `?`, etc.
+    const escaped = APP.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    assert.match(html, new RegExp(escaped));
   });
 
   it('renders preamble paragraphs when provided', async () => {

@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# Default to read-only for the GITHUB_TOKEN; jobs that need more (e.g. to
+# upload artifacts) inherit only what's necessary.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

@@ -255,8 +255,20 @@ export function toStateCode(stateRegion: string | undefined | null): string | un
 
 export function venueNameVariants(name: string): string[] {
   const variants: string[] = [name];
-  // Google Places often appends " at <parent>" or " - <org>"
-  const stripped = name.replace(/\s+at\s+.+$/i, '').replace(/\s+-\s+.+$/, '');
+  // Google Places often appends " at <parent>" or " - <org>". Use indexOf
+  // rather than regex to avoid REDOS on adversarial inputs that repeat the
+  // separator. The `idx + sep.length < ...` guard mirrors the original
+  // `.+$` requirement that at least one character follow the separator.
+  let stripped = name;
+  const lower = stripped.toLowerCase();
+  const atIdx = lower.indexOf(' at ');
+  if (atIdx > 0 && atIdx + 4 < stripped.length) {
+    stripped = stripped.slice(0, atIdx);
+  }
+  const dashIdx = stripped.indexOf(' - ');
+  if (dashIdx > 0 && dashIdx + 3 < stripped.length) {
+    stripped = stripped.slice(0, dashIdx);
+  }
   if (stripped !== name && stripped.length >= 3) variants.push(stripped);
   return variants;
 }

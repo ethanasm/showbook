@@ -28,6 +28,12 @@ on:
         required: false
         default: ""
 
+# Default to read-only — the deploy job runs on a self-hosted runner that
+# operates on a checked-out tree via git/docker; it doesn't need to write to
+# the GitHub repo via the GITHUB_TOKEN.
+permissions:
+  contents: read
+
 concurrency:
   group: deploy-prod
   cancel-in-progress: false
