@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import { useTheme } from '../lib/theme';
 import { useFeedback, type ToastKind } from '../lib/feedback';
@@ -15,11 +16,20 @@ export function BannerHost(): React.JSX.Element | null {
   const { banners, dismissBanner } = useFeedback();
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const insets = useSafeAreaInsets();
 
   if (banners.length === 0) return null;
 
+  // Render absolute over the screen content so the banner doesn't push
+  // a screen's TopBar below the fold (which would happen if we relied
+  // on document flow + a paddingTop on the host). insets.top keeps the
+  // banner clear of the notch / status bar; screens that need to know
+  // the banner is present can read `useFeedback().banners`.
   return (
-    <View>
+    <View
+      pointerEvents="box-none"
+      style={[styles.host, { top: insets.top }]}
+    >
       {banners.map((b) => (
         <View
           key={b.id}
@@ -82,6 +92,12 @@ function bgFor(kind: ToastKind, colors: { surface: string; accentFaded: string; 
 }
 
 const styles = StyleSheet.create({
+  host: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 999,
+  },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',

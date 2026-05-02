@@ -20,6 +20,7 @@
 import { NextResponse } from 'next/server';
 import { child } from '@showbook/observability';
 import { db } from '@showbook/db';
+import { isRateLimited } from '@showbook/api';
 import { readAllowlistFromEnv, shouldAllowSignIn } from '@/lib/auth-allowlist';
 import {
   verifyGoogleIdToken,
@@ -29,7 +30,51 @@ import {
 
 const log = child({ component: 'web.auth.mobile' });
 
+// Per-IP throttle on the unauthenticated mobile-token endpoint. Each
+// request runs Google JWKS verification (CPU-bound crypto), and the
+// route is reachable from anywhere on the public origin, so an
+// unbounded caller could trivially burn CPU and emit log spam. 30
+// requests/minute/IP is an order of magnitude above the legitimate
+// rate (one mint per device per ~30 days) but still keeps abusive
+// callers in check.
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 30;
+
+function clientIpKey(req: Request): string {
+  const headers = req.headers;
+  // Cloudflare → next.js sets these on the inbound request when the
+  // tunnel is fronting prod. Fall back to x-forwarded-for, then to a
+  // synthesised key (which collapses anonymous callers into one bucket
+  // — acceptable for a coarse abuse gate).
+  const cf =
+    headers.get('cf-connecting-ip') ?? headers.get('x-real-ip') ?? '';
+  if (cf) return cf;
+  const fwd = headers.get('x-forwarded-for');
+  if (fwd) {
+    const first = fwd.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  return 'anonymous';
+}
+
 export async function POST(req: Request) {
+  const ipKey = clientIpKey(req);
+  if (
+    isRateLimited(`auth.mobile_token:${ipKey}`, {
+      max: RATE_LIMIT_MAX,
+      windowMs: RATE_LIMIT_WINDOW_MS,
+    })
+  ) {
+    log.warn(
+      { event: 'auth.mobile_rate_limited' },
+      'Mobile token mint rate-limited',
+    );
+    return NextResponse.json(
+      { error: 'rate_limited' },
+      { status: 429, headers: { 'retry-after': '60' } },
+    );
+  }
+
   // Parse and validate the request body
   let idToken: string;
   try {
@@ -129,8 +174,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'server_error' }, { status: 500 });
   }
 
+  // CLAUDE.md prohibits raw PII in logs. Operators correlate via userId.
   log.info(
-    { event: 'auth.mobile_signin', userId: user.id, email: user.email },
+    { event: 'auth.mobile_signin', userId: user.id },
     'Mobile sign-in successful',
   );
 

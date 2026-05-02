@@ -13,7 +13,7 @@
  */
 
 import React from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Alert, View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Inbox, RefreshCw, Trash2 } from 'lucide-react-native';
 
 import { Sheet } from './Sheet';
@@ -101,12 +101,34 @@ export function PendingWritesDrawer({
             <PendingRow
               key={entry.id}
               entry={entry}
-              onDiscard={() => onDiscard(entry.id)}
+              onDiscard={() => confirmDiscard(entry, onDiscard)}
             />
           ))}
         </ScrollView>
       )}
     </Sheet>
+  );
+}
+
+function confirmDiscard(
+  entry: PendingWrite,
+  onDiscard: (id: string) => void,
+): void {
+  // Discarding loses the user's offline work permanently. The Alert
+  // handles the same family of risks the Delete-show flow does (a
+  // mistap on a small target shouldn't drop user data).
+  const label = MUTATION_LABEL[entry.mutation] ?? entry.mutation;
+  Alert.alert(
+    'Discard pending change?',
+    `This permanently drops "${label}". The change won't be saved when you reconnect.`,
+    [
+      { text: 'Keep it', style: 'cancel' },
+      {
+        text: 'Discard',
+        style: 'destructive',
+        onPress: () => onDiscard(entry.id),
+      },
+    ],
   );
 }
 

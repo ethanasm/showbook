@@ -33,8 +33,7 @@ import { useTheme } from '../../../lib/theme';
 import { trpc } from '../../../lib/trpc';
 import { useFeedback } from '../../../lib/feedback';
 import { runOptimisticMutation } from '../../../lib/mutations';
-import { createOutbox } from '../../../lib/cache/outbox';
-import { createMemoryStorage } from '../../../lib/cache/memory-storage';
+import { getCacheOutbox } from '../../../lib/cache';
 
 type Kind = 'concert' | 'theatre' | 'comedy' | 'festival';
 
@@ -105,58 +104,6 @@ function buildInitialValues(detail: ShowDetailLike): FormValues {
     notes: detail.notes ?? '',
     supportActs: supports.join(', '),
   };
-}
-
-// Lazily-created in-memory outbox. Production code at the app root will
-// swap this out for a SQLite-backed instance via the cache module — for
-// now the edit screen still benefits from the optimistic flow plus the
-// pending_writes invariant the unit tests exercise.
-let _outboxSingleton: ReturnType<typeof createOutbox> | null = null;
-function getOutbox(): ReturnType<typeof createOutbox> {
-  if (_outboxSingleton) return _outboxSingleton;
-  // memory-storage's CacheStorage shape is incidental — we want the
-  // in-memory SQLiteLike behavior. Build a tiny shim here so we don't
-  // pull expo-sqlite into the edit screen's module graph.
-  const rows = new Map<
-    string,
-    { id: string; mutation: string; payload: string; created_at: number; attempts: number; last_error: string | null }
-  >();
-  const db = {
-    async execAsync() {
-      // schema migrations are no-ops for the in-memory shim; we own the row store directly.
-    },
-    async runAsync(sql: string, params: unknown[] = []) {
-      if (/^INSERT INTO pending_writes/i.test(sql)) {
-        const [id, mutation, payload, created_at] = params as [string, string, string, number];
-        rows.set(id, { id, mutation, payload, created_at, attempts: 0, last_error: null });
-      } else if (/^DELETE FROM pending_writes WHERE id/i.test(sql)) {
-        rows.delete((params as string[])[0]);
-      } else if (/^DELETE FROM pending_writes/i.test(sql)) {
-        rows.clear();
-      } else if (/^UPDATE pending_writes/i.test(sql)) {
-        const [error, id] = params as [string, string];
-        const row = rows.get(id);
-        if (row) {
-          row.attempts += 1;
-          row.last_error = error;
-        }
-      }
-    },
-    async getFirstAsync<T>(sql: string, params: unknown[] = []) {
-      if (/FROM pending_writes WHERE id/i.test(sql)) {
-        const r = rows.get((params as string[])[0]);
-        return (r ?? null) as T | null;
-      }
-      return null;
-    },
-    async getAllAsync<T>() {
-      return Array.from(rows.values()).sort((a, b) => a.created_at - b.created_at) as T[];
-    },
-  };
-  // Touch the unused storage import so tree-shaking keeps the helper used elsewhere.
-  void createMemoryStorage;
-  _outboxSingleton = createOutbox(db, { ensureMigrations: false });
-  return _outboxSingleton;
 }
 
 export default function EditShowScreen(): React.JSX.Element {
@@ -279,7 +226,7 @@ export default function EditShowScreen(): React.JSX.Element {
       await runOptimisticMutation({
         mutation: 'shows.update',
         input,
-        outbox: getOutbox(),
+        outbox: getCacheOutbox(),
         call: (i) => utils.client.shows.update.mutate(i),
         optimistic: {
           snapshot: () => queryClient.getQueryData(detailKey),

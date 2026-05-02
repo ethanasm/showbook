@@ -84,8 +84,11 @@ export async function resolveTrpcSession(
       return null;
     }
     if (!isEmailAllowed(decoded.email, allowlist)) {
+      // Include the userId so operators can identify which removed user
+      // is still trying to use the app on a stale token. The email is
+      // intentionally omitted (CLAUDE.md prohibits PII in logs).
       log.info(
-        { event: 'auth.mobile_session_denied' },
+        { event: 'auth.mobile_session_denied', userId: decoded.id },
         'Mobile bearer session denied by allowlist',
       );
       return null;

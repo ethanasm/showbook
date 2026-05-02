@@ -8,13 +8,12 @@
  * minimum (768pt → middle stays >= 88pt; iPad-landscape (~1180pt) gives
  * ~500pt of breathing room).
  *
- * Each pane is a fixed slot — the children passed in are mounted as-is
- * by (tabs)/_layout.tsx (the existing Shows / ShowDetail / Map screens).
- * No selection state lives here; cross-pane sync, if any, will land in a
- * later milestone alongside per-screen iPad awareness. Pure layout, no
- * imperative work — safe to remount.
- *
- * Drag-divider polish was deliberately skipped per the M6.C scope note.
+ * Cross-pane selection lives in a small React context exposed via
+ * `useSelectedShow()`. The Shows pane writes a show id when the user
+ * taps a row; the ShowDetail pane reads it as its `showId` prop, and
+ * the Map pane focuses the matching venue. This is the minimum viable
+ * plumbing — drag-divider polish and sticky scroll position are
+ * deliberately out of scope.
  */
 
 import React from 'react';
@@ -23,6 +22,31 @@ import { useTheme } from '../lib/theme';
 
 const LEFT_WIDTH = 320;
 const RIGHT_WIDTH = 360;
+
+interface SelectedShowContextValue {
+  showId: string | null;
+  setShowId: (id: string | null) => void;
+  /** True when we're rendering inside the iPad three-pane layout. */
+  isThreePane: boolean;
+}
+
+const SelectedShowContext = React.createContext<SelectedShowContextValue | null>(null);
+
+/**
+ * Read / write the iPad pane selection. On phone the provider is absent
+ * so consumers fall back to a no-op + `isThreePane: false`. List screens
+ * branch on `isThreePane` to decide between in-place selection (iPad)
+ * and a Stack push (phone).
+ */
+export function useSelectedShow(): SelectedShowContextValue {
+  const ctx = React.useContext(SelectedShowContext);
+  if (ctx) return ctx;
+  return {
+    showId: null,
+    setShowId: () => undefined,
+    isThreePane: false,
+  };
+}
 
 interface ThreePaneLayoutProps {
   left: React.ReactNode;
@@ -37,27 +61,35 @@ export function ThreePaneLayout({
 }: ThreePaneLayoutProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const [showId, setShowId] = React.useState<string | null>(null);
+
+  const value = React.useMemo<SelectedShowContextValue>(
+    () => ({ showId, setShowId, isThreePane: true }),
+    [showId],
+  );
 
   return (
-    <View style={[styles.row, { backgroundColor: colors.bg }]}>
-      <View
-        style={[
-          styles.leftPane,
-          { width: LEFT_WIDTH, borderRightColor: colors.rule },
-        ]}
-      >
-        {left}
+    <SelectedShowContext.Provider value={value}>
+      <View style={[styles.row, { backgroundColor: colors.bg }]}>
+        <View
+          style={[
+            styles.leftPane,
+            { width: LEFT_WIDTH, borderRightColor: colors.rule },
+          ]}
+        >
+          {left}
+        </View>
+        <View style={styles.middlePane}>{middle}</View>
+        <View
+          style={[
+            styles.rightPane,
+            { width: RIGHT_WIDTH, borderLeftColor: colors.rule },
+          ]}
+        >
+          {right}
+        </View>
       </View>
-      <View style={styles.middlePane}>{middle}</View>
-      <View
-        style={[
-          styles.rightPane,
-          { width: RIGHT_WIDTH, borderLeftColor: colors.rule },
-        ]}
-      >
-        {right}
-      </View>
-    </View>
+    </SelectedShowContext.Provider>
   );
 }
 
