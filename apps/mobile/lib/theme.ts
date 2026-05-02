@@ -36,8 +36,10 @@ import { type ShowState } from '@showbook/shared';
 // Re-export so callers can import from a single mobile path
 export type { Kind, ShowState, ThemeMode };
 export type ThemePreference = 'system' | 'light' | 'dark';
+export type Density = 'comfortable' | 'compact';
 
 const PREF_KEY = 'showbook.theme.preference';
+const DENSITY_KEY = 'showbook.theme.density';
 
 // ---------------------------------------------------------------------------
 // Token interfaces
@@ -109,6 +111,8 @@ interface ThemeContextValue {
   mode: ThemeMode;
   preference: ThemePreference;
   setPreference: (p: ThemePreference) => void;
+  density: Density;
+  setDensity: (d: Density) => void;
   tokens: Tokens;
 }
 
@@ -116,6 +120,8 @@ const ThemeContext = createContext<ThemeContextValue>({
   mode: 'dark',
   preference: 'system',
   setPreference: () => undefined,
+  density: 'comfortable',
+  setDensity: () => undefined,
   tokens: DARK_TOKENS,
 });
 
@@ -125,6 +131,7 @@ const ThemeContext = createContext<ThemeContextValue>({
 
 export function ThemeProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
   const [preference, setPreferenceState] = useState<ThemePreference>('system');
+  const [density, setDensityState] = useState<Density>('comfortable');
   const [deviceScheme, setDeviceScheme] = useState<'light' | 'dark'>(
     Appearance.getColorScheme() === 'light' ? 'light' : 'dark',
   );
@@ -139,6 +146,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
       })
       .catch(() => {
         // If read fails, stay with 'system' default
+      });
+    SecureStore.getItemAsync(DENSITY_KEY)
+      .then((stored) => {
+        if (stored === 'comfortable' || stored === 'compact') {
+          setDensityState(stored);
+        }
+      })
+      .catch(() => {
+        // Stay with 'comfortable' default on read failure
       });
   }, []);
 
@@ -157,13 +173,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
     });
   }, []);
 
+  const setDensity = useCallback((d: Density) => {
+    setDensityState(d);
+    SecureStore.setItemAsync(DENSITY_KEY, d).catch(() => {
+      // Best-effort persistence; in-memory state still wins
+    });
+  }, []);
+
   // Resolve active mode: preference overrides system
   const mode: ThemeMode = preference === 'system' ? deviceScheme : preference;
   const tokens = mode === 'dark' ? DARK_TOKENS : LIGHT_TOKENS;
 
   const value = React.useMemo<ThemeContextValue>(
-    () => ({ mode, preference, setPreference, tokens }),
-    [mode, preference, setPreference, tokens],
+    () => ({ mode, preference, setPreference, density, setDensity, tokens }),
+    [mode, preference, setPreference, density, setDensity, tokens],
   );
 
   return React.createElement(ThemeContext.Provider, { value }, children);

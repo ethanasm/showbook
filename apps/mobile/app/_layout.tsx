@@ -34,6 +34,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { trpc, createQueryClient, createTrpcClient } from '../lib/trpc';
+import { CacheBridge } from '../lib/cache/CacheBridge';
 import { loadAppFonts } from '../lib/fonts';
 import { FeedbackProvider } from '../lib/feedback';
 import { ToastHost } from '../components/Toast';
@@ -71,11 +72,13 @@ export default function RootLayout(): React.JSX.Element {
             <ErrorBoundary>
               <AuthProvider>
                 <TrpcProviders>
-                  <BottomSheetModalProvider>
-                    <Slot />
-                    <ToastHost />
-                    <StatusBar style="auto" />
-                  </BottomSheetModalProvider>
+                  <CacheBridge>
+                    <BottomSheetModalProvider>
+                      <Slot />
+                      <ToastHost />
+                      <StatusBar style="auto" />
+                    </BottomSheetModalProvider>
+                  </CacheBridge>
                 </TrpcProviders>
               </AuthProvider>
             </ErrorBoundary>
