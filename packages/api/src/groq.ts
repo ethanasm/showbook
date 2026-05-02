@@ -444,3 +444,112 @@ export async function extractCast(
   }
   return parsed.data.cast;
 }
+
+// ---------------------------------------------------------------------------
+// generateDigestPreamble — short personalized opener for the daily email
+// ---------------------------------------------------------------------------
+
+export interface DigestPreambleInput {
+  displayName: string;
+  todayShows: ReadonlyArray<{ headliner: string; venueName: string; seat: string | null }>;
+  upcomingShows: ReadonlyArray<{
+    headliner: string;
+    venueName: string;
+    dateLabel: string;
+    daysUntil: number;
+  }>;
+  newAnnouncements: ReadonlyArray<{
+    headliner: string;
+    venueName: string;
+    whenLabel: string;
+    reason: 'venue' | 'artist';
+    onSaleSoon: boolean;
+  }>;
+}
+
+const preambleSchema = z.object({
+  preamble: z.string().min(1).max(800),
+});
+
+/**
+ * Returns a 1–2 short paragraph opener for the daily digest, tailored to
+ * what the user actually has on deck. Falls back to `null` on any error
+ * (missing key, network blip, malformed output) so the digest still ships
+ * with the deterministic template content.
+ */
+export async function generateDigestPreamble(
+  input: DigestPreambleInput,
+): Promise<string | null> {
+  if (!process.env.GROQ_API_KEY) return null;
+
+  const summary = {
+    name: input.displayName,
+    tonight: input.todayShows.map((s) => ({
+      headliner: s.headliner,
+      venue: s.venueName,
+      seat: s.seat,
+    })),
+    upcoming: input.upcomingShows.map((s) => ({
+      headliner: s.headliner,
+      venue: s.venueName,
+      when: s.dateLabel,
+      daysUntil: s.daysUntil,
+    })),
+    announcements: input.newAnnouncements.map((a) => ({
+      headliner: a.headliner,
+      venue: a.venueName,
+      when: a.whenLabel,
+      reason: a.reason,
+      onSaleSoon: a.onSaleSoon,
+    })),
+  };
+
+  const messages = [
+    {
+      role: 'system' as const,
+      content:
+        'You write short, warm openers for a daily live-entertainment email digest. ' +
+        'Voice: direct, specific, lightly literary, never breathless or salesy. ' +
+        'Address the reader by first name once if natural. Reference concrete details ' +
+        '(artists, venues, days-until, on-sale) — never invent facts not in the input. ' +
+        'Length: one paragraph if there is little to report, up to two short paragraphs ' +
+        'when the day is busy. Hard cap of 80 words total. No emoji, no markdown, no ' +
+        'headings, no bullet points. Plain prose only — paragraphs separated by a single ' +
+        'blank line. Do not list every item; pick the most interesting beat. If there is ' +
+        'nothing on deck, write a single sentence acknowledging the quiet. ' +
+        'Return ONLY a JSON object: {"preamble": "..."}.',
+    },
+    {
+      role: 'user' as const,
+      content: JSON.stringify(summary),
+    },
+  ];
+
+  try {
+    const result = await traceLLM({
+      name: 'groq.generateDigestPreamble',
+      model: MODEL_TEXT,
+      input: messages,
+      modelParameters: { response_format: 'json_object', temperature: 0.7 },
+      run: () =>
+        groq().chat.completions.create({
+          model: MODEL_TEXT,
+          messages,
+          response_format: { type: 'json_object' },
+          temperature: 0.7,
+        }),
+      extractUsage: groqUsage,
+      extractOutput: pickContent,
+    });
+
+    const content = pickContent(result);
+    if (!content) return null;
+    const raw = JSON.parse(content) as unknown;
+    const parsed = preambleSchema.safeParse(raw);
+    if (!parsed.success) return null;
+    const text = parsed.data.preamble.trim();
+    return text.length > 0 ? text : null;
+  } catch {
+    return null;
+  }
+}

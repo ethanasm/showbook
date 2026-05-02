@@ -18,8 +18,8 @@ export {
 export { matchOrCreateVenue } from './venue-matcher';
 export { matchOrCreatePerformer } from './performer-matcher';
 export { getPlacePhotoMediaUrl, getPlaceDetails } from './google-places';
-export { extractShowFromEmail } from './groq';
-export type { ExtractedTicketInfo } from './groq';
+export { extractShowFromEmail, generateDigestPreamble } from './groq';
+export type { ExtractedTicketInfo, DigestPreambleInput } from './groq';
 export {
   searchMessages,
   getMessageBody,
