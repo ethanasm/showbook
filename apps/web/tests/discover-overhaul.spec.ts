@@ -145,11 +145,23 @@ test.describe('Date TBD UX on show detail page', () => {
     });
 
     // The row's underlying mutation creates a shows row with date=NULL.
-    // We verify the UX by looking up the show id via a tiny test endpoint
-    // and navigating directly to /shows/<id>.
-    const lookup = await page.request.get('/api/test/show-id?productionName=Hamilton&state=watching');
-    expect(lookup.ok()).toBeTruthy();
-    const { id } = await lookup.json();
+    // The Watching button flips optimistically on click, so we poll the
+    // test endpoint until the server-side write has actually landed.
+    let id: string | null = null;
+    await expect
+      .poll(
+        async () => {
+          const res = await page.request.get(
+            '/api/test/show-id?productionName=Hamilton&state=watching',
+          );
+          if (!res.ok()) return null;
+          const body = await res.json();
+          id = (body.id as string | null) ?? null;
+          return id;
+        },
+        { timeout: 8000 },
+      )
+      .toBeTruthy();
     expect(id).toBeTruthy();
 
     await page.goto(`/shows/${id}`);
