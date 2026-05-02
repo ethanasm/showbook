@@ -11,8 +11,58 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Restore Next.js incremental cache
+        uses: actions/cache@v4
+        with:
+          path: apps/web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/**/*.[jt]s', 'apps/web/**/*.[jt]sx', 'packages/**/*.[jt]s', 'packages/**/*.[jt]sx') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            nextjs-${{ runner.os }}-
+
+      - name: Restore Nx cache
+        uses: actions/cache@v4
+        with:
+          path: .nx/cache
+          key: nx-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            nx-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            nx-${{ runner.os }}-
+
+      - name: Build web
+        run: pnpm build
+
+      - name: Upload web build output
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-next-build
+          path: apps/web/.next
+          if-no-files-found: error
+          retention-days: 1
+          include-hidden-files: true
+
   verify-coverage:
     name: Verify + Coverage
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
@@ -32,6 +82,10 @@ jobs:
     env:
       DEV_DATABASE_URL: postgresql://showbook:showbook_dev@localhost:5433/showbook
       E2E_DATABASE_URL: postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e
+      # The build job already ran `next build` (which also type-checks).
+      # Lint + tests don't need apps/web/.next, so we skip the duplicate
+      # build here via SKIP_BUILD (handled by scripts/verify-coverage.sh).
+      SKIP_BUILD: "1"
     steps:
       - uses: actions/checkout@v6
 
@@ -46,6 +100,15 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Restore Nx cache
+        uses: actions/cache@v4
+        with:
+          path: .nx/cache
+          key: nx-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            nx-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            nx-${{ runner.os }}-
 
       - name: Wait for postgres
         run: |
@@ -63,9 +126,6 @@ jobs:
           PGPASSWORD=showbook_dev createdb -h localhost -p 5433 -U showbook showbook_e2e
 
       - name: Run verify:coverage
-        # CI=true is set automatically by GitHub Actions; verify-coverage.sh
-        # branches on it to use the postgres service container instead of
-        # docker-compose helpers.
         env:
           # Optional — when unset, ticketmaster.ts short-circuits to empty
           # results so integration tests stay hermetic. When the secret is
@@ -85,6 +145,7 @@ jobs:
 
   e2e:
     name: Playwright E2E
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # E2E still runs on every push/PR, but its failure does not fail the
@@ -123,8 +184,32 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Download web build output
+        uses: actions/download-artifact@v4
+        with:
+          name: web-next-build
+          path: apps/web/.next
+
+      - name: Resolve Playwright version
+        id: pw
+        run: |
+          v=$(node -p "require('./apps/web/package.json').devDependencies['@playwright/test'].replace(/[^0-9.]/g,'')")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
       - name: Install Playwright browsers
-        run: pnpm --filter web exec playwright install --with-deps chromium
+        run: |
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+            pnpm --filter web exec playwright install-deps chromium
+          else
+            pnpm --filter web exec playwright install --with-deps chromium
+          fi
 
       - name: Wait for postgres
         run: |
@@ -148,9 +233,6 @@ jobs:
         run: pnpm --filter @showbook/jobs bootstrap-pgboss
         env:
           DATABASE_URL: postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e
-
-      - name: Build web app
-        run: pnpm build
 
       - name: Run Playwright E2E
         run: pnpm --filter web run test:e2e
