@@ -22,11 +22,18 @@ function caller(db: FakeDb, userId = 'spotify-test-user') {
 }
 
 let origFetch: typeof globalThis.fetch;
+let origTmKey: string | undefined;
 beforeEach(() => {
   origFetch = globalThis.fetch;
+  origTmKey = process.env.TICKETMASTER_API_KEY;
+  // ticketmaster.ts short-circuits to empty results when the key is unset;
+  // set a stub value so the URL-based fetch mock below is reached.
+  process.env.TICKETMASTER_API_KEY = 'test-tm-key';
 });
 afterEach(() => {
   globalThis.fetch = origFetch;
+  if (origTmKey === undefined) delete process.env.TICKETMASTER_API_KEY;
+  else process.env.TICKETMASTER_API_KEY = origTmKey;
 });
 
 function jsonResponse(body: unknown, status = 200): Response {

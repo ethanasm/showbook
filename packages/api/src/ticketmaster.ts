@@ -6,7 +6,9 @@ import { child } from '@showbook/observability';
 const log = child({ component: 'api.ticketmaster', provider: 'ticketmaster' });
 
 const BASE_URL = "https://app.ticketmaster.com/discovery/v2";
-const API_KEY = process.env.TICKETMASTER_API_KEY;
+function getApiKey(): string | undefined {
+  return process.env.TICKETMASTER_API_KEY;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -146,9 +148,23 @@ async function rateLimitedFetch(url: string): Promise<Response> {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
+let warnedNoKey = false;
+function isApiKeyMissing(): boolean {
+  const key = getApiKey();
+  if (key && key.length > 0) return false;
+  if (!warnedNoKey) {
+    warnedNoKey = true;
+    log.warn(
+      { event: 'tm.request.skipped_no_key' },
+      'TICKETMASTER_API_KEY not set; Ticketmaster calls will return empty results',
+    );
+  }
+  return true;
+}
+
 function buildUrl(path: string, params: Record<string, string | undefined>): string {
   const url = new URL(`${BASE_URL}${path}`);
-  url.searchParams.set("apikey", API_KEY ?? "");
+  url.searchParams.set("apikey", getApiKey() ?? "");
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined) {
       url.searchParams.set(key, value);
@@ -187,6 +203,7 @@ export async function searchEvents(params: {
   size?: number;
   page?: number;
 }): Promise<{ events: TMEvent[]; totalElements: number; totalPages: number }> {
+  if (isApiKeyMissing()) return { events: [], totalElements: 0, totalPages: 0 };
   const url = buildUrl("/events.json", {
     keyword: params.keyword,
     venueId: params.venueId,
@@ -210,6 +227,7 @@ export async function searchEvents(params: {
 }
 
 export async function getVenue(tmVenueId: string): Promise<TMVenue | null> {
+  if (isApiKeyMissing()) return null;
   try {
     const url = buildUrl(`/venues/${encodeURIComponent(tmVenueId)}.json`, {});
     return await tmFetch<TMVenue>(url);
@@ -222,6 +240,7 @@ export async function getVenue(tmVenueId: string): Promise<TMVenue | null> {
 }
 
 export async function getEvent(tmEventId: string): Promise<TMEvent | null> {
+  if (isApiKeyMissing()) return null;
   try {
     const url = buildUrl(`/events/${encodeURIComponent(tmEventId)}.json`, {});
     return await tmFetch<TMEvent>(url);
@@ -236,6 +255,7 @@ export async function getEvent(tmEventId: string): Promise<TMEvent | null> {
 export async function getAttraction(
   tmAttractionId: string,
 ): Promise<TMAttraction | null> {
+  if (isApiKeyMissing()) return null;
   try {
     const url = buildUrl(`/attractions/${encodeURIComponent(tmAttractionId)}.json`, {});
     return await tmFetch<TMAttraction>(url);
@@ -253,6 +273,7 @@ export async function searchVenues(params: {
   countryCode?: string;
   size?: number;
 }): Promise<TMVenue[]> {
+  if (isApiKeyMissing()) return [];
   const url = buildUrl("/venues.json", {
     keyword: params.keyword,
     stateCode: params.stateCode,
@@ -266,6 +287,7 @@ export async function searchVenues(params: {
 export async function searchAttractions(
   keyword: string,
 ): Promise<TMAttraction[]> {
+  if (isApiKeyMissing()) return [];
   const url = buildUrl("/attractions.json", { keyword });
   const data = await tmFetch<TMPageResponse<TMAttraction>>(url);
   return data._embedded?.attractions ?? [];

@@ -66,6 +66,11 @@ jobs:
         # CI=true is set automatically by GitHub Actions; verify-coverage.sh
         # branches on it to use the postgres service container instead of
         # docker-compose helpers.
+        env:
+          # Optional — when unset, ticketmaster.ts short-circuits to empty
+          # results so integration tests stay hermetic. When the secret is
+          # configured, integration tests exercise the real client.
+          TICKETMASTER_API_KEY: ${{ secrets.TICKETMASTER_API_KEY }}
         run: pnpm verify:coverage
 
       - name: Upload coverage report
