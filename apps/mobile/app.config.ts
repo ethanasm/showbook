@@ -51,6 +51,18 @@ const config: ExpoConfig = {
     'expo-font',
     'expo-secure-store',
     'react-native-maps',
+    [
+      'expo-image-picker',
+      {
+        // Permission strings shown by iOS when the user is asked to grant
+        // access to photo library / camera. The picker is launched from the
+        // M4 upload sheet to attach photos and video to a past show.
+        photosPermission:
+          'Showbook needs access to your photos so you can add memories from shows you\'ve attended.',
+        cameraPermission:
+          'Showbook needs access to your camera so you can capture moments from shows you\'ve attended.',
+      },
+    ],
   ],
   experiments: {
     typedRoutes: true,
