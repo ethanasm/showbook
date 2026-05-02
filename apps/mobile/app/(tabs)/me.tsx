@@ -31,6 +31,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { TopBar } from '../../components/TopBar';
+import { SegmentedControl } from '../../components/SegmentedControl';
 import { useTheme, type ThemePreference } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 
@@ -132,50 +133,20 @@ export default function MeScreen(): React.JSX.Element {
 }
 
 /**
- * Local segmented control for theme preference. Three options matching
- * ThemePreference: light / dark / system. The active segment uses the
- * surface color over a rule-track background, mirroring the design
- * SegmentedControlMobile.
+ * Theme preference picker — uses the shared SegmentedControl component.
  */
 function ThemePreferenceSelector(): React.JSX.Element {
-  const { tokens, preference, setPreference } = useTheme();
-  const { colors } = tokens;
-  const options: { value: ThemePreference; label: string }[] = [
-    { value: 'light', label: 'Light' },
-    { value: 'dark', label: 'Dark' },
-    { value: 'system', label: 'System' },
-  ];
+  const { preference, setPreference } = useTheme();
   return (
-    <View style={[styles.segmented, { backgroundColor: colors.rule }]}>
-      {options.map((opt) => {
-        const isActive = preference === opt.value;
-        return (
-          <Pressable
-            key={opt.value}
-            onPress={() => setPreference(opt.value)}
-            accessibilityRole="button"
-            accessibilityState={{ selected: isActive }}
-            style={({ pressed }) => [
-              styles.segment,
-              isActive && { backgroundColor: colors.surface },
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text
-              style={[
-                styles.segmentLabel,
-                {
-                  color: isActive ? colors.ink : colors.muted,
-                  fontWeight: isActive ? '600' : '400',
-                },
-              ]}
-            >
-              {opt.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
+    <SegmentedControl<ThemePreference>
+      options={[
+        { value: 'light', label: 'Light' },
+        { value: 'dark', label: 'Dark' },
+        { value: 'system', label: 'System' },
+      ]}
+      value={preference}
+      onChange={setPreference}
+    />
   );
 }
 

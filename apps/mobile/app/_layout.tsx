@@ -35,6 +35,9 @@ import { ThemeProvider } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { trpc, createQueryClient, createTrpcClient } from '../lib/trpc';
 import { loadAppFonts } from '../lib/fonts';
+import { FeedbackProvider } from '../lib/feedback';
+import { ToastHost } from '../components/Toast';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 // Keep the splash screen up until fonts are ready. Errors here are
 // non-fatal — if preventAutoHideAsync rejects, the splash hides on its
@@ -64,14 +67,19 @@ export default function RootLayout(): React.JSX.Element {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider>
-          <AuthProvider>
-            <TrpcProviders>
-              <BottomSheetModalProvider>
-                <Slot />
-                <StatusBar style="auto" />
-              </BottomSheetModalProvider>
-            </TrpcProviders>
-          </AuthProvider>
+          <FeedbackProvider>
+            <ErrorBoundary>
+              <AuthProvider>
+                <TrpcProviders>
+                  <BottomSheetModalProvider>
+                    <Slot />
+                    <ToastHost />
+                    <StatusBar style="auto" />
+                  </BottomSheetModalProvider>
+                </TrpcProviders>
+              </AuthProvider>
+            </ErrorBoundary>
+          </FeedbackProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
