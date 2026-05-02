@@ -31,6 +31,23 @@ pnpm test
 Or use the repo-root shortcuts (`pnpm mobile:start`, `pnpm mobile:ios`,
 `pnpm mobile:typecheck`, etc.) — they forward to this package.
 
+## Test coverage
+
+The mobile app runs an 80% line / branch / function coverage gate
+scoped to **`apps/mobile/lib/**` only**. Layout-heavy code under
+`app/` and `components/` is intentionally excluded — see
+[`showbook-specs/mobile-testing-strategy.md`](../../showbook-specs/mobile-testing-strategy.md)
+for the rationale and the per-milestone test plan. The gate is
+enforced by `pnpm verify:coverage` (run on every PR by CI), which
+merges per-package LCOV via `scripts/coverage-report.mjs`. Locally:
+
+```bash
+pnpm test:coverage   # writes coverage/mobile-unit.info
+```
+
+The gate is independent from web's 80% gate — a breach in either
+scope fails CI, and the report identifies which scope fell short.
+
 ## Environment variables
 
 Set these locally via shell or `.env.local`. Mobile-side vars are
