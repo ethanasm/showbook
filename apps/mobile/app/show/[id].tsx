@@ -35,15 +35,21 @@ import {
   Image as ImageIcon,
   ListMusic,
   AlertCircle,
+  MoreHorizontal,
+  Pencil,
+  CheckCircle,
+  Trash2,
 } from 'lucide-react-native';
 
 import { TopBar } from '../../components/TopBar';
 import { KindBadge } from '../../components/KindBadge';
 import { StateChip } from '../../components/StateChip';
 import { EmptyState } from '../../components/EmptyState';
+import { Sheet } from '../../components/Sheet';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
 import { CACHE_DEFAULTS } from '../../lib/cache';
+import { useFeedback } from '../../lib/feedback';
 
 // The @showbook/api package isn't a runtime dep of mobile (it's a type-only
 // import via `lib/trpc`), so `inferRouterOutputs` from `@trpc/server` isn't
@@ -139,12 +145,25 @@ export default function ShowDetailScreen(): React.JSX.Element {
     </Pressable>
   );
 
+  const [actionSheetOpen, setActionSheetOpen] = React.useState(false);
+  const moreAction = show ? (
+    <Pressable
+      onPress={() => setActionSheetOpen(true)}
+      hitSlop={12}
+      accessibilityRole="button"
+      accessibilityLabel="More actions"
+    >
+      <MoreHorizontal size={22} color={colors.ink} strokeWidth={2} />
+    </Pressable>
+  ) : undefined;
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
       <TopBar
         title={show ? formatTitle(show) : 'Show'}
         eyebrow={show?.kind ? show.kind.toUpperCase() : undefined}
         leading={back}
+        rightAction={moreAction}
       />
 
       {query.isLoading && (
@@ -180,9 +199,183 @@ export default function ShowDetailScreen(): React.JSX.Element {
           </View>
         </ScrollView>
       )}
+
+      {show ? (
+        <ShowActionSheet
+          open={actionSheetOpen}
+          onClose={() => setActionSheetOpen(false)}
+          showId={show.id}
+          state={show.state as ShowState}
+        />
+      ) : null}
     </View>
   );
 }
+
+function ShowActionSheet({
+  open,
+  onClose,
+  showId,
+  state,
+}: {
+  open: boolean;
+  onClose: () => void;
+  showId: string;
+  state: ShowState;
+}): React.JSX.Element {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+  const router = useRouter();
+  const utils = trpc.useUtils();
+  const { showToast } = useFeedback();
+  const [confirmingDelete, setConfirmingDelete] = React.useState(false);
+
+  const updateState = trpc.shows.updateState.useMutation({
+    onSuccess: () => {
+      void utils.shows.list.invalidate();
+      void utils.shows.detail.invalidate({ showId });
+    },
+  });
+  const remove = trpc.shows.delete.useMutation({
+    onSuccess: () => {
+      void utils.shows.list.invalidate();
+    },
+  });
+
+  const closeAndReset = React.useCallback(() => {
+    setConfirmingDelete(false);
+    onClose();
+  }, [onClose]);
+
+  const goEdit = () => {
+    closeAndReset();
+    router.push(`/show/${showId}/edit`);
+  };
+  const goSetlist = () => {
+    closeAndReset();
+    router.push(`/show/${showId}/setlist`);
+  };
+  const markWatched = async () => {
+    if (state === 'past') {
+      showToast({ kind: 'info', text: 'Already marked as watched' });
+      closeAndReset();
+      return;
+    }
+    try {
+      await updateState.mutateAsync({ showId, newState: 'past' });
+      showToast({ kind: 'success', text: 'Marked as watched' });
+    } catch (err) {
+      showToast({ kind: 'error', text: err instanceof Error ? err.message : 'Failed' });
+    } finally {
+      closeAndReset();
+    }
+  };
+  const doDelete = async () => {
+    try {
+      await remove.mutateAsync({ showId });
+      showToast({ kind: 'success', text: 'Show deleted' });
+      closeAndReset();
+      router.replace('/(tabs)/shows');
+    } catch (err) {
+      showToast({ kind: 'error', text: err instanceof Error ? err.message : 'Failed' });
+    }
+  };
+
+  return (
+    <Sheet open={open} onClose={closeAndReset} snapPoints={['44%']}>
+      <View style={sheetStyles.body}>
+        <ActionRow
+          icon={<Pencil size={18} color={colors.ink} strokeWidth={2} />}
+          label="Edit show"
+          onPress={goEdit}
+        />
+        <ActionRow
+          icon={<ListMusic size={18} color={colors.ink} strokeWidth={2} />}
+          label="Edit setlist"
+          onPress={goSetlist}
+        />
+        <ActionRow
+          icon={<CheckCircle size={18} color={colors.ink} strokeWidth={2} />}
+          label="Mark as watched"
+          onPress={() => void markWatched()}
+          disabled={state === 'past'}
+        />
+        <ActionRow
+          icon={<Trash2 size={18} color={colors.danger} strokeWidth={2} />}
+          label={confirmingDelete ? 'Tap again to confirm' : 'Delete show'}
+          onPress={() => {
+            if (!confirmingDelete) {
+              setConfirmingDelete(true);
+              return;
+            }
+            void doDelete();
+          }}
+          danger
+        />
+      </View>
+    </Sheet>
+  );
+}
+
+function ActionRow({
+  icon,
+  label,
+  onPress,
+  danger = false,
+  disabled = false,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onPress: () => void;
+  danger?: boolean;
+  disabled?: boolean;
+}): React.JSX.Element {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        sheetStyles.row,
+        { borderBottomColor: colors.rule, opacity: disabled ? 0.4 : 1 },
+        pressed && { backgroundColor: colors.surface },
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      {icon}
+      <Text
+        style={[
+          sheetStyles.label,
+          { color: danger ? colors.danger : colors.ink },
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+const sheetStyles = StyleSheet.create({
+  body: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  label: {
+    fontFamily: 'Geist Sans',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Sub-sections
