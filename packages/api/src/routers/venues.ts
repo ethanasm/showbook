@@ -197,6 +197,7 @@ export const venuesRouter = router({
             id: announcements.id,
             venueId: announcements.venueId,
             headlinerPerformerId: announcements.headlinerPerformerId,
+            supportPerformerIds: announcements.supportPerformerIds,
             venueLat: venues.latitude,
             venueLng: venues.longitude,
           })

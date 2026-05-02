@@ -38,6 +38,7 @@ export const announcements = pgTable(
       () => performers.id
     ),
     support: text('support').array(),
+    supportPerformerIds: uuid('support_performer_ids').array(),
     productionName: text('production_name'),
     showDate: date('show_date').notNull(),
     runStartDate: date('run_start_date'),
@@ -54,6 +55,8 @@ export const announcements = pgTable(
     index('announcements_headliner_idx').on(table.headlinerPerformerId),
     index('announcements_show_date_idx').on(table.showDate),
     index('announcements_venue_date_idx').on(table.venueId, table.showDate),
+    index('announcements_support_performer_ids_idx')
+      .using('gin', table.supportPerformerIds),
   ]
 );
 

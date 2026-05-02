@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import { eq, and, ne, sql, desc, count, max, min, inArray } from 'drizzle-orm';
+import { eq, and, or, ne, sql, desc, count, max, min, inArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
 import { performers, userPerformerFollows, shows, showPerformers, announcements, venues, userVenueFollows, userRegions } from '@showbook/db';
 import { enqueueIngestPerformer } from '../job-queue';
 import { computePerformerAnnouncementsToDelete } from './preferences';
-import { searchAttractions, selectBestImage } from '../ticketmaster';
+import { searchAttractions, selectBestImage, extractMusicbrainzId } from '../ticketmaster';
 import { matchOrCreatePerformer } from '../performer-matcher';
 import { enforceRateLimit } from '../rate-limit';
 import { child } from '@showbook/observability';
@@ -110,6 +110,7 @@ export const performersRouter = router({
           tmAttractionId: a.id,
           name: a.name,
           imageUrl: selectBestImage(a.images),
+          musicbrainzId: extractMusicbrainzId(a) ?? null,
         }));
       } catch (err) {
         log.error({ err, event: 'performers.search_external.failed', query: input.query }, 'searchExternal failed');
@@ -127,6 +128,7 @@ export const performersRouter = router({
         tmAttractionId: z.string().min(1),
         name: z.string().min(1),
         imageUrl: z.string().url().optional(),
+        musicbrainzId: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -135,6 +137,7 @@ export const performersRouter = router({
         name: input.name,
         tmAttractionId: input.tmAttractionId,
         imageUrl: input.imageUrl,
+        musicbrainzId: input.musicbrainzId,
       });
       await ctx.db
         .insert(userPerformerFollows)
@@ -187,17 +190,25 @@ export const performersRouter = router({
         .limit(1);
 
       if (!stillFollowed) {
+        // Match the unfollowed performer as either headliner or support
+        // act so we consider all announcements that referenced them.
         const candidateRows = await ctx.db
           .select({
             id: announcements.id,
             venueId: announcements.venueId,
             headlinerPerformerId: announcements.headlinerPerformerId,
+            supportPerformerIds: announcements.supportPerformerIds,
             venueLat: venues.latitude,
             venueLng: venues.longitude,
           })
           .from(announcements)
           .innerJoin(venues, eq(announcements.venueId, venues.id))
-          .where(eq(announcements.headlinerPerformerId, input.performerId));
+          .where(
+            or(
+              eq(announcements.headlinerPerformerId, input.performerId),
+              sql`${announcements.supportPerformerIds} @> ARRAY[${input.performerId}]::uuid[]`,
+            ),
+          );
 
         if (candidateRows.length > 0) {
           const followedVenueRows = await ctx.db
@@ -215,16 +226,30 @@ export const performersRouter = router({
             radiusMiles: r.radiusMiles,
           }));
 
+          // Set of performers any user still follows. The compute fn
+          // excludes the just-unfollowed performer and uses the rest to
+          // preserve announcements where another followed artist
+          // appears (headliner or support).
+          const otherFollowedPerformerRows = await ctx.db
+            .selectDistinct({ performerId: userPerformerFollows.performerId })
+            .from(userPerformerFollows);
+          const allFollowedPerformerIds = otherFollowedPerformerRows.map(
+            (r) => r.performerId,
+          );
+
           const toDelete = computePerformerAnnouncementsToDelete(
             candidateRows.map((r) => ({
               id: r.id,
               venueId: r.venueId,
               headlinerPerformerId: r.headlinerPerformerId,
+              supportPerformerIds: r.supportPerformerIds,
               venueLat: r.venueLat,
               venueLng: r.venueLng,
             })),
             allActiveRegions,
             allFollowedVenueIds,
+            input.performerId,
+            allFollowedPerformerIds,
           );
 
           if (toDelete.length > 0) {

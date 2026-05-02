@@ -3,7 +3,12 @@ import { eq, inArray } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc';
 import { performers, userPerformerFollows } from '@showbook/db';
 import { getFollowedArtists, SpotifyError } from '../spotify';
-import { searchAttractions, selectBestImage, type TMAttraction } from '../ticketmaster';
+import {
+  searchAttractions,
+  selectBestImage,
+  extractMusicbrainzId,
+  type TMAttraction,
+} from '../ticketmaster';
 import { matchOrCreatePerformer } from '../performer-matcher';
 import { enqueueIngestPerformer } from '../job-queue';
 import { enforceRateLimit } from '../rate-limit';
@@ -129,6 +134,7 @@ export const spotifyImportRouter = router({
                 tmAttractionId: tm.id,
                 name: tm.name,
                 imageUrl: selectBestImage(tm.images) ?? null,
+                musicbrainzId: extractMusicbrainzId(tm) ?? null,
               }
             : null,
           alreadyFollowed: tm ? followedTmIds.has(tm.id) : false,
@@ -182,6 +188,7 @@ export const spotifyImportRouter = router({
               tmAttractionId: z.string().min(1),
               name: z.string().min(1).max(200),
               imageUrl: z.string().url().optional(),
+              musicbrainzId: z.string().optional(),
             }),
           )
           .min(1)
@@ -204,6 +211,7 @@ export const spotifyImportRouter = router({
             name: artist.name,
             tmAttractionId: artist.tmAttractionId,
             imageUrl: artist.imageUrl,
+            musicbrainzId: artist.musicbrainzId,
           });
           await ctx.db
             .insert(userPerformerFollows)

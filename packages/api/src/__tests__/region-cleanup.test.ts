@@ -26,6 +26,7 @@ const annSfFollowedPerformer: AnnouncementCandidate = {
   id: 'ann-1',
   venueId: sfVenueId,
   headlinerPerformerId: 'performer-followed',
+  supportPerformerIds: null,
   venueLat: sfVenueLat,
   venueLng: sfVenueLng,
 };
@@ -35,6 +36,7 @@ const annSfOrphan: AnnouncementCandidate = {
   id: 'ann-2',
   venueId: sfVenueId,
   headlinerPerformerId: null,
+  supportPerformerIds: null,
   venueLat: sfVenueLat,
   venueLng: sfVenueLng,
 };
@@ -44,6 +46,7 @@ const annLa: AnnouncementCandidate = {
   id: 'ann-3',
   venueId: laVenueId,
   headlinerPerformerId: null,
+  supportPerformerIds: null,
   venueLat: laVenueLat,
   venueLng: laVenueLng,
 };
@@ -53,6 +56,7 @@ const annSfFollowedVenue: AnnouncementCandidate = {
   id: 'ann-4',
   venueId: 'venue-sf-directly-followed',
   headlinerPerformerId: null,
+  supportPerformerIds: null,
   venueLat: sfVenueLat,
   venueLng: sfVenueLng,
 };
@@ -132,6 +136,7 @@ describe('computeAnnouncementsToDelete', () => {
       id: 'ann-null',
       venueId: 'venue-no-coords',
       headlinerPerformerId: null,
+      supportPerformerIds: null,
       venueLat: null,
       venueLng: null,
     };

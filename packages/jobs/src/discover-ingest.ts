@@ -12,6 +12,7 @@ import {
   searchEvents,
   inferKind,
   selectBestImage,
+  extractMusicbrainzId,
   matchOrCreateVenue,
   matchOrCreatePerformer,
   type TMEvent,
@@ -157,12 +158,45 @@ async function normalizeTmEvent(event: TMEvent): Promise<NormalizedEvent | null>
       name: headlinerAttraction.name,
       tmAttractionId: headlinerAttraction.id,
       imageUrl: imageUrl ?? undefined,
+      musicbrainzId: extractMusicbrainzId(headlinerAttraction),
     });
     headlinerPerformerId = performer.id;
   }
 
-  const support =
-    attractions.length > 1 ? attractions.slice(1).map((a) => a.name) : null;
+  const supportAttractions = attractions.length > 1 ? attractions.slice(1) : [];
+  const support = supportAttractions.length > 0
+    ? supportAttractions.map((a) => a.name)
+    : null;
+
+  // Resolve every support act through matchOrCreatePerformer too, so
+  // followed-artist feeds can match on support_performer_ids and the
+  // performer's photo/MBID get backfilled from TM the same way the
+  // headliner's do. Failures are logged but don't abort the event —
+  // we'd rather have an announcement with one missing support id than
+  // no announcement at all.
+  const supportPerformerIds: string[] = [];
+  for (const attr of supportAttractions) {
+    try {
+      const img = selectBestImage(attr.images);
+      const { performer } = await matchOrCreatePerformer({
+        name: attr.name,
+        tmAttractionId: attr.id,
+        imageUrl: img ?? undefined,
+        musicbrainzId: extractMusicbrainzId(attr),
+      });
+      supportPerformerIds.push(performer.id);
+    } catch (err) {
+      log.warn(
+        {
+          err,
+          event: 'tm.normalize.support_performer_failed',
+          name: attr.name,
+          tmEventId: event.id,
+        },
+        'Failed to resolve support performer',
+      );
+    }
+  }
 
   return {
     sourceEventId: event.id,
@@ -172,6 +206,7 @@ async function normalizeTmEvent(event: TMEvent): Promise<NormalizedEvent | null>
     headlinerPerformerId,
     venueId: venue.id,
     support,
+    supportPerformerIds: supportPerformerIds.length > 0 ? supportPerformerIds : null,
     onSaleDate: parseOnSaleDate(event),
     onSaleStatus: determineOnSaleStatus(event),
     source: 'ticketmaster',
@@ -195,6 +230,7 @@ async function insertSingleEvent(
     headliner: event.headliner,
     headlinerPerformerId: event.headlinerPerformerId,
     support: event.support,
+    supportPerformerIds: event.supportPerformerIds,
     showDate: event.date,
     runStartDate: event.date,
     runEndDate: event.date,
@@ -265,6 +301,8 @@ async function upsertRun(
         performanceDates: merged,
         showDate: merged[0]!,
         support: run.support ?? existing.support,
+        supportPerformerIds:
+          run.supportPerformerIds ?? existing.supportPerformerIds,
         onSaleDate:
           run.kind === 'festival'
             ? run.onSaleDate
@@ -284,6 +322,7 @@ async function upsertRun(
     headliner: run.headliner,
     headlinerPerformerId: run.headlinerPerformerId,
     support: run.support,
+    supportPerformerIds: run.supportPerformerIds,
     productionName: run.productionName,
     showDate: run.runStartDate,
     runStartDate: run.runStartDate,
