@@ -1,0 +1,89 @@
+name: Prod monitor
+
+# Hourly check of the showbook-prod Axiom dataset for warn/error volume.
+# When errors are present in the window, opens (or comments on the existing
+# open) `prod-alert` issue. This is the v1 prototype of the always-on
+# Claude-bot loop — deterministic, no LLM, no API key needed beyond the
+# Axiom query token.
+#
+# Required repo secret: AXIUM_QUERY_TOKEN — a user PAT or advanced API
+# token with the Query capability on the showbook-prod dataset. The
+# "AXIUM" spelling intentionally matches the debugging-prod skill.
+
+on:
+  schedule:
+    # :17 past the hour to dodge the top-of-hour cron rush on shared runners
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      window:
+        description: 'APL ago() window (e.g. 1h, 6h, 24h)'
+        required: false
+        default: '1h'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: prod-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Query Axiom and alert on errors
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Query Axiom
+        id: monitor
+        env:
+          AXIUM_QUERY_TOKEN: ${{ secrets.AXIUM_QUERY_TOKEN }}
+          AXIOM_WINDOW: ${{ inputs.window || '1h' }}
+        run: node scripts/prod-monitor.mjs
+
+      - name: Open or update prod-alert issue
+        if: steps.monitor.outputs.error_count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ERROR_COUNT: ${{ steps.monitor.outputs.error_count }}
+          WARN_COUNT: ${{ steps.monitor.outputs.warn_count }}
+          BODY: ${{ steps.monitor.outputs.body }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          gh label create prod-alert \
+            --color FF6B6B \
+            --description "Automated prod monitor alert" 2>/dev/null || true
+
+          existing=$(gh issue list \
+            --state open \
+            --label prod-alert \
+            --limit 1 \
+            --json number \
+            --jq '.[0].number // empty')
+
+          tmp=$(mktemp)
+          {
+            printf '%s\n' "$BODY"
+            printf '\n[run details](%s)\n' "$RUN_URL"
+          } > "$tmp"
+
+          if [ -n "$existing" ]; then
+            echo "Commenting on existing issue #$existing"
+            gh issue comment "$existing" --body-file "$tmp"
+          else
+            title="Prod monitor: $ERROR_COUNT error(s) in last hour"
+            echo "Opening new issue: $title"
+            gh issue create \
+              --title "$title" \
+              --label prod-alert \
+              --body-file "$tmp"
+          fi
