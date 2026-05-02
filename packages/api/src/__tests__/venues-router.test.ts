@@ -231,24 +231,9 @@ describe('venuesRouter (unit)', () => {
   // `enqueueIngestVenue`, which opens a pg-boss connection that stalls
   // the unit-test event loop. The integration suite covers that path.
 
-  describe('backfillCoordinates', () => {
-    it('returns zeros when no incomplete rows', async () => {
-      const db = makeFakeDb({ selectResults: [[]] });
-      const result = await caller(db).backfillCoordinates();
-      assert.equal(result.total, 0);
-      assert.equal(result.geocoded, 0);
-      assert.equal(result.failed, 0);
-    });
-  });
-
-  describe('backfillTicketmaster', () => {
-    it('returns zeros when no rows are missing TM id', async () => {
-      const db = makeFakeDb({ selectResults: [[]] });
-      const result = await caller(db).backfillTicketmaster();
-      assert.equal(result.total, 0);
-      assert.equal(result.matched, 0);
-    });
-  });
+  // `backfillCoordinates` and `backfillTicketmaster` moved to
+  // `adminRouter` (see `__tests__/admin-router.test.ts`); they're no
+  // longer reachable on `venuesRouter`.
 
   describe('followed', () => {
     it('returns the bare venue rows the user follows', async () => {
