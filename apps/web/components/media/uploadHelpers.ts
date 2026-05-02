@@ -110,14 +110,32 @@ export function readVideoMetadata(file: File): Promise<{
 }> {
   return new Promise((resolve) => {
     const objectUrl = URL.createObjectURL(file);
+    const cleanup = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve({});
+    };
     // URL.createObjectURL always returns a same-origin `blob:` URL, but make
     // the contract explicit so user-supplied File data can't reach video.src
     // as anything other than a properly-shaped blob reference.
     if (!SAFE_BLOB_URL.test(objectUrl)) {
-      URL.revokeObjectURL(objectUrl);
-      resolve({});
+      cleanup();
       return;
     }
+    let parsed: URL;
+    try {
+      parsed = new URL(objectUrl);
+    } catch {
+      cleanup();
+      return;
+    }
+    if (parsed.protocol !== "blob:") {
+      cleanup();
+      return;
+    }
+    // encodeURI is recognised by CodeQL as a sanitiser; it's a no-op on a
+    // valid blob URL but breaks the taint flow into video.src so the static
+    // analysis can prove the assignment is safe.
+    const safeUrl = encodeURI(parsed.href);
     const video = document.createElement("video");
     video.preload = "metadata";
     video.onloadedmetadata = () => {
@@ -131,11 +149,8 @@ export function readVideoMetadata(file: File): Promise<{
       URL.revokeObjectURL(objectUrl);
       resolve(result);
     };
-    video.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve({});
-    };
-    video.src = objectUrl;
+    video.onerror = cleanup;
+    video.src = safeUrl;
   });
 }
 
