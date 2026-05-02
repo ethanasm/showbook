@@ -11,6 +11,7 @@ import { runSetlistRetry } from './setlist-retry';
 import { runShowsNightly } from './shows-nightly';
 import { runBackfillPerformerImages } from './backfill-performer-images';
 import { runBackfillVenuePhotos } from './backfill-venue-photos';
+import { runPruneOrphanCatalog } from './prune-orphan-catalog';
 // @showbook/scrapers pulls in Playwright, which the Next.js dev server
 // tries to bundle. Import it lazily inside the handler so it stays out of
 // the web app's static dependency graph.
@@ -26,6 +27,7 @@ export const JOBS = {
   NOTIFICATIONS_DAILY_DIGEST: 'notifications/daily-digest',
   BACKFILL_PERFORMER_IMAGES: 'backfill/performer-images',
   BACKFILL_VENUE_PHOTOS: 'backfill/venue-photos',
+  PRUNE_ORPHAN_CATALOG: 'prune/orphan-catalog',
 } as const;
 
 const STALE_SCHEDULES = [
@@ -245,6 +247,24 @@ async function backfillVenuePhotosHandler(jobs: PgBoss.Job[]) {
   }
 }
 
+async function pruneOrphanCatalogHandler(jobs: PgBoss.Job[]) {
+  for (const job of jobs) {
+    await runJob(JOBS.PRUNE_ORPHAN_CATALOG, job, async () => {
+      const result = await runPruneOrphanCatalog();
+      log.info(
+        {
+          event: 'prune.summary',
+          announcements: result.announcements,
+          venues: result.venues,
+          performers: result.performers,
+        },
+        'Orphan catalog prune complete',
+      );
+      return result;
+    });
+  }
+}
+
 async function notificationsDailyDigestHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
     await runJob(JOBS.NOTIFICATIONS_DAILY_DIGEST, job, async () => {
@@ -281,7 +301,12 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   await boss.work(JOBS.NOTIFICATIONS_DAILY_DIGEST, notificationsDailyDigestHandler);
   await boss.work(JOBS.BACKFILL_PERFORMER_IMAGES, backfillPerformerImagesHandler);
   await boss.work(JOBS.BACKFILL_VENUE_PHOTOS, backfillVenuePhotosHandler);
+  await boss.work(JOBS.PRUNE_ORPHAN_CATALOG, pruneOrphanCatalogHandler);
 
+  // Backstop sweep for the orphan-cleanup triggers (0002 / 0014 / 0023 /
+  // 0025). Runs before shows-nightly so the nightly transition operates on
+  // the freshly pruned catalog.
+  await boss.schedule(JOBS.PRUNE_ORPHAN_CATALOG, '30 2 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.SHOWS_NIGHTLY, '0 3 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.SETLIST_RETRY, '0 4 * * *', {}, { tz: 'America/New_York' });
   // Backfills run after setlist-retry so any MBIDs persisted on the setlist

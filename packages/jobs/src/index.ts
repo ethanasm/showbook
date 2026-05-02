@@ -7,3 +7,4 @@ export {
   ingestRegion,
 } from './discover-ingest';
 export { runDailyDigest } from './notifications';
+export { runPruneOrphanCatalog } from './prune-orphan-catalog';
