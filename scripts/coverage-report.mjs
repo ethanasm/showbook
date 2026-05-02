@@ -17,19 +17,37 @@ import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = resolve(fileURLToPath(import.meta.url), '..', '..');
 
-// Files to count toward coverage (everything not test/dev/generated/UI shell).
-const INCLUDE_PATTERNS = [
-  /^packages\/api\/src\/.*\.ts$/,
-  /^packages\/jobs\/src\/.*\.ts$/,
-  /^packages\/shared\/src\/utils\/.*\.ts$/,
-  /^packages\/shared\/src\/constants\/.*\.ts$/,
-  /^packages\/emails\/src\/.*\.tsx?$/,
-  /^packages\/observability\/src\/.*\.ts$/,
-  /^packages\/scrapers\/src\/llm\.ts$/,
-  /^apps\/web\/lib\/.*\.tsx?$/,
-  /^apps\/web\/components\/.*\.tsx$/,
-  /^apps\/web\/app\/.*\/route\.ts$/,
-  /^apps\/web\/app\/discover\/region-helpers\.ts$/,
+// Coverage is computed per scope. Each scope has its own include patterns
+// and its own threshold gate; the merged LCOV emitted at the end is the
+// union of all scopes. Excludes are shared across scopes because the
+// same junk (tests, barrels, generated code) is junk regardless.
+//
+// Per `showbook-specs/mobile-testing-strategy.md`, the mobile gate scopes
+// to `apps/mobile/lib/**` only — no `app/`, no `components/`. Web's gate
+// is unchanged.
+const SCOPES = [
+  {
+    name: 'web',
+    include: [
+      /^packages\/api\/src\/.*\.ts$/,
+      /^packages\/jobs\/src\/.*\.ts$/,
+      /^packages\/shared\/src\/utils\/.*\.ts$/,
+      /^packages\/shared\/src\/constants\/.*\.ts$/,
+      /^packages\/emails\/src\/.*\.tsx?$/,
+      /^packages\/observability\/src\/.*\.ts$/,
+      /^packages\/scrapers\/src\/llm\.ts$/,
+      /^apps\/web\/lib\/.*\.tsx?$/,
+      /^apps\/web\/components\/.*\.tsx$/,
+      /^apps\/web\/app\/.*\/route\.ts$/,
+      /^apps\/web\/app\/discover\/region-helpers\.ts$/,
+    ],
+  },
+  {
+    name: 'mobile',
+    include: [
+      /^apps\/mobile\/lib\/.*\.tsx?$/,
+    ],
+  },
 ];
 
 const EXCLUDE_PATTERNS = [
@@ -54,6 +72,10 @@ const EXCLUDE_PATTERNS = [
   /^apps\/web\/app\/api\/test\//,
   /^apps\/web\/app\/api\/auth\//,
   /^apps\/web\/app\/api\/trpc\//,
+  /^apps\/mobile\/lib\/index\.ts$/,
+  /^apps\/mobile\/lib\/cache\/index\.ts$/,
+  /^apps\/mobile\/lib\/media\/index\.ts$/,
+  /^apps\/mobile\/lib\/mutations\/index\.ts$/,
 ];
 
 const args = process.argv.slice(2);
@@ -72,12 +94,20 @@ const COVERAGE_DIRS = [
   'packages/observability/coverage',
   'packages/scrapers/coverage',
   'apps/web/coverage',
+  'apps/mobile/coverage',
 ];
 
-function shouldInclude(file) {
+function scopeFor(file) {
   const p = file.split(sep).join('/');
-  if (EXCLUDE_PATTERNS.some((re) => re.test(p))) return false;
-  return INCLUDE_PATTERNS.some((re) => re.test(p));
+  if (EXCLUDE_PATTERNS.some((re) => re.test(p))) return null;
+  for (const scope of SCOPES) {
+    if (scope.include.some((re) => re.test(p))) return scope.name;
+  }
+  return null;
+}
+
+function shouldInclude(file) {
+  return scopeFor(file) !== null;
 }
 
 function normalizeRelPath(absPath, packageDir) {
@@ -148,40 +178,46 @@ function parseLcov(text, packageDir) {
   return records;
 }
 
+function emptyTotals() {
+  return {
+    lines: 0, linesHit: 0,
+    branches: 0, branchesHit: 0,
+    functions: 0, functionsHit: 0,
+  };
+}
+
 function summarize(records) {
-  let totalLines = 0, hitLines = 0;
-  let totalBranches = 0, hitBranches = 0;
-  let totalFunctions = 0, hitFunctions = 0;
-  const perFile = [];
+  const byScope = new Map();
+  for (const scope of SCOPES) {
+    byScope.set(scope.name, { perFile: [], totals: emptyTotals() });
+  }
   for (const rec of records.values()) {
-    if (!shouldInclude(rec.path)) continue;
+    const scopeName = scopeFor(rec.path);
+    if (!scopeName) continue;
     const lines = rec.lines.size;
     const linesHit = [...rec.lines.values()].filter((h) => h > 0).length;
     const branches = rec.branches.size;
     const branchesHit = [...rec.branches.values()].filter((h) => h > 0).length;
     const fns = rec.functions.size;
     const fnsHit = [...rec.functions.values()].filter((f) => f.hits > 0).length;
-    totalLines += lines;
-    hitLines += linesHit;
-    totalBranches += branches;
-    hitBranches += branchesHit;
-    totalFunctions += fns;
-    hitFunctions += fnsHit;
-    perFile.push({
+    const bucket = byScope.get(scopeName);
+    bucket.totals.lines += lines;
+    bucket.totals.linesHit += linesHit;
+    bucket.totals.branches += branches;
+    bucket.totals.branchesHit += branchesHit;
+    bucket.totals.functions += fns;
+    bucket.totals.functionsHit += fnsHit;
+    bucket.perFile.push({
       path: rec.path,
       lines, linesHit,
       branches, branchesHit,
       functions: fns, functionsHit: fnsHit,
     });
   }
-  return {
-    perFile: perFile.sort((a, b) => a.path.localeCompare(b.path)),
-    totals: {
-      lines: totalLines, linesHit: hitLines,
-      branches: totalBranches, branchesHit: hitBranches,
-      functions: totalFunctions, functionsHit: hitFunctions,
-    },
-  };
+  for (const bucket of byScope.values()) {
+    bucket.perFile.sort((a, b) => a.path.localeCompare(b.path));
+  }
+  return byScope;
 }
 
 function pct(hit, total) {
@@ -283,55 +319,73 @@ async function main() {
       }
     }
   }
-  const { perFile, totals } = summarize(merged);
+  const byScope = summarize(merged);
   await writeMergedLcov(merged, writePath);
 
-  const linesPct = pct(totals.linesHit, totals.lines);
-  const branchesPct = pct(totals.branchesHit, totals.branches);
-  const fnsPct = pct(totals.functionsHit, totals.functions);
-
   const W = 60;
-  console.log('\n' + '─'.repeat(W + 30));
-  console.log(
-    'File'.padEnd(W) +
-      ' | ' + 'Lines'.padStart(8) +
-      ' | ' + 'Branches'.padStart(9) +
-      ' | ' + 'Funcs'.padStart(7),
-  );
-  console.log('─'.repeat(W + 30));
-  for (const f of perFile) {
-    const name = f.path.length > W ? '…' + f.path.slice(-(W - 1)) : f.path.padEnd(W);
-    console.log(
-      name +
-        ' | ' + colorPct(pct(f.linesHit, f.lines)) +
-        ' | ' + colorPct(pct(f.branchesHit, f.branches)) +
-        ' | ' + colorPct(pct(f.functionsHit, f.functions)),
-    );
-  }
-  console.log('─'.repeat(W + 30));
-  console.log(
-    'TOTAL'.padEnd(W) +
-      ' | ' + colorPct(linesPct) +
-      ' | ' + colorPct(branchesPct) +
-      ' | ' + colorPct(fnsPct),
-  );
-  console.log('─'.repeat(W + 30));
+  let totalIncluded = 0;
+  const breaches = [];
 
-  console.log(`\nIncluded files: ${perFile.length}`);
+  for (const scope of SCOPES) {
+    const { perFile, totals } = byScope.get(scope.name);
+    totalIncluded += perFile.length;
+
+    console.log(`\n${'═'.repeat(W + 30)}`);
+    console.log(`SCOPE: ${scope.name}`);
+    console.log('─'.repeat(W + 30));
+    console.log(
+      'File'.padEnd(W) +
+        ' | ' + 'Lines'.padStart(8) +
+        ' | ' + 'Branches'.padStart(9) +
+        ' | ' + 'Funcs'.padStart(7),
+    );
+    console.log('─'.repeat(W + 30));
+    if (perFile.length === 0) {
+      console.log('(no files matched this scope)');
+    }
+    for (const f of perFile) {
+      const name = f.path.length > W ? '…' + f.path.slice(-(W - 1)) : f.path.padEnd(W);
+      console.log(
+        name +
+          ' | ' + colorPct(pct(f.linesHit, f.lines)) +
+          ' | ' + colorPct(pct(f.branchesHit, f.branches)) +
+          ' | ' + colorPct(pct(f.functionsHit, f.functions)),
+      );
+    }
+    const linesPct = pct(totals.linesHit, totals.lines);
+    const branchesPct = pct(totals.branchesHit, totals.branches);
+    const fnsPct = pct(totals.functionsHit, totals.functions);
+    console.log('─'.repeat(W + 30));
+    console.log(
+      `TOTAL (${scope.name})`.padEnd(W) +
+        ' | ' + colorPct(linesPct) +
+        ' | ' + colorPct(branchesPct) +
+        ' | ' + colorPct(fnsPct),
+    );
+
+    if (perFile.length === 0) continue;
+    if (linesPct < threshold) {
+      breaches.push(`[${scope.name}] lines ${linesPct.toFixed(2)}% < ${threshold}%`);
+    }
+    if (branchesPct < threshold) {
+      breaches.push(`[${scope.name}] branches ${branchesPct.toFixed(2)}% < ${threshold}%`);
+    }
+    if (fnsPct < threshold) {
+      breaches.push(`[${scope.name}] functions ${fnsPct.toFixed(2)}% < ${threshold}%`);
+    }
+  }
+
+  console.log(`\nIncluded files: ${totalIncluded}`);
   console.log(`LCOV inputs:    ${lcovFiles.length}`);
-  console.log(`Threshold:      ${threshold}% on lines, branches, functions`);
+  console.log(`Threshold:      ${threshold}% on lines, branches, functions (per scope)`);
   console.log(`Merged LCOV:    ${writePath}`);
 
-  const failed = [];
-  if (linesPct < threshold) failed.push(`lines ${linesPct.toFixed(2)}% < ${threshold}%`);
-  if (branchesPct < threshold) failed.push(`branches ${branchesPct.toFixed(2)}% < ${threshold}%`);
-  if (fnsPct < threshold) failed.push(`functions ${fnsPct.toFixed(2)}% < ${threshold}%`);
-  if (failed.length > 0) {
+  if (breaches.length > 0) {
     console.error('\n\x1b[31m✗ Coverage below threshold:\x1b[0m');
-    for (const f of failed) console.error(`  - ${f}`);
+    for (const b of breaches) console.error(`  - ${b}`);
     process.exit(1);
   }
-  console.log('\n\x1b[32m✓ Coverage threshold met.\x1b[0m');
+  console.log('\n\x1b[32m✓ Coverage threshold met for all scopes.\x1b[0m');
 }
 
 main().catch((err) => {

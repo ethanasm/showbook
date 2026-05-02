@@ -1,8 +1,16 @@
 ## Remaining (not yet addressed)
 
-### Mobile App
-- We have some hifi designs of mobile app through claude design, but we need to do a deep dive on a design for the mobile app now that we've added more features.
-- Hook up push notifications in preferences page to mobile app once done.
+### Mobile App (post-launch follow-ups)
+- Wire push notifications end-to-end. The preferences page exposes the
+  toggle and the Expo client requests permission, but the server-side
+  push delivery (Expo push tokens stored per device, digest job emitting
+  pushes, deep-link routing on tap) still needs to be built.
+- Address the post-M5 review items in
+  [`showbook-specs/reviews/mobile-review-2026-05-02.md`](showbook-specs/reviews/mobile-review-2026-05-02.md)
+  — most notably wiring sign-out to clear the SQLite cache + React Query
+  cache, switching the per-screen fake outbox shims in setlist/edit to
+  the real `expo-sqlite` outbox, and giving Add show a real optimistic
+  path so failed creates are retryable.
 
 ### Code Health (next batch from the audit)
 - **Refactor mega-pages.** `add/page.tsx` (~2.9k LOC), `discover/page.tsx` (~2.1k LOC), `venues/[id]/page.tsx`, `preferences/page.tsx` each bundle 5+ concerns. Round-1 audit identified clear extraction targets (`VenueSearchModal`, `RegionSearchModal`, `VenueRail`, `FormStateManager`, `SetlistFetcher`, `MediaUploadOrchestrator`, `DiscoveryImportUI`).
@@ -16,6 +24,26 @@
 ---
 
 ## Completed (kept for reference)
+
+### Mobile App (M1–M6)
+1. ~~**Mobile app build (M1–M6).**~~ *(Done — Expo SDK 55 + Expo
+   Router app at `apps/mobile/`. M1 (Foundation) shipped sign-in via
+   the `/api/auth/mobile-token` bridge, first-run permissions flow,
+   the 5-tab shell, theme system, and bearer-auth tRPC client. M2
+   (Read flows) added expo-sqlite cache + `useCachedQuery`, real Home
+   / Shows (Timeline / Month / Stats) / ShowDetail / Map and a fully
+   wired Me tab. M3 (Add + Edit) shipped the LLM-backed Add chat,
+   Add form with debounced venue typeahead, edit show + show action
+   sheet, and the setlist composer with drag-reorder + encore divider.
+   M4 (Media) shipped multi-select upload with per-file progress,
+   media grid + lightbox, tag-performers sheet, and the over-quota
+   state. M5 (Discovery + secondaries) shipped Discover feed, Artists
+   list + detail, Venues list + detail, and omnisearch. M6 wave
+   shipped the Toast / Banner system, the offline + pending-writes
+   drawer, the iPad three-pane landscape layout, Maestro Cloud E2E
+   flows (`apps/mobile/e2e/flows/`), and the 80%-coverage gate scoped
+   to `apps/mobile/lib/**`. Stack reference and per-milestone status
+   live in [`showbook-specs/mobile-roadmap.md`](showbook-specs/mobile-roadmap.md).)*
 
 ### Code Audit (rounds 1 + 2)
 1. ~~**Round-1 audit fixes.**~~ *(Done — broad audit identified ~150 findings across the api, web, jobs/scrapers, and db packages. Top eight shipped on `claude/analyze-showbook-codebase-HQrEp`: setlist enrichment now keys off the canonical `setlists` jsonb (not the legacy `setlist text[]`) and dedupes against the existing queue, so nightly no longer re-queues every past concert; `performers.rename` now requires the user to own a show with the performer or follow them; Gmail OAuth callback no longer interpolates Google's response into HTML; `AbortSignal.timeout` added to all 8 external `fetch()` calls (TM, Gmail, setlist.fm, Google Places, Nominatim, robots.txt, OAuth, venue-photo proxy); `console.*` replaced with the structured pino logger in both backfill scripts and the Gmail scan handler; migration `0017` adds 10 indexes on hot lookup columns (announcements headliner/show_date/venue+date, user_regions user+active, venues tm/google/name+city, performers tm/mbid/name); transactions now wrap `discover.watchlist`, `performers.delete`, the setlist-retry update + queue-delete, and the media completeUpload failure path; daily digest collapses N×2 per-show queries into 2 total via `getHeadlinersForShows(showIds)` with `inArray`.)*

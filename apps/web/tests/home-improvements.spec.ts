@@ -1,22 +1,22 @@
 import { test, expect, type Page } from '@playwright/test';
+import { loginAndSeedAsWorker, loginAsEmptyWorker } from './helpers/auth';
 
 async function loginEmpty(page: Page) {
-  // Use a dedicated empty-state test user so seeded tests in other projects
-  // don't interfere (they use the default test@showbook.dev user).
-  await page.goto('/api/test/login?email=empty%40showbook.dev');
-  await page.waitForURL('**/home', { timeout: 10000 });
+  // Per-worker empty user so seeded tests don't interfere.
+  await loginAsEmptyWorker(page);
 }
 
 async function loginSeeded(page: Page) {
-  await page.goto('/api/test/seed');
-  await page.goto('/api/test/login');
-  await page.waitForURL('**/home', { timeout: 10000 });
+  await loginAndSeedAsWorker(page);
 }
 
 test.describe('Home page — empty state', () => {
   test('shows empty-state copy and Gmail import button when no shows exist', async ({ page }) => {
     await loginEmpty(page);
-    const empty = page.getByTestId('home-empty-state');
+    // Scope to <main>: React 18 streaming SSR leaves a hidden suspense
+    // template (`<div hidden id="S:0">`) that contains a duplicate copy of
+    // the rendered subtree, which trips strict-mode locators.
+    const empty = page.getByRole('main').getByTestId('home-empty-state');
     await expect(empty).toBeVisible({ timeout: 10000 });
 
     await expect(empty.getByRole('heading', { name: 'Start your logbook' })).toBeVisible();
@@ -33,7 +33,7 @@ test.describe('Home page — empty state', () => {
 
   test('Gmail import button navigates to /shows with ?gmail=1', async ({ page }) => {
     await loginEmpty(page);
-    const empty = page.getByTestId('home-empty-state');
+    const empty = page.getByRole('main').getByTestId('home-empty-state');
     await expect(empty).toBeVisible({ timeout: 10000 });
 
     const gmailBtn = empty.getByRole('button', { name: /Import from Gmail/i });

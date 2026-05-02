@@ -2,6 +2,23 @@
 
 Personal entertainment tracker for live shows — concerts, theatre, comedy, festivals.
 
+This file covers project-wide conventions (commit hygiene, the
+monorepo, verification gates, observability). For app-specific
+guidance, see the per-app CLAUDE files:
+
+- [`apps/web/CLAUDE.md`](apps/web/CLAUDE.md) — Next.js app, Playwright
+  e2e + isolated DB, email digest plumbing, mobile token bridge.
+- [`apps/mobile/CLAUDE.md`](apps/mobile/CLAUDE.md) — Expo app, auth
+  bridge, Maestro flows, mobile-only test gate.
+
+## Commit and PR hygiene
+
+Do **not** include `https://claude.ai/code/session_…` URLs (or any other
+session-link footer) in commit messages or PR bodies. Strip the line from
+the default template before committing. Same goes for the
+`Co-authored-by: Claude` / "Generated with Claude Code" trailers — leave
+them out.
+
 ## Working environment (Claude on the web)
 
 When you're running in the Claude Code web sandbox, this checkout is a **shallow clone** (`git rev-parse --is-shallow-repository` → `true`) of a single branch. As a result:
@@ -11,88 +28,43 @@ When you're running in the Claude Code web sandbox, this checkout is a **shallow
 - Only worry about divergence if `git log origin/<your-branch>..HEAD` or `git log HEAD..origin/<your-branch>` shows unexpected commits on the branch you actually pushed.
 
 ## Project structure
-- `showbook-specs/` — All specs: schema, data sources, pipelines, infrastructure, decisions
-- `showbook-specs/phases/TASKS.md` — Master task list with dependency DAG (30 tasks + mobile roadmap, 5 waves)
-- `showbook-specs/phases/VERIFICATION.md` — Playwright testing + visual verification strategy
-- `design/` — Hi-fi prototypes from Claude Design (reference only, don't modify)
+
+- `apps/web/` — Next.js 15 (App Router). See [`apps/web/CLAUDE.md`](apps/web/CLAUDE.md).
+- `apps/mobile/` — Expo + Expo Router. See [`apps/mobile/CLAUDE.md`](apps/mobile/CLAUDE.md).
+- `packages/` — `db` (Drizzle schema + migrations), `api` (tRPC routers),
+  `jobs` (pg-boss handlers + daily digest), `emails` (react-email
+  templates), `scrapers` (Playwright-bound external scrapers),
+  `observability` (pino logger + Langfuse wrapper), `shared` (types,
+  constants, utils).
+- `showbook-specs/` — All specs: schema, data sources, pipelines,
+  infrastructure, decisions. Index at
+  [`showbook-specs/README.md`](showbook-specs/README.md).
+- `showbook-specs/TASKS.md` — Master task list with dependency DAG.
+- `showbook-specs/phases/VERIFICATION.md` — Playwright testing + visual
+  verification strategy.
+- `showbook-specs/mobile-roadmap.md` — Mobile build plan; the app
+  is feature-complete against the design handoff.
+- `design/` — Hi-fi prototypes from Claude Design (reference only,
+  don't modify).
 
 ## Key decisions
+
 - TypeScript everywhere (Next.js + Expo + Drizzle + tRPC)
 - Nx monorepo with pnpm
 - Self-hosted on desktop (local Postgres, Caddy, Cloudflare Tunnel)
 - pg-boss for background jobs (runs inside Next.js process)
 - Groq for LLM (chat-mode Add, playbill cast extraction)
 - Ticketmaster Discovery API as primary data source
-- Playwright for functional + visual testing
-- E2E tests use the isolated `showbook_e2e` database via `pnpm test:e2e`;
-  `/api/test/*` routes require `ENABLE_TEST_ROUTES=1` and refuse non-e2e DBs
-- Email digest: Resend-backed `runDailyDigest` job at 08:00 ET; HTML template
-  in `packages/emails/src/DailyDigest.tsx`; sender via `EMAIL_FROM`
-
-## Verification
-- `pnpm verify` — build + lint + unit tests with end-of-run status summary
-- `pnpm verify:e2e` — adds Playwright e2e (or set `RUN_E2E=1`)
-- `pnpm verify:coverage` — build + lint + unit + integration with merged
-  Node native code coverage; **fails if any of lines / branches / functions
-  is below 80%**. CI runs this on every push and PR to `main`.
-- `pnpm test:unit` — unit tests across all packages (uses `node:test`)
-- Integration tests live in `*.integration.test.ts` and are excluded from
-  the unit-test glob; run with `pnpm test:integration`. Each integration
-  test has a 45 s per-test timeout enforced by `--test-timeout=45000`,
-  and the batch is killed after 5 min by `scripts/run-integration.mjs`.
-- `pnpm email:smoke` — render the daily digest with sample data to disk
-- `pnpm email:preview` — react-email dev server with hot reload
-
-## Test coverage
-
-**80% line / branch / function coverage is required on `main`.** The CI
-workflow at `.github/workflows/ci.yml` blocks merges that drop below the
-threshold. Coverage scope, thresholds, and exclusions are owned by
-`scripts/coverage-report.mjs`; merged LCOV lands at `coverage/lcov.info`.
-
-Excluded from coverage (justified): `packages/db/**` (schema +
-generated migrations), per-package re-export `index.ts` barrels,
-`packages/scrapers/{run,runtime,extract,cli}.ts` (Playwright-bound),
-`packages/jobs/{boss,registry,load-env-local}.ts` (orchestration
-wiring + dev-only), Next.js page/layout/loading shells under
-`apps/web/app/`, the test-only `/api/test/*` routes, and NextAuth /
-tRPC mount routes.
-
-### When to write each kind of test
-
-Default to the cheapest test that proves the behaviour. Write:
-
-- **Unit test (`*.test.ts`)** — when the logic is pure or can be made
-  pure with a small mock seam. This is the default. Examples: parsers,
-  matchers, formatters, prompt builders, HTTP clients (mock
-  `globalThis.fetch`), Zod schemas, LLM wrappers (mock the Groq client
-  via `node:test` `mock.module`), tRPC procedures that can use the
-  in-memory `_fake-db.ts`, hooks (via `@testing-library/react`'s
-  `renderHook` under jsdom), small components (via `render` queries).
-  Lives in `<package>/src/__tests__/` or `apps/web/{lib,components}/__tests__/`.
-
-- **Integration test (`*.integration.test.ts`)** — only when DB
-  interaction (cascades, FKs, unique constraints) or cross-router
-  workflow is the thing being asserted. Mock external HTTP. Use the
-  `_test-helpers.ts` fixtures (`callerFor`, `createTestUser`,
-  `cleanupByPrefix`, `fakeUuid`) and wrap any DB-touching
-  `before`/`after` hook in `withTimeout(45_000, ...)`. Each file must
-  finish in under 45 s.
-
-- **E2E test (Playwright `*.spec.ts`)** — only when the assertion is
-  about end-user behaviour that crosses Next.js routing, auth, and
-  real DOM. Uses the isolated `showbook_e2e` database. Skip with
-  `test.skip(!process.env.X)` if the test needs a third-party API key
-  that CI doesn't provide.
-
-Prefer adding cases to an existing test file before creating a new
-one. If a feature needs both unit and integration coverage, write the
-unit test first; reach for the integration only when the unit can't
-falsify the behaviour.
+- Playwright for functional + visual testing on the web app; Maestro
+  Cloud flows on the mobile app
+- Email digest: Resend-backed `runDailyDigest` job at 08:00 ET — see
+  `apps/web/CLAUDE.md` for the operator commands.
 
 ## Running (dev vs prod)
+
 Two compose files, two env files. Both bind to `127.0.0.1` only — the
 Cloudflare Tunnel reaches web via loopback.
+
 - **Dev** — `docker-compose.yml` (project `showbook-dev`), reads `.env.dev`,
   source bind-mounted, Next.js in dev mode. Postgres on host port `5433`,
   web on `3001`, db `showbook`, role `showbook`. Start with `pnpm dev:up`.
@@ -114,30 +86,43 @@ Cloudflare Tunnel reaches web via loopback.
   prod migrations must go through `pnpm prod:migrate`. See README.md
   "Production deployment" for the env checklist.
 
-## Mobile
+## Verification
 
-The Expo app at `apps/mobile/` defaults to the prod tunnel for its
-backend (`EXPO_PUBLIC_API_URL=https://showbook.example.com`). For
-local dev against the running web stack, override that var to your
-LAN IP or `http://localhost:3001`.
+- `pnpm verify` — build + lint + unit tests with end-of-run status summary
+- `pnpm verify:e2e` — adds Playwright e2e (or set `RUN_E2E=1`)
+- `pnpm verify:coverage` — build + lint + unit + integration with merged
+  Node native code coverage; **fails if any of lines / branches / functions
+  is below 80%**, scored independently for the web scope and the mobile
+  scope (`apps/mobile/lib/**`). CI runs this on every push and PR to `main`.
+- `pnpm test:unit` — unit tests across all packages (uses `node:test`)
+- Integration tests live in `*.integration.test.ts` and are excluded from
+  the unit-test glob; run with `pnpm test:integration`. Each integration
+  test has a 45 s per-test timeout enforced by `--test-timeout=45000`,
+  and the batch is killed after 5 min by `scripts/run-integration.mjs`.
+- `pnpm email:smoke` — render the daily digest with sample data to disk
+- `pnpm email:preview` — react-email dev server with hot reload
 
-Commands from the repo root:
-- `pnpm mobile:start` — Metro bundler
-- `pnpm mobile:ios` — open in iOS Simulator
-- `pnpm mobile:android` — open in Android emulator
-- `pnpm mobile:typecheck`, `pnpm mobile:lint`, `pnpm mobile:test`
+App-specific test conventions (when to reach for unit vs integration
+vs e2e/Maestro, fixtures, gating env vars) live in the per-app CLAUDE
+files.
 
-The mobile build is staged across six milestones — see
-[`showbook-specs/mobile-roadmap.md`](showbook-specs/mobile-roadmap.md).
-M1 (Foundation) is complete: sign-in, first-run permissions, the
-5-tab shell, and a real Me tab. M2 (Read flows) brings real
-Home / Shows / Map / ShowDetail.
+## Test coverage
 
-The mobile auth bridge issues a NextAuth-compatible JWT via
-`POST /api/auth/mobile-token` (see `apps/web/lib/mobile-token.ts`).
-Set `GOOGLE_OAUTH_MOBILE_AUDIENCES` in the web env to the
-comma-separated list of iOS + Android Google OAuth client IDs that
-may mint mobile tokens.
+**80% line / branch / function coverage is required on `main`.** The CI
+workflow at `.github/workflows/ci.yml` blocks merges that drop below the
+threshold in either the web scope or the mobile scope. Coverage scope,
+thresholds, and exclusions are owned by `scripts/coverage-report.mjs`;
+merged LCOV lands at `coverage/lcov.info`.
+
+Excluded from coverage (justified): `packages/db/**` (schema +
+generated migrations), per-package re-export `index.ts` barrels,
+`packages/scrapers/{run,runtime,extract,cli}.ts` (Playwright-bound),
+`packages/jobs/{boss,registry,load-env-local}.ts` (orchestration
+wiring + dev-only), Next.js page/layout/loading shells under
+`apps/web/app/`, the test-only `/api/test/*` routes, NextAuth /
+tRPC mount routes, and layout-heavy mobile code under
+`apps/mobile/{app,components}/` (the mobile gate is scoped to
+`apps/mobile/lib/**`).
 
 ## Observability and logging
 
@@ -192,6 +177,7 @@ The stdout copy in the prod web container (`docker logs showbook-prod-web`) is a
 - `notifications.digest.summary` — daily email digest.
 - `pgboss.{started,registered,unschedule_stale}` — pg-boss lifecycle.
 - `trpc.error` — last-resort tRPC procedure error log.
+- `admin.backfill_coordinates.{start,complete}`, `admin.backfill_ticketmaster.{start,complete}` — operator-triggered global venue backfills via the `/admin` page.
 - `job.{start,complete,failed}` — pg-boss job wrapper from `runJob` in `packages/jobs/src/registry.ts`.
 
 When adding a new external-call boundary, follow the `<component>.<action>.<outcome>` shape and add it to this list.
@@ -205,6 +191,11 @@ When adding a new external-call boundary, follow the `<component>.<action>.<outc
 If a new code path doesn't fit these patterns (e.g. a CLI script), extend the package rather than reaching for `console.log` or a fresh client.
 
 ## For agents
+
 Read `showbook-specs/README.md` first. It indexes all spec files.
-Read `showbook-specs/phases/TASKS.md` for the full task breakdown and dependency graph.
+Read `showbook-specs/TASKS.md` for the full task breakdown and dependency graph.
 Each task specifies which spec files to read and how to verify completion.
+
+When the work is web- or mobile-specific, read the relevant per-app
+CLAUDE — they document the conventions you'll need to follow inside
+that scope.

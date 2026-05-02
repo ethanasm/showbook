@@ -55,6 +55,8 @@ import {
 import {
   exchangeGoogleIdTokenForSession,
   describeSignInError,
+  isE2EMode,
+  loadE2ETestSession,
   type SessionUser,
 } from './auth-helpers';
 
@@ -219,6 +221,42 @@ export function AuthProvider({
     if (isSigningInRef.current) return;
     setError(null);
 
+    // ---- E2E TEST MODE BYPASS — DO NOT REMOVE WITHOUT READING ----
+    // Active only when EXPO_PUBLIC_E2E_MODE === '1', which is set ONLY by
+    // the `e2e` EAS profile (see eas.json). Production builds (TestFlight,
+    // Play Store) ship with this var unset, so this branch is dead code
+    // there. Maestro pre-seeds SecureStore with a JWT under
+    // `e2e.test-token` + a SessionUser blob under `e2e.test-user` before
+    // tapping "Continue with Google" — see apps/mobile/e2e/flows/sign-in.yaml.
+    // If either key is missing we surface invalid_response so a misconfigured
+    // flow fails loudly rather than silently signing in.
+    if (isE2EMode()) {
+      isSigningInRef.current = true;
+      setIsSigningIn(true);
+      try {
+        const session = await loadE2ETestSession(SecureStore);
+        if (!session) {
+          setError(describeSignInError(new Error('invalid_response')));
+          return;
+        }
+        await Promise.all([
+          SecureStore.setItemAsync(TOKEN_KEY, session.token),
+          SecureStore.setItemAsync(USER_KEY, JSON.stringify(session.user)),
+        ]);
+        setToken(session.token);
+        setUser(session.user);
+        const firstRunFlag = await SecureStore.getItemAsync(FIRST_RUN_KEY);
+        setIsFirstRun(firstRunFlag !== 'true');
+      } catch (err) {
+        setError(describeSignInError(err));
+      } finally {
+        isSigningInRef.current = false;
+        setIsSigningIn(false);
+      }
+      return;
+    }
+    // ---- END E2E TEST MODE BYPASS ----
+
     const platform: 'ios' | 'android' | 'web' =
       Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';
     const configError = describeGoogleOAuthMisconfiguration(platform);
@@ -257,15 +295,21 @@ export function AuthProvider({
   }, []);
 
   const signOut = React.useCallback(async () => {
+    // Drop every persisted artefact tied to the previous user. The
+    // first-run flag has to be deleted from SecureStore (not just reset
+    // in memory) or `exchangeAndPersist` would reload the stale `'true'`
+    // value on the next sign-in and skip the welcome flow for a
+    // different account on the same device. The React Query cache and
+    // SQLite cache are cleared by a sibling effect in the layout that
+    // watches the `user` transition (see `_layout.tsx`).
     await Promise.all([
       SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => undefined),
       SecureStore.deleteItemAsync(USER_KEY).catch(() => undefined),
+      SecureStore.deleteItemAsync(FIRST_RUN_KEY).catch(() => undefined),
     ]);
     setToken(null);
     setUser(null);
     setError(null);
-    // Sign-out invalidates the session — by definition the next sign-in
-    // (whether the same user or a different one) needs to redo first-run.
     setIsFirstRun(true);
   }, []);
 

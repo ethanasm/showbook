@@ -207,17 +207,30 @@ function decodeBase64Url(encoded: string): string {
 }
 
 function stripHtml(html: string): string {
-  return html
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+  // Iteratively strip <script>/<style> blocks until stable; a single pass can
+  // leave fragments behind for malformed/nested inputs like `<scr<script>ipt>`.
+  // The `(?:<\/tag\b[^>]*>|$)` tail consumes through end-of-input when the
+  // closing tag is missing, and accepts arbitrary whitespace/junk inside the
+  // closing tag (e.g. `</script\n bar>`).
+  let cleaned = html;
+  for (let i = 0; i < 5; i++) {
+    const before = cleaned;
+    cleaned = cleaned
+      .replace(/<style\b[^>]*>[\s\S]*?(?:<\/style\b[^>]*>|$)/gi, '')
+      .replace(/<script\b[^>]*>[\s\S]*?(?:<\/script\b[^>]*>|$)/gi, '');
+    if (cleaned === before) break;
+  }
+  return cleaned
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(p|div|tr|h[1-6]|li|td)>/gi, '\n')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&#\d+;/g, '')
+    // Decode &amp; LAST so input like `&amp;lt;` ends up as literal `&lt;`,
+    // not double-decoded into `<`.
+    .replace(/&amp;/g, '&')
     .replace(/[ \t]+/g, ' ')
     .replace(/\n /g, '\n')
     .replace(/\n{3,}/g, '\n\n')

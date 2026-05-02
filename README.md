@@ -4,8 +4,8 @@ Personal entertainment tracker for live shows — concerts, theatre, comedy, fes
 
 ## Tech Stack
 
-- **Web:** Next.js 15 (App Router)
-- **Mobile:** Expo (React Native)
+- **Web:** Next.js 15 (App Router) — see [`apps/web/CLAUDE.md`](apps/web/CLAUDE.md)
+- **Mobile:** Expo SDK 55 + Expo Router (React Native) — feature-complete; see [`apps/mobile/CLAUDE.md`](apps/mobile/CLAUDE.md) and [`showbook-specs/mobile-roadmap.md`](showbook-specs/mobile-roadmap.md)
 - **Language:** TypeScript
 - **Database:** PostgreSQL + Drizzle ORM
 - **API:** tRPC
@@ -113,7 +113,7 @@ workflow* and pass the SHA.
 See [`apps/web/.env.example`](apps/web/.env.example) for the full template with
 defaults and inline notes. The required groups are:
 
-- **Auth** — `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. Self-hosters should also set `AUTH_ALLOWED_EMAILS` and/or `AUTH_ALLOWED_DOMAINS` (comma-separated) to gate sign-in. Both unset = open sign-up.
+- **Auth** — `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. Self-hosters should also set `AUTH_ALLOWED_EMAILS` and/or `AUTH_ALLOWED_DOMAINS` (comma-separated) to gate sign-in. Both unset = open sign-up. Optionally set `ADMIN_EMAILS` (comma-separated) to grant access to the in-app Admin tab; closed by default.
 - **Data sources** — `TICKETMASTER_API_KEY`, `SETLISTFM_API_KEY`, `GROQ_API_KEY`, `GOOGLE_PLACES_API_KEY`
 - **Media (Cloudflare R2)** — `R2_*` plus `MEDIA_*` quotas/limits
 - **Email (Resend)** — `RESEND_API_KEY`, `EMAIL_FROM` (unset → digest job logs and skips delivery)
@@ -125,8 +125,8 @@ defaults and inline notes. The required groups are:
 ```
 showbook/
 ├── apps/
-│   ├── web/                  # Next.js 15 (App Router)
-│   └── mobile/               # Expo (React Native)
+│   ├── web/                  # Next.js 15 (App Router) — see apps/web/CLAUDE.md
+│   └── mobile/               # Expo + Expo Router — see apps/mobile/CLAUDE.md
 ├── packages/
 │   ├── db/                   # Drizzle schema + migrations
 │   ├── api/                  # tRPC routers
@@ -186,6 +186,29 @@ notifications enabled in Preferences. The HTML template lives in
 - `pnpm --filter @showbook/jobs run-daily-digest` — run the real digest job
   against your dev DB. Without `RESEND_API_KEY` it logs `Would send to ...`
   for each user instead of delivering.
+
+## Mobile app
+
+The Expo app at [`apps/mobile/`](apps/mobile/) is feature-complete
+against the design handoff. It
+authenticates against the web backend via the
+`POST /api/auth/mobile-token` bridge, then talks to the same
+`@showbook/api` tRPC routers as the web client.
+
+```bash
+pnpm mobile:start       # Metro bundler
+pnpm mobile:ios         # build + open in iOS Simulator
+pnpm mobile:android     # build + open in Android emulator
+pnpm mobile:typecheck
+pnpm mobile:lint
+pnpm mobile:test
+```
+
+Defaults to the prod Cloudflare Tunnel hostname for its backend; override
+`EXPO_PUBLIC_API_URL` to your LAN IP or `http://localhost:3001` for
+local dev. Build / submit / push-notification follow-ups live in
+[`showbook-specs/mobile-deployment.md`](showbook-specs/mobile-deployment.md)
+and [`Planned Improvements.md`](./Planned%20Improvements.md).
 
 ## E2E Database Isolation
 

@@ -17,8 +17,12 @@
  * secrets for managed builds.
  */
 
-export const API_URL: string =
-  process.env.EXPO_PUBLIC_API_URL ?? 'https://showbook.example.com';
+// EXPO_PUBLIC_API_URL must be set at build time (EAS secrets) or in
+// `apps/mobile/.env.local` for local dev. The runtime fallback below
+// is intentionally an empty string — we'd rather have the sign-in
+// flow surface a clear "API URL not configured" error than have the
+// app silently hit a non-existent example.com host.
+export const API_URL: string = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 export const GOOGLE_OAUTH_CLIENT_ID_IOS: string | undefined =
   process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS;
@@ -38,6 +42,9 @@ export const GOOGLE_OAUTH_CLIENT_ID_WEB: string | undefined =
 export function describeGoogleOAuthMisconfiguration(
   platform: 'ios' | 'android' | 'web',
 ): string | null {
+  if (!API_URL) {
+    return 'EXPO_PUBLIC_API_URL is not set';
+  }
   // The `webClientId` is required by `expo-auth-session/providers/google` in
   // every config (used as the audience), so we always check it.
   if (!GOOGLE_OAUTH_CLIENT_ID_WEB) {

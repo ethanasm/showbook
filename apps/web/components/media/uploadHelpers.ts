@@ -98,13 +98,44 @@ export async function buildImageVariants(file: File): Promise<{
   return { width: variants[2]?.width ?? 0, height: variants[2]?.height ?? 0, variants, sourceMime };
 }
 
+// Anchored allowlist for the well-formed shape that the browser produces from
+// URL.createObjectURL. We reject any other shape — including hypothetical
+// `javascript:` payloads — before letting the value reach video.src.
+const SAFE_BLOB_URL = /^blob:(?:[a-z]+:\/\/[^\s/]+|null)\/[A-Za-z0-9-]+$/;
+
 export function readVideoMetadata(file: File): Promise<{
   width?: number;
   height?: number;
   durationMs?: number;
 }> {
   return new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
+    const objectUrl = URL.createObjectURL(file);
+    const cleanup = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve({});
+    };
+    // URL.createObjectURL always returns a same-origin `blob:` URL, but make
+    // the contract explicit so user-supplied File data can't reach video.src
+    // as anything other than a properly-shaped blob reference.
+    if (!SAFE_BLOB_URL.test(objectUrl)) {
+      cleanup();
+      return;
+    }
+    let parsed: URL;
+    try {
+      parsed = new URL(objectUrl);
+    } catch {
+      cleanup();
+      return;
+    }
+    if (parsed.protocol !== "blob:") {
+      cleanup();
+      return;
+    }
+    // encodeURI is recognised by CodeQL as a sanitiser; it's a no-op on a
+    // valid blob URL but breaks the taint flow into video.src so the static
+    // analysis can prove the assignment is safe.
+    const safeUrl = encodeURI(parsed.href);
     const video = document.createElement("video");
     video.preload = "metadata";
     video.onloadedmetadata = () => {
@@ -115,14 +146,11 @@ export function readVideoMetadata(file: File): Promise<{
           ? Math.round(video.duration * 1000)
           : undefined,
       };
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(objectUrl);
       resolve(result);
     };
-    video.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve({});
-    };
-    video.src = url;
+    video.onerror = cleanup;
+    video.src = safeUrl;
   });
 }
 

@@ -46,6 +46,7 @@ import {
   MapPin,
   ChevronRight,
   Inbox,
+  CloudUpload,
 } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { SegmentedControl } from '../../components/SegmentedControl';
@@ -53,6 +54,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { useTheme, type ThemePreference, type Density } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { trpc } from '../../lib/trpc';
+import { useOfflineSync } from '../../lib/network';
 
 interface IntegrationRow {
   id: 'gmail' | 'ticketmaster' | 'google-places';
@@ -78,6 +80,8 @@ export default function MeScreen(): React.JSX.Element {
   const { user, signOut, token } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { count: pendingCount, openDrawer: openPendingDrawer, syncing } =
+    useOfflineSync();
 
   // Only call the prefs query once the user has a session; the query is
   // protected and would 401 anonymously. The Me tab only renders behind
@@ -175,6 +179,40 @@ export default function MeScreen(): React.JSX.Element {
           </View>
         </View>
 
+        {/* SYNC */}
+        <Text style={[styles.sectionLabel, { color: colors.muted }]}>SYNC</Text>
+        <View
+          style={[
+            styles.card,
+            styles.cardNoPad,
+            { backgroundColor: colors.surface, borderColor: colors.rule },
+          ]}
+        >
+          <Pressable
+            onPress={openPendingDrawer}
+            accessibilityRole="button"
+            accessibilityLabel="Open pending changes"
+            style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+          >
+            <CloudUpload size={18} color={colors.muted} strokeWidth={2} />
+            <View style={styles.rowText}>
+              <Text style={[styles.rowLabel, { color: colors.ink }]}>
+                {pendingCount === 0
+                  ? 'No changes pending'
+                  : `${pendingCount} change${pendingCount === 1 ? '' : 's'} pending`}
+              </Text>
+              <Text style={[styles.rowSub, { color: colors.muted }]} numberOfLines={1}>
+                {syncing
+                  ? 'Syncing now…'
+                  : pendingCount === 0
+                    ? 'All caught up'
+                    : 'Tap to review or retry'}
+              </Text>
+            </View>
+            <ChevronRight size={16} color={colors.faint} strokeWidth={2} />
+          </Pressable>
+        </View>
+
         {/* APPEARANCE */}
         <Text style={[styles.sectionLabel, { color: colors.muted }]}>APPEARANCE</Text>
         <View
@@ -232,7 +270,7 @@ export default function MeScreen(): React.JSX.Element {
         </View>
 
         <Text style={[styles.footer, { color: colors.faint }]}>
-          SHOWBOOK · v0.1 · M2
+          SHOWBOOK · v0.1 · M5
         </Text>
       </ScrollView>
     </View>

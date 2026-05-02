@@ -794,7 +794,12 @@ export default function MapView() {
     ).length;
   }, [shows]);
 
-  const backfillCoordinates = trpc.venues.backfillCoordinates.useMutation();
+  // Coordinate backfill is admin-only (see GUARDRAILS.md "Admin-only mutations").
+  // Non-admins still see the count of unmapped venues elsewhere; only the
+  // operator sees / can trigger the action button.
+  const amIAdmin = trpc.admin.amIAdmin.useQuery(undefined, { staleTime: 5 * 60_000 });
+  const isAdmin = amIAdmin.data?.isAdmin ?? false;
+  const backfillCoordinates = trpc.admin.backfillVenueCoordinates.useMutation();
   const utils = trpc.useUtils();
   const [backfilling, setBackfilling] = useState(false);
 
@@ -830,7 +835,7 @@ export default function MapView() {
           title="No mapped venues"
           body={unmappedCount > 0 ? "Some venues need coordinates before they can appear here." : "Add a show with a venue to see it on the map."}
           action={
-            unmappedCount > 0 ? (
+            unmappedCount > 0 && isAdmin ? (
               <button
                 type="button"
                 className="map-backfill-banner__btn"
@@ -875,7 +880,7 @@ export default function MapView() {
         years={yearOptions}
       />
 
-      {unmappedCount > 0 && (
+      {unmappedCount > 0 && isAdmin && (
         <div className="map-backfill-banner">
           <span>
             {unmappedCount} show{unmappedCount !== 1 ? "s" : ""} at venues

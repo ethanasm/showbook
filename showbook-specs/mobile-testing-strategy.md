@@ -30,11 +30,12 @@ The mobile app does NOT mirror the web app's blanket 80% coverage gate. Web's lo
 | E-1 offline | `network.test.ts`, `outbox.integration.test.ts` (retry-on-reconnect path) |
 | E-2 iPad | `responsive.test.ts` (breakpoint hook) |
 
-## Wave F (TestFlight prep)
+## Wave F (TestFlight prep) — **COMPLETE**
 
-- Maestro setup + 3 flows: sign-in, add show, sign-out
-- CI runner (GitHub Actions macOS, or Maestro Cloud)
-- Pre-release smoke gate
+- Maestro setup + 3 flows: sign-in, add show, sign-out — `apps/mobile/e2e/flows/`
+- CI runner: Maestro Cloud via `.github/workflows/mobile-e2e.yml` (nightly + push-to-`main`, NOT per-PR)
+- E2E test mode: `EXPO_PUBLIC_E2E_MODE=1` baked into the `e2e` EAS profile (`apps/mobile/eas.json`); `lib/auth.ts` bypasses Google OAuth and reads a pre-seeded Showbook JWT from SecureStore (`e2e.test-token` + `e2e.test-user`). The bypass is gated on the env var so production builds keep the real OAuth path — see the `isE2EMode` test in `apps/mobile/lib/__tests__/auth.test.ts` for the explicit production-safety assertion.
+- Pre-release smoke gate: the same workflow can be triggered via `workflow_dispatch` before cutting a release.
 
 ## Coverage gate rollout
 

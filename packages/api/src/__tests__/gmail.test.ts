@@ -187,8 +187,10 @@ describe('getMessageBody', () => {
       })) as typeof globalThis.fetch;
     const r = await getMessageBody('token', 'mid-2');
     assert.match(r.body, /Hello world/);
-    assert.doesNotMatch(r.body, /<style>/);
-    assert.doesNotMatch(r.body, /<script>/);
+    // Match opening tags with optional attributes / case variants so a smarter
+    // payload can't slip through the assertion (e.g. `<SCRIPT>` or `<script `).
+    assert.doesNotMatch(r.body, /<style\b[^>]*>/i);
+    assert.doesNotMatch(r.body, /<script\b[^>]*>/i);
   });
 
   it('walks nested parts recursively', async () => {

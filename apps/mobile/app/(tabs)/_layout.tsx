@@ -38,6 +38,12 @@ import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, List, Plus, MapPin, User } from 'lucide-react-native';
 import { useTheme } from '../../lib/theme';
+import { useBreakpoint } from '../../lib/responsive';
+import { ThreePaneLayout, useSelectedShow } from '../../components/ThreePaneLayout';
+import { EmptyState } from '../../components/EmptyState';
+import ShowsScreen from './shows';
+import MapScreen from './map';
+import ShowDetailScreen from '../show/[id]';
 
 const TAB_BAR_BASE_HEIGHT = 50;
 
@@ -48,6 +54,22 @@ export default function TabsLayout(): React.JSX.Element {
   // Floor at 4pt so devices without a home indicator (older iPhones, most
   // Android phones) still leave a small breathing gap under the labels.
   const bottomPad = Math.max(insets.bottom, 4);
+  const breakpoint = useBreakpoint();
+
+  // iPad / large-screen shell: three-pane composition replaces the 5-tab
+  // bottom nav. Selection plumbing lives in `useSelectedShow()` from the
+  // ThreePaneLayout — the Shows pane writes a show id when the user
+  // taps a row, the middle pane reads it as ShowDetail's `showIdProp`,
+  // and a placeholder is rendered when nothing is selected yet.
+  if (breakpoint === 'tablet') {
+    return (
+      <ThreePaneLayout
+        left={<ShowsScreen />}
+        middle={<IpadDetailPane />}
+        right={<MapScreen />}
+      />
+    );
+  }
 
   return (
     <Tabs
@@ -117,6 +139,22 @@ export default function TabsLayout(): React.JSX.Element {
       />
     </Tabs>
   );
+}
+
+function IpadDetailPane(): React.JSX.Element {
+  const { showId } = useSelectedShow();
+  const { tokens } = useTheme();
+  if (!showId) {
+    return (
+      <View style={{ flex: 1, backgroundColor: tokens.colors.bg }}>
+        <EmptyState
+          title="Select a show"
+          subtitle="Tap a show on the left to see its details and map preview here."
+        />
+      </View>
+    );
+  }
+  return <ShowDetailScreen showIdProp={showId} />;
 }
 
 // We avoid importing BottomTabBarButtonProps from @react-navigation/bottom-tabs

@@ -40,6 +40,7 @@ import { Sheet } from '../../components/Sheet';
 import { useTheme } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
 import { useAuth } from '../../lib/auth';
+import { useCachedQuery } from '../../lib/cache';
 import darkStyle from './map-style-dark.json';
 import lightStyle from './map-style-light.json';
 
@@ -259,7 +260,10 @@ export default function MapScreen(): React.JSX.Element {
   const { token } = useAuth();
   const mapRef = React.useRef<MapView>(null);
 
-  const showsQuery = trpc.shows.listForMap.useQuery(undefined, {
+  const utils = trpc.useUtils();
+  const showsQuery = useCachedQuery<MapShow[]>({
+    queryKey: ['mobile', 'shows.listForMap'],
+    queryFn: () => utils.client.shows.listForMap.query() as Promise<MapShow[]>,
     enabled: Boolean(token),
   });
 
