@@ -40,7 +40,14 @@ test.describe('Artist detail page', () => {
     expect(await venueLinks.count()).toBeGreaterThan(0);
   });
 
-  test('inline rename persists across navigation', async ({ page }) => {
+  test('inline rename persists across navigation', async ({ page }, testInfo) => {
+    // Renaming Radiohead writes to the global performers table, which
+    // races with other workers that look up Radiohead by name (show-detail,
+    // add-setlists, media-upload). Run only in single-worker mode.
+    test.skip(
+      testInfo.config.workers > 1,
+      'rename mutates global performer name; races with concurrent workers',
+    );
     await page.goto('/artists');
     await page.getByRole('link', { name: 'Radiohead', exact: false }).first().click();
     await page.waitForURL(/\/artists\/[0-9a-f-]+/);

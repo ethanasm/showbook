@@ -22,20 +22,22 @@ async function gotoPrefs(page: Page) {
 test.describe('Preferences fixes', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test('account section shows name and sign-out button', async ({ page }) => {
+  test('account section shows name and sign-out button', async ({ page }, testInfo) => {
     await login(page);
     await gotoPrefs(page);
     const main = page.getByRole('main');
-    await expect(main.getByText('test@showbook.dev')).toBeVisible();
-    await expect(main.getByText('Test User')).toBeVisible();
+    const expectedEmail = `e2e-w${testInfo.parallelIndex}@showbook.dev`;
+    const expectedName = `Worker ${testInfo.parallelIndex}`;
+    await expect(main.getByText(expectedEmail)).toBeVisible();
+    await expect(main.getByText(expectedName)).toBeVisible();
     await expect(main.getByRole('button', { name: /Sign out/i })).toBeVisible();
   });
 
-  test('sidebar shows the session user, not a placeholder', async ({ page }) => {
+  test('sidebar shows the session user, not a placeholder', async ({ page }, testInfo) => {
     await login(page);
     await gotoPrefs(page);
     const sidebarContent = await page.locator('.sidebar__user').innerText();
-    expect(sidebarContent).toContain('Test User');
+    expect(sidebarContent).toContain(`Worker ${testInfo.parallelIndex}`);
     expect(sidebarContent).not.toContain('Ethan Smith');
   });
 
