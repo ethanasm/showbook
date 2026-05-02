@@ -4,8 +4,8 @@ Personal entertainment tracker for live shows — concerts, theatre, comedy, fes
 
 ## Tech Stack
 
-- **Web:** Next.js 15 (App Router)
-- **Mobile:** Expo (React Native)
+- **Web:** Next.js 15 (App Router) — see [`apps/web/CLAUDE.md`](apps/web/CLAUDE.md)
+- **Mobile:** Expo SDK 55 + Expo Router (React Native) — feature-complete (M1–M6 shipped); see [`apps/mobile/CLAUDE.md`](apps/mobile/CLAUDE.md) and [`showbook-specs/mobile-roadmap.md`](showbook-specs/mobile-roadmap.md)
 - **Language:** TypeScript
 - **Database:** PostgreSQL + Drizzle ORM
 - **API:** tRPC
@@ -125,8 +125,8 @@ defaults and inline notes. The required groups are:
 ```
 showbook/
 ├── apps/
-│   ├── web/                  # Next.js 15 (App Router)
-│   └── mobile/               # Expo (React Native)
+│   ├── web/                  # Next.js 15 (App Router) — see apps/web/CLAUDE.md
+│   └── mobile/               # Expo + Expo Router (M1–M6 shipped) — see apps/mobile/CLAUDE.md
 ├── packages/
 │   ├── db/                   # Drizzle schema + migrations
 │   ├── api/                  # tRPC routers
@@ -186,6 +186,29 @@ notifications enabled in Preferences. The HTML template lives in
 - `pnpm --filter @showbook/jobs run-daily-digest` — run the real digest job
   against your dev DB. Without `RESEND_API_KEY` it logs `Would send to ...`
   for each user instead of delivering.
+
+## Mobile app
+
+The Expo app at [`apps/mobile/`](apps/mobile/) is feature-complete
+against the design handoff (M1 Foundation → M6 polish + iPad). It
+authenticates against the web backend via the
+`POST /api/auth/mobile-token` bridge, then talks to the same
+`@showbook/api` tRPC routers as the web client.
+
+```bash
+pnpm mobile:start       # Metro bundler
+pnpm mobile:ios         # build + open in iOS Simulator
+pnpm mobile:android     # build + open in Android emulator
+pnpm mobile:typecheck
+pnpm mobile:lint
+pnpm mobile:test
+```
+
+Defaults to the prod Cloudflare Tunnel hostname for its backend; override
+`EXPO_PUBLIC_API_URL` to your LAN IP or `http://localhost:3001` for
+local dev. Build / submit / push-notification follow-ups live in
+[`showbook-specs/mobile-deployment.md`](showbook-specs/mobile-deployment.md)
+and [`Planned Improvements.md`](./Planned%20Improvements.md).
 
 ## E2E Database Isolation
 
