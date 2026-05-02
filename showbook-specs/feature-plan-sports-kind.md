@@ -320,12 +320,13 @@ them.
 - Existing genre/artist stats tiles get a `WHERE kind != 'sports'`
   guard so they don't blend an apples-to-oranges count.
 
-### 3l. Mobile
-- M2's Show detail screen branches by kind today; add the sports
-  branch from §3d before the screen ships.
-- M5's Discover tab adds the team rail.
+### 3l. Mobile (high-level — see §11 for full detail)
 - The kind-icon consolidation (§3a) lives in `@showbook/shared`, so
-  mobile picks it up for free.
+  mobile picks it up automatically. `apps/mobile/lib/theme.ts`
+  already imports `Kind` from `@showbook/shared` and the existing
+  `KindBadge` / `ShowCard` already accept `'sports'`.
+- The Add screen, Show detail, Discover, Map, and ThreePaneLayout
+  all need sports-aware branches — see §11 for the per-screen plan.
 
 ---
 
@@ -463,7 +464,7 @@ doesn't index. Same wrapper shape.
 | **S2** | Add flow + Show detail + `shows.create` wiring. End-to-end "manually log a past game" works. |
 | **S3** | Discover follow-team + `discover/ingest-team` job + ESPN client. End-to-end "follow Knicks → watching shows appear → attend → fan record updates" works. |
 | **S4** | Past-game enrichment (`sports-score-fill`), digest treatment, Home tile. |
-| **S5** | Mobile. M2 sports branch on Show detail; Discover team rail when M5 ships. |
+| **S5** | Mobile (see §11). Sports branches across Add / Show detail / Shows / Discover / Map; iPad three-pane variant. |
 
 ---
 
@@ -476,3 +477,300 @@ doesn't index. Same wrapper shape.
 | Wrestling / UFC / F1 fit awkwardly into "team" model | Phase 1 ships team-sports only (NBA/NFL/MLB/NHL/MLS/EPL+top European). Combat sports + motorsports are a later expansion that may want a different shape (`event_competitors` with type='fighter' / 'driver'). Don't try to cover everything in v1. |
 | Users want to track "the away team came to MSG" without following either team | Already covered: announcements get team IDs whether the user follows the teams or not; venue ingest pulls them via TM `attractionId` filter. |
 | Sports double-headers / multi-game days | `show_teams` PK includes `role` so a doubleheader is two distinct shows; ingestion dedup by `(date, venue, home, away)` not just `(date, venue)`. |
+
+---
+
+## 9. Audit of sports gaps in the *current* mobile build
+
+Mobile is feature-complete (M1–M6 shipped). It already includes
+`'sports'` in the `Kind` type via `@showbook/shared`, and the
+existing `KindBadge` renders a trophy icon. But every place that
+*does* something with kind today narrows to the four other values.
+
+| Surface | File | Today | Gap |
+|---------|------|-------|-----|
+| Show detail kind branching | `apps/mobile/app/show/[id].tsx` and `[id]/` subroutes | Renders setlist composer for concert/comedy, cast for theatre, performers for festival | No sports branch — falls through to performer rendering, which produces a blank card because sports shows have no `show_performers` rows |
+| Add chat (LLM intent) | `apps/mobile/app/add/index.tsx` (`add` route) | Prompt enumerates the 4 kinds for the LLM | Sports queries fall back to "concert" — visible as users typing "Knicks vs Celtics last night" being parsed as a concert at MSG |
+| Add form fallback | `apps/mobile/app/add/form.tsx` | Kind picker shows 4 tiles | No sports tile, no team picker, no score subform |
+| Setlist composer | `apps/mobile/app/show/[id]/setlist.tsx` | Always available on the Show action sheet | Should hide for `kind='sports'` |
+| Shows tab kind chip filter | `apps/mobile/app/(tabs)/shows.tsx` | 4 chips | 5th chip + matchup-formatted row |
+| ShowCard | `apps/mobile/components/ShowCard.tsx` | `headliner: string` | Needs an "either headliner or matchup" rendering — see §11 |
+| Discover follow rails | `apps/mobile/app/discover.tsx` | Followed venues + Followed artists | Add Followed teams rail |
+| Search | `apps/mobile/app/search.tsx` | Searches venues + performers | Add team search results section |
+| iPad three-pane | `apps/mobile/components/ThreePaneLayout.tsx` | Map (right) / Shows (left) / Show detail (middle) | Right pane should switch to a scoreboard mini-card when the selected show is sports |
+
+§11 below is the concrete fill-in plan.
+
+---
+
+## 10. The sports-mobile UI itself
+
+(Renumbered from prior §9. Risks now §8 above; §10/§11/§12 are
+mobile/tablet/visuals.)
+
+---
+
+## 11. Mobile, tablet, and visuals
+
+### 11a. Add flow — sports kind picker
+
+`apps/mobile/app/add/form.tsx` kind picker grows a 5th tile. The
+existing tile component already accepts any `Kind`; the only work
+is adding the tile + branching the form below.
+
+When sports is picked:
+
+- The "Lineup" Sheet (currently used for performers) is replaced
+  with a **TeamPicker** Sheet:
+
+  ```
+  ┌─ Pick teams ──────────────────────────┐
+  │ Home                                   │
+  │  ┌────────────────────────────────┐    │
+  │  │  🏠  New York Knicks       ✓   │    │
+  │  └────────────────────────────────┘    │
+  │                                        │
+  │ Away                                   │
+  │  ┌────────────────────────────────┐    │
+  │  │  🛫  Boston Celtics        ✓   │    │
+  │  └────────────────────────────────┘    │
+  │                                        │
+  │  ⓘ Neutral site (playoffs, etc.)       │
+  │                                        │
+  │              [Save lineup]             │
+  └────────────────────────────────────────┘
+  ```
+
+  Reuses the existing `Sheet` component pattern and the
+  `VenueTypeahead`-style search affordance, just typed against
+  `teams.search`.
+
+- A new `ScoreEntry` block appears below Notes when
+  `state='past'`:
+
+  ```
+  ┌─ Final score ──────────────────────────┐
+  │  NYK   [ 119 ]    BOS   [ 112 ]        │
+  │  ──────────────────────────────────── │
+  │  ▸ Add period scores                   │
+  │  ▸ MVP                                 │
+  │  ▸ Attendance                          │
+  └────────────────────────────────────────┘
+  ```
+
+  The disclosure rows use the existing accordion pattern from
+  the setlist composer.
+
+- The Add chat path (`apps/mobile/app/add/index.tsx`) prompt is
+  extended with a sports example so the Groq parser correctly
+  identifies a query like "Knicks vs Celtics last night at MSG"
+  as `kind: 'sports'` with home/away inferred from the venue.
+
+### 11b. Show detail — phone scoreboard hero
+
+`apps/mobile/app/show/[id].tsx` gets a new top-of-screen
+**Scoreboard** component for `kind='sports'` that replaces the
+performer hero:
+
+```
+┌─────────────────────────────────────────┐
+│  MAR · 23                   ▌ STATE     │
+│                                          │
+│       ┌─────┐    ╳    ┌─────┐           │
+│       │ NYK │  119 ─  │ BOS │           │
+│       └─────┘    112  └─────┘           │
+│                                          │
+│       Final · OT                         │
+│                                          │
+│       MVP   Jalen Brunson · 38 PTS       │
+│       4–2   your record at this matchup  │
+│                                          │
+│       19,812   official attendance       │
+└─────────────────────────────────────────┘
+```
+
+- New component `apps/mobile/components/Scoreboard.tsx`. Pulls
+  team logos via the new `team.logoUrl` field; falls back to a
+  monogrammed avatar (reuses the `RemoteImage` fallback pattern
+  already used by `ArtistCard`).
+- "Your record" pill is computed by a single tRPC procedure
+  `sports.fanRecord({ teamIds })` so the UI doesn't fan out N
+  queries.
+- Sections below the scoreboard:
+  - **Photos** — unchanged (uses `MediaGrid`).
+  - **Box score** — only when `sports_summary.scorers` populated;
+    a new `BoxScoreTable` component (rows of `player · stat ·
+    value`).
+  - **Notes** — unchanged.
+  - **Setlist** section is *suppressed* (the action-sheet entry
+    `Edit setlist` is also hidden when `kind='sports'`).
+
+### 11c. ShowCard — matchup format
+
+`ShowCard` headliner slot becomes "either headliner or matchup":
+
+```ts
+// apps/mobile/components/ShowCard.tsx
+export interface ShowCardShow {
+  ...
+  headliner: string | null;       // existing — null for sports
+  matchup?: { home: string; away: string; result?: 'W'|'L'|'T'; score?: [number, number] };
+}
+```
+
+Render:
+```
+┌──────────────────────────────────────────┐
+│▌ MAR  ·  TUE                            ▶│
+│  23     NYK · BOS                  W 119 │
+│         Madison Square Garden       –112 │
+└──────────────────────────────────────────┘
+```
+
+- "Result" pill (W/L/T) is colored from the user's followed-team
+  perspective: `success` for win, `error` for loss, `muted` for
+  ties or no-followed-team.
+- Edge bar tints (the existing 3px state indicator) unchanged —
+  still `accent` for ticketed, `kindColor` for watching, `rule`
+  for past.
+
+### 11d. Shows tab — sports filter chip + sports stats card
+
+`apps/mobile/app/(tabs)/shows.tsx`:
+
+- 5th chip in the kind filter: `🏆 Sports`. Existing
+  SegmentedControl + chip rail accommodates without layout work.
+- The stats sub-tab (currently `Total / By kind / By month`) gets
+  a new "By team" sub-mode for users with ≥3 sports shows. Bar
+  chart of show count per team (reuses the existing chart helper
+  pattern from the M2 stats view).
+
+### 11e. Discover tab — Followed teams rail
+
+`apps/mobile/app/discover.tsx`:
+
+- Add a horizontal `Followed teams` rail above the existing
+  `Followed venues` and `Followed artists` rails. Shows
+  team-logo-pill cards, identical chrome to the existing artist
+  rail.
+- "Follow team" CTA at the head of the rail opens a Sheet with
+  team search (typeahead). Search is league-aware (chip filter
+  for NBA / NFL / MLB / NHL / MLS / Other).
+- Long-press a team pill → ActionSheet `Open team page · Unfollow`.
+
+A new optional stack route `apps/mobile/app/team/[id].tsx`
+mirrors the existing artist/venue detail screens — upcoming games
++ attended games + your record. Phase S5 stretch; not blocking.
+
+### 11f. Search tab
+
+`apps/mobile/app/search.tsx` already has segmented sections for
+`shows / venues / artists`. Add a `teams` section. Hits
+`teams.search` (existing pattern, just a new procedure).
+
+### 11g. iPad three-pane — sports treatment
+
+`ThreePaneLayout` keeps its current structure (left=Shows,
+middle=ShowDetail, right=Map). The branching happens *inside* the
+middle and right panes:
+
+- **Middle pane (ShowDetail)** renders the Scoreboard hero from
+  §11b at the top, then either the Map (current behavior, suited
+  to concerts where you orient by venue) or — for sports shows —
+  a **box score** card if `sports_summary.scorers` is populated.
+- **Right pane** — when the selected show is sports, the right
+  pane swaps from Map to a **TeamHeadToHead** card: head-to-head
+  history with the user's record vs each opponent, plus the next
+  upcoming game between the two teams (if any). The Map remains
+  the default for non-sports.
+
+  ```
+  ┌─ TeamHeadToHead ──────────────────────────┐
+  │  NYK    vs    BOS                          │
+  │  ───────────────                            │
+  │  Your record at this matchup                │
+  │       4 – 2                                 │
+  │                                              │
+  │  Last 5 you attended                        │
+  │   W 119–112  · Mar 23, 2025  · MSG          │
+  │   L 102–110  · Jan 11, 2025  · TD Garden    │
+  │   W 124–119  · Apr 02, 2024  · MSG          │
+  │   L  98–106  · Feb 17, 2024  · MSG          │
+  │   W 112–104  · Nov 30, 2023  · TD Garden    │
+  │                                              │
+  │  Upcoming                                   │
+  │   Apr 14, 2026  · MSG  · 7:30pm             │
+  │   [+ Watch]                                 │
+  └──────────────────────────────────────────────┘
+  ```
+
+  This is the iPad-only display the prompt asked about — it earns
+  its width because head-to-head data wants room to breathe and
+  doesn't compete for vertical space the way it does on phone.
+
+- **Left pane (Shows list)** filters with the same kind chips as
+  phone, but the iPad shell can show a permanent kind selector at
+  the top of the pane (no need to hide chips behind a scroll on a
+  1180pt-wide screen).
+
+### 11h. Add screen on iPad
+
+The existing M3 Add screen is phone-shaped. On iPad, opening
+`/add` (regardless of route) presents a centered modal at 720pt
+width rather than full-screen, with the chat history on the left
+half and the form preview on the right half. Sports kind on iPad
+gets the team picker as a side-panel, not a Sheet.
+
+### 11i. Visual / design updates
+
+New components:
+1. **`Scoreboard`** (mobile + web) — central layout primitive for
+   sports show detail. Designed once, used in show detail (full),
+   show row (compact W/L), digest email block (compact), and the
+   Brain `cards` channel (`type: 'sports_scoreboard'`).
+2. **`TeamLogo`** — `RemoteImage`-backed with a monogrammed
+   fallback. Reuses the same lazy-load + tinted-placeholder pattern
+   as `ArtistCard`. New tokens: none — uses existing `surface` /
+   `rule` / kind palette.
+3. **`TeamPicker` Sheet** — composes `Sheet` + `VenueTypeahead`
+   (parameterized for teams). No new chrome.
+
+Color tokens — extend `KIND_COLORS` for sports. Today the existing
+sports color is `#E29A44` (gold-ish, from
+`packages/shared/src/constants/palette.ts` if present, else
+`apps/mobile/lib/theme-utils.ts` — needs verification). If the
+current value is also "trophy gold" close to `accent`, introduce a
+distinct sports tint (suggested: a deep team-jersey blue
+`#2F5BB7` for dark mode, `#1F4FA8` for light) so the kind chip
+reads at a glance against the gold accent in the rest of the
+theme. This is the only palette change in this plan.
+
+Iconography — `lucide-react-native` already provides `Trophy`
+(used today). Add `Volleyball` or `Goal` only if the user
+distinguishes leagues at a glance later. v1 keeps `Trophy` for
+all sports.
+
+Web visual updates: scoreboard hero on `/(app)/shows/[id]/`
+matches the mobile rhythm (tall hero card, then sections stack
+underneath). The existing `HeroCard` design-system primitive gets
+a `variant='scoreboard'` mode rather than a brand-new component.
+Shows list row gets the matchup format and the W/L score badge
+inline.
+
+Tablet web: the `/(app)/shows/[id]/` page already uses a 2-column
+layout when the viewport is wide. The right column on a sports
+show renders the same `TeamHeadToHead` card from §11g — single
+component shared between mobile-iPad and web-tablet via a thin
+RN→DOM compat shim or a parallel implementation. Recommendation:
+parallel implementations; the component is small and the cost of
+the shim isn't worth it.
+
+### 11j. Mobile-specific tests
+
+- `apps/mobile/lib/__tests__/sports-format.test.ts` — matchup
+  string formatting + W/L computation.
+- `apps/mobile/components/__tests__/Scoreboard.test.tsx` —
+  snapshot + period-breakdown rendering.
+- Maestro flow: `e2e/flows/sports-add-show.yaml` — pick sports
+  kind → enter teams → enter score → save → see scoreboard on
+  show detail. Runs alongside the existing add-show flow.

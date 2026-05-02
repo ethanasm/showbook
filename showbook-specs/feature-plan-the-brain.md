@@ -567,11 +567,9 @@ opens Brain pre-loaded with context:
 These become 80% of usage early on — they replace the awkward "skim
 several stat tiles" UX with one paragraph.
 
-### 6c. Mobile (M5/M6)
+### 6c. Mobile
 
-A dedicated tab plus the same per-entity entry pills. Streaming text
-+ cards work over the existing tRPC-over-fetch transport (no special
-WebSocket needed).
+See §12 for the full mobile + tablet plan.
 
 ---
 
@@ -643,7 +641,7 @@ Cost dashboard target: median turn ≤ $0.005, p95 ≤ $0.02. Brain is
 | **B3** | Notes search (§3e) — pgvector + tsvector + embedding job. Unlocks "the rainy MSG show with Sam." |
 | **B4** | Setlist tools (§3d) — depends on `feature-plan-setlist-intelligence` shipping the schema. |
 | **B5** | Action tools (§3f) — `add_show_draft`, `propose_export_playlist`, `propose_follow_artist`. The point at which Brain can *do* things, not just answer. |
-| **B6** | Mobile parity in M5. |
+| **B6** | Mobile + iPad parity (see §12). Brain stack route + Me-tab entry, in-context pills on Show/Venue/Artist, iPad three-pane Brain layout, optional voice input. |
 
 ---
 
@@ -680,3 +678,322 @@ Cost dashboard target: median turn ≤ $0.005, p95 ≤ $0.02. Brain is
    *final* turn. Streaming partial structured output is a complexity
    trap and the reply latency is short enough (~1–3s) that the user
    won't notice.
+
+---
+
+## 12. Mobile, tablet, and visuals
+
+The mobile app is feature-complete (M1–M6 shipped) — 5-tab phone
+shell + iPad three-pane shell at ≥900pt. Brain is the most
+chat-shaped feature in the brainstorm, so its mobile/tablet
+treatment matters more than for the other plans.
+
+### 12a. Where Brain lives in the existing nav
+
+A new **stack route** `apps/mobile/app/brain/` rather than a 6th
+bottom-tab. The 5-tab nav is the design source of truth (see
+`apps/mobile/app/(tabs)/_layout.tsx` and the design handoff); we
+don't add a tab.
+
+Three sub-routes:
+
+| Route | Purpose |
+|-------|---------|
+| `brain/index.tsx` | Threads list — entry from Me tab |
+| `brain/[threadId].tsx` | Single thread — chat surface |
+| `brain/new.tsx` | New thread — starts empty, prompts for first question |
+
+**Two entry points** to reach Brain without a dedicated tab:
+
+1. **Me tab** — a top-of-page "Ask Showbook" pinned card above the
+   existing list rows, accent-tinted to read as the primary
+   affordance:
+
+   ```
+   ┌──────────────────────────────────────┐
+   │  💬  Ask Showbook                    │
+   │                                       │
+   │  "What was the smallest venue I saw  │
+   │   Phoebe Bridgers at?"                │
+   │                                       │
+   │              [Start chatting →]       │
+   └──────────────────────────────────────┘
+   ```
+
+   The example question rotates between 4–5 templated prompts
+   each launch (see `apps/mobile/lib/brain-prompts.ts`).
+
+2. **Inline pills on entity detail screens** — `app/show/[id].tsx`,
+   `app/venues/[id].tsx`, `app/artists/[id].tsx` each get a
+   compact "Ask about this …" pill in the top action bar (next to
+   the existing menu/share/edit triggers). Tap → push a new Brain
+   thread pre-seeded with the entity's id in `BrainContext` and
+   the canned first message:
+
+   - Show: `What can you tell me about my [date] [venue] show?`
+   - Venue: `What's my history at [venue name]?`
+   - Artist: `What's my history with [artist]?`
+
+   These represent ≥80% of expected mobile usage early on. They
+   replace "skim several stat tiles" with one paragraph + cards.
+
+3. **Home — empty thread CTA** — when the user has zero existing
+   threads, a small `Banner` on Home offers `Try asking
+   Showbook a question →`. Disappears once they've started one.
+
+### 12b. Threads list — phone
+
+`apps/mobile/app/brain/index.tsx` — a single FlatList of
+`ThreadRow` components:
+
+```
+┌──────────────────────────────────────────┐
+│ ←  Threads                       [+ new] │
+├──────────────────────────────────────────┤
+│  Phoebe Bridgers · smallest venue        │
+│  3 turns · 2d ago                        │
+├──────────────────────────────────────────┤
+│  Top 2024 · venues + artists             │
+│  7 turns · 1w ago                        │
+├──────────────────────────────────────────┤
+│  Tokyo trip planning                     │
+│  12 turns · 3w ago                       │
+└──────────────────────────────────────────┘
+```
+
+`ThreadRow` is a new component but reuses the existing card chrome
+(border-rule + 16pt padding + Geist sans). Long-press → action
+sheet `Open · Rename · Archive · Delete`.
+
+### 12c. Chat thread — phone
+
+`apps/mobile/app/brain/[threadId].tsx` — the workhorse screen.
+The viewport is split:
+
+```
+┌────────────────────────────────────────┐
+│ ←  Phoebe Bridgers · smallest venue    │
+├────────────────────────────────────────┤
+│                                         │
+│   [User] What's the smallest venue     │
+│           I've seen Phoebe Bridgers at?│
+│                                         │
+│   [Brain] The smallest venue you've    │
+│           seen Phoebe Bridgers at was  │
+│           the Bowery Ballroom (cap.    │
+│           575) on Sep 12, 2019.        │
+│                                         │
+│           ┌─ Show ────────────────┐    │
+│           │ ▌ SEP 12, 2019         │    │
+│           │   Bowery Ballroom      │    │
+│           │   Phoebe Bridgers   →  │    │
+│           └────────────────────────┘    │
+│                                         │
+│           [⌘ tools used · 2]           │
+│                                         │
+├────────────────────────────────────────┤
+│ [⌨︎] Ask anything…                  ➜ │
+│                                  [🎤]   │
+└────────────────────────────────────────┘
+```
+
+- **Bubble layout**: user bubbles are right-aligned, accent-tinted;
+  assistant turns are full-width with no bubble (so cards inline
+  cleanly). Mirrors the iMessage / iOS Mail mental model — plain
+  prose without chrome reads as the assistant's "voice."
+- **Card rendering**: each card type from §5 maps to a mobile
+  component:
+
+  | Card type | Mobile component |
+  |-----------|------------------|
+  | `stat` | `StatCard` (large numeral + label, reused from Home stats tiles) |
+  | `show_list` | `ShowCard` (compact mode), tap → `app/show/[id]` |
+  | `venue_list` | `VenueCard`, tap → `app/venues/[id]` |
+  | `artist_list` | `ArtistCard`, tap → `app/artists/[id]` |
+  | `song_list` | new `SongCountRow` (also used by setlist intel §12) |
+  | `chart_bar` / `chart_line` | new `MiniChart` (re-used from M2 stats sub-tab) |
+  | `confirm_action` | `ConfirmActionCard` — title + body + primary button that triggers a real mutation |
+  | `playlist_pending` | reuses the setlist-intel `SpotifyExportCard` |
+  | `predicted_setlist` | reuses `PredictedSetlistList` |
+
+- **Tools-used disclosure**: the small `[⌘ tools used · 2]` chip
+  expands inline to show what the model called (`count_shows`,
+  `top_venues`, etc. with timing). Useful for trust + debugging
+  without cluttering the answer.
+- **Streaming**: text deltas land in the message bubble as they
+  arrive over SSE; cards appear after the final turn. Use the
+  existing SSE plumbing (`apps/mobile/lib/trpc.ts` already speaks
+  fetch streaming for the Gmail scan).
+- **Composer**: a sticky-bottom textarea that auto-grows (1–6
+  lines). Right-edge button is `Send` when text exists, `Mic` when
+  empty. Voice input pipes audio to the existing
+  `expo-av` + Whisper transcription path (the playbill scanner
+  already wires expo-av; reuse).
+
+### 12d. Cache + offline behavior
+
+Brain threads + messages are cached in expo-sqlite via the
+existing cache layer (`apps/mobile/lib/cache/`):
+
+- New cache table `brain_threads` mirroring the server schema with
+  a `synced_at` column. Migration in `cache/schema.ts`.
+- `useCachedQuery('brain.threads.list')` paints the threads list
+  instantly on cold start.
+- **Offline send**: typing a question while offline writes a
+  pending row to the existing `pending_writes` outbox with
+  `mutation = 'brain.chat.send'`. The optimistic mutation runner
+  shows the user's bubble immediately with a `pending` chip; when
+  the network returns, the server-side stream completes and fills
+  in the assistant turn. Aligned with the M6.A pattern.
+- The Brain reply itself is *not* cached optimistically (the model
+  hasn't run yet). The user's question persists; the answer is
+  pulled when reconnected.
+
+### 12e. iPad three-pane — Brain layout
+
+Brain on iPad gets its own three-pane composition (the existing
+`(tabs)/_layout.tsx` route only renders `ThreePaneLayout` for the
+default tab content; Brain is a separate stack, so its
+`brain/_layout.tsx` renders its own `ThreePaneLayout` when
+`useBreakpoint() === 'tablet'`):
+
+```
+┌── iPad: Brain ─────────────────────────────────────────────────────┐
+│ Threads          │  Chat                       │ Context           │
+│  [+ new]         │  [User] What's the smallest │                   │
+│                  │   venue I've seen Phoebe    │  ┌─ Phoebe ─────┐ │
+│  · Phoebe ...    │   Bridgers at?              │  │ 5 shows       │ │
+│  · Top 2024      │                              │  │ Genres: …     │ │
+│  · Tokyo trip    │  [Brain] The smallest venue │  │ Last: Mar '25 │ │
+│  · Wave A debut  │   you've seen Phoebe        │  └───────────────┘ │
+│                  │   Bridgers at was the…      │                   │
+│                  │                              │  Tools used        │
+│                  │   ┌─ Show card ──────────┐  │  · search_perf'rs │
+│                  │   │ Bowery · Sep 12 2019 │  │  · smallest_venue │
+│                  │   │ Phoebe Bridgers   →  │  │                   │
+│                  │   └──────────────────────┘  │  Recent threads    │
+│                  │                              │  · Top 2024 ↗     │
+│                  │  [Ask anything...]      ➜    │  · Tokyo trip ↗   │
+└──────────────────┴──────────────────────────────┴───────────────────┘
+   320pt left          flexible middle              360pt right
+```
+
+- **Left pane** — threads list. Tap a row → middle pane swaps to
+  that thread *without* a stack push.
+- **Middle pane** — the active chat thread, full reading width.
+  Cards inline as on phone but use the wider layout (e.g.
+  `chart_bar` gets ~600pt to breathe instead of ~320).
+- **Right pane** — auto-summary of the thread's *focus entity*
+  when one exists (i.e. the artist/venue/show the model has been
+  querying about), pulled from `tool_calls` history. Renders the
+  same chrome as the existing entity detail screens but in
+  read-only summary form. When no clear focus, the right pane
+  shows "Tools used in this thread" + "Other recent threads."
+
+This is the iPad-only display the prompt asked about — chat
+naturally wants the middle column, and the side context panes
+turn it from a single-purpose tool into a referenceable workbench.
+Implementation reuses `ThreePaneLayout` parameterized via a
+`BrainSelectionContext` that mirrors `useSelectedShow`.
+
+### 12f. Voice input — mobile-first
+
+Mobile composer's right-edge mic button (when text is empty) opens
+a recording sheet:
+
+```
+┌─ Recording… ────────────────────────────┐
+│                                          │
+│             ███████████░░░               │
+│           Listening · 0:04               │
+│                                          │
+│              [Stop]  [Cancel]            │
+└──────────────────────────────────────────┘
+```
+
+On stop:
+1. Audio file → Whisper API (Groq's whisper-large-v3, already
+   provisioned in `packages/api/src/groq.ts`).
+2. Transcript → composer textbox (user can edit before send).
+3. Auto-send if `autoSendVoice` preference is on.
+
+Recording uses `expo-av` (already a dependency). Permission
+prompt lives alongside the existing first-run permission screen
+flow under `apps/mobile/app/(auth)/first-run/`.
+
+### 12g. Inline brain on detail screens — mobile
+
+Each of `apps/mobile/app/show/[id].tsx`,
+`app/venues/[id].tsx`, `app/artists/[id].tsx` gets a top-bar
+trailing button: a sparkle/chat icon that opens a Brain thread
+pre-seeded with the entity context (§12a).
+
+The button uses the same icon pattern as the existing TopBar
+trailing slots (right side of `TopBar.tsx` already accommodates
+extras). New icon: `Sparkles` from `lucide-react-native`
+(installed).
+
+### 12h. Visual / design updates
+
+New components to design before code:
+
+1. **`MessageBubble`** — user bubbles only; assistant turns are
+   plain blocks. User bubble: 12pt radius, accent-tinted bg,
+   inverse fg, max-width 85%.
+2. **`ToolsUsedDisclosure`** — small chip + expandable list. New
+   chrome but minimal — just a `Pressable` with the chip styling.
+3. **`StatCard`** (new shared primitive) — reused by Brain cards
+   AND by the existing Home stats tiles. Refactor opportunity:
+   today the Home stats tiles are inlined; promote to a shared
+   component as part of B1.
+4. **`ConfirmActionCard`** — primary button styling + secondary
+   "Not now" link. Uses `accent` tint to read as a CTA distinct
+   from informational cards.
+5. **`MiniChart`** — bar + line variants. Pure SVG; no chart lib
+   dependency. Mirrors the M2 stats sub-tab's existing inline chart.
+
+Color tokens — no additions. Brain leans heavily on `accent` for
+the user-bubble + send-button + CTAs; uses `surface` for cards and
+`bg` for the chat-area background. Tool-used chip uses `mutedFg`.
+
+A new `Sparkles` icon (lucide) becomes the Brain symbol everywhere
+— the trailing button on detail screens, the threads-tab affordance
+on Me, the Home banner. Avoid an emoji-only treatment; one
+consistent vector glyph reads better.
+
+Web visual updates: the new `/(app)/brain/` page uses a two-pane
+split (threads sidebar + chat). On wide viewports (≥1280px), the
+right pane from §12e collapses in (mirroring iPad). The inline
+"Ask about this" pills on Show/Venue/Artist pages reuse the
+existing `Pill` design-system component from
+`apps/web/components/design-system/`. Card rendering on web
+imports from a shared `BrainCardRenderer` module that dispatches
+on card type — same JSON, separate web/mobile renderers (no
+RN-on-web shim).
+
+Tablet web: Brain page becomes three-pane on viewports ≥1440px
+(matches the existing tablet breakpoint in
+`apps/web/lib/responsive.ts` if present, else inline media
+query). Same component structure as iPad.
+
+### 12i. Mobile-specific tests
+
+- `apps/mobile/lib/__tests__/brain-cache.test.ts` — thread-list
+  cache hydration + offline pending-question outbox replay.
+- `apps/mobile/lib/__tests__/brain-cards.test.ts` — pure
+  card-renderer dispatcher test (no RN imports).
+- `apps/mobile/lib/__tests__/voice-input.test.ts` — Whisper
+  transcript handoff into the composer state.
+- Maestro flow: `e2e/flows/brain-question.yaml` — open Brain from
+  Me tab, type "how many shows in 2024?", assert the streamed
+  reply contains a number + a `stat` card.
+
+### 12j. Out of scope on mobile (deliberately)
+
+- **Push notifications when Brain finishes a long task.** Brain
+  turns are 1–3s. If we ever introduce long-running tools (e.g.
+  "rebuild my song index"), this becomes worth doing, but not
+  for v1.
+- **Watch complications.** A nice-to-have, not a v1.
+- **Live Activities for streaming responses.** Same — overkill
+  for short turns.

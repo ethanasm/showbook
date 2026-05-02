@@ -282,8 +282,6 @@ modal. Accept actually calls `shows.create` with the parsed payload,
 runs the existing enrichment pipeline, and flips the suggestion's
 `accepted_show_id`.
 
-Compact mobile version becomes M5 / Discovery-tab work — design carries.
-
 ### 3e. tRPC procedures
 
 ```ts
@@ -353,7 +351,7 @@ ever leave the device, and only after the user accepts the
 suggestion. Photo bytes only travel to R2 if the user opts in to
 attaching them to the show.
 
-### 4c. Permissions UX (mobile, M2/M5 territory)
+### 4c. Permissions UX
 
 ```
 Showbook would like to scan your Photos library
@@ -701,3 +699,222 @@ moving on.
    show in 2023?" → trigger a targeted Gmail subject search →
    suggestions appear in Inbox. Cross-feature unlock; defer until
    Brain ships.
+
+---
+
+## 12. Mobile, tablet, and visuals
+
+The mobile app is feature-complete (M1–M6 shipped). The phone shell
+is the 5-tab nav (Home / Shows / Add / Map / Me); the iPad shell is
+`ThreePaneLayout` (`apps/mobile/components/ThreePaneLayout.tsx`)
+keyed off `useBreakpoint() === 'tablet'` (≥900pt window width). All
+import-side surfaces below land into that existing structure — we
+are *not* adding a new tab.
+
+### 12a. Where the Inbox lives on mobile
+
+A new stack route `apps/mobile/app/import/` mirroring the existing
+`app/discover/` and `app/integrations/[id]/` routes. Three sub-routes:
+
+| Route | Purpose |
+|-------|---------|
+| `import/index.tsx` | Inbox list — paginated suggestions, filterable by source. |
+| `import/[id].tsx` | Suggestion detail / resolve sheet (venue or artist disambiguation). |
+| `import/runs.tsx` | History of past scans — accessed from Me → Imports. |
+
+Two **entry points** without a new tab:
+
+1. **Me tab** — a new "Imports" row sits between "Integrations" and
+   "Region" with a count badge: `Imports · 47 pending`. Reuses the
+   existing Me-tab row component pattern.
+2. **Home banner** — when `pendingCount >= 5`, the Home screen shows
+   a non-dismissible Banner above the Now-Playing card:
+   `47 shows we found in your email — review`. Single tap →
+   `/import`. The Banner component already exists
+   (`apps/mobile/components/Banner.tsx`); reuse with
+   `kind='accent'`.
+
+### 12b. Inbox list — phone layout
+
+Reuses the existing `ShowCard` shape modified into a new
+`SuggestionCard` (in `apps/mobile/components/SuggestionCard.tsx`).
+The card is taller than ShowCard because it carries a confidence
+chip + source badge + raw snippet. Same 3px left edge bar as
+ShowCard, but tinted by *confidence*:
+
+```
+┌──────────────────────────────────────────────────┐
+│▌ NOV 12 · MSG                                    │
+│  The National                                    │
+│  ──────────────                                  │
+│  📧 Ticketmaster · $89 · ORCH L 14               │
+│  ✓ 96% match                                     │
+│                                  [Skip] [Accept] │
+└──────────────────────────────────────────────────┘
+```
+
+- Edge bar: `accent` for ≥85, `kindColor` for 50–84, `rule` for <50.
+- Source badge: an existing icon-pill pattern (lucide icons —
+  `Mail`, `Image`, `Wallet`, `Map`, `Music2` for the 5 sources).
+- Per-row swipe gestures (using `react-native-gesture-handler`,
+  already in the bundle for the Sheet component): swipe-right =
+  Accept, swipe-left = Dismiss. Long-press → `ShowActionSheet`-style
+  sheet with `Resolve venue / Resolve artist / Open original / Mark
+  duplicate` options.
+- Sticky header with **segmented control** (`SegmentedControl`
+  already shipped in the kit) for `Pending / Accepted / Dismissed`,
+  plus a horizontal scrollable **chip rail** for source filters
+  (matches the existing Discover kind-chip pattern).
+- Top-of-list "Accept all high-confidence (32)" pill button only
+  appears when ≥10 high-confidence suggestions exist.
+
+### 12c. Resolve sheet (when match is ambiguous)
+
+When a suggestion has `confidence < 70` or unmatched venue/artist,
+tapping it opens a Sheet (`apps/mobile/components/Sheet.tsx`) — not
+a stack push. Inline disambiguation:
+
+```
+┌─ resolve venue ────────────────────────────────┐
+│ "Pier 17"                                       │
+│ ┌─────────────────────────────────────────────┐ │
+│ │ 🔍 Pier 17 ...                              │ │
+│ └─────────────────────────────────────────────┘ │
+│  ▸ Pier 17 · New York, NY                       │
+│  ▸ Pier 17 Concerts · Brooklyn, NY              │
+│  ▸ Add new venue manually                       │
+│                                                  │
+│                          [Skip]   [Accept ✓]    │
+└──────────────────────────────────────────────────┘
+```
+
+Reuses `VenueTypeahead` directly (already used by the Add form).
+Same pattern for artist disambiguation.
+
+### 12d. iPad three-pane treatment
+
+When `useBreakpoint() === 'tablet'`, the import surface gets a
+**dedicated three-pane layout** by routing `app/import/_layout.tsx`
+to render `ThreePaneLayout` instead of a stack:
+
+```
+┌──── iPad: Imports ─────────────────────────────────────────────┐
+│ [Filters/Sources]   │  Inbox list      │  Selected suggestion  │
+│  ◉ Pending  47      │  ▌ NOV 12 MSG    │  ┌─ The National ──┐  │
+│  ○ Accepted 312     │  ▌ AUG 03 Pier17 │  │ MSG · NOV 12    │  │
+│  ○ Dismissed 18     │  ▌ JUL 28 BAM    │  │ $89 · ORCH L 14 │  │
+│                     │  ▌ MAY 04 Forum  │  │                 │  │
+│  Sources            │  …               │  Original email    │  │
+│  ☑ Email   42       │                  │  ┌──────────────┐  │  │
+│  ☑ Photos   3       │                  │  │ "Your tix..." │  │  │
+│  ☑ Wallet   2       │                  │  └──────────────┘  │  │
+│  ☐ Maps     0       │                  │                     │  │
+│                     │                  │  [Skip] [Accept ✓]  │  │
+└─────────────────────┴──────────────────┴─────────────────────────┘
+   320pt left           flexible middle    360pt right
+```
+
+- Reuses the existing `ThreePaneLayout` composition. We don't add a
+  second three-pane component — we *parameterize* the existing one
+  via a route-scoped variant. Plumbing identical: a small
+  `useSelectedSuggestion()` context mirrors `useSelectedShow()`.
+- The right pane shows the **raw email body** or **photo cluster
+  preview** rendered in a webview-or-image container — this is the
+  killer iPad use case. On phone the raw payload is collapsed
+  behind a "View original" disclosure; on iPad it's always there at
+  full reading width.
+- Bulk-select with shift-click range select on iPad (the only place
+  multi-select earns its complexity).
+
+### 12e. Photo library scan — mobile-specific UX
+
+The on-device photo scan (Source 2) lives inside the mobile app
+*only*. Re-use what's already there:
+
+- **Permission flow already exists** —
+  `apps/mobile/app/(auth)/first-run/photos.tsx` requests
+  `MediaLibrary` permission at first run for media-upload purposes.
+  Extend that screen's copy to mention the import use case so
+  consent covers both. Also add a re-grant CTA on the Me tab when
+  the permission is denied.
+- **Background scan job** — `apps/mobile/lib/photo-scan/index.ts`
+  runs as a Foreground task (iOS background tasks have time limits
+  that would truncate a 30k-photo scan). When the user taps "Scan
+  my photos" on the Imports screen, render a non-dismissible
+  progress sheet:
+
+  ```
+  ┌─ Scanning your photo library ────────────┐
+  │                                           │
+  │       ████████░░░░░░░░░░░░░░░             │
+  │       4,820 / 12,400 photos              │
+  │                                           │
+  │       Found 12 possible shows so far.    │
+  │                                           │
+  │             [Continue in background]      │
+  └───────────────────────────────────────────┘
+  ```
+
+- **Cache layer** — partial scan progress persists in
+  `apps/mobile/lib/cache/` so a kill / cold-start doesn't restart
+  from zero. Add a `photo_scan_state` table to `cache/schema.ts`
+  with `(last_asset_id, last_capture_time, version)`.
+- **Outbox-aware** — the `imports.photoClusters.resolve` mutation
+  goes through the existing outbox so a flaky network during a
+  long scan doesn't lose suggestions. Pattern matches the M6.A
+  pending-writes work in `apps/mobile/lib/mutations/`.
+
+### 12f. Wallet pass intake — iOS share extension
+
+Per §5: a `.pkpass` share-sheet target. Implementation lands in
+the existing mobile app config:
+
+- Add `expo-document-picker` (already installed) handler in
+  `apps/mobile/app/_layout.tsx`'s URL/intent listener — when an
+  intent of type `com.apple.pkpass` arrives, route to
+  `app/import/wallet-intake.tsx`. That screen runs the parser
+  inline, writes the suggestion via tRPC, then navigates to
+  `import/[id]` for review.
+- iOS-only initially. The Android wallet-image fallback path
+  (vision-LLM extraction) ships as a P3-stretch, behind the
+  existing `Uploader` flow → "Use as ticket" affordance.
+
+### 12g. Visual / design updates
+
+The import surface introduces three new persistent UI elements;
+each gets a design pass before code:
+
+1. **`SuggestionCard` component** — designed in lockstep with
+   `ShowCard` so the two read as siblings. Confidence chip uses
+   the existing accent palette (gold / kindColor / muted) at
+   reduced contrast. Source pill borrows from `KindBadge` shape.
+2. **Source-icon set** — `Mail` / `Image` / `Wallet` / `Map` /
+   `Music2` from `lucide-react-native` (already a dependency); a
+   secondary "📨 New since last scan" dot styled like the
+   `PulseLabel` primitive on web (`apps/web/components/design-system/`).
+3. **Banner variant** — a new `kind='import'` variant on the
+   existing `Banner` component. Background uses a soft-accent fill
+   distinct from `kind='accent'` (used elsewhere for state changes)
+   so the user reads it as informational, not an alert.
+
+Web visual updates: a new top-strip notification chip on the
+authed shell (matches the existing sidebar count-badges) when
+`pendingCount > 0`. The Inbox page is the only fully-new page;
+copy the editorial rhythm of `/(app)/discover/` (TopBar + chip rail
++ stacked rows) to keep the app cohesive. Suggestion cards reuse
+the existing `HeroCard` chrome for the bulk-accept hero on first
+load, then collapse to a tighter row layout.
+
+Color tokens: no new ones. Confidence chip uses
+`accent` / `kindColor` / `mutedFg` from `theme-utils.ts`. This is
+deliberate — every new feature in the brainstorm should reach for
+existing tokens before extending the palette.
+
+### 12h. Mobile-specific tests
+
+- `lib/photo-scan/__tests__/cluster.test.ts` — night-key clustering
+  logic (pure, fast).
+- `lib/__tests__/wallet-pass.test.ts` — pkpass JSON parser fixtures.
+- Maestro flow: `e2e/flows/import-accept.yaml` — bulk-accept of a
+  seeded suggestion list, asserting the resulting Show appears on
+  the Shows tab.

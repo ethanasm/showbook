@@ -549,7 +549,7 @@ the corpus-fill job.
 
 ---
 
-## 7. UI surfaces (web; mobile mirrors in M2/M5)
+## 7. UI surfaces (web)
 
 ### 7a. Show detail
 - New tab in the existing setlist section: **Predicted** (only on
@@ -613,7 +613,7 @@ the corpus-fill job.
 | **L2** | `tour_setlists` + `enrichment/setlist-corpus-fill` job + "Predicted setlist" tab + "Rare catches" rail. |
 | **L3** | Spotify track resolver job (§3c) + "Save to Spotify" / "Hype playlist" flows. Per-show `spotifyPlaylistUrl` column. |
 | **L4** | Setlist diff UI + per-song `History` page. |
-| **L5** | Mobile parity (carries naturally once M2 ships Show detail). |
+| **L5** | Mobile parity (see §12). Predicted-setlist tab + Spotify export buttons in Show detail; Rare-catch + tour-debut rails on Home; iPad three-pane "Setlist" right pane. |
 
 ---
 
@@ -641,3 +641,231 @@ the corpus-fill job.
 3. Apple Music + Tidal parity? Same shape as Spotify; trivial second
    provider once the schema (`song.<provider>_track_id`) is in place.
    Defer to L4+.
+
+---
+
+## 12. Mobile, tablet, and visuals
+
+The mobile app is feature-complete and already has a working setlist
+composer (`apps/mobile/app/show/[id]/setlist.tsx` — manual entry +
+encore divider + setlist.fm "borrow" banner) and a Spotify integration
+hook for artist-follow import. Setlist intelligence is additive.
+
+### 12a. Show detail — phone
+
+`apps/mobile/app/show/[id].tsx` already segments setlist content per
+performer when multiple performers exist. Extend the segmented control
+from `[Setlist]` to `[Setlist | Predicted | Songs]` based on state:
+
+| Show state | Available segments |
+|------------|--------------------|
+| `watching` / `ticketed` | `Predicted` (default) · `Setlist` (only if user typed any) |
+| `past` | `Setlist` (default) · `Songs` (per-song history & rarity) · `Predicted` (hidden by default; tap "see what we predicted" disclosure) |
+
+- **Predicted** segment renders a new `PredictedSetlistList` component
+  in `apps/mobile/components/`. Each row is a song title + a small
+  horizontal probability bar (a single styled `View` with width %).
+  Encore-likely songs (`encoreProb > 0.6`) show a subtle "ENCORE"
+  uppercase tag (reuse the `KIND_LABELS` typography pattern).
+- Empty state (corpus too small): an `EmptyState` component (already
+  shipped) with the copy "Pulling recent setlists from setlist.fm…"
+  and a Banner that updates when the lazy-fetch (§3a) completes.
+  PullToRefresh on this segment force-runs the corpus-fill job.
+- **Songs** segment lists the user's heard songs for this show,
+  decorated with badges:
+  - `🆕 First time` — pulled from `tourDebutsCaught`.
+  - `🎯 Rare` — pulled from `rareCatches` with frequency in tooltip.
+  Tap a song row → `app/song/[id].tsx` (new stack route) → song
+  history page.
+
+### 12b. New screen — Song detail
+
+`apps/mobile/app/song/[id].tsx`:
+
+```
+┌────────────────────────────────────────┐
+│ ←   The National                        │
+│     "Light Years"                       │
+├────────────────────────────────────────┤
+│  Heard live · 3 times                   │
+│                                          │
+│  First                                   │
+│   Sep 12, 2019  · Music Hall of W'burg  │
+│  Most recent                             │
+│   Mar 22, 2025  · MSG                   │
+│                                          │
+│  In recent setlists  · 78%               │
+│                                          │
+│  [▶ Spotify]                             │
+│                                          │
+│  Your shows where it played              │
+│   • Sep 12, 2019 — Music Hall of W'burg │
+│   • Aug 14, 2023 — Forest Hills Stadium │
+│   • Mar 22, 2025 — MSG                  │
+└────────────────────────────────────────┘
+```
+
+- Reuses `ShowCard` (compact mode) for the per-show rows.
+- Spotify button uses the existing `Linking.openURL` pattern from
+  the artist-import flow.
+
+### 12c. Spotify export — phone
+
+Two button affordances in the Show detail action sheet (the existing
+`ShowActionSheet`):
+
+- "Hype playlist on Spotify" — when state is watching/ticketed and
+  Spotify is connected.
+- "Save to Spotify" — when state is past and a setlist exists.
+
+Both call the new tRPC mutations (`exportPlaylistPredicted` /
+`exportPlaylistAttended`) through the existing optimistic-mutation
+runner in `apps/mobile/lib/mutations/`. The mutation persists a
+pending-write row first (cache schema gets a new `'spotify.export'`
+mutation kind in `apps/mobile/lib/cache/outbox.ts`), so an offline
+tap queues and replays on reconnect — exactly the M6.A pattern.
+
+On success, the action sheet item becomes "Open in Spotify"
+(reads `shows.spotify_playlist_url` from the cached show row).
+On partial-resolve (some songs missing), a `Toast` shows
+`Created — 11 of 14 songs found`.
+
+### 12d. Home screen rails — phone
+
+`apps/mobile/app/(tabs)/index.tsx` adds two new horizontal rails
+between the existing "Now playing" and "Recent" sections:
+
+1. **Tonight's predicted setlist** — visible only when the user has a
+   `ticketed` show with `date = today`. Card shows the artist + 3
+   sample songs + "Open hype playlist" CTA. A new
+   `PredictedTonightCard` component.
+2. **Rare catches** — collapsed-by-default rail; expanded if the user
+   has ≥3 rare catches. Card chrome matches the existing
+   `RecentShowsCard` so the rhythm is consistent.
+
+Both rails read from `useCachedQuery` so they paint instantly from
+the SQLite cache on cold start.
+
+### 12e. Artist screen — phone
+
+`apps/mobile/app/artists/[id].tsx`:
+
+- New section **Songs you've heard live** below the existing tagged
+  photos grid. Renders a `FlatList` of `(song, count)` rows using a
+  new `SongCountRow` component.
+- New section **Tour debuts you caught** — only when the user has any.
+  Single line: `"Light Years" · Sep 12, 2019` with a tap to song
+  detail (§12b).
+- Pull-to-refresh runs the `setlist-corpus-fill` job for this artist
+  (debounced 24h on the server side).
+
+### 12f. iPad three-pane — setlist intelligence pane
+
+The most opportunity-rich tablet display. When a `concert` show is
+selected in the middle pane:
+
+```
+┌── iPad: Show detail (sports → §11g of sports plan; concert here) ──┐
+│ Shows list      │ Show detail (concert)        │ Setlist Lab       │
+│  ▌ MAR 23 MSG   │  ┌─ The National ────────┐  │  ┌─────────────┐  │
+│  ▌ MAR 14 BOS   │  │ MSG · Mar 22, 2025    │  │  │ PREDICTED   │  │
+│  ▌ FEB 28 PHL   │  │ Photos…               │  │  │ ████░ Bloodb│  │
+│                 │  │ Setlist · 18 songs    │  │  │ ███░░ Mr Now│  │
+│                 │  │  1. Bloodbuzz Ohio   │  │  │ ███░░ Light │  │
+│                 │  │  2. Mr November       │  │  │ …           │  │
+│                 │  │  3. Fake Empire 🆕    │  │  │             │  │
+│                 │  │  …                    │  │  │ Confidence  │  │
+│                 │  └────────────────────────┘  │  │  ▰▰▰▰▱ 80% │  │
+│                 │                              │  └─────────────┘  │
+│                 │                              │                   │
+│                 │                              │  ┌─ DIFF ──────┐  │
+│                 │                              │  │ vs MAR 14   │  │
+│                 │                              │  │ + 3 new     │  │
+│                 │                              │  │ – 2 dropped │  │
+│                 │                              │  └─────────────┘  │
+│                 │                              │                   │
+│                 │                              │  [🎵 Spotify]    │
+└─────────────────┴──────────────────────────────┴──────────────────┘
+```
+
+The right pane today shows the Map for any selected show. For
+concerts, it conditionally swaps to a new **SetlistLab** pane that
+shows three stacked cards:
+
+1. **Predicted** — the recency-weighted prediction with confidence.
+2. **Diff** — comparison against the *last show on this tour* the
+   user attended. This is the iPad-only display the prompt asked
+   about; on phone the setlist diff is buried behind a deep link, on
+   iPad it's right next to the show. Single component reusable.
+3. **Spotify export** — pre-show (`Hype`) or post-show
+   (`What I heard`) depending on state.
+
+Switcher at the top of the right pane: `[Map] [Setlist Lab]`
+(SegmentedControl). Persists user choice per session via
+`expo-secure-store`. Map remains default for non-concert kinds.
+
+### 12g. iPad — Songs list view
+
+A net-new tablet-only screen `apps/mobile/app/songs/index.tsx`
+accessed from the Me tab. Three-pane layout:
+
+| Left | Middle | Right |
+|------|--------|-------|
+| Filter rail (artist, year, rarity threshold) | Sortable table of all songs the user has heard live (title, artist, count, last heard, rarity %) | Selected song detail (§12b content) |
+
+This is exactly the kind of "lots of rows wants a wide table" view
+the prompt called out. On phone it'd be cramped; on iPad it's a
+power-user dream. Implementation reuses `ThreePaneLayout`
+parameterized via context, the same way Imports does in
+`feature-plan-personal-data-import.md` §12d.
+
+### 12h. Visual / design updates
+
+New components, all with mobile + web parity:
+
+1. **`PredictedSetlistList`** (mobile) /
+   **`PredictedSetlistView`** (web design-system) — vertical list,
+   each row = song title + horizontal `ProgressBar` (new shared
+   primitive: a single styled `<div>` / `<View>` with theme
+   `accent` fill, `rule` track). Encore tag uses the same uppercase
+   typography as `KIND_LABELS`.
+2. **`SongCountRow`** — reused by Songs section on Artist detail and
+   the iPad table-view middle pane. Renders count as a right-aligned
+   numeric block, monospaced via the existing type ramp.
+3. **`SetlistDiff`** — diff component (`+` / `−` / `=` rows). New
+   color tokens? No — existing `success` / `error` / `mutedFg`.
+4. **`RarePill`** and **`FirstTimePill`** — small inline badges. Extend
+   the existing `KindBadge` styling rather than introducing new
+   chrome.
+5. Spotify connect-state CTA — borrow the existing
+   `apps/mobile/app/integrations/[id].tsx` integration card chrome
+   so the Spotify card slots in with Gmail / Apple Music.
+
+Color tokens: no additions. Confidence bars use `accent`. Rare-pill
+uses `accent` at reduced contrast. First-time-pill uses `kindColor`
+(per show kind).
+
+Web visuals: the new "Predicted" tab on `/(app)/shows/[id]/` reuses
+`HeroCard` chrome for the predicted-setlist hero (with a "Hype
+playlist on Spotify" CTA in the hero's right slot). The Songs page
+on web (`/(app)/songs/`) is a sortable table with a sticky filter
+sidebar — same shape as the existing `/(app)/venues/` and
+`/(app)/artists/` table pages, so the interaction grammar is
+already learned.
+
+Tablet web: songs page already wide-friendly; on viewport ≥1280
+the right column shows the selected song's history (mirror of the
+iPad-only mobile display). Single component shared between web
+and `apps/mobile/app/song/[id].tsx`.
+
+### 12i. Mobile-specific tests
+
+- `apps/mobile/lib/__tests__/predicted-setlist.test.ts` — render-
+  ready transformation of the tRPC `predictedSetlist` payload into
+  the `PredictedSetlistList` row shape (probability formatting,
+  encore-tag thresholds).
+- `apps/mobile/lib/__tests__/spotify-export.test.ts` — outbox-aware
+  mutation behavior (replay on reconnect, partial-success toast).
+- Maestro flow: `e2e/flows/spotify-export.yaml` — open a past show
+  with a setlist → tap "Save to Spotify" → assert toast → assert
+  the action sheet item flips to "Open in Spotify".
