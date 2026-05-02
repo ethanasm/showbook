@@ -10,7 +10,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "test": "find lib/__tests__ components/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' \\) -print0 2>/dev/null | xargs -0 -I{} node --import tsx --test {}"
+    "test": "find lib/__tests__ components/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' -o -name '*.test.cjs' \\) -print0 2>/dev/null | xargs -0 -I{} node --import tsx --test {}"
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.13",
@@ -39,6 +39,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-native": "0.79.7",
+    "react-native-draggable-flatlist": "^4.0.3",
     "react-native-gesture-handler": "~2.31.1",
     "react-native-maps": "1.27.2",
     "react-native-reanimated": "~3.19.5",
@@ -49,11 +50,13 @@
   "devDependencies": {
     "@babel/core": "^7.29.0",
     "@showbook/api": "workspace:*",
+    "@testing-library/react-native": "^13.3.3",
     "@types/node": "^25.6.0",
     "@types/react": "^19.1.0",
     "babel-preset-expo": "~55.0.18",
     "eslint": "^9.18.0",
     "eslint-config-expo": "~55.0.0",
+    "react-test-renderer": "^19.2.5",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }
