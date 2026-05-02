@@ -209,12 +209,15 @@ function decodeBase64Url(encoded: string): string {
 function stripHtml(html: string): string {
   // Iteratively strip <script>/<style> blocks until stable; a single pass can
   // leave fragments behind for malformed/nested inputs like `<scr<script>ipt>`.
+  // The `(?:<\/tag\b[^>]*>|$)` tail consumes through end-of-input when the
+  // closing tag is missing, and accepts arbitrary whitespace/junk inside the
+  // closing tag (e.g. `</script\n bar>`).
   let cleaned = html;
   for (let i = 0; i < 5; i++) {
     const before = cleaned;
     cleaned = cleaned
-      .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '')
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '');
+      .replace(/<style\b[^>]*>[\s\S]*?(?:<\/style\b[^>]*>|$)/gi, '')
+      .replace(/<script\b[^>]*>[\s\S]*?(?:<\/script\b[^>]*>|$)/gi, '');
     if (cleaned === before) break;
   }
   return cleaned
