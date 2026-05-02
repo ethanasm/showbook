@@ -5,7 +5,7 @@ Personal entertainment tracker for live shows — concerts, theatre, comedy, fes
 ## Tech Stack
 
 - **Web:** Next.js 15 (App Router) — see [`apps/web/CLAUDE.md`](apps/web/CLAUDE.md)
-- **Mobile:** Expo SDK 55 + Expo Router (React Native) — feature-complete (M1–M6 shipped); see [`apps/mobile/CLAUDE.md`](apps/mobile/CLAUDE.md) and [`showbook-specs/mobile-roadmap.md`](showbook-specs/mobile-roadmap.md)
+- **Mobile:** Expo SDK 55 + Expo Router (React Native) — feature-complete; see [`apps/mobile/CLAUDE.md`](apps/mobile/CLAUDE.md) and [`showbook-specs/mobile-roadmap.md`](showbook-specs/mobile-roadmap.md)
 - **Language:** TypeScript
 - **Database:** PostgreSQL + Drizzle ORM
 - **API:** tRPC
@@ -126,7 +126,7 @@ defaults and inline notes. The required groups are:
 showbook/
 ├── apps/
 │   ├── web/                  # Next.js 15 (App Router) — see apps/web/CLAUDE.md
-│   └── mobile/               # Expo + Expo Router (M1–M6 shipped) — see apps/mobile/CLAUDE.md
+│   └── mobile/               # Expo + Expo Router — see apps/mobile/CLAUDE.md
 ├── packages/
 │   ├── db/                   # Drizzle schema + migrations
 │   ├── api/                  # tRPC routers
@@ -190,7 +190,7 @@ notifications enabled in Preferences. The HTML template lives in
 ## Mobile app
 
 The Expo app at [`apps/mobile/`](apps/mobile/) is feature-complete
-against the design handoff (M1 Foundation → M6 polish + iPad). It
+against the design handoff. It
 authenticates against the web backend via the
 `POST /api/auth/mobile-token` bridge, then talks to the same
 `@showbook/api` tRPC routers as the web client.

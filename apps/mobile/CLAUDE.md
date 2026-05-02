@@ -6,12 +6,11 @@ conventions; this file covers what's specific to the mobile app.
 
 ## Status
 
-The app is feature-complete against the design handoff. M1–M6 have
-all shipped. See
+The app is feature-complete against the design handoff. See
 [`showbook-specs/mobile-roadmap.md`](../../showbook-specs/mobile-roadmap.md)
-for the milestone breakdown and
+for the build plan and
 [`showbook-specs/reviews/mobile-review-2026-05-02.md`](../../showbook-specs/reviews/mobile-review-2026-05-02.md)
-for the post-M5 audit + outstanding follow-ups (sign-out cache
+for the latest audit + outstanding follow-ups (sign-out cache
 cleanup, real outbox on edit/setlist, push notifications wiring).
 
 ## Layout
@@ -85,7 +84,7 @@ The mobile app runs an 80% line / branch / function coverage gate
 **scoped to `apps/mobile/lib/**` only**. Layout-heavy code under
 `app/` and `components/` is intentionally excluded — see
 [`showbook-specs/mobile-testing-strategy.md`](../../showbook-specs/mobile-testing-strategy.md)
-for the rationale and the per-milestone test plan. The gate is
+for the rationale and the test plan. The gate is
 enforced by `pnpm verify:coverage` (run on every PR by CI), which
 merges per-package LCOV via `scripts/coverage-report.mjs`. Locally:
 
@@ -127,9 +126,9 @@ npx maestro test --dry-run apps/mobile/e2e/flows/
   the screen calls a new tRPC procedure or mutation, the helper in
   `lib/` should pick up unit coverage.
 - Adding a new write path? It needs an outbox entry so the
-  optimistic mutation survives a kill / cold start (M3 + M6.A
-  pattern). Don't repeat the per-screen fake-DB shims that the
-  post-M5 review flagged — use `getCacheDatabase()` and
+  optimistic mutation survives a kill / cold start. Don't repeat
+  the per-screen fake-DB shims that the latest mobile review
+  flagged — use `getCacheDatabase()` and
   `createOutbox(db, { ensureMigrations: true })`.
 - Changing auth? Mirror `lib/__tests__/auth.test.ts` so the
   E2E-bypass guard stays watertight.

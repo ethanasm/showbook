@@ -2,7 +2,7 @@
 
 Expo + TypeScript app for Showbook. See
 [`showbook-specs/mobile-roadmap.md`](../../showbook-specs/mobile-roadmap.md)
-for the M1-M6 milestone plan.
+for the build plan.
 
 ## Setup
 
@@ -37,7 +37,7 @@ The mobile app runs an 80% line / branch / function coverage gate
 scoped to **`apps/mobile/lib/**` only**. Layout-heavy code under
 `app/` and `components/` is intentionally excluded — see
 [`showbook-specs/mobile-testing-strategy.md`](../../showbook-specs/mobile-testing-strategy.md)
-for the rationale and the per-milestone test plan. The gate is
+for the rationale and the test plan. The gate is
 enforced by `pnpm verify:coverage` (run on every PR by CI), which
 merges per-package LCOV via `scripts/coverage-report.mjs`. Locally:
 
@@ -56,42 +56,42 @@ prefixed `EXPO_PUBLIC_` so Expo inlines them at build time.
 | Var | Default | Required for |
 |---|---|---|
 | `EXPO_PUBLIC_API_URL` | `https://showbook.example.com` | tRPC client target. Override to your LAN IP or `http://localhost:3001` for local dev against the web stack. |
-| `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS` | - | Sign in with Google on iOS (M1) |
-| `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID` | - | Sign in with Google on Android (M1) |
-| `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB` | - | Sign in with Google on Expo web preview (M1) |
+| `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS` | - | Sign in with Google on iOS |
+| `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID` | - | Sign in with Google on Android |
+| `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB` | - | Sign in with Google on Expo web preview |
 
 The backend (`apps/web`) needs `GOOGLE_OAUTH_MOBILE_AUDIENCES` set
 to the comma-separated list of these client IDs so it accepts the
 mobile-issued ID tokens at `POST /api/auth/mobile-token`.
 
-## What's shipped (M1–M6)
+## What's shipped
 
 The mobile app is feature-complete against the design handoff:
 
 - **Sign in with Google** — native OAuth via Expo AuthSession; ID
   token traded for a NextAuth-compatible JWT and stored in
-  `expo-secure-store`. (M1)
+  `expo-secure-store`.
 - **First-run permissions** — welcome → notifications → photos →
-  location → gmail flow, each with deferable asks. (M1)
-- **5-tab nav** — Home, Shows, Add, Map, Me, all wired to real data. (M1 + M2)
+  location → gmail flow, each with deferable asks.
+- **5-tab nav** — Home, Shows, Add, Map, Me, all wired to real data.
 - **Theme system** — token-driven `ThemeProvider` + `useTheme` hook
-  with light + dark palettes. No CSS-in-JS dependency. (M1)
+  with light + dark palettes. No CSS-in-JS dependency.
 - **Read flows** — Home, Shows (Timeline / Month / Stats), Show
   detail, Map (clustered + pin sheet), Me, all on top of an
-  `expo-sqlite` cache + `useCachedQuery`. (M2)
+  `expo-sqlite` cache + `useCachedQuery`.
 - **Add + Edit** — chat-mode Add (LLM round-trip), form fallback
   with debounced venue typeahead, Edit show, show action sheet,
-  setlist composer with drag-reorder + encore divider. (M3)
+  setlist composer with drag-reorder + encore divider.
 - **Media** — multi-select upload with per-file progress against
   the existing presigned R2 endpoint, media grid + lightbox,
-  tag-performers sheet, over-quota state. (M4)
+  tag-performers sheet, over-quota state.
 - **Discovery + secondaries** — Discover feed, Artists list +
-  detail, Venues list + detail, omnisearch. (M5)
+  detail, Venues list + detail, omnisearch.
 - **System polish + iPad** — Toast / Banner system, offline +
-  pending-writes drawer, iPad three-pane landscape layout. (M6)
+  pending-writes drawer, iPad three-pane landscape layout.
 
 See [`showbook-specs/mobile-roadmap.md`](../../showbook-specs/mobile-roadmap.md)
-for the milestone-by-milestone breakdown and
+for the full build plan and
 [`apps/mobile/CLAUDE.md`](./CLAUDE.md) for working conventions.
 
 ## Open follow-ups
@@ -101,7 +101,7 @@ for the milestone-by-milestone breakdown and
   (Expo push token persistence, digest emission, deep-link routing)
   is the open follow-up tracked in the root
   [`Planned Improvements.md`](../../Planned%20Improvements.md).
-- **Post-M5 review items.** See
+- **Latest mobile review items.** See
   [`showbook-specs/reviews/mobile-review-2026-05-02.md`](../../showbook-specs/reviews/mobile-review-2026-05-02.md)
   — most notably wiring sign-out to clear the SQLite cache + React
   Query cache, switching the per-screen fake outbox shims in
@@ -113,12 +113,12 @@ for the milestone-by-milestone breakdown and
 - **Asset placeholders are 1x1 PNGs.** Splash, icon, and adaptive
   icon need real artwork before TestFlight / Play Store submission.
 
-## Maestro E2E flows (Wave F)
+## Maestro E2E flows
 
 Three flows live under `e2e/flows/` — sign-in, add-show, sign-out.
 They run on Maestro Cloud nightly + on every push to `main` via
 `.github/workflows/mobile-e2e.yml` (NOT per-PR, by design — see
-`showbook-specs/mobile-testing-strategy.md` § Wave F). The cloud run
+`showbook-specs/mobile-testing-strategy.md`). The cloud run
 uses the `e2e` EAS profile (see `eas.json`) which sets
 `EXPO_PUBLIC_E2E_MODE=1`. With that flag on, `lib/auth.ts` skips the
 Google OAuth round-trip and instead reads a pre-baked Showbook JWT

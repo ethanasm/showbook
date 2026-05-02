@@ -42,8 +42,8 @@ When you're running in the Claude Code web sandbox, this checkout is a **shallow
 - `showbook-specs/TASKS.md` — Master task list with dependency DAG.
 - `showbook-specs/phases/VERIFICATION.md` — Playwright testing + visual
   verification strategy.
-- `showbook-specs/mobile-roadmap.md` — Mobile build plan; M1–M6 all
-  shipped.
+- `showbook-specs/mobile-roadmap.md` — Mobile build plan; the app
+  is feature-complete against the design handoff.
 - `design/` — Hi-fi prototypes from Claude Design (reference only,
   don't modify).
 
