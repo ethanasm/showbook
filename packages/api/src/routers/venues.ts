@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, and, asc, desc, gte, sql, isNotNull, inArray } from 'drizzle-orm';
+import { eq, and, asc, desc, gte, sql, inArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
 import {
@@ -11,7 +11,7 @@ import {
   shows,
 } from '@showbook/db';
 import { getPlaceDetails } from '../google-places';
-import { matchOrCreateVenue, findTmVenueId } from '../venue-matcher';
+import { matchOrCreateVenue } from '../venue-matcher';
 import { geocodeVenue } from '../geocode';
 import { enqueueIngestVenue } from '../job-queue';
 import { scrapeConfigSchema, parseScrapeConfig } from '../scrape-config';
@@ -437,80 +437,4 @@ export const venuesRouter = router({
       });
     }),
 
-  backfillCoordinates: protectedProcedure.mutation(async ({ ctx }) => {
-    const incomplete = await ctx.db
-      .select()
-      .from(venues)
-      .where(
-        and(
-          isNotNull(venues.city),
-          sql`${venues.city} != 'Unknown'`,
-          sql`(${venues.latitude} IS NULL OR ${venues.stateRegion} IS NULL OR ${venues.stateRegion} = '')`,
-        ),
-      );
-
-    let geocoded = 0;
-    let failed = 0;
-
-    for (const venue of incomplete) {
-      try {
-        const geo = await geocodeVenue(venue.name, venue.city, venue.stateRegion ?? null);
-        if (geo) {
-          const updates: Record<string, unknown> = {};
-          if (venue.latitude == null) {
-            updates.latitude = geo.lat;
-            updates.longitude = geo.lng;
-          }
-          if (!venue.stateRegion && geo.stateRegion) updates.stateRegion = geo.stateRegion;
-          if ((!venue.country || venue.country === 'US') && geo.country) updates.country = geo.country;
-          if (Object.keys(updates).length > 0) {
-            await ctx.db
-              .update(venues)
-              .set(updates)
-              .where(eq(venues.id, venue.id));
-          }
-          geocoded++;
-        } else {
-          failed++;
-        }
-      } catch {
-        failed++;
-      }
-    }
-
-    return { total: incomplete.length, geocoded, failed };
-  }),
-
-  backfillTicketmaster: protectedProcedure.mutation(async ({ ctx }) => {
-    const missing = await ctx.db
-      .select()
-      .from(venues)
-      .where(
-        and(
-          sql`${venues.ticketmasterVenueId} IS NULL`,
-          isNotNull(venues.city),
-          sql`${venues.city} != 'Unknown'`,
-        ),
-      );
-
-    let matched = 0;
-    let failed = 0;
-
-    for (const venue of missing) {
-      try {
-        const tmId = await findTmVenueId(venue.name, venue.city, venue.stateRegion);
-        if (tmId) {
-          await ctx.db
-            .update(venues)
-            .set({ ticketmasterVenueId: tmId })
-            .where(eq(venues.id, venue.id));
-          matched++;
-        }
-      } catch {
-        failed++;
-      }
-    }
-
-    return { total: missing.length, matched, failed };
-  }),
 });

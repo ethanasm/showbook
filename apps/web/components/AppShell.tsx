@@ -48,6 +48,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const showsCountQuery = trpc.shows.count.useQuery(undefined, { staleTime: 60_000 });
   const performersCountQuery = trpc.performers.count.useQuery(undefined, { staleTime: 60_000 });
   const venuesCountQuery = trpc.venues.count.useQuery(undefined, { staleTime: 60_000 });
+  // `amIAdmin` is server-derived from the user's email + ADMIN_EMAILS allowlist.
+  // Stale-time of 5 min keeps the sidebar quiet; the `/admin` page still does
+  // its own server-side check on every navigation, so this is UX, not auth.
+  const amIAdminQuery = trpc.admin.amIAdmin.useQuery(undefined, { staleTime: 5 * 60_000 });
+  const isAdmin = amIAdminQuery.data?.isAdmin ?? false;
 
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
@@ -95,6 +100,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             counts={counts}
             userName={userName}
             userInitials={userInitials}
+            isAdmin={isAdmin}
           />
         </div>
         <main className="app-shell__content">

@@ -21,6 +21,7 @@ helper for a Redis-backed implementation.
 |------|-------|-----------|
 | Sign-in allowlist | `apps/web/lib/auth-allowlist.ts`, wired in `apps/web/auth.config.ts` | If `AUTH_ALLOWED_EMAILS` and `AUTH_ALLOWED_DOMAINS` are both unset → open sign-up. If either is set → sign-in callback denies anyone not on the list. |
 | tRPC `protectedProcedure` | `packages/api/src/trpc.ts` | Every mutation/query in the app routers requires a valid session. |
+| tRPC `adminProcedure` | `packages/api/src/trpc.ts`, `packages/api/src/admin.ts` | Operator-only mutations. Requires `ctx.session.user.id` to resolve to a `users.email` listed in `ADMIN_EMAILS` (comma-separated). Closed by default — empty/unset → no admins. Email check is case-insensitive and re-derived from the DB on every call. |
 | `/api/test/*` triple gate | `apps/web/app/api/test/_guard.ts` | Refuses to run unless **all three** are true: `NODE_ENV !== 'production'`, `ENABLE_TEST_ROUTES === '1'`, and the active DB name matches `TEST_DATABASE_NAME` (default `showbook_e2e`). |
 | iCal feed authorization | `apps/web/app/api/shows/[id]/ical/route.ts`, `apps/web/app/api/announcements/[id]/ical/route.ts` | Show feeds require the requesting user to own the show. Announcement feeds require an active follow on the linked venue or performer. |
 | Venue-photo proxy | `apps/web/app/api/venue-photo/[venueId]/route.ts` | Requires a session. Without it Google Places photo enumeration would burn the operator's API quota anonymously. |
@@ -139,6 +140,23 @@ us, which keeps the operator's quota healthy.
 | Ticketmaster: 5 req/sec across all users (200 ms `MIN_INTERVAL_MS`, single in-process token) | `packages/api/src/ticketmaster.ts` |
 | Ticketmaster: automatic backoff + retry on HTTP 429 | same |
 | Groq email-extraction: up to 3 retries with `Retry-After` honoured | `packages/api/src/groq.ts` (`extractShowFromEmail`) |
+
+---
+
+## Admin-only mutations
+
+Mutations under `packages/api/src/routers/admin.ts` use `adminProcedure`
+(see "Auth and session gates" above) and additionally enforce a per-admin
+rate limit of 4 calls per hour each as defense-in-depth, since both touch
+shared upstream API budgets:
+
+| Procedure | Effect | Upstream APIs |
+|-----------|--------|---------------|
+| `admin.backfillVenueCoordinates` | Geocodes every venue with a known city but missing lat/lng/stateRegion. | Google Geocoding |
+| `admin.backfillVenueTicketmaster` | Looks up a Ticketmaster venue id for every venue without one. | Ticketmaster Discovery |
+
+Triggered from the in-app `/admin` page, which `notFound()`s for
+non-admins (server-side check via `admin.amIAdmin`).
 
 ---
 

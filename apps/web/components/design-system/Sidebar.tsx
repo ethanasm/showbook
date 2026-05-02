@@ -11,6 +11,7 @@ import {
   Plus,
   Search,
   Settings,
+  ShieldCheck,
   MoreHorizontal,
   LogOut,
 } from "lucide-react";
@@ -25,6 +26,8 @@ export interface NavItem {
   section: "navigate" | "settings";
   /** smaller font for settings items */
   small?: boolean;
+  /** Only render when the caller passes `isAdmin` to <Sidebar>. */
+  adminOnly?: boolean;
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -35,6 +38,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "venues", label: "Venues", icon: MapPin, section: "navigate" },
   { id: "artists", label: "Artists", icon: Music, section: "navigate" },
   { id: "preferences", label: "Preferences", icon: Settings, section: "settings", small: true },
+  { id: "admin", label: "Admin", icon: ShieldCheck, section: "settings", small: true, adminOnly: true },
 ];
 
 /** Items shown in mobile bottom tab bar */
@@ -54,6 +58,8 @@ interface SidebarProps {
   userName?: string;
   userInitials?: string;
   syncStatus?: string;
+  /** When false (or undefined), items flagged `adminOnly` are hidden. */
+  isAdmin?: boolean;
 }
 
 export function Sidebar({
@@ -64,11 +70,13 @@ export function Sidebar({
   userName,
   userInitials,
   syncStatus = "signed in",
+  isAdmin = false,
 }: SidebarProps) {
   const displayName = userName ?? "…";
   const displayInitials = userInitials ?? "·";
-  const navItems = NAV_ITEMS.filter((i) => i.section === "navigate");
-  const settingsItems = NAV_ITEMS.filter((i) => i.section === "settings");
+  const visibleItems = NAV_ITEMS.filter((i) => !i.adminOnly || isAdmin);
+  const navItems = visibleItems.filter((i) => i.section === "navigate");
+  const settingsItems = visibleItems.filter((i) => i.section === "settings");
 
   function getCount(item: NavItem): number | undefined {
     if (counts && item.id in counts) return counts[item.id];
