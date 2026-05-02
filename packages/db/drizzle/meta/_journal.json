@@ -180,8 +180,15 @@
     {
       "idx": 25,
       "version": "7",
-      "when": 1788086400000,
-      "tag": "0025_support_performer_ids",
+      "when": 1789000000000,
+      "tag": "0025_venue_cleanup_after_unfollow",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789086400000,
+      "tag": "0026_support_performer_ids",
       "breakpoints": true
     }
   ]

@@ -14,6 +14,7 @@ import {
 } from '@showbook/db';
 import { and, eq, gte, lte, isNotNull, inArray, asc } from 'drizzle-orm';
 import { renderDailyDigest } from '@showbook/emails';
+import { generateDigestPreamble } from '@showbook/api';
 import { child } from '@showbook/observability';
 
 const log = child({ component: 'notifications' });
@@ -363,11 +364,28 @@ export async function runDailyDigest(): Promise<{
         continue;
       }
 
+      const displayName = user.displayName ?? 'there';
+      let preamble: string | null = null;
+      try {
+        preamble = await generateDigestPreamble({
+          displayName,
+          todayShows,
+          upcomingShows,
+          newAnnouncements,
+        });
+      } catch (err) {
+        log.warn(
+          { err, event: 'notifications.digest.preamble_failed', userId: user.userId },
+          'Preamble generation failed; falling back to static greeting',
+        );
+      }
+
       const html = await renderDailyDigest({
-        displayName: user.displayName ?? 'there',
+        displayName,
         todayShows,
         upcomingShows,
         newAnnouncements,
+        preamble,
         appUrl,
       });
 
