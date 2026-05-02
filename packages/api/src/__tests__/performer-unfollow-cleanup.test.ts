@@ -18,6 +18,7 @@ const orphanAnn: AnnouncementCandidate = {
   id: 'ann-orphan',
   venueId: 'venue-nowhere',
   headlinerPerformerId: 'performer-1',
+  supportPerformerIds: null,
   venueLat: outsideLat,
   venueLng: outsideLng,
 };
@@ -26,6 +27,7 @@ const followedVenueAnn: AnnouncementCandidate = {
   id: 'ann-followed-venue',
   venueId: 'venue-followed',
   headlinerPerformerId: 'performer-1',
+  supportPerformerIds: null,
   venueLat: outsideLat,
   venueLng: outsideLng,
 };
@@ -34,6 +36,7 @@ const inRegionAnn: AnnouncementCandidate = {
   id: 'ann-in-region',
   venueId: 'venue-sf',
   headlinerPerformerId: 'performer-1',
+  supportPerformerIds: null,
   venueLat: sfVenueLat,
   venueLng: sfVenueLng,
 };
@@ -42,6 +45,7 @@ const nullCoordsAnn: AnnouncementCandidate = {
   id: 'ann-null-coords',
   venueId: 'venue-no-coords',
   headlinerPerformerId: 'performer-1',
+  supportPerformerIds: null,
   venueLat: null,
   venueLng: null,
 };
@@ -52,6 +56,7 @@ describe('computePerformerAnnouncementsToDelete', () => {
       [orphanAnn],
       [],
       [],
+      'performer-1',
     );
     assert.deepEqual(toDelete, ['ann-orphan']);
   });
@@ -61,6 +66,7 @@ describe('computePerformerAnnouncementsToDelete', () => {
       [followedVenueAnn],
       [],
       ['venue-followed'],
+      'performer-1',
     );
     assert.deepEqual(toDelete, []);
   });
@@ -70,6 +76,7 @@ describe('computePerformerAnnouncementsToDelete', () => {
       [inRegionAnn],
       [sfRegion],
       [],
+      'performer-1',
     );
     assert.deepEqual(toDelete, []);
   });
@@ -79,6 +86,7 @@ describe('computePerformerAnnouncementsToDelete', () => {
       [nullCoordsAnn],
       [sfRegion],
       [],
+      'performer-1',
     );
     assert.deepEqual(toDelete, []);
   });
@@ -88,7 +96,46 @@ describe('computePerformerAnnouncementsToDelete', () => {
       [orphanAnn, followedVenueAnn, inRegionAnn, nullCoordsAnn],
       [sfRegion],
       ['venue-followed'],
+      'performer-1',
     );
     assert.deepEqual(toDelete, ['ann-orphan']);
+  });
+
+  it('keeps announcements where the unfollowed performer was a support act and another followed performer remains', () => {
+    const supportAnn: AnnouncementCandidate = {
+      id: 'ann-support',
+      venueId: 'venue-nowhere',
+      headlinerPerformerId: 'headliner-still-followed',
+      supportPerformerIds: ['performer-1'],
+      venueLat: outsideLat,
+      venueLng: outsideLng,
+    };
+    const toDelete = computePerformerAnnouncementsToDelete(
+      [supportAnn],
+      [],
+      [],
+      'performer-1',
+      ['headliner-still-followed', 'performer-1'],
+    );
+    assert.deepEqual(toDelete, []);
+  });
+
+  it('deletes announcements where the unfollowed performer was the only followed support and nothing else preserves it', () => {
+    const supportAnn: AnnouncementCandidate = {
+      id: 'ann-support-orphan',
+      venueId: 'venue-nowhere',
+      headlinerPerformerId: 'headliner-not-followed',
+      supportPerformerIds: ['performer-1', 'unfollowed-other'],
+      venueLat: outsideLat,
+      venueLng: outsideLng,
+    };
+    const toDelete = computePerformerAnnouncementsToDelete(
+      [supportAnn],
+      [],
+      [],
+      'performer-1',
+      ['performer-1'],
+    );
+    assert.deepEqual(toDelete, ['ann-support-orphan']);
   });
 });

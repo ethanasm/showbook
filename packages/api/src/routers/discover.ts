@@ -146,9 +146,17 @@ export const discoverRouter = router({
         return { items: [], nextCursor: undefined };
       }
 
-      const conditions = [
+      // Match the followed performer as either headliner OR support.
+      // The `&&` (array overlap) operator hits the GIN index on
+      // support_performer_ids; the headliner branch hits the btree
+      // index on headliner_performer_id. PG can OR-combine bitmaps
+      // from both, so this stays cheap.
+      const performerOverlap = sql`${announcements.supportPerformerIds} && ${performerIds}::uuid[]`;
+      const followedMatch = or(
         inArray(announcements.headlinerPerformerId, performerIds),
-      ];
+        performerOverlap,
+      )!;
+      const conditions = [followedMatch];
       const decoded = decodeCursor(cursor);
       if (decoded) {
         conditions.push(cursorCondition(decoded));

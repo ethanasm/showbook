@@ -8,7 +8,12 @@ export type ListedArtist = {
   name: string;
   imageUrl: string | null;
   genres: string[];
-  tmMatch: { tmAttractionId: string; name: string; imageUrl: string | null } | null;
+  tmMatch: {
+    tmAttractionId: string;
+    name: string;
+    imageUrl: string | null;
+    musicbrainzId: string | null;
+  } | null;
   alreadyFollowed: boolean;
 };
 
@@ -149,6 +154,7 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
         tmAttractionId: a.tmMatch!.tmAttractionId,
         name: a.tmMatch!.name,
         imageUrl: a.tmMatch!.imageUrl ?? undefined,
+        musicbrainzId: a.tmMatch!.musicbrainzId ?? undefined,
       }));
     if (payload.length === 0) return;
     importSelected.mutate({ artists: payload });

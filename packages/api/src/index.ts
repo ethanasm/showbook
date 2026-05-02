@@ -10,6 +10,7 @@ export {
   searchAttractions,
   getAttraction,
   inferKind,
+  extractMusicbrainzId,
   selectBestImage,
   type TMEvent,
   type TMVenue,

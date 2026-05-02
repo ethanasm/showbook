@@ -13,6 +13,7 @@ export interface AnnouncementCandidate {
   id: string;
   venueId: string;
   headlinerPerformerId: string | null;
+  supportPerformerIds: string[] | null;
   venueLat: number | null;
   venueLng: number | null;
 }
@@ -56,8 +57,9 @@ export function computeAnnouncementsToDelete(
       // Keep if user directly follows this venue
       if (followedVenueSet.has(a.venueId)) return false;
 
-      // Keep if user follows the headliner performer
+      // Keep if user follows the headliner performer or any support performer
       if (a.headlinerPerformerId && followedPerformerSet.has(a.headlinerPerformerId)) return false;
+      if (a.supportPerformerIds?.some((id) => followedPerformerSet.has(id))) return false;
 
       return true;
     })
@@ -68,14 +70,24 @@ export function computePerformerAnnouncementsToDelete(
   candidates: AnnouncementCandidate[],
   allActiveRegions: RegionBbox[],
   allFollowedVenueIds: string[],
+  unfollowedPerformerId: string,
+  allFollowedPerformerIds: string[] = [],
 ): string[] {
   const followedVenueSet = new Set(allFollowedVenueIds);
+  // Other performers (not the just-unfollowed one) that some user still
+  // follows. If an announcement names any of them as headliner OR
+  // support, it stays alive.
+  const otherFollowedPerformers = new Set(
+    allFollowedPerformerIds.filter((id) => id !== unfollowedPerformerId),
+  );
 
   return candidates
     .filter((a) => {
       if (a.venueLat == null || a.venueLng == null) return false;
       if (followedVenueSet.has(a.venueId)) return false;
       if (allActiveRegions.some((r) => isVenueInBbox(a.venueLat!, a.venueLng!, r))) return false;
+      if (a.headlinerPerformerId && otherFollowedPerformers.has(a.headlinerPerformerId)) return false;
+      if (a.supportPerformerIds?.some((id) => otherFollowedPerformers.has(id))) return false;
       return true;
     })
     .map((a) => a.id);
@@ -101,6 +113,7 @@ export function computeVenueUnfollowAnnouncementsToDelete(
       if (a.venueLat == null || a.venueLng == null) return false;
       if (allActiveRegions.some((r) => isVenueInBbox(a.venueLat!, a.venueLng!, r))) return false;
       if (a.headlinerPerformerId && followedPerformerSet.has(a.headlinerPerformerId)) return false;
+      if (a.supportPerformerIds?.some((id) => followedPerformerSet.has(id))) return false;
       return true;
     })
     .map((a) => a.id);
@@ -267,6 +280,7 @@ export const preferencesRouter = router({
           id: announcements.id,
           venueId: announcements.venueId,
           headlinerPerformerId: announcements.headlinerPerformerId,
+          supportPerformerIds: announcements.supportPerformerIds,
           venueLat: venues.latitude,
           venueLng: venues.longitude,
         })
@@ -284,6 +298,7 @@ export const preferencesRouter = router({
           id: r.id,
           venueId: r.venueId,
           headlinerPerformerId: r.headlinerPerformerId,
+          supportPerformerIds: r.supportPerformerIds,
           venueLat: r.venueLat,
           venueLng: r.venueLng,
         })),

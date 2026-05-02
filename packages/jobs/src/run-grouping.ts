@@ -20,6 +20,8 @@ export interface NormalizedEvent {
   headlinerPerformerId: string | null;
   venueId: string;
   support: string[] | null;
+  /** Resolved performer ids for support acts, parallel to `support`. */
+  supportPerformerIds: string[] | null;
   onSaleDate: Date | null;
   onSaleStatus: 'announced' | 'on_sale' | 'sold_out';
   source: 'ticketmaster' | 'manual' | 'scraped';
@@ -41,6 +43,7 @@ export interface EventRun {
   headlinerPerformerId: string | null;
   venueId: string;
   support: string[] | null;
+  supportPerformerIds: string[] | null;
   /** Earliest on-sale date across the run (most relevant for "tickets coming"). */
   onSaleDate: Date | null;
   onSaleStatus: 'announced' | 'on_sale' | 'sold_out';
@@ -146,6 +149,7 @@ function makeRun(cluster: NormalizedEvent[]): EventRun {
     headlinerPerformerId: representative.headlinerPerformerId,
     venueId: representative.venueId,
     support: representative.support,
+    supportPerformerIds: representative.supportPerformerIds,
     onSaleDate:
       representative.kind === 'festival'
         ? representative.onSaleDate

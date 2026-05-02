@@ -26,8 +26,10 @@ import type {
   searchVenues as SearchVenuesFn,
   searchAttractions as SearchAttractionsFn,
   selectBestImage as SelectBestImageFn,
+  extractMusicbrainzId as ExtractMusicbrainzIdFn,
   inferKind as InferKindFn,
   TMImage,
+  TMAttraction,
   TMError as TMErrorClass,
 } from '../ticketmaster';
 
@@ -39,6 +41,7 @@ let getAttraction: typeof GetAttractionFn;
 let searchVenues: typeof SearchVenuesFn;
 let searchAttractions: typeof SearchAttractionsFn;
 let selectBestImage: typeof SelectBestImageFn;
+let extractMusicbrainzId: typeof ExtractMusicbrainzIdFn;
 let inferKind: typeof InferKindFn;
 let TMError: typeof TMErrorClass;
 
@@ -55,6 +58,7 @@ before(async () => {
   searchVenues = mod.searchVenues;
   searchAttractions = mod.searchAttractions;
   selectBestImage = mod.selectBestImage;
+  extractMusicbrainzId = mod.extractMusicbrainzId;
   inferKind = mod.inferKind;
   TMError = mod.TMError;
 });
@@ -399,6 +403,30 @@ test('selectBestImage: falls back to widest non-3_2 when no 3_2 exists', () => {
     img({ ratio: '1_1', width: 400, url: 'tiny.jpg' }),
   ]);
   assert.equal(result, 'big.jpg');
+});
+
+// ── extractMusicbrainzId ────────────────────────────────────────────────
+
+function attraction(overrides: Partial<TMAttraction> = {}): TMAttraction {
+  return { id: 'a', name: 'A', ...overrides };
+}
+
+test('extractMusicbrainzId: returns the first MBID when present', () => {
+  const a = attraction({
+    externalLinks: { musicbrainz: [{ id: 'mbid-1' }, { id: 'mbid-2' }] },
+  });
+  assert.equal(extractMusicbrainzId(a), 'mbid-1');
+});
+
+test('extractMusicbrainzId: returns undefined when externalLinks is missing', () => {
+  assert.equal(extractMusicbrainzId(attraction()), undefined);
+});
+
+test('extractMusicbrainzId: returns undefined when musicbrainz array is empty', () => {
+  assert.equal(
+    extractMusicbrainzId(attraction({ externalLinks: { musicbrainz: [] } })),
+    undefined,
+  );
 });
 
 // ── inferKind branches missed by ticketmaster-kind.test.ts ──────────────

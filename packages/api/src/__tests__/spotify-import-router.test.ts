@@ -49,7 +49,15 @@ function jsonResponse(body: unknown, status = 200): Response {
  */
 function setupFetchMock(opts: {
   spotifyArtists: Array<{ id: string; name: string }>;
-  tmAttractionsByQuery: Record<string, Array<{ id: string; name: string; images?: unknown[] }>>;
+  tmAttractionsByQuery: Record<
+    string,
+    Array<{
+      id: string;
+      name: string;
+      images?: unknown[];
+      externalLinks?: { musicbrainz?: Array<{ id: string }> };
+    }>
+  >;
   spotifyStatus?: number;
 }) {
   const calls: { url: string }[] = [];
@@ -172,6 +180,40 @@ describe('spotifyImportRouter.listFollowed', () => {
       (err: unknown) =>
         err instanceof TRPCError && err.code === 'TOO_MANY_REQUESTS',
     );
+  });
+
+  it('exposes the TM musicbrainzId on tmMatch when present', async () => {
+    setupFetchMock({
+      spotifyArtists: [{ id: 'sp1', name: 'Phoebe Bridgers' }],
+      tmAttractionsByQuery: {
+        'Phoebe Bridgers': [
+          {
+            id: 'tm1',
+            name: 'Phoebe Bridgers',
+            images: [],
+            externalLinks: {
+              musicbrainz: [{ id: 'mbid-phoebe-bridgers' }],
+            },
+          },
+        ],
+      },
+    });
+    const db = makeFakeDb({ selectResults: [[]] });
+    const result = await caller(db).listFollowed({ accessToken: 'tok' });
+    assert.equal(result.artists[0]?.tmMatch?.musicbrainzId, 'mbid-phoebe-bridgers');
+  });
+
+  it('returns musicbrainzId=null when TM has no MusicBrainz external link', async () => {
+    setupFetchMock({
+      spotifyArtists: [{ id: 'sp1', name: 'Sam Short' }],
+      tmAttractionsByQuery: {
+        'Sam Short': [{ id: 'tm-sam-short', name: 'Sam Short', images: [] }],
+      },
+    });
+    const db = makeFakeDb({ selectResults: [[]] });
+    const result = await caller(db).listFollowed({ accessToken: 'tok' });
+    assert.equal(result.artists[0]?.tmMatch?.tmAttractionId, 'tm-sam-short');
+    assert.equal(result.artists[0]?.tmMatch?.musicbrainzId, null);
   });
 
   it('handles empty Spotify follow list without hitting TM', async () => {
