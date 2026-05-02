@@ -55,6 +55,8 @@ import {
 import {
   exchangeGoogleIdTokenForSession,
   describeSignInError,
+  isE2EMode,
+  loadE2ETestSession,
   type SessionUser,
 } from './auth-helpers';
 
@@ -218,6 +220,42 @@ export function AuthProvider({
   const signIn = React.useCallback(async () => {
     if (isSigningInRef.current) return;
     setError(null);
+
+    // ---- E2E TEST MODE BYPASS — DO NOT REMOVE WITHOUT READING ----
+    // Active only when EXPO_PUBLIC_E2E_MODE === '1', which is set ONLY by
+    // the `e2e` EAS profile (see eas.json). Production builds (TestFlight,
+    // Play Store) ship with this var unset, so this branch is dead code
+    // there. Maestro pre-seeds SecureStore with a JWT under
+    // `e2e.test-token` + a SessionUser blob under `e2e.test-user` before
+    // tapping "Continue with Google" — see apps/mobile/e2e/flows/sign-in.yaml.
+    // If either key is missing we surface invalid_response so a misconfigured
+    // flow fails loudly rather than silently signing in.
+    if (isE2EMode()) {
+      isSigningInRef.current = true;
+      setIsSigningIn(true);
+      try {
+        const session = await loadE2ETestSession(SecureStore);
+        if (!session) {
+          setError(describeSignInError(new Error('invalid_response')));
+          return;
+        }
+        await Promise.all([
+          SecureStore.setItemAsync(TOKEN_KEY, session.token),
+          SecureStore.setItemAsync(USER_KEY, JSON.stringify(session.user)),
+        ]);
+        setToken(session.token);
+        setUser(session.user);
+        const firstRunFlag = await SecureStore.getItemAsync(FIRST_RUN_KEY);
+        setIsFirstRun(firstRunFlag !== 'true');
+      } catch (err) {
+        setError(describeSignInError(err));
+      } finally {
+        isSigningInRef.current = false;
+        setIsSigningIn(false);
+      }
+      return;
+    }
+    // ---- END E2E TEST MODE BYPASS ----
 
     const platform: 'ios' | 'android' | 'web' =
       Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';

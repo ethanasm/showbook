@@ -1,0 +1,74 @@
+# Sign-in flow — Maestro Cloud
+#
+# Prereq: app is built with the `e2e` EAS profile (EXPO_PUBLIC_E2E_MODE=1).
+# In that build, apps/mobile/lib/auth.ts skips Google OAuth entirely and
+# instead reads a Showbook JWT from SecureStore keys `e2e.test-token`
+# and `e2e.test-user`. Maestro is responsible for seeding those keys
+# before tapping "Continue with Google".
+#
+# Seeding contract: the e2e build registers a debug-only deeplink
+# handler `showbook://e2e/seed-session?token=...&user=...` that writes
+# both keys into SecureStore. The runScript step below builds the
+# deeplink from environment variables that CI exports from the
+# MAESTRO_E2E_TOKEN / MAESTRO_E2E_USER_JSON Maestro Cloud secrets.
+appId: com.showbook.app
+name: sign-in
+tags:
+  - critical
+  - auth
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+
+# Seed SecureStore via the e2e debug deeplink. The token and user JSON
+# come from Maestro Cloud secrets exported as MAESTRO_E2E_TOKEN /
+# MAESTRO_E2E_USER_JSON; if either is empty the assertion below fails
+# loudly and the sign-in tap returns the invalid_response error path.
+- runScript:
+    file: ../scripts/seed-session.js
+    env:
+      MAESTRO_E2E_TOKEN: ${MAESTRO_E2E_TOKEN}
+      MAESTRO_E2E_USER_JSON: ${MAESTRO_E2E_USER_JSON}
+
+- openLink: ${output.seedDeeplink}
+
+# Re-launch so the app boots into the auth gate with the seeded session
+# already on disk. clearState:false keeps SecureStore intact.
+- launchApp:
+    clearState: false
+
+- assertVisible:
+    text: "Sign in with Google"
+    timeout: 15000
+
+- tapOn:
+    text: "Sign in with Google"
+
+# After the bypass writes the cached session and re-renders, the auth
+# gate routes either to first-run welcome or directly to the tabs.
+# Either landing screen is acceptable — we just need to confirm we're
+# out of the sign-in screen and into the authenticated app shell.
+- runFlow:
+    when:
+      visible: "Welcome"
+    commands:
+      - tapOn: "Continue"
+      - tapOn: "Skip for now"
+      - tapOn: "Skip for now"
+      - tapOn: "Skip for now"
+      - tapOn: "Skip for now"
+
+# expo-router renders the tab bar with the title as visible text and the
+# Add tab via accessibilityLabel="Add" (no label). Match on those.
+- assertVisible:
+    text: "Home"
+    timeout: 15000
+- assertVisible:
+    text: "Shows"
+- assertVisible:
+    text: "Map"
+- assertVisible:
+    text: "Me"
+- assertVisible:
+    id: "Add"

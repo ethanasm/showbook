@@ -1,0 +1,71 @@
+# Sign-out flow — Maestro Cloud
+#
+# Verifies the destructive Alert confirmation and that the auth gate
+# routes back to /(auth)/signin once the SecureStore session is gone.
+appId: com.showbook.app
+name: sign-out
+tags:
+  - critical
+  - auth
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+
+- runScript:
+    file: ../scripts/seed-session.js
+    env:
+      MAESTRO_E2E_TOKEN: ${MAESTRO_E2E_TOKEN}
+      MAESTRO_E2E_USER_JSON: ${MAESTRO_E2E_USER_JSON}
+
+- openLink: ${output.seedDeeplink}
+
+- launchApp:
+    clearState: false
+
+- tapOn:
+    text: "Sign in with Google"
+- runFlow:
+    when:
+      visible: "Welcome"
+    commands:
+      - tapOn: "Continue"
+      - tapOn: "Skip for now"
+      - tapOn: "Skip for now"
+      - tapOn: "Skip for now"
+      - tapOn: "Skip for now"
+
+- assertVisible:
+    text: "Me"
+    timeout: 15000
+
+- tapOn:
+    text: "Me"
+
+- assertVisible:
+    text: "ACCOUNT"
+    timeout: 10000
+
+# The sign-out row scrolls into view at the bottom of the Me screen.
+- scrollUntilVisible:
+    element:
+      text: "Sign out"
+    direction: DOWN
+
+- tapOn:
+    text: "Sign out"
+
+# Native iOS / Android Alert. Maestro matches by visible text — the
+# destructive button label is also "Sign out" (see apps/mobile/app/
+# (tabs)/me.tsx onSignOut). Maestro picks the most-recently-shown
+# match, which is the alert button.
+- assertVisible:
+    text: "Are you sure you want to sign out?"
+    timeout: 5000
+
+- tapOn:
+    text: "Sign out"
+
+- assertVisible:
+    text: "Sign in with Google"
+    timeout: 10000

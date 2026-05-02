@@ -1,0 +1,95 @@
+# Add-show flow — Maestro Cloud
+#
+# Assumes the e2e build is signed in via the same SecureStore-seeding
+# path as sign-in.yaml. We re-run the seed step here so add-show can
+# run independently of sign-in (Maestro Cloud parallelizes flows by
+# default; flows must be self-contained).
+#
+# Test data is deterministic: a fixed headliner, venue, and date so
+# repeated runs assert the same row on Home. The Showbook test backend
+# must accept arbitrary venue strings (city defaults to "Unknown" in
+# apps/mobile/app/add/form.tsx when no typeahead match is selected).
+appId: com.showbook.app
+name: add-show
+tags:
+  - critical
+  - write
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+
+- runScript:
+    file: ../scripts/seed-session.js
+    env:
+      MAESTRO_E2E_TOKEN: ${MAESTRO_E2E_TOKEN}
+      MAESTRO_E2E_USER_JSON: ${MAESTRO_E2E_USER_JSON}
+
+- openLink: ${output.seedDeeplink}
+
+- launchApp:
+    clearState: false
+
+# Get past first-run if it's the user's first session in this state.
+- tapOn:
+    text: "Sign in with Google"
+- runFlow:
+    when:
+      visible: "Welcome"
+    commands:
+      - tapOn: "Continue"
+      - tapOn: "Skip for now"
+      - tapOn: "Skip for now"
+      - tapOn: "Skip for now"
+      - tapOn: "Skip for now"
+
+- assertVisible:
+    text: "Home"
+    timeout: 15000
+
+# The Add tab opens the chat surface; the form is reachable via the
+# pen-line "form" affordance in the input footer. The middle FAB tab
+# has no label — it's exposed via accessibilityLabel="Add".
+- tapOn:
+    id: "Add"
+
+# Skip the LLM chat path entirely — tap the pen-line "Open form"
+# affordance to land directly on the structured form.
+- tapOn:
+    id: "Open form"
+    timeout: 10000
+
+- assertVisible:
+    text: "New show"
+    timeout: 10000
+
+- tapOn:
+    id: "headliner-input"
+- inputText: "Maestro Test Headliner"
+
+- tapOn:
+    id: "venue-typeahead"
+- inputText: "Maestro Test Venue"
+
+# Fill the date input — placeholder is "YYYY-MM-DD"; tapping the
+# placeholder text targets the input directly.
+- tapOn:
+    text: "YYYY-MM-DD"
+- inputText: "2026-12-31"
+
+# The Save button is an icon-only Check button in the TopBar.
+- tapOn:
+    id: "Save"
+
+- assertVisible:
+    text: "Show added"
+    timeout: 15000
+
+# The success path replaces to /show/<id>; navigate back to Home and
+# verify the row landed.
+- tapOn:
+    text: "Home"
+
+- assertVisible:
+    text: "Maestro Test Headliner"
+    timeout: 15000
