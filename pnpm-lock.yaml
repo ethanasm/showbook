@@ -33,6 +33,9 @@ importers:
       '@gorhom/bottom-sheet':
         specifier: ^5.2.13
         version: 5.2.13(@types/react@19.2.14)(react-native-gesture-handler@2.31.1(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-reanimated@3.19.5(@babel/core@7.29.0)(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
+      '@react-native-community/netinfo':
+        specifier: ^11.4.1
+        version: 11.5.2(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
       '@showbook/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -2884,6 +2887,12 @@ packages:
       leaflet: ^1.9.0
       react: ^19.0.0
       react-dom: ^19.0.0
+
+  '@react-native-community/netinfo@11.5.2':
+    resolution: {integrity: sha512-/g0m65BtX9HU+bPiCH2517bOHpEIUsGrWFXDzi1a5nNKn5KujQgm04WhL7/OSXWKHyrT8VVtUoJA0XKRxueBpQ==}
+    peerDependencies:
+      react: '*'
+      react-native: '>=0.59'
 
   '@react-native/assets-registry@0.79.7':
     resolution: {integrity: sha512-YeOXq8H5JZQbeIcAtHxmboDt02QG8ej8Z4SFVNh5UjaSb/0X1/v5/DhwNb4dfpIsQ5lFy75jeoSmUVp8qEKu9g==}
@@ -10113,6 +10122,11 @@ snapshots:
       leaflet: 1.9.4
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
+
+  '@react-native-community/netinfo@11.5.2(react-native@0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)':
+    dependencies:
+      react: 19.2.5
+      react-native: 0.79.7(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5)
 
   '@react-native/assets-registry@0.79.7': {}
 
