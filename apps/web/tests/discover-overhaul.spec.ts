@@ -62,7 +62,7 @@ test.describe('Discover overhaul', () => {
     await page.getByRole('button', { name: /Followed artists/i }).click();
     // No artists are followed in the seed, so an empty-state message appears.
     await expect(
-      page.getByText(/No upcoming shows from artists you follow|Follow an artist/i),
+      page.getByText(/No upcoming shows from artists you follow/i),
     ).toBeVisible({ timeout: 8000 });
   });
 });
