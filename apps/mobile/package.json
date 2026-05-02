@@ -50,7 +50,7 @@
     "@types/node": "^25.6.0",
     "@types/react": "^19.1.0",
     "babel-preset-expo": "~55.0.18",
-    "eslint": "^10.2.1",
+    "eslint": "^9.18.0",
     "eslint-config-expo": "~55.0.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
