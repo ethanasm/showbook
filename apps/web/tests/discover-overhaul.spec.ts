@@ -1,13 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
+import { loginAndSeedAsWorker, workerShowId } from './helpers/auth';
 
 async function loginAsTestUser(page: Page) {
-  // Order: login first to create the test user, then seed (the seed route
-  // refuses to run without the user existing). clean is implicitly done by
-  // seed itself for that user's data.
-  await page.goto('/api/test/login');
-  await page.waitForURL('**/home');
-  await page.goto('/api/test/seed');
-  await page.waitForLoadState('networkidle');
+  await loginAndSeedAsWorker(page);
 }
 
 test.describe('Discover overhaul', () => {
@@ -151,12 +146,7 @@ test.describe('Date TBD UX on show detail page', () => {
     await expect
       .poll(
         async () => {
-          const res = await page.request.get(
-            '/api/test/show-id?productionName=Hamilton&state=watching',
-          );
-          if (!res.ok()) return null;
-          const body = await res.json();
-          id = (body.id as string | null) ?? null;
+          id = await workerShowId(page, { productionName: 'Hamilton', state: 'watching' });
           return id;
         },
         { timeout: 8000 },

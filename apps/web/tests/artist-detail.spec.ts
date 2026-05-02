@@ -1,9 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
+import { loginAndSeedAsWorker } from './helpers/auth';
 
 async function loginAndSeed(page: Page) {
-  await page.goto('/api/test/seed');
-  await page.goto('/api/test/login');
-  await page.waitForURL('**/home');
+  await loginAndSeedAsWorker(page);
 }
 
 test.describe('Artist detail page', () => {
@@ -13,9 +12,7 @@ test.describe('Artist detail page', () => {
 
   test('loads from /artists row click', async ({ page }) => {
     await page.goto('/artists');
-    await page.waitForTimeout(1000);
-
-    // Click the Radiohead row link.
+    // Click the Radiohead row link (auto-waits for it to be actionable).
     await page.getByRole('link', { name: /Radiohead/i }).first().click();
     await page.waitForURL(/\/artists\/[0-9a-f-]+/);
 
@@ -33,7 +30,6 @@ test.describe('Artist detail page', () => {
 
   test('lists shows for that artist with venue links', async ({ page }) => {
     await page.goto('/artists');
-    await page.waitForTimeout(1000);
     await page.getByRole('link', { name: /Radiohead/i }).first().click();
     await page.waitForURL(/\/artists\/[0-9a-f-]+/);
 
@@ -46,7 +42,6 @@ test.describe('Artist detail page', () => {
 
   test('inline rename persists across navigation', async ({ page }) => {
     await page.goto('/artists');
-    await page.waitForTimeout(1000);
     await page.getByRole('link', { name: 'Radiohead', exact: false }).first().click();
     await page.waitForURL(/\/artists\/[0-9a-f-]+/);
 
@@ -59,7 +54,8 @@ test.describe('Artist detail page', () => {
     await input.fill('Radiohead (renamed)');
     await input.press('Enter');
 
-    await page.waitForTimeout(500);
+    // Wait for the editable label to reflect the new value before reloading.
+    await expect(editable).toContainText('Radiohead (renamed)');
     await page.reload();
     await expect(page.locator('body')).toContainText('Radiohead (renamed)');
 
@@ -68,19 +64,19 @@ test.describe('Artist detail page', () => {
     const input2 = page.locator('input').first();
     await input2.fill('Radiohead');
     await input2.press('Enter');
-    await page.waitForTimeout(500);
+    await expect(page.locator('div[title="Double-click to edit"]').first()).toContainText('Radiohead');
   });
 
   test('follow toggle persists', async ({ page }) => {
     await page.goto('/artists');
-    await page.waitForTimeout(1000);
     await page.getByRole('link', { name: /Radiohead/i }).first().click();
     await page.waitForURL(/\/artists\/[0-9a-f-]+/);
 
     const followBtn = page.getByRole('button', { name: /^Follow$|^Following$/ });
     const initialText = (await followBtn.textContent())?.trim();
     await followBtn.click();
-    await page.waitForTimeout(400);
+    // Wait for the label flip rather than a fixed sleep.
+    await expect(followBtn).not.toHaveText(initialText ?? '');
 
     const after = (await followBtn.textContent())?.trim();
     expect(after).not.toBe(initialText);
@@ -91,13 +87,13 @@ test.describe('Artist detail page', () => {
     expect(reloaded).toBe(after);
 
     // Toggle back so subsequent runs start from the same state.
-    await page.getByRole('button', { name: /^Follow$|^Following$/ }).click();
-    await page.waitForTimeout(400);
+    const toggleBack = page.getByRole('button', { name: /^Follow$|^Following$/ });
+    await toggleBack.click();
+    await expect(toggleBack).not.toHaveText(after ?? '');
   });
 
   test('show row click navigates to /shows/[id]', async ({ page }) => {
     await page.goto('/artists');
-    await page.waitForTimeout(1000);
     await page.getByRole('link', { name: /Radiohead/i }).first().click();
     await page.waitForURL(/\/artists\/[0-9a-f-]+/);
 

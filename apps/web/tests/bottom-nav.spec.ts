@@ -1,9 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
+import { loginAndSeedAsWorker } from './helpers/auth';
 
 async function loginSeeded(page: Page) {
-  await page.goto('/api/test/seed');
-  await page.goto('/api/test/login');
-  await page.waitForURL('**/home', { timeout: 10000 });
+  await loginAndSeedAsWorker(page);
 }
 
 // Bottom bar is only visible on mobile (<768px). Use the mobile project.

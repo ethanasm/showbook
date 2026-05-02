@@ -2,16 +2,17 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { encode } from 'next-auth/jwt';
 import { db, users, eq } from '@showbook/db';
 import { testRouteGuard } from '../_guard';
-
-const DEFAULT_EMAIL = 'test@showbook.dev';
-const DEFAULT_NAME = 'Test User';
+import { workerEmail, workerName } from '../_worker';
 
 export async function GET(req: NextRequest) {
   const guardResponse = testRouteGuard();
   if (guardResponse) return guardResponse;
 
-  const email = req.nextUrl.searchParams.get('email') ?? DEFAULT_EMAIL;
-  const name = req.nextUrl.searchParams.get('name') ?? DEFAULT_NAME;
+  const worker = req.nextUrl.searchParams.get('worker');
+  const email =
+    req.nextUrl.searchParams.get('email') ?? workerEmail(worker);
+  const name =
+    req.nextUrl.searchParams.get('name') ?? workerName(worker);
 
   let user = await db.query.users.findFirst({
     where: eq(users.email, email),

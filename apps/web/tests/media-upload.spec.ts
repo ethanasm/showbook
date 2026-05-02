@@ -1,18 +1,18 @@
 import { test, expect, type Page } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { loginAndSeedAsWorker, workerShowId } from './helpers/auth';
 
 async function loginAndSeed(page: Page) {
-  await page.goto('/api/test/seed', { timeout: 60000 });
-  await page.goto('/api/test/login', { timeout: 60000 });
-  await page.waitForURL('**/home', { timeout: 60000 });
+  await loginAndSeedAsWorker(page);
 }
 
 async function gotoRadioheadMSG(page: Page): Promise<string> {
-  const res = await page.request.get(
-    '/api/test/show-id?headliner=Radiohead&venueName=Madison+Square+Garden&state=past',
-  );
-  const { id } = await res.json();
+  const id = await workerShowId(page, {
+    headliner: 'Radiohead',
+    venueName: 'Madison Square Garden',
+    state: 'past',
+  });
   if (!id) throw new Error('Radiohead @ MSG show not seeded');
   await page.goto(`/shows/${id}`);
   await page.locator('text=Loading show…').waitFor({ state: 'detached', timeout: 120000 });

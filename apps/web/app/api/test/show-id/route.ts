@@ -5,8 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, shows, showPerformers, performers, venues, users, eq, and } from '@showbook/db';
 import { testRouteGuard } from '../_guard';
-
-const TEST_EMAIL = 'test@showbook.dev';
+import { workerEmail } from '../_worker';
 
 export async function GET(req: NextRequest) {
   const guardResponse = testRouteGuard();
@@ -16,8 +15,9 @@ export async function GET(req: NextRequest) {
   const state = req.nextUrl.searchParams.get('state');
   const headliner = req.nextUrl.searchParams.get('headliner');
   const venueName = req.nextUrl.searchParams.get('venueName');
+  const email = workerEmail(req.nextUrl.searchParams.get('worker'));
 
-  const user = await db.query.users.findFirst({ where: eq(users.email, TEST_EMAIL) });
+  const user = await db.query.users.findFirst({ where: eq(users.email, email) });
   if (!user) return NextResponse.json({ error: 'No test user' }, { status: 404 });
 
   // Lookup by productionName + state (theatre / festival).
