@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { testRouteGuard } from '../_guard';
+import { workerEmail, workerName } from '../_worker';
 import {
   db,
   eq,
@@ -18,8 +19,6 @@ import {
   type PerformerSetlistsMap,
   singleMainSet,
 } from '@showbook/shared';
-
-const TEST_EMAIL = 'test@showbook.dev';
 
 const VENUES = [
   { name: 'Madison Square Garden', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7505, longitude: -73.9934, ticketmasterVenueId: 'KovZpZA7AAEA', googlePlaceId: 'ChIJhRwB-yFawokR5Phil-QQ3zM' },
@@ -108,8 +107,17 @@ export async function GET(request: Request) {
   const guardResponse = testRouteGuard();
   if (guardResponse) return guardResponse;
 
-  // If ?addRegion is present, just add a single region without re-seeding
   const url = new URL(request.url);
+  // ?worker=<index> makes the seed user-scoped: it operates on
+  // `e2e-w<index>@showbook.dev` and intentionally leaves announcements
+  // alone so parallel workers don't trample each other. Announcements
+  // are seeded once by tests/global.setup.ts via the unworked call.
+  const worker = url.searchParams.get('worker');
+  const TEST_EMAIL = workerEmail(worker);
+  const TEST_NAME = workerName(worker);
+  const isWorkerSeed = worker != null;
+
+  // If ?addRegion is present, just add a single region without re-seeding
   if (url.searchParams.has('addRegion')) {
     const lat = parseFloat(url.searchParams.get('lat') ?? '0');
     const lng = parseFloat(url.searchParams.get('lng') ?? '0');
@@ -139,7 +147,7 @@ export async function GET(request: Request) {
     if (!user) {
       const [created] = await db
         .insert(users)
-        .values({ email: TEST_EMAIL, name: 'Test User' })
+        .values({ email: TEST_EMAIL, name: TEST_NAME })
         .returning();
       user = created!;
     }
@@ -155,7 +163,11 @@ export async function GET(request: Request) {
     }
     await db.delete(userVenueFollows).where(eq(userVenueFollows.userId, user.id));
     await db.delete(userRegions).where(eq(userRegions.userId, user.id));
-    await db.delete(announcements);
+    // Announcements are shared across worker users; only the unworked
+    // call (globalSetup or dev) is allowed to wipe them.
+    if (!isWorkerSeed) {
+      await db.delete(announcements);
+    }
     await db.delete(shows).where(eq(shows.userId, user.id));
 
     // Insert venues
@@ -279,48 +291,53 @@ export async function GET(request: Request) {
       }
     }
 
-    // Insert announcements at followed venues
-    const msgId = venueMap.get('Madison Square Garden')!;
-    const bsId = venueMap.get('Brooklyn Steel')!;
-    const btId = venueMap.get('The Beacon Theatre')!;
+    // Insert announcements at followed venues — only for the unworked
+    // (global) seed call. Worker seeds skip this so concurrent calls
+    // don't insert duplicates (the announcements table has no unique
+    // key to dedupe on).
+    if (!isWorkerSeed) {
+      const msgId = venueMap.get('Madison Square Garden')!;
+      const bsId = venueMap.get('Brooklyn Steel')!;
+      const btId = venueMap.get('The Beacon Theatre')!;
 
-    // Build a 90-night Hamilton run for testing run-card rendering.
-    const hamiltonDates: string[] = [];
-    const hamStart = new Date('2026-08-01');
-    for (let i = 0; i < 90; i++) {
-      const d = new Date(hamStart);
-      d.setDate(hamStart.getDate() + i);
-      hamiltonDates.push(d.toISOString().slice(0, 10));
+      // Build a 90-night Hamilton run for testing run-card rendering.
+      const hamiltonDates: string[] = [];
+      const hamStart = new Date('2026-08-01');
+      for (let i = 0; i < 90; i++) {
+        const d = new Date(hamStart);
+        d.setDate(hamStart.getDate() + i);
+        hamiltonDates.push(d.toISOString().slice(0, 10));
+      }
+      const radioCityId = venueMap.get('Radio City Music Hall')!;
+
+      // Two non-followed nearby venues so Near You has data to render.
+      const irvingPlazaId = venueMap.get('Irving Plaza');
+      const comedyCellarId = venueMap.get('The Comedy Cellar');
+
+      await db.insert(announcements).values([
+        { venueId: msgId, kind: 'concert', headliner: 'Bon Iver', support: ['Big Thief'], showDate: '2026-08-15', runStartDate: '2026-08-15', runEndDate: '2026-08-15', performanceDates: ['2026-08-15'], onSaleStatus: 'on_sale', source: 'ticketmaster' },
+        { venueId: msgId, kind: 'comedy', headliner: 'Trevor Noah', showDate: '2026-09-01', runStartDate: '2026-09-01', runEndDate: '2026-09-01', performanceDates: ['2026-09-01'], onSaleStatus: 'announced', source: 'ticketmaster' },
+        { venueId: bsId, kind: 'concert', headliner: 'Alvvays', support: ['Men I Trust'], showDate: '2026-07-22', runStartDate: '2026-07-22', runEndDate: '2026-07-22', performanceDates: ['2026-07-22'], onSaleStatus: 'on_sale', source: 'ticketmaster' },
+        { venueId: btId, kind: 'concert', headliner: 'Fleet Foxes', showDate: '2026-08-30', runStartDate: '2026-08-30', runEndDate: '2026-08-30', performanceDates: ['2026-08-30'], onSaleStatus: 'sold_out', source: 'ticketmaster' },
+        { venueId: btId, kind: 'concert', headliner: 'Big Thief', support: ['Adrianne Lenker'], showDate: '2026-10-18', runStartDate: '2026-10-18', runEndDate: '2026-10-18', performanceDates: ['2026-10-18'], onSaleStatus: 'announced', source: 'ticketmaster' },
+        // Multi-night theatre run — exercises the run-card UI path
+        {
+          venueId: radioCityId,
+          kind: 'theatre',
+          headliner: 'Hamilton',
+          productionName: 'Hamilton',
+          showDate: hamiltonDates[0]!,
+          runStartDate: hamiltonDates[0]!,
+          runEndDate: hamiltonDates[hamiltonDates.length - 1]!,
+          performanceDates: hamiltonDates,
+          onSaleStatus: 'on_sale',
+          source: 'ticketmaster',
+        },
+        // Nearby (non-followed) venues so the Near You tab has data.
+        ...(irvingPlazaId ? [{ venueId: irvingPlazaId, kind: 'concert' as const, headliner: 'Mitski', showDate: '2026-09-12', runStartDate: '2026-09-12', runEndDate: '2026-09-12', performanceDates: ['2026-09-12'], onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
+        ...(comedyCellarId ? [{ venueId: comedyCellarId, kind: 'comedy' as const, headliner: 'Sam Morril', showDate: '2026-08-05', runStartDate: '2026-08-05', runEndDate: '2026-08-05', performanceDates: ['2026-08-05'], onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
+      ]);
     }
-    const radioCityId = venueMap.get('Radio City Music Hall')!;
-
-    // Two non-followed nearby venues so Near You has data to render.
-    const irvingPlazaId = venueMap.get('Irving Plaza');
-    const comedyCellarId = venueMap.get('The Comedy Cellar');
-
-    await db.insert(announcements).values([
-      { venueId: msgId, kind: 'concert', headliner: 'Bon Iver', support: ['Big Thief'], showDate: '2026-08-15', runStartDate: '2026-08-15', runEndDate: '2026-08-15', performanceDates: ['2026-08-15'], onSaleStatus: 'on_sale', source: 'ticketmaster' },
-      { venueId: msgId, kind: 'comedy', headliner: 'Trevor Noah', showDate: '2026-09-01', runStartDate: '2026-09-01', runEndDate: '2026-09-01', performanceDates: ['2026-09-01'], onSaleStatus: 'announced', source: 'ticketmaster' },
-      { venueId: bsId, kind: 'concert', headliner: 'Alvvays', support: ['Men I Trust'], showDate: '2026-07-22', runStartDate: '2026-07-22', runEndDate: '2026-07-22', performanceDates: ['2026-07-22'], onSaleStatus: 'on_sale', source: 'ticketmaster' },
-      { venueId: btId, kind: 'concert', headliner: 'Fleet Foxes', showDate: '2026-08-30', runStartDate: '2026-08-30', runEndDate: '2026-08-30', performanceDates: ['2026-08-30'], onSaleStatus: 'sold_out', source: 'ticketmaster' },
-      { venueId: btId, kind: 'concert', headliner: 'Big Thief', support: ['Adrianne Lenker'], showDate: '2026-10-18', runStartDate: '2026-10-18', runEndDate: '2026-10-18', performanceDates: ['2026-10-18'], onSaleStatus: 'announced', source: 'ticketmaster' },
-      // Multi-night theatre run — exercises the run-card UI path
-      {
-        venueId: radioCityId,
-        kind: 'theatre',
-        headliner: 'Hamilton',
-        productionName: 'Hamilton',
-        showDate: hamiltonDates[0]!,
-        runStartDate: hamiltonDates[0]!,
-        runEndDate: hamiltonDates[hamiltonDates.length - 1]!,
-        performanceDates: hamiltonDates,
-        onSaleStatus: 'on_sale',
-        source: 'ticketmaster',
-      },
-      // Nearby (non-followed) venues so the Near You tab has data.
-      ...(irvingPlazaId ? [{ venueId: irvingPlazaId, kind: 'concert' as const, headliner: 'Mitski', showDate: '2026-09-12', runStartDate: '2026-09-12', runEndDate: '2026-09-12', performanceDates: ['2026-09-12'], onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
-      ...(comedyCellarId ? [{ venueId: comedyCellarId, kind: 'comedy' as const, headliner: 'Sam Morril', showDate: '2026-08-05', runStartDate: '2026-08-05', runEndDate: '2026-08-05', performanceDates: ['2026-08-05'], onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
-    ]);
 
     return NextResponse.json({
       ok: true,
@@ -328,10 +345,11 @@ export async function GET(request: Request) {
         venues: venueMap.size,
         performers: performerMap.size,
         shows: showCount,
-        announcements: 6,
+        announcements: isWorkerSeed ? 0 : 6,
         regions: 2,
         followedVenues: followVenues.length,
       },
+      worker,
     });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });

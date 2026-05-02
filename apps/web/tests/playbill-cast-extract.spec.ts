@@ -15,6 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
+import { loginAndSeedAsWorker, workerShowId } from './helpers/auth';
 
 const FIXTURE = path.join(__dirname, 'fixtures/playbills/Hadestown.png');
 
@@ -57,9 +58,7 @@ const SHOULD_NOT_APPEAR = [
 ];
 
 async function loginAsTestUser(page: Page) {
-  await page.goto('/api/test/seed');
-  await page.goto('/api/test/login');
-  await page.waitForURL('**/home');
+  await loginAndSeedAsWorker(page);
 }
 
 test.describe('Playbill cast extraction (Groq vision)', () => {
@@ -157,13 +156,17 @@ test.describe('Playbill cast extraction (Groq vision)', () => {
     await expect(saveButton).toBeEnabled({ timeout: 5_000 });
     await saveButton.click();
 
-    // 7. Look up the new show id.
-    await page.waitForTimeout(1_000); // mutation round-trip
-    const lookup = await page.request.get(
-      `/api/test/show-id?productionName=${encodeURIComponent(productionName)}&state=past`,
-    );
-    expect(lookup.ok(), 'show-id lookup should succeed').toBe(true);
-    const { id } = (await lookup.json()) as { id: string | null };
+    // 7. Look up the new show id (poll until the mutation lands).
+    let id: string | null = null;
+    await expect
+      .poll(
+        async () => {
+          id = await workerShowId(page, { productionName, state: 'past' });
+          return id;
+        },
+        { timeout: 8000 },
+      )
+      .toBeTruthy();
     expect(id, `show with productionName="${productionName}" must exist`).not.toBeNull();
 
     // 8. Verify lineup on the show detail page renders actor + character name.

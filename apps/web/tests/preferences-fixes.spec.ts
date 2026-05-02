@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { loginAsWorker, seedForWorker } from './helpers/auth';
 
 // Verifies the post-review fixes:
 //   - Fix #1: Theme hydrates from server prefs on a fresh browser context
@@ -8,9 +9,8 @@ import { test, expect, type Page } from '@playwright/test';
 //   - Fix #8: Account section shows name + sign-out; sidebar shows real user
 //   - compactMode actually changes list-page row density
 
-async function login(page: Page, email = 'test@showbook.dev', name = 'Test User') {
-  await page.goto(`/api/test/login?email=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}`);
-  await page.waitForURL('**/home');
+async function login(page: Page, email?: string) {
+  await loginAsWorker(page, email ? { email } : {});
 }
 
 async function gotoPrefs(page: Page) {
@@ -22,20 +22,22 @@ async function gotoPrefs(page: Page) {
 test.describe('Preferences fixes', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test('account section shows name and sign-out button', async ({ page }) => {
+  test('account section shows name and sign-out button', async ({ page }, testInfo) => {
     await login(page);
     await gotoPrefs(page);
     const main = page.getByRole('main');
-    await expect(main.getByText('test@showbook.dev')).toBeVisible();
-    await expect(main.getByText('Test User')).toBeVisible();
+    const expectedEmail = `e2e-w${testInfo.parallelIndex}@showbook.dev`;
+    const expectedName = `Worker ${testInfo.parallelIndex}`;
+    await expect(main.getByText(expectedEmail)).toBeVisible();
+    await expect(main.getByText(expectedName)).toBeVisible();
     await expect(main.getByRole('button', { name: /Sign out/i })).toBeVisible();
   });
 
-  test('sidebar shows the session user, not a placeholder', async ({ page }) => {
+  test('sidebar shows the session user, not a placeholder', async ({ page }, testInfo) => {
     await login(page);
     await gotoPrefs(page);
     const sidebarContent = await page.locator('.sidebar__user').innerText();
-    expect(sidebarContent).toContain('Test User');
+    expect(sidebarContent).toContain(`Worker ${testInfo.parallelIndex}`);
     expect(sidebarContent).not.toContain('Ethan Smith');
   });
 
@@ -59,8 +61,7 @@ test.describe('Preferences fixes', () => {
     await lng.fill('-86.7816');
     const addBtn = page.getByRole('button', { name: /Add Region/i });
     await addBtn.click();
-    await page.waitForTimeout(1500);
-    await expect(page.getByText('Nashville', { exact: false }).first()).toBeVisible();
+    await expect(page.getByText('Nashville', { exact: false }).first()).toBeVisible({ timeout: 5000 });
   });
 
   test('AddRegionForm surfaces search errors', async ({ page }) => {
@@ -68,15 +69,15 @@ test.describe('Preferences fixes', () => {
     await gotoPrefs(page);
     await page.getByText('Add a region').first().click();
     await page.locator('input[placeholder*="Nashville"]').fill('Boston');
-    await page.waitForTimeout(2000);
-    const bodyText = await page.locator('body').innerText();
-    // The dropdown must reach a terminal state — never hang on
-    // "Searching…". Real results, the error banner, or "No matches"
-    // (when the Places API key isn't configured) all qualify.
-    const hasError = bodyText.includes('Search unavailable') || bodyText.includes('unavailable right now');
-    const hasNoMatches = bodyText.includes('No matches');
-    const hasResults = await page.locator('button').filter({ hasText: /Boston/ }).count();
-    expect(hasError || hasNoMatches || hasResults > 0).toBeTruthy();
+    // The dropdown must reach a terminal state — never hang on "Searching…".
+    // Poll until we observe one of the terminal outcomes.
+    await expect.poll(async () => {
+      const bodyText = await page.locator('body').innerText();
+      const hasError = bodyText.includes('Search unavailable') || bodyText.includes('unavailable right now');
+      const hasNoMatches = bodyText.includes('No matches');
+      const hasResults = await page.locator('button').filter({ hasText: /Boston/ }).count();
+      return hasError || hasNoMatches || hasResults > 0;
+    }, { timeout: 5000 }).toBeTruthy();
   });
 
   test('VenueFollowModal reaches a terminal state', async ({ page }) => {
@@ -84,23 +85,21 @@ test.describe('Preferences fixes', () => {
     await gotoPrefs(page);
     await page.getByText('Follow a venue').first().click();
     await page.locator('input[placeholder*="Search venues"]').fill('Madison Square Garden');
-    await page.waitForTimeout(2500);
-    const bodyText = await page.locator('body').innerText();
-    // The dropdown must reach a terminal state — error banner, real
-    // results, or "No venues found" when no API key is configured.
-    // Never a permanent "Searching…" spinner.
-    const hasError = bodyText.includes('Google Places search is unavailable');
-    const hasNoVenuesMsg = bodyText.includes('No venues found');
-    const hasResults = await page.locator('button').filter({ hasText: /Madison Square Garden/i }).count();
-    const stillSearching = bodyText.includes('Searching…') || bodyText.includes('Searching...');
-    expect(stillSearching).toBeFalsy();
-    expect(hasError || hasNoVenuesMsg || hasResults > 0).toBeTruthy();
+    // Poll until the dropdown reaches a terminal state — error banner, real
+    // results, or "No venues found". Never a permanent "Searching…" spinner.
+    await expect.poll(async () => {
+      const bodyText = await page.locator('body').innerText();
+      const hasError = bodyText.includes('Google Places search is unavailable');
+      const hasNoVenuesMsg = bodyText.includes('No venues found');
+      const hasResults = await page.locator('button').filter({ hasText: /Madison Square Garden/i }).count();
+      const stillSearching = bodyText.includes('Searching…') || bodyText.includes('Searching...');
+      return !stillSearching && (hasError || hasNoVenuesMsg || hasResults > 0);
+    }, { timeout: 6000 }).toBeTruthy();
   });
 
   test('compactMode reduces row padding on shows page', async ({ page }) => {
     await login(page);
-    await page.goto('/api/test/seed');
-    await page.waitForTimeout(1500);
+    await seedForWorker(page);
 
     // Force compactMode to a known starting value (off).
     await gotoPrefs(page);
@@ -152,17 +151,21 @@ test.describe('Preferences fixes', () => {
     const a = await ctxA.newPage();
     await login(a);
     await gotoPrefs(a);
-    await a.getByRole('button', { name: 'Light', exact: true }).click();
-    await a.waitForTimeout(800);
+    const lightBtn = a.getByRole('button', { name: 'Light', exact: true });
+    await lightBtn.click();
+    // Wait for the prefs mutation to round-trip (button reflects active state).
+    await expect(lightBtn).toHaveAttribute('aria-pressed', 'true').catch(async () => {
+      // Fallback: data-theme on <html> updates after the mutation lands.
+      await expect(a.locator('html')).toHaveAttribute('data-theme', 'light', { timeout: 3000 });
+    });
     await ctxA.close();
 
     // Open a brand new context (clears localStorage) and log in as same user.
     const ctxB = await browser.newContext({ ignoreHTTPSErrors: true });
     const b = await ctxB.newPage();
     await login(b);
-    await b.waitForTimeout(2000);
-    const dataTheme = await b.locator('html').getAttribute('data-theme');
-    expect(dataTheme).toBe('light');
+    // Theme hydrates from server prefs after first paint — wait for it.
+    await expect(b.locator('html')).toHaveAttribute('data-theme', 'light', { timeout: 5000 });
     await ctxB.close();
   });
 });

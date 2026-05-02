@@ -1,16 +1,13 @@
 import { test, expect, type Page } from '@playwright/test';
+import { loginAndSeedAsWorker, loginAsEmptyWorker } from './helpers/auth';
 
 async function loginEmpty(page: Page) {
-  // Use a dedicated empty-state test user so seeded tests in other projects
-  // don't interfere (they use the default test@showbook.dev user).
-  await page.goto('/api/test/login?email=empty%40showbook.dev');
-  await page.waitForURL('**/home', { timeout: 10000 });
+  // Per-worker empty user so seeded tests don't interfere.
+  await loginAsEmptyWorker(page);
 }
 
 async function loginSeeded(page: Page) {
-  await page.goto('/api/test/seed');
-  await page.goto('/api/test/login');
-  await page.waitForURL('**/home', { timeout: 10000 });
+  await loginAndSeedAsWorker(page);
 }
 
 test.describe('Home page — empty state', () => {

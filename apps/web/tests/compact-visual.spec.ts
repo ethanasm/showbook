@@ -1,13 +1,11 @@
-import { test, type Page } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+import { loginAndSeedAsWorker } from './helpers/auth';
 
 // Captures screenshots of every list-bearing page in both loose and compact
 // modes so a human can eyeball that nothing looks broken.
 
 async function login(page: Page) {
-  await page.goto('/api/test/login');
-  await page.waitForURL('**/home');
-  await page.goto('/api/test/seed');
-  await page.waitForTimeout(1500);
+  await loginAndSeedAsWorker(page);
 }
 
 async function setCompact(page: Page, on: boolean) {
@@ -17,7 +15,7 @@ async function setCompact(page: Page, on: boolean) {
   const current = await toggle.getAttribute('aria-checked');
   if ((current === 'true') !== on) {
     await toggle.click();
-    await page.waitForTimeout(800);
+    await expect(toggle).toHaveAttribute('aria-checked', on ? 'true' : 'false');
   }
 }
 
@@ -29,8 +27,7 @@ test('capture loose vs compact for every list page', async ({ page }) => {
   await setCompact(page, false);
   for (const p of PAGES) {
     await page.goto(p);
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(800);
+    await page.waitForLoadState('domcontentloaded');
     const slug = p.replace(/^\//, '') || 'home';
     await page.screenshot({
       path: `test-results/screenshots/compact-loose-${slug}.png`,
@@ -40,8 +37,7 @@ test('capture loose vs compact for every list page', async ({ page }) => {
   await setCompact(page, true);
   for (const p of PAGES) {
     await page.goto(p);
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(800);
+    await page.waitForLoadState('domcontentloaded');
     const slug = p.replace(/^\//, '') || 'home';
     await page.screenshot({
       path: `test-results/screenshots/compact-on-${slug}.png`,

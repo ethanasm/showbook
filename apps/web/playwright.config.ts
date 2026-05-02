@@ -9,13 +9,26 @@ const port = Number(process.env.PLAYWRIGHT_PORT ?? 3003);
 // causing per-test timeouts. The build is produced in a separate CI step.
 const isCI = process.env.CI === 'true';
 const protocol = isCI ? 'http' : 'https';
+// Workers > 1 are safe: each worker partitions on its own
+// `e2e-w<index>@showbook.dev` user via /api/test/{login,seed}?worker=N.
+// Shared (read-only-after-setup) data — venues, performers,
+// announcements — is seeded once by `tests/global.setup.ts`.
+const workers = Number(process.env.PLAYWRIGHT_WORKERS ?? 4);
+
+const sharedUse = {
+  baseURL: `${protocol}://localhost:${port}`,
+  ignoreHTTPSErrors: true,
+  screenshot: 'only-on-failure' as const,
+  trace: 'retain-on-failure' as const,
+  ...(customChromium
+    ? { launchOptions: { executablePath: customChromium } }
+    : {}),
+};
 
 export default defineConfig({
   testDir: './tests',
   outputDir: './test-results',
-  // All tests share a single test user + DB. Run serially so /api/test/seed
-  // calls in one test don't wipe data another test is mid-way through using.
-  workers: 1,
+  workers,
   // CI: custom progress reporter prints `Executing X of Y tests (Z failed)`
   // after each test; HTML report is kept for the artifact upload step.
   // Local: default `list` reporter for full per-test detail.
@@ -25,18 +38,23 @@ export default defineConfig({
         ['html', { open: 'never' }],
       ]
     : 'list',
-  use: {
-    baseURL: `${protocol}://localhost:${port}`,
-    ignoreHTTPSErrors: true,
-    screenshot: 'only-on-failure',
-    trace: 'retain-on-failure',
-    ...(customChromium
-      ? { launchOptions: { executablePath: customChromium } }
-      : {}),
-  },
+  use: sharedUse,
   projects: [
-    { name: 'desktop-dark', use: { viewport: { width: 1440, height: 900 } } },
-    { name: 'mobile', use: { viewport: { width: 390, height: 844 } } },
+    {
+      name: 'setup',
+      testMatch: /global\.setup\.ts$/,
+      use: sharedUse,
+    },
+    {
+      name: 'desktop-dark',
+      use: { ...sharedUse, viewport: { width: 1440, height: 900 } },
+      dependencies: ['setup'],
+    },
+    {
+      name: 'mobile',
+      use: { ...sharedUse, viewport: { width: 390, height: 844 } },
+      dependencies: ['setup'],
+    },
   ],
   webServer: {
     command: isCI

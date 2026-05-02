@@ -1,9 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
+import { loginAndSeedAsWorker } from './helpers/auth';
 
 async function loginAndSeed(page: Page) {
-  await page.goto('/api/test/seed');
-  await page.goto('/api/test/login');
-  await page.waitForURL('**/home');
+  await loginAndSeedAsWorker(page);
 }
 
 test.describe('Calendar and stats features', () => {
