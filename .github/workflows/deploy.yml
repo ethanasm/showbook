@@ -55,6 +55,15 @@ jobs:
       # if your prod tree lives somewhere other than /opt/showbook.
       PROD_DIR: ${{ vars.PROD_DIR || '/opt/showbook' }}
       DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || inputs.sha }}
+      # On macOS self-hosted runners, /usr/bin/git is a stub that delegates
+      # to the developer dir selected by `xcode-select`. If the runner's
+      # selected dir is full Xcode and the license hasn't been accepted,
+      # every git invocation aborts with exit 69. Pinning DEVELOPER_DIR to
+      # Command Line Tools avoids that prompt — its license is accepted at
+      # install time and it has all we need (git, etc.). The variable is a
+      # no-op on Linux runners and on Macs without CLT, where git falls
+      # back to whatever's on PATH.
+      DEVELOPER_DIR: /Library/Developer/CommandLineTools
     steps:
       - name: Verify prod tree
         run: |

@@ -23,8 +23,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  preflight:
+    name: Check secrets
+    runs-on: ubuntu-latest
+    outputs:
+      has_secrets: ${{ steps.check.outputs.has_secrets }}
+    steps:
+      # Skip the rest of the workflow when the required secrets aren't
+      # configured in the repo. Without this guard the workflow fails on
+      # every nightly cron with "An Expo user account is required to
+      # proceed", which buries real signal. The job still runs (and
+      # reports success) so the workflow doesn't show as "failing"
+      # forever — it reports "skipped — secrets not configured" in the
+      # summary instead.
+      - id: check
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          MAESTRO_CLOUD_API_KEY: ${{ secrets.MAESTRO_CLOUD_API_KEY }}
+        run: |
+          if [ -n "$EXPO_TOKEN" ] && [ -n "$MAESTRO_CLOUD_API_KEY" ]; then
+            echo "has_secrets=true" >> "$GITHUB_OUTPUT"
+            echo "Secrets present — proceeding with EAS build + Maestro Cloud." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "has_secrets=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Mobile E2E skipped"
+              echo ""
+              echo "Required secrets are not configured on this repo:"
+              echo ""
+              [ -z "$EXPO_TOKEN" ] && echo "- \`EXPO_TOKEN\` (missing)"
+              [ -z "$MAESTRO_CLOUD_API_KEY" ] && echo "- \`MAESTRO_CLOUD_API_KEY\` (missing)"
+              echo ""
+              echo "Configure them under Settings → Secrets and variables → Actions to enable this workflow."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   build-and-test:
     name: EAS build + Maestro Cloud
+    needs: preflight
+    if: needs.preflight.outputs.has_secrets == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
