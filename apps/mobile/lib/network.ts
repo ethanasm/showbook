@@ -26,11 +26,10 @@
 
 import React from 'react';
 import {
-  createOutbox,
   type Outbox,
   type PendingWrite,
-  type SQLiteLike,
 } from './cache/outbox';
+import { getCacheOutbox } from './cache/db';
 import { useFeedback } from './feedback';
 
 // ---------------------------------------------------------------------------
@@ -166,34 +165,37 @@ export function useNetwork(): NetworkState {
 }
 
 // ---------------------------------------------------------------------------
-// Outbox singleton
+// Outbox accessor
 // ---------------------------------------------------------------------------
+//
+// The replay machinery shares the same `Outbox` instance that mutation
+// sites (Add / Edit / Setlist / Action sheet) use via `getCacheOutbox`.
+// Two key invariants come out of this unification:
+//
+//   1. Sign-out's `deleteCacheDatabase()` resets the singleton in
+//      `cache/db.ts`, so the next mutation after a sign-in re-binds to
+//      a fresh database. If `network.ts` cached its own promise, the
+//      stale handle would survive across users.
+//   2. There's exactly one `pending_writes` row per pending mutation,
+//      and the polling drawer + reconnect replay observe the same
+//      writes the user just enqueued.
+//
+// `getOutbox()` stays async to preserve the M6.A surface — the
+// underlying `getCacheOutbox()` is sync. Tests can override the
+// opener via `__setOutboxOpenerForTest` (used by `network.test.ts`).
 
-export type OutboxOpener = () => Promise<Outbox>;
+export type OutboxOpener = () => Outbox | Promise<Outbox>;
 
-const DEFAULT_DB_NAME = 'showbook-cache.db';
-
-async function defaultOutboxOpener(): Promise<Outbox> {
-  // Lazy require so node:test doesn't try to load expo-sqlite.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const SQLite = require('expo-sqlite') as {
-    openDatabaseAsync: (name: string) => Promise<SQLiteLike>;
-  };
-  const db = await SQLite.openDatabaseAsync(DEFAULT_DB_NAME);
-  return createOutbox(db, { ensureMigrations: true });
-}
+const defaultOutboxOpener: OutboxOpener = () => getCacheOutbox();
 
 let _outboxOpener: OutboxOpener = defaultOutboxOpener;
-let _outboxPromise: Promise<Outbox> | null = null;
 
-export function getOutbox(): Promise<Outbox> {
-  if (!_outboxPromise) _outboxPromise = _outboxOpener();
-  return _outboxPromise;
+export async function getOutbox(): Promise<Outbox> {
+  return _outboxOpener();
 }
 
 export function __setOutboxOpenerForTest(opener: OutboxOpener | null): void {
   _outboxOpener = opener ?? defaultOutboxOpener;
-  _outboxPromise = null;
 }
 
 // ---------------------------------------------------------------------------
@@ -251,6 +253,12 @@ function classifyError(err: unknown): ClassifiedError {
  * Drops successful rows; records the last error on failures. Transient
  * errors back off and retry inside the same call up to
  * `backoffMs.length + 1` total attempts.
+ *
+ * Each iteration re-checks `outbox.get(id)` before dispatching. This
+ * closes a race where a sign-out (which calls `deleteCacheDatabase`)
+ * happens mid-replay: the pending row is wiped from disk, the next
+ * `outbox.get` returns null, and the loop skips applying a stale write
+ * against a different user's session.
  */
 export async function replayOutbox(opts: ReplayOptions): Promise<void> {
   const sleep = opts.sleep ?? defaultSleep;
@@ -259,6 +267,11 @@ export async function replayOutbox(opts: ReplayOptions): Promise<void> {
   for (const write of writes) {
     let attempt = 0;
     while (true) {
+      // Defensive: another caller (sign-out cleanup, drawer discard,
+      // a parallel replay) may have removed this row while we were
+      // sleeping/retrying. Apply only what's still pending.
+      const stillPending = await opts.outbox.get(write.id).catch(() => null);
+      if (!stillPending) break;
       try {
         await opts.dispatch(write);
         await opts.outbox.drop(write.id);

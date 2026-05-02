@@ -11,26 +11,53 @@
  * `SQLiteLike` whose methods open the singleton on first use and re-open
  * after a `deleteCacheDatabase()` call. That lets the outbox and persister
  * survive sign-out → sign-in cycles without retaining a stale handle.
+ *
+ * `expo-sqlite` is loaded via a lazy require so this module is safe to
+ * import from `node:test` runs (which can't resolve the RN native
+ * binding). Tests that exercise the outbox / replay layer don't actually
+ * call `openCacheDatabase()` — they inject their own `SQLiteLike` via
+ * `__setOutboxOpenerForTest` in `network.ts`.
  */
 
-import * as SQLite from 'expo-sqlite';
 import { applyMigrations } from './schema';
 import { createOutbox, type Outbox } from './outbox';
 import type { SQLiteLike } from './sqlite-adapter';
 
+interface SQLiteModule {
+  openDatabaseAsync(name: string): Promise<SQLiteLikeNative>;
+  deleteDatabaseAsync(name: string): Promise<void>;
+}
+
+interface SQLiteLikeNative {
+  closeAsync?(): Promise<void>;
+  execAsync(sql: string): Promise<unknown>;
+  runAsync(sql: string, params?: unknown[]): Promise<unknown>;
+  getFirstAsync<T = unknown>(sql: string, params?: unknown[]): Promise<T | null>;
+  getAllAsync<T = unknown>(sql: string, params?: unknown[]): Promise<T[]>;
+}
+
+let _sqliteModule: SQLiteModule | null = null;
+function loadSQLite(): SQLiteModule {
+  if (_sqliteModule) return _sqliteModule;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  _sqliteModule = require('expo-sqlite') as SQLiteModule;
+  return _sqliteModule;
+}
+
 const DB_NAME = 'showbook-cache.db';
 
-let _db: SQLite.SQLiteDatabase | null = null;
-let _opening: Promise<SQLite.SQLiteDatabase> | null = null;
+let _db: SQLiteLikeNative | null = null;
+let _opening: Promise<SQLiteLikeNative> | null = null;
 
 /**
  * Open the cache database (once per process), apply pending migrations,
  * and return the singleton handle. Idempotent — concurrent callers share
  * the same in-flight open promise.
  */
-export async function openCacheDatabase(): Promise<SQLite.SQLiteDatabase> {
+export async function openCacheDatabase(): Promise<SQLiteLikeNative> {
   if (_db) return _db;
   if (_opening) return _opening;
+  const SQLite = loadSQLite();
   _opening = (async () => {
     const handle = await SQLite.openDatabaseAsync(DB_NAME);
     await applyMigrations(handle as unknown as SQLiteLike);
@@ -49,7 +76,7 @@ export async function closeCacheDatabase(): Promise<void> {
   const handle = _db;
   _db = null;
   _opening = null;
-  if (!handle) return;
+  if (!handle?.closeAsync) return;
   try {
     await handle.closeAsync();
   } catch {
@@ -66,6 +93,7 @@ export async function deleteCacheDatabase(): Promise<void> {
   await closeCacheDatabase();
   _outbox = null;
   try {
+    const SQLite = loadSQLite();
     await SQLite.deleteDatabaseAsync(DB_NAME);
   } catch {
     // The file may not exist yet (fresh install). That's fine.

@@ -111,11 +111,35 @@ export default function RootLayout(): React.JSX.Element {
  * inside TrpcProviders + NetworkProvider so it can read both contexts.
  * Exists as its own component so the dispatcher captures the freshest
  * client without re-mounting OfflineSyncProvider.
+ *
+ * The dispatcher refuses to apply pending writes when there's no active
+ * session, which closes a race where a sign-out + sign-in (different
+ * user) happens mid-replay and queued writes from the previous user
+ * would be applied with the new user's bearer token. The cache cleanup
+ * in `useSignOutCleanup` also drops the SQLite file, so the next
+ * outbox read inside `replayOutbox` returns null and the loop short-
+ * circuits — but enforcing the check here is defence-in-depth.
  */
 function OfflineBridge({ children }: { children: React.ReactNode }): React.JSX.Element {
   const utils = trpc.useUtils();
+  const { user } = useAuth();
+  const userIdRef = React.useRef<string | null>(user?.id ?? null);
+  React.useEffect(() => {
+    userIdRef.current = user?.id ?? null;
+  }, [user?.id]);
+
   const dispatch = React.useCallback<OutboxDispatch>(
     async (write) => {
+      if (!userIdRef.current) {
+        // Surface as a TRPCError-shaped object so `classifyError` in
+        // `replayOutbox` treats it as a hard 401 (non-transient) and
+        // doesn't burn the backoff schedule retrying.
+        const err = new Error('No active session — replay aborted') as Error & {
+          data?: { httpStatus?: number };
+        };
+        err.data = { httpStatus: 401 };
+        throw err;
+      }
       const c = utils.client;
       const payload = write.payload as never;
       const m: PendingMutation = write.mutation;
