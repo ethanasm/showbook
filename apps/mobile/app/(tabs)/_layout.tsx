@@ -38,6 +38,11 @@ import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, List, Plus, MapPin, User } from 'lucide-react-native';
 import { useTheme } from '../../lib/theme';
+import { useBreakpoint } from '../../lib/responsive';
+import { ThreePaneLayout } from '../../components/ThreePaneLayout';
+import ShowsScreen from './shows';
+import MapScreen from './map';
+import ShowDetailScreen from '../show/[id]';
 
 const TAB_BAR_BASE_HEIGHT = 50;
 
@@ -48,6 +53,20 @@ export default function TabsLayout(): React.JSX.Element {
   // Floor at 4pt so devices without a home indicator (older iPhones, most
   // Android phones) still leave a small breathing gap under the labels.
   const bottomPad = Math.max(insets.bottom, 4);
+  const breakpoint = useBreakpoint();
+
+  // iPad / large-screen shell: three-pane composition replaces the 5-tab
+  // bottom nav. The phone branch below is unchanged. Each pane mounts an
+  // existing M2 screen as-is — no per-screen iPad awareness.
+  if (breakpoint === 'tablet') {
+    return (
+      <ThreePaneLayout
+        left={<ShowsScreen />}
+        middle={<ShowDetailScreen />}
+        right={<MapScreen />}
+      />
+    );
+  }
 
   return (
     <Tabs
