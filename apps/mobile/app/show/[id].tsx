@@ -41,6 +41,7 @@ import { TopBar } from '../../components/TopBar';
 import { KindBadge } from '../../components/KindBadge';
 import { StateChip } from '../../components/StateChip';
 import { EmptyState } from '../../components/EmptyState';
+import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
 import { CACHE_DEFAULTS } from '../../lib/cache';
@@ -174,7 +175,7 @@ export default function ShowDetailScreen(): React.JSX.Element {
           <Lineup show={show} />
           {show.notes ? <Notes notes={show.notes} /> : null}
           <SetlistStub />
-          <PhotosStub />
+          <Photos showId={show.id} canUpload={isShowPast(show)} />
           <View style={styles.endRule}>
             <Text style={[styles.endText, { color: colors.faint }]}>— END —</Text>
           </View>
@@ -408,18 +409,57 @@ function SetlistStub(): React.JSX.Element {
   );
 }
 
-function PhotosStub(): React.JSX.Element {
+function isShowPast(show: ShowDetail): boolean {
+  // Mirrors the server's `isDatePast` rule: media uploads are gated on
+  // the show being in the past. We don't have endDate here so we treat a
+  // missing date conservatively as "not past" — matches server behaviour.
+  if (!show.date) return false;
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(
+    2,
+    '0',
+  )}-${String(today.getDate()).padStart(2, '0')}`;
+  return show.date < todayStr;
+}
+
+function Photos({
+  showId,
+  canUpload,
+}: {
+  showId: string;
+  canUpload: boolean;
+}): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const query = trpc.media.listForShow.useQuery(
+    { showId },
+    {
+      staleTime: CACHE_DEFAULTS.staleTime,
+      gcTime: CACHE_DEFAULTS.gcTime,
+    },
+  );
+
+  // The DTO carries multiple variants (thumb/large/source); the grid wants
+  // a single thumbnail uri. Prefer thumb, then source, then anything.
+  const items: MediaGridItem[] = (query.data ?? []).map((dto) => {
+    const urls = (dto.urls ?? {}) as Record<string, string>;
+    const thumbnailUri = urls.thumb ?? urls.large ?? urls.source ?? Object.values(urls)[0] ?? '';
+    return {
+      id: dto.id,
+      thumbnailUri,
+      caption: dto.caption,
+      tagCount: dto.performerIds?.length ?? 0,
+    };
+  });
+
   return (
     <Section title="Photos" icon={<ImageIcon size={13} color={colors.ink} strokeWidth={2} />}>
-      <View style={[styles.stubCard, { backgroundColor: colors.surface, borderColor: colors.rule }]}>
-        <EmptyState
-          icon={<ImageIcon size={32} color={colors.faint} strokeWidth={1.5} />}
-          title="Photos arrive in M4"
-          subtitle="Capture and upload from the show land in milestone four."
-        />
-      </View>
+      <MediaGrid
+        items={items}
+        showId={showId}
+        canUpload={canUpload}
+        loading={query.isLoading}
+      />
     </Section>
   );
 }

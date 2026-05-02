@@ -8,8 +8,8 @@
     "run-daily-digest": "tsx scripts/run-daily-digest.ts",
     "email:smoke": "tsx scripts/email-smoke.ts",
     "bootstrap-pgboss": "node scripts/bootstrap-pgboss.mjs",
-    "test": "find src/__tests__ -name '*.test.ts' -not -name '*.integration.test.ts' -print0 | xargs -0 node --import tsx --test",
-    "test:coverage": "mkdir -p coverage && find src/__tests__ -name '*.test.ts' -not -name '*.integration.test.ts' -print0 | xargs -0 node --import tsx --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/unit.info --test-reporter=spec --test-reporter-destination=stdout",
+    "test": "find src/__tests__ -name '*.test.ts' -not -name '*.integration.test.ts' -print0 | xargs -0 node --import tsx --test --experimental-test-module-mocks",
+    "test:coverage": "mkdir -p coverage && find src/__tests__ -name '*.test.ts' -not -name '*.integration.test.ts' -print0 | xargs -0 node --import tsx --test --experimental-test-module-mocks --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/unit.info --test-reporter=spec --test-reporter-destination=stdout",
     "test:integration": "node ../../scripts/run-integration.mjs packages/jobs",
     "test:integration:coverage": "mkdir -p coverage && LCOV_OUT=$PWD/coverage/integration.info node ../../scripts/run-integration.mjs packages/jobs --coverage",
     "typecheck": "tsc --noEmit -p tsconfig.json"

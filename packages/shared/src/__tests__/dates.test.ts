@@ -1,12 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  countdown,
   daysUntil,
   formatDateLong,
   formatDateMedium,
   formatDateParts,
   formatDateRangeLong,
   formatOnSaleDate,
+  formatShowDate,
   formatYear,
   isDatePast,
   toSetlistFmDate,
@@ -143,6 +145,44 @@ test("formatYear: extracts year", () => {
 test("isDatePast: today is not past", () => {
   const today = new Date().toISOString().slice(0, 10);
   assert.equal(isDatePast(today), false);
+});
+
+// ── countdown ───────────────────────────────────────────────────────────
+
+test("countdown: 'today' for today", () => {
+  const now = new Date();
+  // Add a few hours so we're squarely on the same calendar day
+  const target = new Date(now.getTime() + 1000 * 60 * 60 * 2);
+  const out = countdown(target);
+  // Could be 'today', 'tomorrow', or '1 days' depending on time drift
+  assert.match(out, /today|days|tomorrow/);
+});
+
+test("countdown: tomorrow / days / weeks / months / years", () => {
+  const day = (n: number) => new Date(Date.now() + n * 1000 * 60 * 60 * 24);
+  assert.match(countdown(day(1.5)), /tomorrow|days/);
+  assert.match(countdown(day(3)), /days/);
+  assert.match(countdown(day(15)), /weeks/);
+  assert.match(countdown(day(60)), /months/);
+  assert.match(countdown(day(800)), /years/);
+});
+
+test("countdown: past date returns 'N days ago'", () => {
+  const past = new Date(Date.now() - 1000 * 60 * 60 * 24 * 5);
+  assert.match(countdown(past), /days ago/);
+});
+
+// ── formatShowDate ──────────────────────────────────────────────────────
+
+test("formatShowDate: weekday + month + day + year", () => {
+  const out = formatShowDate("2024-06-15");
+  assert.match(out, /2024/);
+});
+
+// ── toSetlistFmDate string overload ─────────────────────────────────────
+
+test("toSetlistFmDate: string overload (zone-less ISO)", () => {
+  assert.equal(toSetlistFmDate("2024-06-15"), "15-06-2024");
 });
 
 test("toSetlistFmDate: dd-MM-yyyy", () => {

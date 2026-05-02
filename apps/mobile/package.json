@@ -10,7 +10,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "test": "find lib/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' \\) -print0 2>/dev/null | xargs -0 -I{} node --import tsx --test {}"
+    "test": "find lib/__tests__ components/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' \\) -print0 2>/dev/null | xargs -0 -I{} node --import tsx --test {}"
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.13",
@@ -23,6 +23,8 @@
     "expo-constants": "~55.0.15",
     "expo-crypto": "~55.0.14",
     "expo-font": "~55.0.6",
+    "expo-image": "~55.0.9",
+    "expo-image-picker": "~55.0.19",
     "expo-linking": "~55.0.14",
     "expo-location": "~55.1.8",
     "expo-media-library": "~55.0.15",

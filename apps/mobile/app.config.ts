@@ -35,6 +35,21 @@ const config: ExpoConfig = {
     config: GOOGLE_MAPS_API_KEY
       ? { googleMapsApiKey: GOOGLE_MAPS_API_KEY }
       : undefined,
+    // iPhone stays portrait-locked (matches the top-level `orientation`
+    // above); iPad gets all four orientations so the M6.C three-pane
+    // landscape layout has somewhere to live. The `~ipad` suffix is the
+    // standard Info.plist device-class override.
+    infoPlist: {
+      UISupportedInterfaceOrientations: [
+        'UIInterfaceOrientationPortrait',
+      ],
+      'UISupportedInterfaceOrientations~ipad': [
+        'UIInterfaceOrientationPortrait',
+        'UIInterfaceOrientationPortraitUpsideDown',
+        'UIInterfaceOrientationLandscapeLeft',
+        'UIInterfaceOrientationLandscapeRight',
+      ],
+    },
   },
   android: {
     package: 'com.showbook.app',
@@ -51,6 +66,18 @@ const config: ExpoConfig = {
     'expo-font',
     'expo-secure-store',
     'react-native-maps',
+    [
+      'expo-image-picker',
+      {
+        // Permission strings shown by iOS when the user is asked to grant
+        // access to photo library / camera. The picker is launched from the
+        // M4 upload sheet to attach photos and video to a past show.
+        photosPermission:
+          'Showbook needs access to your photos so you can add memories from shows you\'ve attended.',
+        cameraPermission:
+          'Showbook needs access to your camera so you can capture moments from shows you\'ve attended.',
+      },
+    ],
   ],
   experiments: {
     typedRoutes: true,
