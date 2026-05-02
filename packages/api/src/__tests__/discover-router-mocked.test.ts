@@ -185,6 +185,101 @@ describe('discoverRouter (with mocked db)', () => {
     });
   });
 
+  describe('followedFeed pagination', () => {
+    it('emits null ticketUrl when neither stored nor sourceEventId is set', async () => {
+      const a = {
+        id: 'a',
+        venueId: 'v1',
+        showDate: '2026-08-01',
+        ticketUrl: null,
+        sourceEventId: null,
+      };
+      reset({
+        selectResults: [
+          [{ venueId: 'v1' }],
+          [{ announcement: a, venue: { id: 'v1', name: 'V' } }],
+        ],
+      });
+      const result = await caller().call((c) =>
+        c.followedFeed({ limit: 10 }),
+      );
+      assert.equal(result.items.length, 1);
+      assert.equal(result.items[0]!.ticketUrl, null);
+    });
+  });
+
+  describe('followedArtistsFeed pagination', () => {
+    it('emits a nextCursor when results overflow the limit', async () => {
+      const a1 = {
+        id: 'a1',
+        venueId: 'v1',
+        showDate: '2026-08-01',
+        ticketUrl: null,
+        sourceEventId: 'evt-1',
+      };
+      const a2 = {
+        id: 'a2',
+        venueId: 'v1',
+        showDate: '2026-08-02',
+        ticketUrl: null,
+        sourceEventId: null,
+      };
+      reset({
+        selectResults: [
+          [{ performerId: 'p1' }],
+          [
+            { announcement: a1, venue: { id: 'v1', name: 'V' } },
+            { announcement: a2, venue: { id: 'v1', name: 'V' } },
+          ],
+        ],
+      });
+      const result = await caller().call((c) =>
+        c.followedArtistsFeed({ limit: 1 }),
+      );
+      assert.equal(result.items.length, 1);
+      assert.ok(result.nextCursor);
+    });
+  });
+
+  describe('nearbyFeed cursor handling', () => {
+    it('honors a per-region cursor and assigns to smallest matching region', async () => {
+      const r1 = {
+        id: 'r1',
+        cityName: 'NYC',
+        latitude: 40.7,
+        longitude: -74,
+        radiusMiles: 50,
+      };
+      const r2 = {
+        id: 'r2',
+        cityName: 'NYC small',
+        latitude: 40.7,
+        longitude: -74,
+        radiusMiles: 5,
+      };
+      const venue = { id: 'v', name: 'V', latitude: 40.7, longitude: -74 };
+      const announcement = {
+        id: 'a1',
+        venueId: 'v',
+        showDate: '2026-08-01',
+        ticketUrl: null,
+        sourceEventId: null,
+      };
+      reset({
+        selectResults: [
+          [r1, r2],
+          [], // followedVenues
+          [{ announcement, venue }],
+        ],
+      });
+      const result = await caller().call((c) =>
+        c.nearbyFeed({}),
+      );
+      assert.equal(result.items.length, 1);
+      assert.equal(result.items[0]!.regionId, 'r2'); // smaller region wins
+    });
+  });
+
   describe('watchlist', () => {
     it('throws when announcement is not found', async () => {
       reset({ selectResults: [[]] });
