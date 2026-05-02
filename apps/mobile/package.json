@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "test": "find lib/__tests__ components/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' -o -name '*.test.cjs' \\) -print0 2>/dev/null | xargs -0 -I{} node --import tsx --test {}"
+    "test": "find lib/__tests__ components/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' -o -name '*.test.cjs' \\) -print0 2>/dev/null | xargs -0 -I{} node --import tsx --test {}",
+    "test:coverage": "mkdir -p coverage && find lib/__tests__ components/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' -o -name '*.test.cjs' \\) -print0 2>/dev/null | xargs -0 node --import tsx --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/mobile-unit.info --test-reporter=spec --test-reporter-destination=stdout"
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.13",
