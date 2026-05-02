@@ -37,8 +37,18 @@ import { trpc, createQueryClient, createTrpcClient } from '../lib/trpc';
 import { CacheBridge } from '../lib/cache/CacheBridge';
 import { loadAppFonts } from '../lib/fonts';
 import { FeedbackProvider } from '../lib/feedback';
+import {
+  NetworkProvider,
+  OfflineSyncProvider,
+  useOfflineSync,
+  type OutboxDispatch,
+  type PendingMutation,
+} from '../lib/network';
 import { ToastHost } from '../components/Toast';
+import { BannerHost } from '../components/Banner';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { PendingWritesDrawer } from '../components/PendingWritesDrawer';
+import { useNetwork } from '../lib/network';
 
 // Keep the splash screen up until fonts are ready. Errors here are
 // non-fatal — if preventAutoHideAsync rejects, the splash hides on its
@@ -74,9 +84,15 @@ export default function RootLayout(): React.JSX.Element {
                 <TrpcProviders>
                   <CacheBridge>
                     <BottomSheetModalProvider>
-                      <Slot />
-                      <ToastHost />
-                      <StatusBar style="auto" />
+                      <NetworkProvider>
+                        <OfflineBridge>
+                          <BannerHost />
+                          <Slot />
+                          <ToastHost />
+                          <StatusBar style="auto" />
+                          <PendingWritesDrawerHost />
+                        </OfflineBridge>
+                      </NetworkProvider>
                     </BottomSheetModalProvider>
                   </CacheBridge>
                 </TrpcProviders>
@@ -86,6 +102,57 @@ export default function RootLayout(): React.JSX.Element {
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
+  );
+}
+
+/**
+ * Bridges tRPC's vanilla client into the offline outbox dispatcher. Lives
+ * inside TrpcProviders + NetworkProvider so it can read both contexts.
+ * Exists as its own component so the dispatcher captures the freshest
+ * client without re-mounting OfflineSyncProvider.
+ */
+function OfflineBridge({ children }: { children: React.ReactNode }): React.JSX.Element {
+  const utils = trpc.useUtils();
+  const dispatch = React.useCallback<OutboxDispatch>(
+    async (write) => {
+      const c = utils.client;
+      const payload = write.payload as never;
+      const m: PendingMutation = write.mutation;
+      switch (m) {
+        case 'shows.create':
+          return c.shows.create.mutate(payload);
+        case 'shows.update':
+          return c.shows.update.mutate(payload);
+        case 'shows.delete':
+          return c.shows.delete.mutate(payload);
+        case 'shows.updateState':
+          return c.shows.updateState.mutate(payload);
+        case 'shows.setSetlist':
+          return c.shows.setSetlist.mutate(payload);
+        default: {
+          const _exhaustive: never = m;
+          throw new Error(`Unknown pending mutation: ${String(_exhaustive)}`);
+        }
+      }
+    },
+    [utils],
+  );
+  return <OfflineSyncProvider dispatch={dispatch}>{children}</OfflineSyncProvider>;
+}
+
+function PendingWritesDrawerHost(): React.JSX.Element {
+  const sync = useOfflineSync();
+  const network = useNetwork();
+  return (
+    <PendingWritesDrawer
+      open={sync.drawerOpen}
+      onClose={sync.closeDrawer}
+      entries={sync.entries}
+      onRetry={sync.retry}
+      onDiscard={sync.discard}
+      online={network.online}
+      syncing={sync.syncing}
+    />
   );
 }
 
