@@ -56,7 +56,9 @@
       "postcss@<8.5.10": "^8.5.10",
       "svix@<1.92.2": "^1.92.2",
       "nx>minimatch@<9.0.7": "^9.0.7",
-      "@esbuild-kit/core-utils>esbuild": "^0.25.0"
+      "@esbuild-kit/core-utils>esbuild": "^0.25.0",
+      "follow-redirects@<1.16.0": "^1.16.0",
+      "uuid@<14.0.0": "^14.0.0"
     }
   }
 }

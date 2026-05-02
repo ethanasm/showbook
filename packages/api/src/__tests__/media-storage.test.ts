@@ -104,6 +104,55 @@ test('storeLocalObject: rejects absolute paths', async () => {
   );
 });
 
+test('storeLocalObject: rejects keys containing backslashes', async () => {
+  useLocalTempRoot();
+  await assert.rejects(
+    () => storeLocalObject('showbook\\..\\etc\\passwd', Buffer.from('x')),
+    /Invalid media key/,
+  );
+});
+
+test('storeLocalObject: rejects keys with empty segments', async () => {
+  useLocalTempRoot();
+  await assert.rejects(
+    () => storeLocalObject('showbook//foo.jpg', Buffer.from('x')),
+    /Invalid media key/,
+  );
+});
+
+test('storeLocalObject: rejects keys with trailing slash', async () => {
+  useLocalTempRoot();
+  await assert.rejects(
+    () => storeLocalObject('showbook/foo/', Buffer.from('x')),
+    /Invalid media key/,
+  );
+});
+
+test('storeLocalObject: rejects keys whose segments start with a dot', async () => {
+  useLocalTempRoot();
+  await assert.rejects(
+    () => storeLocalObject('showbook/.hidden/foo', Buffer.from('x')),
+    /Invalid media key/,
+  );
+});
+
+test('storeLocalObject: rejects empty keys', async () => {
+  useLocalTempRoot();
+  await assert.rejects(
+    () => storeLocalObject('', Buffer.from('x')),
+    /Invalid media key/,
+  );
+});
+
+test('storeLocalObject: accepts UUID-shaped key segments', async () => {
+  useLocalTempRoot();
+  const key =
+    'showbook/123e4567-e89b-12d3-a456-426614174000/shows/' +
+    'abcdef01-2345-6789-abcd-ef0123456789/photos/' +
+    'fedcba98-7654-3210-fedc-ba9876543210/thumb.webp';
+  await storeLocalObject(key, Buffer.from('x'));
+});
+
 // ── local-mode round trip: store → head → read → delete ────────────────
 
 test('local mode: stores a file, heads its size, reads the body, deletes it', async () => {
