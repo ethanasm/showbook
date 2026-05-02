@@ -48,6 +48,15 @@ test.describe('Discover overhaul', () => {
     await page.goto('/discover');
     await page.waitForLoadState('networkidle');
 
+    // Slow down the refreshNow tRPC response so we can deterministically
+    // observe the in-flight UI. In CI, the mutation + ingest jobs can both
+    // complete before Playwright's polling catches the "Refreshing" /
+    // "Loading shows" state, making the assertions flake.
+    await page.route('**/api/trpc/discover.refreshNow**', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.continue();
+    });
+
     const btn = page.getByRole('button', { name: /^Refresh$/ });
     await btn.click();
 
