@@ -94,6 +94,16 @@ export const __test = {
   detectImageMime,
 };
 
+/**
+ * Lightweight liveness check for the Groq API. Lists models — no token
+ * burn, no LLM trace. Used by the health-check cron to verify the API
+ * key is valid and the service is reachable.
+ */
+export async function pingGroq(): Promise<{ models: number }> {
+  const list = await groq().models.list();
+  return { models: list.data.length };
+}
+
 const MODEL_TEXT = 'llama-3.3-70b-versatile';
 const MODEL_VISION = 'meta-llama/llama-4-scout-17b-16e-instruct';
 
