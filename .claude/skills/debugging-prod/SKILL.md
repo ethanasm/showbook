@@ -7,7 +7,7 @@ description: Use when investigating production issues in the showbook stack — 
 
 ## Overview
 
-Prod logs ship from `showbook-prod-web` to Axiom (dataset `showbook-prod`) via `pino` + `@axiomhq/pino`. The repo-side `AXIOM_TOKEN` is **ingest-only** and cannot read. To query, this skill uses the user-scoped `AXIUM_QUERY_TOKEN` PAT.
+Prod logs ship from `showbook-prod-web` to Axiom (dataset `showbook-prod`) via `pino` + `@axiomhq/pino`. The repo-side `AXIOM_TOKEN` is **ingest-only** and cannot read. Querying requires a user-scoped Personal Access Token (PAT) with the `Query` capability on the `showbook-prod` dataset, exposed to the shell as `AXIUM_QUERY_TOKEN` (note the spelling — kept for backward compatibility).
 
 The runbook below turns a vague prod report into the next concrete query. CLAUDE.md is the source of truth for the curated event-name catalog, organized by component prefix — refer to it when narrowing by `event`.
 
@@ -23,19 +23,21 @@ The runbook below turns a vague prod report into the next concrete query. CLAUDE
 - **LLM regressions** (bad output, slow generations, missing tool calls) → Langfuse, not Axiom. Traces from `traceLLM` / `withTrace` are not in this dataset.
 - **Local/dev debugging** → `AXIOM_TOKEN` is intentionally unset in `.env.dev`; just read stdout.
 - **Schema / migration issues** → run `pnpm db:studio` against prod (read-only) or check `pnpm prod:migrate` output.
-- **Cloud / web-sandbox sessions** (Claude Code on the web, hosted runners, etc.) → the skill relies on `AXIUM_QUERY_TOKEN` exported from the user's local `~/.zshrc`, which isn't reachable from cloud envs, and the Axiom API isn't part of the sandbox network anyway. Ask the user to run the recipes locally and paste results back instead.
 
 ## Pre-flight
 
-Each Bash tool call starts a fresh shell that doesn't inherit the user's
-exported env, so the token has to be sourced inline. Run this first — it
-re-sources `~/.zshrc` and reports whether the token is now in scope:
+The token must be available as an env var. Different environments expose it
+differently — check, and if missing, source the user's shell rc as a fallback:
 
 ```bash
-source ~/.zshrc; test -n "$AXIUM_QUERY_TOKEN" && echo "ok" || echo "AXIUM_QUERY_TOKEN missing — add it to ~/.zshrc as a PAT from Axiom → Settings → Profile → Personal Access Tokens"
+if [ -z "$AXIUM_QUERY_TOKEN" ] && [ -f ~/.zshrc ]; then . ~/.zshrc; fi
+if [ -z "$AXIUM_QUERY_TOKEN" ] && [ -f ~/.bashrc ]; then . ~/.bashrc; fi
+test -n "$AXIUM_QUERY_TOKEN" && echo "ok" || echo "AXIUM_QUERY_TOKEN missing — ask the user to export a PAT from Axiom → Settings → Profile → Personal Access Tokens"
 ```
 
-If still unset after sourcing, ask the user to export it. Never commit it.
+If still unset, ask the user to export it. Never commit it.
+
+The Axiom org id is **autodiscovered** from the token — no hardcoded slug. The query template below resolves it once via `/v1/orgs` and caches it in `$AXIOM_ORG`. (If `$AXIOM_ORG` is already exported, it's used as-is. The env var `AXIOM_ORG_ID` is sometimes confused with the dataset name; do not rely on it.)
 
 ## Decision tree
 
@@ -61,19 +63,26 @@ Symptom from user
 ## Query template
 
 All queries use the same curl wrapper. Substitute the APL string in `<<APL>>`.
-The `source ~/.zshrc` prefix is required on every call — each Bash tool
-invocation is a fresh shell and won't have `AXIUM_QUERY_TOKEN` in scope
-otherwise:
+The preamble auto-discovers `$AXIOM_ORG` if not already set, so the wrapper
+works on any machine that has `AXIUM_QUERY_TOKEN` exported (laptop, server,
+sandbox):
 
 ```bash
-source ~/.zshrc; ORG=showbook-egap; curl -sS -X POST "https://api.axiom.co/v1/datasets/_apl?format=tabular" \
+: "${AXIOM_ORG:=$(curl -sS https://api.axiom.co/v1/orgs -H "Authorization: Bearer $AXIUM_QUERY_TOKEN" | python3 -c 'import sys,json; print(json.load(sys.stdin)[0]["id"])')}"
+curl -sS -X POST "https://api.axiom.co/v1/datasets/_apl?format=tabular" \
   -H "Authorization: Bearer $AXIUM_QUERY_TOKEN" \
-  -H "X-AXIOM-ORG-ID: $ORG" \
+  -H "X-AXIOM-ORG-ID: $AXIOM_ORG" \
   -H "Content-Type: application/json" \
   -d '{"apl": "<<APL>>"}'
 ```
 
-Pipe to `jq` for readability, or `column -t -s $'\t'` for the tabular form.
+Pipe to `python3 -m json.tool` (or `jq`) for readability. For row-oriented
+output from the tabular response, this one-liner zips the column arrays back
+into per-row JSON:
+
+```bash
+python3 -c "import sys,json; d=json.load(sys.stdin); t=d['tables'][0]; f=[x['name'] for x in t['fields']]; [print(json.dumps(dict(zip(f,r)))) for r in zip(*t['columns'])]"
+```
 
 ## Recipe library
 
@@ -97,7 +106,7 @@ Drop these into the `<<APL>>` slot above.
 
 **4. Failed jobs in last 24h — what blew up overnight.**
 ```
-["showbook-prod"] | where _time > ago(24h) and event == "job.failed" | project _time, job, jobId, msg, err | order by _time desc
+["showbook-prod"] | where _time > ago(24h) and event == "job.failed" | project _time, job, jobId, msg | order by _time desc
 ```
 
 **5. Did event X fire today? — confirm a scheduled run.**
@@ -112,19 +121,23 @@ Drop these into the `<<APL>>` slot above.
 
 **7. Errors with full context (last 6h).**
 ```
-["showbook-prod"] | where _time > ago(6h) and level == "error" | project _time, event, component, msg, err | order by _time desc | limit 50
+["showbook-prod"] | where _time > ago(6h) and level == "error" | project _time, event, component, msg, ["err.message"], ["err.cause.message"] | order by _time desc | limit 50
 ```
+
+Note: nested error fields are flattened by Axiom's ingest into dotted columns
+(`err.message`, `err.cause.message`, etc.). Reference them with bracket-quoted
+identifiers in APL — bare `err` will fail to compile.
 
 ## Docker logs fallback
 
-When Axiom returns nothing for a recent window (retention rolled off, ingest lag, or the container restarted before flushing), fall through to the container's stdout:
+When Axiom returns nothing for a recent window (retention rolled off, ingest lag, or the container restarted before flushing), fall through to the container's stdout — only useful when SSH'd to the host running prod:
 
 ```bash
 docker logs showbook-prod-web --since 15m 2>&1 | tail -200
 docker logs showbook-prod-web --since 1h 2>&1 | grep -E '"level":"(warn|error)"'
 ```
 
-Useful when SSH'd to the host. Stdout is JSON (`pino` in prod), so `jq` works:
+Stdout is JSON (`pino` in prod), so `jq` works:
 
 ```bash
 docker logs showbook-prod-web --since 30m 2>&1 | jq -c 'select(.level=="error") | {time, event, msg, err}'
@@ -134,7 +147,8 @@ docker logs showbook-prod-web --since 30m 2>&1 | jq -c 'select(.level=="error") 
 
 - **`err.cause` is missing in Axiom.** Pino's `err` serializer in `packages/observability/src/logger.ts` does NOT walk `cause`, so wrapped postgres-js / Drizzle errors lose their underlying SQLSTATE. If a `Failed query: …` log is unhelpful, fix the serializer first rather than working around it. Docker stdout has the same gap — it's the serializer, not the transport.
 - **Wrong token = empty results, not auth error.** `AXIOM_TOKEN` is ingest-only. If `AXIUM_QUERY_TOKEN` was created without `Query` capability on `showbook-prod`, Axiom returns 200 with no rows. Verify in the UI under Settings → Tokens.
-- **Org header is required.** Omitting `X-AXIOM-ORG-ID` makes the request fail silently with a misleading error.
+- **Org id ≠ dataset name.** The dataset is `showbook-prod`; the org slug is something else (e.g. `showbook-egap`). Do not hardcode it — let the `/v1/orgs` lookup resolve it. Setting `AXIOM_ORG_ID=showbook-prod` (the dataset) makes every query 404.
+- **Org header is required for query requests.** Omitting `X-AXIOM-ORG-ID` on `/v1/datasets/_apl` gives a 400; pointing it at the wrong org gives a 404 with empty body (not a clear auth error).
 - **Timezone.** `_time` is UTC. Convert with `bin_auto(_time)` and `format_datetime(_time, "yyyy-MM-dd HH:mm:ss")` if comparing against ET-scheduled jobs (digest at 08:00 ET = 12:00/13:00 UTC depending on DST).
 
 ## Quick reference
