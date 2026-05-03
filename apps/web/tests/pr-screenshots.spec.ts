@@ -13,12 +13,8 @@ import { takeScreenshot } from './helpers/screenshots';
 
 const ROUTES_FILE = path.join(__dirname, '.pr-screenshots.json');
 
-function readRoutes(): string[] {
-  if (!existsSync(ROUTES_FILE)) {
-    throw new Error(
-      `pr-screenshots: ${ROUTES_FILE} not found. The pr-screenshots skill writes this file before running Playwright.`,
-    );
-  }
+function readRoutes(): string[] | null {
+  if (!existsSync(ROUTES_FILE)) return null;
   const parsed = JSON.parse(readFileSync(ROUTES_FILE, 'utf8')) as {
     routes?: unknown;
   };
@@ -42,6 +38,8 @@ function slugify(route: string): string {
 test('capture PR screenshots for diff-touched routes', async ({ page }, testInfo) => {
   test.setTimeout(180_000);
   const routes = readRoutes();
+  test.skip(routes === null, 'pr-screenshots skill did not stage a routes file');
+  if (routes === null) return;
   const projectSlug = testInfo.project.name === 'mobile' ? 'mobile' : 'desktop';
   await loginAndSeedAsWorker(page);
   for (const route of routes) {
