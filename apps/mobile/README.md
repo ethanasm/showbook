@@ -2,7 +2,7 @@
 
 Expo + TypeScript app for Showbook. See
 [`showbook-specs/mobile-roadmap.md`](../../showbook-specs/mobile-roadmap.md)
-for the build plan.
+for the milestone plan.
 
 ## Setup
 
@@ -64,54 +64,10 @@ The backend (`apps/web`) needs `GOOGLE_OAUTH_MOBILE_AUDIENCES` set
 to the comma-separated list of these client IDs so it accepts the
 mobile-issued ID tokens at `POST /api/auth/mobile-token`.
 
-## What's shipped
-
-The mobile app is feature-complete against the design handoff:
-
-- **Sign in with Google** — native OAuth via Expo AuthSession; ID
-  token traded for a NextAuth-compatible JWT and stored in
-  `expo-secure-store`.
-- **First-run permissions** — welcome → notifications → photos →
-  location → gmail flow, each with deferable asks.
-- **5-tab nav** — Home, Shows, Add, Map, Me, all wired to real data.
-- **Theme system** — token-driven `ThemeProvider` + `useTheme` hook
-  with light + dark palettes. No CSS-in-JS dependency.
-- **Read flows** — Home, Shows (Timeline / Month / Stats), Show
-  detail, Map (clustered + pin sheet), Me, all on top of an
-  `expo-sqlite` cache + `useCachedQuery`.
-- **Add + Edit** — chat-mode Add (LLM round-trip), form fallback
-  with debounced venue typeahead, Edit show, show action sheet,
-  setlist composer with drag-reorder + encore divider.
-- **Media** — multi-select upload with per-file progress against
-  the existing presigned R2 endpoint, media grid + lightbox,
-  tag-performers sheet, over-quota state.
-- **Discovery + secondaries** — Discover feed, Artists list +
-  detail, Venues list + detail, omnisearch.
-- **System polish + iPad** — Toast / Banner system, offline +
-  pending-writes drawer, iPad three-pane landscape layout.
+## Status
 
 See [`showbook-specs/mobile-roadmap.md`](../../showbook-specs/mobile-roadmap.md)
-for the full build plan and
-[`apps/mobile/CLAUDE.md`](./CLAUDE.md) for working conventions.
-
-## Open follow-ups
-
-- **Push notifications.** The toggle in Preferences and the
-  client-side permission prompt exist; the server-side wiring
-  (Expo push token persistence, digest emission, deep-link routing)
-  is the open follow-up tracked in the root
-  [`Planned Improvements.md`](../../Planned%20Improvements.md).
-- **Latest mobile review items.** See
-  [`showbook-specs/reviews/mobile-review-2026-05-02.md`](../../showbook-specs/reviews/mobile-review-2026-05-02.md)
-  — most notably wiring sign-out to clear the SQLite cache + React
-  Query cache, switching the per-screen fake outbox shims in
-  setlist/edit to the real `expo-sqlite` outbox, and giving Add show
-  a real optimistic path so failed creates are retryable.
-- **Geist font is a no-op loader.** `lib/fonts.ts` resolves
-  immediately and the system sans falls back. On iOS this looks very
-  close to Geist; we'll wire the real font in a later polish pass.
-- **Asset placeholders are 1x1 PNGs.** Splash, icon, and adaptive
-  icon need real artwork before TestFlight / Play Store submission.
+for the milestone plan, what's shipped, and what's next.
 
 ## Maestro E2E flows
 
