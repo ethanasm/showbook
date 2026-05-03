@@ -5,12 +5,14 @@
   toggle and the Expo client requests permission, but the server-side
   push delivery (Expo push tokens stored per device, digest job emitting
   pushes, deep-link routing on tap) still needs to be built.
-- Address the post-M5 review items in
-  [`showbook-specs/reviews/mobile-review-2026-05-02.md`](showbook-specs/reviews/mobile-review-2026-05-02.md)
-  — most notably wiring sign-out to clear the SQLite cache + React Query
-  cache, switching the per-screen fake outbox shims in setlist/edit to
-  the real `expo-sqlite` outbox, and giving Add show a real optimistic
-  path so failed creates are retryable.
+- Smaller items from the post-M5 audit that weren't addressed in the
+  follow-up fix PR: the unencrypted SQLite cache threat-model note,
+  swapping the destructive Delete "tap-again" for an `Alert.alert`,
+  the inline `width: '${pct}%'` style allocations on the Shows tab,
+  the setlist composer's `KeyboardAvoidingView` scope, the outbox
+  `_idCounter` cold-start collision risk, the
+  `runOptimisticMutation` snapshot-undefined gating, and renaming
+  the Map "Search this area" button (or wiring a real bbox filter).
 
 ### Code Health (next batch from the audit)
 - **Refactor mega-pages.** `add/page.tsx` (~2.9k LOC), `discover/page.tsx` (~2.1k LOC), `venues/[id]/page.tsx`, `preferences/page.tsx` each bundle 5+ concerns. Round-1 audit identified clear extraction targets (`VenueSearchModal`, `RegionSearchModal`, `VenueRail`, `FormStateManager`, `SetlistFetcher`, `MediaUploadOrchestrator`, `DiscoveryImportUI`).
