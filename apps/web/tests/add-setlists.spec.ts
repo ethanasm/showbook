@@ -1,9 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
+import { loginAndSeedAsWorker, workerShowId } from './helpers/auth';
 
 async function loginAndSeed(page: Page) {
-  await page.goto('/api/test/seed');
-  await page.goto('/api/test/login');
-  await page.waitForURL('**/home');
+  await loginAndSeedAsWorker(page);
 }
 
 test.describe('Add page — per-performer setlist input', () => {
@@ -70,10 +69,11 @@ test.describe('Add page — per-performer setlist input', () => {
 
   test('editing a show with setlists renders the setlist section', async ({ page }) => {
     // Look up the show id directly so we don't depend on shows-page pagination.
-    const res = await page.request.get(
-      '/api/test/show-id?headliner=Radiohead&venueName=Madison+Square+Garden&state=past',
-    );
-    const { id } = await res.json();
+    const id = await workerShowId(page, {
+      headliner: 'Radiohead',
+      venueName: 'Madison Square Garden',
+      state: 'past',
+    });
     if (!id) throw new Error('Radiohead @ MSG show not seeded');
     await page.goto(`/add?editId=${id}`);
     // Wait for the edit prefill to finish (Loading… is replaced by the form).

@@ -48,7 +48,7 @@ import { useTheme } from '../../../lib/theme';
 import { trpc } from '../../../lib/trpc';
 import { useFeedback } from '../../../lib/feedback';
 import { runOptimisticMutation } from '../../../lib/mutations';
-import { createOutbox } from '../../../lib/cache/outbox';
+import { getCacheOutbox } from '../../../lib/cache';
 
 interface ShowDetailLike {
   id: string;
@@ -100,47 +100,6 @@ function tracksToSetlist(tracks: DraftTrack[]): PerformerSetlist {
   if (main.songs.length > 0) sections.push(main);
   if (encore.songs.length > 0) sections.push(encore);
   return { sections };
-}
-
-let _outboxSingleton: ReturnType<typeof createOutbox> | null = null;
-function getOutbox(): ReturnType<typeof createOutbox> {
-  if (_outboxSingleton) return _outboxSingleton;
-  const rows = new Map<
-    string,
-    { id: string; mutation: string; payload: string; created_at: number; attempts: number; last_error: string | null }
-  >();
-  const db = {
-    async execAsync() {},
-    async runAsync(sql: string, params: unknown[] = []) {
-      if (/^INSERT INTO pending_writes/i.test(sql)) {
-        const [id, mutation, payload, created_at] = params as [string, string, string, number];
-        rows.set(id, { id, mutation, payload, created_at, attempts: 0, last_error: null });
-      } else if (/^DELETE FROM pending_writes WHERE id/i.test(sql)) {
-        rows.delete((params as string[])[0]);
-      } else if (/^DELETE FROM pending_writes/i.test(sql)) {
-        rows.clear();
-      } else if (/^UPDATE pending_writes/i.test(sql)) {
-        const [error, id] = params as [string, string];
-        const row = rows.get(id);
-        if (row) {
-          row.attempts += 1;
-          row.last_error = error;
-        }
-      }
-    },
-    async getFirstAsync<T>(sql: string, params: unknown[] = []) {
-      if (/FROM pending_writes WHERE id/i.test(sql)) {
-        const r = rows.get((params as string[])[0]);
-        return (r ?? null) as T | null;
-      }
-      return null;
-    },
-    async getAllAsync<T>() {
-      return Array.from(rows.values()).sort((a, b) => a.created_at - b.created_at) as T[];
-    },
-  };
-  _outboxSingleton = createOutbox(db, { ensureMigrations: false });
-  return _outboxSingleton;
 }
 
 export default function SetlistComposerScreen(): React.JSX.Element {
@@ -234,7 +193,7 @@ export default function SetlistComposerScreen(): React.JSX.Element {
       await runOptimisticMutation({
         mutation: 'shows.setSetlist',
         input: { showId, performerId: activePerformerId, setlist },
-        outbox: getOutbox(),
+        outbox: getCacheOutbox(),
         call: (i) => utils.client.shows.setSetlist.mutate(i),
         optimistic: {
           snapshot: () => queryClient.getQueryData(detailKey),
@@ -314,6 +273,10 @@ export default function SetlistComposerScreen(): React.JSX.Element {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
       <TopBar
         title="Setlist"
         eyebrow={activePerformerName?.toUpperCase()}
@@ -398,10 +361,6 @@ export default function SetlistComposerScreen(): React.JSX.Element {
         </View>
       ) : null}
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
         <DraggableFlatList<DraftTrack>
           data={orderedTracks}
           keyExtractor={(item) => item.key}

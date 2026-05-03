@@ -37,6 +37,8 @@ import { TopBar } from '../../components/TopBar';
 import { EmptyState } from '../../components/EmptyState';
 import { KindBadge } from '../../components/KindBadge';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
+import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
+import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { trpc } from '../../lib/trpc';
@@ -154,6 +156,20 @@ export default function VenueDetailScreen(): React.JSX.Element {
     enabled: Boolean(token) && venueId.length > 0,
   });
 
+  type VenueMedia = {
+    id: string;
+    showId: string;
+    caption: string | null;
+    performerIds: string[];
+    urls: Record<string, string>;
+  };
+  const mediaQuery = useCachedQuery<VenueMedia[]>({
+    queryKey: ['mobile', 'venue', venueId, 'media'],
+    queryFn: () =>
+      utils.client.media.listForVenue.query({ venueId }) as unknown as Promise<VenueMedia[]>,
+    enabled: Boolean(token) && venueId.length > 0,
+  });
+
   const back = (
     <Pressable
       onPress={() => (router.canGoBack() ? router.back() : router.replace('/venues'))}
@@ -168,6 +184,26 @@ export default function VenueDetailScreen(): React.JSX.Element {
   const venue = detailQuery.data;
   const upcoming = upcomingQuery.data ?? [];
   const shows = showsQuery.data ?? [];
+  const refreshControl = useThemedRefreshControl(
+    (detailQuery.isFetching ||
+      upcomingQuery.isFetching ||
+      showsQuery.isFetching ||
+      mediaQuery.isFetching) &&
+      !(
+        detailQuery.isLoading &&
+        upcomingQuery.isLoading &&
+        showsQuery.isLoading &&
+        mediaQuery.isLoading
+      ),
+    () => {
+      void Promise.all([
+        detailQuery.refetch(),
+        upcomingQuery.refetch(),
+        showsQuery.refetch(),
+        mediaQuery.refetch(),
+      ]);
+    },
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
@@ -191,7 +227,11 @@ export default function VenueDetailScreen(): React.JSX.Element {
           />
         </View>
       ) : venue ? (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
+        >
           <Hero venue={venue} />
           <Upcoming items={upcoming} loading={upcomingQuery.isLoading} />
           <YourShows
@@ -200,7 +240,10 @@ export default function VenueDetailScreen(): React.JSX.Element {
             venueName={venue.name}
             venueCity={venue.city}
           />
-          <PhotosStub />
+          <VenuePhotos
+            items={mediaQuery.data ?? []}
+            loading={mediaQuery.isLoading}
+          />
         </ScrollView>
       ) : null}
     </View>
@@ -360,19 +403,67 @@ function YourShows({
   );
 }
 
-function PhotosStub(): React.JSX.Element {
+interface VenueMediaItem {
+  id: string;
+  showId: string;
+  caption: string | null;
+  performerIds: string[];
+  urls: Record<string, string>;
+}
+
+function VenuePhotos({
+  items,
+  loading,
+}: {
+  items: VenueMediaItem[];
+  loading: boolean;
+}): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
-  // TODO(M4): when MediaGrid lands, render media-from-your-shows here.
+  const gridItems: MediaGridItem[] = items.map((m) => {
+    const urls = m.urls ?? {};
+    const thumbnailUri =
+      urls.thumb ?? urls.large ?? urls.source ?? Object.values(urls)[0] ?? '';
+    return {
+      id: m.id,
+      thumbnailUri,
+      caption: m.caption,
+      tagCount: m.performerIds?.length ?? 0,
+    };
+  });
+
+  const onItemPress = (item: MediaGridItem): void => {
+    const source = items.find((m) => m.id === item.id);
+    if (!source) return;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { router: r } = require('expo-router') as { router: { push: (h: string) => void } };
+    r.push(`/media/${item.id}?showId=${encodeURIComponent(source.showId)}`);
+  };
+
   return (
     <Section title="Photos" icon={<ImageIcon size={13} color={colors.ink} strokeWidth={2} />}>
-      <View style={[styles.stubCard, { backgroundColor: colors.surface, borderColor: colors.rule }]}>
-        <EmptyState
-          icon={<ImageIcon size={32} color={colors.faint} strokeWidth={1.5} />}
-          title="Photos arrive in M4"
-          subtitle="Media from your shows at this venue will appear here."
+      {loading && items.length === 0 ? (
+        <View
+          style={[
+            styles.stubCard,
+            { backgroundColor: colors.surface, borderColor: colors.rule, padding: 24 },
+          ]}
+        >
+          <EmptyState
+            icon={<ImageIcon size={32} color={colors.faint} strokeWidth={1.5} />}
+            title="Loading…"
+            subtitle="Pulling in media from your shows here."
+          />
+        </View>
+      ) : (
+        <MediaGrid
+          items={gridItems}
+          showId={items[0]?.showId ?? ''}
+          canUpload={false}
+          loading={loading}
+          onItemPress={onItemPress}
         />
-      </View>
+      )}
     </Section>
   );
 }

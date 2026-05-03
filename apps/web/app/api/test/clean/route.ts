@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { testRouteGuard } from '../_guard';
+import { workerEmail } from '../_worker';
 import {
   db,
   eq,
@@ -12,15 +13,16 @@ import {
   userPreferences,
 } from '@showbook/db';
 
-const TEST_EMAIL = 'test@showbook.dev';
-
-export async function GET() {
+export async function GET(req: NextRequest) {
   const guardResponse = testRouteGuard();
   if (guardResponse) return guardResponse;
 
+  const worker = req.nextUrl.searchParams.get('worker');
+  const email = workerEmail(worker);
+
   try {
     const user = await db.query.users.findFirst({
-      where: eq(users.email, TEST_EMAIL),
+      where: eq(users.email, email),
     });
 
     if (!user) {
@@ -40,7 +42,11 @@ export async function GET() {
     await db.delete(userRegions).where(eq(userRegions.userId, user.id));
     await db.delete(userPreferences).where(eq(userPreferences.userId, user.id));
     await db.delete(shows).where(eq(shows.userId, user.id));
-    await db.delete(announcements);
+    // Only the global / unworked path wipes announcements — they're shared
+    // across worker users and are seeded once by globalSetup.
+    if (worker == null) {
+      await db.delete(announcements);
+    }
 
     return NextResponse.json({ ok: true, message: 'Test data cleaned' });
   } catch (error) {

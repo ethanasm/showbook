@@ -270,7 +270,7 @@ export default function MeScreen(): React.JSX.Element {
         </View>
 
         <Text style={[styles.footer, { color: colors.faint }]}>
-          SHOWBOOK · v0.1 · M2
+          SHOWBOOK · v0.1 · M5
         </Text>
       </ScrollView>
     </View>

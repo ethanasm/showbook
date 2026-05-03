@@ -295,15 +295,21 @@ export function AuthProvider({
   }, []);
 
   const signOut = React.useCallback(async () => {
+    // Drop every persisted artefact tied to the previous user. The
+    // first-run flag has to be deleted from SecureStore (not just reset
+    // in memory) or `exchangeAndPersist` would reload the stale `'true'`
+    // value on the next sign-in and skip the welcome flow for a
+    // different account on the same device. The React Query cache and
+    // SQLite cache are cleared by a sibling effect in the layout that
+    // watches the `user` transition (see `_layout.tsx`).
     await Promise.all([
       SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => undefined),
       SecureStore.deleteItemAsync(USER_KEY).catch(() => undefined),
+      SecureStore.deleteItemAsync(FIRST_RUN_KEY).catch(() => undefined),
     ]);
     setToken(null);
     setUser(null);
     setError(null);
-    // Sign-out invalidates the session — by definition the next sign-in
-    // (whether the same user or a different one) needs to redo first-run.
     setIsFirstRun(true);
   }, []);
 

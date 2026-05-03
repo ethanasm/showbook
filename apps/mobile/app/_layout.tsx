@@ -25,7 +25,7 @@
 import React from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Slot } from 'expo-router';
@@ -35,6 +35,7 @@ import { ThemeProvider } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { trpc, createQueryClient, createTrpcClient } from '../lib/trpc';
 import { CacheBridge } from '../lib/cache/CacheBridge';
+import { deleteCacheDatabase } from '../lib/cache';
 import { loadAppFonts } from '../lib/fonts';
 import { FeedbackProvider } from '../lib/feedback';
 import {
@@ -110,11 +111,35 @@ export default function RootLayout(): React.JSX.Element {
  * inside TrpcProviders + NetworkProvider so it can read both contexts.
  * Exists as its own component so the dispatcher captures the freshest
  * client without re-mounting OfflineSyncProvider.
+ *
+ * The dispatcher refuses to apply pending writes when there's no active
+ * session, which closes a race where a sign-out + sign-in (different
+ * user) happens mid-replay and queued writes from the previous user
+ * would be applied with the new user's bearer token. The cache cleanup
+ * in `useSignOutCleanup` also drops the SQLite file, so the next
+ * outbox read inside `replayOutbox` returns null and the loop short-
+ * circuits — but enforcing the check here is defence-in-depth.
  */
 function OfflineBridge({ children }: { children: React.ReactNode }): React.JSX.Element {
   const utils = trpc.useUtils();
+  const { user } = useAuth();
+  const userIdRef = React.useRef<string | null>(user?.id ?? null);
+  React.useEffect(() => {
+    userIdRef.current = user?.id ?? null;
+  }, [user?.id]);
+
   const dispatch = React.useCallback<OutboxDispatch>(
     async (write) => {
+      if (!userIdRef.current) {
+        // Surface as a TRPCError-shaped object so `classifyError` in
+        // `replayOutbox` treats it as a hard 401 (non-transient) and
+        // doesn't burn the backoff schedule retrying.
+        const err = new Error('No active session — replay aborted') as Error & {
+          data?: { httpStatus?: number };
+        };
+        err.data = { httpStatus: 401 };
+        throw err;
+      }
       const c = utils.client;
       const payload = write.payload as never;
       const m: PendingMutation = write.mutation;
@@ -157,7 +182,7 @@ function PendingWritesDrawerHost(): React.JSX.Element {
 }
 
 function TrpcProviders({ children }: { children: React.ReactNode }): React.JSX.Element {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const tokenRef = React.useRef<string | null>(token);
   React.useEffect(() => {
     tokenRef.current = token;
@@ -171,9 +196,31 @@ function TrpcProviders({ children }: { children: React.ReactNode }): React.JSX.E
     createTrpcClient(() => tokenRef.current),
   );
 
+  useSignOutCleanup(queryClient, user?.id ?? null);
+
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </trpc.Provider>
   );
+}
+
+/**
+ * Watches the `user` transition. When the previous render had a user and
+ * the current render has none, drop everything tied to the old session:
+ * the React Query in-memory cache, the SQLite-backed persisted cache,
+ * and the pending-writes outbox. Without this the next user — same
+ * device, different account — sees the previous user's shows / venues /
+ * outbox until each query refetches over the new bearer.
+ */
+function useSignOutCleanup(queryClient: QueryClient, userId: string | null): void {
+  const previousUserId = React.useRef<string | null>(userId);
+  React.useEffect(() => {
+    const prev = previousUserId.current;
+    previousUserId.current = userId;
+    if (prev && !userId) {
+      queryClient.clear();
+      void deleteCacheDatabase();
+    }
+  }, [queryClient, userId]);
 }

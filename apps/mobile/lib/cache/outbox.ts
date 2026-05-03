@@ -56,10 +56,15 @@ export interface Outbox {
 
 let _idCounter = 0;
 function genId(): string {
-  // Monotonic enough for FIFO ordering inside a single process — and
-  // tests can override via the explicit `id` arg to enqueue().
+  // Encoded `${ts}-${random}-${counter}` so two writes in the same ms
+  // across process restarts can't collide (the counter alone resets to
+  // zero on cold start). FIFO ordering is enforced by `created_at` on
+  // SELECT, so the random suffix doesn't affect dequeue order.
   _idCounter += 1;
-  return `pw-${Date.now().toString(36)}-${_idCounter.toString(36)}`;
+  const random = Math.floor(Math.random() * 0xffffff)
+    .toString(36)
+    .padStart(4, '0');
+  return `pw-${Date.now().toString(36)}-${random}-${_idCounter.toString(36)}`;
 }
 
 /** Reset the in-process id counter. Tests only. */

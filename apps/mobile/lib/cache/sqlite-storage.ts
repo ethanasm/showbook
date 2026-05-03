@@ -1,25 +1,20 @@
 /**
- * `expo-sqlite`-backed `CacheStorage`. The schema is a single table:
+ * `expo-sqlite`-backed `CacheStorage`. Backed by the shared singleton
+ * handle in `db.ts` so the React Query persister and the pending-writes
+ * outbox both write into the same file (and are dropped together on
+ * sign-out).
  *
- *   query_cache(key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at INTEGER NOT NULL)
- *
- * `value` holds the JSON-serialised React Query result; `updated_at`
- * is epoch milliseconds. Staleness is a render-time decision, not a
- * schema constraint.
- *
- * This file is the only place that imports `expo-sqlite`. The actual
- * SQL adapter lives in `sqlite-adapter.ts` so the pure logic stays
- * testable in Node.
+ * The schema lives in `schema.ts` — `query_cache` is migration v1,
+ * `pending_writes` is v2. `applyMigrations` runs inside
+ * `openCacheDatabase()` so this file only adapts an already-migrated
+ * handle into the `CacheStorage` interface.
  */
 
-import * as SQLite from 'expo-sqlite';
 import type { CacheStorage } from './storage';
-import { adaptDatabase, QUERY_CACHE_SCHEMA, type SQLiteLike } from './sqlite-adapter';
-
-const DEFAULT_DB_NAME = 'showbook-cache.db';
+import { adaptDatabase, type SQLiteLike } from './sqlite-adapter';
+import { lazyCacheSqliteLike } from './db';
 
 export interface SqliteStorageOptions {
-  databaseName?: string;
   /** Pre-opened database handle — tests pass an in-memory fake. */
   database?: SQLiteLike;
 }
@@ -27,12 +22,7 @@ export interface SqliteStorageOptions {
 export async function createSqliteStorage(
   options: SqliteStorageOptions = {},
 ): Promise<CacheStorage> {
-  const db: SQLiteLike =
-    options.database ??
-    ((await SQLite.openDatabaseAsync(
-      options.databaseName ?? DEFAULT_DB_NAME,
-    )) as unknown as SQLiteLike);
-  await db.execAsync(QUERY_CACHE_SCHEMA);
+  const db: SQLiteLike = options.database ?? lazyCacheSqliteLike();
   return adaptDatabase(db);
 }
 

@@ -149,14 +149,18 @@ jobs:
           retention-days: 14
 
   e2e:
-    name: Playwright E2E
+    name: Playwright E2E (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     # E2E still runs on every push/PR, but its failure does not fail the
     # workflow. The deploy workflow gates on the CI workflow_run conclusion,
     # so this keeps verify-coverage as the sole blocker for prod deploys.
     continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     services:
       postgres:
         image: postgres:16-alpine
@@ -224,29 +228,25 @@ jobs:
           done
           echo "Postgres did not become ready"; exit 1
 
-      - name: Create showbook_e2e database
+      - name: Prepare e2e database
         run: |
           PGPASSWORD=showbook_dev psql -h localhost -p 5433 -U showbook -d showbook \
             -tAc "SELECT 1 FROM pg_database WHERE datname = 'showbook_e2e'" \
             | grep -q 1 || \
           PGPASSWORD=showbook_dev createdb -h localhost -p 5433 -U showbook showbook_e2e
-
-      - name: Migrate e2e database
-        run: pnpm db:migrate:e2e
-
-      - name: Bootstrap pg-boss in e2e database
-        run: pnpm --filter @showbook/jobs bootstrap-pgboss
+          pnpm db:migrate:e2e
+          pnpm --filter @showbook/jobs bootstrap-pgboss
         env:
           DATABASE_URL: postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e
 
-      - name: Run Playwright E2E
-        run: pnpm --filter web run test:e2e
+      - name: Run Playwright E2E (shard ${{ matrix.shard }}/4)
+        run: pnpm --filter web exec playwright test --shard=${{ matrix.shard }}/4
 
       - name: Upload Playwright artifacts
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-results
+          name: playwright-results-shard-${{ matrix.shard }}
           path: |
             apps/web/test-results/
             apps/web/playwright-report/

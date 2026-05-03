@@ -13,15 +13,15 @@
  * so cached entries hydrate instantly via the persister.
  */
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Dimensions,
   FlatList,
   Pressable,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from 'react-native';
@@ -49,8 +49,6 @@ interface MediaListItem {
   urls: Record<string, string>;
 }
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-
 export default function LightboxScreen(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -58,6 +56,11 @@ export default function LightboxScreen(): React.JSX.Element {
   const router = useRouter();
   const params = useLocalSearchParams<{ id: string; showId?: string }>();
   const mediaId = typeof params.id === 'string' ? params.id : '';
+
+  // useWindowDimensions reflows on rotation — important for iPad
+  // landscape where the static `Dimensions.get('window')` snapshot from
+  // module-load time would freeze the pager at the launch orientation.
+  const { width: screenW, height: screenH } = useWindowDimensions();
 
   // The lightbox needs the showId to fetch the sibling list. When the
   // caller doesn't pass it (e.g. deep-link from a notification), fall back
@@ -88,8 +91,19 @@ export default function LightboxScreen(): React.JSX.Element {
     return i < 0 ? 0 : i;
   }, [items, mediaId]);
 
-  const [activeIndex, setActiveIndex] = useState(initialIndex);
+  // `activeIndex` initializes to 0 (items is empty on first render) and
+  // would stay there until the user manually scrolls — making the
+  // bottom-bar counter and `active` lookup show the wrong row. Snap it
+  // to `initialIndex` once the items list resolves.
+  const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef<FlatList<MediaListItem>>(null);
+  const initialApplied = useRef(false);
+  useEffect(() => {
+    if (initialApplied.current) return;
+    if (items.length === 0) return;
+    initialApplied.current = true;
+    setActiveIndex(initialIndex);
+  }, [items.length, initialIndex]);
 
   const close = (
     <Pressable
@@ -104,7 +118,7 @@ export default function LightboxScreen(): React.JSX.Element {
   );
 
   const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>): void => {
-    const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+    const idx = Math.round(e.nativeEvent.contentOffset.x / screenW);
     if (idx !== activeIndex) setActiveIndex(idx);
   };
 
@@ -131,12 +145,14 @@ export default function LightboxScreen(): React.JSX.Element {
           showsHorizontalScrollIndicator={false}
           initialScrollIndex={initialIndex}
           getItemLayout={(_, index) => ({
-            length: SCREEN_W,
-            offset: SCREEN_W * index,
+            length: screenW,
+            offset: screenW * index,
             index,
           })}
           onMomentumScrollEnd={onMomentumEnd}
-          renderItem={({ item }) => <ZoomablePage item={item} />}
+          renderItem={({ item }) => (
+            <ZoomablePage item={item} width={screenW} height={screenH} />
+          )}
         />
       )}
 
@@ -177,7 +193,15 @@ export default function LightboxScreen(): React.JSX.Element {
   );
 }
 
-function ZoomablePage({ item }: { item: MediaListItem }): React.JSX.Element {
+function ZoomablePage({
+  item,
+  width,
+  height,
+}: {
+  item: MediaListItem;
+  width: number;
+  height: number;
+}): React.JSX.Element {
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const x = useSharedValue(0);
@@ -201,8 +225,25 @@ function ZoomablePage({ item }: { item: MediaListItem }): React.JSX.Element {
       }
     });
 
+  // Single-finger pan only fires when the image is zoomed; otherwise
+  // the FlatList's horizontal pager handles single-finger swipes
+  // between pages. The previous `minPointers(2)` requirement made the
+  // zoomed image impossible to inspect with one finger.
   const pan = Gesture.Pan()
-    .minPointers(2)
+    .minPointers(1)
+    .maxPointers(2)
+    .enabled(true)
+    .onStart(() => {
+      // No-op — the gesture only emits onUpdate when scale > 1 thanks
+      // to the manualActivation guard below.
+    })
+    .manualActivation(true)
+    .onTouchesMove((_, state) => {
+      // Only steal pan from the FlatList when the user has actually
+      // zoomed in. While at scale 1, defer to the parent pager.
+      if (scale.value > 1.01) state.activate();
+      else state.fail();
+    })
     .onUpdate((e) => {
       x.value = savedX.value + e.translationX;
       y.value = savedY.value + e.translationY;
@@ -241,7 +282,7 @@ function ZoomablePage({ item }: { item: MediaListItem }): React.JSX.Element {
   const uri = item.urls.large ?? item.urls.source ?? Object.values(item.urls)[0];
 
   return (
-    <View style={[styles.page, { width: SCREEN_W, height: SCREEN_H }]}>
+    <View style={[styles.page, { width, height }]}>
       <GestureDetector gesture={composed}>
         <Animated.View style={[styles.imageWrap, style]}>
           {uri ? (

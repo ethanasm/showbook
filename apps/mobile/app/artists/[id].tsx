@@ -29,6 +29,8 @@ import { ChevronLeft, AlertCircle, Image as ImageIcon, Music } from 'lucide-reac
 import { TopBar } from '../../components/TopBar';
 import { EmptyState } from '../../components/EmptyState';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
+import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
+import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { trpc } from '../../lib/trpc';
@@ -140,6 +142,22 @@ export default function ArtistDetailScreen(): React.JSX.Element {
     enabled: Boolean(token) && performerId.length > 0,
   });
 
+  type TaggedMedia = {
+    id: string;
+    showId: string;
+    caption: string | null;
+    performerIds: string[];
+    urls: Record<string, string>;
+  };
+  const mediaQuery = useCachedQuery<TaggedMedia[]>({
+    queryKey: ['mobile', 'artist', performerId, 'media'],
+    queryFn: () =>
+      utils.client.media.listForPerformer.query({ performerId }) as unknown as Promise<
+        TaggedMedia[]
+      >,
+    enabled: Boolean(token) && performerId.length > 0,
+  });
+
   const back = (
     <Pressable
       onPress={() => (router.canGoBack() ? router.back() : router.replace('/artists'))}
@@ -153,6 +171,17 @@ export default function ArtistDetailScreen(): React.JSX.Element {
 
   const performer = detailQuery.data;
   const shows = showsQuery.data ?? [];
+  const refreshControl = useThemedRefreshControl(
+    (detailQuery.isFetching || showsQuery.isFetching || mediaQuery.isFetching) &&
+      !(detailQuery.isLoading && showsQuery.isLoading && mediaQuery.isLoading),
+    () => {
+      void Promise.all([
+        detailQuery.refetch(),
+        showsQuery.refetch(),
+        mediaQuery.refetch(),
+      ]);
+    },
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
@@ -176,10 +205,17 @@ export default function ArtistDetailScreen(): React.JSX.Element {
           />
         </View>
       ) : performer ? (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
+        >
           <Hero performer={performer} />
           <YourShows shows={shows} loading={showsQuery.isLoading} />
-          <PhotosStub />
+          <TaggedPhotos
+            items={mediaQuery.data ?? []}
+            loading={mediaQuery.isLoading}
+          />
         </ScrollView>
       ) : null}
     </View>
@@ -258,19 +294,67 @@ function YourShows({
   );
 }
 
-function PhotosStub(): React.JSX.Element {
+interface TaggedMedia {
+  id: string;
+  showId: string;
+  caption: string | null;
+  performerIds: string[];
+  urls: Record<string, string>;
+}
+
+function TaggedPhotos({
+  items,
+  loading,
+}: {
+  items: TaggedMedia[];
+  loading: boolean;
+}): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
-  // TODO(M4): when MediaGrid lands, render tagged photos for this performer.
+  const gridItems: MediaGridItem[] = items.map((m) => {
+    const urls = m.urls ?? {};
+    const thumbnailUri =
+      urls.thumb ?? urls.large ?? urls.source ?? Object.values(urls)[0] ?? '';
+    return {
+      id: m.id,
+      thumbnailUri,
+      caption: m.caption,
+      tagCount: m.performerIds?.length ?? 0,
+    };
+  });
+
+  // The grid hands a per-item showId to the lightbox via onItemPress;
+  // since this list spans multiple shows, we route to the lightbox with
+  // the item's own showId so the swipe pager loads its sibling list.
+  const onItemPress = (item: MediaGridItem): void => {
+    const source = items.find((m) => m.id === item.id);
+    if (!source) return;
+    // expo-router doesn't support showId as a query param in the file
+    // path here, but `/media/[id]` accepts a showId query string.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { router } = require('expo-router') as { router: { push: (h: string) => void } };
+    router.push(`/media/${item.id}?showId=${encodeURIComponent(source.showId)}`);
+  };
+
   return (
     <Section title="Tagged photos" icon={<ImageIcon size={13} color={colors.ink} strokeWidth={2} />}>
-      <View style={[styles.stubCard, { backgroundColor: colors.surface, borderColor: colors.rule }]}>
-        <EmptyState
-          icon={<ImageIcon size={32} color={colors.faint} strokeWidth={1.5} />}
-          title="Photos arrive in M4"
-          subtitle="Tagged media land in the next milestone."
+      {loading && items.length === 0 ? (
+        <View style={[styles.stubCard, { backgroundColor: colors.surface, borderColor: colors.rule, padding: 24 }]}>
+          <EmptyState
+            icon={<ImageIcon size={32} color={colors.faint} strokeWidth={1.5} />}
+            title="Loading…"
+            subtitle="Pulling in tagged media."
+          />
+        </View>
+      ) : (
+        <MediaGrid
+          items={gridItems}
+          showId={items[0]?.showId ?? ''}
+          canUpload={false}
+          loading={loading}
+          onItemPress={onItemPress}
         />
-      </View>
+      )}
     </Section>
   );
 }

@@ -27,6 +27,7 @@ import { TopBar } from '../../components/TopBar';
 import { EmptyState } from '../../components/EmptyState';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { ShowCardListSkeleton } from '../../components/skeletons';
+import { ShowActionSheet } from '../../components/ShowActionSheet';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
@@ -108,6 +109,10 @@ export default function HomeScreen(): React.JSX.Element {
   const router = useRouter();
   const { token } = useAuth();
   const utils = trpc.useUtils();
+  const [actionSheetFor, setActionSheetFor] = React.useState<{
+    id: string;
+    state: ShowState;
+  } | null>(null);
 
   const showsQuery = useCachedQuery<ShowsListItem[]>({
     queryKey: ['mobile', 'home', 'shows.list'],
@@ -193,14 +198,22 @@ export default function HomeScreen(): React.JSX.Element {
           <>
             {sections.nowPlaying ? (
               <Section title="Now playing">
-                <ShowCardLink show={sections.nowPlaying} />
+                <ShowCardLink
+                show={sections.nowPlaying}
+                onLongPress={() =>
+                  setActionSheetFor({
+                    id: sections.nowPlaying!.id,
+                    state: sections.nowPlaying!.state as ShowState,
+                  })
+                }
+              />
               </Section>
             ) : null}
 
             {sections.upcoming.length > 0 ? (
               <Section title="Upcoming">
                 {sections.upcoming.map((s) => (
-                  <ShowCardLink key={s.id} show={s} />
+                  <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
                 ))}
               </Section>
             ) : null}
@@ -208,7 +221,7 @@ export default function HomeScreen(): React.JSX.Element {
             {sections.recent.length > 0 ? (
               <Section title="Recently added">
                 {sections.recent.map((s) => (
-                  <ShowCardLink key={s.id} show={s} />
+                  <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
                 ))}
               </Section>
             ) : null}
@@ -216,7 +229,7 @@ export default function HomeScreen(): React.JSX.Element {
             {sections.wishlist.length > 0 ? (
               <Section title="Wishlist">
                 {sections.wishlist.map((s) => (
-                  <ShowCardLink key={s.id} show={s} />
+                  <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
                 ))}
               </Section>
             ) : null}
@@ -234,6 +247,15 @@ export default function HomeScreen(): React.JSX.Element {
           </>
         )}
       </ScrollView>
+
+      {actionSheetFor ? (
+        <ShowActionSheet
+          open
+          onClose={() => setActionSheetFor(null)}
+          showId={actionSheetFor.id}
+          state={actionSheetFor.state}
+        />
+      ) : null}
     </View>
   );
 }
@@ -256,11 +278,17 @@ function Section({
   );
 }
 
-function ShowCardLink({ show }: { show: ShowsListItem }): React.JSX.Element {
+function ShowCardLink({
+  show,
+  onLongPress,
+}: {
+  show: ShowsListItem;
+  onLongPress: () => void;
+}): React.JSX.Element {
   const card = React.useMemo(() => toShowCardShow(show), [show]);
   return (
     <Link href={`/show/${show.id}`} asChild>
-      <ShowCard show={card} />
+      <ShowCard show={card} onLongPress={onLongPress} />
     </Link>
   );
 }

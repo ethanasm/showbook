@@ -37,7 +37,7 @@ The mobile app runs an 80% line / branch / function coverage gate
 scoped to **`apps/mobile/lib/**` only**. Layout-heavy code under
 `app/` and `components/` is intentionally excluded — see
 [`showbook-specs/mobile-testing-strategy.md`](../../showbook-specs/mobile-testing-strategy.md)
-for the rationale and the per-milestone test plan. The gate is
+for the rationale and the test plan. The gate is
 enforced by `pnpm verify:coverage` (run on every PR by CI), which
 merges per-package LCOV via `scripts/coverage-report.mjs`. Locally:
 
@@ -69,12 +69,12 @@ mobile-issued ID tokens at `POST /api/auth/mobile-token`.
 See [`showbook-specs/mobile-roadmap.md`](../../showbook-specs/mobile-roadmap.md)
 for the milestone plan, what's shipped, and what's next.
 
-## Maestro E2E flows (Wave F)
+## Maestro E2E flows
 
 Three flows live under `e2e/flows/` — sign-in, add-show, sign-out.
 They run on Maestro Cloud nightly + on every push to `main` via
 `.github/workflows/mobile-e2e.yml` (NOT per-PR, by design — see
-`showbook-specs/mobile-testing-strategy.md` § Wave F). The cloud run
+`showbook-specs/mobile-testing-strategy.md`). The cloud run
 uses the `e2e` EAS profile (see `eas.json`) which sets
 `EXPO_PUBLIC_E2E_MODE=1`. With that flag on, `lib/auth.ts` skips the
 Google OAuth round-trip and instead reads a pre-baked Showbook JWT
