@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
-import { MapPin, Search, Eye, Pencil, Ticket } from "lucide-react";
+import { MapPin, Search, Eye, Pencil, Ticket, Plus } from "lucide-react";
 import { PaginationFooter } from "@/components/PaginationFooter";
 import { SortHeader, type SortConfig } from "@/components/SortHeader";
 import { useCompactMode } from "@/lib/useCompactMode";
@@ -36,7 +36,6 @@ function useWindowWidth() {
 }
 
 export default function VenuesView() {
-  const router = useRouter();
   const [sort, setSort] = useState<SortConfig<SortField>>({
     field: "past",
     dir: "desc",
@@ -257,29 +256,15 @@ export default function VenuesView() {
           <div style={{ padding: "28px 36px" }}>
             <EmptyState
               kind="venues"
-              title={search ? "No venue matches" : "Venues await"}
-              body={search ? "Try another city or clear the filter." : "Venues populate from the shows you log."}
+              title={search ? "No venue matches" : "No venues yet"}
+              body={
+                search
+                  ? "Try another city or clear the filter."
+                  : "Venues show up here from shows you log."
+              }
               action={
                 search ? undefined : (
-                  <button
-                    type="button"
-                    onClick={() => router.push("/add")}
-                    style={{
-                      padding: "10px 18px",
-                      background: "var(--accent)",
-                      color: "var(--accent-text)",
-                      border: "none",
-                      borderRadius: 8,
-                      cursor: "pointer",
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 11,
-                      letterSpacing: ".06em",
-                      textTransform: "uppercase",
-                      fontWeight: 500,
-                    }}
-                  >
-                    Add a Show
-                  </button>
+                  <VenuesEmptyActions />
                 )
               }
             />
@@ -397,6 +382,62 @@ export default function VenuesView() {
           onClose={() => setContextMenu(null)}
         />
       )}
+    </div>
+  );
+}
+
+function VenuesEmptyActions() {
+  return (
+    <div
+      data-testid="venues-empty-actions"
+      style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}
+    >
+      <Link
+        href="/shows?gmail=1"
+        style={{
+          padding: "10px 18px",
+          background: "var(--accent)",
+          color: "var(--accent-text)",
+          border: "none",
+          borderRadius: 8,
+          cursor: "pointer",
+          fontFamily: "var(--font-geist-mono), monospace",
+          fontSize: 11,
+          letterSpacing: ".06em",
+          textTransform: "uppercase",
+          fontWeight: 500,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          textDecoration: "none",
+        }}
+      >
+        <Image src="/google-g.svg" alt="" width={14} height={14} />
+        Import from Gmail
+      </Link>
+      <Link
+        href="/add"
+        style={{
+          padding: "10px 18px",
+          background: "transparent",
+          color: "var(--ink)",
+          border: "1px solid var(--rule-strong)",
+          borderRadius: 8,
+          cursor: "pointer",
+          fontFamily: "var(--font-geist-mono), monospace",
+          fontSize: 11,
+          letterSpacing: ".06em",
+          textTransform: "uppercase",
+          fontWeight: 500,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          textDecoration: "none",
+        }}
+      >
+        <Plus size={13} />
+        Add a Show
+      </Link>
     </div>
   );
 }

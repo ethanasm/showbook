@@ -1085,29 +1085,56 @@ export default function ShowsView() {
             title="Start your logbook"
             body="Add the first show you saw, the next one you are watching, or import ticket history from Gmail."
             action={
-              <button
-                type="button"
-                onClick={handleOpenGmailModal}
-                style={{
-                  padding: "10px 18px",
-                  background: "var(--accent)",
-                  color: "var(--accent-text)",
-                  border: "none",
-                  borderRadius: 8,
-                  cursor: "pointer",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
-                  letterSpacing: ".06em",
-                  textTransform: "uppercase",
-                  fontWeight: 500,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
+              <div
+                style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}
               >
-                <Image src="/google-g.svg" alt="" width={14} height={14} />
-                Import from Gmail
-              </button>
+                <button
+                  type="button"
+                  onClick={handleOpenGmailModal}
+                  style={{
+                    padding: "10px 18px",
+                    background: "var(--accent)",
+                    color: "var(--accent-text)",
+                    border: "none",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 11,
+                    letterSpacing: ".06em",
+                    textTransform: "uppercase",
+                    fontWeight: 500,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Image src="/google-g.svg" alt="" width={14} height={14} />
+                  Import from Gmail
+                </button>
+                <Link
+                  href="/discover"
+                  style={{
+                    padding: "10px 18px",
+                    background: "transparent",
+                    color: "var(--ink)",
+                    border: "1px solid var(--rule-strong)",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 11,
+                    letterSpacing: ".06em",
+                    textTransform: "uppercase",
+                    fontWeight: 500,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    textDecoration: "none",
+                  }}
+                >
+                  <Eye size={13} />
+                  Find shows in Discover
+                </Link>
+              </div>
             }
           />
         </div>

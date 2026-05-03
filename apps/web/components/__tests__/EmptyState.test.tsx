@@ -12,6 +12,28 @@ describe('EmptyState', () => {
     cleanup();
   });
 
+  it('artists eyebrow acknowledges follows, not just attended shows', () => {
+    const { getByText } = render(
+      <EmptyState kind="artists" title="No artists" body="" />,
+    );
+    assert.ok(
+      getByText('Artists from your shows and follows'),
+      'Eyebrow must not claim users have "seen" artists they only follow.',
+    );
+    cleanup();
+  });
+
+  it('venues eyebrow does not claim user has been there', () => {
+    const { getByText } = render(
+      <EmptyState kind="venues" title="No venues" body="" />,
+    );
+    assert.ok(
+      getByText('Venues from your shows'),
+      'Eyebrow must not claim users have been to venues they only follow.',
+    );
+    cleanup();
+  });
+
   it('renders body and title text', () => {
     const { getByText } = render(
       <EmptyState kind="venues" title="No venues" body="Find one." />,

@@ -22,9 +22,10 @@ import React from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Link, useRouter } from 'expo-router';
-import { Music, Calendar, Compass } from 'lucide-react-native';
+import { Calendar, Compass } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { EmptyState } from '../../components/EmptyState';
+import { GetStartedHub } from '../../components/GetStartedHub';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { ShowCardListSkeleton } from '../../components/skeletons';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
@@ -189,11 +190,7 @@ export default function HomeScreen(): React.JSX.Element {
             <ShowCardListSkeleton count={4} />
           </View>
         ) : sections.total === 0 ? (
-          <EmptyState
-            icon={<Music size={40} color={colors.faint} strokeWidth={1.5} />}
-            title="No shows yet"
-            subtitle="Add your first show from the Add tab — concerts, theatre, comedy, festivals."
-          />
+          <GetStartedHub variant="expanded" />
         ) : (
           <>
             {sections.nowPlaying ? (
