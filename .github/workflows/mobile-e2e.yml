@@ -1,15 +1,19 @@
 name: Mobile E2E (Maestro)
 
-# Per mobile-testing-strategy.md § Wave F: Maestro flows are gated to
+# Per mobile-testing-strategy.md § Wave F: Maestro flows default to
 # nightly + push-to-main only. They're slow (EAS build + Maestro Cloud
 # upload) and per-PR runs would block the fast feedback loop the unit /
-# component / integration tiers provide.
+# component / integration tiers provide. The `pull_request` trigger is
+# label-gated so devs can opt in to per-PR Maestro screenshots by
+# attaching the `mobile-visual` label — see the `if:` on the job.
 on:
   push:
     branches: [main]
     paths:
       - 'apps/mobile/**'
       - '.github/workflows/mobile-e2e.yml'
+  pull_request:
+    types: [labeled, synchronize, opened, reopened]
   schedule:
     # 09:00 UTC = 04:00 ET — runs after the nightly cron jobs settle.
     - cron: '0 9 * * *'
@@ -17,10 +21,14 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
-  group: mobile-e2e-${{ github.ref }}
-  cancel-in-progress: false
+  # Group per-PR runs by PR number so successive pushes cancel the
+  # in-flight build (EAS minutes are expensive). Non-PR triggers
+  # (push/schedule/dispatch) keep the old non-cancelling behaviour.
+  group: mobile-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-and-test:
@@ -41,7 +49,14 @@ jobs:
     # `secrets` can't be referenced in a job-level `if:` (only github /
     # needs / vars / inputs are available there), which is why the gate
     # is on `vars` instead.
-    if: vars.MOBILE_E2E_ENABLED == 'true'
+    #
+    # The PR-trigger arm of this gate is label-driven: PRs only build
+    # when they carry the `mobile-visual` label, so opt-in stays
+    # explicit and the EAS / Maestro free tiers cover normal load.
+    if: >-
+      vars.MOBILE_E2E_ENABLED == 'true' &&
+      (github.event_name != 'pull_request' ||
+       contains(github.event.pull_request.labels.*.name, 'mobile-visual'))
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -114,16 +129,54 @@ jobs:
 
       # Maestro Cloud accepts an .ipa / .app.zip URL; we hand it the EAS
       # artifact directly. MAESTRO_CLOUD_API_KEY is the project token
-      # configured in repo Settings → Secrets.
+      # configured in repo Settings → Secrets. Stdout is teed so we can
+      # extract the upload URL for the PR-body edit below.
       - name: Run flows on Maestro Cloud
+        id: maestro
         env:
           BUILD_URL: ${{ steps.build.outputs.build_url }}
           MAESTRO_E2E_TOKEN: ${{ secrets.MAESTRO_E2E_TOKEN }}
           MAESTRO_E2E_USER_JSON: ${{ secrets.MAESTRO_E2E_USER_JSON }}
         run: |
+          set -o pipefail
           maestro cloud \
             --apiKey "$MAESTRO_CLOUD_API_KEY" \
             --env MAESTRO_E2E_TOKEN="$MAESTRO_E2E_TOKEN" \
             --env MAESTRO_E2E_USER_JSON="$MAESTRO_E2E_USER_JSON" \
             "$BUILD_URL" \
-            apps/mobile/e2e/flows/
+            apps/mobile/e2e/flows/ 2>&1 | tee /tmp/maestro.log
+          URL=$(grep -oE 'https://console\.mobile\.dev/uploads/[a-zA-Z0-9_-]+' /tmp/maestro.log | head -1)
+          if [ -n "$URL" ]; then
+            echo "upload_url=$URL" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Only on PR runs: append/replace a `## Mobile screenshots` section
+      # in the PR body, bracketed by sentinel comments so re-runs replace
+      # cleanly. Runs on success and failure so reviewers see the
+      # Maestro Cloud upload URL even when a flow fails.
+      - name: Update PR body with Maestro upload URL
+        if: always() && github.event_name == 'pull_request' && steps.maestro.outputs.upload_url != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          UPLOAD_URL: ${{ steps.maestro.outputs.upload_url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          CURRENT=$(gh pr view "$PR_NUMBER" --json body --jq .body)
+          STRIPPED=$(printf '%s' "$CURRENT" | awk '
+            /<!-- mobile-screenshots:start -->/ { skip=1; next }
+            /<!-- mobile-screenshots:end -->/   { skip=0; next }
+            !skip { print }
+          ')
+          NEW_SECTION=$(cat <<EOF
+          <!-- mobile-screenshots:start -->
+          ## Mobile screenshots
+
+          Maestro Cloud upload: $UPLOAD_URL
+          Workflow run: $RUN_URL
+          <!-- mobile-screenshots:end -->
+          EOF
+          )
+          NEW_BODY="${STRIPPED%$'\n'}"$'\n\n'"$NEW_SECTION"
+          gh pr edit "$PR_NUMBER" --body "$NEW_BODY"
