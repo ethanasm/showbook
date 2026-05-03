@@ -869,3 +869,571 @@ and `apps/mobile/app/song/[id].tsx`.
 - Maestro flow: `e2e/flows/spotify-export.yaml` — open a past show
   with a setlist → tap "Save to Spotify" → assert toast → assert
   the action sheet item flips to "Open in Spotify".
+
+---
+
+## 13. Deeper Spotify API integration
+
+The §5 plan covers **track resolution** and **playlist export** — the
+floor of what Spotify can do for us. Spotify's Web API exposes a much
+larger surface that's directly applicable to setlist data we already
+own. This section enumerates what's worth pulling in, what new schema
+each unlocks, what UI it powers, and the risks.
+
+### 13a. Spotify API deprecation, late 2024 — read this first
+
+In November 2024, Spotify deprecated several Web API endpoints for
+**new** applications:
+
+- `GET /audio-features/{id}` and `GET /audio-features?ids=...`
+- `GET /audio-analysis/{id}`
+- `GET /artists/{id}/related-artists`
+- `GET /recommendations`
+- `GET /recommendations/available-genre-seeds`
+- `GET /browse/featured-playlists`
+- algorithmic playlist endpoints
+
+Existing applications that used these prior to the cutoff retain
+access. Showbook's app registration (used for the existing
+`user-follow-read` artist-import flow) **may or may not** have
+grandfathered access — verify with a probe call early in §13's
+schedule. Where access is unavailable, the alternatives below use
+**MusicBrainz**, **Last.fm**, **ListenBrainz**, or **AcousticBrainz**
+(open / community sources) as drop-ins.
+
+This caveat applies primarily to §13b (audio features) and §13e
+(related-artist graph). Everything else in §13 uses
+non-deprecated, durable endpoints.
+
+### 13b. Audio features → "show vibe" + energy arc
+
+The single highest-value unused dataset. `audio-features` returns
+seven numerical floats per track:
+
+| Feature | Range | Loosely means |
+|---------|-------|---------------|
+| `energy` | 0–1 | loudness × intensity × activity |
+| `danceability` | 0–1 | rhythm steadiness, tempo, beat strength |
+| `valence` | 0–1 | "happiness" / positive affect |
+| `acousticness` | 0–1 | confidence the track is acoustic |
+| `instrumentalness` | 0–1 | confidence there are no vocals |
+| `liveness` | 0–1 | presence of a live audience |
+| `speechiness` | 0–1 | presence of spoken word |
+| `tempo` | BPM | rounded to 1 dp |
+| `key`, `mode` | 0–11, 0/1 | pitch class + major/minor |
+| `loudness` | dB | average across the track |
+| `duration_ms` | int | ms |
+
+#### What it unlocks
+
+1. **Show vibe profile** — average each feature across the songs in a
+   user's setlist. Render as a radar chart on Show detail
+   (`apps/web/components/charts/VibeRadar.tsx`,
+   `apps/mobile/components/VibeRadar.tsx`). Auto-summary one-liner:
+   `High energy · Mostly acoustic · Tour-low danceability.`
+
+2. **Energy arc** — the song order in `setlists` jsonb is preserved.
+   Plot energy/valence over time (line chart) to visualize the show's
+   emotional arc. Encore peaks are visible. This is a *novel* display
+   no other tracker has — the energy curve is what artists actually
+   design around, and we're the only product that has the
+   per-song-order data to expose it.
+
+3. **Set length precision** — sum `duration_ms`. Show detail prints
+   `1h 47m 22s on stage` instead of "12 songs."
+
+4. **Tempo / key stats** — average BPM, dominant key (major vs minor
+   ratio), tempo distribution. The Year-end soundtrack playlist
+   (§13h) gets DJ-mix-style ordering by tempo curve.
+
+5. **Genre/mood fingerprint per user** — average audio features
+   weighted by listening time across all attended shows → the user's
+   "concert taste profile." Powers the Brain answer to "what kind of
+   shows do I usually go to?" with grounded numerics.
+
+6. **"Why did I love that show?" Brain tool** — the
+   `audio_features_for_show` Brain tool (§Brain plan §3d) returns
+   the radar payload so the Brain can answer "the show was higher-
+   valence and lower-energy than your average — chillest concert of
+   the year."
+
+#### Schema additions
+
+```sql
+ALTER TABLE songs
+  ADD COLUMN spotify_audio_features jsonb;
+  -- { energy, danceability, valence, acousticness, instrumentalness,
+  --   liveness, speechiness, tempo, key, mode, loudness, duration_ms }
+
+CREATE INDEX songs_spotify_audio_features_gin
+  ON songs USING gin (spotify_audio_features);   -- for jsonb path queries
+
+-- Optional denormalized view of per-show averages for fast display:
+CREATE MATERIALIZED VIEW show_vibe AS
+  SELECT
+    s.id AS show_id,
+    s.user_id,
+    AVG((sng.spotify_audio_features->>'energy')::float)        AS avg_energy,
+    AVG((sng.spotify_audio_features->>'valence')::float)       AS avg_valence,
+    AVG((sng.spotify_audio_features->>'danceability')::float)  AS avg_danceability,
+    AVG((sng.spotify_audio_features->>'acousticness')::float)  AS avg_acousticness,
+    AVG((sng.spotify_audio_features->>'instrumentalness')::float) AS avg_instrumentalness,
+    AVG((sng.spotify_audio_features->>'liveness')::float)      AS avg_liveness,
+    AVG((sng.spotify_audio_features->>'tempo')::float)         AS avg_tempo,
+    SUM((sng.spotify_audio_features->>'duration_ms')::int)     AS total_duration_ms,
+    COUNT(*)                                                    AS song_count
+  FROM shows s
+  JOIN setlist_song_appearances a ON a.show_id = s.id
+  JOIN songs sng ON sng.id = a.song_id
+  WHERE sng.spotify_audio_features IS NOT NULL
+  GROUP BY s.id, s.user_id;
+
+CREATE UNIQUE INDEX show_vibe_pk ON show_vibe (show_id);
+CREATE INDEX show_vibe_user_idx ON show_vibe (user_id);
+```
+
+#### Job
+
+Extend `spotify/track-resolve` (§3c) — once `songs.spotify_track_id`
+is populated, batch-fetch audio features:
+
+```ts
+// packages/jobs/src/spotify-audio-features.ts
+registerJob('spotify/audio-features-fill', async ({ performerId, batch = 100 }) => {
+  const targets = await db.query.songs.findMany({
+    where: and(
+      eq(songs.performerId, performerId),
+      isNotNull(songs.spotifyTrackId),
+      isNull(songs.spotifyAudioFeatures),
+    ),
+    limit: batch,
+  });
+  // GET /v1/audio-features?ids=<comma-separated, max 100>
+  // Cache misses with a sentinel (jsonb {"unavailable": true}) so we
+  // don't retry forever for tracks whose features were stripped post-
+  // deprecation.
+});
+```
+
+Concurrency 1, 200ms minimum interval. Falls into the same client-
+credentials token already used by `track-resolve`.
+
+#### UI
+
+- **Show detail — vibe section** (web + mobile + iPad). On web, a
+  small radar chart sits between the setlist and the photos grid.
+  On mobile, it's a card directly beneath the scoreboard/hero. On
+  iPad three-pane, it's a right-pane card alongside `SetlistLab`.
+- **Energy arc chart** — single horizontal sparkline, x = song
+  order, y = energy (or toggleable to valence). Overlaid label
+  marks the encore boundary. Renders only when ≥6 songs have
+  features; otherwise the section collapses.
+- **Auto-summary chip** — one-line LLM-rendered description of
+  the vibe profile (cached on the row, regenerated when setlist
+  changes). Uses the existing `traceLLM` wrapper.
+
+#### Fallbacks if the audio-features endpoint isn't available
+
+- **AcousticBrainz** (community-maintained, frozen 2022 but rich)
+  matched via MusicBrainz recording IDs — we already cache MBIDs.
+  Reduced coverage on newer tracks (post-2022) but acceptable.
+- **Spotify track preview audio + on-device ML** — last resort:
+  download the 30s preview, run a small Python (or wasm) energy/
+  valence model. Heavy infra; defer indefinitely.
+
+### 13c. Library cross-reference → fan loyalty score
+
+User-scoped: `GET /me/tracks` (saved tracks) and
+`GET /me/playlists/{id}/tracks` (playlist contents). Cross-reference
+against the songs they heard live.
+
+#### What it unlocks
+
+- **Fan loyalty score per show**: "You had 12 of 18 songs saved
+  before the show — 67% fan loyalty." Display as a ring chart on
+  Show detail.
+- **"Songs you discovered live"** rail: tracks the user **didn't**
+  have saved but heard at the show, plus a "save to library" CTA
+  per row. Spotify lets us write to the library with `PUT
+  /me/tracks?ids=...`.
+- **"Songs you keep hearing live but never play"** — saved-track
+  appearances minus monthly play count. Brain answer fodder.
+
+#### Schema
+
+```sql
+CREATE TABLE user_spotify_saved_tracks (
+  user_id     text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  spotify_track_id text NOT NULL,
+  added_at    timestamp NOT NULL,
+  fetched_at  timestamp NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, spotify_track_id)
+);
+CREATE INDEX user_spotify_saved_tracks_user_idx
+  ON user_spotify_saved_tracks (user_id);
+```
+
+#### Job
+
+`spotify/library-sync` runs nightly per opted-in user. Pages
+through `GET /me/tracks` (50 per page, may run 20+ pages for power
+users). Stores `(track_id, added_at)`. Pruned + fully-rewritten on
+each run — Spotify's library is small enough that a full resync is
+cheaper than diff logic.
+
+Token: needs `user-library-read` scope. Granted on a separate
+"Connect library" CTA in Preferences/Integrations — we keep the
+import-only `user-follow-read` scope as the baseline so granting
+extra scope is opt-in.
+
+### 13d. Recently played + currently playing → live mode + listening peaks
+
+`GET /me/player/recently-played` (last 50 plays, max ~24h history)
+and `GET /me/player/currently-playing` (real-time).
+
+#### What it unlocks
+
+- **Personal-data-import "Spotify peaks" enhancement** — already in
+  `feature-plan-personal-data-import.md` §7. Rolling recently-played
+  is the API path; the Takeout extended-history is the historical
+  path. Same logic, two windows.
+- **Live mode setlist capture** (mobile only): when the user opens
+  the show detail of a `ticketed` show that's currently happening
+  (date == today AND now > scheduled start), surface a "track what
+  I'm hearing" toggle. While on, poll `currently-playing` every 30s
+  and append matched titles to a draft setlist. Caveats:
+  - Only works if the user is *playing the live audio through
+    Spotify*, which they generally aren't. Practical use case is
+    actually the **post-show listen** — many users listen to the
+    headliner on the way home; recently-played gives a clean
+    signal of "what stuck."
+- **Pre-show priming detection** — if the recently-played includes
+  the headliner in the 4 hours before the show, infer the user
+  primed and write a `prep_played: true` flag. Powers a small "you
+  played 4 [artist] tracks before the show" stat on the recap card.
+
+#### Schema
+
+Lightweight — just timestamps on existing rows, no new table:
+
+```sql
+ALTER TABLE shows
+  ADD COLUMN spotify_prep_track_count smallint,        -- count in 4h pre-show
+  ADD COLUMN spotify_post_track_count smallint;        -- count in 6h post-show
+```
+
+Backfilled by a `spotify/listening-peaks-fill` job that runs once
+per show as `state` transitions to `past`.
+
+Scope: `user-read-recently-played`, `user-read-currently-playing`.
+
+### 13e. Top tracks + related artists → predictive enhancement
+
+`GET /artists/{id}/top-tracks?market=US` is **not** deprecated —
+this is the safe Spotify-graph signal. `related-artists` IS
+deprecated for new apps; alternatives below.
+
+#### What it unlocks
+
+- **Better predicted setlist** (§4c): blend the corpus-based
+  recency-weighted prediction with each artist's Spotify top-10.
+  Top tracks correlate strongly with what they actually play. New
+  formula: `score = 0.7 * corpus_recent + 0.3 * top_track_rank`.
+  Improves cold-start (artists whose `tour_setlists` corpus is
+  empty fall back to top tracks).
+- **Pre-show "Hype" playlist seeded from top tracks** when the
+  predicted setlist is too short or too uncertain. Still names
+  the playlist `Hype: {artist}…` — user just gets the safe-bet
+  list rather than an empty one.
+- **Cross-tour discovery rail** — for each followed artist, find
+  artists also-followed by users who attended their shows. Approx
+  via Spotify related-artists if grandfathered; via **Last.fm
+  "similar" API** otherwise; via **MusicBrainz `artist-rels`** as
+  the open-source backstop.
+
+#### Schema
+
+```sql
+ALTER TABLE performers
+  ADD COLUMN spotify_top_tracks jsonb,        -- [{ trackId, name, popularity }]
+  ADD COLUMN spotify_top_tracks_fetched_at timestamp;
+```
+
+Refreshed monthly by `spotify/top-tracks-refresh` (per followed
+artist). Cheap (1 call per artist per month, max ~5K calls/month
+for a power user with 200 followed artists × 1 = manageable).
+
+### 13f. Branded playlist cover art
+
+`PUT /playlists/{id}/images` accepts a base64-encoded JPEG ≤256kb
+and sets it as the playlist cover.
+
+#### What it unlocks
+
+Every Showbook-generated playlist gets a **custom cover** instead
+of Spotify's default 4-quad collage:
+
+- Hype playlist: dark editorial card with `HYPE` label, headliner,
+  date, venue.
+- "What I heard" playlist: same chrome with `LIVE` label.
+- Year-end concert soundtrack (§13h): `2025 · LIVE` with
+  attendance count.
+
+Reuses the share-card service we'll need anyway for the future
+Wrapped feature (out of scope for now, but the renderer pays for
+itself across multiple use cases). For v1 we can lean on a small
+Edge Function that renders an SVG → JPEG with Satori (already
+common in Next.js) or a Sharp-based static generator.
+
+#### Implementation
+
+```ts
+async function attachCover(playlistId: string, accessToken: string, jpegBytes: Buffer) {
+  await spotifyFetch(`/playlists/${playlistId}/images`, accessToken, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'image/jpeg' },
+    body: jpegBytes.toString('base64'),
+  });
+}
+```
+
+Cover image is also written to R2 alongside the show's media
+(`media_assets` row with `kind='playlist_cover'`) so it survives
+playlist deletion and powers the in-app playlist card.
+
+### 13g. ISRC + album → first-class song identity
+
+Today `songs` is keyed by `(performerId, lower(title))` — fine for
+display but mushy for cross-referencing. Spotify exposes ISRC on
+every track via `external_ids.isrc`, plus album metadata via
+`/tracks/{id}` (which returns `album.id`, `album.release_date`,
+`album.album_type`).
+
+#### What it unlocks
+
+- **De-duped song identity** across "Heroes (Live 2003)" /
+  "Heroes - 2002 Remaster" / "Heroes" — same ISRC, same
+  `songs` row.
+- **Cross-platform readiness** — Apple Music and Tidal also key on
+  ISRC. When/if we add those providers, `songs` already has the
+  bridge.
+- **Album-release context** — "you saw [artist] two weeks before
+  [album] dropped" auto-rendered on Show detail. Album-release
+  date is a dimension the Brain can pivot on
+  (`shows_around_album_release` Brain tool).
+- **Cover detection** — when a track's `album.artists[0]` doesn't
+  match the headliner, mark `songs.is_cover = true` and populate
+  `songs.cover_of` from the album artist. Cleaner than our manual
+  text-pattern guess.
+
+#### Schema
+
+```sql
+ALTER TABLE songs
+  ADD COLUMN isrc                    text,
+  ADD COLUMN spotify_album_id        text,
+  ADD COLUMN spotify_album_name      text,
+  ADD COLUMN spotify_album_release   date,
+  ADD COLUMN spotify_album_type      text;   -- 'album' | 'single' | 'compilation'
+
+CREATE UNIQUE INDEX songs_isrc_unique
+  ON songs (isrc) WHERE isrc IS NOT NULL;
+CREATE INDEX songs_album_release_idx
+  ON songs (spotify_album_release DESC) WHERE spotify_album_release IS NOT NULL;
+```
+
+`spotify/track-resolve` (§3c) extends to fetch `/tracks/{id}` after
+search match, capturing ISRC + album fields in one round-trip.
+
+### 13h. Year-end "Concert soundtrack" playlist
+
+A single user-scoped artifact: one signature track per attended
+show in the year, ordered DJ-set-style by tempo + energy curve.
+
+#### What it unlocks
+
+- A *single click* delivers the year's emotional arc as audio.
+  Differentiated from Wrapped-style slideshows because it's an
+  ongoing artifact the user actually listens to.
+- Stretch: "Smart shuffle" — re-order weekly using the audio-
+  features tempo curve for a smoother listen.
+
+#### Implementation
+
+`spotify/concert-soundtrack-build` job, runs on user demand
+(button on Year filter of Shows list) or weekly when the user has
+≥3 new shows in the current year:
+
+```ts
+// 1. For each show this year with a setlist, pick the "signature" track:
+//    - song with max (timesHeardThisYear * popularity)
+//    - tie-break: latest played
+// 2. Resolve each to spotify_track_id.
+// 3. Order by valence ascending → energy ascending → valence descending
+//    (rough DJ "warm up → peak → wind down" curve).
+// 4. Create / update playlist `Showbook · 2025`.
+// 5. Apply branded cover (§13f).
+```
+
+Schema: `users.spotify_year_playlists jsonb` — `{ "2025":
+"playlist_id_xxx", "2024": "..." }` so re-runs idempotently
+update the existing playlist.
+
+### 13i. Followed-on-Spotify-but-not-on-Showbook → discovery rail
+
+User-scoped: `GET /me/following?type=artist` returns who the user
+follows on Spotify. Diff against `user_performer_follows`. The
+remainder is "artists you care about that Showbook doesn't know
+about yet."
+
+#### What it unlocks
+
+- **Onboarding**: at first run, offer to bulk-import every Spotify
+  follow as a Showbook follow. (Already the existing
+  `spotify-import` flow — extend it to include this delta on
+  every run, not just first run.)
+- **Discover rail**: "You follow these on Spotify — see their
+  upcoming shows" with one-tap Showbook follow + Discover hit.
+- **Brain context**: `spotify_only_follows` tool returns the diff
+  list, so the Brain can answer "who do I follow on Spotify but
+  haven't tracked here yet?"
+
+#### Schema
+
+No new tables — the existing `user_performer_follows` is the
+source of truth, and the diff is a join at query time. Cache the
+last-fetched-at on the user row to throttle to once-per-day.
+
+### 13j. 30-second previews + Web Playback SDK → embedded playback
+
+Most tracks expose a `preview_url` (30s MP3) on the
+`/tracks/{id}` response. Free, no auth required beyond the
+existing client-credentials token.
+
+#### What it unlocks
+
+- **Web Show detail** — tap a song row in the setlist, plays the
+  30s preview inline (HTML `<audio>` element controlled from
+  React). No account needed. Preview audio rendered as a small
+  waveform overlay on the row using the audio file's first 1s of
+  amplitude data.
+- **Mobile Show detail** — same, via `expo-av` (already a
+  dependency for the voice-input feature in the Brain plan).
+  Tap-to-play with a small inline waveform visualization.
+- **Premium users** — Web Playback SDK on web (
+  `apps/web/lib/spotify-playback.ts`) lets logged-in Premium
+  subscribers play *full* tracks inside Showbook, controlled
+  from the show's setlist row. Skip controls, etc. Out of scope
+  for v1; the 30s preview ships first.
+
+#### Schema
+
+```sql
+ALTER TABLE songs
+  ADD COLUMN spotify_preview_url text;
+```
+
+Fetched alongside ISRC/album in `spotify/track-resolve` (§3c).
+
+### 13k. Token storage — the missing infra
+
+Today's Spotify integration is one-shot: the OAuth callback uses
+the access token in the same request and discards it. Everything
+in §13c (library), §13d (recently-played + currently-playing),
+§13h (year playlist), §13i (Spotify follows) requires *persistent*
+user-scoped tokens with refresh handling.
+
+#### Schema
+
+```sql
+CREATE TABLE user_spotify_tokens (
+  user_id           text PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  access_token      text NOT NULL,         -- AES-encrypted at rest
+  refresh_token     text NOT NULL,         -- ditto
+  scope             text NOT NULL,         -- comma-joined granted scopes
+  expires_at        timestamp NOT NULL,
+  spotify_user_id   text NOT NULL,
+  display_name      text,
+  product           text,                  -- 'free' | 'premium' | 'open'
+  created_at        timestamp NOT NULL DEFAULT now(),
+  updated_at        timestamp NOT NULL DEFAULT now()
+);
+```
+
+Tokens encrypted at rest using a key from `process.env.TOKEN_KEY`
+(rotate via re-encrypt job). Same pattern as Gmail tokens (which
+also already need this — verify the existing implementation in
+`apps/web/app/api/gmail/`).
+
+Refresh helper:
+
+```ts
+// packages/api/src/spotify.ts
+export async function ensureFreshUserToken(userId: string): Promise<string> {
+  const row = await db.query.userSpotifyTokens.findFirst({
+    where: eq(userSpotifyTokens.userId, userId),
+  });
+  if (!row) throw new Error('not_connected');
+  if (row.expiresAt > new Date(Date.now() + 60_000)) return decrypt(row.accessToken);
+  // POST /api/token grant_type=refresh_token
+  const refreshed = await refreshSpotifyToken(decrypt(row.refreshToken));
+  await db.update(userSpotifyTokens).set({
+    accessToken: encrypt(refreshed.access_token),
+    expiresAt: new Date(Date.now() + refreshed.expires_in * 1000),
+    updatedAt: new Date(),
+  }).where(eq(userSpotifyTokens.userId, userId));
+  return refreshed.access_token;
+}
+```
+
+This lands in §L0 alongside the rest of §13's prerequisites.
+
+### 13l. Scope ladder — opt-in granularity
+
+Don't ask for everything up front. The integrations page shows
+Spotify with a connected/not-connected state and a per-feature
+toggle that adds the matching scope incrementally:
+
+| Feature | Scope | Default |
+|---------|-------|---------|
+| Import Spotify follows (existing) | `user-follow-read` | On at first connect |
+| Hype + post-show playlists | `playlist-modify-private`, `ugc-image-upload` | On at first connect |
+| Library cross-reference | `user-library-read` | Off — opt in per §13c |
+| Recently played peaks | `user-read-recently-played` | Off — opt in per §13d |
+| Currently playing (live mode) | `user-read-currently-playing` | Off — opt in per §13d |
+| Save discovered songs | `user-library-modify` | Off — gated behind a CTA |
+
+Each toggle re-runs OAuth with the additive scope set. If a user
+later denies a scope, the dependent feature gracefully degrades
+with an "Enable in Spotify settings" toast. Match the existing
+Gmail-scope-management pattern.
+
+### 13m. Phased rollout (extension to §9)
+
+| Phase | Scope |
+|-------|-------|
+| **L3.5** | Persistent token storage + scope ladder UI (§13k, §13l). Prerequisite for everything below. |
+| **L6** | Audio features fill (§13b). Verify deprecation status with a probe call before shipping. Vibe radar + energy arc + set-length on Show detail. |
+| **L7** | ISRC + album metadata (§13g). De-dup song identity. Album-release context display. |
+| **L8** | Library cross-reference (§13c). Fan-loyalty ring on Show detail. |
+| **L9** | Top-tracks-enhanced predicted setlist (§13e). |
+| **L10** | Branded playlist covers (§13f). Year-end concert soundtrack playlist (§13h). |
+| **L11** | Recently-played peaks + pre/post show counts (§13d). |
+| **L12** | 30s previews inline (§13j). Premium full-playback as a stretch behind a feature flag. |
+
+L6 onwards each runs probe-first: the deprecation status of a
+given endpoint determines whether it ships natively or via the
+fallback in §13b/§13e.
+
+### 13n. Risks specific to §13
+
+| Risk | Mitigation |
+|------|-----------|
+| Audio-features endpoint inaccessible (Nov 2024 deprecation) | Probe call gates the L6 schema rollout. Fall back to AcousticBrainz via cached MBIDs; reduced coverage on post-2022 tracks but acceptable. |
+| Related-artists endpoint inaccessible | Use Last.fm `similar` API (free, registered) or MusicBrainz `artist-rels` as the related-artist source. |
+| User scope creep — too many OAuth re-prompts | Scope ladder (§13l) — one prompt per feature, never bundled. Surface "what data this needs" copy on each toggle. |
+| Token leak | Encrypt at rest; never log the access/refresh token. Pino redaction already covers `accessToken`/`refreshToken` keys; verify in serialization paths. |
+| Spotify API rate limit (~180 req/min) | Concurrency 1 per token; 200ms minimum interval; per-user circuit breaker via the existing `rate-limit.ts` shared limiter. |
+| ISRC drift — Spotify's ISRC for a track sometimes differs from MusicBrainz's | Don't hard-merge on ISRC alone for songs that already have a populated `songs.id`; treat ISRC as a *secondary* index. |
+| 30s preview deprecation | Some tracks already have null `preview_url`; treat as graceful degradation (row hides the play button). Spotify hasn't formally deprecated, but the field has been quietly thinning since 2024. |
+| Cover-art generation cost | Cache covers in R2 keyed by `(playlistId, version)`; regenerate only when the show set changes. |
