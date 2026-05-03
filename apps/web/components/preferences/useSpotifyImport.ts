@@ -77,6 +77,7 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
       utils.performers.list.invalidate();
       utils.performers.count.invalidate();
       utils.discover.followedFeed.invalidate();
+      utils.discover.followedArtistsFeed.invalidate();
       opts.onImported?.({
         count: data.imported.length,
         performerIds: data.imported.map((i) => i.performerId),
