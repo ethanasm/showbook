@@ -29,9 +29,9 @@ of high-fidelity mocks across the flows below.
 | M6 | Shipped (offline + pending-writes drawer, Toast/Banner, iPad three-pane, Maestro Cloud E2E flows, 80% coverage gate scoped to `apps/mobile/lib/**`) |
 
 The mobile app is feature-complete against the design handoff. Open
-follow-ups (push notifications wiring, post-M5 review items) live in
-the root [`Planned Improvements.md`](../Planned%20Improvements.md) and
-[`reviews/mobile-review-2026-05-02.md`](reviews/mobile-review-2026-05-02.md).
+follow-ups (push notifications wiring + the smaller items from the
+post-M5 audit that hadn't been addressed at audit time) live in
+[`planned-improvements.md`](planned-improvements.md).
 
 ## Stack decisions (locked for M1, may extend in later milestones)
 

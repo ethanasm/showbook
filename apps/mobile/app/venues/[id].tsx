@@ -41,46 +41,18 @@ import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
-import { trpc } from '../../lib/trpc';
+import { trpc, type RouterOutput } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
 
-interface VenueDetail {
-  id: string;
-  name: string;
-  city: string | null;
-  stateRegion: string | null;
-  country: string | null;
-  photoUrl: string | null;
-  capacity: number | null;
-  isFollowed: boolean;
-  userShowCount: number;
-  upcomingCount: number;
-}
-
-interface UpcomingAnnouncement {
-  id: string;
-  kind: Kind;
-  headliner: string;
-  productionName: string | null;
-  showDate: string;
-}
-
-interface VenueShowPerformer {
-  role: 'headliner' | 'support' | 'cast';
-  sortOrder: number;
-  performer: { id: string; name: string };
-}
-
-interface VenueShow {
-  id: string;
-  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports';
-  state: 'past' | 'ticketed' | 'watching';
-  date: string | null;
-  productionName: string | null;
-  seat: string | null;
-  pricePaid: string | null;
-  showPerformers: VenueShowPerformer[];
-}
+// Derive screen types from the tRPC vanilla client so drift in the server
+// contract is caught at the call site instead of papered over with casts.
+type UtilsClient = ReturnType<typeof trpc.useUtils>['client'];
+type VenueDetail = RouterOutput<UtilsClient['venues']['detail']['query']>;
+type UpcomingAnnouncement = RouterOutput<
+  UtilsClient['venues']['upcomingAnnouncements']['query']
+>[number];
+type VenueShow = RouterOutput<UtilsClient['venues']['userShows']['query']>[number];
+type VenueMedia = RouterOutput<UtilsClient['media']['listForVenue']['query']>[number];
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const DOWS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -134,39 +106,26 @@ export default function VenueDetailScreen(): React.JSX.Element {
 
   const detailQuery = useCachedQuery<VenueDetail>({
     queryKey: ['mobile', 'venue', venueId, 'detail'],
-    queryFn: () =>
-      utils.client.venues.detail.query({ venueId }) as unknown as Promise<VenueDetail>,
+    queryFn: () => utils.client.venues.detail.query({ venueId }),
     enabled: Boolean(token) && venueId.length > 0,
   });
 
   const upcomingQuery = useCachedQuery<UpcomingAnnouncement[]>({
     queryKey: ['mobile', 'venue', venueId, 'upcoming'],
     queryFn: () =>
-      utils.client.venues.upcomingAnnouncements.query({
-        venueId,
-        limit: 25,
-      }) as unknown as Promise<UpcomingAnnouncement[]>,
+      utils.client.venues.upcomingAnnouncements.query({ venueId, limit: 25 }),
     enabled: Boolean(token) && venueId.length > 0,
   });
 
   const showsQuery = useCachedQuery<VenueShow[]>({
     queryKey: ['mobile', 'venue', venueId, 'shows'],
-    queryFn: () =>
-      utils.client.venues.userShows.query({ venueId }) as unknown as Promise<VenueShow[]>,
+    queryFn: () => utils.client.venues.userShows.query({ venueId }),
     enabled: Boolean(token) && venueId.length > 0,
   });
 
-  type VenueMedia = {
-    id: string;
-    showId: string;
-    caption: string | null;
-    performerIds: string[];
-    urls: Record<string, string>;
-  };
   const mediaQuery = useCachedQuery<VenueMedia[]>({
     queryKey: ['mobile', 'venue', venueId, 'media'],
-    queryFn: () =>
-      utils.client.media.listForVenue.query({ venueId }) as unknown as Promise<VenueMedia[]>,
+    queryFn: () => utils.client.media.listForVenue.query({ venueId }),
     enabled: Boolean(token) && venueId.length > 0,
   });
 
@@ -261,7 +220,6 @@ function Hero({ venue }: { venue: VenueDetail }): React.JSX.Element {
       ? `${venue.userShowCount} show${venue.userShowCount === 1 ? '' : 's'}`
       : null,
     venue.upcomingCount > 0 ? `${venue.upcomingCount} upcoming` : null,
-    venue.capacity ? `${venue.capacity.toLocaleString()} cap.` : null,
   ]
     .filter(Boolean)
     .join(' · ');

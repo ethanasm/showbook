@@ -5,10 +5,10 @@
  * what M2 actually exposes:
  *   - User card row (avatar circle + name + signed-in email)
  *   - INTEGRATIONS section: Gmail / Ticketmaster / Google Places — display
- *     only for M2. Tapping a row pushes /integrations/[id], which renders an
- *     EmptyState ("Coming in M3"). The connect status text is a placeholder
- *     because the prefs router does not yet expose integration state — see
- *     INTEGRATIONS comment below.
+ *     only on mobile. Tapping a row pushes /integrations/[id], which renders
+ *     a "Not yet on mobile" EmptyState; integrations are managed on web. The
+ *     connect status text is a placeholder because the prefs router does
+ *     not yet expose integration state — see INTEGRATIONS comment below.
  *   - REGION section: shows the user's first saved region from the existing
  *     `preferences.get` query (the prefs router treats regions as a list and
  *     does not name a "default" — we display the first as the effective

@@ -33,41 +33,15 @@ import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
-import { trpc } from '../../lib/trpc';
+import { trpc, type RouterOutput } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
 
-interface PerformerDetail {
-  id: string;
-  name: string;
-  imageUrl: string | null;
-  isFollowed: boolean;
-  showCount: number;
-  firstSeen: string | null;
-  lastSeen: string | null;
-}
-
-interface UserShowVenue {
-  name: string;
-  city: string | null;
-}
-
-interface UserShowPerformer {
-  role: 'headliner' | 'support' | 'cast';
-  sortOrder: number;
-  performer: { id: string; name: string };
-}
-
-interface UserShow {
-  id: string;
-  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports';
-  state: 'past' | 'ticketed' | 'watching';
-  date: string | null;
-  productionName: string | null;
-  seat: string | null;
-  pricePaid: string | null;
-  venue: UserShowVenue;
-  showPerformers: UserShowPerformer[];
-}
+// Derive screen types from the tRPC vanilla client so drift in the server
+// contract is caught at the call site instead of papered over with casts.
+type UtilsClient = ReturnType<typeof trpc.useUtils>['client'];
+type PerformerDetail = RouterOutput<UtilsClient['performers']['detail']['query']>;
+type UserShow = RouterOutput<UtilsClient['performers']['userShows']['query']>[number];
+type TaggedMedia = RouterOutput<UtilsClient['media']['listForPerformer']['query']>[number];
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const DOWS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -130,31 +104,19 @@ export default function ArtistDetailScreen(): React.JSX.Element {
 
   const detailQuery = useCachedQuery<PerformerDetail>({
     queryKey: ['mobile', 'artist', performerId, 'detail'],
-    queryFn: () =>
-      utils.client.performers.detail.query({ performerId }) as unknown as Promise<PerformerDetail>,
+    queryFn: () => utils.client.performers.detail.query({ performerId }),
     enabled: Boolean(token) && performerId.length > 0,
   });
 
   const showsQuery = useCachedQuery<UserShow[]>({
     queryKey: ['mobile', 'artist', performerId, 'shows'],
-    queryFn: () =>
-      utils.client.performers.userShows.query({ performerId }) as unknown as Promise<UserShow[]>,
+    queryFn: () => utils.client.performers.userShows.query({ performerId }),
     enabled: Boolean(token) && performerId.length > 0,
   });
 
-  type TaggedMedia = {
-    id: string;
-    showId: string;
-    caption: string | null;
-    performerIds: string[];
-    urls: Record<string, string>;
-  };
   const mediaQuery = useCachedQuery<TaggedMedia[]>({
     queryKey: ['mobile', 'artist', performerId, 'media'],
-    queryFn: () =>
-      utils.client.media.listForPerformer.query({ performerId }) as unknown as Promise<
-        TaggedMedia[]
-      >,
+    queryFn: () => utils.client.media.listForPerformer.query({ performerId }),
     enabled: Boolean(token) && performerId.length > 0,
   });
 
@@ -292,14 +254,6 @@ function YourShows({
       )}
     </Section>
   );
-}
-
-interface TaggedMedia {
-  id: string;
-  showId: string;
-  caption: string | null;
-  performerIds: string[];
-  urls: Record<string, string>;
 }
 
 function TaggedPhotos({
