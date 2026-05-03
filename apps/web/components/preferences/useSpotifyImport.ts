@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 
+// Shared with apps/web/app/api/spotify/callback/route.ts — both ends must
+// agree on this key for the localStorage fallback to work.
+const SPOTIFY_AUTH_LS_KEY = "showbook:spotify-auth";
+
 export type ListedArtist = {
   spotifyId: string;
   name: string;
@@ -47,6 +51,7 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importedCount, setImportedCount] = useState<number | null>(null);
   const handlerRef = useRef<((e: MessageEvent) => void) | null>(null);
+  const storageHandlerRef = useRef<((e: StorageEvent) => void) | null>(null);
   const popupRef = useRef<Window | null>(null);
 
   const listFollowed = trpc.spotifyImport.listFollowed.useMutation({
@@ -86,12 +91,16 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
     onError: (err) => setError(err.message),
   });
 
-  // Cleanup listener on unmount
+  // Cleanup listeners on unmount
   useEffect(() => {
     return () => {
       if (handlerRef.current) {
         window.removeEventListener("message", handlerRef.current);
         handlerRef.current = null;
+      }
+      if (storageHandlerRef.current) {
+        window.removeEventListener("storage", storageHandlerRef.current);
+        storageHandlerRef.current = null;
       }
     };
   }, []);
@@ -100,21 +109,75 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
     setError(null);
     setImportedCount(null);
 
+    // Drop any stale auth payload from a previous (aborted) flow so the
+    // storage listener below only fires for this round-trip.
+    try {
+      window.localStorage.removeItem(SPOTIFY_AUTH_LS_KEY);
+    } catch {
+      // Private-mode quota errors etc. — non-fatal.
+    }
+
+    const cleanup = () => {
+      if (handlerRef.current) {
+        window.removeEventListener("message", handlerRef.current);
+        handlerRef.current = null;
+      }
+      if (storageHandlerRef.current) {
+        window.removeEventListener("storage", storageHandlerRef.current);
+        storageHandlerRef.current = null;
+      }
+    };
+
+    const handlePayload = (data: unknown): boolean => {
+      if (!data || typeof data !== "object") return false;
+      const payload = data as { type?: unknown; accessToken?: unknown };
+      if (
+        payload.type === "spotify-auth" &&
+        typeof payload.accessToken === "string"
+      ) {
+        cleanup();
+        try {
+          window.localStorage.removeItem(SPOTIFY_AUTH_LS_KEY);
+        } catch {
+          /* ignore */
+        }
+        listFollowed.mutate({ accessToken: payload.accessToken });
+        return true;
+      }
+      if (payload.type === "spotify-auth-error") {
+        cleanup();
+        try {
+          window.localStorage.removeItem(SPOTIFY_AUTH_LS_KEY);
+        } catch {
+          /* ignore */
+        }
+        setError("Spotify authorization failed");
+        return true;
+      }
+      return false;
+    };
+
     const handler = (e: MessageEvent) => {
       if (e.origin !== window.location.origin) return;
-      if (e.data?.type === "spotify-auth" && e.data.accessToken) {
-        window.removeEventListener("message", handler);
-        handlerRef.current = null;
-        listFollowed.mutate({ accessToken: e.data.accessToken });
-      }
-      if (e.data?.type === "spotify-auth-error") {
-        window.removeEventListener("message", handler);
-        handlerRef.current = null;
-        setError("Spotify authorization failed");
-      }
+      handlePayload(e.data);
     };
     handlerRef.current = handler;
     window.addEventListener("message", handler);
+
+    // localStorage fallback: mobile Safari typically nulls out window.opener
+    // after the cross-origin Spotify hop, so the popup's postMessage never
+    // arrives. The callback also writes the token to localStorage, which
+    // dispatches a storage event in this (originating) tab cross-window.
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== SPOTIFY_AUTH_LS_KEY || !e.newValue) return;
+      try {
+        handlePayload(JSON.parse(e.newValue));
+      } catch {
+        /* malformed payload, ignore */
+      }
+    };
+    storageHandlerRef.current = onStorage;
+    window.addEventListener("storage", onStorage);
 
     const popup = window.open(
       "/api/spotify",
@@ -126,10 +189,7 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
       const checkClosed = setInterval(() => {
         if (popup.closed) {
           clearInterval(checkClosed);
-          if (handlerRef.current) {
-            window.removeEventListener("message", handlerRef.current);
-            handlerRef.current = null;
-          }
+          cleanup();
         }
       }, 500);
     }
