@@ -46,6 +46,7 @@ export default function ArtistsView() {
   const [currentPage, setCurrentPage] = useState(0);
   const compact = useCompactMode();
   const windowWidth = useWindowWidth();
+  const isMobile = windowWidth < 768;
   const isHalfWidth = windowWidth < 960;
 
   const PAGE_SIZE = compact ? 12 : 15;
@@ -258,9 +259,11 @@ export default function ArtistsView() {
   }
 
   // Column layout: name | shows | past | future | first seen | last seen | metadata | follow
-  const gridCols = isHalfWidth
-    ? "minmax(140px,2fr) 58px 52px 58px minmax(98px,0.9fr) 32px 32px 32px"
-    : "minmax(180px,2.4fr) 62px 54px 62px minmax(106px,0.9fr) minmax(106px,0.9fr) 32px 32px 32px";
+  const gridCols = isMobile
+    ? "minmax(0,1.6fr) 44px 40px 44px 28px"
+    : isHalfWidth
+      ? "minmax(140px,2fr) 58px 52px 58px minmax(98px,0.9fr) 32px 32px 32px"
+      : "minmax(180px,2.4fr) 62px 54px 62px minmax(106px,0.9fr) minmax(106px,0.9fr) 32px 32px 32px";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
@@ -344,17 +347,21 @@ export default function ArtistsView() {
             />
           </div>
         ) : (
-          <div style={{ margin: "4px 36px 0", background: "var(--surface)" }}>
+          <div style={{ margin: isMobile ? "4px 12px 0" : "4px 36px 0", background: "var(--surface)" }}>
             {/* Column headers */}
-            <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: 14, padding: "10px 20px", borderBottom: "1px solid var(--rule)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase" }}>
+            <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 8 : 14, padding: isMobile ? "10px 12px" : "10px 20px", borderBottom: "1px solid var(--rule)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase" }}>
               <SortHeader<SortField> field="name" label="Name" sort={sort} onToggle={toggleSort} />
               <SortHeader<SortField> field="shows" label="Shows" sort={sort} onToggle={toggleSort} align="center" />
               <SortHeader<SortField> field="past" label="Past" sort={sort} onToggle={toggleSort} align="center" />
               <SortHeader<SortField> field="future" label="Future" sort={sort} onToggle={toggleSort} align="center" />
-              {!isHalfWidth && <SortHeader<SortField> field="firstSeen" label="First Seen" sort={sort} onToggle={toggleSort} />}
-              <SortHeader<SortField> field="lastSeen" label="Last Seen" sort={sort} onToggle={toggleSort} />
-              <div style={{ textAlign: "center" }}><Ticket size={10} /></div>
-              <div style={{ textAlign: "center" }}><Music2 size={10} /></div>
+              {!isMobile && (
+                <>
+                  {!isHalfWidth && <SortHeader<SortField> field="firstSeen" label="First Seen" sort={sort} onToggle={toggleSort} />}
+                  <SortHeader<SortField> field="lastSeen" label="Last Seen" sort={sort} onToggle={toggleSort} />
+                  <div style={{ textAlign: "center" }}><Ticket size={10} /></div>
+                  <div style={{ textAlign: "center" }}><Music2 size={10} /></div>
+                </>
+              )}
               <div style={{ textAlign: "center" }}><Eye size={10} /></div>
             </div>
 
@@ -365,7 +372,7 @@ export default function ArtistsView() {
               >
                 <Link
                   href={`/artists/${artist.id}`}
-                  style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: 14, padding: compact ? "5px 20px" : "12px 20px", borderBottom: "1px solid var(--rule)", alignItems: "center", cursor: "pointer", color: "inherit", textDecoration: "none" }}
+                  style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 8 : 14, padding: isMobile ? (compact ? "5px 12px" : "12px 12px") : (compact ? "5px 20px" : "12px 20px"), borderBottom: "1px solid var(--rule)", alignItems: "center", cursor: "pointer", color: "inherit", textDecoration: "none" }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface2, var(--surface))")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
@@ -391,16 +398,20 @@ export default function ArtistsView() {
                   <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: artist.futureShowsCount > 0 ? "var(--accent)" : "var(--faint)", fontFeatureSettings: '"tnum"' }}>
                     {artist.showCount > 0 ? artist.futureShowsCount : "—"}
                   </div>
-                  {!isHalfWidth && (
-                    <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {artist.firstSeen ? formatDate(artist.firstSeen) : "—"}
-                    </div>
+                  {!isMobile && (
+                    <>
+                      {!isHalfWidth && (
+                        <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {artist.firstSeen ? formatDate(artist.firstSeen) : "—"}
+                        </div>
+                      )}
+                      <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {artist.lastSeen ? formatDate(artist.lastSeen) : "—"}
+                      </div>
+                      <MetadataIcon linked={Boolean(artist.ticketmasterAttractionId)} label="Ticketmaster ID" Icon={Ticket} color="var(--accent)" />
+                      <MetadataIcon linked={Boolean(artist.musicbrainzId)} label="MusicBrainz ID" Icon={Music2} color="var(--kind-concert)" />
+                    </>
                   )}
-                  <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {artist.lastSeen ? formatDate(artist.lastSeen) : "—"}
-                  </div>
-                  <MetadataIcon linked={Boolean(artist.ticketmasterAttractionId)} label="Ticketmaster ID" Icon={Ticket} color="var(--accent)" />
-                  <MetadataIcon linked={Boolean(artist.musicbrainzId)} label="MusicBrainz ID" Icon={Music2} color="var(--kind-concert)" />
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }} title={artist.isFollowed ? "Following" : "Not following"}>
                     {artist.isFollowed && <Eye size={13} color="var(--accent)" />}
                   </div>

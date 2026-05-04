@@ -44,6 +44,7 @@ export default function VenuesView() {
   const [currentPage, setCurrentPage] = useState(0);
   const compact = useCompactMode();
   const windowWidth = useWindowWidth();
+  const isMobile = windowWidth < 768;
   const isHalfWidth = windowWidth < 960;
 
   const PAGE_SIZE = compact ? 12 : 15;
@@ -209,9 +210,11 @@ export default function VenuesView() {
   }
 
   // Column layout: differs by responsive breakpoint
-  const gridCols = isHalfWidth
-    ? "minmax(120px,2fr) minmax(80px,1fr) 70px 70px 32px 32px 32px"
-    : "minmax(120px,2fr) minmax(60px,0.7fr) minmax(80px,1fr) 70px 70px 32px 32px 32px";
+  const gridCols = isMobile
+    ? "minmax(0,1.7fr) minmax(0,1fr) 40px 40px 28px"
+    : isHalfWidth
+      ? "minmax(120px,2fr) minmax(80px,1fr) 70px 70px 32px 32px 32px"
+      : "minmax(120px,2fr) minmax(60px,0.7fr) minmax(80px,1fr) 70px 70px 32px 32px 32px";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
@@ -270,9 +273,9 @@ export default function VenuesView() {
             />
           </div>
         ) : (
-          <div style={{ margin: "4px 36px 0", background: "var(--surface)" }}>
+          <div style={{ margin: isMobile ? "4px 12px 0" : "4px 36px 0", background: "var(--surface)" }}>
             {/* Column headers */}
-            <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: 20, padding: "10px 20px", borderBottom: "1px solid var(--rule)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase" }}>
+            <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 10 : 20, padding: isMobile ? "10px 12px" : "10px 20px", borderBottom: "1px solid var(--rule)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase" }}>
               <SortHeader<SortField> field="name" label="Name" sort={sort} onToggle={toggleSort} />
               {!isHalfWidth && (
                 <SortHeader<SortField> field="state" label="State" sort={sort} onToggle={toggleSort} />
@@ -280,8 +283,12 @@ export default function VenuesView() {
               <SortHeader<SortField> field="city" label={isHalfWidth ? "City" : "City"} sort={sort} onToggle={toggleSort} />
               <SortHeader<SortField> field="past" label="Past" sort={sort} onToggle={toggleSort} align="center" />
               <SortHeader<SortField> field="future" label="Future" sort={sort} onToggle={toggleSort} align="center" />
-              <div style={{ textAlign: "center" }}><Ticket size={10} /></div>
-              <div style={{ textAlign: "center" }}><MapPin size={10} /></div>
+              {!isMobile && (
+                <>
+                  <div style={{ textAlign: "center" }}><Ticket size={10} /></div>
+                  <div style={{ textAlign: "center" }}><MapPin size={10} /></div>
+                </>
+              )}
               <div style={{ textAlign: "center" }}><Eye size={10} /></div>
             </div>
 
@@ -317,7 +324,7 @@ export default function VenuesView() {
                   ) : (
                     <Link
                       href={`/venues/${v.id}`}
-                      style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: 20, padding: compact ? "5px 20px" : "12px 20px", borderBottom: "1px solid var(--rule)", alignItems: "center", cursor: "pointer", color: "inherit", textDecoration: "none" }}
+                      style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 10 : 20, padding: isMobile ? (compact ? "5px 12px" : "12px 12px") : (compact ? "5px 20px" : "12px 20px"), borderBottom: "1px solid var(--rule)", alignItems: "center", cursor: "pointer", color: "inherit", textDecoration: "none" }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface2, var(--surface))")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
@@ -348,8 +355,12 @@ export default function VenuesView() {
                       <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: v.futureShowsCount > 0 ? "var(--accent)" : "var(--faint)", fontFeatureSettings: '"tnum"' }}>
                         {v.futureShowsCount}
                       </div>
-                      <MetadataIcon linked={Boolean(v.ticketmasterVenueId)} label="Ticketmaster ID" Icon={Ticket} color="var(--accent)" />
-                      <MetadataIcon linked={Boolean(v.googlePlaceId)} label="Google Places ID" Icon={MapPin} color="var(--kind-concert)" />
+                      {!isMobile && (
+                        <>
+                          <MetadataIcon linked={Boolean(v.ticketmasterVenueId)} label="Ticketmaster ID" Icon={Ticket} color="var(--accent)" />
+                          <MetadataIcon linked={Boolean(v.googlePlaceId)} label="Google Places ID" Icon={MapPin} color="var(--kind-concert)" />
+                        </>
+                      )}
                       <span title={v.isFollowed ? "Following" : "Not following"} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                         {v.isFollowed && <Eye size={13} color="var(--accent)" />}
                       </span>

@@ -69,7 +69,13 @@ test('capture PR screenshots for diff-touched routes', async ({ page }, testInfo
   }
   for (const route of config.routes) {
     await page.goto(route);
-    await page.waitForLoadState('domcontentloaded');
+    // Wait for hydration so client-only responsive hooks (useIsMobile)
+    // settle before we capture. `domcontentloaded` fires before React
+    // hydration runs and `networkidle` finishes before the post-paint
+    // useEffect cycle that flips `useIsMobile()` to true on mobile,
+    // so mobile screenshots showed the server-rendered desktop layout.
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1500);
     // Hide the Next.js dev-mode "N issues" toast/indicator. The skill
     // runs against `next dev`, which surfaces transient cross-page
     // warnings (e.g. NextAuth `getSession` aborted by a subsequent

@@ -5,6 +5,7 @@ import Link from "next/link";
 import "./design-system.css";
 import type { ShowKind } from "./KindBadge";
 import { PulseLabel } from "./PulseLabel";
+import { useIsMobile } from "@/lib/useIsMobile";
 import {
   MapPin,
   Ticket,
@@ -37,13 +38,14 @@ interface HeroCardProps {
 export function HeroCard({ show }: HeroCardProps) {
   const KindIcon = KIND_ICONS[show.kind];
   const kindColor = `var(--kind-${show.kind})`;
+  const isMobile = useIsMobile();
 
   return (
     <div
       style={{
         position: "relative",
         overflow: "hidden",
-        padding: "28px 32px",
+        padding: isMobile ? "20px 18px" : "28px 32px",
         background: "var(--surface)",
         border: "1px solid var(--rule)",
         borderRadius: 12,
@@ -89,8 +91,8 @@ export function HeroCard({ show }: HeroCardProps) {
           position: "relative",
           zIndex: 1,
           display: "grid",
-          gridTemplateColumns: "1fr auto",
-          gap: 32,
+          gridTemplateColumns: isMobile ? "1fr" : "1fr auto",
+          gap: isMobile ? 20 : 32,
           alignItems: "center",
       }}
     >
@@ -151,7 +153,7 @@ export function HeroCard({ show }: HeroCardProps) {
         <div
           style={{
             fontFamily: "var(--font-display)",
-            fontSize: 52,
+            fontSize: isMobile ? 36 : 52,
             fontWeight: 700,
             letterSpacing: "-0.01em",
             color: "var(--ink)",
@@ -211,7 +213,8 @@ export function HeroCard({ show }: HeroCardProps) {
         <div
           style={{
             display: "flex",
-            gap: 32,
+            flexDirection: isMobile ? "column" : "row",
+            gap: isMobile ? 12 : 32,
             marginTop: 22,
             fontFamily: "var(--font-geist-sans), sans-serif",
             fontSize: 13,
@@ -291,9 +294,11 @@ export function HeroCard({ show }: HeroCardProps) {
       <div
         style={{
           textAlign: "center",
-          paddingLeft: 32,
-          borderLeft: "1px solid var(--rule)",
-          minWidth: 180,
+          paddingLeft: isMobile ? 0 : 32,
+          paddingTop: isMobile ? 14 : 0,
+          borderLeft: isMobile ? "none" : "1px solid var(--rule)",
+          borderTop: isMobile ? "1px solid var(--rule)" : "none",
+          minWidth: isMobile ? 0 : 180,
         }}
       >
         <div
@@ -311,7 +316,7 @@ export function HeroCard({ show }: HeroCardProps) {
         <div
           style={{
             fontFamily: "var(--font-geist-sans), sans-serif",
-            fontSize: 120,
+            fontSize: isMobile ? 88 : 120,
             fontWeight: 500,
             letterSpacing: 0,
             lineHeight: 0.85,
