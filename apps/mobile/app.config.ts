@@ -33,9 +33,15 @@ const config: ExpoConfig = {
   ios: {
     bundleIdentifier: 'com.showbook.app',
     supportsTablet: true,
-    config: GOOGLE_MAPS_API_KEY
-      ? { googleMapsApiKey: GOOGLE_MAPS_API_KEY }
-      : undefined,
+    // ios.config must always be a defined object — Expo SDK 55's
+    // withUsesNonExemptEncryption plugin does `'usesNonExemptEncryption' in
+    // config.ios.config` and crashes if it's undefined. usesNonExemptEncryption
+    // is the canonical place to declare the encryption-export answer; Expo
+    // mirrors it into Info.plist as ITSAppUsesNonExemptEncryption.
+    config: {
+      usesNonExemptEncryption: false,
+      ...(GOOGLE_MAPS_API_KEY ? { googleMapsApiKey: GOOGLE_MAPS_API_KEY } : {}),
+    },
     // iPhone stays portrait-locked (matches the top-level `orientation`
     // above); iPad gets all four orientations so the M6.C three-pane
     // landscape layout has somewhere to live. The `~ipad` suffix is the
