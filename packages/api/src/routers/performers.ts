@@ -17,7 +17,8 @@ export const performersRouter = router({
     const userId = ctx.session.user.id;
     const today = new Date().toISOString().slice(0, 10);
 
-    const rows = await ctx.db
+    // Show-derived performers (with show counts + dates).
+    const showRows = await ctx.db
       .select({
         id: performers.id,
         name: performers.name,
@@ -37,13 +38,40 @@ export const performersRouter = router({
       .groupBy(performers.id, performers.name, performers.imageUrl, performers.musicbrainzId, performers.ticketmasterAttractionId)
       .orderBy(desc(max(shows.date)));
 
-    const followed = await ctx.db
-      .select({ performerId: userPerformerFollows.performerId })
+    // Followed performers, including those with zero shows. Joined to
+    // performers so we can render a row for a Spotify-imported artist
+    // before the user has logged any of their shows. Without this join
+    // the Get Started hub's "Import artists from Spotify" door has no
+    // visible destination on /artists.
+    const followedRows = await ctx.db
+      .select({
+        id: performers.id,
+        name: performers.name,
+        imageUrl: performers.imageUrl,
+        musicbrainzId: performers.musicbrainzId,
+        ticketmasterAttractionId: performers.ticketmasterAttractionId,
+      })
       .from(userPerformerFollows)
+      .innerJoin(performers, eq(userPerformerFollows.performerId, performers.id))
       .where(eq(userPerformerFollows.userId, userId));
 
-    const followedSet = new Set(followed.map((f) => f.performerId));
-    return rows.map((r) => ({ ...r, isFollowed: followedSet.has(r.id) }));
+    const followedIds = new Set(followedRows.map((r) => r.id));
+    const showRowsById = new Map(showRows.map((r) => [r.id, r]));
+
+    const merged = showRows.map((r) => ({ ...r, isFollowed: followedIds.has(r.id) }));
+    for (const f of followedRows) {
+      if (showRowsById.has(f.id)) continue;
+      merged.push({
+        ...f,
+        showCount: 0,
+        pastShowsCount: 0,
+        futureShowsCount: 0,
+        lastSeen: null,
+        firstSeen: null,
+        isFollowed: true,
+      });
+    }
+    return merged;
   }),
 
   /**

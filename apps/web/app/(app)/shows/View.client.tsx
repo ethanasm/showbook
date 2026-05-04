@@ -34,6 +34,7 @@ import {
   Eye,
 } from "lucide-react";
 import { useCompactMode } from "@/lib/useCompactMode";
+import { useIsMobile } from "@/lib/useIsMobile";
 import { daysUntil, formatDateParts } from "@showbook/shared";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import { STATE_TRANSITIONS } from "@/lib/show-state";
@@ -218,6 +219,7 @@ export default function ShowsView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const compact = useCompactMode();
+  const isMobile = useIsMobile();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedYear, setSelectedYear] = useState<string>("All");
   const [selectedKind, setSelectedKind] = useState<ShowKind | null>(null);
@@ -591,10 +593,12 @@ export default function ShowsView() {
 
     return (
       <div style={{
-        padding: "16px 36px",
+        padding: isMobile ? "14px 16px" : "16px 36px",
         display: "flex",
-        alignItems: "center",
+        flexDirection: isMobile ? "column" : "row",
+        alignItems: isMobile ? "stretch" : "center",
         justifyContent: "space-between",
+        gap: isMobile ? 12 : 0,
         borderBottom: "1px solid var(--rule)",
       }}>
         <div>
@@ -619,7 +623,12 @@ export default function ShowsView() {
             Shows
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{
+          display: "flex",
+          flexDirection: isMobile ? "column" : "row",
+          alignItems: isMobile ? "stretch" : "center",
+          gap: isMobile ? 8 : 12,
+        }}>
           <button
             onClick={handleOpenGmailModal}
             style={{
@@ -634,6 +643,7 @@ export default function ShowsView() {
               letterSpacing: -0.2,
               display: "flex",
               alignItems: "center",
+              justifyContent: isMobile ? "center" : "flex-start",
               gap: 7,
             }}
           >
@@ -677,14 +687,16 @@ export default function ShowsView() {
                     borderRight: i === modes.length - 1 ? "none" : "1px solid var(--rule-strong)",
                     background: active ? "var(--ink)" : "transparent",
                     color: active ? "var(--bg)" : "var(--ink)",
-                    padding: "10px 18px",
+                    padding: isMobile ? "10px 12px" : "10px 18px",
                     fontFamily: "var(--font-geist-sans), sans-serif",
                     fontSize: 14,
                     fontWeight: active ? 600 : 500,
                     letterSpacing: -0.2,
                     display: "flex",
                     alignItems: "center",
+                    justifyContent: "center",
                     gap: 8,
+                    flex: isMobile ? 1 : "0 0 auto",
                   }}
                 >
                   <Ic size={14} />
@@ -715,10 +727,10 @@ export default function ShowsView() {
   function renderFilterBar() {
     return (
       <div style={{
-        padding: "11px 36px",
+        padding: isMobile ? "11px 16px" : "11px 36px",
         display: "flex",
         alignItems: "center",
-        gap: 18,
+        gap: isMobile ? 12 : 18,
         flexWrap: "wrap",
         background: "var(--surface)",
         borderBottom: "1px solid var(--rule)",
@@ -1067,35 +1079,62 @@ export default function ShowsView() {
   function renderList() {
     if (filteredShows.length === 0) {
       return (
-        <div style={{ padding: "28px 36px" }}>
+        <div style={{ padding: isMobile ? "20px 16px" : "28px 36px" }}>
           <EmptyState
             kind="shows"
             title="Start your logbook"
             body="Add the first show you saw, the next one you are watching, or import ticket history from Gmail."
             action={
-              <button
-                type="button"
-                onClick={handleOpenGmailModal}
-                style={{
-                  padding: "10px 18px",
-                  background: "var(--accent)",
-                  color: "var(--accent-text)",
-                  border: "none",
-                  borderRadius: 8,
-                  cursor: "pointer",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
-                  letterSpacing: ".06em",
-                  textTransform: "uppercase",
-                  fontWeight: 500,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
+              <div
+                style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}
               >
-                <Image src="/google-g.svg" alt="" width={14} height={14} />
-                Import from Gmail
-              </button>
+                <button
+                  type="button"
+                  onClick={handleOpenGmailModal}
+                  style={{
+                    padding: "10px 18px",
+                    background: "var(--accent)",
+                    color: "var(--accent-text)",
+                    border: "none",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 11,
+                    letterSpacing: ".06em",
+                    textTransform: "uppercase",
+                    fontWeight: 500,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Image src="/google-g.svg" alt="" width={14} height={14} />
+                  Import from Gmail
+                </button>
+                <Link
+                  href="/discover"
+                  style={{
+                    padding: "10px 18px",
+                    background: "transparent",
+                    color: "var(--ink)",
+                    border: "1px solid var(--rule-strong)",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 11,
+                    letterSpacing: ".06em",
+                    textTransform: "uppercase",
+                    fontWeight: 500,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    textDecoration: "none",
+                  }}
+                >
+                  <Eye size={13} />
+                  Find shows in Discover
+                </Link>
+              </div>
             }
           />
         </div>
@@ -1105,7 +1144,7 @@ export default function ShowsView() {
     return (
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
         {/* Section label */}
-        <div style={{ padding: "18px 36px 8px", display: "flex", alignItems: "baseline", gap: 14 }}>
+        <div style={{ padding: isMobile ? "16px 16px 8px" : "18px 36px 8px", display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
           <div style={{
             fontFamily: "var(--font-geist-mono), monospace",
             fontSize: 11,
@@ -1126,7 +1165,7 @@ export default function ShowsView() {
         </div>
 
         {/* Show list */}
-        <div className="shows-list-table" style={{ margin: "4px 36px 0", background: "var(--surface)" }}>
+        <div className="shows-list-table" style={{ margin: isMobile ? "4px 12px 0" : "4px 36px 0", background: "var(--surface)" }}>
           {/* Column headers */}
           <div style={{
             display: "grid",
@@ -1371,7 +1410,7 @@ export default function ShowsView() {
     }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     return (
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: "22px 36px 36px" }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: isMobile ? "18px 16px 24px" : "22px 36px 36px" }}>
         {/* Month toolbar */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
@@ -1546,7 +1585,7 @@ export default function ShowsView() {
     }
 
     return (
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: "22px 36px 36px" }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: isMobile ? "18px 16px 24px" : "22px 36px 36px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 30, fontWeight: 600, color: "var(--ink)", letterSpacing: -0.9 }}>
             {calYear}
@@ -1684,7 +1723,7 @@ export default function ShowsView() {
         : "All time";
 
     return (
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: "22px 36px 36px" }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: isMobile ? "18px 16px 24px" : "22px 36px 36px" }}>
         {/* Timeframe selector */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
           <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".06em" }}>

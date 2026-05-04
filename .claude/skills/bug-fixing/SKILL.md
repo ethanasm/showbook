@@ -53,35 +53,11 @@ the sandbox. CI will run the full suite — that's the point of step 3.
 
 If `pnpm verify` passes, the local gate is green. Move on.
 
-### 3. Open the PR
+### 3. Hand off to creating-prs
 
-- Commit on the assigned development branch (per the session instructions).
-- Push with `git push -u origin <branch>`.
-- Create the PR with `mcp__github__create_pull_request`. Title under 70 chars; body has
-  a short Summary and a Test plan checklist. **No `claude.ai/code` session footer, no
-  `Co-authored-by: Claude` trailer** (see `CLAUDE.md` → "Commit and PR hygiene").
-
-### 4. Subscribe to CI and respond
-
-Immediately after creating the PR, subscribe so E2E + lint + coverage failures stream back:
-
-```
-mcp__github__subscribe_pr_activity { owner: "ethanasm", repo: "showbook", pullNumber: <n> }
-```
-
-Then tell the user the PR URL and that you're watching CI. While CI runs, you can move on
-to other work — events arrive wrapped in `<github-webhook-activity>` tags.
-
-When a failure event arrives:
-
-1. Pull the failing job's logs (via the GitHub MCP tools) and identify the failing test
-   and the assertion or stack frame.
-2. Decide if it's a real regression in the diff, a pre-existing flake, or an environment
-   issue. For E2E flakes, check the test for known flaky patterns before retrying.
-3. If it's a real failure, fix it locally, re-run the relevant **non-E2E** gate, and push
-   the fix. CI re-runs automatically.
-4. Repeat until CI is green. Unsubscribe with `mcp__github__unsubscribe_pr_activity` once
-   the PR is merged or the user releases you.
+Commit on the assigned development branch, then invoke the `creating-prs` skill — it
+owns push, PR creation, PR-activity subscription, the CI-failure → fix → re-push loop,
+and the `pr-screenshots` hand-off when the diff touches UI.
 
 ## Why no local E2E
 

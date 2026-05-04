@@ -94,6 +94,16 @@ export const __test = {
   detectImageMime,
 };
 
+/**
+ * Lightweight liveness check for the Groq API. Lists models — no token
+ * burn, no LLM trace. Used by the health-check cron to verify the API
+ * key is valid and the service is reachable.
+ */
+export async function pingGroq(): Promise<{ models: number }> {
+  const list = await groq().models.list();
+  return { models: list.data.length };
+}
+
 const MODEL_TEXT = 'llama-3.3-70b-versatile';
 const MODEL_VISION = 'meta-llama/llama-4-scout-17b-16e-instruct';
 
@@ -552,4 +562,110 @@ export async function generateDigestPreamble(
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// generateHealthSummaryPreamble — short ops-grade opener for the morning
+// health-check email. Different voice from the user-facing digest: terse,
+// factual, prioritizes what's broken.
+// ---------------------------------------------------------------------------
+
+export interface HealthSummaryPreambleInput {
+  status: 'ok' | 'warn' | 'fail' | 'unknown';
+  checks: ReadonlyArray<{
+    name: string;
+    status: 'ok' | 'warn' | 'fail' | 'unknown';
+    summary: string;
+    detail?: Record<string, unknown>;
+  }>;
+}
+
+/**
+ * Returns a 1–2 short paragraph operator-facing summary for the morning
+ * health-check email. Voice is dense and specific — assumes the reader
+ * is the on-call operator who needs to triage in 10 seconds. Falls back
+ * to `null` on any error (missing key, network blip, malformed output)
+ * so the email still ships with the deterministic check rows.
+ */
+export async function generateHealthSummaryPreamble(
+  input: HealthSummaryPreambleInput,
+): Promise<string | null> {
+  if (!process.env.GROQ_API_KEY) return null;
+
+  // Trim detail payloads so the prompt stays small. We keep the shape
+  // but stringify-cap each detail so a 50-row failures array doesn't
+  // blow up the input window.
+  const condensed = {
+    status: input.status,
+    checks: input.checks.map((c) => ({
+      name: c.name,
+      status: c.status,
+      summary: c.summary,
+      detail: c.detail ? truncateDetail(c.detail) : undefined,
+    })),
+  };
+
+  const messages = [
+    {
+      role: 'system' as const,
+      content:
+        'You write the opener for a daily morning ops health-check email for the Showbook stack ' +
+        '(Next.js + Postgres + pg-boss). The reader is the on-call operator. Voice: terse, factual, ' +
+        'prioritized by severity (fail > warn > unknown > ok). Lead with what is broken or missing ' +
+        'and what to look at; if everything is healthy, say so in one sentence and stop. ' +
+        'Reference concrete check names and details from the input — never invent facts. ' +
+        'Length: one paragraph; up to two short paragraphs when there are multiple failures. ' +
+        'Hard cap 90 words. Plain prose only — no markdown, no headings, no bullets, no emoji. ' +
+        'Paragraphs separated by a single blank line. Do not enumerate every check; the ' +
+        'detailed list is below the preamble already. ' +
+        'Return ONLY a JSON object: {"preamble": "..."}.',
+    },
+    {
+      role: 'user' as const,
+      content: JSON.stringify(condensed),
+    },
+  ];
+
+  try {
+    const result = await traceLLM({
+      name: 'groq.generateHealthSummaryPreamble',
+      model: MODEL_TEXT,
+      input: messages,
+      modelParameters: { response_format: 'json_object', temperature: 0.4 },
+      run: () =>
+        groq().chat.completions.create({
+          model: MODEL_TEXT,
+          messages,
+          response_format: { type: 'json_object' },
+          temperature: 0.4,
+        }),
+      extractUsage: groqUsage,
+      extractOutput: pickContent,
+    });
+
+    const content = pickContent(result);
+    if (!content) return null;
+    const raw = JSON.parse(content) as unknown;
+    const parsed = preambleSchema.safeParse(raw);
+    if (!parsed.success) return null;
+    const text = parsed.data.preamble.trim();
+    return text.length > 0 ? text : null;
+  } catch {
+    return null;
+  }
+}
+
+function truncateDetail(detail: Record<string, unknown>): Record<string, unknown> {
+  // Cap each top-level value's serialized form so a 50-row failures
+  // array doesn't dominate the prompt. We keep the shape, just shrink.
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(detail)) {
+    if (Array.isArray(v)) {
+      out[k] = v.slice(0, 5);
+    } else {
+      const s = JSON.stringify(v);
+      out[k] = s && s.length > 200 ? s.slice(0, 197) + '…' : v;
+    }
+  }
+  return out;
 }

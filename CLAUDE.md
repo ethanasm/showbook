@@ -179,6 +179,7 @@ The stdout copy in the prod web container (`docker logs showbook-prod-web`) is a
 - `trpc.error` — last-resort tRPC procedure error log.
 - `admin.backfill_coordinates.{start,complete}`, `admin.backfill_ticketmaster.{start,complete}` — operator-triggered global venue backfills via the `/admin` page.
 - `job.{start,complete,failed}` — pg-boss job wrapper from `runJob` in `packages/jobs/src/registry.ts`.
+- `health.check.{start,summary}`, `health.check.<name>.{ok,warn,fail,unknown}`, `health.check.email.{skipped,failed}`, `health.check.preamble.failed`, `health.check.axiom.{skipped,http_error,failed}` — daily morning health-check cron (`health/morning-check`, 07:00 ET). `<name>` is one of `failed_jobs`, `missed_schedules`, `error_volume`, `database`, `pgboss_queue`, `data_freshness`, `stalled_scrapes`, `external_apis`. The job itself is queryable via these events, so `debugging-prod` can confirm the cron ran. The Groq-generated preamble at the top of the email is traced as `groq.generateHealthSummaryPreamble` in Langfuse; it falls back to a deterministic count line when Groq is unavailable.
 
 When adding a new external-call boundary, follow the `<component>.<action>.<outcome>` shape and add it to this list.
 
