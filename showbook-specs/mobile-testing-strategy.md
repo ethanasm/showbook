@@ -10,7 +10,7 @@ The mobile app does NOT mirror the web app's blanket 80% coverage gate. Web's lo
 | 2. Migration | Cache schema migrations apply cleanly + idempotently | `apps/mobile/lib/__tests__/cache/migration.test.ts` | Yes | (counted in tier 1) |
 | 3. Component (selective) | Genuinely interactive components only — SegmentedControl, VenueTypeahead, SetlistRow drag-state, MediaTile tag toggle, Toast/Banner provider | `apps/mobile/components/__tests__/**.test.tsx` via `@testing-library/react-native` | Yes | None |
 | 4. Integration (cache + fake tRPC) | Cache + sync + outbox round-trips against in-memory sqlite | `apps/mobile/lib/__tests__/**.integration.test.ts` | Yes | None |
-| 5. E2E | Sign-in, add show, sign-out — 3 flows max | `apps/mobile/e2e/**` via Maestro | **Nightly + release only**, NOT per-PR | None |
+| 5. E2E | Sign-in, add show, sign-out — 3 flows max | `apps/mobile/e2e/**` via Maestro | **Nightly + release** by default; per-PR is opt-in via the `mobile-visual` label | None |
 
 **No coverage gate on `apps/mobile/app/**` or `apps/mobile/components/**`.** Layout has no meaningful branches; visual review of PRs covers what coverage can't.
 
@@ -33,7 +33,7 @@ The mobile app does NOT mirror the web app's blanket 80% coverage gate. Web's lo
 ## Wave F (TestFlight prep) — **COMPLETE**
 
 - Maestro setup + 3 flows: sign-in, add show, sign-out — `apps/mobile/e2e/flows/`
-- CI runner: Maestro Cloud via `.github/workflows/mobile-e2e.yml` (nightly + push-to-`main`, NOT per-PR)
+- CI runner: Maestro Cloud via `.github/workflows/mobile-e2e.yml` (nightly + push-to-`main` by default; per-PR runs are opt-in via the `mobile-visual` label, which the `pr-screenshots` skill attaches when a PR touches `apps/mobile/{app,components}/**`)
 - E2E test mode: `EXPO_PUBLIC_E2E_MODE=1` baked into the `e2e` EAS profile (`apps/mobile/eas.json`); `lib/auth.ts` bypasses Google OAuth and reads a pre-seeded Showbook JWT from SecureStore (`e2e.test-token` + `e2e.test-user`). The bypass is gated on the env var so production builds keep the real OAuth path — see the `isE2EMode` test in `apps/mobile/lib/__tests__/auth.test.ts` for the explicit production-safety assertion.
 - Pre-release smoke gate: the same workflow can be triggered via `workflow_dispatch` before cutting a release.
 
@@ -59,5 +59,5 @@ Skip jest. The repo's pattern is `node:test` with tsx, and it works for RN compo
 - **No blanket 80% gate** — the web pattern doesn't fit
 - **No visual regression / Storybook + Chromatic** — too much overhead for a small team; design fidelity is reviewed in PR
 - **No Detox** — Maestro is lighter, YAML-driven, and good enough for the 3 critical flows
-- **No per-PR E2E** — runs nightly + release only; per-PR is too slow
+- **No per-PR E2E by default** — runs nightly + release only; per-PR is too slow for the default path. Devs can opt in on a per-PR basis with the `mobile-visual` label when they want a Maestro Cloud screenshot capture for visual review.
 - **No screen-level unit tests for layout-only screens** — typecheck + visual review is enough
