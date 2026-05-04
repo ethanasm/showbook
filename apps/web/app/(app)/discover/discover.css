@@ -1117,6 +1117,13 @@ a.discover-row__headliner-link:hover {
     gap: 10px;
   }
 
+  /* Stack chips above the feed instead of letting them become a
+   * full-height row-flex sibling that stretches the chip buttons
+   * to the viewport. */
+  .discover-main {
+    flex-direction: column;
+  }
+
   /* Hide desktop rail, show mobile chips */
   .discover-rail {
     display: none;
