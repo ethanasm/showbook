@@ -11,7 +11,7 @@ async function loginSeeded(page: Page) {
 }
 
 test.describe('Home page — empty state', () => {
-  test('shows empty-state copy and Gmail import button when no shows exist', async ({ page }) => {
+  test('shows Get Started hub with all four onboarding doors when no shows exist', async ({ page }) => {
     await loginEmpty(page);
     // Scope to <main>: React 18 streaming SSR leaves a hidden suspense
     // template (`<div hidden id="S:0">`) that contains a duplicate copy of
@@ -19,11 +19,15 @@ test.describe('Home page — empty state', () => {
     const empty = page.getByRole('main').getByTestId('home-empty-state');
     await expect(empty).toBeVisible({ timeout: 10000 });
 
-    await expect(empty.getByRole('heading', { name: 'Start your logbook' })).toBeVisible();
-    await expect(empty.getByText(/Import your ticket history from Gmail/i)).toBeVisible();
+    const hub = empty.getByTestId('get-started-hub');
+    await expect(hub).toBeVisible();
+    await expect(hub.getByRole('heading', { name: /Build your showbook/i })).toBeVisible();
 
-    const gmailBtn = empty.getByRole('button', { name: /Import from Gmail/i });
-    await expect(gmailBtn).toBeVisible();
+    // All four doors render so users see every onboarding option in one grid.
+    await expect(hub.getByTestId('get-started-door-gmail')).toBeVisible();
+    await expect(hub.getByTestId('get-started-door-discover')).toBeVisible();
+    await expect(hub.getByTestId('get-started-door-spotify')).toBeVisible();
+    await expect(hub.getByTestId('get-started-door-add')).toBeVisible();
 
     await page.screenshot({
       path: 'test-results/screenshots/home-empty-state.png',
@@ -31,14 +35,13 @@ test.describe('Home page — empty state', () => {
     });
   });
 
-  test('Gmail import button navigates to /shows with ?gmail=1', async ({ page }) => {
+  test('Gmail door navigates to /shows with ?gmail=1', async ({ page }) => {
     await loginEmpty(page);
     const empty = page.getByRole('main').getByTestId('home-empty-state');
     await expect(empty).toBeVisible({ timeout: 10000 });
 
-    const gmailBtn = empty.getByRole('button', { name: /Import from Gmail/i });
-    await gmailBtn.click();
-    // The shows page opens the Gmail modal — just verify navigation happened
+    await empty.getByTestId('get-started-door-gmail').click();
+    // The shows page opens the Gmail modal — just verify navigation happened.
     await page.waitForURL('**/shows*', { timeout: 8000 });
   });
 });

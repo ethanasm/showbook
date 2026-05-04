@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { loginAndSeedAsWorker } from './helpers/auth';
+import { loginAndSeedAsWorker, loginAsEmptyWorker } from './helpers/auth';
 import { takeScreenshot } from './helpers/screenshots';
 
 // Captures full-page screenshots of a route list supplied by the
@@ -10,13 +10,24 @@ import { takeScreenshot } from './helpers/screenshots';
 // invoking Playwright (and deletes after). Viewport is picked via the
 // existing `--project=desktop-dark` / `--project=mobile` flags in
 // `apps/web/playwright.config.ts`.
+//
+// Optional `empty: true` in the JSON switches the worker login from the
+// seeded fixture user to the empty-shows fixture user, which is the only
+// way to capture brand-new-user empty states (Home Get Started hub,
+// /shows-/artists-/venues "no rows yet" surfaces).
 
 const ROUTES_FILE = path.join(__dirname, '.pr-screenshots.json');
 
-function readRoutes(): string[] | null {
+interface RoutesConfig {
+  routes: string[];
+  empty?: boolean;
+}
+
+function readRoutes(): RoutesConfig | null {
   if (!existsSync(ROUTES_FILE)) return null;
   const parsed = JSON.parse(readFileSync(ROUTES_FILE, 'utf8')) as {
     routes?: unknown;
+    empty?: unknown;
   };
   if (
     !Array.isArray(parsed.routes) ||
@@ -26,7 +37,10 @@ function readRoutes(): string[] | null {
       `pr-screenshots: ${ROUTES_FILE} must contain { "routes": string[] }`,
     );
   }
-  return parsed.routes;
+  return {
+    routes: parsed.routes,
+    empty: parsed.empty === true,
+  };
 }
 
 function slugify(route: string): string {
@@ -37,12 +51,16 @@ function slugify(route: string): string {
 
 test('capture PR screenshots for diff-touched routes', async ({ page }, testInfo) => {
   test.setTimeout(180_000);
-  const routes = readRoutes();
-  test.skip(routes === null, 'pr-screenshots skill did not stage a routes file');
-  if (routes === null) return;
+  const config = readRoutes();
+  test.skip(config === null, 'pr-screenshots skill did not stage a routes file');
+  if (config === null) return;
   const projectSlug = testInfo.project.name === 'mobile' ? 'mobile' : 'desktop';
-  await loginAndSeedAsWorker(page);
-  for (const route of routes) {
+  if (config.empty) {
+    await loginAsEmptyWorker(page);
+  } else {
+    await loginAndSeedAsWorker(page);
+  }
+  for (const route of config.routes) {
     await page.goto(route);
     await page.waitForLoadState('domcontentloaded');
     await takeScreenshot(page, `pr-${projectSlug}-${slugify(route)}`);

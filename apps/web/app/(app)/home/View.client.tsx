@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { useCompactMode } from "@/lib/useCompactMode";
 import { EmptyState, HeroCard } from "@/components/design-system";
+import { GetStartedHub, useGetStartedDismissed } from "@/components/home/GetStartedHub";
 import type { ShowKind } from "@/components/design-system/KindBadge";
 import {
   ArrowRight,
@@ -83,6 +83,9 @@ export default function HomeView() {
   const router = useRouter();
   const compact = useCompactMode();
   const { data: shows, isLoading } = trpc.shows.list.useQuery({});
+  const { data: followedArtists } = trpc.performers.followed.useQuery();
+  const { data: followedVenues } = trpc.venues.followed.useQuery();
+  const { dismissed, dismiss } = useGetStartedDismissed();
   const {
     openContextMenu: handleRecentContextMenu,
     portal: showContextMenuPortal,
@@ -200,48 +203,17 @@ export default function HomeView() {
   }
 
   const noShows = !isLoading && shows !== undefined && shows.length === 0;
+  const noFollows =
+    (followedArtists?.length ?? 0) === 0 &&
+    (followedVenues?.length ?? 0) === 0;
+  // Card appears once the user has shows but hasn't seeded a follow graph
+  // yet. Once they have both, or dismiss explicitly, the card is gone.
+  const showHubCard = !dismissed && !noShows && noFollows;
 
   if (noShows) {
     return (
-      <div
-        data-testid="home-empty-state"
-        style={{
-          height: "100%",
-          padding: "40px 24px",
-          display: "grid",
-          placeItems: "center",
-        }}
-      >
-        <EmptyState
-          kind="shows"
-          title="Start your logbook"
-          body="Add the first show you saw, the next one you are watching, or import your ticket history from Gmail."
-          action={
-            <button
-              type="button"
-              onClick={() => router.push("/shows?gmail=1")}
-              style={{
-                padding: "10px 18px",
-                background: "var(--accent)",
-                color: "var(--accent-text)",
-                border: "none",
-                borderRadius: 8,
-                cursor: "pointer",
-                fontFamily: MONO,
-                fontSize: 11,
-                letterSpacing: ".06em",
-                textTransform: "uppercase",
-                fontWeight: 500,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <Image src="/google-g.svg" alt="" width={14} height={14} />
-              Import from Gmail
-            </button>
-          }
-        />
+      <div data-testid="home-empty-state" style={{ height: "100%" }}>
+        <GetStartedHub variant="expanded" />
       </div>
     );
   }
@@ -378,6 +350,9 @@ export default function HomeView() {
           alignContent: "start",
         }}
       >
+        {showHubCard && (
+          <GetStartedHub variant="card" onDismiss={dismiss} />
+        )}
         {/* ── NEXT UP Section ─────────────────────────────── */}
         <section>
           {/* Section header — the "Next up · in N days …" pulse label lives

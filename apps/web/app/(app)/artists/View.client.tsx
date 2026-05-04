@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
-import { Search, Eye, Pencil, Trash2, Ticket, Check, Music2 } from "lucide-react";
+import { Search, Eye, Pencil, Trash2, Ticket, Check, Music2, Plus, ArrowRight } from "lucide-react";
 import { PaginationFooter } from "@/components/PaginationFooter";
 import { SortHeader, type SortConfig } from "@/components/SortHeader";
 import { useCompactMode } from "@/lib/useCompactMode";
@@ -301,8 +302,17 @@ export default function ArtistsView() {
           <div style={{ padding: "28px 36px" }}>
             <EmptyState
               kind="artists"
-              title={search ? "No artist matches" : "Artists await"}
-              body={search ? "Try another spelling or clear the filter." : "Artists populate from the shows you log."}
+              title={search ? "No artist matches" : "No artists yet"}
+              body={
+                search
+                  ? "Try another spelling or clear the filter."
+                  : "Artists show up here from the shows you log. Followed artists from Spotify and search live in Discover."
+              }
+              action={
+                search ? undefined : (
+                  <ArtistsEmptyActions />
+                )
+              }
             />
           </div>
         ) : (
@@ -432,4 +442,83 @@ function formatDate(dateStr: string): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function ArtistsEmptyActions() {
+  return (
+    <div
+      data-testid="artists-empty-actions"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 12,
+      }}
+    >
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+        <Link
+          href="/shows?gmail=1"
+          style={{
+            padding: "10px 18px",
+            background: "var(--accent)",
+            color: "var(--accent-text)",
+            border: "none",
+            borderRadius: 8,
+            cursor: "pointer",
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 11,
+            letterSpacing: ".06em",
+            textTransform: "uppercase",
+            fontWeight: 500,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            textDecoration: "none",
+          }}
+        >
+          <Image src="/google-g.svg" alt="" width={14} height={14} />
+          Import from Gmail
+        </Link>
+        <Link
+          href="/add"
+          style={{
+            padding: "10px 18px",
+            background: "transparent",
+            color: "var(--ink)",
+            border: "1px solid var(--rule-strong)",
+            borderRadius: 8,
+            cursor: "pointer",
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 11,
+            letterSpacing: ".06em",
+            textTransform: "uppercase",
+            fontWeight: 500,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            textDecoration: "none",
+          }}
+        >
+          <Plus size={13} />
+          Add a Show
+        </Link>
+      </div>
+      <Link
+        href="/discover"
+        style={{
+          fontFamily: "var(--font-geist-mono), monospace",
+          fontSize: 11,
+          color: "var(--muted)",
+          textDecoration: "none",
+          letterSpacing: ".04em",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+        }}
+      >
+        Manage followed artists in Discover
+        <ArrowRight size={11} />
+      </Link>
+    </div>
+  );
 }

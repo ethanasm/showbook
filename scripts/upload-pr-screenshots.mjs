@@ -62,7 +62,13 @@ try {
     if (!status.trim()) {
       process.stderr.write(`upload-pr-screenshots: no changes to commit\n`);
     } else {
-      git(['commit', '-m', `screenshots: ${branch} (PR #${pr})`], { cwd: wtDir });
+      // The orphan branch stores only binary asset PNGs — no source code,
+      // no audit value to signing — and the Claude Code on the web
+      // sandbox's SSH signer rejects commits made inside a fresh
+      // `git worktree add --orphan` directory with "missing source".
+      // Skip signing for this one commit only; the feature branch
+      // commits still go through the regular signed path.
+      git(['commit', '--no-gpg-sign', '-m', `screenshots: ${branch} (PR #${pr})`], { cwd: wtDir });
       git(['push', remote, `HEAD:${targetBranch}`], { cwd: wtDir });
     }
   }
@@ -144,5 +150,17 @@ function parseRemote(remoteName) {
   if (ssh) return { owner: ssh[1], repo: ssh[2] };
   const https = url.match(/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/);
   if (https) return { owner: https[1], repo: https[2] };
+  // Sandbox / proxy routes the same repo through a non-github host like
+  // http://local_proxy@127.0.0.1:PORT/git/owner/repo. Fall back to the
+  // last two path segments.
+  try {
+    const u = new URL(url);
+    const segs = u.pathname.replace(/\.git$/, '').split('/').filter(Boolean);
+    if (segs.length >= 2) {
+      return { owner: segs[segs.length - 2], repo: segs[segs.length - 1] };
+    }
+  } catch {
+    // not a parseable URL — fall through to throw below
+  }
   throw new Error(`upload-pr-screenshots: cannot parse remote URL ${url}`);
 }

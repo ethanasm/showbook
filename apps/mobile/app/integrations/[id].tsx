@@ -19,6 +19,7 @@ const TITLES: Record<string, string> = {
   gmail: 'Gmail',
   ticketmaster: 'Ticketmaster',
   'google-places': 'Google Places',
+  spotify: 'Spotify',
 };
 
 export default function IntegrationStub(): React.JSX.Element {
