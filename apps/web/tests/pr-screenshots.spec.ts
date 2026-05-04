@@ -49,6 +49,13 @@ function slugify(route: string): string {
   return trimmed.replace(/[^a-zA-Z0-9]+/g, '-');
 }
 
+const HIDE_DEV_INDICATOR = `
+  [data-nextjs-toast],
+  [data-nextjs-dev-tools-button],
+  [data-nextjs-dev-tools-menu],
+  nextjs-portal { display: none !important; }
+`;
+
 test('capture PR screenshots for diff-touched routes', async ({ page }, testInfo) => {
   test.setTimeout(180_000);
   const config = readRoutes();
@@ -63,6 +70,13 @@ test('capture PR screenshots for diff-touched routes', async ({ page }, testInfo
   for (const route of config.routes) {
     await page.goto(route);
     await page.waitForLoadState('domcontentloaded');
+    // Hide the Next.js dev-mode "N issues" toast/indicator. The skill
+    // runs against `next dev`, which surfaces transient cross-page
+    // warnings (e.g. NextAuth `getSession` aborted by a subsequent
+    // navigation) as a sticky badge that pollutes review material.
+    // Re-inject after each navigation since the new document replaces
+    // <head>.
+    await page.addStyleTag({ content: HIDE_DEV_INDICATOR });
     await takeScreenshot(page, `pr-${projectSlug}-${slugify(route)}`);
   }
 });
