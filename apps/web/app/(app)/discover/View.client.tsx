@@ -20,6 +20,7 @@ import {
   groupAnnouncementsByRegion,
   groupVenuesByRegion,
 } from "./region-helpers";
+import { computeAnnouncementGroupKeys } from "./grouping";
 import { DISCOVER_KIND_ICONS as KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import { ContextMenu } from "@/components/ContextMenu";
 import { VenueSearchModal } from "@/components/VenueSearchModal";
@@ -48,6 +49,7 @@ type Announcement = {
   kind: DiscoverKind;
   headliner: string;
   headlinerPerformerId: string | null;
+  supportPerformerIds: string[] | null;
   support: string[] | null;
   productionName: string | null;
   showDate: string;
@@ -774,6 +776,7 @@ function FeedSection({
   activeRegions,
   regionCount,
   onRegionAdded,
+  onSpotifyImported,
 }: {
   items: Announcement[] | undefined;
   isLoading: boolean;
@@ -792,6 +795,7 @@ function FeedSection({
   activeRegions?: { id: string; cityName: string; radiusMiles: number }[];
   regionCount?: number;
   onRegionAdded?: (regionId: string) => void;
+  onSpotifyImported?: (result: { count: number; performerIds: string[] }) => void;
 }) {
   // The rail and the per-group headers consume a single pending set whose
   // members depend on the tab: venues for Followed, performers for Artists,
@@ -876,8 +880,8 @@ function FeedSection({
     });
   }, []);
 
-  function getGroupKey(item: Announcement): string | null {
-    return groupBy === "artist" ? item.headlinerPerformerId : item.venue.id;
+  function getGroupKeys(item: Announcement): string[] {
+    return computeAnnouncementGroupKeys(item, groupBy, allFollowedArtists);
   }
 
   // Extract unique groups (venues or artists) with counts
@@ -906,17 +910,18 @@ function FeedSection({
 
     if (items) {
       for (const item of items) {
-        const key = getGroupKey(item);
-        if (!key) continue;
-        if (!seen.has(key)) {
-          seen.set(key, {
-            id: key,
-            name: groupBy === "artist" ? item.headliner : item.venue.name,
-            label: groupBy === "artist" ? undefined : item.venue.city,
-            count: 0,
-          });
+        const keys = getGroupKeys(item);
+        for (const key of keys) {
+          if (!seen.has(key)) {
+            seen.set(key, {
+              id: key,
+              name: groupBy === "artist" ? item.headliner : item.venue.name,
+              label: groupBy === "artist" ? undefined : item.venue.city,
+              count: 0,
+            });
+          }
+          seen.get(key)!.count++;
         }
-        seen.get(key)!.count++;
       }
     }
     return Array.from(seen.values());
@@ -927,7 +932,7 @@ function FeedSection({
   const filteredItems = useMemo(() => {
     if (!items) return [];
     if (!selectedGroupId) return items;
-    return items.filter((item) => getGroupKey(item) === selectedGroupId);
+    return items.filter((item) => getGroupKeys(item).includes(selectedGroupId));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, selectedGroupId, groupBy]);
 
@@ -949,7 +954,7 @@ function FeedSection({
     }
     return groupList.map((g) => ({
       group: g,
-      items: sortedFilteredItems.filter((item) => getGroupKey(item) === g.id),
+      items: sortedFilteredItems.filter((item) => getGroupKeys(item).includes(g.id)),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortedFilteredItems, groupList, selectedGroupId, groupBy]);
@@ -1015,6 +1020,7 @@ function FeedSection({
     <SpotifyImportModal
       open={spotifyModalOpen}
       onClose={() => setSpotifyModalOpen(false)}
+      onImported={onSpotifyImported}
     />
   );
   const totalRegionCount = regionCount ?? activeRegions?.length ?? 0;
@@ -1560,6 +1566,23 @@ export default function DiscoverView() {
     },
   });
 
+  // Seed the pending-ingest set with newly-imported performer IDs the moment
+  // import completes, so per-artist loading dots and the "Loading shows…"
+  // header light up in the same render rather than waiting for the next
+  // ingestStatus poll cycle.
+  const handleSpotifyImported = useCallback(
+    ({ performerIds }: { count: number; performerIds: string[] }) => {
+      if (performerIds.length === 0) return;
+      setPendingIngest((prev) => {
+        const next = new Set(prev.performerIds);
+        for (const id of performerIds) next.add(id);
+        return { ...prev, performerIds: next };
+      });
+      setPeakPending((prev) => prev + performerIds.length);
+    },
+    [],
+  );
+
   function handleVenueFollowed() {
     utils.venues.followed.invalidate();
     utils.discover.followedFeed.invalidate();
@@ -1737,6 +1760,7 @@ export default function DiscoverView() {
           groupBy="venue"
           allFollowedVenues={followedVenuesList.data}
           pendingIngestVenueIds={pendingIngest.venueIds}
+          onSpotifyImported={handleSpotifyImported}
         />
       )}
 
@@ -1752,6 +1776,7 @@ export default function DiscoverView() {
           groupBy="artist"
           allFollowedArtists={followedArtistsList.data}
           pendingIngestPerformerIds={pendingIngest.performerIds}
+          onSpotifyImported={handleSpotifyImported}
         />
       )}
 
@@ -1773,11 +1798,13 @@ export default function DiscoverView() {
             // Poller picks up the new region within ~one round-trip.
             utils.discover.ingestStatus.invalidate();
           }}
+          onSpotifyImported={handleSpotifyImported}
         />
       )}
       <SpotifyImportModal
         open={headerSpotifyModalOpen}
         onClose={() => setHeaderSpotifyModalOpen(false)}
+        onImported={handleSpotifyImported}
       />
     </div>
   );

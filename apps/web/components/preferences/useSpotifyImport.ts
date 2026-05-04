@@ -83,6 +83,12 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
       utils.performers.count.invalidate();
       utils.discover.followedFeed.invalidate();
       utils.discover.followedArtistsFeed.invalidate();
+      // The IngestStatusPoller only refetches on a 2s loop while it sees
+      // pending work. Without this invalidate, the poller stays asleep
+      // after import — so per-artist loading dots and the
+      // "Loading shows… X/N" header never appear even though pg-boss is
+      // actively running ingest jobs for the freshly-followed performers.
+      utils.discover.ingestStatus.invalidate();
       opts.onImported?.({
         count: data.imported.length,
         performerIds: data.imported.map((i) => i.performerId),
