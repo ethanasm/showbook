@@ -137,7 +137,7 @@ export default function ArtistsView() {
     });
 
     return result;
-  }, [artists, search, sort]);
+  }, [artists, search, sort, followedOnly]);
 
   useEffect(() => {
     setCurrentPage(0);
