@@ -19,8 +19,17 @@ export {
 export { matchOrCreateVenue } from './venue-matcher';
 export { matchOrCreatePerformer } from './performer-matcher';
 export { getPlacePhotoMediaUrl, getPlaceDetails } from './google-places';
-export { extractShowFromEmail, generateDigestPreamble } from './groq';
-export type { ExtractedTicketInfo, DigestPreambleInput } from './groq';
+export {
+  extractShowFromEmail,
+  generateDigestPreamble,
+  generateHealthSummaryPreamble,
+  pingGroq,
+} from './groq';
+export type {
+  ExtractedTicketInfo,
+  DigestPreambleInput,
+  HealthSummaryPreambleInput,
+} from './groq';
 export {
   searchMessages,
   getMessageBody,
@@ -36,3 +45,4 @@ export {
 export { storeLocalObject } from './media-storage';
 export { getMediaConfig } from './media-config';
 export { enforceRateLimit, isRateLimited } from './rate-limit';
+export { parseAdminEmails, isAdminEmail } from './admin';

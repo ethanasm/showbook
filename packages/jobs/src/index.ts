@@ -8,3 +8,4 @@ export {
 } from './discover-ingest';
 export { runDailyDigest } from './notifications';
 export { runPruneOrphanCatalog } from './prune-orphan-catalog';
+export { runHealthCheck, type HealthCheckSummary } from './health-check';

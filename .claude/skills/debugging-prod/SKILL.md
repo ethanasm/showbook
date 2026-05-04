@@ -7,7 +7,7 @@ description: Use when investigating production issues in the showbook stack — 
 
 ## Overview
 
-Prod logs ship from `showbook-prod-web` to Axiom (dataset `showbook-prod`) via `pino` + `@axiomhq/pino`. The repo-side `AXIOM_TOKEN` is **ingest-only** and cannot read. Querying requires a user-scoped Personal Access Token (PAT) with the `Query` capability on the `showbook-prod` dataset, exposed to the shell as `AXIUM_QUERY_TOKEN` (note the spelling — kept for backward compatibility).
+Prod logs ship from `showbook-prod-web` to Axiom (dataset `showbook-prod`) via `pino` + `@axiomhq/pino`. The repo-side `AXIOM_TOKEN` is **ingest-only** and cannot read. Querying requires a user-scoped Personal Access Token (PAT) with the `Query` capability on the `showbook-prod` dataset, exposed to the shell as `AXIOM_QUERY_TOKEN`.
 
 The runbook below turns a vague prod report into the next concrete query. CLAUDE.md is the source of truth for the curated event-name catalog, organized by component prefix — refer to it when narrowing by `event`.
 
@@ -30,9 +30,9 @@ The token must be available as an env var. Different environments expose it
 differently — check, and if missing, source the user's shell rc as a fallback:
 
 ```bash
-if [ -z "$AXIUM_QUERY_TOKEN" ] && [ -f ~/.zshrc ]; then . ~/.zshrc; fi
-if [ -z "$AXIUM_QUERY_TOKEN" ] && [ -f ~/.bashrc ]; then . ~/.bashrc; fi
-test -n "$AXIUM_QUERY_TOKEN" && echo "ok" || echo "AXIUM_QUERY_TOKEN missing — ask the user to export a PAT from Axiom → Settings → Profile → Personal Access Tokens"
+if [ -z "$AXIOM_QUERY_TOKEN" ] && [ -f ~/.zshrc ]; then . ~/.zshrc; fi
+if [ -z "$AXIOM_QUERY_TOKEN" ] && [ -f ~/.bashrc ]; then . ~/.bashrc; fi
+test -n "$AXIOM_QUERY_TOKEN" && echo "ok" || echo "AXIOM_QUERY_TOKEN missing — ask the user to export a PAT from Axiom → Settings → Profile → Personal Access Tokens"
 ```
 
 If still unset, ask the user to export it. Never commit it.
@@ -64,13 +64,13 @@ Symptom from user
 
 All queries use the same curl wrapper. Substitute the APL string in `<<APL>>`.
 The preamble auto-discovers `$AXIOM_ORG` if not already set, so the wrapper
-works on any machine that has `AXIUM_QUERY_TOKEN` exported (laptop, server,
+works on any machine that has `AXIOM_QUERY_TOKEN` exported (laptop, server,
 sandbox):
 
 ```bash
-: "${AXIOM_ORG:=$(curl -sS https://api.axiom.co/v1/orgs -H "Authorization: Bearer $AXIUM_QUERY_TOKEN" | python3 -c 'import sys,json; print(json.load(sys.stdin)[0]["id"])')}"
+: "${AXIOM_ORG:=$(curl -sS https://api.axiom.co/v1/orgs -H "Authorization: Bearer $AXIOM_QUERY_TOKEN" | python3 -c 'import sys,json; print(json.load(sys.stdin)[0]["id"])')}"
 curl -sS -X POST "https://api.axiom.co/v1/datasets/_apl?format=tabular" \
-  -H "Authorization: Bearer $AXIUM_QUERY_TOKEN" \
+  -H "Authorization: Bearer $AXIOM_QUERY_TOKEN" \
   -H "X-AXIOM-ORG-ID: $AXIOM_ORG" \
   -H "Content-Type: application/json" \
   -d '{"apl": "<<APL>>"}'
@@ -146,7 +146,7 @@ docker logs showbook-prod-web --since 30m 2>&1 | jq -c 'select(.level=="error") 
 ## Pitfalls
 
 - **`err.cause` is missing in Axiom.** Pino's `err` serializer in `packages/observability/src/logger.ts` does NOT walk `cause`, so wrapped postgres-js / Drizzle errors lose their underlying SQLSTATE. If a `Failed query: …` log is unhelpful, fix the serializer first rather than working around it. Docker stdout has the same gap — it's the serializer, not the transport.
-- **Wrong token = empty results, not auth error.** `AXIOM_TOKEN` is ingest-only. If `AXIUM_QUERY_TOKEN` was created without `Query` capability on `showbook-prod`, Axiom returns 200 with no rows. Verify in the UI under Settings → Tokens.
+- **Wrong token = empty results, not auth error.** `AXIOM_TOKEN` is ingest-only. If `AXIOM_QUERY_TOKEN` was created without `Query` capability on `showbook-prod`, Axiom returns 200 with no rows. Verify in the UI under Settings → Tokens.
 - **Org id ≠ dataset name.** The dataset is `showbook-prod`; the org slug is something else (e.g. `showbook-egap`). Do not hardcode it — let the `/v1/orgs` lookup resolve it. Setting `AXIOM_ORG_ID=showbook-prod` (the dataset) makes every query 404.
 - **Org header is required for query requests.** Omitting `X-AXIOM-ORG-ID` on `/v1/datasets/_apl` gives a 400; pointing it at the wrong org gives a 404 with empty body (not a clear auth error).
 - **Timezone.** `_time` is UTC. Convert with `bin_auto(_time)` and `format_datetime(_time, "yyyy-MM-dd HH:mm:ss")` if comparing against ET-scheduled jobs (digest at 08:00 ET = 12:00/13:00 UTC depending on DST).

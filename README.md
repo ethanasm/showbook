@@ -117,6 +117,7 @@ defaults and inline notes. The required groups are:
 - **Data sources** — `TICKETMASTER_API_KEY`, `SETLISTFM_API_KEY`, `GROQ_API_KEY`, `GOOGLE_PLACES_API_KEY`
 - **Media (Cloudflare R2)** — `R2_*` plus `MEDIA_*` quotas/limits
 - **Email (Resend)** — `RESEND_API_KEY`, `EMAIL_FROM` (unset → digest job logs and skips delivery)
+- **Health-check cron (optional)** — `AXIOM_QUERY_TOKEN` (Axiom Personal Access Token with Query capability on `showbook-prod`; unset → axiom-backed checks report "unknown" instead of "ok"). The morning summary email is sent to every address in `ADMIN_EMAILS` (the same allowlist that gates the in-app Admin tab); empty/unset → cron still runs and logs to Axiom but no email is sent. Both are optional in dev — the cron no-ops the relevant pieces gracefully.
 - **Observability (optional)** — Langfuse and Axiom keys
 - **Per-user guardrails (optional overrides)** — `SHOWBOOK_LLM_CALLS_PER_DAY` (default 50), `SHOWBOOK_BULK_SCAN_PER_HOUR` (default 5), `SHOWBOOK_BULK_SCAN_MESSAGE_CAP` (default 200). See [`GUARDRAILS.md`](./GUARDRAILS.md) for the full list.
 
