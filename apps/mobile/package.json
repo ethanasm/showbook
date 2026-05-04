@@ -14,6 +14,7 @@
     "test:coverage": "mkdir -p coverage && find lib/__tests__ components/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' -o -name '*.test.cjs' \\) -print0 2>/dev/null | xargs -0 node --import tsx --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/mobile-unit.info --test-reporter=spec --test-reporter-destination=stdout"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~6.1.2",
     "@gorhom/bottom-sheet": "^5.2.13",
     "@react-native-community/netinfo": "^11.4.1",
     "@showbook/shared": "workspace:*",
@@ -63,5 +64,15 @@
     "react-test-renderer": "^19.2.5",
     "tsx": "^4.21.0",
     "typescript": "~5.9.2"
+  },
+  "expo": {
+    "install": {
+      "exclude": [
+        "react",
+        "react-dom",
+        "react-native-reanimated",
+        "react-native-worklets"
+      ]
+    }
   }
 }
