@@ -140,14 +140,56 @@ describe('performersRouter (unit)', () => {
 
   describe('list', () => {
     it('joins follow set onto performer rows', async () => {
-      const rows = [
+      const showRows = [
         { id: 'p1', name: 'A', imageUrl: null, musicbrainzId: null, ticketmasterAttractionId: null, showCount: 2, pastShowsCount: 2, futureShowsCount: 0, lastSeen: '2024-01-01', firstSeen: '2020-01-01' },
         { id: 'p2', name: 'B', imageUrl: null, musicbrainzId: null, ticketmasterAttractionId: null, showCount: 1, pastShowsCount: 0, futureShowsCount: 1, lastSeen: '2026-08-01', firstSeen: '2026-08-01' },
       ];
-      const db = makeFakeDb({ selectResults: [rows, [{ performerId: 'p2' }]] });
+      const followedRows = [
+        { id: 'p2', name: 'B', imageUrl: null, musicbrainzId: null, ticketmasterAttractionId: null },
+      ];
+      const db = makeFakeDb({ selectResults: [showRows, followedRows] });
       const result = await caller(db).list();
       assert.equal(result.find((r) => r.id === 'p1')!.isFollowed, false);
       assert.equal(result.find((r) => r.id === 'p2')!.isFollowed, true);
+    });
+
+    it('includes followed-only artists with zero shows and null seen-dates', async () => {
+      const showRows = [
+        { id: 'p1', name: 'A', imageUrl: null, musicbrainzId: null, ticketmasterAttractionId: null, showCount: 2, pastShowsCount: 2, futureShowsCount: 0, lastSeen: '2024-01-01', firstSeen: '2020-01-01' },
+      ];
+      // p2 is followed but has never headlined or supported a show the user
+      // logged — typical of a Spotify-imported follow.
+      const followedRows = [
+        { id: 'p2', name: 'B', imageUrl: null, musicbrainzId: null, ticketmasterAttractionId: 'tm-b' },
+      ];
+      const db = makeFakeDb({ selectResults: [showRows, followedRows] });
+      const result = await caller(db).list();
+
+      assert.equal(result.length, 2, 'follow-only artist should render its own row');
+
+      const p2 = result.find((r) => r.id === 'p2');
+      assert.ok(p2);
+      assert.equal(p2!.isFollowed, true);
+      assert.equal(p2!.showCount, 0);
+      assert.equal(p2!.pastShowsCount, 0);
+      assert.equal(p2!.futureShowsCount, 0);
+      assert.equal(p2!.lastSeen, null);
+      assert.equal(p2!.firstSeen, null);
+      assert.equal(p2!.ticketmasterAttractionId, 'tm-b');
+    });
+
+    it('does not duplicate a performer that is both followed and show-derived', async () => {
+      const showRows = [
+        { id: 'p1', name: 'A', imageUrl: null, musicbrainzId: null, ticketmasterAttractionId: null, showCount: 2, pastShowsCount: 2, futureShowsCount: 0, lastSeen: '2024-01-01', firstSeen: '2020-01-01' },
+      ];
+      const followedRows = [
+        { id: 'p1', name: 'A', imageUrl: null, musicbrainzId: null, ticketmasterAttractionId: null },
+      ];
+      const db = makeFakeDb({ selectResults: [showRows, followedRows] });
+      const result = await caller(db).list();
+      assert.equal(result.length, 1);
+      assert.equal(result[0]!.isFollowed, true);
+      assert.equal(result[0]!.showCount, 2);
     });
   });
 
