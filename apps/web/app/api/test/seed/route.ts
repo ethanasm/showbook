@@ -199,9 +199,12 @@ export async function GET(request: Request) {
       // rename and restore) is still found, then heal the name back to the
       // canonical seed value so the test fixtures render predictably.
       let existing: { id: string; name: string } | undefined;
-      if (p.ticketmasterAttractionId) {
+      // PERFORMERS is `as const` so only entries with the field have it on
+      // their literal type — narrow before reading.
+      const tmId = 'ticketmasterAttractionId' in p ? p.ticketmasterAttractionId : null;
+      if (tmId) {
         existing = await db.query.performers.findFirst({
-          where: eq(performers.ticketmasterAttractionId, p.ticketmasterAttractionId),
+          where: eq(performers.ticketmasterAttractionId, tmId),
           columns: { id: true, name: true },
         });
       }
