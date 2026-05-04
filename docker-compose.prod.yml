@@ -31,6 +31,8 @@ name: showbook-prod
 #   AUTH_ALLOWED_EMAILS     and/or AUTH_ALLOWED_DOMAINS — leaving both unset
 #                           opens sign-up to anyone with a Google account.
 #   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+#   ADMIN_QUERY_TOKEN       Optional. Bearer for read-only /api/admin/sql.
+#                           See apps/web/.env.example. Disabled when unset.
 #   plus any data-source / R2 / observability keys actually used.
 
 services:

@@ -70,6 +70,34 @@ pnpm prod:logs      # tail web logs
 pnpm prod:down      # stop
 ```
 
+### Querying the prod database from another machine
+
+Postgres is bound to `127.0.0.1:5434` on the prod host, so direct
+connections require either an SSH tunnel (DBeaver / `psql`) or the
+read-only HTTPS endpoint described here.
+
+`POST /api/admin/sql` accepts a single `SELECT`/`EXPLAIN`/`WITH`/`SHOW`/
+`TABLE`/`VALUES` statement, runs it inside a `BEGIN READ ONLY`
+transaction with a 5s `statement_timeout`, and returns up to 1000 rows
+as JSON. Bearer-auth'd via `ADMIN_QUERY_TOKEN`. Disabled (401) when the
+token is unset or shorter than 32 chars.
+
+```bash
+# One-time: generate the token and add to .env.prod, then restart prod web.
+openssl rand -hex 32     # → ADMIN_QUERY_TOKEN=<value>
+pnpm prod:up             # restart picks up the new env
+
+# From a dev machine (or Claude Code on the web):
+export ADMIN_QUERY_URL=https://<your-tunnel-hostname>
+export ADMIN_QUERY_TOKEN=<value-from-.env.prod>
+pnpm prod:query "select count(*) from shows"
+pnpm prod:query --file query.sql
+echo "select * from users limit 5" | pnpm prod:query
+```
+
+Writes are blocked at the Postgres engine — the `READ ONLY` transaction
+errors any INSERT/UPDATE/DELETE/DDL with SQLSTATE `25006`.
+
 Dev and prod stacks coexist: dev web binds host port `3001`, prod
 binds `3002`, and postgres uses `5433` / `5434` respectively. The
 Cloudflare Tunnel ingress for the prod hostname must point at
