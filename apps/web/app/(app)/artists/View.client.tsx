@@ -42,6 +42,7 @@ export default function ArtistsView() {
     dir: "desc",
   });
   const [search, setSearch] = useState("");
+  const [followedOnly, setFollowedOnly] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const compact = useCompactMode();
   const windowWidth = useWindowWidth();
@@ -106,6 +107,10 @@ export default function ArtistsView() {
       result = result.filter((a) => a.name.toLowerCase().includes(q));
     }
 
+    if (followedOnly) {
+      result = result.filter((a) => a.isFollowed);
+    }
+
     const flip = sort.dir === "asc" ? 1 : -1;
     const cmpStr = (a: string | null, b: string | null) => {
       if (a === b) return 0;
@@ -136,7 +141,7 @@ export default function ArtistsView() {
 
   useEffect(() => {
     setCurrentPage(0);
-  }, [search, sort.field, sort.dir]);
+  }, [search, sort.field, sort.dir, followedOnly]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paged = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
@@ -263,7 +268,7 @@ export default function ArtistsView() {
       <div style={{ padding: "16px 36px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--rule)" }}>
         <div>
           <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", letterSpacing: ".1em", textTransform: "uppercase" }}>
-            Performers you&apos;ve seen live
+            Artists from your shows and follows
           </div>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 700, color: "var(--ink)", letterSpacing: "-0.01em", lineHeight: 1.1, marginTop: 4 }}>
             Artists
@@ -282,6 +287,29 @@ export default function ArtistsView() {
             style={{ border: "none", background: "transparent", color: "var(--ink)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, outline: "none", width: "100%", letterSpacing: ".02em" }}
           />
         </div>
+
+        <button
+          type="button"
+          data-testid="artists-followed-only-toggle"
+          aria-pressed={followedOnly}
+          onClick={() => setFollowedOnly((v) => !v)}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "5px 10px",
+            background: followedOnly ? "var(--accent)" : "transparent",
+            color: followedOnly ? "var(--accent-text)" : "var(--ink)",
+            border: `1px solid ${followedOnly ? "var(--accent)" : "var(--rule-strong)"}`,
+            cursor: "pointer",
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 11,
+            letterSpacing: ".02em",
+          }}
+        >
+          <Eye size={11} />
+          Followed only
+        </button>
 
         <div style={{ flex: 1 }} />
 
@@ -354,14 +382,14 @@ export default function ArtistsView() {
                       {artist.name}
                     </span>
                   </div>
-                  <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: "var(--ink)", fontFeatureSettings: '"tnum"' }}>
-                    {artist.showCount}&times;
+                  <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: artist.showCount > 0 ? "var(--ink)" : "var(--faint)", fontFeatureSettings: '"tnum"' }}>
+                    {artist.showCount > 0 ? <>{artist.showCount}&times;</> : "—"}
                   </div>
                   <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: artist.pastShowsCount > 0 ? "var(--ink)" : "var(--faint)", fontFeatureSettings: '"tnum"' }}>
-                    {artist.pastShowsCount}
+                    {artist.showCount > 0 ? artist.pastShowsCount : "—"}
                   </div>
                   <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: artist.futureShowsCount > 0 ? "var(--accent)" : "var(--faint)", fontFeatureSettings: '"tnum"' }}>
-                    {artist.futureShowsCount}
+                    {artist.showCount > 0 ? artist.futureShowsCount : "—"}
                   </div>
                   {!isHalfWidth && (
                     <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
