@@ -110,7 +110,7 @@ test.describe('Preferences fixes', () => {
       await page.waitForTimeout(600);
     }
 
-    await page.goto('/shows');
+    await page.goto('/logbook');
     await page.waitForLoadState('networkidle');
     await expect(page.locator('.show-row').first()).toBeVisible({ timeout: 10_000 });
     const looseHeight = (await page.locator('.show-row').first().boundingBox())!.height;
@@ -122,7 +122,7 @@ test.describe('Preferences fixes', () => {
     await compactRow2.getByRole('switch').click();
     await page.waitForTimeout(800);
 
-    await page.goto('/shows');
+    await page.goto('/logbook');
     await page.waitForLoadState('networkidle');
     await expect(page.locator('.show-row').first()).toBeVisible({ timeout: 10_000 });
     const compactHeight = (await page.locator('.show-row').first().boundingBox())!.height;

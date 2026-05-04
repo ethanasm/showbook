@@ -370,7 +370,7 @@ export default function HomeView() {
             <div style={{ flex: 1 }} />
             {upcoming.length > 0 && (
               <div
-                onClick={() => router.push("/shows")}
+                onClick={() => router.push("/upcoming")}
                 style={{
                   fontFamily: MONO,
                   fontSize: 10.5,
@@ -631,7 +631,7 @@ export default function HomeView() {
             </div>
             <div style={{ flex: 1 }} />
             <div
-              onClick={() => router.push("/shows")}
+              onClick={() => router.push("/logbook")}
               style={{
                 fontFamily: MONO,
                 fontSize: 10.5,

@@ -401,6 +401,23 @@ export const showsRouter = router({
     return row?.count ?? 0;
   }),
 
+  /**
+   * Per-mode counts used by the sidebar to badge Upcoming and Logbook
+   * independently. Single round-trip aggregate so we don't fan out into
+   * three separate count queries from <AppShell>.
+   */
+  countsByMode: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const [row] = await ctx.db
+      .select({
+        upcoming: sql<number>`count(*) filter (where ${shows.state} in ('watching','ticketed'))::int`,
+        logbook: sql<number>`count(*) filter (where ${shows.state} = 'past')::int`,
+      })
+      .from(shows)
+      .where(eq(shows.userId, userId));
+    return { upcoming: row?.upcoming ?? 0, logbook: row?.logbook ?? 0 };
+  }),
+
   detail: protectedProcedure
     .input(z.object({ showId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {

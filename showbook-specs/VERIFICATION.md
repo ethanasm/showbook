@@ -191,7 +191,7 @@ test.describe('Shows page', () => {
   });
 
   test('renders shows with correct state styling', async ({ page }) => {
-    await page.goto('/shows');
+    await page.goto('/logbook');
     await page.waitForSelector('[data-testid="show-row"]');
 
     // Verify all 3 states are visible
@@ -204,14 +204,14 @@ test.describe('Shows page', () => {
   });
 
   test('expands row on click', async ({ page }) => {
-    await page.goto('/shows');
+    await page.goto('/logbook');
     await page.locator('[data-testid="show-row"]').first().click();
     await expect(page.locator('[data-testid="show-detail-panel"]')).toBeVisible();
     await page.screenshot({ path: 'test-results/screenshots/shows-expanded-row.png', fullPage: true });
   });
 
   test('filters by year', async ({ page }) => {
-    await page.goto('/shows');
+    await page.goto('/logbook');
     await page.locator('[data-testid="year-2024"]').click();
     // Verify only 2024 shows visible
     const rows = page.locator('[data-testid="show-row"]');

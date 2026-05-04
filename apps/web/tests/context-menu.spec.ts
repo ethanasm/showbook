@@ -11,7 +11,7 @@ test.describe('Context menus on list pages', () => {
   });
 
   test('right-click a shows row opens context menu', async ({ page }) => {
-    await page.goto('/shows');
+    await page.goto('/logbook');
     await page.waitForSelector('.show-row', { timeout: 10000 });
 
     // Right-click the first show row
@@ -27,7 +27,7 @@ test.describe('Context menus on list pages', () => {
   });
 
   test('context menu dismisses on Escape', async ({ page }) => {
-    await page.goto('/shows');
+    await page.goto('/logbook');
     await page.waitForSelector('.show-row', { timeout: 10000 });
 
     await page.locator('.show-row').first().click({ button: 'right' });
@@ -38,7 +38,7 @@ test.describe('Context menus on list pages', () => {
   });
 
   test('context menu dismisses on outside click', async ({ page }) => {
-    await page.goto('/shows');
+    await page.goto('/logbook');
     await page.waitForSelector('.show-row', { timeout: 10000 });
 
     await page.locator('.show-row').first().click({ button: 'right' });
@@ -50,7 +50,7 @@ test.describe('Context menus on list pages', () => {
   });
 
   test('Delete from shows context menu removes the row', async ({ page }) => {
-    await page.goto('/shows');
+    await page.goto('/logbook');
     await page.waitForSelector('.show-row', { timeout: 10000 });
 
     // Get the headliner text from the first row so we can verify it's gone

@@ -11,7 +11,7 @@ test.describe('Calendar and stats features', () => {
   });
 
   test('calendar view is accessible from shows page', async ({ page }) => {
-    await page.goto('/shows');
+    await page.goto('/logbook');
     await page.waitForSelector('.show-row', { timeout: 10000 });
 
     await page.getByRole('button', { name: /Calendar/i }).click();
@@ -20,7 +20,7 @@ test.describe('Calendar and stats features', () => {
   });
 
   test('year view toggle renders 12 mini grids', async ({ page }) => {
-    await page.goto('/shows');
+    await page.goto('/logbook');
     await page.waitForSelector('.show-row', { timeout: 10000 });
 
     await page.getByRole('button', { name: /Calendar/i }).click();
@@ -36,7 +36,7 @@ test.describe('Calendar and stats features', () => {
   });
 
   test('clicking a mini month in year view switches to month view', async ({ page }) => {
-    await page.goto('/shows');
+    await page.goto('/logbook');
     await page.waitForSelector('.show-row', { timeout: 10000 });
 
     await page.getByRole('button', { name: /Calendar/i }).click();
@@ -54,7 +54,7 @@ test.describe('Calendar and stats features', () => {
   });
 
   test('calendar prev button is disabled when at earliest show month', async ({ page }) => {
-    await page.goto('/shows');
+    await page.goto('/logbook');
     await page.waitForSelector('.show-row', { timeout: 10000 });
 
     await page.getByRole('button', { name: /Calendar/i }).click();
@@ -73,7 +73,7 @@ test.describe('Calendar and stats features', () => {
   });
 
   test('stats timeframe filter changes the shown data', async ({ page }) => {
-    await page.goto('/shows');
+    await page.goto('/logbook');
     await page.waitForSelector('.show-row', { timeout: 10000 });
 
     await page.getByRole('button', { name: /Stats/i }).click();
@@ -99,7 +99,7 @@ test.describe('Calendar and stats features', () => {
   });
 
   test('stats timeframe buttons are present: year, 5years, all', async ({ page }) => {
-    await page.goto('/shows');
+    await page.goto('/logbook');
     await page.waitForSelector('.show-row', { timeout: 10000 });
 
     await page.getByRole('button', { name: /Stats/i }).click();

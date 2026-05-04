@@ -215,7 +215,30 @@ function getFirstDayOfWeek(year: number, month: number): number {
 type CalView = "month" | "year";
 type StatsTimeframe = "year" | "5years" | "all";
 
-export default function ShowsView() {
+export type ShowsListMode = 'upcoming' | 'logbook';
+
+const MODE_LABELS: Record<ShowsListMode, { eyebrow: string; title: string; emptyTitle: string; emptyBody: string }> = {
+  upcoming: {
+    eyebrow: 'Plans on the horizon',
+    title: 'Upcoming',
+    emptyTitle: 'Nothing on the horizon',
+    emptyBody:
+      'Add a show or browse Discover for upcoming events from venues and artists you follow.',
+  },
+  logbook: {
+    eyebrow: 'Your live-show log',
+    title: 'Logbook',
+    emptyTitle: 'Your history starts here',
+    emptyBody:
+      "Once your first show happens it'll move into your logbook automatically. Or import receipts from Gmail to backfill past shows.",
+  },
+};
+
+interface ShowsListViewProps {
+  mode: ShowsListMode;
+}
+
+export default function ShowsListView({ mode }: ShowsListViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const compact = useCompactMode();
@@ -223,8 +246,19 @@ export default function ShowsView() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedYear, setSelectedYear] = useState<string>("All");
   const [selectedKind, setSelectedKind] = useState<ShowKind | null>(null);
-  const [sort, setSort] = useState<SortConfig>({ field: "date", dir: "desc" });
+  // Upcoming defaults to date-asc (next-up first); Logbook keeps date-desc.
+  // Stats is past-context only — never an option on /upcoming.
+  const [sort, setSort] = useState<SortConfig>({
+    field: "date",
+    dir: mode === "upcoming" ? "asc" : "desc",
+  });
+  // Sub-filter on /upcoming: All · Tickets · Watching. /logbook ignores it.
+  const [upcomingFilter, setUpcomingFilter] = useState<"all" | "ticketed" | "watching">("all");
   const [currentPage, setCurrentPage] = useState(0);
+
+  const labels = MODE_LABELS[mode];
+  const isUpcoming = mode === "upcoming";
+  const isLogbook = mode === "logbook";
 
   const PAGE_SIZE = compact ? 10 : 12;
 
@@ -324,13 +358,28 @@ export default function ShowsView() {
     }
   }, [selectedYear, selectedKind]);
 
-  // Filtered shows
+  // Filtered shows. Mode-driven state filter is the primary cut:
+  //   /upcoming → state IN ('watching','ticketed')
+  //   /logbook  → state = 'past'
+  // The watching/ticketed sub-filter on /upcoming narrows further; /logbook
+  // keeps the existing year/kind filters.
   const filteredShows = useMemo(() => {
     let result = shows;
 
-    if (selectedYear === "older") {
+    if (isUpcoming) {
+      result = result.filter(
+        (s) => s.state === "watching" || s.state === "ticketed",
+      );
+      if (upcomingFilter !== "all") {
+        result = result.filter((s) => s.state === upcomingFilter);
+      }
+    } else {
+      result = result.filter((s) => s.state === "past");
+    }
+
+    if (isLogbook && selectedYear === "older") {
       const currentYear = new Date().getFullYear();
-      result = result.filter((s) => getYear(s.date) < currentYear - 2);
+      result = result.filter((s) => s.date && getYear(s.date) < currentYear - 2);
     }
 
     if (selectedKind) {
@@ -340,7 +389,16 @@ export default function ShowsView() {
     result = [...result].sort((a, b) => compareShows(a, b, sort));
 
     return result;
-  }, [shows, selectedKind, sort, selectedYear]);
+  }, [shows, selectedKind, sort, selectedYear, isUpcoming, isLogbook, upcomingFilter]);
+
+  // Date-TBD watching shows (no date set yet) deserve their own rail at
+  // the top of /upcoming so users can pick a night. The main filteredShows
+  // list below already includes them, but a dedicated rail signals they
+  // need attention.
+  const dateTbdShows = useMemo(() => {
+    if (!isUpcoming) return [];
+    return shows.filter((s) => s.state === "watching" && s.date === null);
+  }, [shows, isUpcoming]);
 
   const totalPages = Math.ceil(filteredShows.length / PAGE_SIZE);
   const pagedShows = filteredShows.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
@@ -484,11 +542,13 @@ export default function ShowsView() {
     }
   }, [startGmailScan]);
 
-  // Auto-open Gmail modal when navigated from the empty-state CTA (?gmail=1)
+  // Auto-open Gmail modal when navigated from an empty-state CTA
+  // (?gmail=1). Replace the URL with the canonical mode-specific path
+  // (Gmail receipts mostly land in Logbook).
   useEffect(() => {
     if (searchParams.get("gmail") === "1") {
       handleOpenGmailModal();
-      router.replace("/shows");
+      router.replace(isUpcoming ? "/upcoming" : "/logbook");
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -585,11 +645,15 @@ export default function ShowsView() {
   // ---------------------------------------------------------------------------
 
   function renderHeader() {
-    const modes: { k: ViewMode; l: string; Ic: React.ComponentType<{ size?: number; color?: string }>; count: string }[] = [
+    // Stats is past-context only — total spent / new artists / rhythm don't
+    // make sense for a future-only view. Calendar lives on both pages but
+    // is scoped to that page's state set via filteredShows.
+    const allModes: { k: ViewMode; l: string; Ic: React.ComponentType<{ size?: number; color?: string }>; count: string }[] = [
       { k: "list", l: "List", Ic: Archive, count: modeCounts.list },
       { k: "calendar", l: "Calendar", Ic: Calendar, count: modeCounts.calendar },
       { k: "stats", l: "Stats", Ic: ArrowDownUp, count: modeCounts.stats },
     ];
+    const modes = isUpcoming ? allModes.filter((m) => m.k !== "stats") : allModes;
 
     return (
       <div style={{
@@ -609,7 +673,7 @@ export default function ShowsView() {
             letterSpacing: ".1em",
             textTransform: "uppercase",
           }}>
-            All shows &middot; one stream
+            {labels.eyebrow}
           </div>
           <div style={{
             fontFamily: "var(--font-display)",
@@ -620,8 +684,23 @@ export default function ShowsView() {
             lineHeight: 1.1,
             marginTop: 4,
           }}>
-            Shows
+            {labels.title}
           </div>
+          {/* Cross-link to the other half so the split doesn't feel siloed. */}
+          <Link
+            href={isUpcoming ? "/logbook" : "/upcoming"}
+            style={{
+              display: "inline-block",
+              marginTop: 6,
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 10.5,
+              color: "var(--accent)",
+              letterSpacing: ".04em",
+              textDecoration: "none",
+            }}
+          >
+            {isUpcoming ? "View past →" : "View upcoming →"}
+          </Link>
         </div>
         <div style={{
           display: "flex",
@@ -725,6 +804,15 @@ export default function ShowsView() {
   // ---------------------------------------------------------------------------
 
   function renderFilterBar() {
+    // /upcoming swaps the year filter (which is misleading there — it
+    // pulls older years from date-TBD watching shows) for an
+    // All · Tickets · Watching chip toggle that narrows the state set.
+    const upcomingChips: { k: typeof upcomingFilter; l: string }[] = [
+      { k: "all", l: "All" },
+      { k: "ticketed", l: "Tickets" },
+      { k: "watching", l: "Watching" },
+    ];
+
     return (
       <div style={{
         padding: isMobile ? "11px 16px" : "11px 36px",
@@ -735,31 +823,61 @@ export default function ShowsView() {
         background: "var(--surface)",
         borderBottom: "1px solid var(--rule)",
       }}>
-        {/* Year buttons */}
-        <div style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid var(--rule-strong)" }}>
-          {yearButtons.map((y, i, arr) => {
-            const active = y === selectedYear;
-            return (
-              <div
-                key={y}
-                onClick={() => setSelectedYear(y)}
-                style={{
-                  padding: "5px 11px",
-                  borderRight: i === arr.length - 1 ? "none" : "1px solid var(--rule-strong)",
-                  background: active ? "var(--ink)" : "transparent",
-                  color: active ? "var(--bg)" : "var(--ink)",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
-                  fontWeight: active ? 500 : 400,
-                  cursor: "pointer",
-                  letterSpacing: ".02em",
-                }}
-              >
-                {y}
-              </div>
-            );
-          })}
-        </div>
+        {/* Mode-specific primary filter */}
+        {isLogbook ? (
+          <div data-testid="logbook-year-filter" style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid var(--rule-strong)" }}>
+            {yearButtons.map((y, i, arr) => {
+              const active = y === selectedYear;
+              return (
+                <div
+                  key={y}
+                  onClick={() => setSelectedYear(y)}
+                  style={{
+                    padding: "5px 11px",
+                    borderRight: i === arr.length - 1 ? "none" : "1px solid var(--rule-strong)",
+                    background: active ? "var(--ink)" : "transparent",
+                    color: active ? "var(--bg)" : "var(--ink)",
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 11,
+                    fontWeight: active ? 500 : 400,
+                    cursor: "pointer",
+                    letterSpacing: ".02em",
+                  }}
+                >
+                  {y}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div data-testid="upcoming-state-filter" style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid var(--rule-strong)" }}>
+            {upcomingChips.map(({ k, l }, i, arr) => {
+              const active = upcomingFilter === k;
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  data-testid={`upcoming-filter-${k}`}
+                  onClick={() => setUpcomingFilter(k)}
+                  style={{
+                    padding: "5px 11px",
+                    borderRight: i === arr.length - 1 ? "none" : "1px solid var(--rule-strong)",
+                    border: "none",
+                    background: active ? "var(--ink)" : "transparent",
+                    color: active ? "var(--bg)" : "var(--ink)",
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 11,
+                    fontWeight: active ? 500 : 400,
+                    cursor: "pointer",
+                    letterSpacing: ".02em",
+                  }}
+                >
+                  {l}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Kind chips */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1078,62 +1196,92 @@ export default function ShowsView() {
 
   function renderList() {
     if (filteredShows.length === 0) {
+      // Empty-state asymmetry per the IA cleanup plan:
+      //   /upcoming → Discover-leaning ("Nothing on the horizon")
+      //   /logbook  → Gmail-leaning ("Your history starts here")
+      const primary = isUpcoming ? (
+        <Link
+          href="/discover"
+          style={{
+            padding: "10px 18px",
+            background: "var(--accent)",
+            color: "var(--accent-text)",
+            border: "none",
+            borderRadius: 8,
+            cursor: "pointer",
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 11,
+            letterSpacing: ".06em",
+            textTransform: "uppercase",
+            fontWeight: 500,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            textDecoration: "none",
+          }}
+        >
+          <Eye size={13} />
+          Find shows in Discover
+        </Link>
+      ) : (
+        <button
+          type="button"
+          onClick={handleOpenGmailModal}
+          style={{
+            padding: "10px 18px",
+            background: "var(--accent)",
+            color: "var(--accent-text)",
+            border: "none",
+            borderRadius: 8,
+            cursor: "pointer",
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 11,
+            letterSpacing: ".06em",
+            textTransform: "uppercase",
+            fontWeight: 500,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <Image src="/google-g.svg" alt="" width={14} height={14} />
+          Import from Gmail
+        </button>
+      );
+      const secondary = (
+        <Link
+          href="/add"
+          style={{
+            padding: "10px 18px",
+            background: "transparent",
+            color: "var(--ink)",
+            border: "1px solid var(--rule-strong)",
+            borderRadius: 8,
+            cursor: "pointer",
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 11,
+            letterSpacing: ".06em",
+            textTransform: "uppercase",
+            fontWeight: 500,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            textDecoration: "none",
+          }}
+        >
+          {isUpcoming ? "Add a show" : "Add a past show"}
+        </Link>
+      );
       return (
         <div style={{ padding: isMobile ? "20px 16px" : "28px 36px" }}>
           <EmptyState
             kind="shows"
-            title="Start your logbook"
-            body="Add the first show you saw, the next one you are watching, or import ticket history from Gmail."
+            title={labels.emptyTitle}
+            body={labels.emptyBody}
             action={
-              <div
-                style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}
-              >
-                <button
-                  type="button"
-                  onClick={handleOpenGmailModal}
-                  style={{
-                    padding: "10px 18px",
-                    background: "var(--accent)",
-                    color: "var(--accent-text)",
-                    border: "none",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11,
-                    letterSpacing: ".06em",
-                    textTransform: "uppercase",
-                    fontWeight: 500,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <Image src="/google-g.svg" alt="" width={14} height={14} />
-                  Import from Gmail
-                </button>
-                <Link
-                  href="/discover"
-                  style={{
-                    padding: "10px 18px",
-                    background: "transparent",
-                    color: "var(--ink)",
-                    border: "1px solid var(--rule-strong)",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11,
-                    letterSpacing: ".06em",
-                    textTransform: "uppercase",
-                    fontWeight: 500,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                    textDecoration: "none",
-                  }}
-                >
-                  <Eye size={13} />
-                  Find shows in Discover
-                </Link>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+                {primary}
+                {secondary}
               </div>
             }
           />
@@ -1143,6 +1291,41 @@ export default function ShowsView() {
 
     return (
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+        {/* Date-TBD rail (Upcoming only): watching shows with no date set
+            yet — typically a multi-night theatre run the user wants to
+            see but hasn't picked a night for. Surfaced separately so they
+            don't sink to the bottom of a date-asc sort. */}
+        {isUpcoming && dateTbdShows.length > 0 && (
+          <div data-testid="date-tbd-rail" style={{ padding: isMobile ? "12px 16px 0" : "14px 36px 0", display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 10.5,
+              color: "var(--muted)",
+              letterSpacing: ".1em",
+              textTransform: "uppercase",
+            }}>
+              Date TBD &middot; {dateTbdShows.length}
+            </div>
+            <div style={{
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 11,
+              color: "var(--faint)",
+              lineHeight: 1.5,
+            }}>
+              {dateTbdShows.map((s, i) => (
+                <span key={s.id}>
+                  <Link
+                    href={`/shows/${s.id}`}
+                    style={{ color: "var(--ink)", textDecoration: "none" }}
+                  >
+                    {s.showPerformers?.[0]?.performer?.name ?? s.productionName ?? "Untitled"}
+                  </Link>
+                  {i < dateTbdShows.length - 1 ? " · " : ""}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Section label */}
         <div style={{ padding: isMobile ? "16px 16px 8px" : "18px 36px 8px", display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
           <div style={{
@@ -1153,14 +1336,16 @@ export default function ShowsView() {
             textTransform: "uppercase",
             fontWeight: 500,
           }}>
-            All shows &middot; {filteredShows.length}
+            {labels.title} &middot; {filteredShows.length}
           </div>
           <div style={{
             fontFamily: "var(--font-geist-mono), monospace",
             fontSize: 10.5,
             color: "var(--faint)",
           }}>
-            {ticketedCount} tix &middot; {watchingCount} watching &middot; {pastCount} past
+            {isUpcoming
+              ? `${ticketedCount} tix · ${watchingCount} watching`
+              : `${pastCount} past`}
           </div>
         </div>
 
@@ -1241,8 +1426,14 @@ export default function ShowsView() {
   function renderCalendar() {
     const today = new Date();
 
-    // Compute bounds from all shows
-    const allDates = shows.map((s) => new Date(s.date + "T00:00:00"));
+    // Compute bounds from all shows. Date-TBD watching rows have a null
+    // date and would crash `new Date(null + "T00:00:00")` if we mapped
+    // them blindly. They also have nothing to plot on a grid so dropping
+    // them is correct — the Date-TBD rail on /upcoming surfaces them
+    // separately.
+    const allDates = shows
+      .filter((s) => s.date !== null)
+      .map((s) => new Date(s.date + "T00:00:00"));
     const calMin = allDates.length > 0
       ? { year: Math.min(...allDates.map((d) => d.getFullYear())), month: allDates.reduce((a, b) => a < b ? a : b).getMonth() }
       : null;
@@ -1403,6 +1594,7 @@ export default function ShowsView() {
     }
 
     const railShows = shows.filter((s) => {
+      if (!s.date) return false;
       const d = new Date(s.date + "T00:00:00");
       const m = d.getMonth();
       const y = d.getFullYear();
@@ -1659,6 +1851,7 @@ export default function ShowsView() {
     // Rhythm chart — shows per month in current year
     const rhythm = MONTHS.map((_, i) => {
       const monthShows = allShowsList.filter((s) => {
+        if (!s.date) return false;
         const d = new Date(s.date + "T00:00:00");
         return d.getFullYear() === currentYear && d.getMonth() === i;
       });
@@ -2123,6 +2316,7 @@ export default function ShowsView() {
               // Most shows in a month
               const monthCounts = new Map<number, number>();
               for (const s of thisYearShows) {
+                if (!s.date) continue;
                 const m = new Date(s.date + "T00:00:00").getMonth();
                 monthCounts.set(m, (monthCounts.get(m) ?? 0) + 1);
               }

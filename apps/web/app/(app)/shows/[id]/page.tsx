@@ -71,7 +71,11 @@ export default function ShowDetailPage() {
   const deleteShow = trpc.shows.delete.useMutation({
     onSuccess: () => {
       utils.shows.invalidate();
-      router.push("/shows");
+      // After delete, route to the bucket the show used to live in so
+      // the user lands somewhere sensible. Past → /logbook; everything
+      // else → /upcoming.
+      const fallback = detailQuery.data?.state === "past" ? "/logbook" : "/upcoming";
+      router.push(fallback);
     },
   });
 
@@ -85,7 +89,7 @@ export default function ShowDetailPage() {
         Couldn&apos;t load show.{" "}
         <button
           type="button"
-          onClick={() => router.push("/shows")}
+          onClick={() => router.push("/logbook")}
           style={{
             background: "none",
             border: "none",
@@ -175,7 +179,7 @@ export default function ShowDetailPage() {
         }}
       >
         <Link
-          href="/shows"
+          href={show.state === "past" ? "/logbook" : "/upcoming"}
           style={{
             color: "var(--muted)",
             textDecoration: "none",
