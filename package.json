@@ -43,6 +43,8 @@
     "mobile:typecheck": "pnpm --filter mobile typecheck",
     "mobile:lint": "pnpm --filter mobile lint",
     "mobile:test": "pnpm --filter mobile test",
+    "mobile:e2e:ios": "pnpm --filter mobile e2e:ios",
+    "mobile:e2e:dry": "pnpm --filter mobile e2e:dry",
     "setup:runner": "bash scripts/setup-runner.sh"
   },
   "devDependencies": {

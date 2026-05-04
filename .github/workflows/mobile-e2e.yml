@@ -1,11 +1,14 @@
-name: Mobile E2E (Maestro)
+name: Mobile E2E (Maestro, Android)
 
-# Per mobile-testing-strategy.md § Wave F: Maestro flows default to
-# nightly + push-to-main only. They're slow (EAS build + Maestro Cloud
-# upload) and per-PR runs would block the fast feedback loop the unit /
-# component / integration tiers provide. The `pull_request` trigger is
-# label-gated so devs can opt in to per-PR Maestro screenshots by
-# attaching the `mobile-visual` label — see the `if:` on the job.
+# Mobile e2e ran on Maestro Cloud until 2026-05; that service is paid
+# only (free trial only, no free tier), so the automated path is now
+# Android-only on a self-hosted runner inside the prod WSL box. iOS
+# coverage is manual via `pnpm mobile:e2e:ios` on the dev Mac — see
+# showbook-specs/mobile-testing-strategy.md § Wave F for the rationale.
+#
+# The e2e tier is a smoke layer above the unit / component / integration
+# tiers; Android catches ~90% of regressions because the surface
+# (auth gate, navigation, optimistic mutations) is platform-shared in RN.
 on:
   push:
     branches: [main]
@@ -24,44 +27,45 @@ permissions:
   pull-requests: write
 
 concurrency:
-  # Group per-PR runs by PR number so successive pushes cancel the
-  # in-flight build (EAS minutes are expensive). Non-PR triggers
+  # Per-PR runs cancel on push to save runner time; non-PR triggers
   # (push/schedule/dispatch) keep the old non-cancelling behaviour.
   group: mobile-e2e-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build-and-test:
-    name: EAS build + Maestro Cloud
-    # Gated on a repo variable so the job reports as **skipped** (not
-    # success, not failure) until the prereqs are in place. Without this
-    # gate the workflow failed every nightly cron with "An Expo user
-    # account is required to proceed", which buried real signal.
+  android-e2e:
+    name: EAS Android build + Maestro on self-hosted emulator
+    # Gate logic mirrors the previous Maestro Cloud workflow:
+    #   - vars.MOBILE_E2E_ENABLED must be 'true' so the workflow reports
+    #     skipped (not failed) until the prereqs are in place.
+    #   - PR runs require the `mobile-visual` label so opt-in stays
+    #     explicit; non-PR triggers (push/schedule/dispatch) always run.
     #
     # To enable this workflow:
     #   1. Add secrets under Settings → Secrets and variables → Actions:
     #        - EXPO_TOKEN
-    #        - MAESTRO_CLOUD_API_KEY
     #        - MAESTRO_E2E_TOKEN, MAESTRO_E2E_USER_JSON (used by the run step)
-    #   2. Set the repo variable `MOBILE_E2E_ENABLED` to `true`
-    #      (Settings → Secrets and variables → Actions → Variables tab).
-    #
-    # `secrets` can't be referenced in a job-level `if:` (only github /
-    # needs / vars / inputs are available there), which is why the gate
-    # is on `vars` instead.
-    #
-    # The PR-trigger arm of this gate is label-driven: PRs only build
-    # when they carry the `mobile-visual` label, so opt-in stays
-    # explicit and the EAS / Maestro free tiers cover normal load.
+    #      (MAESTRO_CLOUD_API_KEY is no longer needed — Maestro runs
+    #      locally on the self-hosted runner.)
+    #   2. Set repo variable `MOBILE_E2E_ENABLED` to `true`.
+    #   3. Optional: set repo variable `ANDROID_SDK_ROOT` to the install
+    #      path on the runner; defaults to /opt/android-sdk.
+    #   4. Run scripts/setup-runner.sh on the prod box (already done if
+    #      the runner is up), then scripts/setup-runner-android.sh once
+    #      to install Android SDK + create the e2e AVD.
     if: >-
       vars.MOBILE_E2E_ENABLED == 'true' &&
       (github.event_name != 'pull_request' ||
        contains(github.event.pull_request.labels.*.name, 'mobile-visual'))
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Self-hosted runner registered by scripts/setup-runner.sh on the
+    # prod WSL box (label `showbook-prod`). It needs Android SDK + AVD
+    # installed via scripts/setup-runner-android.sh (one-time).
+    runs-on: [self-hosted, showbook-prod]
+    timeout-minutes: 45
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-      MAESTRO_CLOUD_API_KEY: ${{ secrets.MAESTRO_CLOUD_API_KEY }}
+      ANDROID_SDK_ROOT: ${{ vars.ANDROID_SDK_ROOT || '/opt/android-sdk' }}
+      ANDROID_AVD_NAME: showbook_e2e
     steps:
       - uses: actions/checkout@v6
 
@@ -83,29 +87,27 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      # iOS simulator builds run on EAS infra; we just trigger and wait
-      # for the artifact URL. The `e2e` profile (apps/mobile/eas.json)
-      # bakes EXPO_PUBLIC_E2E_MODE=1 so apps/mobile/lib/auth.ts uses
-      # the SecureStore bypass instead of real Google OAuth.
-      - name: Build iOS app for e2e
+      # The `e2e` EAS profile bakes EXPO_PUBLIC_E2E_MODE=1 so the
+      # SecureStore-bypass branch in apps/mobile/lib/auth.ts kicks in
+      # and the sign-in flow doesn't need real Google OAuth.
+      - name: Build Android APK on EAS
         id: build
         working-directory: apps/mobile
         run: |
           eas build \
-            --platform ios \
+            --platform android \
             --profile e2e \
             --non-interactive \
             --no-wait \
             --json > /tmp/eas-build.json
-          BUILD_URL=$(node -e "const b=require('/tmp/eas-build.json'); console.log(Array.isArray(b)?b[0].artifacts.buildUrl:b.artifacts.buildUrl)")
-          echo "build_url=$BUILD_URL" >> "$GITHUB_OUTPUT"
+          BUILD_ID=$(node -e "const b=require('/tmp/eas-build.json'); console.log(Array.isArray(b)?b[0].id:b.id)")
+          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
 
       - name: Wait for EAS build to finish
         working-directory: apps/mobile
+        env:
+          BUILD_ID: ${{ steps.build.outputs.build_id }}
         run: |
-          BUILD_ID=$(node -e "const b=require('/tmp/eas-build.json'); console.log(Array.isArray(b)?b[0].id:b.id)")
-          eas build:view "$BUILD_ID" --json > /dev/null
-          # Poll until status is 'finished' or 'errored'.
           for i in $(seq 1 60); do
             STATUS=$(eas build:view "$BUILD_ID" --json | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const b=JSON.parse(d);console.log(b.status)})")
             echo "build status: $STATUS"
@@ -118,48 +120,89 @@ jobs:
           echo "EAS build timed out" >&2
           exit 1
 
+      - name: Download APK artifact
+        working-directory: apps/mobile
+        env:
+          BUILD_ID: ${{ steps.build.outputs.build_id }}
+        run: |
+          APK_URL=$(eas build:view "$BUILD_ID" --json | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const b=JSON.parse(d);console.log(b.artifacts.buildUrl)})")
+          curl -sSL -o /tmp/showbook-e2e.apk "$APK_URL"
+          ls -lh /tmp/showbook-e2e.apk
+
       - name: Install Maestro CLI
         run: |
-          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          if ! command -v maestro >/dev/null 2>&1; then
+            curl -fsSL "https://get.maestro.mobile.dev" | bash
+          fi
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
 
       - name: Validate Maestro flow YAML
-        run: |
-          maestro test --dry-run apps/mobile/e2e/flows/
+        run: maestro test --dry-run apps/mobile/e2e/flows/
 
-      # Maestro Cloud accepts an .ipa / .app.zip URL; we hand it the EAS
-      # artifact directly. MAESTRO_CLOUD_API_KEY is the project token
-      # configured in repo Settings → Secrets. Stdout is teed so we can
-      # extract the upload URL for the PR-body edit below.
-      - name: Run flows on Maestro Cloud
-        id: maestro
+      - name: Boot Android emulator
+        run: |
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
+          # Kill any stale emulator from a previous run that crashed.
+          adb kill-server || true
+          adb start-server
+          # Boot headless. -no-snapshot-load skips a flaky snapshot
+          # restore path; -gpu swiftshader_indirect is the most reliable
+          # software-renderer option on a headless WSL host.
+          nohup emulator -avd "$ANDROID_AVD_NAME" \
+            -no-window -no-audio -no-boot-anim -no-snapshot-load \
+            -gpu swiftshader_indirect \
+            > /tmp/emulator.log 2>&1 &
+          echo "emulator pid: $!"
+          # Wait up to 5 min for boot completion.
+          adb wait-for-device
+          for i in $(seq 1 60); do
+            BOOTED=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+            if [ "$BOOTED" = "1" ]; then
+              echo "emulator booted"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "emulator failed to boot in 5 minutes" >&2
+          tail -50 /tmp/emulator.log >&2
+          exit 1
+
+      - name: Install APK
+        run: |
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          adb install -r /tmp/showbook-e2e.apk
+
+      - name: Run Maestro flows
         env:
-          BUILD_URL: ${{ steps.build.outputs.build_url }}
           MAESTRO_E2E_TOKEN: ${{ secrets.MAESTRO_E2E_TOKEN }}
           MAESTRO_E2E_USER_JSON: ${{ secrets.MAESTRO_E2E_USER_JSON }}
         run: |
-          set -o pipefail
-          maestro cloud \
-            --apiKey "$MAESTRO_CLOUD_API_KEY" \
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$HOME/.maestro/bin:$PATH"
+          maestro test \
             --env MAESTRO_E2E_TOKEN="$MAESTRO_E2E_TOKEN" \
             --env MAESTRO_E2E_USER_JSON="$MAESTRO_E2E_USER_JSON" \
-            "$BUILD_URL" \
-            apps/mobile/e2e/flows/ 2>&1 | tee /tmp/maestro.log
-          URL=$(grep -oE 'https://console\.mobile\.dev/uploads/[a-zA-Z0-9_-]+' /tmp/maestro.log | head -1)
-          if [ -n "$URL" ]; then
-            echo "upload_url=$URL" >> "$GITHUB_OUTPUT"
-          fi
+            apps/mobile/e2e/flows/
+
+      - name: Upload Maestro debug artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-debug-${{ github.run_id }}
+          path: |
+            ~/.maestro/tests/**
+            /tmp/emulator.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       # Only on PR runs: append/replace a `## Mobile screenshots` section
       # in the PR body, bracketed by sentinel comments so re-runs replace
       # cleanly. Runs on success and failure so reviewers see the
-      # Maestro Cloud upload URL even when a flow fails.
-      - name: Update PR body with Maestro upload URL
-        if: always() && github.event_name == 'pull_request' && steps.maestro.outputs.upload_url != ''
+      # workflow run + debug artifact link even when a flow fails.
+      - name: Update PR body with workflow run link
+        if: always() && github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          UPLOAD_URL: ${{ steps.maestro.outputs.upload_url }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -171,12 +214,20 @@ jobs:
           ')
           NEW_SECTION=$(cat <<EOF
           <!-- mobile-screenshots:start -->
-          ## Mobile screenshots
+          ## Mobile e2e (Android)
 
-          Maestro Cloud upload: $UPLOAD_URL
           Workflow run: $RUN_URL
+          (Failed runs upload Maestro screenshots + emulator log as the
+          \`maestro-debug-${{ github.run_id }}\` artifact.)
           <!-- mobile-screenshots:end -->
           EOF
           )
           NEW_BODY="${STRIPPED%$'\n'}"$'\n\n'"$NEW_SECTION"
           gh pr edit "$PR_NUMBER" --body "$NEW_BODY"
+
+      - name: Shut down emulator
+        if: always()
+        run: |
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          adb emu kill || true
+          adb kill-server || true
