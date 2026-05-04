@@ -50,6 +50,10 @@ const config: ExpoConfig = {
         'UIInterfaceOrientationLandscapeLeft',
         'UIInterfaceOrientationLandscapeRight',
       ],
+      // Showbook only uses standard HTTPS — no custom crypto. Declaring
+      // this here keeps App Store Connect from blocking TestFlight builds
+      // on the manual "Export Compliance" question per submission.
+      ITSAppUsesNonExemptEncryption: false,
     },
   },
   android: {
