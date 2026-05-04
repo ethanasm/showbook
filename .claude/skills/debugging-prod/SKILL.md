@@ -7,7 +7,7 @@ description: Use when investigating production issues in the showbook stack — 
 
 ## Overview
 
-Prod logs ship from `showbook-prod-web` to Axiom (dataset `showbook-prod`) via `pino` + `@axiomhq/pino`. The repo-side `AXIOM_TOKEN` is **ingest-only** and cannot read. To query, this skill uses the user-scoped `AXIUM_QUERY_TOKEN` PAT.
+Prod logs ship from `showbook-prod-web` to Axiom (dataset `showbook-prod`) via `pino` + `@axiomhq/pino`. The repo-side `AXIOM_TOKEN` is **ingest-only** and cannot read. To query, this skill uses the user-scoped `AXIOM_QUERY_TOKEN` PAT.
 
 The runbook below turns a vague prod report into the next concrete query. CLAUDE.md is the source of truth for the curated event-name catalog, organized by component prefix — refer to it when narrowing by `event`.
 
@@ -23,7 +23,7 @@ The runbook below turns a vague prod report into the next concrete query. CLAUDE
 - **LLM regressions** (bad output, slow generations, missing tool calls) → Langfuse, not Axiom. Traces from `traceLLM` / `withTrace` are not in this dataset.
 - **Local/dev debugging** → `AXIOM_TOKEN` is intentionally unset in `.env.dev`; just read stdout.
 - **Schema / migration issues** → run `pnpm db:studio` against prod (read-only) or check `pnpm prod:migrate` output.
-- **Cloud / web-sandbox sessions** (Claude Code on the web, hosted runners, etc.) → the skill relies on `AXIUM_QUERY_TOKEN` exported from the user's local `~/.zshrc`, which isn't reachable from cloud envs, and the Axiom API isn't part of the sandbox network anyway. Ask the user to run the recipes locally and paste results back instead.
+- **Cloud / web-sandbox sessions** (Claude Code on the web, hosted runners, etc.) → the skill relies on `AXIOM_QUERY_TOKEN` exported from the user's local `~/.zshrc`, which isn't reachable from cloud envs, and the Axiom API isn't part of the sandbox network anyway. Ask the user to run the recipes locally and paste results back instead.
 
 ## Pre-flight
 
@@ -32,7 +32,7 @@ exported env, so the token has to be sourced inline. Run this first — it
 re-sources `~/.zshrc` and reports whether the token is now in scope:
 
 ```bash
-source ~/.zshrc; test -n "$AXIUM_QUERY_TOKEN" && echo "ok" || echo "AXIUM_QUERY_TOKEN missing — add it to ~/.zshrc as a PAT from Axiom → Settings → Profile → Personal Access Tokens"
+source ~/.zshrc; test -n "$AXIOM_QUERY_TOKEN" && echo "ok" || echo "AXIOM_QUERY_TOKEN missing — add it to ~/.zshrc as a PAT from Axiom → Settings → Profile → Personal Access Tokens"
 ```
 
 If still unset after sourcing, ask the user to export it. Never commit it.
@@ -62,12 +62,12 @@ Symptom from user
 
 All queries use the same curl wrapper. Substitute the APL string in `<<APL>>`.
 The `source ~/.zshrc` prefix is required on every call — each Bash tool
-invocation is a fresh shell and won't have `AXIUM_QUERY_TOKEN` in scope
+invocation is a fresh shell and won't have `AXIOM_QUERY_TOKEN` in scope
 otherwise:
 
 ```bash
 source ~/.zshrc; ORG=showbook-egap; curl -sS -X POST "https://api.axiom.co/v1/datasets/_apl?format=tabular" \
-  -H "Authorization: Bearer $AXIUM_QUERY_TOKEN" \
+  -H "Authorization: Bearer $AXIOM_QUERY_TOKEN" \
   -H "X-AXIOM-ORG-ID: $ORG" \
   -H "Content-Type: application/json" \
   -d '{"apl": "<<APL>>"}'
@@ -133,7 +133,7 @@ docker logs showbook-prod-web --since 30m 2>&1 | jq -c 'select(.level=="error") 
 ## Pitfalls
 
 - **`err.cause` is missing in Axiom.** Pino's `err` serializer in `packages/observability/src/logger.ts` does NOT walk `cause`, so wrapped postgres-js / Drizzle errors lose their underlying SQLSTATE. If a `Failed query: …` log is unhelpful, fix the serializer first rather than working around it. Docker stdout has the same gap — it's the serializer, not the transport.
-- **Wrong token = empty results, not auth error.** `AXIOM_TOKEN` is ingest-only. If `AXIUM_QUERY_TOKEN` was created without `Query` capability on `showbook-prod`, Axiom returns 200 with no rows. Verify in the UI under Settings → Tokens.
+- **Wrong token = empty results, not auth error.** `AXIOM_TOKEN` is ingest-only. If `AXIOM_QUERY_TOKEN` was created without `Query` capability on `showbook-prod`, Axiom returns 200 with no rows. Verify in the UI under Settings → Tokens.
 - **Org header is required.** Omitting `X-AXIOM-ORG-ID` makes the request fail silently with a misleading error.
 - **Timezone.** `_time` is UTC. Convert with `bin_auto(_time)` and `format_datetime(_time, "yyyy-MM-dd HH:mm:ss")` if comparing against ET-scheduled jobs (digest at 08:00 ET = 12:00/13:00 UTC depending on DST).
 
