@@ -190,11 +190,35 @@ export async function GET(request: Request) {
       const [inserted] = await db.insert(performers).values(p).onConflictDoNothing().returning();
       if (inserted) {
         performerMap.set(p.name, inserted.id);
-      } else {
-        const existing = await db.query.performers.findFirst({
-          where: eq(performers.name, p.name),
+        continue;
+      }
+      // Conflict — typically the unique TM-attraction-id index. Look up by TM
+      // ID first (the stable identity) so a row whose `name` was mutated by
+      // an earlier test (e.g. the artist-detail "inline rename" spec, which
+      // can leak "Radiohead (renamed)" into the table if it crashes between
+      // rename and restore) is still found, then heal the name back to the
+      // canonical seed value so the test fixtures render predictably.
+      let existing: { id: string; name: string } | undefined;
+      if (p.ticketmasterAttractionId) {
+        existing = await db.query.performers.findFirst({
+          where: eq(performers.ticketmasterAttractionId, p.ticketmasterAttractionId),
+          columns: { id: true, name: true },
         });
-        if (existing) performerMap.set(p.name, existing.id);
+      }
+      if (!existing) {
+        existing = await db.query.performers.findFirst({
+          where: eq(performers.name, p.name),
+          columns: { id: true, name: true },
+        });
+      }
+      if (existing) {
+        if (existing.name !== p.name) {
+          await db
+            .update(performers)
+            .set({ name: p.name })
+            .where(eq(performers.id, existing.id));
+        }
+        performerMap.set(p.name, existing.id);
       }
     }
 

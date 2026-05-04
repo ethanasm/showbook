@@ -52,26 +52,40 @@ test.describe('Artist detail page', () => {
     await page.getByRole('link', { name: 'Radiohead', exact: false }).first().click();
     await page.waitForURL(/\/artists\/[0-9a-f-]+/);
 
-    // Find the editable name (uses div with title="Double-click to edit").
-    const editable = page.locator('div[title="Double-click to edit"]').first();
-    await expect(editable).toContainText('Radiohead');
-    await editable.dblclick();
+    try {
+      // Find the editable name (uses div with title="Double-click to edit").
+      const editable = page.locator('div[title="Double-click to edit"]').first();
+      await expect(editable).toContainText('Radiohead');
+      await editable.dblclick();
 
-    const input = page.locator('input').first();
-    await input.fill('Radiohead (renamed)');
-    await input.press('Enter');
+      const input = page.locator('input').first();
+      await input.fill('Radiohead (renamed)');
+      await input.press('Enter');
 
-    // Wait for the editable label to reflect the new value before reloading.
-    await expect(editable).toContainText('Radiohead (renamed)');
-    await page.reload();
-    await expect(page.locator('body')).toContainText('Radiohead (renamed)');
-
-    // Restore so other tests / fixtures aren't affected within this run.
-    await page.locator('div[title="Double-click to edit"]').first().dblclick();
-    const input2 = page.locator('input').first();
-    await input2.fill('Radiohead');
-    await input2.press('Enter');
-    await expect(page.locator('div[title="Double-click to edit"]').first()).toContainText('Radiohead');
+      // Wait for the editable label to reflect the new value before reloading.
+      await expect(editable).toContainText('Radiohead (renamed)');
+      await page.reload();
+      await expect(page.locator('body')).toContainText('Radiohead (renamed)');
+    } finally {
+      // Always attempt to restore the canonical name, even if the assertions
+      // above fail. Without this, a mid-test crash leaks "Radiohead (renamed)"
+      // into the e2e DB, breaking every later test that looks up Radiohead
+      // by name. The seed handler also heals this defensively, but a
+      // try/finally here is the cheapest safety net.
+      try {
+        await page
+          .locator('div[title="Double-click to edit"]')
+          .first()
+          .dblclick({ timeout: 5000 });
+        const input2 = page.locator('input').first();
+        await input2.fill('Radiohead');
+        await input2.press('Enter');
+      } catch {
+        // The page may not be in an editable state if the assertions above
+        // failed early. The seed-side heal will pick up the slack on the
+        // next run.
+      }
+    }
   });
 
   test('follow toggle persists', async ({ page }) => {
