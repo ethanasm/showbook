@@ -1,5 +1,10 @@
 import { Resend } from 'resend';
-import { searchAttractions, searchArtist, pingGroq } from '@showbook/api';
+import {
+  searchAttractions,
+  searchArtist,
+  pingGroq,
+  parseAdminEmails,
+} from '@showbook/api';
 import { renderHealthSummary } from '@showbook/emails';
 import { child } from '@showbook/observability';
 import {
@@ -99,7 +104,7 @@ export interface ResendLike {
   emails: {
     send(payload: {
       from: string;
-      to: string;
+      to: string | string[];
       subject: string;
       html: string;
     }): Promise<{ data?: unknown; error?: { message: string } | null }>;
@@ -114,8 +119,14 @@ function getResend(): ResendLike | null {
   return key ? (new Resend(key) as unknown as ResendLike) : null;
 }
 
-function getRecipient(): string | null {
-  return process.env.HEALTH_CHECK_RECIPIENT?.trim() || null;
+/**
+ * Recipients for the morning summary. Reuses the existing
+ * `ADMIN_EMAILS` allowlist (the same list that gates the in-app Admin
+ * tab + tRPC `adminProcedure`) so operators don't have to maintain a
+ * second env var. Empty/unset → no recipients → email is skipped.
+ */
+function getRecipients(): string[] {
+  return parseAdminEmails(process.env.ADMIN_EMAILS);
 }
 
 function getFromAddress(): string {
@@ -140,8 +151,8 @@ export interface RunHealthCheckOptions {
 
 /**
  * Run every health check, log structured outcomes, and email a summary
- * to `HEALTH_CHECK_RECIPIENT`. Never throws — issues are reported
- * through the returned summary and through Axiom.
+ * to every address in `ADMIN_EMAILS`. Never throws — issues are
+ * reported through the returned summary and through Axiom.
  */
 export async function runHealthCheck(
   opts: RunHealthCheckOptions = {},
@@ -174,17 +185,17 @@ export async function runHealthCheck(
   const unknownCount = checks.filter((c) => c.status === 'unknown').length;
   const status = rollupStatus(checks);
 
-  const recipient = getRecipient();
+  const recipients = getRecipients();
   let emailSent = false;
 
-  if (!resend || !recipient) {
+  if (!resend || recipients.length === 0) {
     log.warn(
       {
         event: 'health.check.email.skipped',
         hasResend: Boolean(resend),
-        hasRecipient: Boolean(recipient),
+        recipientCount: recipients.length,
       },
-      'Health summary email skipped (RESEND_API_KEY or HEALTH_CHECK_RECIPIENT unset)',
+      'Health summary email skipped (RESEND_API_KEY or ADMIN_EMAILS unset)',
     );
   } else {
     try {
@@ -197,7 +208,7 @@ export async function runHealthCheck(
       const subject = formatSubject(status, failCount, warnCount);
       const sendResult = await resend.emails.send({
         from: getFromAddress(),
-        to: recipient,
+        to: recipients,
         subject,
         html,
       });

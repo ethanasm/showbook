@@ -36,3 +36,4 @@ export {
 export { storeLocalObject } from './media-storage';
 export { getMediaConfig } from './media-config';
 export { enforceRateLimit, isRateLimited } from './rate-limit';
+export { parseAdminEmails, isAdminEmail } from './admin';

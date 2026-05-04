@@ -56,7 +56,7 @@ function makeResend(opts: {
   error?: { message: string } | null;
 } = {}): FakeResend {
   const sendCalls: Array<unknown> = [];
-  return {
+  const fake: FakeResend = {
     sendCalls,
     emails: {
       send: async (payload) => {
@@ -70,6 +70,7 @@ function makeResend(opts: {
       list: async () => ({ data: [], error: null }),
     },
   };
+  return fake;
 }
 
 beforeEach(() => {
@@ -82,7 +83,7 @@ beforeEach(() => {
   ];
   EXECUTE.shouldThrow = null;
   delete process.env.RESEND_API_KEY;
-  delete process.env.HEALTH_CHECK_RECIPIENT;
+  delete process.env.ADMIN_EMAILS;
   delete process.env.AXIOM_QUERY_TOKEN;
 });
 
@@ -99,32 +100,44 @@ describe('runHealthCheck', () => {
   });
 
   it('skips email when Resend is null', async () => {
-    process.env.HEALTH_CHECK_RECIPIENT = 'ops@example.com';
+    process.env.ADMIN_EMAILS = 'ops@example.com';
     const result = await runHealthCheck({ pings: noopPings, resend: null });
     assert.equal(result.emailSent, false);
   });
 
-  it('skips email when HEALTH_CHECK_RECIPIENT is unset even with a Resend client', async () => {
+  it('skips email when ADMIN_EMAILS is unset even with a Resend client', async () => {
     const fake = makeResend();
     const result = await runHealthCheck({ pings: noopPings, resend: fake });
     assert.equal(result.emailSent, false);
     assert.equal(fake.sendCalls.length, 0);
   });
 
-  it('sends email when both Resend client and HEALTH_CHECK_RECIPIENT are set', async () => {
-    process.env.HEALTH_CHECK_RECIPIENT = 'ops@example.com';
+  it('sends email to every ADMIN_EMAILS entry when Resend client is set', async () => {
+    process.env.ADMIN_EMAILS = 'ops@example.com, oncall@example.com';
     const fake = makeResend();
     const result = await runHealthCheck({ pings: noopPings, resend: fake });
     assert.equal(result.emailSent, true);
     assert.equal(fake.sendCalls.length, 1);
-    const sent = fake.sendCalls[0] as { to: string; subject: string; html: string };
-    assert.equal(sent.to, 'ops@example.com');
+    const sent = fake.sendCalls[0] as {
+      to: string | string[];
+      subject: string;
+      html: string;
+    };
+    assert.deepEqual(sent.to, ['ops@example.com', 'oncall@example.com']);
     assert.match(sent.subject, /\[Showbook health\]/);
     assert.match(sent.html, /health/);
   });
 
+  it('lower-cases ADMIN_EMAILS entries (matches parseAdminEmails behaviour)', async () => {
+    process.env.ADMIN_EMAILS = 'OPS@Example.com';
+    const fake = makeResend();
+    await runHealthCheck({ pings: noopPings, resend: fake });
+    const sent = fake.sendCalls[0] as { to: string[] };
+    assert.deepEqual(sent.to, ['ops@example.com']);
+  });
+
   it('marks emailSent=false when Resend send throws', async () => {
-    process.env.HEALTH_CHECK_RECIPIENT = 'ops@example.com';
+    process.env.ADMIN_EMAILS = 'ops@example.com';
     const fake = makeResend({ shouldThrow: true });
     const result = await runHealthCheck({ pings: noopPings, resend: fake });
     assert.equal(result.emailSent, false);
@@ -133,7 +146,7 @@ describe('runHealthCheck', () => {
   });
 
   it('marks emailSent=false when Resend returns an error envelope', async () => {
-    process.env.HEALTH_CHECK_RECIPIENT = 'ops@example.com';
+    process.env.ADMIN_EMAILS = 'ops@example.com';
     const fake = makeResend({ error: { message: 'rate limited' } });
     const result = await runHealthCheck({ pings: noopPings, resend: fake });
     assert.equal(result.emailSent, false);
@@ -147,7 +160,7 @@ describe('runHealthCheck', () => {
   });
 
   it('subject reflects rollup status', async () => {
-    process.env.HEALTH_CHECK_RECIPIENT = 'ops@example.com';
+    process.env.ADMIN_EMAILS = 'ops@example.com';
     const fake = makeResend();
     EXECUTE.shouldThrow = new Error('boom');
     await runHealthCheck({ pings: noopPings, resend: fake });
