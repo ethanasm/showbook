@@ -29,26 +29,14 @@ import { RowSkeleton } from '../../components/skeletons';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
-import { trpc } from '../../lib/trpc';
+import { trpc, type RouterOutput } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
 
-interface PerformerListRow {
-  id: string;
-  name: string;
-  imageUrl: string | null;
-  showCount: number;
-  pastShowsCount: number;
-  futureShowsCount: number;
-  lastSeen: string | null;
-  firstSeen: string | null;
-  isFollowed: boolean;
-}
-
-interface FollowedPerformerRow {
-  id: string;
-  name: string;
-  imageUrl: string | null;
-}
+type UtilsClient = ReturnType<typeof trpc.useUtils>['client'];
+type PerformerListRow = RouterOutput<UtilsClient['performers']['list']['query']>[number];
+type FollowedPerformerRow = RouterOutput<
+  UtilsClient['performers']['followed']['query']
+>[number];
 
 export default function ArtistsListScreen(): React.JSX.Element {
   const { tokens } = useTheme();
@@ -60,14 +48,13 @@ export default function ArtistsListScreen(): React.JSX.Element {
 
   const listQuery = useCachedQuery<PerformerListRow[]>({
     queryKey: ['mobile', 'artists', 'list'],
-    queryFn: () => utils.client.performers.list.query() as unknown as Promise<PerformerListRow[]>,
+    queryFn: () => utils.client.performers.list.query(),
     enabled: Boolean(token),
   });
 
   const followedQuery = useCachedQuery<FollowedPerformerRow[]>({
     queryKey: ['mobile', 'artists', 'followed'],
-    queryFn: () =>
-      utils.client.performers.followed.query() as unknown as Promise<FollowedPerformerRow[]>,
+    queryFn: () => utils.client.performers.followed.query(),
     enabled: Boolean(token),
   });
 

@@ -29,6 +29,7 @@ apps/*/coverage/
 apps/web/test-results/
 apps/web/playwright-report/
 apps/web/public/media-uploads/
+apps/web/tests/.pr-screenshots.json
 walkthrough-screenshots/
 
 # Docker

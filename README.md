@@ -209,7 +209,7 @@ Defaults to the prod Cloudflare Tunnel hostname for its backend; override
 `EXPO_PUBLIC_API_URL` to your LAN IP or `http://localhost:3001` for
 local dev. Build / submit / push-notification follow-ups live in
 [`showbook-specs/mobile-deployment.md`](showbook-specs/mobile-deployment.md)
-and [`Planned Improvements.md`](./Planned%20Improvements.md).
+and [`showbook-specs/planned-improvements.md`](./showbook-specs/planned-improvements.md).
 
 ## E2E Database Isolation
 

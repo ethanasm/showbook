@@ -9,9 +9,10 @@ conventions; this file covers what's specific to the mobile app.
 The app is feature-complete against the design handoff. See
 [`showbook-specs/mobile-roadmap.md`](../../showbook-specs/mobile-roadmap.md)
 for the build plan and
-[`showbook-specs/reviews/mobile-review-2026-05-02.md`](../../showbook-specs/reviews/mobile-review-2026-05-02.md)
-for the latest audit + outstanding follow-ups (sign-out cache
-cleanup, real outbox on edit/setlist, push notifications wiring).
+[`showbook-specs/planned-improvements.md`](../../showbook-specs/planned-improvements.md)
+for outstanding follow-ups (push notifications wiring + the smaller
+remaining items called out in the post-M5 audit, which has otherwise
+been fully addressed).
 
 ## Layout
 
@@ -126,10 +127,9 @@ npx maestro test --dry-run apps/mobile/e2e/flows/
   the screen calls a new tRPC procedure or mutation, the helper in
   `lib/` should pick up unit coverage.
 - Adding a new write path? It needs an outbox entry so the
-  optimistic mutation survives a kill / cold start. Don't repeat
-  the per-screen fake-DB shims that the latest mobile review
-  flagged — use `getCacheDatabase()` and
-  `createOutbox(db, { ensureMigrations: true })`.
+  optimistic mutation survives a kill / cold start. Don't reintroduce
+  the per-screen fake-DB shims that the post-M5 audit flagged — use
+  `getCacheDatabase()` and `createOutbox(db, { ensureMigrations: true })`.
 - Changing auth? Mirror `lib/__tests__/auth.test.ts` so the
   E2E-bypass guard stays watertight.
 
@@ -144,5 +144,5 @@ npx maestro test --dry-run apps/mobile/e2e/flows/
 - **Push notifications are not yet delivered.** The toggle in
   Preferences and the client-side permission prompt exist; the
   server side (Expo push token persistence + digest emission +
-  deep-link routing) is the open follow-up tracked in the root
-  `Planned Improvements.md`.
+  deep-link routing) is the open follow-up tracked in
+  `showbook-specs/planned-improvements.md`.

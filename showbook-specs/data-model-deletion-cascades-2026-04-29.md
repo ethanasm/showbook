@@ -1,6 +1,6 @@
 # Data model: deletion & follow/unfollow cascades
 
-Investigation of the two open data-model questions in `Planned Improvements.md`.
+Investigation of the two open data-model questions in `planned-improvements.md`.
 Snapshot date: 2026-04-29. Schema source of truth: `packages/db/schema/*` and
 `packages/db/drizzle/*.sql`.
 

@@ -31,21 +31,23 @@ test.describe('Map improvements', () => {
   });
 
   test('"Watch upcoming" button is absent from venue side panel', async ({ page }) => {
-    await page.goto('/map');
-    // Wait for the leaflet map + at least one circle to render.
-    const circles = page.locator('.leaflet-interactive');
-    await circles.first().waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
-    const count = await circles.count();
-    if (count === 0) {
-      test.skip();
-      return;
-    }
+    // Open the inspector via the /map?venue=<id> deep link instead of
+    // clicking a Leaflet circle. Click-based opening was flaky under
+    // sharded CI load: react-leaflet attaches click handlers from a
+    // post-mount effect, and the FitBounds animation can move markers
+    // between locator resolution and click dispatch. The deep-link path
+    // mounts with selectedVenueId set from the URL, so the inspector
+    // opens as soon as the shows query resolves.
+    const followedRes = await page.request.get('/api/trpc/venues.followed');
+    expect(followedRes.ok(), 'venues.followed should succeed').toBeTruthy();
+    const body = await followedRes.json();
+    const venueId = body?.result?.data?.json?.[0]?.id;
+    expect(venueId, 'expected at least one followed venue from seed').toBeTruthy();
 
-    await circles.first().click({ force: true });
+    await page.goto(`/map?venue=${venueId}`);
 
-    // The venue inspector should open
     const inspector = page.locator('.venue-inspector');
-    await expect(inspector).toBeVisible({ timeout: 3000 });
+    await expect(inspector).toBeVisible({ timeout: 10000 });
 
     // "Watch upcoming" should NOT be there
     await expect(page.getByRole('button', { name: /Watch upcoming/i })).not.toBeVisible();
