@@ -19,6 +19,7 @@ const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
 const config: ExpoConfig = {
   name: 'Showbook',
   slug: 'showbook',
+  owner: 'ethanasm',
   version: '0.1.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
