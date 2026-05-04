@@ -62,7 +62,13 @@ try {
     if (!status.trim()) {
       process.stderr.write(`upload-pr-screenshots: no changes to commit\n`);
     } else {
-      git(['commit', '-m', `screenshots: ${branch} (PR #${pr})`], { cwd: wtDir });
+      // The orphan branch stores only binary asset PNGs — no source code,
+      // no audit value to signing — and the Claude Code on the web
+      // sandbox's SSH signer rejects commits made inside a fresh
+      // `git worktree add --orphan` directory with "missing source".
+      // Skip signing for this one commit only; the feature branch
+      // commits still go through the regular signed path.
+      git(['commit', '--no-gpg-sign', '-m', `screenshots: ${branch} (PR #${pr})`], { cwd: wtDir });
       git(['push', remote, `HEAD:${targetBranch}`], { cwd: wtDir });
     }
   }
