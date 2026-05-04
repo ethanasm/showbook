@@ -67,19 +67,13 @@ const RATE_LIMIT_MAX = 30;
  *     and `sql.begin('READ ONLY', ...)` which want a raw client.
  *   - A cap of 2 connections caps the blast radius of a leaked token;
  *     even with cheap queries you can't open more than 2 backends.
- *   - We can wire a different connection string later
- *     (e.g. a `showbook_readonly` Postgres role) without touching the
- *     ORM client.
  */
 let _client: ReturnType<typeof postgres> | null = null;
 function getClient(): ReturnType<typeof postgres> {
   if (_client) return _client;
-  const connectionString =
-    process.env.ADMIN_QUERY_DATABASE_URL ?? process.env.DATABASE_URL;
+  const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
-    throw new Error(
-      'ADMIN_QUERY_DATABASE_URL (or DATABASE_URL) must be set to use /api/admin/sql',
-    );
+    throw new Error('DATABASE_URL must be set to use /api/admin/sql');
   }
   _client = postgres(connectionString, { max: 2, idle_timeout: 20 });
   return _client;

@@ -96,10 +96,7 @@ echo "select * from users limit 5" | pnpm prod:query
 ```
 
 Writes are blocked at the Postgres engine — the `READ ONLY` transaction
-errors any INSERT/UPDATE/DELETE/DDL with SQLSTATE `25006`. If you want
-defense-in-depth, set `ADMIN_QUERY_DATABASE_URL` to a `showbook_readonly`
-role's connection string and the endpoint will use it instead of
-`DATABASE_URL`.
+errors any INSERT/UPDATE/DELETE/DDL with SQLSTATE `25006`.
 
 Dev and prod stacks coexist: dev web binds host port `3001`, prod
 binds `3002`, and postgres uses `5433` / `5434` respectively. The
