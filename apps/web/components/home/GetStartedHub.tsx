@@ -61,7 +61,7 @@ export function GetStartedHub({
       title: "Import from Gmail",
       subtitle: "Backfill past shows from your ticket receipts.",
       primary: true,
-      href: "/shows?gmail=1",
+      href: "/logbook?gmail=1",
     },
     {
       id: "discover",

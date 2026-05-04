@@ -5,6 +5,8 @@ import {
   Home,
   Eye,
   Archive,
+  BookOpen,
+  CalendarClock,
   Map,
   MapPin,
   Music,
@@ -30,21 +32,29 @@ export interface NavItem {
   adminOnly?: boolean;
 }
 
+// Sidebar nav order encodes the verb flow: find → plan → log.
+// Discover surfaces things to add → Upcoming holds your plans →
+// Logbook holds your history.
 export const NAV_ITEMS: NavItem[] = [
   { id: "home", label: "Home", icon: Home, section: "navigate" },
   { id: "discover", label: "Discover", icon: Eye, section: "navigate" },
+  { id: "upcoming", label: "Upcoming", icon: CalendarClock, section: "navigate" },
+  { id: "logbook", label: "Logbook", icon: BookOpen, section: "navigate" },
   { id: "map", label: "Map", icon: Map, section: "navigate" },
-  { id: "shows", label: "Shows", icon: Archive, section: "navigate" },
   { id: "venues", label: "Venues", icon: MapPin, section: "navigate" },
   { id: "artists", label: "Artists", icon: Music, section: "navigate" },
   { id: "preferences", label: "Preferences", icon: Settings, section: "settings", small: true },
   { id: "admin", label: "Admin", icon: ShieldCheck, section: "settings", small: true, adminOnly: true },
 ];
 
-/** Items shown in mobile bottom tab bar */
+/** Items shown in the web app's mobile-viewport bottom tab bar.
+ * Web diverges from the RN mobile app: web has the Upcoming/Logbook
+ * structural split everywhere (per the IA cleanup plan), so the
+ * bottom-bar "Shows" button lands on /upcoming. Logbook is one
+ * cross-link tap away from the Upcoming page header. */
 export const BOTTOM_NAV_ITEMS = [
   { id: "home", label: "Home", icon: Home },
-  { id: "shows", label: "Shows", icon: Archive },
+  { id: "upcoming", label: "Shows", icon: Archive },
   { id: "add", label: "Add", icon: Plus, isAddButton: true },
   { id: "map", label: "Map", icon: Map },
   { id: "preferences", label: "Me", icon: Settings },

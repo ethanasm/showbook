@@ -35,14 +35,14 @@ test.describe('Home page — empty state', () => {
     });
   });
 
-  test('Gmail door navigates to /shows with ?gmail=1', async ({ page }) => {
+  test('Gmail door navigates to /logbook with ?gmail=1', async ({ page }) => {
     await loginEmpty(page);
     const empty = page.getByRole('main').getByTestId('home-empty-state');
     await expect(empty).toBeVisible({ timeout: 10000 });
 
     await empty.getByTestId('get-started-door-gmail').click();
     // The shows page opens the Gmail modal — just verify navigation happened.
-    await page.waitForURL('**/shows*', { timeout: 8000 });
+    await page.waitForURL('**/logbook*', { timeout: 8000 });
   });
 });
 

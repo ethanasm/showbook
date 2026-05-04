@@ -393,7 +393,7 @@ function VenuesEmptyActions() {
       style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}
     >
       <Link
-        href="/shows?gmail=1"
+        href="/logbook?gmail=1"
         style={{
           padding: "10px 18px",
           background: "var(--accent)",

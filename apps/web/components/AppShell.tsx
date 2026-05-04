@@ -45,7 +45,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Use lightweight count procedures rather than `*.list().length` —
   // otherwise every page render fetches the full show/performer/venue list
   // (potentially thousands of rows with relations) just to read its length.
-  const showsCountQuery = trpc.shows.count.useQuery(undefined, { staleTime: 60_000 });
+  const showsCountsQuery = trpc.shows.countsByMode.useQuery(undefined, { staleTime: 60_000 });
   const performersCountQuery = trpc.performers.count.useQuery(undefined, { staleTime: 60_000 });
   const venuesCountQuery = trpc.venues.count.useQuery(undefined, { staleTime: 60_000 });
   // `amIAdmin` is server-derived from the user's email + ADMIN_EMAILS allowlist.
@@ -76,7 +76,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [addMenuOpen]);
 
   const counts: Partial<Record<string, number>> = {};
-  if (showsCountQuery.data !== undefined) counts.shows = showsCountQuery.data;
+  if (showsCountsQuery.data !== undefined) {
+    counts.upcoming = showsCountsQuery.data.upcoming;
+    counts.logbook = showsCountsQuery.data.logbook;
+  }
   if (performersCountQuery.data !== undefined) counts.artists = performersCountQuery.data;
   if (venuesCountQuery.data !== undefined) counts.venues = venuesCountQuery.data;
 

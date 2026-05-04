@@ -85,7 +85,7 @@ Every page transition logs ~3-5 next-auth `ClientFetchError: Failed to fetch` er
 ## Verification
 
 - `apps/web/tests/preferences-fixes.spec.ts` — 8 assertions covering all fixes; passes (51.9s).
-- `apps/web/tests/compact-visual.spec.ts` — captures loose vs compact screenshots for `/home`, `/shows`, `/venues`, `/artists`, `/discover`, `/preferences`. Visually inspected — no breakage.
+- `apps/web/tests/compact-visual.spec.ts` — captures loose vs compact screenshots for `/home`, `/upcoming`, `/logbook`, `/venues`, `/artists`, `/discover`, `/preferences`. Visually inspected — no breakage.
 - Existing suite: 61/70 pass. The 9 remaining failures are pre-existing (hardcoded `http://localhost:3010` in `venue-follow-modal.spec.ts`, plus flaky `global-search` timeouts under suite-wide load — both pass when run alone).
 
 ## Screenshots from the review
