@@ -8,6 +8,22 @@ import { resolveTrpcSession } from './resolve-session';
 
 const log = child({ component: 'web.trpc' });
 
+const CLIENT_ERROR_CODES = new Set([
+  'PARSE_ERROR',
+  'BAD_REQUEST',
+  'UNAUTHORIZED',
+  'FORBIDDEN',
+  'NOT_FOUND',
+  'METHOD_NOT_SUPPORTED',
+  'TIMEOUT',
+  'CONFLICT',
+  'PRECONDITION_FAILED',
+  'PAYLOAD_TOO_LARGE',
+  'UNPROCESSABLE_CONTENT',
+  'TOO_MANY_REQUESTS',
+  'CLIENT_CLOSED_REQUEST',
+]);
+
 // Assert AUTH_SECRET at module load. If it's missing, bearer decode is
 // disabled for every request (cookie auth still works — NextAuth handles
 // its own secret check). We warn once here rather than per-request to
@@ -45,10 +61,21 @@ const handler = async (req: Request) => {
     router: appRouter,
     createContext: () => createContext({ session }),
     onError: ({ path, error }) => {
-      log.error(
-        { err: error, event: 'trpc.error', path: path ?? 'unknown', userId: session?.user?.id },
-        'tRPC procedure error',
-      );
+      // 4xx-equivalent codes are expected client conditions (stale
+      // session cookie after a user is deleted, missing required input,
+      // unauthorized access attempts). Logging them at error level
+      // pollutes alerting; demote to warn so genuine 5xx server errors
+      // remain the only thing on the error channel.
+      const isClientError = CLIENT_ERROR_CODES.has(error.code);
+      const payload = {
+        err: error,
+        event: 'trpc.error',
+        path: path ?? 'unknown',
+        userId: session?.user?.id,
+        code: error.code,
+      };
+      if (isClientError) log.warn(payload, 'tRPC client error');
+      else log.error(payload, 'tRPC procedure error');
     },
   });
 };

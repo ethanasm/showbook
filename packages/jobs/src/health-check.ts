@@ -71,7 +71,16 @@ export function defaultExternalPings(resend: ResendLike | null): ExternalPingFns
     resend: async () => {
       if (!resend) throw new Error('RESEND_API_KEY unset');
       const res = await resend.domains.list();
-      if (res.error) throw new Error(res.error.message);
+      // A send-only API key (the recommended least-privilege configuration)
+      // can authenticate but cannot list domains. Treat that specific
+      // response as a successful reachability probe — the credential is
+      // valid for the operation we actually depend on (sending email).
+      if (res.error) {
+        if (/restricted to only send emails/i.test(res.error.message)) {
+          return { sendOnlyKey: true };
+        }
+        throw new Error(res.error.message);
+      }
       const data = res.data as unknown;
       const count = Array.isArray(data)
         ? data.length
