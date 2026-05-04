@@ -26,6 +26,10 @@ export interface HealthSummaryProps {
   checks: ReadonlyArray<HealthCheckSummaryRow>;
   runAt: Date;
   appUrl: string;
+  /** Optional 1–2 paragraph LLM-generated triage opener. Falls back to
+   *  the deterministic count line when null. Paragraphs separated by a
+   *  blank line, max 90 words (enforced upstream). */
+  preamble?: string | null;
 }
 
 // Brand palette mirrors apps/web/app/globals.css (dark default).
@@ -127,6 +131,20 @@ const styles = {
     margin: '12px 0 0',
     lineHeight: '20px',
   },
+  preamble: {
+    fontSize: '15px',
+    color: C.ink,
+    margin: '16px 0 0',
+    lineHeight: '24px',
+    letterSpacing: '-0.005em',
+  },
+  preambleBreak: {
+    fontSize: '15px',
+    color: C.ink,
+    margin: '10px 0 0',
+    lineHeight: '24px',
+    letterSpacing: '-0.005em',
+  },
   section: {
     padding: '0 32px',
   },
@@ -211,6 +229,14 @@ function formatRunAt(d: Date): string {
   });
 }
 
+function splitPreamble(text: string): string[] {
+  return text
+    .split(/\n{2,}|\r\n\r\n/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
+    .slice(0, 2);
+}
+
 function summarizeDetail(detail: Record<string, unknown> | undefined): string | null {
   if (!detail) return null;
   // Compact, single-line render — keep email small even when nested
@@ -243,6 +269,7 @@ export function HealthSummary({
   checks,
   runAt,
   appUrl,
+  preamble,
 }: HealthSummaryProps) {
   const failing = checks.filter((c) => c.status === 'fail');
   const warning = checks.filter((c) => c.status === 'warn');
@@ -294,12 +321,23 @@ export function HealthSummary({
           <Section style={styles.hero}>
             <Text style={styles.heroEyebrow}>{eyebrow}</Text>
             <Heading style={styles.heroHeadline}>{headline}</Heading>
-            <Text style={styles.greet}>
-              {passing.length}/{checks.length} checks passing
-              {unknown.length > 0
-                ? ` · ${unknown.length} unknown (Axiom token unset?)`
-                : ''}
-            </Text>
+            {preamble ? (
+              splitPreamble(preamble).map((para, i) => (
+                <Text
+                  key={`preamble-${i}`}
+                  style={i === 0 ? styles.preamble : styles.preambleBreak}
+                >
+                  {para}
+                </Text>
+              ))
+            ) : (
+              <Text style={styles.greet}>
+                {passing.length}/{checks.length} checks passing
+                {unknown.length > 0
+                  ? ` · ${unknown.length} unknown (Axiom token unset?)`
+                  : ''}
+              </Text>
+            )}
           </Section>
 
           {failing.length > 0 ? (

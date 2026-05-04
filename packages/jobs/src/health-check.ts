@@ -4,6 +4,7 @@ import {
   searchArtist,
   pingGroq,
   parseAdminEmails,
+  generateHealthSummaryPreamble,
 } from '@showbook/api';
 import { renderHealthSummary } from '@showbook/emails';
 import { child } from '@showbook/observability';
@@ -147,6 +148,10 @@ export interface RunHealthCheckOptions {
    *  constructs one from `RESEND_API_KEY`; when null is supplied, email
    *  sending is skipped explicitly. */
   resend?: ResendLike | null;
+  /** Override the LLM preamble generator for tests. Defaults to the
+   *  Groq-backed `generateHealthSummaryPreamble`. Returns null on any
+   *  error so the email still ships with the deterministic check list. */
+  generatePreamble?: typeof generateHealthSummaryPreamble;
 }
 
 /**
@@ -199,11 +204,25 @@ export async function runHealthCheck(
     );
   } else {
     try {
+      // Generate the LLM preamble before render. Catches its own errors
+      // and returns null, so a Groq blip never blocks the email.
+      const preambleFn = opts.generatePreamble ?? generateHealthSummaryPreamble;
+      let preamble: string | null = null;
+      try {
+        preamble = await preambleFn({ status, checks });
+      } catch (err) {
+        log.warn(
+          { err, event: 'health.check.preamble.failed' },
+          'Preamble generation failed; falling back to deterministic email',
+        );
+      }
+
       const html = await renderHealthSummary({
         status,
         checks,
         runAt: now,
         appUrl: getAppUrl(),
+        preamble,
       });
       const subject = formatSubject(status, failCount, warnCount);
       const sendResult = await resend.emails.send({

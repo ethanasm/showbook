@@ -72,4 +72,19 @@ describe('renderHealthSummary', () => {
     });
     assert.match(html, /shows\/nightly/);
   });
+
+  it('renders LLM preamble paragraphs when provided', async () => {
+    const html = await renderHealthSummary({
+      ...baseProps,
+      preamble:
+        'shows/nightly failed twice overnight; check job.failed events.\n\nQueue is healthy otherwise.',
+    });
+    assert.match(html, /shows\/nightly failed twice/);
+    assert.match(html, /Queue is healthy otherwise/);
+  });
+
+  it('falls back to count line when preamble is null', async () => {
+    const html = await renderHealthSummary({ ...baseProps, preamble: null });
+    assert.match(html, /checks passing/);
+  });
 });

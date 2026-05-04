@@ -31,7 +31,7 @@ mock.module('@showbook/emails', {
   },
 });
 
-import type { ResendLike } from '../health-check';
+import type { ResendLike, RunHealthCheckOptions } from '../health-check';
 import type { ExternalPingFns } from '../health-check/checks';
 
 let runHealthCheck: typeof import('../health-check').runHealthCheck;
@@ -46,6 +46,9 @@ const noopPings: ExternalPingFns = {
   groq: async () => ({}),
   resend: async () => ({}),
 };
+
+// By default tests inject a no-op preamble fn so they don't reach Groq.
+const noPreamble = async () => null;
 
 interface FakeResend extends ResendLike {
   sendCalls: Array<unknown>;
@@ -89,7 +92,7 @@ beforeEach(() => {
 
 describe('runHealthCheck', () => {
   it('runs every check and rolls up status (ok when all clean and Axiom unset)', async () => {
-    const result = await runHealthCheck({ pings: noopPings, resend: null });
+    const result = await runHealthCheck({ pings: noopPings, resend: null, generatePreamble: noPreamble });
     // 5 ok (db, queue, freshness, stalled, external) + 3 unknown (axiom checks).
     assert.equal(result.checks.length, 8);
     assert.equal(result.failCount, 0);
@@ -101,13 +104,13 @@ describe('runHealthCheck', () => {
 
   it('skips email when Resend is null', async () => {
     process.env.ADMIN_EMAILS = 'ops@example.com';
-    const result = await runHealthCheck({ pings: noopPings, resend: null });
+    const result = await runHealthCheck({ pings: noopPings, resend: null, generatePreamble: noPreamble });
     assert.equal(result.emailSent, false);
   });
 
   it('skips email when ADMIN_EMAILS is unset even with a Resend client', async () => {
     const fake = makeResend();
-    const result = await runHealthCheck({ pings: noopPings, resend: fake });
+    const result = await runHealthCheck({ pings: noopPings, resend: fake, generatePreamble: noPreamble });
     assert.equal(result.emailSent, false);
     assert.equal(fake.sendCalls.length, 0);
   });
@@ -115,7 +118,7 @@ describe('runHealthCheck', () => {
   it('sends email to every ADMIN_EMAILS entry when Resend client is set', async () => {
     process.env.ADMIN_EMAILS = 'ops@example.com, oncall@example.com';
     const fake = makeResend();
-    const result = await runHealthCheck({ pings: noopPings, resend: fake });
+    const result = await runHealthCheck({ pings: noopPings, resend: fake, generatePreamble: noPreamble });
     assert.equal(result.emailSent, true);
     assert.equal(fake.sendCalls.length, 1);
     const sent = fake.sendCalls[0] as {
@@ -131,7 +134,7 @@ describe('runHealthCheck', () => {
   it('lower-cases ADMIN_EMAILS entries (matches parseAdminEmails behaviour)', async () => {
     process.env.ADMIN_EMAILS = 'OPS@Example.com';
     const fake = makeResend();
-    await runHealthCheck({ pings: noopPings, resend: fake });
+    await runHealthCheck({ pings: noopPings, resend: fake, generatePreamble: noPreamble });
     const sent = fake.sendCalls[0] as { to: string[] };
     assert.deepEqual(sent.to, ['ops@example.com']);
   });
@@ -139,7 +142,7 @@ describe('runHealthCheck', () => {
   it('marks emailSent=false when Resend send throws', async () => {
     process.env.ADMIN_EMAILS = 'ops@example.com';
     const fake = makeResend({ shouldThrow: true });
-    const result = await runHealthCheck({ pings: noopPings, resend: fake });
+    const result = await runHealthCheck({ pings: noopPings, resend: fake, generatePreamble: noPreamble });
     assert.equal(result.emailSent, false);
     // Run still produced a summary — we don't throw.
     assert.ok(['ok', 'warn', 'fail', 'unknown'].includes(result.status));
@@ -148,13 +151,13 @@ describe('runHealthCheck', () => {
   it('marks emailSent=false when Resend returns an error envelope', async () => {
     process.env.ADMIN_EMAILS = 'ops@example.com';
     const fake = makeResend({ error: { message: 'rate limited' } });
-    const result = await runHealthCheck({ pings: noopPings, resend: fake });
+    const result = await runHealthCheck({ pings: noopPings, resend: fake, generatePreamble: noPreamble });
     assert.equal(result.emailSent, false);
   });
 
   it('rolls up to fail when one check fails', async () => {
     EXECUTE.shouldThrow = new Error('connection refused');
-    const result = await runHealthCheck({ pings: noopPings, resend: null });
+    const result = await runHealthCheck({ pings: noopPings, resend: null, generatePreamble: noPreamble });
     assert.equal(result.status, 'fail');
     assert.ok(result.failCount >= 1);
   });
@@ -163,8 +166,44 @@ describe('runHealthCheck', () => {
     process.env.ADMIN_EMAILS = 'ops@example.com';
     const fake = makeResend();
     EXECUTE.shouldThrow = new Error('boom');
-    await runHealthCheck({ pings: noopPings, resend: fake });
+    await runHealthCheck({ pings: noopPings, resend: fake, generatePreamble: noPreamble });
     const sent = fake.sendCalls[0] as { subject: string };
     assert.match(sent.subject, /FAIL/);
+  });
+
+  it('passes preamble fn the rolled-up status + checks', async () => {
+    process.env.ADMIN_EMAILS = 'ops@example.com';
+    const fake = makeResend();
+    let capturedStatus: string | null = null;
+    let capturedCount = 0;
+    const generatePreamble: RunHealthCheckOptions['generatePreamble'] = async (
+      input,
+    ) => {
+      capturedStatus = input.status;
+      capturedCount = input.checks.length;
+      return 'shows/nightly is broken — go look.';
+    };
+    await runHealthCheck({
+      pings: noopPings,
+      resend: fake,
+      generatePreamble,
+    });
+    assert.equal(capturedCount, 8);
+    assert.ok(['ok', 'warn', 'fail', 'unknown'].includes(capturedStatus ?? ''));
+  });
+
+  it('still ships the email when preamble fn throws', async () => {
+    process.env.ADMIN_EMAILS = 'ops@example.com';
+    const fake = makeResend();
+    const generatePreamble: RunHealthCheckOptions['generatePreamble'] = async () => {
+      throw new Error('groq down');
+    };
+    const result = await runHealthCheck({
+      pings: noopPings,
+      resend: fake,
+      generatePreamble,
+    });
+    assert.equal(result.emailSent, true);
+    assert.equal(fake.sendCalls.length, 1);
   });
 });
