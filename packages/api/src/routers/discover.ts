@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { eq, and, inArray, asc, sql, notInArray, or } from 'drizzle-orm';
+import { eq, and, inArray, asc, sql, notInArray, or, arrayOverlaps } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc';
 import {
@@ -151,10 +151,14 @@ export const discoverRouter = router({
       // support_performer_ids; the headliner branch hits the btree
       // index on headliner_performer_id. PG can OR-combine bitmaps
       // from both, so this stays cheap.
-      const performerOverlap = sql`${announcements.supportPerformerIds} && ${performerIds}::uuid[]`;
+      //
+      // Use drizzle's arrayOverlaps helper rather than a raw sql template:
+      // interpolating a JS array into ${performerIds}::uuid[] expands as a
+      // parameter tuple ($1, $2, ...) which Postgres cannot cast to uuid[]
+      // (SQLSTATE 42846 "cannot cast type record to uuid[]").
       const followedMatch = or(
         inArray(announcements.headlinerPerformerId, performerIds),
-        performerOverlap,
+        arrayOverlaps(announcements.supportPerformerIds, performerIds),
       )!;
       const conditions = [followedMatch];
       const decoded = decodeCursor(cursor);
