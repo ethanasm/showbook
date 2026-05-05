@@ -77,6 +77,24 @@ sequentially if the change is responsive-sensitive.
 PNGs land in `apps/web/test-results/screenshots/`. Delete
 `apps/web/tests/.pr-screenshots.json` after the run.
 
+**Before/after is preferred whenever the change is visual** (spacing,
+sizing, color, copy, layout). One screenshot of the new state forces
+reviewers to imagine the old one — show both side-by-side. Capture
+order:
+
+1. Run the spec on the current branch (HEAD) to produce the "after"
+   PNGs, then rename / move them into a `…-after.png` set so the next
+   run doesn't overwrite them.
+2. `git stash` (or `git checkout <merge-base>` in a clean tree) to
+   reach the parent state, re-run the same spec, rename the output to
+   `…-before.png`.
+3. Restore the working tree (`git stash pop` / `git checkout -`),
+   upload both sets, and embed them in the PR body as a two-row layout
+   (one row "Before", one row "After") so reviewers can scan the
+   delta. If the "before" capture isn't possible (route didn't exist,
+   transient state can't be reproduced), say so explicitly in the PR
+   body rather than silently shipping only the "after".
+
 ### 3. Push to the orphan branch
 
 ```
