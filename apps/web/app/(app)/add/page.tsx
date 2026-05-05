@@ -1057,10 +1057,15 @@ export default function AddPage() {
   // ── Render: Form Mode (Left Panel) ─────────────────────────
 
   const renderFormPanel = () => (
-    <div className="add-form-panel">
+    <div style={{
+      padding: "28px 36px 100px",
+      overflow: "auto",
+      minHeight: 0,
+      flex: 1,
+    }}>
       {/* Heading + mode tabs */}
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 20, marginBottom: 20, flexWrap: "wrap" }}>
-        <div style={{ minWidth: 0, flex: "1 1 240px" }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 20, marginBottom: 20 }}>
+        <div>
           <div style={{
             fontFamily: mono,
             fontSize: 10.5,
@@ -1081,6 +1086,7 @@ export default function AddPage() {
             {isEditMode ? "Edit show" : "Add a show"}
           </div>
         </div>
+        <div style={{ flex: 1 }} />
         {/* Mode Tabs — hidden in edit mode */}
         {!isEditMode && (
           <div style={{ display: "inline-flex", border: `1px solid var(--rule-strong)` }}>
@@ -1301,7 +1307,7 @@ export default function AddPage() {
       {/* ── Kind ── */}
       <div style={{ marginBottom: 26 }}>
         <FieldLabel hint="drives which data source is used">Kind</FieldLabel>
-        <div style={{ display: "flex", flexWrap: "wrap", borderLeft: `1px solid var(--rule-strong)` }}>
+        <div style={{ display: "flex", borderLeft: `1px solid var(--rule-strong)` }}>
           {KIND_CONFIG.map((k) => {
             const active = kind === k.kind;
             const c = kindColor(k.kind);
@@ -1311,7 +1317,7 @@ export default function AddPage() {
                 type="button"
                 onClick={() => setKind(k.kind)}
                 style={{
-                  flex: "1 1 140px",
+                  flex: 1,
                   padding: "14px 14px",
                   background: active ? "var(--surface)" : "transparent",
                   borderLeft: active ? `2px solid ${c}` : "2px solid transparent",
@@ -2767,20 +2773,21 @@ export default function AddPage() {
       .add-outer { display: flex; flex-direction: column; height: 100%; min-height: 100vh; background: var(--bg); color: var(--ink); font-family: ${sans}; -webkit-font-smoothing: antialiased; }
       .add-layout { flex: 1; display: grid; grid-template-columns: 1fr 440px; min-height: 0; overflow: hidden; }
       .add-preview-panel { min-width: 0; border-left: 1px solid var(--rule); background: var(--bg); overflow: auto; }
-      .add-topbar { padding: 14px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--rule); flex-shrink: 0; gap: 10px; flex-wrap: wrap; }
-      .add-form-panel { padding: 28px 36px 100px; overflow: auto; min-height: 0; flex: 1; }
       @media (max-width: 960px) {
         .add-layout { grid-template-columns: 1fr; overflow: visible; }
         .add-preview-panel { display: none; }
       }
-      @media (max-width: 767px) {
-        .add-topbar { padding: 10px 16px; gap: 8px; font-size: 11px; }
-        .add-form-panel { padding: 18px 16px 80px; }
-      }
     `}</style>
     <div className="add-outer">
       {/* Top bar / Breadcrumb */}
-      <div className="add-topbar">
+      <div style={{
+        padding: "14px 32px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        borderBottom: `1px solid var(--rule)`,
+        flexShrink: 0,
+      }}>
         <div style={{
           display: "flex",
           alignItems: "center",

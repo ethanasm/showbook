@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { useCompactMode } from "@/lib/useCompactMode";
-import { useIsMobile } from "@/lib/useIsMobile";
 import { EmptyState, HeroCard } from "@/components/design-system";
 import { GetStartedHub, useGetStartedDismissed } from "@/components/home/GetStartedHub";
 import type { ShowKind } from "@/components/design-system/KindBadge";
@@ -83,7 +82,6 @@ const SANS = "var(--font-geist-sans), sans-serif";
 export default function HomeView() {
   const router = useRouter();
   const compact = useCompactMode();
-  const isMobile = useIsMobile();
   const { data: shows, isLoading } = trpc.shows.list.useQuery({});
   const { data: followedArtists } = trpc.performers.followed.useQuery();
   const { data: followedVenues } = trpc.venues.followed.useQuery();
@@ -240,12 +238,10 @@ export default function HomeView() {
       {/* ── Top bar ─────────────────────────────────────────── */}
       <div
         style={{
-          padding: isMobile ? "12px 16px" : "14px 36px",
+          padding: "14px 36px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 10,
-          flexWrap: "wrap",
           borderBottom: "1px solid var(--rule)",
           flexShrink: 0,
         }}
@@ -281,35 +277,33 @@ export default function HomeView() {
               boxShadow: "inset 0 1px 0 rgba(245,245,243,.04)",
             }}
           >
-            {!isMobile && (
-              <div
-                style={{
-                  padding: "0 12px 0 10px",
-                  fontFamily: MONO,
-                  fontSize: 9.5,
-                  color: "var(--faint)",
-                  lineHeight: 1,
-                  letterSpacing: ".08em",
-                  textTransform: "uppercase",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {new Date().getFullYear()}
-              </div>
-            )}
+            <div
+              style={{
+                padding: "0 12px 0 10px",
+                fontFamily: MONO,
+                fontSize: 9.5,
+                color: "var(--faint)",
+                lineHeight: 1,
+                letterSpacing: ".08em",
+                textTransform: "uppercase",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {new Date().getFullYear()}
+            </div>
             {[
               { label: "Shows", value: String(stats.shows) },
               { label: "Venues", value: String(stats.venues) },
               { label: "Artists", value: String(stats.artists) },
-            ].map(({ label, value }, i) => (
+            ].map(({ label, value }) => (
               <div
                 key={label}
                 style={{
                   display: "flex",
                   alignItems: "baseline",
-                  gap: 5,
-                  padding: isMobile ? "6px 10px" : "6px 13px",
-                  borderLeft: isMobile && i === 0 ? "none" : "1px solid var(--rule)",
+                  gap: 6,
+                  padding: "6px 13px",
+                  borderLeft: "1px solid var(--rule)",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -349,10 +343,10 @@ export default function HomeView() {
           flex: 1,
           minHeight: 0,
           overflowY: "auto",
-          padding: isMobile ? "20px 16px 32px" : "28px 36px 40px",
+          padding: "28px 36px 40px",
           display: "grid",
           gridTemplateColumns: "1fr",
-          gap: isMobile ? 20 : 28,
+          gap: 28,
           alignContent: "start",
         }}
       >
@@ -433,14 +427,12 @@ export default function HomeView() {
             />
           )}
 
-          {/* Mini upcoming cards (3 columns desktop, 1 column mobile) */}
+          {/* Mini upcoming cards (3 columns) */}
           {miniCards.length > 0 && (
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: isMobile
-                  ? "1fr"
-                  : `repeat(${miniCards.length}, 1fr)`,
+                gridTemplateColumns: `repeat(${miniCards.length}, 1fr)`,
                 gap: 1,
                 marginTop: 1,
                 background: "var(--rule)",

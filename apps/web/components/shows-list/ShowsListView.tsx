@@ -1351,16 +1351,12 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
 
         {/* Show list */}
         <div className="shows-list-table" style={{ margin: isMobile ? "4px 12px 0" : "4px 36px 0", background: "var(--surface)" }}>
-          {/* Column headers — match the data row grid (10 cols desktop, 6
-              cols mobile per the .show-row mobile media query) so headers
-              don't overflow the 390px viewport. */}
+          {/* Column headers */}
           <div style={{
             display: "grid",
-            gridTemplateColumns: isMobile
-              ? "8px 32px 64px 1.2fr 1fr 64px"
-              : SHOW_LIST_GRID_TEMPLATE,
-            columnGap: isMobile ? 8 : 16,
-            padding: isMobile ? "10px 16px" : "10px 20px 10px 10px",
+            gridTemplateColumns: SHOW_LIST_GRID_TEMPLATE,
+            columnGap: 16,
+            padding: "10px 20px 10px 10px",
             borderBottom: "1px solid var(--rule)",
             fontFamily: "var(--font-geist-mono), monospace",
             fontSize: 9.5,
@@ -1371,18 +1367,12 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
             <div />
             <div />
             <SortHeader field="date" label="Date" sort={sort} onToggle={toggleSort} />
-            {!isMobile && (
-              <SortHeader field="kind" label="Kind" sort={sort} onToggle={toggleSort} />
-            )}
+            <SortHeader field="kind" label="Kind" sort={sort} onToggle={toggleSort} />
             <SortHeader field="headliner" label="Headline" sort={sort} onToggle={toggleSort} />
             <SortHeader field="venue" label="Venue" sort={sort} onToggle={toggleSort} />
-            {!isMobile && (
-              <>
-                <SortHeader field="seat" label="Seat" sort={sort} onToggle={toggleSort} />
-                <div />
-                <SortHeader field="paid" label="Paid" sort={sort} onToggle={toggleSort} align="right" />
-              </>
-            )}
+            <SortHeader field="seat" label="Seat" sort={sort} onToggle={toggleSort} />
+            <div />
+            <SortHeader field="paid" label="Paid" sort={sort} onToggle={toggleSort} align="right" />
             <SortHeader field="state" label="State" sort={sort} onToggle={toggleSort} align="right" />
           </div>
 
