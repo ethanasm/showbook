@@ -241,7 +241,7 @@ Event-driven (triggered on write, not scheduled):
 
 ## LLM: Groq
 
-**Chat-mode Add:** `llama-3.3-70b-versatile` parses free text into structured fields.
+**Text prompts (chat-mode Add, email/PDF extraction, scrapers, digest + health preambles):** `openai/gpt-oss-120b` with `reasoning_effort: 'low'`. Cheaper input/output than `llama-3.3-70b-versatile` ($0.15 / $0.60 vs $0.59 / $0.79 per Mtok) and produces noticeably more specific outputs on the digest/health prompts. `reasoning_effort: 'low'` is required — the default ('medium') burns 4–10× more completion tokens for our JSON-shaped prompts without quality gains.
 **Playbill cast extraction:** `meta-llama/llama-4-scout-17b-16e-instruct` (Llama 4 Scout) reads photos, extracts cast. Native multimodal — better quality than the older preview models. User confirms before saving.
 
 ```typescript
@@ -249,9 +249,10 @@ import Groq from 'groq-sdk';
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const result = await groq.chat.completions.create({
-  model: 'llama-3.3-70b-versatile',
+  model: 'openai/gpt-oss-120b',
   messages: [{ role: 'user', content: prompt }],
   response_format: { type: 'json_object' },
+  reasoning_effort: 'low',
 });
 ```
 
