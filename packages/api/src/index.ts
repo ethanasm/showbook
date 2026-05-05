@@ -16,7 +16,9 @@ export {
   type TMVenue,
   type TMAttraction,
 } from './ticketmaster';
-export { matchOrCreateVenue } from './venue-matcher';
+export { matchOrCreateVenue, isUniqueViolation } from './venue-matcher';
+export { geocodeVenue } from './geocode';
+export type { GeocodeResult } from './geocode';
 export { matchOrCreatePerformer } from './performer-matcher';
 export { getPlacePhotoMediaUrl, getPlaceDetails } from './google-places';
 export {

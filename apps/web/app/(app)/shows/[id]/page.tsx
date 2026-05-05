@@ -19,6 +19,7 @@ import {
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import {
   CenteredMessage,
+  RemoteImage,
   SectionHeader,
   StateChip,
   type ShowKind,
@@ -195,6 +196,34 @@ export default function ShowDetailPage() {
           {titleText.toLowerCase()} @ {show.venue.name.toLowerCase()} · {show.date}
         </span>
       </div>
+
+      {(() => {
+        // Fallback chain: TM event image (coverImageUrl) → headliner photo →
+        // venue photo proxy. The venue proxy URL is gated on venue.photoUrl
+        // because the proxy itself returns 404 when the column is null,
+        // which would force RemoteImage into its initials fallback.
+        const heroSrc =
+          show.coverImageUrl ??
+          headlinerSP?.performer.imageUrl ??
+          (show.venue.photoUrl ? `/api/venue-photo/${show.venue.id}` : null);
+        if (!heroSrc) return null;
+        return (
+          <div style={{ padding: "24px 36px 0" }}>
+            <div className="venue-photo-band">
+              <RemoteImage
+                src={heroSrc}
+                alt={`${titleText} cover`}
+                kind={show.kind as ShowKind}
+                name={titleText}
+                aspect="16/9"
+                size="hero"
+                priority
+              />
+              <div className="venue-photo-band__fade" />
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Hero */}
       <div

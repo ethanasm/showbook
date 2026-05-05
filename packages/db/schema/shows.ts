@@ -61,6 +61,7 @@ export const shows = pgTable(
     setlist: text('setlist').array(),
     setlists: jsonb('setlists').$type<PerformerSetlistsMap>(),
     photos: text('photos').array(),
+    coverImageUrl: text('cover_image_url'),
     sourceRefs: jsonb('source_refs'),
     ticketUrl: text('ticket_url'),
     notes: text('notes'),

@@ -149,12 +149,17 @@ export async function matchOrCreateVenue(
   let googlePlaceId = input.googlePlaceId ?? null;
   let photoUrl = input.photoUrl ?? null;
 
-  if (lat == null && input.name && input.city) {
+  // Run the Google Places lookup whenever we're missing coordinates OR a
+  // place id. Ticketmaster events ship lat/lng but no Place ID; without
+  // this, TM-ingested venues are saved with `googlePlaceId = null` and
+  // never get a hero photo. We keep TM's lat/lng when present and only
+  // adopt Google's lat/lng when ours are null.
+  if ((lat == null || googlePlaceId == null) && input.name && input.city) {
     try {
       const geo = await geocodeVenue(input.name, input.city, stateRegion);
       if (geo) {
-        lat = geo.lat;
-        lng = geo.lng;
+        if (lat == null) lat = geo.lat;
+        if (lng == null) lng = geo.lng;
         if (!stateRegion && geo.stateRegion) stateRegion = geo.stateRegion;
         if (geo.country) country = geo.country;
         if (!googlePlaceId && geo.googlePlaceId) googlePlaceId = geo.googlePlaceId;
@@ -410,7 +415,11 @@ async function maybeUpdate(
   if (input.lng != null && existing.longitude == null) {
     updates.longitude = input.lng;
   }
-  if (existing.latitude == null && input.lat == null) {
+  // Same broadened trigger as the create path: geocode when we're missing
+  // coordinates OR a Place ID. Skips when we already have both.
+  const needsCoords = existing.latitude == null && input.lat == null;
+  const needsPlaceId = existing.googlePlaceId == null && !input.googlePlaceId;
+  if (needsCoords || needsPlaceId) {
     try {
       const geo = await geocodeVenue(
         existing.name,
@@ -418,8 +427,10 @@ async function maybeUpdate(
         existing.stateRegion ?? input.stateRegion ?? null,
       );
       if (geo) {
-        updates.latitude = geo.lat;
-        updates.longitude = geo.lng;
+        if (existing.latitude == null && input.lat == null) {
+          updates.latitude = geo.lat;
+          updates.longitude = geo.lng;
+        }
         if (!existing.stateRegion && geo.stateRegion) updates.stateRegion = geo.stateRegion;
         if (!existing.country && geo.country) updates.country = geo.country;
         if (!existing.googlePlaceId && geo.googlePlaceId) updates.googlePlaceId = geo.googlePlaceId;
