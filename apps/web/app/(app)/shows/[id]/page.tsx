@@ -4,6 +4,7 @@ import { useParams, useRouter, } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
+import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
 import {
   MapPin,
   MoreHorizontal,
@@ -56,6 +57,7 @@ export default function ShowDetailPage() {
   const showId = params?.id ?? "";
 
   const utils = trpc.useUtils();
+  const invalidateSidebarCounts = useInvalidateSidebarCounts();
   const detailQuery = trpc.shows.detail.useQuery(
     { showId },
     { enabled: Boolean(showId) },
@@ -65,12 +67,14 @@ export default function ShowDetailPage() {
     onSuccess: () => {
       utils.shows.detail.invalidate({ showId });
       utils.shows.invalidate();
+      invalidateSidebarCounts();
     },
   });
 
   const deleteShow = trpc.shows.delete.useMutation({
     onSuccess: () => {
       utils.shows.invalidate();
+      invalidateSidebarCounts();
       // After delete, route to the bucket the show used to live in so
       // the user lands somewhere sensible. Past → /logbook; everything
       // else → /upcoming.
@@ -645,10 +649,12 @@ function LineupSection({
   const [editing, setEditing] = useState(false);
   const utils = trpc.useUtils();
 
+  const invalidateSidebarCounts = useInvalidateSidebarCounts();
   const removePerformer = trpc.shows.removePerformer.useMutation({
     onSuccess: () => {
       utils.shows.detail.invalidate({ showId });
       utils.shows.invalidate();
+      invalidateSidebarCounts();
     },
   });
 
@@ -785,10 +791,12 @@ function LineupAddForm({ showId }: { showId: string }) {
     { enabled: debouncedName.length >= 1 },
   );
 
+  const invalidateSidebarCounts = useInvalidateSidebarCounts();
   const addPerformer = trpc.shows.addPerformer.useMutation({
     onSuccess: () => {
       utils.shows.detail.invalidate({ showId });
       utils.shows.invalidate();
+      invalidateSidebarCounts();
       setName("");
       setDebouncedName("");
       setCharacterName("");

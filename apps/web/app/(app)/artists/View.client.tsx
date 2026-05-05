@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
+import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
 import { Search, Eye, Pencil, Trash2, Ticket, Check, Music2, Plus, ArrowRight } from "lucide-react";
 import { PaginationFooter } from "@/components/PaginationFooter";
 import { SortHeader, type SortConfig } from "@/components/SortHeader";
@@ -68,6 +69,7 @@ export default function ArtistsView() {
   });
 
   const utils = trpc.useUtils();
+  const invalidateSidebarCounts = useInvalidateSidebarCounts();
   const renameMutation = trpc.performers.rename.useMutation({
     onSuccess: () => utils.performers.invalidate(),
   });
@@ -75,6 +77,7 @@ export default function ArtistsView() {
     onSuccess: () => {
       utils.performers.invalidate();
       utils.shows.invalidate();
+      invalidateSidebarCounts();
     },
   });
   const followMutation = trpc.performers.follow.useMutation({
@@ -87,6 +90,7 @@ export default function ArtistsView() {
     onSuccess: () => {
       utils.shows.invalidate();
       utils.performers.invalidate();
+      invalidateSidebarCounts();
     },
   });
 

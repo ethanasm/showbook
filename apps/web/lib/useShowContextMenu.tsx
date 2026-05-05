@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { trpc } from "@/lib/trpc";
+import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
 import { STATE_TRANSITIONS } from "@/lib/show-state";
 import { getHeadliner, type ShowLike } from "@/lib/show-accessors";
 import type { ShowState } from "@/components/design-system";
@@ -35,6 +36,7 @@ interface ContextMenuState<T> {
 export function useShowContextMenu<T extends ShowForContextMenu>() {
   const router = useRouter();
   const utils = trpc.useUtils();
+  const invalidateSidebarCounts = useInvalidateSidebarCounts();
   const updateState = trpc.shows.updateState.useMutation();
   const deleteShow = trpc.shows.delete.useMutation();
 
@@ -57,8 +59,9 @@ export function useShowContextMenu<T extends ShowForContextMenu>() {
       await deleteShow.mutateAsync({ showId });
       utils.shows.invalidate();
       utils.performers.invalidate();
+      invalidateSidebarCounts();
     },
-    [deleteShow, utils],
+    [deleteShow, utils, invalidateSidebarCounts],
   );
 
   const handleStateTransition = useCallback(
@@ -76,8 +79,9 @@ export function useShowContextMenu<T extends ShowForContextMenu>() {
         newState: transition.target,
       });
       utils.shows.invalidate();
+      invalidateSidebarCounts();
     },
-    [updateState, utils],
+    [updateState, utils, invalidateSidebarCounts],
   );
 
   const handleTransitionSubmit = useCallback(async () => {
@@ -97,6 +101,7 @@ export function useShowContextMenu<T extends ShowForContextMenu>() {
     setTransitionPrice("");
     setTransitionTicketCount("1");
     utils.shows.invalidate();
+    invalidateSidebarCounts();
   }, [
     transitionShow,
     transitionSeat,
@@ -104,6 +109,7 @@ export function useShowContextMenu<T extends ShowForContextMenu>() {
     transitionTicketCount,
     updateState,
     utils,
+    invalidateSidebarCounts,
   ]);
 
   const buildItems = useCallback(

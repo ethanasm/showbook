@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
+import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
 import {
   EmptyState,
   ShowRow,
@@ -329,6 +330,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
   const deleteAllShows = trpc.shows.deleteAll.useMutation();
   const createShow = trpc.shows.create.useMutation();
   const utils = trpc.useUtils();
+  const invalidateSidebarCounts = useInvalidateSidebarCounts();
   const setTicketUrl = trpc.shows.setTicketUrl.useMutation({
     onSuccess: () => utils.shows.invalidate(),
   });
@@ -430,6 +432,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     await deleteAllShows.mutateAsync();
     utils.shows.invalidate();
     utils.performers.invalidate();
+    invalidateSidebarCounts();
   }
 
   // ---------------------------------------------------------------------------
@@ -597,7 +600,8 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     setGmailAdding(false);
     setGmailModalOpen(false);
     utils.shows.invalidate();
-  }, [gmailBulkResults, gmailBulkSelected, createShow, utils]);
+    invalidateSidebarCounts();
+  }, [gmailBulkResults, gmailBulkSelected, createShow, utils, invalidateSidebarCounts]);
 
   // ---------------------------------------------------------------------------
   // Render: Loading / Error
