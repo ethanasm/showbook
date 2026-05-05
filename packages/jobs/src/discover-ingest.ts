@@ -18,6 +18,7 @@ import {
   type TMEvent,
 } from '@showbook/api';
 import {
+  dedupeTierVariants,
   groupEventsIntoRuns,
   type EventRun,
   type NormalizedEvent,
@@ -216,7 +217,10 @@ async function normalizeTmEvent(
 
   return {
     sourceEventId: event.id,
+    extraSourceEventIds: [],
     date: event.dates.start.localDate,
+    localTime: event.dates.start.localTime ?? null,
+    city: (venue.city ?? tmVenue.city?.name ?? 'unknown').trim().toLowerCase(),
     kind: inferKind(event.classifications, { eventName: event.name }),
     headliner: headlinerName,
     headlinerPerformerId,
@@ -255,9 +259,12 @@ async function insertSingleEvent(
     onSaleStatus: event.onSaleStatus,
     source: event.source,
     sourceEventId: event.sourceEventId,
+    extraSourceEventIds:
+      event.extraSourceEventIds.length > 0 ? event.extraSourceEventIds : null,
     ticketUrl: event.ticketUrl,
   });
   existingSourceIds.add(event.sourceEventId);
+  for (const id of event.extraSourceEventIds) existingSourceIds.add(id);
   return true;
 }
 
@@ -308,6 +315,12 @@ async function upsertRun(
       }
     }
     const merged = Array.from(existingDates).sort();
+    const mergedExtras = Array.from(
+      new Set([
+        ...(existing.extraSourceEventIds ?? []),
+        ...run.extraSourceEventIds,
+      ]),
+    );
     await db
       .update(announcements)
       .set({
@@ -325,9 +338,11 @@ async function upsertRun(
             : run.onSaleDate ?? existing.onSaleDate,
         onSaleStatus: run.onSaleStatus,
         ticketUrl: run.ticketUrl ?? existing.ticketUrl,
+        extraSourceEventIds: mergedExtras.length > 0 ? mergedExtras : null,
       })
       .where(eq(announcements.id, existing.id));
     for (const id of newSourceIds) existingSourceIds.add(id);
+    for (const id of run.extraSourceEventIds) existingSourceIds.add(id);
     return extended ? 1 : 0;
   }
 
@@ -351,9 +366,12 @@ async function upsertRun(
     // let the per-night IDs live in performanceDates' association via
     // existingSourceIds dedup.
     sourceEventId: null,
+    extraSourceEventIds:
+      run.extraSourceEventIds.length > 0 ? run.extraSourceEventIds : null,
     ticketUrl: run.ticketUrl,
   });
   for (const id of newSourceIds) existingSourceIds.add(id);
+  for (const id of run.extraSourceEventIds) existingSourceIds.add(id);
   return 1;
 }
 
@@ -401,7 +419,8 @@ async function ingestTmEvents(
     }
   }
 
-  const { runs, singles } = groupEventsIntoRuns(normalized);
+  const deduped = dedupeTierVariants(normalized);
+  const { runs, singles } = groupEventsIntoRuns(deduped);
 
   let count = 0;
   for (const run of runs) {
@@ -435,15 +454,18 @@ async function ingestTmEvents(
 
 async function loadExistingSourceIds(): Promise<Set<string>> {
   const rows = await db
-    .select({ sourceEventId: announcements.sourceEventId })
+    .select({
+      sourceEventId: announcements.sourceEventId,
+      extraSourceEventIds: announcements.extraSourceEventIds,
+    })
     .from(announcements)
-    .where(
-      and(
-        eq(announcements.source, 'ticketmaster'),
-        isNotNull(announcements.sourceEventId),
-      ),
-    );
-  return new Set(rows.map((r) => r.sourceEventId).filter((id): id is string => !!id));
+    .where(eq(announcements.source, 'ticketmaster'));
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (row.sourceEventId) ids.add(row.sourceEventId);
+    for (const id of row.extraSourceEventIds ?? []) ids.add(id);
+  }
+  return ids;
 }
 
 // ---------------------------------------------------------------------------
