@@ -415,11 +415,7 @@ async function maybeUpdate(
   if (input.lng != null && existing.longitude == null) {
     updates.longitude = input.lng;
   }
-  // Same broadened trigger as the create path: geocode when we're missing
-  // coordinates OR a Place ID. Skips when we already have both.
-  const needsCoords = existing.latitude == null && input.lat == null;
-  const needsPlaceId = existing.googlePlaceId == null && !input.googlePlaceId;
-  if (needsCoords || needsPlaceId) {
+  if (existing.latitude == null && input.lat == null) {
     try {
       const geo = await geocodeVenue(
         existing.name,
@@ -427,10 +423,8 @@ async function maybeUpdate(
         existing.stateRegion ?? input.stateRegion ?? null,
       );
       if (geo) {
-        if (existing.latitude == null && input.lat == null) {
-          updates.latitude = geo.lat;
-          updates.longitude = geo.lng;
-        }
+        updates.latitude = geo.lat;
+        updates.longitude = geo.lng;
         if (!existing.stateRegion && geo.stateRegion) updates.stateRegion = geo.stateRegion;
         if (!existing.country && geo.country) updates.country = geo.country;
         if (!existing.googlePlaceId && geo.googlePlaceId) updates.googlePlaceId = geo.googlePlaceId;
