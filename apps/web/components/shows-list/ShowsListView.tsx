@@ -288,30 +288,43 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
   // Stats timeframe
   const [statsTimeframe, setStatsTimeframe] = useState<StatsTimeframe>("all");
 
-  // Gmail bulk scan state
-  const [gmailModalOpen, setGmailModalOpen] = useState(false);
+  // Import (Gmail / setlist.fm / Eventbrite) state. The scan UIs are
+  // source-keyed but share the review list, dedupe, and "Add selected"
+  // creation logic.
+  type ImportSource = "gmail" | "setlistfm" | "eventbrite";
+  type BulkResult = {
+    gmailMessageId?: string;
+    headliner: string;
+    production_name: string | null;
+    venue_name: string | null;
+    venue_city: string | null;
+    venue_state: string | null;
+    date: string | null;
+    seat: string | null;
+    price: string | null;
+    ticket_count: number | null;
+    kind_hint: "concert" | "theatre" | "comedy" | "festival" | null;
+    confidence: "high" | "medium" | "low";
+    // Source-specific extras carried through to createShow:
+    setlistId?: string;
+    musicbrainzId?: string;
+    tourName?: string | null;
+    setlist?: import("@showbook/shared").PerformerSetlist;
+    orderId?: string;
+    eventId?: string;
+  };
+  const [importSource, setImportSource] = useState<ImportSource | null>(null);
   const [gmailBulkLoading, setGmailBulkLoading] = useState(false);
-  const [gmailBulkResults, setGmailBulkResults] = useState<
-    Array<{
-      gmailMessageId: string;
-      headliner: string;
-      production_name: string | null;
-      venue_name: string | null;
-      venue_city: string | null;
-      venue_state: string | null;
-      date: string | null;
-      seat: string | null;
-      price: string | null;
-      ticket_count: number | null;
-      kind_hint: "concert" | "theatre" | "comedy" | "festival" | null;
-      confidence: "high" | "medium" | "low";
-    }>
-  >([]);
+  const [gmailBulkResults, setGmailBulkResults] = useState<BulkResult[]>([]);
   const [gmailBulkSelected, setGmailBulkSelected] = useState<Set<number>>(new Set());
   const [gmailAdding, setGmailAdding] = useState(false);
   const [gmailAddedCount, setGmailAddedCount] = useState(0);
   const [gmailAccessToken, setGmailAccessToken] = useState<string | null>(null);
   const [gmailError, setGmailError] = useState<string | null>(null);
+  // Eventbrite + setlist.fm specific bits:
+  const [eventbriteAccessToken, setEventbriteAccessToken] = useState<string | null>(null);
+  const [setlistfmUsername, setSetlistfmUsername] = useState("");
+  const setlistfmFetchAttended = trpc.imports.setlistfmFetchAttended.useMutation();
 
   // Fetch shows
   const yearFilter = selectedYear === "All" ? undefined :
@@ -512,29 +525,133 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     }
   }, [isDuplicate]);
 
-  const handleOpenGmailModal = useCallback(() => {
-    setGmailModalOpen(true);
+  const startEventbriteScan = useCallback(async (token: string) => {
+    setGmailBulkLoading(true);
+    setGmailProgress(null);
+    try {
+      const res = await fetch("/api/eventbrite/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessToken: token }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "Scan failed");
+        throw new Error(text || "Scan failed");
+      }
+      const data = (await res.json()) as {
+        tickets: Array<{
+          orderId: string;
+          eventId: string;
+          date: string | null;
+          eventName: string | null;
+          venueName: string | null;
+          venueCity: string | null;
+          venueState: string | null;
+          price: string | null;
+          ticketCount: number;
+          kindHint: "concert" | "theatre" | "comedy" | "festival" | null;
+          duplicate: boolean;
+        }>;
+      };
+      const mapped: BulkResult[] = data.tickets.map((t) => ({
+        headliner: t.eventName ?? "(unknown)",
+        production_name: null,
+        venue_name: t.venueName,
+        venue_city: t.venueCity,
+        venue_state: t.venueState,
+        date: t.date,
+        seat: null,
+        price: t.price,
+        ticket_count: t.ticketCount,
+        kind_hint: t.kindHint,
+        confidence: "medium",
+        orderId: t.orderId,
+        eventId: t.eventId,
+      }));
+      setGmailBulkResults(mapped);
+      const initial = new Set<number>();
+      mapped.forEach((t, i) => { if (!isDuplicate(t)) initial.add(i); });
+      setGmailBulkSelected(initial);
+    } catch (err) {
+      setGmailError(err instanceof Error ? err.message : "Eventbrite scan failed");
+    } finally {
+      setGmailBulkLoading(false);
+    }
+  }, [isDuplicate]);
+
+  const startSetlistfmScan = useCallback(async (username: string) => {
+    setGmailBulkLoading(true);
+    setGmailError(null);
+    try {
+      const data = await setlistfmFetchAttended.mutateAsync({ username });
+      const mapped: BulkResult[] = data.tickets.map((t) => ({
+        headliner: t.headliner,
+        production_name: null,
+        venue_name: t.venueName,
+        venue_city: t.venueCity,
+        venue_state: t.venueState,
+        date: t.date,
+        seat: null,
+        price: null,
+        ticket_count: 1,
+        kind_hint: "concert",
+        confidence: "high",
+        setlistId: t.setlistId,
+        musicbrainzId: t.musicbrainzId,
+        tourName: t.tourName,
+        setlist: t.setlist,
+      }));
+      setGmailBulkResults(mapped);
+      const initial = new Set<number>();
+      mapped.forEach((t, i) => { if (!isDuplicate(t)) initial.add(i); });
+      setGmailBulkSelected(initial);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "setlist.fm import failed";
+      setGmailError(msg);
+    } finally {
+      setGmailBulkLoading(false);
+    }
+  }, [isDuplicate, setlistfmFetchAttended]);
+
+  const handleOpenImportModal = useCallback((source: ImportSource) => {
+    setImportSource(source);
     setGmailBulkResults([]);
     setGmailBulkSelected(new Set());
     setGmailAddedCount(0);
     setGmailAccessToken(null);
+    setEventbriteAccessToken(null);
+    setSetlistfmUsername("");
     setGmailError(null);
     setGmailProgress(null);
 
+    if (source === "setlistfm") {
+      // No popup — username form is shown inline in the modal.
+      return;
+    }
+
+    // OAuth-based sources (gmail, eventbrite) share the popup pattern.
+    const expectedAuth = source === "gmail" ? "gmail-auth" : "eventbrite-auth";
+    const expectedAuthError = source === "gmail" ? "gmail-auth-error" : "eventbrite-auth-error";
+    const popupPath = source === "gmail" ? "/api/gmail" : "/api/eventbrite";
+
     const handler = (e: MessageEvent) => {
-      if (e.data?.type === "gmail-auth" && e.data.accessToken) {
+      if (e.data?.type === expectedAuth && e.data.accessToken) {
         window.removeEventListener("message", handler);
-        setGmailAccessToken(e.data.accessToken);
-        startGmailScan(e.data.accessToken);
+        if (source === "gmail") {
+          setGmailAccessToken(e.data.accessToken);
+          startGmailScan(e.data.accessToken);
+        } else {
+          setEventbriteAccessToken(e.data.accessToken);
+          startEventbriteScan(e.data.accessToken);
+        }
       }
-      if (e.data?.type === "gmail-auth-error") {
+      if (e.data?.type === expectedAuthError) {
         window.removeEventListener("message", handler);
       }
     };
     window.addEventListener("message", handler);
 
-    const popup = window.open("/api/gmail", "gmail-auth", "width=500,height=600,popup=yes");
-
+    const popup = window.open(popupPath, `${source}-auth`, "width=500,height=600,popup=yes");
     if (popup) {
       const checkClosed = setInterval(() => {
         if (popup.closed) {
@@ -543,14 +660,18 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
         }
       }, 500);
     }
-  }, [startGmailScan]);
+  }, [startGmailScan, startEventbriteScan]);
 
-  // Auto-open Gmail modal when navigated from an empty-state CTA
-  // (?gmail=1). Replace the URL with the canonical mode-specific path
-  // (Gmail receipts mostly land in Logbook).
+  // Back-compat: ?gmail=1 still opens Gmail. New: ?import=gmail|setlistfm|eventbrite.
   useEffect(() => {
+    const importParam = searchParams.get("import");
+    if (importParam === "gmail" || importParam === "setlistfm" || importParam === "eventbrite") {
+      handleOpenImportModal(importParam);
+      router.replace(isUpcoming ? "/upcoming" : "/logbook");
+      return;
+    }
     if (searchParams.get("gmail") === "1") {
-      handleOpenGmailModal();
+      handleOpenImportModal("gmail");
       router.replace(isUpcoming ? "/upcoming" : "/logbook");
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -576,9 +697,21 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
 
     for (const ticket of selected) {
       try {
+        let sourceRefs: Record<string, unknown>;
+        if (ticket.setlistId) {
+          sourceRefs = { setlistfm: { setlistId: ticket.setlistId } };
+        } else if (ticket.orderId) {
+          sourceRefs = { eventbrite: { orderId: ticket.orderId, eventId: ticket.eventId } };
+        } else {
+          sourceRefs = { gmail: true };
+        }
         await createShow.mutateAsync({
           kind: ticket.kind_hint ?? "concert",
-          headliner: { name: ticket.headliner },
+          headliner: {
+            name: ticket.headliner,
+            ...(ticket.musicbrainzId ? { musicbrainzId: ticket.musicbrainzId } : {}),
+            ...(ticket.setlist ? { setlist: ticket.setlist } : {}),
+          },
           venue: {
             name: ticket.venue_name ?? "Unknown Venue",
             city: ticket.venue_city ?? "Unknown",
@@ -589,7 +722,8 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
           pricePaid: ticket.price ?? undefined,
           ticketCount: ticket.ticket_count ?? 1,
           productionName: ticket.production_name ?? undefined,
-          sourceRefs: { gmail: true },
+          tourName: ticket.tourName ?? undefined,
+          sourceRefs,
         });
         setGmailAddedCount((prev) => prev + 1);
       } catch {
@@ -598,7 +732,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     }
 
     setGmailAdding(false);
-    setGmailModalOpen(false);
+    setImportSource(null);
     utils.shows.invalidate();
     invalidateSidebarCounts();
   }, [gmailBulkResults, gmailBulkSelected, createShow, utils, invalidateSidebarCounts]);
@@ -712,27 +846,87 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
           alignItems: isMobile ? "stretch" : "center",
           gap: isMobile ? 8 : 12,
         }}>
-          <button
-            onClick={handleOpenGmailModal}
+          <div
+            role="group"
+            aria-label="Import past shows"
             style={{
-              border: "1px solid var(--rule-strong)",
-              cursor: "pointer",
-              background: "transparent",
-              color: "var(--ink)",
-              padding: "10px 16px",
-              fontFamily: "var(--font-geist-sans), sans-serif",
-              fontSize: 13,
-              fontWeight: 500,
-              letterSpacing: -0.2,
               display: "flex",
-              alignItems: "center",
-              justifyContent: isMobile ? "center" : "flex-start",
-              gap: 7,
+              alignItems: "stretch",
+              border: "1px solid var(--rule-strong)",
+              flexDirection: isMobile ? "column" : "row",
             }}
           >
-            <Mail size={14} />
-            <span>Import from Gmail</span>
-          </button>
+            <button
+              onClick={() => handleOpenImportModal("gmail")}
+              title="Import from Gmail"
+              style={{
+                border: "none",
+                borderRight: isMobile ? "none" : "1px solid var(--rule-strong)",
+                borderBottom: isMobile ? "1px solid var(--rule-strong)" : "none",
+                cursor: "pointer",
+                background: "transparent",
+                color: "var(--ink)",
+                padding: "10px 14px",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 13,
+                fontWeight: 500,
+                letterSpacing: -0.2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: isMobile ? "center" : "flex-start",
+                gap: 7,
+              }}
+            >
+              <Image src="/google-g.svg" alt="" width={14} height={14} />
+              <span>Gmail</span>
+            </button>
+            <button
+              onClick={() => handleOpenImportModal("setlistfm")}
+              title="Import attended shows from setlist.fm"
+              style={{
+                border: "none",
+                borderRight: isMobile ? "none" : "1px solid var(--rule-strong)",
+                borderBottom: isMobile ? "1px solid var(--rule-strong)" : "none",
+                cursor: "pointer",
+                background: "transparent",
+                color: "var(--ink)",
+                padding: "10px 14px",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 13,
+                fontWeight: 500,
+                letterSpacing: -0.2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: isMobile ? "center" : "flex-start",
+                gap: 7,
+              }}
+            >
+              <Mail size={14} />
+              <span>setlist.fm</span>
+            </button>
+            <button
+              onClick={() => handleOpenImportModal("eventbrite")}
+              title="Import past orders from Eventbrite"
+              style={{
+                border: "none",
+                cursor: "pointer",
+                background: "transparent",
+                color: "var(--ink)",
+                padding: "10px 14px",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 13,
+                fontWeight: 500,
+                letterSpacing: -0.2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: isMobile ? "center" : "flex-start",
+                gap: 7,
+              }}
+            >
+              <Ticket size={14} />
+              <span>Eventbrite</span>
+            </button>
+          </div>
           {totalShows > 0 && (
             <button
               onClick={handleDeleteAll}
@@ -1228,29 +1422,77 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
           Find shows in Discover
         </Link>
       ) : (
-        <button
-          type="button"
-          onClick={handleOpenGmailModal}
-          style={{
-            padding: "10px 18px",
-            background: "var(--accent)",
-            color: "var(--accent-text)",
-            border: "none",
-            borderRadius: 8,
-            cursor: "pointer",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
-            letterSpacing: ".06em",
-            textTransform: "uppercase",
-            fontWeight: 500,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          <Image src="/google-g.svg" alt="" width={14} height={14} />
-          Import from Gmail
-        </button>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+          <button
+            type="button"
+            onClick={() => handleOpenImportModal("gmail")}
+            style={{
+              padding: "10px 18px",
+              background: "var(--accent)",
+              color: "var(--accent-text)",
+              border: "none",
+              borderRadius: 8,
+              cursor: "pointer",
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 11,
+              letterSpacing: ".06em",
+              textTransform: "uppercase",
+              fontWeight: 500,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Image src="/google-g.svg" alt="" width={14} height={14} />
+            Gmail
+          </button>
+          <button
+            type="button"
+            onClick={() => handleOpenImportModal("setlistfm")}
+            style={{
+              padding: "10px 18px",
+              background: "transparent",
+              color: "var(--ink)",
+              border: "1px solid var(--rule-strong)",
+              borderRadius: 8,
+              cursor: "pointer",
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 11,
+              letterSpacing: ".06em",
+              textTransform: "uppercase",
+              fontWeight: 500,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Mail size={13} />
+            setlist.fm
+          </button>
+          <button
+            type="button"
+            onClick={() => handleOpenImportModal("eventbrite")}
+            style={{
+              padding: "10px 18px",
+              background: "transparent",
+              color: "var(--ink)",
+              border: "1px solid var(--rule-strong)",
+              borderRadius: 8,
+              cursor: "pointer",
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 11,
+              letterSpacing: ".06em",
+              textTransform: "uppercase",
+              fontWeight: 500,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Ticket size={13} />
+            Eventbrite
+          </button>
+        </div>
       );
       const secondary = (
         <Link
@@ -2388,10 +2630,10 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
       {/* Show row context menu + watching → ticketed transition modal */}
       {showContextMenuPortal}
 
-      {/* Gmail bulk scan modal */}
-      {gmailModalOpen && (
+      {/* Bulk import modal — Gmail / setlist.fm / Eventbrite share this UI. */}
+      {importSource !== null && (
         <div
-          onClick={() => setGmailModalOpen(false)}
+          onClick={() => setImportSource(null)}
           style={{
             position: "fixed",
             inset: 0,
@@ -2432,7 +2674,9 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                   letterSpacing: "-0.01em",
                   lineHeight: 1.1,
                 }}>
-                  Import from Gmail
+                  {importSource === "gmail" && "Import from Gmail"}
+                  {importSource === "setlistfm" && "Import from setlist.fm"}
+                  {importSource === "eventbrite" && "Import from Eventbrite"}
                 </div>
                 <div style={{
                   fontFamily: "var(--font-geist-mono), monospace",
@@ -2442,20 +2686,30 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                   marginTop: 2,
                 }}>
                   {gmailBulkLoading
-                    ? gmailProgress?.phase === "processing"
-                      ? `Processing ${gmailProgress.processed} of ${gmailProgress.total} emails · ${gmailProgress.found} tickets found`
-                      : "Searching Gmail for ticket emails..."
+                    ? importSource === "gmail"
+                      ? gmailProgress?.phase === "processing"
+                        ? `Processing ${gmailProgress.processed} of ${gmailProgress.total} emails · ${gmailProgress.found} tickets found`
+                        : "Searching Gmail for ticket emails..."
+                      : importSource === "setlistfm"
+                        ? "Fetching attended setlists..."
+                        : "Fetching Eventbrite orders..."
                     : gmailError
                       ? gmailError
                       : gmailBulkResults.length > 0
                         ? `${gmailBulkResults.length} ticket${gmailBulkResults.length !== 1 ? "s" : ""} found · ${gmailBulkSelected.size} selected`
-                        : gmailAccessToken
-                          ? "No tickets found"
-                          : "Waiting for Gmail authorization..."}
+                        : importSource === "gmail"
+                          ? gmailAccessToken
+                            ? "No tickets found"
+                            : "Waiting for Gmail authorization..."
+                          : importSource === "eventbrite"
+                            ? eventbriteAccessToken
+                              ? "No tickets found"
+                              : "Waiting for Eventbrite authorization..."
+                            : "Enter your setlist.fm username"}
                 </div>
               </div>
               <button
-                onClick={() => setGmailModalOpen(false)}
+                onClick={() => setImportSource(null)}
                 style={{
                   border: "none",
                   background: "transparent",
@@ -2488,11 +2742,15 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                   color: "var(--muted)",
                   letterSpacing: ".04em",
                 }}>
-                  {gmailProgress?.phase === "processing"
-                    ? `Processing ${gmailProgress.processed} of ${gmailProgress.total} · ${gmailProgress.found} found`
-                    : "Searching Gmail..."}
+                  {importSource === "gmail"
+                    ? gmailProgress?.phase === "processing"
+                      ? `Processing ${gmailProgress.processed} of ${gmailProgress.total} · ${gmailProgress.found} found`
+                      : "Searching Gmail..."
+                    : importSource === "setlistfm"
+                      ? "Fetching attended setlists from setlist.fm..."
+                      : "Fetching past orders from Eventbrite..."}
                 </span>
-                {gmailProgress?.phase === "processing" && gmailProgress.total > 0 && (
+                {importSource === "gmail" && gmailProgress?.phase === "processing" && gmailProgress.total > 0 && (
                   <div style={{
                     flex: 1,
                     height: 3,
@@ -2511,6 +2769,81 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                 )}
                 <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
               </div>
+            )}
+
+            {/* setlist.fm: username form (no OAuth, just public username lookup). */}
+            {importSource === "setlistfm" && !gmailBulkLoading && gmailBulkResults.length === 0 && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const trimmed = setlistfmUsername.trim();
+                  if (!trimmed) return;
+                  startSetlistfmScan(trimmed);
+                }}
+                style={{
+                  padding: "20px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                  borderBottom: "1px solid var(--rule)",
+                }}
+              >
+                <label
+                  style={{
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 11,
+                    color: "var(--muted)",
+                    letterSpacing: ".06em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Your setlist.fm username
+                </label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    type="text"
+                    value={setlistfmUsername}
+                    onChange={(e) => setSetlistfmUsername(e.target.value)}
+                    placeholder="e.g. yourname"
+                    autoFocus
+                    style={{
+                      flex: 1,
+                      padding: "10px 12px",
+                      border: "1px solid var(--rule-strong)",
+                      background: "transparent",
+                      color: "var(--ink)",
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 13,
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!setlistfmUsername.trim()}
+                    style={{
+                      padding: "8px 16px",
+                      border: "none",
+                      background: setlistfmUsername.trim() ? "var(--ink)" : "var(--rule)",
+                      color: setlistfmUsername.trim() ? "var(--bg)" : "var(--muted)",
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: setlistfmUsername.trim() ? "pointer" : "default",
+                      letterSpacing: -0.1,
+                    }}
+                  >
+                    Fetch
+                  </button>
+                </div>
+                <div style={{
+                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontSize: 10.5,
+                  color: "var(--faint)",
+                  letterSpacing: ".02em",
+                }}>
+                  Pulls every concert you&rsquo;ve marked attended on setlist.fm,
+                  including the setlist itself.
+                </div>
+              </form>
             )}
 
             {/* Results list */}
