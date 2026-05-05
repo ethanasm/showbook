@@ -1189,49 +1189,6 @@ a.show-row__support-link:hover {
     max-width: 100%;
   }
 
-  /* Add button wrapper + popover */
-  .bottom-bar__add-wrapper {
-    position: relative;
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .bottom-bar__add-popover {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--surface);
-    border: 1px solid var(--rule-strong);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.18);
-    min-width: 160px;
-    display: flex;
-    flex-direction: column;
-    z-index: 200;
-  }
-
-  .bottom-bar__add-popover-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 11px 16px;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    color: var(--ink);
-    font-family: var(--font-geist-sans), sans-serif;
-    font-size: 13px;
-    text-align: left;
-    white-space: nowrap;
-    transition: background 0.1s ease;
-  }
-
-  .bottom-bar__add-popover-item:hover {
-    background: var(--bg);
-  }
-
   /* ShowRow: collapse to 5 essential columns at narrow widths so the row
      fits a 390px viewport without horizontal overflow clipping links. */
   .show-row {

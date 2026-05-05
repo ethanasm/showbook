@@ -35,9 +35,12 @@ import type { ResendLike, RunHealthCheckOptions } from '../health-check';
 import type { ExternalPingFns } from '../health-check/checks';
 
 let runHealthCheck: typeof import('../health-check').runHealthCheck;
+let defaultExternalPings: typeof import('../health-check').defaultExternalPings;
 
 before(async () => {
-  runHealthCheck = (await import('../health-check')).runHealthCheck;
+  const mod = await import('../health-check');
+  runHealthCheck = mod.runHealthCheck;
+  defaultExternalPings = mod.defaultExternalPings;
 });
 
 const noopPings: ExternalPingFns = {
@@ -205,5 +208,38 @@ describe('runHealthCheck', () => {
     });
     assert.equal(result.emailSent, true);
     assert.equal(fake.sendCalls.length, 1);
+  });
+});
+
+describe('defaultExternalPings.resend', () => {
+  it('throws when no Resend client is configured', async () => {
+    const pings = defaultExternalPings(null);
+    await assert.rejects(pings.resend(), /RESEND_API_KEY unset/);
+  });
+
+  it('treats a send-only API key as reachable (Resend rejects domains.list)', async () => {
+    const fake: ResendLike = {
+      emails: { send: async () => ({ data: null, error: null }) },
+      domains: {
+        list: async () => ({
+          data: null,
+          error: { message: 'This API key is restricted to only send emails' },
+        }),
+      },
+    };
+    const pings = defaultExternalPings(fake);
+    const result = (await pings.resend()) as { sendOnlyKey?: boolean };
+    assert.equal(result.sendOnlyKey, true);
+  });
+
+  it('still surfaces unrelated Resend errors', async () => {
+    const fake: ResendLike = {
+      emails: { send: async () => ({ data: null, error: null }) },
+      domains: {
+        list: async () => ({ data: null, error: { message: 'rate limited' } }),
+      },
+    };
+    const pings = defaultExternalPings(fake);
+    await assert.rejects(pings.resend(), /rate limited/);
   });
 });

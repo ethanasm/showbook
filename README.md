@@ -98,6 +98,44 @@ echo "select * from users limit 5" | pnpm prod:query
 Writes are blocked at the Postgres engine — the `READ ONLY` transaction
 errors any INSERT/UPDATE/DELETE/DDL with SQLSTATE `25006`.
 
+#### Restricting the endpoint to a dedicated read-only role (recommended)
+
+By default, `/api/admin/sql` connects via `DATABASE_URL` — i.e. as the app's
+main role, which owns the schema. The `BEGIN READ ONLY` transaction blocks
+writes, but a privileged role can still SELECT pg_read_file, pg_authid, and
+the NextAuth `accounts` / `sessions` / `verification_tokens` tables (which
+hold OAuth refresh tokens and session material). If `ADMIN_QUERY_TOKEN`
+leaks, that's an account-takeover-class incident.
+
+Migration `0027_admin_query_role.sql` adds a dedicated `showbook_query` role
+with SELECT on public tables only, with explicit REVOKE on the three auth
+tables above. Wire the endpoint up to it as a one-time post-migration step:
+
+```bash
+# On the prod host, after `pnpm prod:migrate` has run 0027 (the role exists
+# as NOLOGIN until you do this). Use a long random password — it never needs
+# to be typed by a human, only loaded from .env.prod.
+PASSWORD=$(openssl rand -hex 32)
+docker compose -f docker-compose.prod.yml -p showbook-prod exec -T db \
+  psql -U showbook_prod -d showbook_prod \
+    -c "ALTER ROLE showbook_query WITH LOGIN PASSWORD '$PASSWORD'"
+
+# Then add to .env.prod and restart:
+echo "ADMIN_QUERY_DATABASE_URL=postgresql://showbook_query:$PASSWORD@db:5432/showbook_prod" >> .env.prod
+pnpm prod:up
+```
+
+The endpoint prefers `ADMIN_QUERY_DATABASE_URL` when set and falls back to
+`DATABASE_URL` otherwise, so this is a safe roll-forward — adopt it when
+ready without breaking existing flows. Verify the lockdown is live:
+
+```bash
+pnpm prod:query "select 1 from accounts limit 1"
+# expect: 500 server_error with details "permission denied for table accounts"
+pnpm prod:query "select count(*) from users"
+# expect: 200 with a row count
+```
+
 Dev and prod stacks coexist: dev web binds host port `3001`, prod
 binds `3002`, and postgres uses `5433` / `5434` respectively. The
 Cloudflare Tunnel ingress for the prod hostname must point at

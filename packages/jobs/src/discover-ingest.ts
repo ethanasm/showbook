@@ -18,6 +18,7 @@ import {
   type TMEvent,
 } from '@showbook/api';
 import {
+  dedupeTierVariants,
   groupEventsIntoRuns,
   type EventRun,
   type NormalizedEvent,
@@ -109,8 +110,18 @@ export async function fetchAllEvents(
  * Convert a TM event into our normalized shape. Resolves the venue and
  * headliner performer along the way (creating new rows as needed).
  * Returns null when the event is unusable (no venue).
+ *
+ * `resolvedVenueId` overrides venue resolution: when the caller already knows
+ * which venue these events belong to (e.g. Phase 1 / `ingestVenue` queried TM
+ * with a specific `venueId`), we trust that and skip `matchOrCreateVenue`.
+ * Without this, TM's habit of returning a different `_embedded.venues[0].id`
+ * than the search-time venue id (parent vs sub-venue) causes a duplicate
+ * venue row to be created and the events land on the wrong venue.
  */
-async function normalizeTmEvent(event: TMEvent): Promise<NormalizedEvent | null> {
+async function normalizeTmEvent(
+  event: TMEvent,
+  resolvedVenueId?: string,
+): Promise<NormalizedEvent | null> {
   const tmVenue = event._embedded?.venues?.[0];
   if (!tmVenue) return null;
 
@@ -133,19 +144,25 @@ async function normalizeTmEvent(event: TMEvent): Promise<NormalizedEvent | null>
     return null;
   }
 
-  const { venue } = await matchOrCreateVenue({
-    name: tmVenue.name,
-    city: tmVenue.city?.name ?? 'Unknown',
-    stateRegion: tmVenue.state?.name,
-    country: tmVenue.country?.countryCode,
-    tmVenueId: tmVenue.id,
-    lat: tmVenue.location?.latitude
-      ? parseFloat(tmVenue.location.latitude)
-      : undefined,
-    lng: tmVenue.location?.longitude
-      ? parseFloat(tmVenue.location.longitude)
-      : undefined,
-  });
+  let venueId: string;
+  if (resolvedVenueId) {
+    venueId = resolvedVenueId;
+  } else {
+    const { venue } = await matchOrCreateVenue({
+      name: tmVenue.name,
+      city: tmVenue.city?.name ?? 'Unknown',
+      stateRegion: tmVenue.state?.name,
+      country: tmVenue.country?.countryCode,
+      tmVenueId: tmVenue.id,
+      lat: tmVenue.location?.latitude
+        ? parseFloat(tmVenue.location.latitude)
+        : undefined,
+      lng: tmVenue.location?.longitude
+        ? parseFloat(tmVenue.location.longitude)
+        : undefined,
+    });
+    venueId = venue.id;
+  }
 
   const attractions = event._embedded?.attractions ?? [];
   const headlinerAttraction = attractions[0];
@@ -200,11 +217,14 @@ async function normalizeTmEvent(event: TMEvent): Promise<NormalizedEvent | null>
 
   return {
     sourceEventId: event.id,
+    extraSourceEventIds: [],
     date: event.dates.start.localDate,
+    localTime: event.dates.start.localTime ?? null,
+    city: (tmVenue.city?.name ?? 'unknown').trim().toLowerCase(),
     kind: inferKind(event.classifications, { eventName: event.name }),
     headliner: headlinerName,
     headlinerPerformerId,
-    venueId: venue.id,
+    venueId,
     support,
     supportPerformerIds: supportPerformerIds.length > 0 ? supportPerformerIds : null,
     onSaleDate: parseOnSaleDate(event),
@@ -239,9 +259,12 @@ async function insertSingleEvent(
     onSaleStatus: event.onSaleStatus,
     source: event.source,
     sourceEventId: event.sourceEventId,
+    extraSourceEventIds:
+      event.extraSourceEventIds.length > 0 ? event.extraSourceEventIds : null,
     ticketUrl: event.ticketUrl,
   });
   existingSourceIds.add(event.sourceEventId);
+  for (const id of event.extraSourceEventIds) existingSourceIds.add(id);
   return true;
 }
 
@@ -292,6 +315,12 @@ async function upsertRun(
       }
     }
     const merged = Array.from(existingDates).sort();
+    const mergedExtras = Array.from(
+      new Set([
+        ...(existing.extraSourceEventIds ?? []),
+        ...run.extraSourceEventIds,
+      ]),
+    );
     await db
       .update(announcements)
       .set({
@@ -309,9 +338,11 @@ async function upsertRun(
             : run.onSaleDate ?? existing.onSaleDate,
         onSaleStatus: run.onSaleStatus,
         ticketUrl: run.ticketUrl ?? existing.ticketUrl,
+        extraSourceEventIds: mergedExtras.length > 0 ? mergedExtras : null,
       })
       .where(eq(announcements.id, existing.id));
     for (const id of newSourceIds) existingSourceIds.add(id);
+    for (const id of run.extraSourceEventIds) existingSourceIds.add(id);
     return extended ? 1 : 0;
   }
 
@@ -335,9 +366,12 @@ async function upsertRun(
     // let the per-night IDs live in performanceDates' association via
     // existingSourceIds dedup.
     sourceEventId: null,
+    extraSourceEventIds:
+      run.extraSourceEventIds.length > 0 ? run.extraSourceEventIds : null,
     ticketUrl: run.ticketUrl,
   });
   for (const id of newSourceIds) existingSourceIds.add(id);
+  for (const id of run.extraSourceEventIds) existingSourceIds.add(id);
   return 1;
 }
 
@@ -369,12 +403,13 @@ async function pruneDuplicateFestivalSinglesForRun(run: EventRun): Promise<void>
 async function ingestTmEvents(
   events: TMEvent[],
   existingSourceIds: Set<string>,
+  resolvedVenueId?: string,
 ): Promise<number> {
   const normalized: NormalizedEvent[] = [];
   for (const event of events) {
     if (existingSourceIds.has(event.id)) continue;
     try {
-      const ne = await normalizeTmEvent(event);
+      const ne = await normalizeTmEvent(event, resolvedVenueId);
       if (ne) normalized.push(ne);
     } catch (err) {
       log.error(
@@ -384,7 +419,8 @@ async function ingestTmEvents(
     }
   }
 
-  const { runs, singles } = groupEventsIntoRuns(normalized);
+  const deduped = dedupeTierVariants(normalized);
+  const { runs, singles } = groupEventsIntoRuns(deduped);
 
   let count = 0;
   for (const run of runs) {
@@ -418,15 +454,18 @@ async function ingestTmEvents(
 
 async function loadExistingSourceIds(): Promise<Set<string>> {
   const rows = await db
-    .select({ sourceEventId: announcements.sourceEventId })
+    .select({
+      sourceEventId: announcements.sourceEventId,
+      extraSourceEventIds: announcements.extraSourceEventIds,
+    })
     .from(announcements)
-    .where(
-      and(
-        eq(announcements.source, 'ticketmaster'),
-        isNotNull(announcements.sourceEventId),
-      ),
-    );
-  return new Set(rows.map((r) => r.sourceEventId).filter((id): id is string => !!id));
+    .where(eq(announcements.source, 'ticketmaster'));
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (row.sourceEventId) ids.add(row.sourceEventId);
+    for (const id of row.extraSourceEventIds ?? []) ids.add(id);
+  }
+  return ids;
 }
 
 // ---------------------------------------------------------------------------
@@ -454,7 +493,7 @@ export async function ingestVenue(venueId: string): Promise<{ events: number }> 
     startDateTime: nowISO(),
     endDateTime: futureISO(INGEST_HORIZON_MONTHS),
   });
-  const created = await ingestTmEvents(events, existingSourceIds);
+  const created = await ingestTmEvents(events, existingSourceIds, venue.id);
   log.info(
     {
       event: 'discover.ingest.targeted.venue',
@@ -634,14 +673,14 @@ export async function runDiscoverIngest(): Promise<{
   // ==========================================================================
 
   let phase1Events = 0;
-  for (const { tmVenueId } of followedVenues) {
+  for (const { venueId, tmVenueId } of followedVenues) {
     try {
       const events = await fetchAllEvents({
         venueId: tmVenueId,
         startDateTime: start,
         endDateTime: end,
       });
-      phase1Events += await ingestTmEvents(events, existingSourceIds);
+      phase1Events += await ingestTmEvents(events, existingSourceIds, venueId);
     } catch (err) {
       log.error(
         { err, event: 'discover.ingest.phase1.venue_failed', tmVenueId },
@@ -763,9 +802,17 @@ export async function runDiscoverIngest(): Promise<{
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const cutoffDate = sevenDaysAgo.toISOString().split('T')[0]; // YYYY-MM-DD
 
+  // For multi-night runs, `showDate` is pinned to `runStartDate` at insert
+  // time and never advances. Comparing only `showDate` against the cutoff
+  // would delete an in-progress run as soon as its first night was 7 days
+  // past — vaporising theatre productions and festivals mid-engagement.
+  // Use coalesce(runEndDate, showDate) so a single-night event (no runEnd)
+  // still gets cleaned up after its date passes.
   const deleted = await db
     .delete(announcements)
-    .where(lt(announcements.showDate, cutoffDate))
+    .where(
+      sql`coalesce(${announcements.runEndDate}, ${announcements.showDate}) < ${cutoffDate}`,
+    )
     .returning({ id: announcements.id });
   const pruned = deleted.length;
   log.info(

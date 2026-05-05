@@ -250,7 +250,7 @@ export async function checkPgBossQueue(): Promise<CheckResult> {
     const result = await db.execute(sql`
       select
         count(*) filter (where state = 'failed') as failed,
-        count(*) filter (where state = 'active' and "createdOn" < now() - interval '2 hours') as active_stuck,
+        count(*) filter (where state = 'active' and created_on < now() - interval '2 hours') as active_stuck,
         count(*) filter (where state = 'active') as active_total,
         count(*) filter (where state = 'retry') as retry
       from pgboss.job

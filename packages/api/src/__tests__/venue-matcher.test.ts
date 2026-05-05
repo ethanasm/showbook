@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import {
   isUniqueViolation,
   matchOrCreateVenue,
+  stripCitySuffix,
   toStateCode,
   venueNameVariants,
 } from '../venue-matcher';
@@ -120,6 +121,73 @@ test('venueNameVariants: case-insensitive on " at "', () => {
     'Foo Hall AT Bar College',
     'Foo Hall',
   ]);
+});
+
+// ── stripCitySuffix ─────────────────────────────────────────────────────
+// Targets the SF Orpheum bug: TM venue search returns "Orpheum Theatre" (id
+// `KovZpZAFaanA`) but the event-side venue payload is "Orpheum Theatre-San
+// Francisco" (id `ZFr9jZedke`). Stripping the city suffix collapses these.
+
+test('stripCitySuffix: strips trailing "-City"', () => {
+  assert.equal(
+    stripCitySuffix('Orpheum Theatre-San Francisco', 'San Francisco'),
+    'Orpheum Theatre',
+  );
+});
+
+test('stripCitySuffix: strips trailing " - City"', () => {
+  assert.equal(
+    stripCitySuffix('Orpheum Theatre - San Francisco', 'San Francisco'),
+    'Orpheum Theatre',
+  );
+});
+
+test('stripCitySuffix: strips trailing ", City"', () => {
+  assert.equal(
+    stripCitySuffix('Apollo Theater, New York', 'New York'),
+    'Apollo Theater',
+  );
+});
+
+test('stripCitySuffix: strips trailing "(City)"', () => {
+  assert.equal(
+    stripCitySuffix('Apollo Theater (New York)', 'New York'),
+    'Apollo Theater',
+  );
+});
+
+test('stripCitySuffix: case-insensitive on city portion', () => {
+  assert.equal(
+    stripCitySuffix('Orpheum Theatre-SAN FRANCISCO', 'san francisco'),
+    'Orpheum Theatre',
+  );
+});
+
+test('stripCitySuffix: returns input unchanged when no suffix matches', () => {
+  assert.equal(
+    stripCitySuffix('Madison Square Garden', 'New York'),
+    'Madison Square Garden',
+  );
+});
+
+test('stripCitySuffix: leaves city occurrence in middle alone', () => {
+  assert.equal(
+    stripCitySuffix('San Francisco Symphony Hall', 'San Francisco'),
+    'San Francisco Symphony Hall',
+  );
+});
+
+test('stripCitySuffix: refuses to strip when result would be too short', () => {
+  // After stripping, "X" remains — keep the original.
+  assert.equal(stripCitySuffix('X-San Francisco', 'San Francisco'), 'X-San Francisco');
+});
+
+test('stripCitySuffix: handles regex-special chars in city name', () => {
+  // No real city has these but ensure the helper doesn't blow up.
+  assert.equal(
+    stripCitySuffix('Some Venue-St. Louis', 'St. Louis'),
+    'Some Venue',
+  );
 });
 
 // ── isUniqueViolation ────────────────────────────────────────────────────

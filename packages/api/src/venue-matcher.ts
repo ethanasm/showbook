@@ -101,6 +101,44 @@ export async function matchOrCreateVenue(
     };
   }
 
+  // 3b. Normalized-name match within the same city. TM's `searchVenues`
+  // endpoint returns one venue id (looks like a "master" venue) while the
+  // event payload's `_embedded.venues[0].id` is often a different id with
+  // a city-suffixed name like "Orpheum Theatre-San Francisco" vs the
+  // search-side "Orpheum Theatre". Without this, the TM-id step misses,
+  // exact name+city misses, and we create a duplicate. Compare on a name
+  // with the trailing city qualifier stripped.
+  const strippedInput = stripCitySuffix(input.name, input.city);
+  if (strippedInput && strippedInput.toLowerCase() !== input.name.toLowerCase()) {
+    const [existing] = await db
+      .select()
+      .from(venues)
+      .where(
+        and(
+          sql`lower(${venues.name}) = lower(${strippedInput})`,
+          sql`lower(${venues.city}) = lower(${input.city})`,
+        ),
+      )
+      .limit(1);
+    if (existing) {
+      const updated = await maybeUpdate(existing, input);
+      return { venue: updated, created: false };
+    }
+  }
+  // Reverse direction: input has the short name, an existing row has the
+  // city-suffixed long name.
+  const samCityVenues = await db
+    .select()
+    .from(venues)
+    .where(sql`lower(${venues.city}) = lower(${input.city})`);
+  const reverse = samCityVenues.find(
+    (v) => stripCitySuffix(v.name, input.city).toLowerCase() === input.name.toLowerCase(),
+  );
+  if (reverse) {
+    const updated = await maybeUpdate(reverse, input);
+    return { venue: updated, created: false };
+  }
+
   // 4. Create new venue — resolve external metadata BEFORE the transaction
   // so we don't hold the advisory lock while waiting on Google/TM.
   let lat = input.lat ?? null;
@@ -161,6 +199,44 @@ export async function matchOrCreateVenue(
       .limit(1);
     if (recheck) {
       return { venue: recheck, created: false };
+    }
+
+    // Defense-in-depth: if we're about to create a new venue with a TM id
+    // but a same-city venue already exists with a similar name (one is a
+    // prefix of the other after stripping the city suffix), log a warning
+    // so we can detect TM parent/sub-venue id splits in production and
+    // catch follow-on dedup bugs without waiting for users to report
+    // "0 shows". See plan: `venue_matcher.tm_id_mismatch`.
+    if (tmVenueId) {
+      const sameCity = await tx
+        .select({ id: venues.id, name: venues.name, tmId: venues.ticketmasterVenueId })
+        .from(venues)
+        .where(sql`lower(${venues.city}) = lower(${input.city})`);
+      const inputStripped = stripCitySuffix(input.name, input.city).toLowerCase();
+      const inputLower = input.name.toLowerCase();
+      const similar = sameCity.find((v) => {
+        const vStripped = stripCitySuffix(v.name, input.city).toLowerCase();
+        const vLower = v.name.toLowerCase();
+        return (
+          vStripped === inputLower ||
+          vLower === inputStripped ||
+          (vStripped.length >= 3 && inputStripped.length >= 3 && vStripped === inputStripped)
+        );
+      });
+      if (similar) {
+        log.warn(
+          {
+            event: 'venue_matcher.tm_id_mismatch',
+            city: input.city,
+            newName: input.name,
+            newTmVenueId: tmVenueId,
+            existingVenueId: similar.id,
+            existingName: similar.name,
+            existingTmVenueId: similar.tmId,
+          },
+          'Creating venue with new TM id beside same-city venue with similar name',
+        );
+      }
     }
 
     try {
@@ -251,6 +327,24 @@ export function toStateCode(stateRegion: string | undefined | null): string | un
   if (!stateRegion) return undefined;
   if (stateRegion.length === 2) return stateRegion.toUpperCase();
   return US_STATE_CODES[stateRegion.toLowerCase()];
+}
+
+/**
+ * Strip a trailing city qualifier from a venue name. Handles the patterns
+ * TM uses on event-side venue payloads: "Name-City", "Name - City",
+ * "Name, City", "Name (City)", "Name at City". Case-insensitive on the
+ * city portion. Returns the input unchanged when no suffix is found.
+ */
+export function stripCitySuffix(name: string, city: string): string {
+  if (!name || !city) return name;
+  const trimmed = name.trim();
+  const escaped = city.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(
+    `\\s*(?:[-—,]\\s*|\\s+at\\s+|\\s*\\(\\s*)${escaped}\\)?\\s*$`,
+    'i',
+  );
+  const stripped = trimmed.replace(re, '').trim();
+  return stripped.length >= 3 ? stripped : trimmed;
 }
 
 export function venueNameVariants(name: string): string[] {

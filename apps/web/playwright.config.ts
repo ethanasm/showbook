@@ -29,6 +29,9 @@ export default defineConfig({
   testDir: './tests',
   outputDir: './test-results',
   workers,
+  // CI retries absorb timing flakes (server cold-start, network blips on
+  // shared GitHub runners). Local runs keep retries off so flakes surface.
+  retries: isCI ? 2 : 0,
   // CI: custom progress reporter prints `Executing X of Y tests (Z failed)`
   // after each test; HTML report is kept for the artifact upload step.
   // Local: default `list` reporter for full per-test detail.

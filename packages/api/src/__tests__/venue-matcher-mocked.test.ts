@@ -168,6 +168,67 @@ describe('matchOrCreateVenue (mocked db)', () => {
     assert.equal(result.venue.id, 'a');
   });
 
+  // Regression: TM splits "Orpheum Theatre" between a search-side id
+  // (KovZpZAFaanA) and an event-side id with city-suffixed name "Orpheum
+  // Theatre-San Francisco" (ZFr9jZedke). Without the normalized-name match
+  // we'd create a duplicate venue and the announcements would land on it.
+  it('matches an event-side "Name-City" against an existing "Name" via stripped match', async () => {
+    const existing = {
+      id: 'v-orpheum',
+      name: 'Orpheum Theatre',
+      city: 'San Francisco',
+      stateRegion: 'California',
+      country: 'US',
+      ticketmasterVenueId: 'KovZpZAFaanA',
+      googlePlaceId: null,
+      photoUrl: null,
+      latitude: 37.78,
+      longitude: -122.4,
+    };
+    reset({
+      selectResults: [
+        [], // step 1: TM id match miss (event-side id ≠ stored id)
+        [], // step 3: exact name+city miss
+        [existing], // step 3b: stripped name match hits
+      ],
+    });
+    const result = await mod.matchOrCreateVenue({
+      name: 'Orpheum Theatre-San Francisco',
+      city: 'San Francisco',
+      tmVenueId: 'ZFr9jZedke',
+    });
+    assert.equal(result.created, false);
+    assert.equal(result.venue.id, 'v-orpheum');
+  });
+
+  it('matches input "Name" against existing "Name-City" via reverse stripped match', async () => {
+    const existing = {
+      id: 'v-orpheum',
+      name: 'Orpheum Theatre-San Francisco',
+      city: 'San Francisco',
+      stateRegion: 'California',
+      country: 'US',
+      ticketmasterVenueId: 'ZFr9jZedke',
+      googlePlaceId: null,
+      photoUrl: null,
+      latitude: 37.78,
+      longitude: -122.4,
+    };
+    reset({
+      selectResults: [
+        [], // step 3: exact name+city miss
+        // step 3b skipped: input "Orpheum Theatre" has no city suffix to strip
+        [existing], // step 3c: same-city scan finds the long-named row
+      ],
+    });
+    const result = await mod.matchOrCreateVenue({
+      name: 'Orpheum Theatre',
+      city: 'San Francisco',
+    });
+    assert.equal(result.created, false);
+    assert.equal(result.venue.id, 'v-orpheum');
+  });
+
   it('creates a new venue when none exists', async () => {
     const created = {
       id: 'new',

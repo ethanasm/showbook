@@ -316,6 +316,39 @@ describe('runDailyDigest', () => {
     }
   });
 
+  it('idempotency: a second run on the same ET day skips users already sent', async () => {
+    // The previous test ("Resend success path") populated lastDigestSentAt
+    // for every eligible user with content. A pg-boss retry — modelled here
+    // by simply running the digest a second time — must not double-send.
+    process.env.RESEND_API_KEY = 're_test_key_idem';
+
+    const originalFetch = globalThis.fetch;
+    let resendCalls = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('resend')) {
+        resendCalls++;
+        return new Response(JSON.stringify({ id: 'should-not-be-called' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return originalFetch(input as RequestInfo | URL);
+    }) as typeof fetch;
+
+    try {
+      const { sent } = await runDailyDigest();
+      assert.equal(
+        resendCalls,
+        0,
+        'no Resend calls expected on a same-day re-run',
+      );
+      assert.equal(sent, 0, 'no users marked sent on retry');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('Resend failure path: per-user errors are caught and counted as skipped', async () => {
     process.env.RESEND_API_KEY = 're_test_key_fail';
 
