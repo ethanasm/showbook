@@ -19,6 +19,15 @@ the default template before committing. Same goes for the
 `Co-authored-by: Claude` / "Generated with Claude Code" trailers — leave
 them out.
 
+When you have committed changes that need to ship, hand off to the
+`creating-prs` skill rather than driving `git push` + `mcp__github__*`
+manually — it owns the push/open/subscribe loop and delegates to
+`pr-screenshots` whenever the diff touches `apps/web/{app,components}`,
+`apps/web/lib/**/*.tsx`, or `apps/mobile/{app,components}`. Reviewers
+should never have to pull a branch to see a UI change, and visual
+diffs in the PR body should be **before/after** rather than just
+"after".
+
 ## Working environment (Claude on the web)
 
 When you're running in the Claude Code web sandbox, this checkout is a **shallow clone** (`git rev-parse --is-shallow-repository` → `true`) of a single branch. As a result:
