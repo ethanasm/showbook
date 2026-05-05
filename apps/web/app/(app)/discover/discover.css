@@ -1221,6 +1221,14 @@ a.discover-row__headliner-link:hover {
     display: none;
   }
 
+  /* On the followed-regions feed, surface the headliner in the third
+   * column instead of the venue — the venue is already shown in the
+   * region group header, so duplicating it here just steals room from
+   * the headliner. */
+  .discover-row--region .discover-row__venue-cell {
+    display: none;
+  }
+
   /* Compact icon-only Watch / Calendar / Tix buttons on mobile so the
    * action column doesn't stack three full-width labelled buttons per
    * row. `font-size: 0` hides the trailing text node; the SVG keeps
