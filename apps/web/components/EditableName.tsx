@@ -7,10 +7,12 @@ export function EditableName({
   value,
   onSave,
   displayValue,
+  compact,
 }: {
   value: string;
   onSave: (name: string) => void;
   displayValue?: ReactNode;
+  compact?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -39,12 +41,14 @@ export function EditableName({
 
   const sharedStyle: React.CSSProperties = {
     fontFamily: "var(--font-display)",
-    fontSize: 48,
+    fontSize: compact ? 28 : 48,
     fontWeight: 700,
     color: "var(--ink)",
     letterSpacing: "-0.01em",
     lineHeight: 1.1,
-    marginTop: 10,
+    marginTop: compact ? 6 : 10,
+    overflowWrap: "break-word",
+    wordBreak: "break-word",
   };
 
   if (editing) {

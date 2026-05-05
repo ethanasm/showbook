@@ -26,6 +26,12 @@
      body (Geist Sans); the title treatment lives in `.display-title`. */
   --font-display: var(--font-geist-sans), sans-serif;
 
+  /* Page-level horizontal padding. Used by inline styles via
+     `padding: "Yp var(--page-pad-x)"` so screens can be retuned for
+     narrow viewports in one place. Mobile override lives at the bottom
+     of this file. */
+  --page-pad-x: 36px;
+
   /* Backward-compatible aliases */
   --background: var(--bg);
   --foreground: var(--ink);
@@ -34,6 +40,12 @@
   --surface-raised: var(--surface2);
   --border: var(--rule);
   --marquee-gold: var(--accent);
+}
+
+@media (max-width: 767px) {
+  :root {
+    --page-pad-x: 14px;
+  }
 }
 
 [data-theme="light"] {

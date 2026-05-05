@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { useCompactMode } from "@/lib/useCompactMode";
+import { useIsMobile } from "@/lib/useIsMobile";
 import { EmptyState, HeroCard } from "@/components/design-system";
 import { GetStartedHub, useGetStartedDismissed } from "@/components/home/GetStartedHub";
 import type { ShowKind } from "@/components/design-system/KindBadge";
@@ -82,6 +83,7 @@ const SANS = "var(--font-geist-sans), sans-serif";
 export default function HomeView() {
   const router = useRouter();
   const compact = useCompactMode();
+  const isMobile = useIsMobile();
   const { data: shows, isLoading } = trpc.shows.list.useQuery({});
   const { data: followedArtists } = trpc.performers.followed.useQuery();
   const { data: followedVenues } = trpc.venues.followed.useQuery();
@@ -178,8 +180,8 @@ export default function HomeView() {
   const skeleton = (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* skeleton top bar */}
-      <div style={{ padding: "14px 36px", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 52 }} />
-      <div style={{ flex: 1, minHeight: 0, padding: "28px 36px 40px", display: "grid", gap: 28, alignContent: "start" }}>
+      <div style={{ padding: "14px var(--page-pad-x)", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 52 }} />
+      <div style={{ flex: 1, minHeight: 0, padding: "28px var(--page-pad-x) 40px", display: "grid", gap: 28, alignContent: "start" }}>
         {/* skeleton hero */}
         <div style={{ height: 148, background: "var(--surface)", borderLeft: "3px solid var(--rule)" }} />
         {/* skeleton mini cards */}
@@ -238,10 +240,12 @@ export default function HomeView() {
       {/* ── Top bar ─────────────────────────────────────────── */}
       <div
         style={{
-          padding: "14px 36px",
+          padding: "14px var(--page-pad-x)",
           display: "flex",
-          alignItems: "center",
+          alignItems: isMobile ? "flex-start" : "center",
           justifyContent: "space-between",
+          gap: isMobile ? 10 : 0,
+          flexWrap: isMobile ? "wrap" : "nowrap",
           borderBottom: "1px solid var(--rule)",
           flexShrink: 0,
         }}
@@ -302,7 +306,7 @@ export default function HomeView() {
                   display: "flex",
                   alignItems: "baseline",
                   gap: 6,
-                  padding: "6px 13px",
+                  padding: isMobile ? "5px 10px" : "6px 13px",
                   borderLeft: "1px solid var(--rule)",
                   whiteSpace: "nowrap",
                 }}
@@ -343,7 +347,7 @@ export default function HomeView() {
           flex: 1,
           minHeight: 0,
           overflowY: "auto",
-          padding: "28px 36px 40px",
+          padding: "28px var(--page-pad-x) 40px",
           display: "grid",
           gridTemplateColumns: "1fr",
           gap: 28,
@@ -427,12 +431,14 @@ export default function HomeView() {
             />
           )}
 
-          {/* Mini upcoming cards (3 columns) */}
+          {/* Mini upcoming cards (3 columns on desktop, stacked on mobile) */}
           {miniCards.length > 0 && (
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: `repeat(${miniCards.length}, 1fr)`,
+                gridTemplateColumns: isMobile
+                  ? "1fr"
+                  : `repeat(${miniCards.length}, 1fr)`,
                 gap: 1,
                 marginTop: 1,
                 background: "var(--rule)",
@@ -650,30 +656,32 @@ export default function HomeView() {
 
           {/* Recent table */}
           <div style={{ background: "var(--surface)" }}>
-            {/* Column headers */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "72px 110px 1fr 1fr 110px 64px 28px",
-                columnGap: 16,
-                padding: "10px 20px",
-                borderBottom: "1px solid var(--rule)",
-                fontFamily: MONO,
-                fontSize: 9.5,
-                color: "var(--faint)",
-                letterSpacing: ".12em",
-                textTransform: "uppercase",
-              }}
-            >
-              <div>Date</div>
-              <div>Kind</div>
-              <div>Headline</div>
-              <div>Venue</div>
-              <div>Seat</div>
-              <div style={{ textAlign: "right" }}>Paid</div>
-              <div />
-            </div>
+            {/* Column headers — hidden on mobile (3-col layout is self-evident). */}
+            {!isMobile && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "72px 110px 1fr 1fr 110px 64px 28px",
+                  columnGap: 16,
+                  padding: "10px 20px",
+                  borderBottom: "1px solid var(--rule)",
+                  fontFamily: MONO,
+                  fontSize: 9.5,
+                  color: "var(--faint)",
+                  letterSpacing: ".12em",
+                  textTransform: "uppercase",
+                }}
+              >
+                <div>Date</div>
+                <div>Kind</div>
+                <div>Headline</div>
+                <div>Venue</div>
+                <div>Seat</div>
+                <div style={{ textAlign: "right" }}>Paid</div>
+                <div />
+              </div>
+            )}
 
             {/* Rows */}
             {recentShows.length > 0 ? (
@@ -707,10 +715,15 @@ export default function HomeView() {
                     }
                     style={{
                       display: "grid",
-                      gridTemplateColumns:
-                        "72px 110px 1fr 1fr 110px 64px 28px",
-                      columnGap: 16,
-                      padding: compact ? "6px 20px" : "14px 20px",
+                      gridTemplateColumns: isMobile
+                        ? "56px minmax(0, 1fr) 14px"
+                        : "72px 110px 1fr 1fr 110px 64px 28px",
+                      columnGap: isMobile ? 10 : 16,
+                      padding: compact
+                        ? "6px var(--page-pad-x)"
+                        : isMobile
+                        ? "12px var(--page-pad-x)"
+                        : "14px 20px",
                       borderBottom: "1px solid var(--rule)",
                       alignItems: "center",
                       cursor: "pointer",
@@ -746,23 +759,26 @@ export default function HomeView() {
                       </div>
                     </div>
 
-                    {/* Kind */}
-                    <div
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 7,
-                        fontFamily: MONO,
-                        fontSize: 10.5,
-                        color: kindColor,
-                        letterSpacing: ".08em",
-                        textTransform: "uppercase",
-                        fontWeight: 500,
-                      }}
-                    >
-                      <KindIcon size={12} color={kindColor} />
-                      {KIND_LABELS[kind]}
-                    </div>
+                    {/* Kind — desktop only; on mobile we show the kind icon
+                        next to the venue name to keep the row to 3 cols. */}
+                    {!isMobile && (
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 7,
+                          fontFamily: MONO,
+                          fontSize: 10.5,
+                          color: kindColor,
+                          letterSpacing: ".08em",
+                          textTransform: "uppercase",
+                          fontWeight: 500,
+                        }}
+                      >
+                        <KindIcon size={12} color={kindColor} />
+                        {KIND_LABELS[kind]}
+                      </div>
+                    )}
 
                     {/* Headline + support */}
                     <div style={{ minWidth: 0 }}>
@@ -829,9 +845,36 @@ export default function HomeView() {
                           })}
                         </div>
                       )}
+                      {isMobile && (
+                        <div
+                          style={{
+                            fontFamily: SANS,
+                            fontSize: 12,
+                            color: "var(--muted)",
+                            marginTop: 4,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            maxWidth: "100%",
+                          }}
+                        >
+                          <KindIcon size={11} color={kindColor} />
+                          <Link
+                            href={`/venues/${s.venue.id}`}
+                            style={{ color: "inherit", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis" }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {s.venue.name}
+                          </Link>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Venue */}
+                    {/* Venue — desktop only; mobile merges venue into the headline cell. */}
+                    {!isMobile && (
                     <div style={{ minWidth: 0 }}>
                       <div
                         style={{
@@ -866,31 +909,36 @@ export default function HomeView() {
                         </div>
                       )}
                     </div>
+                    )}
 
-                    {/* Seat */}
-                    <div
-                      style={{
-                        fontFamily: MONO,
-                        fontSize: 11,
-                        color: "var(--muted)",
-                      }}
-                    >
-                      {s.seat ?? "—"}
-                    </div>
+                    {/* Seat — desktop only */}
+                    {!isMobile && (
+                      <div
+                        style={{
+                          fontFamily: MONO,
+                          fontSize: 11,
+                          color: "var(--muted)",
+                        }}
+                      >
+                        {s.seat ?? "—"}
+                      </div>
+                    )}
 
-                    {/* Paid */}
-                    <div
-                      style={{
-                        textAlign: "right",
-                        fontFamily: MONO,
-                        fontSize: 12,
-                        color: "var(--ink)",
-                        fontWeight: 500,
-                        fontFeatureSettings: '"tnum"',
-                      }}
-                    >
-                      {paidDisplay}
-                    </div>
+                    {/* Paid — desktop only */}
+                    {!isMobile && (
+                      <div
+                        style={{
+                          textAlign: "right",
+                          fontFamily: MONO,
+                          fontSize: 12,
+                          color: "var(--ink)",
+                          fontWeight: 500,
+                          fontFeatureSettings: '"tnum"',
+                        }}
+                      >
+                        {paidDisplay}
+                      </div>
+                    )}
 
                     {/* Chevron */}
                     <ChevronRight

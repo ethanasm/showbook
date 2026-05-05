@@ -44,7 +44,8 @@ export default function VenuesView() {
   const [currentPage, setCurrentPage] = useState(0);
   const compact = useCompactMode();
   const windowWidth = useWindowWidth();
-  const isHalfWidth = windowWidth < 960;
+  const isMobile = windowWidth <= 767;
+  const isHalfWidth = windowWidth < 960 && !isMobile;
 
   const PAGE_SIZE = compact ? 12 : 15;
 
@@ -189,11 +190,11 @@ export default function VenuesView() {
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
         {/* skeleton header */}
-        <div style={{ padding: "16px 36px", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 52 }} />
+        <div style={{ padding: "16px var(--page-pad-x)", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 52 }} />
         {/* skeleton filter bar */}
-        <div style={{ padding: "10px 36px", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 44, background: "var(--surface)" }} />
+        <div style={{ padding: "10px var(--page-pad-x)", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 44, background: "var(--surface)" }} />
         {/* skeleton table rows */}
-        <div style={{ flex: 1, minHeight: 0, padding: "12px 36px 24px", overflow: "hidden" }}>
+        <div style={{ flex: 1, minHeight: 0, padding: "12px var(--page-pad-x) 24px", overflow: "hidden" }}>
           <div style={{ background: "var(--surface)" }}>
             {Array.from({ length: 12 }).map((_, i) => (
               <div key={i} style={{ height: 40, borderBottom: "1px solid var(--rule)", background: "var(--surface)" }} />
@@ -208,15 +209,18 @@ export default function VenuesView() {
     return <CenteredMessage tone="error">Failed to load venues.</CenteredMessage>;
   }
 
-  // Column layout: differs by responsive breakpoint
-  const gridCols = isHalfWidth
+  // Column layout: differs by responsive breakpoint.
+  // Mobile collapses to: name | past | future | followed-eye.
+  const gridCols = isMobile
+    ? "minmax(0, 1fr) 36px 36px 24px"
+    : isHalfWidth
     ? "minmax(120px,2fr) minmax(80px,1fr) 70px 70px 32px 32px 32px"
     : "minmax(120px,2fr) minmax(60px,0.7fr) minmax(80px,1fr) 70px 70px 32px 32px 32px";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* Header */}
-      <div style={{ padding: "16px 36px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--rule)" }}>
+      <div style={{ padding: "16px var(--page-pad-x)", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--rule)" }}>
         <div>
           <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", letterSpacing: ".1em", textTransform: "uppercase" }}>
             Places you&apos;ve been
@@ -228,8 +232,8 @@ export default function VenuesView() {
       </div>
 
       {/* Filter bar */}
-      <div style={{ padding: "11px 36px", display: "flex", alignItems: "center", gap: 18, background: "var(--surface)", borderBottom: "1px solid var(--rule)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", border: "1px solid var(--rule-strong)", minWidth: 220 }}>
+      <div style={{ padding: "11px var(--page-pad-x)", display: "flex", alignItems: "center", gap: isMobile ? 8 : 18, flexWrap: "wrap", background: "var(--surface)", borderBottom: "1px solid var(--rule)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", border: "1px solid var(--rule-strong)", minWidth: isMobile ? 0 : 220, flex: isMobile ? "1 1 100%" : undefined }}>
           <Search size={12} color="var(--muted)" />
           <input
             value={search}
@@ -246,14 +250,14 @@ export default function VenuesView() {
 
       {/* List */}
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
-        <div style={{ padding: "18px 36px 8px", display: "flex", alignItems: "baseline", gap: 14 }}>
+        <div style={{ padding: "18px var(--page-pad-x) 8px", display: "flex", alignItems: "baseline", gap: 14 }}>
           <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--ink)", letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 500 }}>
             {search ? "Matching" : "All venues"} &middot; {filtered.length}
           </div>
         </div>
 
         {filtered.length === 0 ? (
-          <div style={{ padding: "28px 36px" }}>
+          <div style={{ padding: "28px var(--page-pad-x)" }}>
             <EmptyState
               kind="venues"
               title={search ? "No venue matches" : "No venues yet"}
@@ -270,18 +274,18 @@ export default function VenuesView() {
             />
           </div>
         ) : (
-          <div style={{ margin: "4px 36px 0", background: "var(--surface)" }}>
+          <div style={{ margin: "4px var(--page-pad-x) 0", background: "var(--surface)" }}>
             {/* Column headers */}
-            <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: 20, padding: "10px 20px", borderBottom: "1px solid var(--rule)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase" }}>
+            <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 8 : 20, padding: isMobile ? "8px 12px" : "10px 20px", borderBottom: "1px solid var(--rule)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase" }}>
               <SortHeader<SortField> field="name" label="Name" sort={sort} onToggle={toggleSort} />
-              {!isHalfWidth && (
+              {!isHalfWidth && !isMobile && (
                 <SortHeader<SortField> field="state" label="State" sort={sort} onToggle={toggleSort} />
               )}
-              <SortHeader<SortField> field="city" label={isHalfWidth ? "City" : "City"} sort={sort} onToggle={toggleSort} />
-              <SortHeader<SortField> field="past" label="Past" sort={sort} onToggle={toggleSort} align="center" />
-              <SortHeader<SortField> field="future" label="Future" sort={sort} onToggle={toggleSort} align="center" />
-              <div style={{ textAlign: "center" }}><Ticket size={10} /></div>
-              <div style={{ textAlign: "center" }}><MapPin size={10} /></div>
+              {!isMobile && <SortHeader<SortField> field="city" label="City" sort={sort} onToggle={toggleSort} />}
+              <SortHeader<SortField> field="past" label={isMobile ? "Seen" : "Past"} sort={sort} onToggle={toggleSort} align="center" />
+              <SortHeader<SortField> field="future" label={isMobile ? "Up" : "Future"} sort={sort} onToggle={toggleSort} align="center" />
+              {!isMobile && <div style={{ textAlign: "center" }}><Ticket size={10} /></div>}
+              {!isMobile && <div style={{ textAlign: "center" }}><MapPin size={10} /></div>}
               <div style={{ textAlign: "center" }}><Eye size={10} /></div>
             </div>
 
@@ -298,7 +302,7 @@ export default function VenuesView() {
                   style={{ position: "relative" }}
                 >
                   {isEditing ? (
-                    <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: 20, padding: compact ? "5px 20px" : "10px 20px", borderBottom: "1px solid var(--rule)", alignItems: "center" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 8 : 20, padding: compact ? "5px 20px" : isMobile ? "10px 12px" : "10px 20px", borderBottom: "1px solid var(--rule)", alignItems: "center" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                         <MapPin size={14} color="var(--muted)" style={{ flexShrink: 0 }} />
                         <input
@@ -317,39 +321,48 @@ export default function VenuesView() {
                   ) : (
                     <Link
                       href={`/venues/${v.id}`}
-                      style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: 20, padding: compact ? "5px 20px" : "12px 20px", borderBottom: "1px solid var(--rule)", alignItems: "center", cursor: "pointer", color: "inherit", textDecoration: "none" }}
+                      style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 8 : 20, padding: compact ? "5px 20px" : isMobile ? "10px 12px" : "12px 20px", borderBottom: "1px solid var(--rule)", alignItems: "center", cursor: "pointer", color: "inherit", textDecoration: "none" }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface2, var(--surface))")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                        <RemoteImage
-                          src={v.photoUrl ? `/api/venue-photo/${v.id}` : null}
-                          alt=""
-                          kind="venue"
-                          name={v.name}
-                          aspect="square"
-                          size="thumb"
-                        />
-                        <span style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 14, fontWeight: 500, color: "var(--ink)", letterSpacing: -0.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? 2 : 10, minWidth: 0 }}>
+                        {!isMobile && (
+                          <RemoteImage
+                            src={v.photoUrl ? `/api/venue-photo/${v.id}` : null}
+                            alt=""
+                            kind="venue"
+                            name={v.name}
+                            aspect="square"
+                            size="thumb"
+                          />
+                        )}
+                        <span style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 14, fontWeight: 500, color: "var(--ink)", letterSpacing: -0.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
                           {v.name}
                         </span>
+                        {isMobile && (
+                          <span style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
+                            {cityDisplay}
+                          </span>
+                        )}
                       </div>
-                      {!isHalfWidth && (
+                      {!isHalfWidth && !isMobile && (
                         <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: v.stateRegion ? "var(--ink)" : "var(--faint)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {v.stateRegion ?? "—"}
                         </div>
                       )}
-                      <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {cityDisplay}
-                      </div>
+                      {!isMobile && (
+                        <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {cityDisplay}
+                        </div>
+                      )}
                       <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: v.pastShowsCount > 0 ? "var(--ink)" : "var(--faint)", fontFeatureSettings: '"tnum"' }}>
                         {v.pastShowsCount}
                       </div>
                       <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: v.futureShowsCount > 0 ? "var(--accent)" : "var(--faint)", fontFeatureSettings: '"tnum"' }}>
                         {v.futureShowsCount}
                       </div>
-                      <MetadataIcon linked={Boolean(v.ticketmasterVenueId)} label="Ticketmaster ID" Icon={Ticket} color="var(--accent)" />
-                      <MetadataIcon linked={Boolean(v.googlePlaceId)} label="Google Places ID" Icon={MapPin} color="var(--kind-concert)" />
+                      {!isMobile && <MetadataIcon linked={Boolean(v.ticketmasterVenueId)} label="Ticketmaster ID" Icon={Ticket} color="var(--accent)" />}
+                      {!isMobile && <MetadataIcon linked={Boolean(v.googlePlaceId)} label="Google Places ID" Icon={MapPin} color="var(--kind-concert)" />}
                       <span title={v.isFollowed ? "Following" : "Not following"} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                         {v.isFollowed && <Eye size={13} color="var(--accent)" />}
                       </span>

@@ -36,7 +36,7 @@ export function PaginationFooter({
         position: "sticky",
         bottom: 0,
         zIndex: 5,
-        margin: "auto 36px 0",
+        margin: "auto var(--page-pad-x) 0",
         background: "var(--surface)",
         borderTop: "1px solid var(--rule)",
         padding: "12px 20px",

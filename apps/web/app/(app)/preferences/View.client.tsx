@@ -647,9 +647,9 @@ export default function PreferencesView() {
     return (
       <div style={styles.container}>
         {/* skeleton header */}
-        <div style={{ padding: "16px 36px", borderBottom: "1px solid var(--rule)", height: 52 }} />
+        <div style={{ padding: "16px var(--page-pad-x)", borderBottom: "1px solid var(--rule)", height: 52 }} />
         {/* skeleton sections */}
-        <div style={{ padding: "28px 36px", display: "grid", gap: 28, alignContent: "start" }}>
+        <div style={{ padding: "28px var(--page-pad-x)", display: "grid", gap: 28, alignContent: "start" }}>
           {Array.from({ length: 3 }).map((_, sectionIdx) => (
             <div key={sectionIdx} style={{ display: "grid", gap: 10 }}>
               <div style={{ height: 14, width: 140, background: "var(--rule)" }} />
@@ -1134,7 +1134,7 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: 0,
   },
   header: {
-    padding: "16px 36px",
+    padding: "16px var(--page-pad-x)",
     borderBottom: "1px solid var(--rule)",
   },
   headerLabel: {
@@ -1156,7 +1156,7 @@ const styles: Record<string, React.CSSProperties> = {
   content: {
     flex: 1,
     overflow: "auto",
-    padding: "28px 36px 60px",
+    padding: "28px var(--page-pad-x) 60px",
   },
   contentInner: {
     maxWidth: 720,

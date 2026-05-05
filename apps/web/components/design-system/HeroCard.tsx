@@ -12,6 +12,7 @@ import {
   Check,
 } from "lucide-react";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
+import { useIsMobile } from "@/lib/useIsMobile";
 
 export interface HeroShow {
   headliner: string;
@@ -37,13 +38,14 @@ interface HeroCardProps {
 export function HeroCard({ show }: HeroCardProps) {
   const KindIcon = KIND_ICONS[show.kind];
   const kindColor = `var(--kind-${show.kind})`;
+  const isMobile = useIsMobile();
 
   return (
     <div
       style={{
         position: "relative",
         overflow: "hidden",
-        padding: "28px 32px",
+        padding: isMobile ? "20px 18px" : "28px 32px",
         background: "var(--surface)",
         border: "1px solid var(--rule)",
         borderRadius: 12,
@@ -89,8 +91,8 @@ export function HeroCard({ show }: HeroCardProps) {
           position: "relative",
           zIndex: 1,
           display: "grid",
-          gridTemplateColumns: "1fr auto",
-          gap: 32,
+          gridTemplateColumns: isMobile ? "1fr" : "1fr auto",
+          gap: isMobile ? 18 : 32,
           alignItems: "center",
       }}
     >
@@ -151,11 +153,13 @@ export function HeroCard({ show }: HeroCardProps) {
         <div
           style={{
             fontFamily: "var(--font-display)",
-            fontSize: 52,
+            fontSize: isMobile ? 32 : 52,
             fontWeight: 700,
             letterSpacing: "-0.01em",
             color: "var(--ink)",
             lineHeight: 1.1,
+            overflowWrap: "break-word",
+            wordBreak: "break-word",
           }}
         >
           {show.headlinerId ? (
@@ -211,8 +215,10 @@ export function HeroCard({ show }: HeroCardProps) {
         <div
           style={{
             display: "flex",
-            gap: 32,
-            marginTop: 22,
+            flexWrap: "wrap",
+            gap: isMobile ? 14 : 32,
+            rowGap: 10,
+            marginTop: isMobile ? 14 : 22,
             fontFamily: "var(--font-geist-sans), sans-serif",
             fontSize: 13,
             color: "var(--ink)",
@@ -287,13 +293,19 @@ export function HeroCard({ show }: HeroCardProps) {
         </div>
       </div>
 
-      {/* Right side — date column */}
+      {/* Right side — date column. On mobile this becomes a horizontal
+          strip below the headliner so the day digit doesn't crowd the title. */}
       <div
         style={{
-          textAlign: "center",
-          paddingLeft: 32,
-          borderLeft: "1px solid var(--rule)",
-          minWidth: 180,
+          textAlign: isMobile ? "left" : "center",
+          paddingLeft: isMobile ? 0 : 32,
+          paddingTop: isMobile ? 14 : 0,
+          borderLeft: isMobile ? "none" : "1px solid var(--rule)",
+          borderTop: isMobile ? "1px solid var(--rule)" : "none",
+          minWidth: isMobile ? 0 : 180,
+          display: isMobile ? "flex" : "block",
+          alignItems: "center",
+          gap: isMobile ? 14 : 0,
         }}
       >
         <div
@@ -304,6 +316,7 @@ export function HeroCard({ show }: HeroCardProps) {
             letterSpacing: ".12em",
             textTransform: "uppercase",
             fontWeight: 500,
+            order: isMobile ? 2 : 0,
           }}
         >
           {show.date.dow}
@@ -311,12 +324,13 @@ export function HeroCard({ show }: HeroCardProps) {
         <div
           style={{
             fontFamily: "var(--font-geist-sans), sans-serif",
-            fontSize: 120,
+            fontSize: isMobile ? 56 : 120,
             fontWeight: 500,
             letterSpacing: 0,
             lineHeight: 0.85,
             fontFeatureSettings: '"tnum"',
-            marginTop: 4,
+            marginTop: isMobile ? 0 : 4,
+            order: isMobile ? 0 : 0,
           }}
           className="gradient-emphasis"
         >
@@ -328,9 +342,10 @@ export function HeroCard({ show }: HeroCardProps) {
             fontSize: 12,
             color: "var(--ink)",
             letterSpacing: ".14em",
-            marginTop: 4,
+            marginTop: isMobile ? 0 : 4,
             textTransform: "uppercase",
             fontWeight: 500,
+            order: isMobile ? 1 : 0,
           }}
         >
           {show.date.month}
@@ -340,8 +355,10 @@ export function HeroCard({ show }: HeroCardProps) {
             fontFamily: "var(--font-geist-mono), monospace",
             fontSize: 10.5,
             color: "var(--muted)",
-            marginTop: 10,
+            marginTop: isMobile ? 0 : 10,
+            marginLeft: isMobile ? "auto" : 0,
             letterSpacing: ".06em",
+            order: isMobile ? 3 : 0,
           }}
         >
           {show.countdown}
