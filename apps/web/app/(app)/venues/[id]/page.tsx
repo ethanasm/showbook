@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
+import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
 import { EditableName } from "@/components/EditableName";
 import {
   Music,
@@ -133,11 +134,14 @@ export default function VenueDetailPage() {
     },
   });
 
+  const invalidateSidebarCounts = useInvalidateSidebarCounts();
+
   const updateState = trpc.shows.updateState.useMutation({
     onSuccess: () => {
       utils.venues.userShows.invalidate();
       utils.venues.detail.invalidate();
       utils.shows.invalidate();
+      invalidateSidebarCounts();
     },
   });
 
@@ -147,6 +151,7 @@ export default function VenueDetailPage() {
       utils.venues.userShows.invalidate();
       utils.venues.detail.invalidate();
       utils.shows.invalidate();
+      invalidateSidebarCounts();
     },
   });
 

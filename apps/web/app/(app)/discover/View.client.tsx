@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
+import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
 import {
   SortHeader,
   type SortConfig as SortConfigBase,
@@ -235,13 +236,24 @@ function WatchButton({
   isWatching: boolean;
   onToggle: (id: string, watching: boolean) => void;
 }) {
+  const utils = trpc.useUtils();
+  const invalidateSidebarCounts = useInvalidateSidebarCounts();
+
   const watchMutation = trpc.discover.watchlist.useMutation({
-    onSuccess: () => onToggle(announcementId, true),
+    onSuccess: () => {
+      onToggle(announcementId, true);
+      invalidateSidebarCounts();
+      utils.shows.invalidate();
+    },
     onError: () => onToggle(announcementId, false),
   });
 
   const unwatchMutation = trpc.discover.unwatchlist.useMutation({
-    onSuccess: () => onToggle(announcementId, false),
+    onSuccess: () => {
+      onToggle(announcementId, false);
+      invalidateSidebarCounts();
+      utils.shows.invalidate();
+    },
     onError: () => onToggle(announcementId, true),
   });
 

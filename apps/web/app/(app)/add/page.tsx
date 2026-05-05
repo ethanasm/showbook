@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
+import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
 import { type ShowKind } from "@/components/design-system";
 import {
   AddShowMediaStaging,
@@ -275,9 +276,17 @@ export default function AddPage() {
   const parseChat = trpc.enrichment.parseChat.useMutation();
   const extractCast = trpc.enrichment.extractCast.useMutation();
   const extractFromPdf = trpc.enrichment.extractFromPdf.useMutation();
-  const createShow = trpc.shows.create.useMutation();
+  const invalidateSidebarCounts = useInvalidateSidebarCounts();
+  const createShow = trpc.shows.create.useMutation({
+    onSuccess: () => {
+      utils.shows.invalidate();
+      invalidateSidebarCounts();
+    },
+  });
   const updateShow = trpc.shows.update.useMutation({
     onSuccess: () => {
+      utils.shows.invalidate();
+      invalidateSidebarCounts();
       router.push("/shows");
     },
   });
