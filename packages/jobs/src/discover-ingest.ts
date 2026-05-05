@@ -109,8 +109,18 @@ export async function fetchAllEvents(
  * Convert a TM event into our normalized shape. Resolves the venue and
  * headliner performer along the way (creating new rows as needed).
  * Returns null when the event is unusable (no venue).
+ *
+ * `resolvedVenueId` overrides venue resolution: when the caller already knows
+ * which venue these events belong to (e.g. Phase 1 / `ingestVenue` queried TM
+ * with a specific `venueId`), we trust that and skip `matchOrCreateVenue`.
+ * Without this, TM's habit of returning a different `_embedded.venues[0].id`
+ * than the search-time venue id (parent vs sub-venue) causes a duplicate
+ * venue row to be created and the events land on the wrong venue.
  */
-async function normalizeTmEvent(event: TMEvent): Promise<NormalizedEvent | null> {
+async function normalizeTmEvent(
+  event: TMEvent,
+  resolvedVenueId?: string,
+): Promise<NormalizedEvent | null> {
   const tmVenue = event._embedded?.venues?.[0];
   if (!tmVenue) return null;
 
@@ -133,19 +143,25 @@ async function normalizeTmEvent(event: TMEvent): Promise<NormalizedEvent | null>
     return null;
   }
 
-  const { venue } = await matchOrCreateVenue({
-    name: tmVenue.name,
-    city: tmVenue.city?.name ?? 'Unknown',
-    stateRegion: tmVenue.state?.name,
-    country: tmVenue.country?.countryCode,
-    tmVenueId: tmVenue.id,
-    lat: tmVenue.location?.latitude
-      ? parseFloat(tmVenue.location.latitude)
-      : undefined,
-    lng: tmVenue.location?.longitude
-      ? parseFloat(tmVenue.location.longitude)
-      : undefined,
-  });
+  let venueId: string;
+  if (resolvedVenueId) {
+    venueId = resolvedVenueId;
+  } else {
+    const { venue } = await matchOrCreateVenue({
+      name: tmVenue.name,
+      city: tmVenue.city?.name ?? 'Unknown',
+      stateRegion: tmVenue.state?.name,
+      country: tmVenue.country?.countryCode,
+      tmVenueId: tmVenue.id,
+      lat: tmVenue.location?.latitude
+        ? parseFloat(tmVenue.location.latitude)
+        : undefined,
+      lng: tmVenue.location?.longitude
+        ? parseFloat(tmVenue.location.longitude)
+        : undefined,
+    });
+    venueId = venue.id;
+  }
 
   const attractions = event._embedded?.attractions ?? [];
   const headlinerAttraction = attractions[0];
@@ -204,7 +220,7 @@ async function normalizeTmEvent(event: TMEvent): Promise<NormalizedEvent | null>
     kind: inferKind(event.classifications, { eventName: event.name }),
     headliner: headlinerName,
     headlinerPerformerId,
-    venueId: venue.id,
+    venueId,
     support,
     supportPerformerIds: supportPerformerIds.length > 0 ? supportPerformerIds : null,
     onSaleDate: parseOnSaleDate(event),
@@ -369,12 +385,13 @@ async function pruneDuplicateFestivalSinglesForRun(run: EventRun): Promise<void>
 async function ingestTmEvents(
   events: TMEvent[],
   existingSourceIds: Set<string>,
+  resolvedVenueId?: string,
 ): Promise<number> {
   const normalized: NormalizedEvent[] = [];
   for (const event of events) {
     if (existingSourceIds.has(event.id)) continue;
     try {
-      const ne = await normalizeTmEvent(event);
+      const ne = await normalizeTmEvent(event, resolvedVenueId);
       if (ne) normalized.push(ne);
     } catch (err) {
       log.error(
@@ -454,7 +471,7 @@ export async function ingestVenue(venueId: string): Promise<{ events: number }> 
     startDateTime: nowISO(),
     endDateTime: futureISO(INGEST_HORIZON_MONTHS),
   });
-  const created = await ingestTmEvents(events, existingSourceIds);
+  const created = await ingestTmEvents(events, existingSourceIds, venue.id);
   log.info(
     {
       event: 'discover.ingest.targeted.venue',
@@ -634,14 +651,14 @@ export async function runDiscoverIngest(): Promise<{
   // ==========================================================================
 
   let phase1Events = 0;
-  for (const { tmVenueId } of followedVenues) {
+  for (const { venueId, tmVenueId } of followedVenues) {
     try {
       const events = await fetchAllEvents({
         venueId: tmVenueId,
         startDateTime: start,
         endDateTime: end,
       });
-      phase1Events += await ingestTmEvents(events, existingSourceIds);
+      phase1Events += await ingestTmEvents(events, existingSourceIds, venueId);
     } catch (err) {
       log.error(
         { err, event: 'discover.ingest.phase1.venue_failed', tmVenueId },
