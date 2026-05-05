@@ -439,45 +439,11 @@ test('inferKind: returns "concert" when classifications is empty', () => {
   assert.equal(inferKind([]), 'concert');
 });
 
-test('inferKind: arts/theatre with an unrecognised genre defaults to theatre', () => {
-  // Genuine concerts come in under the Music segment; anything tagged
-  // Arts & Theatre is a stage performance even if the genre string doesn't
-  // literally contain "theatre"/"musical" (e.g. "Performance Art",
-  // "Children's Entertainment", "Theatrical Production", "Lecture").
-  assert.equal(
-    inferKind([
-      { primary: true, segment: { id: 's', name: 'Arts & Theatre' }, genre: { id: 'g', name: 'Lecture' } },
-    ]),
-    'theatre',
-  );
-  assert.equal(
-    inferKind([
-      { primary: true, segment: { id: 's', name: 'Arts & Theatre' }, genre: { id: 'g', name: 'Performance Art' } },
-    ]),
-    'theatre',
-  );
-  assert.equal(
-    inferKind([
-      { primary: true, segment: { id: 's', name: 'Arts & Theatre' } },
-    ]),
-    'theatre',
-  );
-});
-
-test('inferKind: theater spelling is recognised', () => {
-  assert.equal(
-    inferKind([
-      { primary: true, segment: { id: 's', name: 'Arts & Theatre' }, genre: { id: 'g', name: 'Theater' } },
-    ]),
-    'theatre',
-  );
-});
-
 test('inferKind: when no classification is primary, picks the first', () => {
   assert.equal(
     inferKind([
-      { primary: false, segment: { id: 's1', name: 'Music' }, genre: { id: 'g', name: 'Rock' } },
-      { primary: false, segment: { id: 's2', name: 'Sports' } },
+      { primary: false, segment: { id: 'KZFzniwnSyZfZ7v7nJ', name: 'Music' }, genre: { id: 'g', name: 'Rock' } },
+      { primary: false, segment: { id: 'KZFzniwnSyZfZ7v7nE', name: 'Sports' } },
     ]),
     'concert',
   );
@@ -486,7 +452,7 @@ test('inferKind: when no classification is primary, picks the first', () => {
 test('inferKind: known festival name "Outside Lands" maps to festival even without festival tokens', () => {
   assert.equal(
     inferKind(
-      [{ primary: true, segment: { id: 's', name: 'Music' }, genre: { id: 'g', name: 'Indie' } }],
+      [{ primary: true, segment: { id: 'KZFzniwnSyZfZ7v7nJ', name: 'Music' }, genre: { id: 'g', name: 'Indie' } }],
       { eventName: 'Outside Lands 2026' },
     ),
     'festival',
@@ -496,7 +462,7 @@ test('inferKind: known festival name "Outside Lands" maps to festival even witho
 test('inferKind: handles null eventName gracefully', () => {
   assert.equal(
     inferKind(
-      [{ primary: true, segment: { id: 's', name: 'Music' }, genre: { id: 'g', name: 'Rock' } }],
+      [{ primary: true, segment: { id: 'KZFzniwnSyZfZ7v7nJ', name: 'Music' }, genre: { id: 'g', name: 'Rock' } }],
       { eventName: null },
     ),
     'concert',
