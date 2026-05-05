@@ -64,16 +64,65 @@ describe('buildTicketSearchQuery', () => {
 });
 
 describe('buildBulkScanQueries', () => {
-  it('returns three distinct queries', () => {
+  it('returns four distinct queries', () => {
     const qs = buildBulkScanQueries();
-    assert.equal(qs.length, 3);
-    assert.equal(new Set(qs).size, 3);
+    assert.equal(qs.length, 4);
+    assert.equal(new Set(qs).size, 4);
   });
 
   it('includes ticket platform names in mid-priority query', () => {
     const qs = buildBulkScanQueries();
     assert.match(qs[1] ?? '', /ticketmaster/i);
     assert.match(qs[1] ?? '', /eventbrite/);
+  });
+
+  it('expands the exact-sender allowlist beyond the original four', () => {
+    const exact = buildBulkScanQueries()[0] ?? '';
+    // Original four
+    assert.match(exact, /customer_support@email\.ticketmaster\.com/);
+    assert.match(exact, /guestservices@axs\.com/);
+    assert.match(exact, /order-support@frontgatetickets\.com/);
+    assert.match(exact, /no-reply@e\.todaytix\.com/);
+    // Newly added — these are the recall wins we're after
+    assert.match(exact, /noreply@account\.ticketmaster\.com/);
+    assert.match(exact, /order@axs\.com/);
+    assert.match(exact, /noreply@dice\.fm/);
+    assert.match(exact, /hello@dice\.fm/);
+    assert.match(exact, /noreply@seetickets\.us/);
+    assert.match(exact, /tickets@seatgeek\.com/);
+    assert.match(exact, /orders@eventbrite\.com/);
+    assert.match(exact, /service@telecharge\.com/);
+    assert.match(exact, /noreply@email\.stubhub\.com/);
+  });
+
+  it('adds a sender-domain query that drops the subject-keyword requirement', () => {
+    const domainQuery = buildBulkScanQueries()[3] ?? '';
+    // Should be sender-domain based, no positive subject:() AND clause
+    // (-subject:(...) exclusions are fine — only the AND-required keyword
+    // filter is what hurts recall)
+    assert.doesNotMatch(domainQuery, /(^|\s)subject:\(/);
+    assert.match(domainQuery, /@dice\.fm/);
+    assert.match(domainQuery, /@seatgeek\.com/);
+    assert.match(domainQuery, /@eventbrite\.com/);
+    // Still keeps the BULK_EXCLUSIONS guards
+    assert.match(domainQuery, /-subject:\(museum/);
+    assert.match(domainQuery, /-category:promotions/);
+  });
+
+  it('drops poster/merch from BULK_EXCLUSIONS to recover legit add-on confirmations', () => {
+    const qs = buildBulkScanQueries();
+    // The mid + broad + domain queries embed BULK_EXCLUSIONS. None of them
+    // should still be filtering on poster/merch in subject.
+    for (const q of [qs[1], qs[2], qs[3]]) {
+      assert.ok(q);
+      assert.doesNotMatch(q, /poster/);
+      assert.doesNotMatch(q, /\bmerch\b/);
+      assert.doesNotMatch(q, /merchandise/);
+      // Sanity: real exclusions are still there
+      assert.match(q, /museum/);
+      assert.match(q, /shipping/);
+      assert.match(q, /parking/);
+    }
   });
 });
 

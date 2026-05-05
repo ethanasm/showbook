@@ -175,14 +175,47 @@ export function buildTicketSearchQuery(options: {
 }
 
 const BULK_EXCLUSIONS =
-  '-subject:(museum OR shipping OR shipped OR tracking OR poster OR merch OR ' +
-  'merchandise OR "bus pass" OR shuttle OR parking OR camping OR flight OR hotel) ' +
+  '-subject:(museum OR shipping OR shipped OR tracking OR ' +
+  '"bus pass" OR shuttle OR parking OR camping OR flight OR hotel) ' +
   '-from:(museum OR gallery OR ups OR fedex OR usps OR airbnb OR hotels OR airline OR events@mail.stubhub.com OR livemusic@frontgatetickets.com)';
+
+// Senders whose mail is high-precision enough that we accept everything from
+// them and let the LLM stage decide whether each message is a real ticket
+// confirmation. Keep additions narrow — a noisy marketing address here will
+// burn LLM budget on every scan.
+const KNOWN_TICKET_SENDERS = [
+  'customer_support@email.ticketmaster.com',
+  'noreply@account.ticketmaster.com',
+  'guestservices@axs.com',
+  'order@axs.com',
+  'order-support@frontgatetickets.com',
+  'no-reply@e.todaytix.com',
+  'noreply@dice.fm',
+  'hello@dice.fm',
+  'noreply@seetickets.us',
+  'tickets@seatgeek.com',
+  'noreply@seatgeek.com',
+  'orders@eventbrite.com',
+  'service@telecharge.com',
+  'noreply@email.stubhub.com',
+];
+
+// Domains that send confirmation mail with subject lines we can't reliably
+// keyword-match (e.g. DICE's "You're going to…", SeatGeek's "Get ready for
+// tonight"). Combined with BULK_EXCLUSIONS this stays high-precision.
+const KNOWN_TICKET_DOMAINS = [
+  '@dice.fm',
+  '@seatgeek.com',
+  '@eventbrite.com',
+  '@seetickets.us',
+  '@telecharge.com',
+  '@todaytix.com',
+];
 
 export function buildBulkScanQueries(): string[] {
   return [
     // High-priority: known purchase confirmation senders
-    'from:(customer_support@email.ticketmaster.com OR guestservices@axs.com OR order-support@frontgatetickets.com OR no-reply@e.todaytix.com)',
+    `from:(${KNOWN_TICKET_SENDERS.join(' OR ')})`,
     // Known ticket platforms by sender
     'subject:(ticket OR tickets OR confirmation OR order) ' +
     'from:(ticketmaster OR axs OR eventbrite OR stubhub OR seatgeek OR ' +
@@ -194,6 +227,10 @@ export function buildBulkScanQueries(): string[] {
     // Broader: ticket/order confirmations from any sender
     'subject:(tickets OR "order confirmation" OR "e-ticket" OR "booking confirmation") ' +
     '-category:promotions ' + BULK_EXCLUSIONS,
+    // Sender-domain net for platforms whose subject lines don't match the
+    // keyword filters above (DICE "You're going to…", SeatGeek "Get ready for
+    // tonight", Eventbrite event reminders, etc.)
+    `from:(${KNOWN_TICKET_DOMAINS.join(' OR ')}) -category:promotions ${BULK_EXCLUSIONS}`,
   ];
 }
 
