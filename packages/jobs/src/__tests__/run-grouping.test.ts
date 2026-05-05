@@ -10,12 +10,20 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { groupEventsIntoRuns, shouldGroup, type NormalizedEvent } from '../run-grouping';
+import {
+  dedupeTierVariants,
+  groupEventsIntoRuns,
+  shouldGroup,
+  type NormalizedEvent,
+} from '../run-grouping';
 
 function makeEvent(overrides: Partial<NormalizedEvent>): NormalizedEvent {
   return {
     sourceEventId: overrides.sourceEventId ?? `id-${Math.random()}`,
+    extraSourceEventIds: overrides.extraSourceEventIds ?? [],
     date: overrides.date ?? '2026-08-01',
+    localTime: overrides.localTime ?? null,
+    city: overrides.city ?? 'amsterdam',
     kind: overrides.kind ?? 'theatre',
     headliner: overrides.headliner ?? 'Hamilton',
     headlinerPerformerId: overrides.headlinerPerformerId ?? 'hamilton-perf',
@@ -341,6 +349,212 @@ test('groupEventsIntoRuns: on-sale status sold_out only when ALL nights sold out
   ];
   const { runs } = groupEventsIntoRuns(events);
   assert.equal(runs[0]!.onSaleStatus, 'sold_out');
+});
+
+test('dedupeTierVariants: collapses same-night tier variants at one venue cluster', () => {
+  // The screenshot case: four "Ziggo Dome" listings on the same night for
+  // the same artist — different sub-room venues, different on-sale dates.
+  const events = [
+    makeEvent({
+      sourceEventId: 'main',
+      kind: 'concert',
+      headliner: 'Sabrina Carpenter',
+      headlinerPerformerId: 'sc',
+      venueId: 'ziggo-dome',
+      city: 'amsterdam',
+      date: '2026-05-04',
+      onSaleDate: new Date('2025-10-03T00:00:00Z'),
+      onSaleStatus: 'on_sale',
+      support: ['Opener A'],
+    }),
+    makeEvent({
+      sourceEventId: 'club-early',
+      kind: 'concert',
+      headliner: 'Sabrina Carpenter',
+      headlinerPerformerId: 'sc',
+      venueId: 'ziggo-dome-club',
+      city: 'amsterdam',
+      date: '2026-05-04',
+      onSaleDate: new Date('2025-12-09T00:00:00Z'),
+      onSaleStatus: 'on_sale',
+    }),
+    makeEvent({
+      sourceEventId: 'club-late',
+      kind: 'concert',
+      headliner: 'Sabrina Carpenter',
+      headlinerPerformerId: 'sc',
+      venueId: 'ziggo-dome-club',
+      city: 'amsterdam',
+      date: '2026-05-04',
+      onSaleDate: new Date('2026-04-07T00:00:00Z'),
+      onSaleStatus: 'on_sale',
+    }),
+    makeEvent({
+      sourceEventId: 'vinyl-room',
+      kind: 'concert',
+      headliner: 'Sabrina Carpenter',
+      headlinerPerformerId: 'sc',
+      venueId: 'vinyl-room',
+      city: 'amsterdam',
+      date: '2026-05-04',
+      onSaleDate: new Date('2026-01-16T00:00:00Z'),
+      onSaleStatus: 'on_sale',
+    }),
+  ];
+
+  const deduped = dedupeTierVariants(events);
+  assert.equal(deduped.length, 1);
+  // Canonical = most support, then earliest on-sale → 'main'.
+  assert.equal(deduped[0]!.sourceEventId, 'main');
+  assert.deepEqual(
+    [...deduped[0]!.extraSourceEventIds].sort(),
+    ['club-early', 'club-late', 'vinyl-room'],
+  );
+});
+
+test('dedupeTierVariants: same artist different cities are NOT deduped', () => {
+  const events = [
+    makeEvent({
+      sourceEventId: 'a',
+      kind: 'concert',
+      headliner: 'Phoebe',
+      headlinerPerformerId: 'pb',
+      city: 'amsterdam',
+      date: '2026-05-04',
+    }),
+    makeEvent({
+      sourceEventId: 'b',
+      kind: 'concert',
+      headliner: 'Phoebe',
+      headlinerPerformerId: 'pb',
+      city: 'rotterdam',
+      date: '2026-05-04',
+    }),
+  ];
+  const deduped = dedupeTierVariants(events);
+  assert.equal(deduped.length, 2);
+});
+
+test('dedupeTierVariants: same artist different dates are NOT deduped', () => {
+  const events = [
+    makeEvent({
+      sourceEventId: 'a',
+      kind: 'concert',
+      headliner: 'Phoebe',
+      headlinerPerformerId: 'pb',
+      city: 'amsterdam',
+      date: '2026-05-04',
+    }),
+    makeEvent({
+      sourceEventId: 'b',
+      kind: 'concert',
+      headliner: 'Phoebe',
+      headlinerPerformerId: 'pb',
+      city: 'amsterdam',
+      date: '2026-05-05',
+    }),
+  ];
+  const deduped = dedupeTierVariants(events);
+  assert.equal(deduped.length, 2);
+});
+
+test('dedupeTierVariants: comedy early/late shows with localTime stay separate', () => {
+  const events = [
+    makeEvent({
+      sourceEventId: 'early',
+      kind: 'comedy',
+      headliner: 'John Mulaney',
+      headlinerPerformerId: 'jm',
+      city: 'nyc',
+      date: '2026-05-04',
+      localTime: '19:00:00',
+    }),
+    makeEvent({
+      sourceEventId: 'late',
+      kind: 'comedy',
+      headliner: 'John Mulaney',
+      headlinerPerformerId: 'jm',
+      city: 'nyc',
+      date: '2026-05-04',
+      localTime: '22:00:00',
+    }),
+  ];
+  const deduped = dedupeTierVariants(events);
+  assert.equal(deduped.length, 2);
+});
+
+test('dedupeTierVariants: tier variants with same start time still merge', () => {
+  const events = [
+    makeEvent({
+      sourceEventId: 'main',
+      kind: 'concert',
+      headliner: 'X',
+      headlinerPerformerId: 'x',
+      city: 'amsterdam',
+      date: '2026-05-04',
+      localTime: '20:00:00',
+      support: ['s1'],
+    }),
+    makeEvent({
+      sourceEventId: 'vip',
+      kind: 'concert',
+      headliner: 'X',
+      headlinerPerformerId: 'x',
+      city: 'amsterdam',
+      date: '2026-05-04',
+      localTime: '20:00:00',
+    }),
+  ];
+  const deduped = dedupeTierVariants(events);
+  assert.equal(deduped.length, 1);
+  assert.equal(deduped[0]!.sourceEventId, 'main');
+  assert.deepEqual(deduped[0]!.extraSourceEventIds, ['vip']);
+});
+
+test('dedupeTierVariants: festivals are exempt', () => {
+  const events = [
+    makeEvent({
+      sourceEventId: 'three-day',
+      kind: 'festival',
+      headliner: 'Outside Lands',
+      headlinerPerformerId: 'ol',
+      city: 'sf',
+      date: '2026-08-07',
+    }),
+    makeEvent({
+      sourceEventId: 'platinum',
+      kind: 'festival',
+      headliner: 'Outside Lands',
+      headlinerPerformerId: 'ol',
+      city: 'sf',
+      date: '2026-08-07',
+    }),
+  ];
+  const deduped = dedupeTierVariants(events);
+  assert.equal(deduped.length, 2);
+});
+
+test('dedupeTierVariants -> groupEventsIntoRuns: extras are carried into the run', () => {
+  const events = [
+    makeEvent({
+      sourceEventId: 'main',
+      kind: 'theatre',
+      city: 'nyc',
+      date: '2026-05-04',
+      support: ['s'],
+    }),
+    makeEvent({
+      sourceEventId: 'tier',
+      kind: 'theatre',
+      city: 'nyc',
+      date: '2026-05-04',
+    }),
+    makeEvent({ sourceEventId: 'b', kind: 'theatre', city: 'nyc', date: '2026-05-05' }),
+  ];
+  const deduped = dedupeTierVariants(events);
+  const { runs } = groupEventsIntoRuns(deduped);
+  assert.equal(runs.length, 1);
+  assert.deepEqual(runs[0]!.extraSourceEventIds, ['tier']);
 });
 
 test('groupEventsIntoRuns: earliest on-sale date across the run is used', () => {
