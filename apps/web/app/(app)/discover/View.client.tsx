@@ -22,6 +22,7 @@ import {
 } from "./region-helpers";
 import { computeAnnouncementGroupKeys } from "./grouping";
 import { DISCOVER_KIND_ICONS as KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
+import { isNonWatchableKind } from "@showbook/shared";
 import { ContextMenu } from "@/components/ContextMenu";
 import { VenueSearchModal } from "@/components/VenueSearchModal";
 import { RegionSearchModal } from "@/components/RegionSearchModal";
@@ -29,7 +30,7 @@ import { SpotifyImportModal } from "@/components/preferences/SpotifyImportModal"
 import { FollowArtistSearch } from "@/components/discover/FollowArtistSearch";
 import "./discover.css";
 
-type DiscoverKind = ShowKind | "sports";
+type DiscoverKind = ShowKind | "sports" | "film" | "unknown";
 type DiscoverSortField =
   | "showDate"
   | "kind"
@@ -109,6 +110,8 @@ const DISCOVER_KIND_ORDER: Record<DiscoverKind, number> = {
   comedy: 2,
   festival: 3,
   sports: 4,
+  film: 5,
+  unknown: 6,
 };
 
 const ON_SALE_STATUS_ORDER: Record<Announcement["onSaleStatus"], number> = {
@@ -432,7 +435,7 @@ function AnnouncementRow({
 
       {/* Actions */}
       <div className="discover-row__actions">
-        {announcement.kind !== "sports" && (
+        {!isNonWatchableKind(announcement.kind) && (
           <WatchButton
             announcementId={announcement.id}
             isWatching={isWatching}

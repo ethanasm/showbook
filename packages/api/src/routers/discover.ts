@@ -14,6 +14,7 @@ import {
   userRegions,
   venues,
 } from '@showbook/db';
+import { isNonWatchableKind, KIND_LABELS } from '@showbook/shared';
 import { matchOrCreatePerformer } from '../performer-matcher';
 import {
   enqueueIngestVenue,
@@ -506,10 +507,13 @@ export const discoverRouter = router({
         throw new Error('Announcement not found');
       }
 
-      if (announcement.kind === 'sports') {
+      if (isNonWatchableKind(announcement.kind)) {
+        // Sports / film / unknown are surfaced on Discover but Showbook
+        // doesn't (yet) model them as watchable shows.
+        const label = KIND_LABELS[announcement.kind as keyof typeof KIND_LABELS] ?? announcement.kind;
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: 'Sports events cannot be added to your watchlist',
+          message: `${label} events cannot be added to your watchlist`,
         });
       }
 

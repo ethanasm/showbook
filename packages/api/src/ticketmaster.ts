@@ -334,11 +334,24 @@ const TM_SEGMENT_ID = {
 // to "theatre".
 const TM_GENRE_ID_COMEDY = "KnvZfZ7vAe1";
 
+export type InferredKind =
+  | "concert"
+  | "theatre"
+  | "comedy"
+  | "festival"
+  | "sports"
+  | "film"
+  | "unknown";
+
 export function inferKind(
   classifications?: TMEvent["classifications"],
   context?: { eventName?: string | null },
-): "concert" | "theatre" | "comedy" | "festival" | "sports" {
-  if (!classifications || classifications.length === 0) return "concert";
+): InferredKind {
+  // No classifications at all means TM didn't tell us what kind of event
+  // this is. We don't want to silently bucket those as concerts (that's how
+  // the Orpheum theatre productions ended up mislabelled), so flag them as
+  // "unknown" and let a human / admin sort them out.
+  if (!classifications || classifications.length === 0) return "unknown";
 
   const primary =
     classifications.find((c) => c.primary) ?? classifications[0];
@@ -346,6 +359,10 @@ export function inferKind(
 
   if (segmentId === TM_SEGMENT_ID.sports) {
     return "sports";
+  }
+
+  if (segmentId === TM_SEGMENT_ID.film) {
+    return "film";
   }
 
   if (segmentId === TM_SEGMENT_ID.artsTheatre) {
@@ -377,7 +394,10 @@ export function inferKind(
     return "concert";
   }
 
-  return "concert";
+  // Miscellaneous segment, or a segment ID we don't recognise. Don't
+  // pretend we know — surface as "unknown" so it's visible on Discover but
+  // can't accidentally be added to a watchlist.
+  return "unknown";
 }
 
 export function extractMusicbrainzId(attraction: TMAttraction): string | undefined {

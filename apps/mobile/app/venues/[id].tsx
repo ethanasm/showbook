@@ -40,6 +40,7 @@ import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
+import { isNonWatchableKind } from '@showbook/shared';
 import { useAuth } from '../../lib/auth';
 import { trpc, type RouterOutput } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
@@ -78,7 +79,7 @@ function toShowCard(s: VenueShow, venueName: string, venueCity: string | null): 
     s.productionName ??
     s.showPerformers[0]?.performer.name ??
     'Untitled show';
-  const kind: Kind = s.kind === 'sports' ? 'concert' : (s.kind as Kind);
+  const kind: Kind = isNonWatchableKind(s.kind) ? 'concert' : (s.kind as Kind);
   return {
     id: s.id,
     kind,

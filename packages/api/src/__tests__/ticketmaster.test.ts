@@ -431,12 +431,12 @@ test('extractMusicbrainzId: returns undefined when musicbrainz array is empty', 
 
 // ── inferKind branches missed by ticketmaster-kind.test.ts ──────────────
 
-test('inferKind: returns "concert" when classifications is undefined', () => {
-  assert.equal(inferKind(undefined), 'concert');
+test('inferKind: returns "unknown" when classifications is undefined', () => {
+  assert.equal(inferKind(undefined), 'unknown');
 });
 
-test('inferKind: returns "concert" when classifications is empty', () => {
-  assert.equal(inferKind([]), 'concert');
+test('inferKind: returns "unknown" when classifications is empty', () => {
+  assert.equal(inferKind([]), 'unknown');
 });
 
 test('inferKind: when no classification is primary, picks the first', () => {

@@ -35,9 +35,10 @@ import { useFeedback } from '../../lib/feedback';
 import { runOptimisticMutation } from '../../lib/mutations';
 import { getCacheOutbox } from '../../lib/cache';
 
-// Local kind union; the theme's Kind includes 'sports' which the
-// create mutation's input doesn't accept yet. Until the API ships it,
-// the form's segmented control limits choices to this narrower union.
+// Local kind union; the theme's Kind includes the non-watchable kinds
+// (sports, film, unknown) which can't be manually added — see
+// NON_WATCHABLE_KINDS in @showbook/shared. The segmented control limits
+// choices to the watchable subset.
 type Kind = 'concert' | 'theatre' | 'comedy' | 'festival';
 
 const KIND_OPTIONS: { value: Kind; label: string }[] = [

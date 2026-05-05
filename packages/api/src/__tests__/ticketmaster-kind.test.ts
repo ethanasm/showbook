@@ -11,6 +11,8 @@ const SEGMENT = {
   music: { id: 'KZFzniwnSyZfZ7v7nJ', name: 'Music' },
   sports: { id: 'KZFzniwnSyZfZ7v7nE', name: 'Sports' },
   artsTheatre: { id: 'KZFzniwnSyZfZ7v7na', name: 'Arts & Theatre' },
+  film: { id: 'KZFzniwnSyZfZ7v7nn', name: 'Film' },
+  miscellaneous: { id: 'KZFzniwnSyZfZ7v7n1', name: 'Miscellaneous' },
 } as const;
 
 const GENRE_COMEDY_ID = 'KnvZfZ7vAe1';
@@ -149,16 +151,25 @@ test('inferKind: Arts & Theatre comedy keyed by genre ID even if name is unusual
   );
 });
 
-test('inferKind: unrecognised segment ID falls back to concert', () => {
-  // E.g. Film, Miscellaneous — we don't have a mapping to a stage-show
-  // kind for those, and they shouldn't accidentally land as "theatre".
+test('inferKind: Film segment maps to film', () => {
   assert.equal(
-    inferKind([
-      classification({
-        segment: { id: 'KZFzniwnSyZfZ7v7nn', name: 'Film' },
-        genre: undefined,
-      }),
-    ]),
-    'concert',
+    inferKind([classification({ segment: { ...SEGMENT.film }, genre: undefined })]),
+    'film',
   );
+});
+
+test('inferKind: Miscellaneous segment falls back to unknown, not concert', () => {
+  // We don't have a watchable kind for Misc; surface as "unknown" so it
+  // shows up on Discover but can't be added to a watchlist.
+  assert.equal(
+    inferKind([classification({ segment: { ...SEGMENT.miscellaneous }, genre: undefined })]),
+    'unknown',
+  );
+});
+
+test('inferKind: empty / missing classifications surface as unknown', () => {
+  // The previous default of "concert" silently mislabelled events whose
+  // TM payload had no classification block at all.
+  assert.equal(inferKind(undefined), 'unknown');
+  assert.equal(inferKind([]), 'unknown');
 });

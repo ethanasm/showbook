@@ -7,7 +7,7 @@
  * after each path normalizes its events into NormalizedEvent.
  */
 
-export type Kind = 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports';
+export type Kind = 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports' | 'film' | 'unknown';
 
 export interface NormalizedEvent {
   /** Stable per-source event id, used for dedup. */
