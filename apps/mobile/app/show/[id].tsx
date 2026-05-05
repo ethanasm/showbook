@@ -73,7 +73,7 @@ interface ShowDetailShowPerformer {
 }
 interface ShowDetail {
   id: string;
-  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports';
+  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports' | 'film' | 'unknown';
   state: 'past' | 'ticketed' | 'watching';
   date: string | null;
   seat: string | null;

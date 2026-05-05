@@ -14,7 +14,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Music, Drama, Smile, Tent, Trophy } from 'lucide-react-native';
+import { Music, Drama, Smile, Tent, Trophy, Film, HelpCircle } from 'lucide-react-native';
 import { useTheme } from '../lib/theme';
 import { RADII } from '../lib/theme-utils';
 import type { Kind } from '../lib/theme';
@@ -30,6 +30,8 @@ const KIND_LABEL: Record<Kind, string> = {
   comedy: 'COMEDY',
   festival: 'FESTIVAL',
   sports: 'SPORTS',
+  film: 'FILM',
+  unknown: 'UNKNOWN',
 };
 
 type LucideIconComponent = React.ComponentType<{
@@ -44,6 +46,8 @@ const KIND_ICON: Record<Kind, LucideIconComponent> = {
   comedy: Smile,
   festival: Tent,
   sports: Trophy,
+  film: Film,
+  unknown: HelpCircle,
 };
 
 export function KindBadge({ kind, size = 'sm' }: KindBadgeProps): React.JSX.Element {

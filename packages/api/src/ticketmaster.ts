@@ -310,39 +310,83 @@ function hasFestivalSignal(value: string): boolean {
   return normalized.includes("festival") || /\bfest\b/.test(normalized);
 }
 
+// Stable Ticketmaster classification IDs. These are the public, documented
+// segment + genre identifiers — they appear in TM's own URLs (e.g.
+// ticketmaster.com/discover/...?categoryId=KZFzniwnSyZfZ7v7na) and don't
+// change over time. We key off these instead of segment/genre *names*
+// because TM is inconsistent about the human-readable label on individual
+// events (a Broadway tour like Phantom of the Opera might come back with
+// genre "Theatrical Production" or "Performance Art" rather than the
+// literal substring "theatre"/"musical"), which used to cause Arts & Theatre
+// events to fall through to the "concert" default.
+const TM_SEGMENT_ID = {
+  music: "KZFzniwnSyZfZ7v7nJ",
+  sports: "KZFzniwnSyZfZ7v7nE",
+  artsTheatre: "KZFzniwnSyZfZ7v7na",
+  film: "KZFzniwnSyZfZ7v7nn",
+  miscellaneous: "KZFzniwnSyZfZ7v7n1",
+} as const;
+
+// Comedy genre under the Arts & Theatre segment. Every other Arts & Theatre
+// genre (Theatre, Musical, Children's Theatre, Dance, Opera, Magic & Illusion,
+// Performance Art, Cultural, Variety, Fine Art, Multimedia, Circus & Specialty
+// Acts, Lectures & Seminars, Pre-Game Shows) is a stage performance and maps
+// to "theatre".
+const TM_GENRE_ID_COMEDY = "KnvZfZ7vAe1";
+
+export type InferredKind =
+  | "concert"
+  | "theatre"
+  | "comedy"
+  | "festival"
+  | "sports"
+  | "film"
+  | "unknown";
+
 export function inferKind(
   classifications?: TMEvent["classifications"],
   context?: { eventName?: string | null },
-): "concert" | "theatre" | "comedy" | "festival" | "sports" {
-  if (!classifications || classifications.length === 0) return "concert";
+): InferredKind {
+  // No classifications at all means TM didn't tell us what kind of event
+  // this is. We don't want to silently bucket those as concerts (that's how
+  // the Orpheum theatre productions ended up mislabelled), so flag them as
+  // "unknown" and let a human / admin sort them out.
+  if (!classifications || classifications.length === 0) return "unknown";
 
   const primary =
     classifications.find((c) => c.primary) ?? classifications[0];
-  const segmentName = primary?.segment?.name?.toLowerCase() ?? "";
-  const genreName = primary?.genre?.name?.toLowerCase() ?? "";
-  const eventName = context?.eventName?.toLowerCase() ?? "";
+  const segmentId = primary?.segment?.id;
 
-  if (segmentName.includes("sports")) {
+  if (segmentId === TM_SEGMENT_ID.sports) {
     return "sports";
   }
 
-  if (segmentName.includes("music")) {
-    const classificationText = classifications
-      .flatMap((classification) => [
-        classification.genre?.name,
-        classification.subGenre?.name,
-        classification.type?.name,
-        classification.subType?.name,
-      ])
-      .filter((name): name is string => Boolean(name))
-      .join(" ")
-      .toLowerCase();
-    const festivalText = `${classificationText} ${eventName}`;
-    const knownFestivalNames = ["outside lands"];
+  if (segmentId === TM_SEGMENT_ID.film) {
+    return "film";
+  }
 
-    if (hasFestivalSignal(festivalText)) {
+  if (segmentId === TM_SEGMENT_ID.artsTheatre) {
+    const isComedy = classifications.some(
+      (c) => c.genre?.id === TM_GENRE_ID_COMEDY,
+    );
+    return isComedy ? "comedy" : "theatre";
+  }
+
+  if (segmentId === TM_SEGMENT_ID.music) {
+    // Festivals don't have a single canonical TM ID — TM tags them via
+    // genre / subGenre / type / subType *names* (e.g. genre "Festival",
+    // subGenre "Music Festival", type "Festival Pass"). Match those label
+    // fields directly, since that's the structured signal TM provides; this
+    // isn't name-guessing the kind, it's reading TM's own festival flag.
+    const eventName = context?.eventName ?? "";
+    const labelText = classifications
+      .flatMap((c) => [c.genre?.name, c.subGenre?.name, c.type?.name, c.subType?.name])
+      .filter((name): name is string => Boolean(name))
+      .join(" ");
+    if (hasFestivalSignal(`${labelText} ${eventName}`)) {
       return "festival";
     }
+    const knownFestivalNames = ["outside lands"];
     const normalizedEventName = normalizeFestivalText(eventName);
     if (knownFestivalNames.some((name) => normalizedEventName.includes(name))) {
       return "festival";
@@ -350,18 +394,10 @@ export function inferKind(
     return "concert";
   }
 
-  if (segmentName.includes("arts") || segmentName.includes("theatre")) {
-    if (genreName.includes("comedy")) return "comedy";
-    if (
-      genreName.includes("musical") ||
-      genreName.includes("theatre") ||
-      genreName.includes("theater")
-    ) {
-      return "theatre";
-    }
-  }
-
-  return "concert";
+  // Miscellaneous segment, or a segment ID we don't recognise. Don't
+  // pretend we know — surface as "unknown" so it's visible on Discover but
+  // can't accidentally be added to a watchlist.
+  return "unknown";
 }
 
 export function extractMusicbrainzId(attraction: TMAttraction): string | undefined {

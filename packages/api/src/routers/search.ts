@@ -14,7 +14,7 @@ const RESULT_LIMIT = 8;
 export type GlobalShowResult = {
   id: string;
   date: string | null;
-  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports';
+  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports' | 'film' | 'unknown';
   state: 'past' | 'ticketed' | 'watching';
   title: string;
   venueName: string;
