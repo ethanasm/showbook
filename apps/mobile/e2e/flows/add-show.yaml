@@ -45,7 +45,6 @@ tags:
 
 - assertVisible:
     text: "Home"
-    timeout: 15000
 
 # The Add tab opens the chat surface; the form is reachable via the
 # pen-line "form" affordance in the input footer. The middle FAB tab
@@ -57,11 +56,9 @@ tags:
 # affordance to land directly on the structured form.
 - tapOn:
     id: "Open form"
-    timeout: 10000
 
 - assertVisible:
     text: "New show"
-    timeout: 10000
 
 - tapOn:
     id: "headliner-input"
@@ -83,7 +80,6 @@ tags:
 
 - assertVisible:
     text: "Show added"
-    timeout: 15000
 
 # The success path replaces to /show/<id>; navigate back to Home and
 # verify the row landed.
@@ -92,4 +88,3 @@ tags:
 
 - assertVisible:
     text: "Maestro Test Headliner"
-    timeout: 15000

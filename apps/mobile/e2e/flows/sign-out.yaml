@@ -37,14 +37,12 @@ tags:
 
 - assertVisible:
     text: "Me"
-    timeout: 15000
 
 - tapOn:
     text: "Me"
 
 - assertVisible:
     text: "ACCOUNT"
-    timeout: 10000
 
 # The sign-out row scrolls into view at the bottom of the Me screen.
 - scrollUntilVisible:
@@ -61,11 +59,9 @@ tags:
 # match, which is the alert button.
 - assertVisible:
     text: "Are you sure you want to sign out?"
-    timeout: 5000
 
 - tapOn:
     text: "Sign out"
 
 - assertVisible:
     text: "Sign in with Google"
-    timeout: 10000

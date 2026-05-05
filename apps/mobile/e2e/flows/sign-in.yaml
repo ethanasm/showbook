@@ -40,7 +40,6 @@ tags:
 
 - assertVisible:
     text: "Sign in with Google"
-    timeout: 15000
 
 - tapOn:
     text: "Sign in with Google"
@@ -63,7 +62,6 @@ tags:
 # Add tab via accessibilityLabel="Add" (no label). Match on those.
 - assertVisible:
     text: "Home"
-    timeout: 15000
 - assertVisible:
     text: "Shows"
 - assertVisible:
