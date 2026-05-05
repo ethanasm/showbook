@@ -1720,7 +1720,7 @@ export default function DiscoverView() {
             fontFamily: "var(--font-geist-mono), monospace",
             fontSize: 11,
             color: "var(--muted)",
-            margin: "0 0 12px",
+            margin: "0 0 24px",
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
