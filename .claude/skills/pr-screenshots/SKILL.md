@@ -121,6 +121,33 @@ so re-runs replace cleanly:
 
 Edit via `mcp__github__update_pull_request`.
 
+### 5. Visually verify the screenshots before posting
+
+Screenshots are a **quality gate**, not just decoration. Before
+attaching them to the PR, open each PNG with the `Read` tool and
+confirm with your own eyes:
+
+- **The intended change is actually visible.** If the diff is `padding`,
+  `margin`, color, copy, or sizing on element X, element X must be on
+  screen *and* the change must be perceptible between before and after.
+  A passing Playwright run does not prove the visual change works —
+  CI green + invisible-on-screenshot is still a failed task.
+- **The element you changed is in the right state.** Many UI elements
+  render conditionally (loading rows, empty states, hover/focus, error
+  banners). If the seeded fixture doesn't put the element in that
+  state, mock the upstream API (tRPC route, fetch, etc.) inside the
+  spec to force it — don't ship "after" screenshots of a route that
+  doesn't even contain the element you changed.
+- **The before/after delta matches the user's request.** Re-read what
+  the user actually asked for ("more left padding", "tighter line
+  height", "bigger gap below"). If your screenshot shows a different
+  axis moving (or barely moving at all), the code change is wrong —
+  go back and fix it before pushing.
+
+If the screenshot doesn't reflect the change, do **not** post it and
+declare done. Iterate on the code until the visual matches the intent,
+or surface the blocker to the user explicitly.
+
 ## Mobile flow
 
 ### 1. Add the label
