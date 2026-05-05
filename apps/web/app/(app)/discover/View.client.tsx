@@ -927,7 +927,10 @@ function FeedSection({
         }
       }
     }
-    return Array.from(seen.values());
+    return Array.from(seen.values()).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.name.localeCompare(b.name);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, groupBy, allFollowedVenues, allFollowedArtists]);
 
