@@ -338,7 +338,7 @@
 
 /* Near You table has an extra Venue column between Kind and Headliner. */
 .discover-col-headers--region {
-  grid-template-columns: 72px 76px 196px minmax(0, 1fr) 120px 110px 200px;
+  grid-template-columns: 72px 76px 140px minmax(0, 1fr) 90px 80px 200px;
 }
 
 /* ── Venue Group ─────────────────────────────────────── */
@@ -438,7 +438,7 @@
 
 /* Near You row layout includes a Venue cell. */
 .discover-row.discover-row--region {
-  grid-template-columns: 72px 76px 196px minmax(0, 1fr) 120px 110px 200px;
+  grid-template-columns: 72px 76px 140px minmax(0, 1fr) 90px 80px 200px;
 }
 
 .discover-row__venue-cell {
