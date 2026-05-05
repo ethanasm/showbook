@@ -763,9 +763,17 @@ export async function runDiscoverIngest(): Promise<{
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const cutoffDate = sevenDaysAgo.toISOString().split('T')[0]; // YYYY-MM-DD
 
+  // For multi-night runs, `showDate` is pinned to `runStartDate` at insert
+  // time and never advances. Comparing only `showDate` against the cutoff
+  // would delete an in-progress run as soon as its first night was 7 days
+  // past — vaporising theatre productions and festivals mid-engagement.
+  // Use coalesce(runEndDate, showDate) so a single-night event (no runEnd)
+  // still gets cleaned up after its date passes.
   const deleted = await db
     .delete(announcements)
-    .where(lt(announcements.showDate, cutoffDate))
+    .where(
+      sql`coalesce(${announcements.runEndDate}, ${announcements.showDate}) < ${cutoffDate}`,
+    )
     .returning({ id: announcements.id });
   const pruned = deleted.length;
   log.info(
