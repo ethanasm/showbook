@@ -109,19 +109,39 @@ function logCheckOutcome(check: CheckResult): void {
 
 /** Minimal subset of the Resend SDK we use for the health summary
  *  email and the resend ping. Defined as an interface so tests can
- *  inject a fake without mocking the SDK module. */
+ *  inject a fake without mocking the SDK module. The optional second
+ *  arg mirrors `Resend.emails.send`'s `IdempotentRequest` shape so the
+ *  orchestrator can pass an idempotency key without dragging the full
+ *  SDK type into this module. */
 export interface ResendLike {
   emails: {
-    send(payload: {
-      from: string;
-      to: string | string[];
-      subject: string;
-      html: string;
-    }): Promise<{ data?: unknown; error?: { message: string } | null }>;
+    send(
+      payload: {
+        from: string;
+        to: string | string[];
+        subject: string;
+        html: string;
+      },
+      options?: { idempotencyKey?: string },
+    ): Promise<{ data?: unknown; error?: { message: string } | null }>;
   };
   domains: {
     list(): Promise<{ data?: unknown; error?: { message: string } | null }>;
   };
+}
+
+/**
+ * Calendar date `d` falls on in America/New_York, formatted YYYY-MM-DD.
+ * Used to derive a per-day idempotency key for the Resend send so that
+ * a pg-boss retry, a duplicate cron firing, or any other accidental
+ * re-run within the same ET day collapses into a single delivered
+ * email rather than spamming the inbox.
+ */
+function etDateString(d: Date): string {
+  const local = new Date(
+    d.toLocaleString('en-US', { timeZone: 'America/New_York' }),
+  );
+  return local.toISOString().split('T')[0]!;
 }
 
 function getResend(): ResendLike | null {
@@ -234,12 +254,21 @@ export async function runHealthCheck(
         preamble,
       });
       const subject = formatSubject(status, failCount, warnCount);
-      const sendResult = await resend.emails.send({
-        from: getFromAddress(),
-        to: recipients,
-        subject,
-        html,
-      });
+      // Idempotency key derived from the ET calendar date so any
+      // accidental re-run within the same day (pg-boss retry of a
+      // failed handler, the cron firing twice during a deploy, two
+      // workers competing) collapses to a single delivery at the
+      // Resend layer. Resend retains the prior response for 24h.
+      const idempotencyKey = `health-summary-${etDateString(now)}`;
+      const sendResult = await resend.emails.send(
+        {
+          from: getFromAddress(),
+          to: recipients,
+          subject,
+          html,
+        },
+        { idempotencyKey },
+      );
       if (sendResult.error) {
         throw new Error(sendResult.error.message);
       }
@@ -280,4 +309,4 @@ function formatSubject(
   return `${base} OK`;
 }
 
-export const _testing = { rollupStatus, formatSubject };
+export const _testing = { rollupStatus, formatSubject, etDateString };
