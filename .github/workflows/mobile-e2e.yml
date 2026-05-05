@@ -137,7 +137,7 @@ jobs:
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
 
       - name: Validate Maestro flow YAML
-        run: maestro test --dry-run apps/mobile/e2e/flows/
+        run: pnpm --filter mobile e2e:dry
 
       - name: Boot Android emulator
         run: |
