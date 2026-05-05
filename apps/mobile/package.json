@@ -13,7 +13,7 @@
     "test": "find lib/__tests__ components/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' -o -name '*.test.cjs' \\) -print0 2>/dev/null | xargs -0 -I{} node --import tsx --test {}",
     "test:coverage": "mkdir -p coverage && find lib/__tests__ components/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' -o -name '*.test.cjs' \\) -print0 2>/dev/null | xargs -0 node --import tsx --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/mobile-unit.info --test-reporter=spec --test-reporter-destination=stdout",
     "e2e:ios": "maestro test --env MAESTRO_E2E_TOKEN=\"${MAESTRO_E2E_TOKEN:-}\" --env MAESTRO_E2E_USER_JSON=\"${MAESTRO_E2E_USER_JSON:-}\" e2e/flows/",
-    "e2e:dry": "maestro test --dry-run e2e/flows/"
+    "e2e:dry": "node e2e/scripts/dry-run.mjs e2e/flows"
   },
   "dependencies": {
     "@expo/metro-runtime": "~55.0.10",
