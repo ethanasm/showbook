@@ -52,6 +52,19 @@ function formatDate(dateStr: string): string {
   });
 }
 
+/**
+ * Calendar date a Date falls on in the America/New_York timezone, formatted
+ * YYYY-MM-DD. Used by the per-user idempotency guard so a pg-boss retry of a
+ * partially-failed digest run doesn't re-email users who already received
+ * today's digest before the failure.
+ */
+function etDateString(d: Date): string {
+  const local = new Date(
+    d.toLocaleString('en-US', { timeZone: 'America/New_York' }),
+  );
+  return local.toISOString().split('T')[0]!;
+}
+
 export function whenLabel(row: {
   showDate: string;
   runStartDate: string | null;
@@ -251,6 +264,26 @@ export async function runDailyDigest(): Promise<{
 
   for (const user of eligibleUsers) {
     if (!user.email) {
+      skipped++;
+      continue;
+    }
+
+    // Idempotency guard: pg-boss retries (retryLimit=3) a failed run, and
+    // the eligibleUsers query has no per-day filter — so without this check
+    // every user already processed before the failure would receive a
+    // duplicate email on retry. Compare lastDigestSentAt's ET calendar
+    // date against todayStr; if they match, today's send already happened.
+    if (
+      user.lastDigestSentAt &&
+      etDateString(user.lastDigestSentAt) === todayStr
+    ) {
+      log.info(
+        {
+          event: 'notifications.digest.already_sent_today',
+          userId: user.userId,
+        },
+        'Skipping user: already received today\'s digest',
+      );
       skipped++;
       continue;
     }
