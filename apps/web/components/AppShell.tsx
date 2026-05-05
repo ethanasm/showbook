@@ -7,21 +7,13 @@ import { PrefsServerSync } from "@/components/PrefsServerSync";
 import { GlobalSearch, openGlobalSearch } from "@/components/GlobalSearch";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "next-auth/react";
-import { type ReactNode, useState, useRef, useEffect } from "react";
-import { Plus, Search, Map, MapPin, Music, Eye } from "lucide-react";
-
-const ADD_MENU_ITEMS = [
-  { id: "add", label: "Add a show", Icon: Plus },
-  { id: "discover", label: "Discover", Icon: Eye },
-  { id: "venues", label: "Venues", Icon: MapPin },
-  { id: "artists", label: "Artists", Icon: Music },
-  { id: "map", label: "Map", Icon: Map },
-] as const;
+import type { ReactNode } from "react";
 
 function pathnameToNavId(pathname: string): string {
   const segment = pathname.split("/")[1] ?? "home";
-  const match = NAV_ITEMS.find((item) => item.id === segment);
-  return match ? match.id : "";
+  if (NAV_ITEMS.some((item) => item.id === segment)) return segment;
+  if (BOTTOM_NAV_ITEMS.some((item) => item.id === segment)) return segment;
+  return "";
 }
 
 function navIdToPath(id: string): string {
@@ -53,27 +45,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   // its own server-side check on every navigation, so this is UX, not auth.
   const amIAdminQuery = trpc.admin.amIAdmin.useQuery(undefined, { staleTime: 5 * 60_000 });
   const isAdmin = amIAdminQuery.data?.isAdmin ?? false;
-
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
-  const addMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!addMenuOpen) return;
-    function handleClick(e: MouseEvent) {
-      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
-        setAddMenuOpen(false);
-      }
-    }
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setAddMenuOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [addMenuOpen]);
 
   const counts: Partial<Record<string, number>> = {};
   if (showsCountsQuery.data !== undefined) {
@@ -113,51 +84,24 @@ export function AppShell({ children }: { children: ReactNode }) {
         <nav className="app-shell__bottom-bar">
           {BOTTOM_NAV_ITEMS.map((item) => {
             const isActive = activeId === item.id;
-            if ("isAddButton" in item && item.isAddButton) {
-              return (
-                <div key={item.id} className="bottom-bar__add-wrapper" ref={addMenuRef}>
-                  {addMenuOpen && (
-                    <div className="bottom-bar__add-popover" role="menu">
-                      {ADD_MENU_ITEMS.map(({ label, id, Icon }) => (
-                        <button
-                          key={id}
-                          className="bottom-bar__add-popover-item"
-                          type="button"
-                          role="menuitem"
-                          onClick={() => { setAddMenuOpen(false); handleNavigate(id); }}
-                        >
-                          <Icon size={14} />
-                          <span>{label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <button
-                    className="bottom-bar__item bottom-bar__item--add"
-                    onClick={() => setAddMenuOpen((o) => !o)}
-                    type="button"
-                    aria-label="Add"
-                    aria-expanded={addMenuOpen}
-                    aria-haspopup="menu"
-                  >
-                    <span className="bottom-bar__add-circle">
-                      <item.icon size={20} strokeWidth={2.5} />
-                    </span>
-                    <span className="bottom-bar__label">{item.label}</span>
-                  </button>
-                </div>
-              );
-            }
+            const isAdd = "isAddButton" in item && item.isAddButton;
             return (
               <button
                 key={item.id}
-                className={`bottom-bar__item ${isActive ? "bottom-bar__item--active" : ""}`}
+                className={`bottom-bar__item ${isAdd ? "bottom-bar__item--add" : ""} ${isActive && !isAdd ? "bottom-bar__item--active" : ""}`}
                 onClick={() => handleNavigate(item.id)}
                 type="button"
+                aria-label={isAdd ? "Add a show" : undefined}
               >
-                <span className="bottom-bar__icon">
-                  <item.icon size={18} />
-                </span>
+                {isAdd ? (
+                  <span className="bottom-bar__add-circle">
+                    <item.icon size={20} strokeWidth={2.5} />
+                  </span>
+                ) : (
+                  <span className="bottom-bar__icon">
+                    <item.icon size={18} />
+                  </span>
+                )}
                 <span className="bottom-bar__label">{item.label}</span>
               </button>
             );

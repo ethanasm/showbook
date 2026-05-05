@@ -1117,6 +1117,13 @@ a.discover-row__headliner-link:hover {
     gap: 10px;
   }
 
+  /* Stack chips above the feed instead of letting them become a
+   * full-height row-flex sibling that stretches the chip buttons
+   * to the viewport. */
+  .discover-main {
+    flex-direction: column;
+  }
+
   /* Hide desktop rail, show mobile chips */
   .discover-rail {
     display: none;
@@ -1214,10 +1221,25 @@ a.discover-row__headliner-link:hover {
     display: none;
   }
 
+  /* Compact icon-only Watch / Calendar / Tix buttons on mobile so the
+   * action column doesn't stack three full-width labelled buttons per
+   * row. `font-size: 0` hides the trailing text node; the SVG keeps
+   * its own width/height attrs from the lucide `size={11}` prop. */
   .discover-row__actions {
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 6px;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .discover-watch-btn,
+  .discover-tix-btn {
+    padding: 6px;
+    min-width: 28px;
+    width: 28px;
+    height: 28px;
+    justify-content: center;
+    gap: 0;
+    font-size: 0;
   }
 
   .discover-venue-group__header {
