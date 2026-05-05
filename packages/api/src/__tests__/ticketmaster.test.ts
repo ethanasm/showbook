@@ -439,12 +439,28 @@ test('inferKind: returns "concert" when classifications is empty', () => {
   assert.equal(inferKind([]), 'concert');
 });
 
-test('inferKind: arts/theatre with no recognised genre falls through to concert', () => {
+test('inferKind: arts/theatre with an unrecognised genre defaults to theatre', () => {
+  // Genuine concerts come in under the Music segment; anything tagged
+  // Arts & Theatre is a stage performance even if the genre string doesn't
+  // literally contain "theatre"/"musical" (e.g. "Performance Art",
+  // "Children's Entertainment", "Theatrical Production", "Lecture").
   assert.equal(
     inferKind([
       { primary: true, segment: { id: 's', name: 'Arts & Theatre' }, genre: { id: 'g', name: 'Lecture' } },
     ]),
-    'concert',
+    'theatre',
+  );
+  assert.equal(
+    inferKind([
+      { primary: true, segment: { id: 's', name: 'Arts & Theatre' }, genre: { id: 'g', name: 'Performance Art' } },
+    ]),
+    'theatre',
+  );
+  assert.equal(
+    inferKind([
+      { primary: true, segment: { id: 's', name: 'Arts & Theatre' } },
+    ]),
+    'theatre',
   );
 });
 

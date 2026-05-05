@@ -352,13 +352,11 @@ export function inferKind(
 
   if (segmentName.includes("arts") || segmentName.includes("theatre")) {
     if (genreName.includes("comedy")) return "comedy";
-    if (
-      genreName.includes("musical") ||
-      genreName.includes("theatre") ||
-      genreName.includes("theater")
-    ) {
-      return "theatre";
-    }
+    // Anything else under Arts & Theatre — Theatre, Musical, Children's
+    // Theatre, Performance Art, Cultural, Dance, Opera, Magic, Lecture, or
+    // an unrecognised/missing genre — is a stage performance, not a concert.
+    // Real concerts arrive under the Music segment above.
+    return "theatre";
   }
 
   return "concert";
