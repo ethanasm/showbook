@@ -9,6 +9,7 @@ import { searchRouter } from './routers/search';
 import { mediaRouter } from './routers/media';
 import { spotifyImportRouter } from './routers/spotify-import';
 import { adminRouter } from './routers/admin';
+import { importsRouter } from './routers/imports';
 export const appRouter = router({
   shows: showsRouter,
   venues: venuesRouter,
@@ -19,6 +20,7 @@ export const appRouter = router({
   search: searchRouter,
   media: mediaRouter,
   spotifyImport: spotifyImportRouter,
+  imports: importsRouter,
   admin: adminRouter,
 });
 
