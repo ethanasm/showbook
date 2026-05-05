@@ -104,7 +104,13 @@ export async function pingGroq(): Promise<{ models: number }> {
   return { models: list.data.length };
 }
 
-const MODEL_TEXT = 'llama-3.3-70b-versatile';
+// Text model: openai/gpt-oss-120b on Groq. Cheaper ($0.15/$0.60 vs $0.59/$0.79
+// per Mtok input/output) and produces noticeably more specific outputs on the
+// digest/health summary prompts than llama-3.3-70b-versatile. We pin
+// `reasoning_effort: 'low'` because the default ('medium') burns 4–10× more
+// completion tokens for our JSON-shaped prompts without quality gains.
+const MODEL_TEXT = 'openai/gpt-oss-120b';
+const TEXT_REASONING_EFFORT = 'low' as const;
 const MODEL_VISION = 'meta-llama/llama-4-scout-17b-16e-instruct';
 
 function pickContent(result: { choices: Array<{ message: { content: string | null } }> }): string | null {
@@ -131,12 +137,13 @@ export async function parseShowInput(
     name: 'groq.parseShowInput',
     model: MODEL_TEXT,
     input: messages,
-    modelParameters: { response_format: 'json_object' },
+    modelParameters: { response_format: 'json_object', reasoning_effort: TEXT_REASONING_EFFORT },
     run: () =>
       groq().chat.completions.create({
         model: MODEL_TEXT,
         messages,
         response_format: { type: 'json_object' },
+        reasoning_effort: TEXT_REASONING_EFFORT,
       }),
     extractUsage: groqUsage,
     extractOutput: pickContent,
@@ -219,13 +226,14 @@ export async function extractShowFromEmail(
         name: 'groq.extractShowFromEmail',
         model: MODEL_TEXT,
         input: messages,
-        modelParameters: { response_format: 'json_object' },
+        modelParameters: { response_format: 'json_object', reasoning_effort: TEXT_REASONING_EFFORT },
         metadata: { attempt },
         run: () =>
           groq().chat.completions.create({
             model: MODEL_TEXT,
             messages,
             response_format: { type: 'json_object' },
+            reasoning_effort: TEXT_REASONING_EFFORT,
           }),
         extractUsage: groqUsage,
         extractOutput: pickContent,
@@ -286,13 +294,14 @@ export async function validateAndDedupTickets<T extends ExtractedTicketInfo>(
     name: 'groq.validateAndDedupTickets',
     model: MODEL_TEXT,
     input: messages,
-    modelParameters: { response_format: 'json_object' },
+    modelParameters: { response_format: 'json_object', reasoning_effort: TEXT_REASONING_EFFORT },
     metadata: { ticketCount: tickets.length },
     run: () =>
       groq().chat.completions.create({
         model: MODEL_TEXT,
         messages,
         response_format: { type: 'json_object' },
+        reasoning_effort: TEXT_REASONING_EFFORT,
       }),
     extractUsage: groqUsage,
     extractOutput: pickContent,
@@ -343,12 +352,13 @@ export async function extractShowFromPdfText(
     name: 'groq.extractShowFromPdfText',
     model: MODEL_TEXT,
     input: messages,
-    modelParameters: { response_format: 'json_object' },
+    modelParameters: { response_format: 'json_object', reasoning_effort: TEXT_REASONING_EFFORT },
     run: () =>
       groq().chat.completions.create({
         model: MODEL_TEXT,
         messages,
         response_format: { type: 'json_object' },
+        reasoning_effort: TEXT_REASONING_EFFORT,
       }),
     extractUsage: groqUsage,
     extractOutput: pickContent,
@@ -540,13 +550,14 @@ export async function generateDigestPreamble(
       name: 'groq.generateDigestPreamble',
       model: MODEL_TEXT,
       input: messages,
-      modelParameters: { response_format: 'json_object', temperature: 0.7 },
+      modelParameters: { response_format: 'json_object', temperature: 0.7, reasoning_effort: TEXT_REASONING_EFFORT },
       run: () =>
         groq().chat.completions.create({
           model: MODEL_TEXT,
           messages,
           response_format: { type: 'json_object' },
           temperature: 0.7,
+          reasoning_effort: TEXT_REASONING_EFFORT,
         }),
       extractUsage: groqUsage,
       extractOutput: pickContent,
@@ -631,13 +642,14 @@ export async function generateHealthSummaryPreamble(
       name: 'groq.generateHealthSummaryPreamble',
       model: MODEL_TEXT,
       input: messages,
-      modelParameters: { response_format: 'json_object', temperature: 0.4 },
+      modelParameters: { response_format: 'json_object', temperature: 0.4, reasoning_effort: TEXT_REASONING_EFFORT },
       run: () =>
         groq().chat.completions.create({
           model: MODEL_TEXT,
           messages,
           response_format: { type: 'json_object' },
           temperature: 0.4,
+          reasoning_effort: TEXT_REASONING_EFFORT,
         }),
       extractUsage: groqUsage,
       extractOutput: pickContent,

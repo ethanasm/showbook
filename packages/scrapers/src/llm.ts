@@ -71,7 +71,9 @@ function buildSystemPrompt(input: LlmExtractInput): string {
     `For each event, include a "sourceQuote" — a short verbatim substring`,
     `from the page that proves the event exists. The substring must be`,
     `directly quotable; do not paraphrase.`,
-    `Return at most 50 events. Reply with JSON only, no commentary.`,
+    `Return at most 50 events. Reply with a JSON object of the form`,
+    `{"events": [...]} (an object with an "events" array key — not a bare array),`,
+    `no commentary.`,
   ].join(' ');
 }
 
@@ -93,17 +95,18 @@ export async function extractEventsFromPage(
 
   const completion = await traceLLM({
     name: 'scrapers.extractEventsFromPage',
-    model: 'llama-3.3-70b-versatile',
+    model: 'openai/gpt-oss-120b',
     input: messages,
-    modelParameters: { temperature: 0.1, response_format: 'json_object', max_tokens: 4000 },
+    modelParameters: { temperature: 0.1, response_format: 'json_object', max_tokens: 4000, reasoning_effort: 'low' },
     metadata: { venueName: input.venueName, venueCity: input.venueCity, pageUrl: input.pageUrl },
     run: () =>
       groq().chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
+        model: 'openai/gpt-oss-120b',
         messages,
         temperature: 0.1,
         response_format: { type: 'json_object' },
         max_tokens: 4000,
+        reasoning_effort: 'low',
       }),
     extractUsage: groqUsage,
     extractOutput: (c) => c.choices[0]?.message?.content ?? null,
