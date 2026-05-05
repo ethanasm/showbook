@@ -220,7 +220,7 @@ async function normalizeTmEvent(
     extraSourceEventIds: [],
     date: event.dates.start.localDate,
     localTime: event.dates.start.localTime ?? null,
-    city: (venue.city ?? tmVenue.city?.name ?? 'unknown').trim().toLowerCase(),
+    city: (tmVenue.city?.name ?? 'unknown').trim().toLowerCase(),
     kind: inferKind(event.classifications, { eventName: event.name }),
     headliner: headlinerName,
     headlinerPerformerId,
