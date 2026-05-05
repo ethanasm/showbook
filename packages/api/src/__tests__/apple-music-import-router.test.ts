@@ -156,7 +156,9 @@ describe('appleMusicImportRouter.listFollowed', () => {
     const db = makeFakeDb();
     await caller(db).listFollowed({ musicUserToken: 'my-mut' });
 
-    const appleCall = calls.find((c) => c.url.includes('api.music.apple.com'));
+    const appleCall = calls.find(
+      (c) => new URL(c.url).hostname === 'api.music.apple.com',
+    );
     assert.ok(appleCall, 'expected an Apple Music call');
     assert.equal(appleCall!.headers!['Music-User-Token'], 'my-mut');
     assert.match(appleCall!.headers!['Authorization']!, /^Bearer .+\..+\..+$/);
