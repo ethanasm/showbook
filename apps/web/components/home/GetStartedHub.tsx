@@ -80,18 +80,19 @@ export function GetStartedHub({
       href: "/logbook?import=eventbrite",
     },
     {
+      id: "spotify",
+      icon: <Music size={16} color="var(--accent)" />,
+      title: "Import artists from Spotify",
+      subtitle: "Powers your Discover feed (doesn't add shows directly).",
+      primary: true,
+      onClick: () => setSpotifyOpen(true),
+    },
+    {
       id: "discover",
       icon: <Eye size={16} color="var(--accent)" />,
       title: "Find shows in Discover",
       subtitle: "See announcements from venues and artists you follow.",
       href: "/discover",
-    },
-    {
-      id: "spotify",
-      icon: <Music size={16} color="var(--accent)" />,
-      title: "Import artists from Spotify",
-      subtitle: "Powers your Discover feed (doesn't add shows directly).",
-      onClick: () => setSpotifyOpen(true),
     },
     {
       id: "add",
