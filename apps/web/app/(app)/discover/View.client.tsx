@@ -1605,7 +1605,10 @@ export default function DiscoverView() {
   // Seed the pending-ingest set with newly-imported performer IDs the moment
   // import completes, so per-artist loading dots and the "Loading shows…"
   // header light up in the same render rather than waiting for the next
-  // ingestStatus poll cycle.
+  // ingestStatus poll cycle. Invalidate ingestStatus too: the poller's
+  // refetchInterval halts whenever its last snapshot was empty, so without a
+  // forced refetch the seeded IDs would never be reconciled with server truth
+  // and "Loading shows…" would stick forever after a fast import.
   const handleSpotifyImported = useCallback(
     ({ performerIds }: { count: number; performerIds: string[] }) => {
       if (performerIds.length === 0) return;
@@ -1615,8 +1618,9 @@ export default function DiscoverView() {
         return { ...prev, performerIds: next };
       });
       setPeakPending((prev) => prev + performerIds.length);
+      utils.discover.ingestStatus.invalidate();
     },
-    [],
+    [utils],
   );
 
   function handleVenueFollowed() {
