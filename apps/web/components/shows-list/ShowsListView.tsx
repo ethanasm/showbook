@@ -1603,6 +1603,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
             gridTemplateColumns: SHOW_LIST_GRID_TEMPLATE,
             columnGap: 16,
             padding: "10px 20px 10px 10px",
+            marginBottom: 8,
             borderBottom: "1px solid var(--rule)",
             fontFamily: "var(--font-geist-mono), monospace",
             fontSize: 9.5,
