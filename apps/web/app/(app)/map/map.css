@@ -452,6 +452,19 @@
   padding: 24px;
 }
 
+@media (max-width: 767px) {
+  /* On mobile the EmptyState can be taller than the visible map pane, so
+     centering clips the action buttons. Switch to top-aligned, scrollable
+     flow so the .empty-state mobile bottom padding clears the fixed nav. */
+  .map-empty {
+    height: auto;
+    min-height: 100%;
+    justify-content: flex-start;
+    overflow-y: auto;
+    padding: 24px 16px;
+  }
+}
+
 /* ── Inspector panel ────────────────────────────────────────────────────── */
 
 .venue-inspector {
