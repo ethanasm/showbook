@@ -733,9 +733,15 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
 
     setGmailAdding(false);
     setImportSource(null);
-    utils.shows.invalidate();
-    invalidateSidebarCounts();
-  }, [gmailBulkResults, gmailBulkSelected, createShow, utils, invalidateSidebarCounts]);
+    await Promise.all([
+      utils.shows.invalidate(),
+      invalidateSidebarCounts(),
+    ]);
+    // The logbook/upcoming pages prefetch shows.list on the server and
+    // hydrate into the client cache; refresh the RSC so the SSR'd payload
+    // also picks up the just-imported rows.
+    router.refresh();
+  }, [gmailBulkResults, gmailBulkSelected, createShow, utils, invalidateSidebarCounts, router]);
 
   // ---------------------------------------------------------------------------
   // Render: Loading / Error
