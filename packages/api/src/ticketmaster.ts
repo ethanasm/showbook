@@ -32,6 +32,7 @@ export interface TMVenue {
   country?: { name: string; countryCode: string };
   address?: { line1: string };
   location?: { longitude: string; latitude: string };
+  images?: TMImage[];
 }
 
 export interface TMAttraction {
