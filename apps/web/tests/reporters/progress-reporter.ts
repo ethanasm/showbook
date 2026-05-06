@@ -1,3 +1,5 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import type {
   Reporter,
   FullConfig,
@@ -113,6 +115,23 @@ class ProgressReporter implements Reporter {
         `${passed} passed, ${this.failed} failed, ${this.skipped} skipped ` +
         `(${result.status})\n`,
     );
+
+    // Dump a structured failure summary so CI can post it as a PR comment
+    // (see .github/workflows/ci.yml — the webhook delivery for PR comments
+    // includes the body, so this is how E2E failures reach the
+    // PR-watching session without a manual paste).
+    if (this.failures.length > 0) {
+      const outDir = path.resolve(__dirname, '..', '..', 'test-results');
+      try {
+        mkdirSync(outDir, { recursive: true });
+        writeFileSync(
+          path.join(outDir, 'failures.json'),
+          JSON.stringify({ failures: this.failures }, null, 2),
+        );
+      } catch {
+        // Best-effort; the human-readable summary above is the source of truth.
+      }
+    }
   }
 }
 

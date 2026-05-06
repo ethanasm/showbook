@@ -153,6 +153,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
     # E2E still runs on every push/PR, but its failure does not fail the
     # workflow. The deploy workflow gates on the CI workflow_run conclusion,
     # so this keeps verify-coverage as the sole blocker for prod deploys.
@@ -241,6 +244,16 @@ jobs:
 
       - name: Run Playwright E2E (shard ${{ matrix.shard }}/4)
         run: pnpm --filter web exec playwright test --shard=${{ matrix.shard }}/4
+
+      - name: Post failure summary as sticky PR comment
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          SHARD: ${{ matrix.shard }}
+          JOB_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/post-e2e-failure-comment.mjs
+        continue-on-error: true
 
       - name: Upload Playwright artifacts
         if: failure()
