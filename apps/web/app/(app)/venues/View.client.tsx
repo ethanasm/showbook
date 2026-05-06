@@ -282,8 +282,8 @@ export default function VenuesView() {
                 <SortHeader<SortField> field="state" label="State" sort={sort} onToggle={toggleSort} />
               )}
               {!isMobile && <SortHeader<SortField> field="city" label="City" sort={sort} onToggle={toggleSort} />}
-              <SortHeader<SortField> field="past" label={isMobile ? "Seen" : "Past"} sort={sort} onToggle={toggleSort} align="center" />
-              <SortHeader<SortField> field="future" label={isMobile ? "Up" : "Future"} sort={sort} onToggle={toggleSort} align="center" />
+              <SortHeader<SortField> field="past" label="Past" sort={sort} onToggle={toggleSort} align="center" />
+              <SortHeader<SortField> field="future" label="Future" sort={sort} onToggle={toggleSort} align="center" />
               {!isMobile && <div style={{ textAlign: "center" }}><Ticket size={10} /></div>}
               {!isMobile && <div style={{ textAlign: "center" }}><MapPin size={10} /></div>}
               <div style={{ textAlign: "center" }}><Eye size={10} /></div>

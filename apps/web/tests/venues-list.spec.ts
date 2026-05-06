@@ -61,7 +61,10 @@ test.describe('Venues list page', () => {
     await expect(pastHeader).toHaveAttribute('data-sort-active', 'asc');
   });
 
-  test('clicking city header sorts alphabetically', async ({ page }) => {
+  test('clicking city header sorts alphabetically', async ({ page }, testInfo) => {
+    // City column is collapsed into the venue-name cell on mobile, so the
+    // sortable header isn't rendered at narrow widths.
+    test.skip(testInfo.project.name === 'mobile', 'City sort header is desktop-only');
     await gotoVenues(page);
 
     const cityHeader = page.getByRole('button', { name: 'City' });
@@ -69,7 +72,9 @@ test.describe('Venues list page', () => {
     await expect(cityHeader).toHaveAttribute('data-sort-active', 'asc');
   });
 
-  test('TM badge reflects linked vs unlinked state', async ({ page }) => {
+  test('TM badge reflects linked vs unlinked state', async ({ page }, testInfo) => {
+    // TM/Places metadata icons are hidden on mobile to free up the row.
+    test.skip(testInfo.project.name === 'mobile', 'TM badge column is desktop-only');
     await gotoVenues(page);
 
     // Madison Square Garden has a TM ID seeded; Brooklyn Steel does not.

@@ -845,6 +845,11 @@ export default function HomeView() {
                           })}
                         </div>
                       )}
+                      {/* Mobile-only venue line under the headliner. The
+                          row itself navigates to the show detail, so the
+                          venue is rendered as plain text — wrapping it in
+                          a Link with stopPropagation made tapping the row
+                          ambiguous and intermittently swallowed the click. */}
                       {isMobile && (
                         <div
                           style={{
@@ -862,13 +867,9 @@ export default function HomeView() {
                           }}
                         >
                           <KindIcon size={11} color={kindColor} />
-                          <Link
-                            href={`/venues/${s.venue.id}`}
-                            style={{ color: "inherit", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis" }}
-                            onClick={(e) => e.stopPropagation()}
-                          >
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                             {s.venue.name}
-                          </Link>
+                          </span>
                         </div>
                       )}
                     </div>

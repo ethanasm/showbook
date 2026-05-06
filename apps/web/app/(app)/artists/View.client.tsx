@@ -357,8 +357,8 @@ export default function ArtistsView() {
             <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 8 : 14, padding: isMobile ? "8px 12px" : "10px 20px", borderBottom: "1px solid var(--rule)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase" }}>
               <SortHeader<SortField> field="name" label="Name" sort={sort} onToggle={toggleSort} />
               {!isMobile && <SortHeader<SortField> field="shows" label="Shows" sort={sort} onToggle={toggleSort} align="center" />}
-              <SortHeader<SortField> field="past" label={isMobile ? "Seen" : "Past"} sort={sort} onToggle={toggleSort} align="center" />
-              <SortHeader<SortField> field="future" label={isMobile ? "Up" : "Future"} sort={sort} onToggle={toggleSort} align="center" />
+              <SortHeader<SortField> field="past" label="Past" sort={sort} onToggle={toggleSort} align="center" />
+              <SortHeader<SortField> field="future" label="Future" sort={sort} onToggle={toggleSort} align="center" />
               {!isHalfWidth && !isMobile && <SortHeader<SortField> field="firstSeen" label="First Seen" sort={sort} onToggle={toggleSort} />}
               {!isMobile && <SortHeader<SortField> field="lastSeen" label="Last Seen" sort={sort} onToggle={toggleSort} />}
               {!isMobile && <div style={{ textAlign: "center" }}><Ticket size={10} /></div>}
