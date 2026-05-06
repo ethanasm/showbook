@@ -132,7 +132,15 @@ test('determineOnSaleStatus: offsale status → sold_out', () => {
   );
 });
 
-test('determineOnSaleStatus: cancelled status → sold_out', () => {
+test('determineOnSaleStatus: canceled status → sold_out', () => {
+  // TM Discovery API uses American spelling.
+  assert.equal(
+    determineOnSaleStatus(eventWithSales({ statusCode: 'canceled' })),
+    'sold_out',
+  );
+});
+
+test('determineOnSaleStatus: cancelled status → sold_out (defensive)', () => {
   assert.equal(
     determineOnSaleStatus(eventWithSales({ statusCode: 'cancelled' })),
     'sold_out',
