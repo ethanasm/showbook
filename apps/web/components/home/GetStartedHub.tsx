@@ -40,6 +40,9 @@ interface Door {
   id: string;
   icon: React.ReactNode;
   title: string;
+  // Shorter label used in the card variant on mobile, where the
+  // 2-column grid can't fit the full "Import from …" sentence.
+  shortTitle: string;
   subtitle: string;
   primary?: boolean;
   href?: string;
@@ -61,6 +64,7 @@ export function GetStartedHub({
       id: "gmail",
       icon: <Image src="/google-g.svg" alt="" width={16} height={16} />,
       title: "Import from Gmail",
+      shortTitle: "Gmail",
       subtitle: "Backfill past shows from your ticket receipts.",
       primary: true,
       href: "/logbook?import=gmail",
@@ -69,6 +73,7 @@ export function GetStartedHub({
       id: "setlistfm",
       icon: <Mail size={16} color="var(--accent)" />,
       title: "Import from setlist.fm",
+      shortTitle: "setlist.fm",
       subtitle: "Pull every concert you've marked attended (with setlists).",
       primary: true,
       href: "/logbook?import=setlistfm",
@@ -77,6 +82,7 @@ export function GetStartedHub({
       id: "eventbrite",
       icon: <Ticket size={16} color="var(--accent)" />,
       title: "Import from Eventbrite",
+      shortTitle: "Eventbrite",
       subtitle: "Past orders for indie shows, comedy, theatre.",
       primary: true,
       href: "/logbook?import=eventbrite",
@@ -85,6 +91,7 @@ export function GetStartedHub({
       id: "spotify",
       icon: <Music size={16} color="var(--accent)" />,
       title: "Import artists from Spotify",
+      shortTitle: "Spotify",
       subtitle: "Powers your Discover feed (doesn't add shows directly).",
       primary: true,
       onClick: () => setSpotifyOpen(true),
@@ -93,6 +100,7 @@ export function GetStartedHub({
       id: "discover",
       icon: <Eye size={16} color="var(--accent)" />,
       title: "Find shows in Discover",
+      shortTitle: "Discover",
       subtitle: "See announcements from venues and artists you follow.",
       href: "/discover",
     },
@@ -100,6 +108,7 @@ export function GetStartedHub({
       id: "add",
       icon: <Plus size={16} color="var(--ink)" />,
       title: "Add a show manually",
+      shortTitle: "Add manually",
       subtitle: "Log one you remember, or one you just bought tickets to.",
       href: "/add",
     },
@@ -207,7 +216,7 @@ export function GetStartedHub({
               >
                 {d.icon}
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {d.title}
+                  {isMobile ? d.shortTitle : d.title}
                 </span>
               </span>
             );
