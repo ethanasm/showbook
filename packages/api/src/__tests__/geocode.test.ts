@@ -104,6 +104,7 @@ test('geocodeVenue: returns details from Google Places when available', async ()
 
   const result = await geocodeVenue('The Fillmore', 'San Francisco');
   assert.deepEqual(result, {
+    name: 'The Fillmore',
     lat: 37.78,
     lng: -122.43,
     stateRegion: 'CA',

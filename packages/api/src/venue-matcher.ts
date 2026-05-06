@@ -148,6 +148,11 @@ export async function matchOrCreateVenue(
   let tmVenueId = input.tmVenueId ?? null;
   let googlePlaceId = input.googlePlaceId ?? null;
   let photoUrl = input.photoUrl ?? null;
+  // Canonical name from an external source (TM > Google). Gmail-extracted
+  // venue names are often verbose ("The Beacon Theatre @ Beacon Theater
+  // (NY)"); when we can resolve the venue against TM or Google Places,
+  // prefer their cleaner display name on insert.
+  let canonicalName: string | null = null;
 
   // Run the Google Places lookup whenever we're missing coordinates OR a
   // place id. Ticketmaster events ship lat/lng but no Place ID; without
@@ -164,6 +169,7 @@ export async function matchOrCreateVenue(
         if (geo.country) country = geo.country;
         if (!googlePlaceId && geo.googlePlaceId) googlePlaceId = geo.googlePlaceId;
         if (!photoUrl && geo.photoUrl) photoUrl = geo.photoUrl;
+        if (geo.name) canonicalName = geo.name;
       }
     } catch (err) {
       log.warn(
@@ -180,8 +186,49 @@ export async function matchOrCreateVenue(
   }
 
   if (!tmVenueId && input.name && input.city) {
-    const found = await findTmVenueId(input.name, input.city, stateRegion);
-    if (found) tmVenueId = found;
+    const found = await findTmVenue(input.name, input.city, stateRegion);
+    if (found) {
+      tmVenueId = found.id;
+      // TM is our primary venue source — its name overrides Google's.
+      canonicalName = found.name;
+    }
+  }
+
+  // Prefer the canonical name from TM/Google over the (often verbose)
+  // input name. Falls back to input.name when neither source returned
+  // something usable.
+  const venueName =
+    canonicalName && canonicalName.trim().length > 0 ? canonicalName : input.name;
+
+  // If the canonical name differs from the input, the outer name+city
+  // SELECTs (steps 3 / 3b) didn't have a chance to match against it.
+  // Look once more before we lock + insert so two import paths that
+  // converge on the same TM/Google venue under different verbose Gmail
+  // names don't end up inserting twice. (Race-safety still relies on
+  // the partial UNIQUE on tmVenueId/googlePlaceId.)
+  if (venueName !== input.name) {
+    const [existing] = await db
+      .select()
+      .from(venues)
+      .where(
+        and(
+          sql`lower(${venues.name}) = lower(${venueName})`,
+          sql`lower(${venues.city}) = lower(${input.city})`,
+        ),
+      )
+      .limit(1);
+    if (existing) {
+      const updated = await maybeUpdate(existing, {
+        ...input,
+        tmVenueId: tmVenueId ?? input.tmVenueId,
+        googlePlaceId: googlePlaceId ?? input.googlePlaceId,
+        lat: input.lat ?? lat ?? undefined,
+        lng: input.lng ?? lng ?? undefined,
+        photoUrl: input.photoUrl ?? photoUrl ?? undefined,
+        stateRegion: input.stateRegion ?? stateRegion ?? undefined,
+      });
+      return { venue: updated, created: false };
+    }
   }
 
   // Re-check + insert under an advisory lock keyed on lower(name)+lower(city)
@@ -189,7 +236,7 @@ export async function matchOrCreateVenue(
   // lock both would miss the SELECT above and both would INSERT, creating a
   // duplicate global row.
   return await db.transaction(async (tx) => {
-    const lockKey = `${input.name.trim().toLowerCase()}|${input.city.trim().toLowerCase()}`;
+    const lockKey = `${venueName.trim().toLowerCase()}|${input.city.trim().toLowerCase()}`;
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${lockKey}))`);
 
     const [recheck] = await tx
@@ -197,7 +244,7 @@ export async function matchOrCreateVenue(
       .from(venues)
       .where(
         and(
-          sql`lower(${venues.name}) = lower(${input.name})`,
+          sql`lower(${venues.name}) = lower(${venueName})`,
           sql`lower(${venues.city}) = lower(${input.city})`,
         ),
       )
@@ -217,8 +264,8 @@ export async function matchOrCreateVenue(
         .select({ id: venues.id, name: venues.name, tmId: venues.ticketmasterVenueId })
         .from(venues)
         .where(sql`lower(${venues.city}) = lower(${input.city})`);
-      const inputStripped = stripCitySuffix(input.name, input.city).toLowerCase();
-      const inputLower = input.name.toLowerCase();
+      const inputStripped = stripCitySuffix(venueName, input.city).toLowerCase();
+      const inputLower = venueName.toLowerCase();
       const similar = sameCity.find((v) => {
         const vStripped = stripCitySuffix(v.name, input.city).toLowerCase();
         const vLower = v.name.toLowerCase();
@@ -233,7 +280,7 @@ export async function matchOrCreateVenue(
           {
             event: 'venue_matcher.tm_id_mismatch',
             city: input.city,
-            newName: input.name,
+            newName: venueName,
             newTmVenueId: tmVenueId,
             existingVenueId: similar.id,
             existingName: similar.name,
@@ -253,7 +300,7 @@ export async function matchOrCreateVenue(
         sp
           .insert(venues)
           .values({
-            name: input.name,
+            name: venueName,
             city: input.city,
             stateRegion,
             country,
@@ -372,11 +419,17 @@ export function venueNameVariants(name: string): string[] {
   return variants;
 }
 
-export async function findTmVenueId(
+/**
+ * Look up a venue on Ticketmaster, returning the canonical id and name
+ * when a match is found. Used by `matchOrCreateVenue` to (a) populate
+ * `ticketmasterVenueId` on insert and (b) replace verbose Gmail-extracted
+ * names with TM's cleaner display name.
+ */
+export async function findTmVenue(
   name: string,
   city: string,
   stateRegion?: string | null,
-): Promise<string | null> {
+): Promise<{ id: string; name: string } | null> {
   const cityLower = city.toLowerCase().split(',')[0].trim();
   const stateCode = toStateCode(stateRegion);
 
@@ -391,13 +444,26 @@ export async function findTmVenueId(
         const tmCity = v.city?.name?.toLowerCase() ?? '';
         return tmCity.includes(cityLower) || cityLower.includes(tmCity);
       });
-      if (match) return match.id;
+      if (match) return { id: match.id, name: match.name };
     } catch (err) {
       log.warn({ err, event: 'venue_matcher.tm_lookup.failed' }, 'TM venue lookup failed');
       return null;
     }
   }
   return null;
+}
+
+/**
+ * Back-compat wrapper for callers that only need the id (e.g. the admin
+ * backfill cron and `maybeUpdate`'s "fill in missing TM id" branch).
+ */
+export async function findTmVenueId(
+  name: string,
+  city: string,
+  stateRegion?: string | null,
+): Promise<string | null> {
+  const found = await findTmVenue(name, city, stateRegion);
+  return found?.id ?? null;
 }
 
 async function maybeUpdate(
