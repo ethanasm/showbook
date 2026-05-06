@@ -177,6 +177,34 @@ describe('checkMissedSchedules', () => {
     );
     assert.equal(r.status, 'unknown');
   });
+
+  it('uses an 8d lookback for discover-ingest (weekly cron) and 24h for daily jobs', async () => {
+    const aplCalls: string[] = [];
+    const fn = (async (apl: string) => {
+      aplCalls.push(apl);
+      return ok([{ cnt: 1 }]);
+    }) as unknown as QueryAxiomFn;
+    await checks.checkMissedSchedules(tuesdayMorning, fn);
+    // 6 expectations on Tuesday: 5 daily + discover-ingest (weekly).
+    assert.equal(aplCalls.length, 6);
+    const discoverApl = aplCalls.find((a) => /discover\.ingest\./.test(a));
+    assert.ok(discoverApl, 'expected an APL call for discover-ingest');
+    assert.match(discoverApl!, /ago\(8d\)/);
+    const dailyApls = aplCalls.filter((a) => !/discover\.ingest\./.test(a));
+    for (const apl of dailyApls) {
+      assert.match(apl, /ago\(24h\)/);
+    }
+  });
+
+  it('passes when discover-ingest ran within the last 8d even if last 24h is empty', async () => {
+    // Simulate "Monday's run was missed (deploy timing) but the prior
+    // Monday is in the 8d window" — every expectation reports 1 hit.
+    const r = await checks.checkMissedSchedules(
+      tuesdayMorning,
+      fakeAxiom(ok([{ cnt: 1 }])),
+    );
+    assert.equal(r.status, 'ok');
+  });
 });
 
 describe('checkDatabaseConnectivity', () => {

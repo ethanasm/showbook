@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Eye, Music, Plus, X, ArrowRight } from "lucide-react";
+import { Eye, Music, Plus, X, ArrowRight, Mail, Ticket } from "lucide-react";
 import { SpotifyImportModal } from "@/components/preferences/SpotifyImportModal";
 
 const STORAGE_KEY = "showbook:get-started-dismissed";
@@ -61,7 +61,23 @@ export function GetStartedHub({
       title: "Import from Gmail",
       subtitle: "Backfill past shows from your ticket receipts.",
       primary: true,
-      href: "/logbook?gmail=1",
+      href: "/logbook?import=gmail",
+    },
+    {
+      id: "setlistfm",
+      icon: <Mail size={16} color="var(--accent)" />,
+      title: "Import from setlist.fm",
+      subtitle: "Pull every concert you've marked attended (with setlists).",
+      primary: true,
+      href: "/logbook?import=setlistfm",
+    },
+    {
+      id: "eventbrite",
+      icon: <Ticket size={16} color="var(--accent)" />,
+      title: "Import from Eventbrite",
+      subtitle: "Past orders for indie shows, comedy, theatre.",
+      primary: true,
+      href: "/logbook?import=eventbrite",
     },
     {
       id: "discover",

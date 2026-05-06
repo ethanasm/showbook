@@ -244,6 +244,7 @@ function WatchButton({
       onToggle(announcementId, true);
       invalidateSidebarCounts();
       utils.shows.invalidate();
+      utils.discover.watchedAnnouncementIds.invalidate();
     },
     onError: () => onToggle(announcementId, false),
   });
@@ -253,6 +254,7 @@ function WatchButton({
       onToggle(announcementId, false);
       invalidateSidebarCounts();
       utils.shows.invalidate();
+      utils.discover.watchedAnnouncementIds.invalidate();
     },
     onError: () => onToggle(announcementId, true),
   });
@@ -1481,7 +1483,23 @@ const TABS = [
 
 export default function DiscoverView() {
   const [activeTab, setActiveTab] = useState<string>("Followed");
+  const watchedAnnouncementIds = trpc.discover.watchedAnnouncementIds.useQuery(
+    undefined,
+    { staleTime: 60_000 },
+  );
   const [watchedIds, setWatchedIds] = useState<Set<string>>(new Set());
+  // Seed the local watched set from the server so the yellow row + "Watching"
+  // button persist when the user navigates back to Discover. Merge with any
+  // optimistic local additions instead of replacing wholesale.
+  useEffect(() => {
+    const serverIds = watchedAnnouncementIds.data;
+    if (!serverIds) return;
+    setWatchedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of serverIds) next.add(id);
+      return next;
+    });
+  }, [watchedAnnouncementIds.data]);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [headerSpotifyModalOpen, setHeaderSpotifyModalOpen] = useState(false);
   const [pendingIngest, setPendingIngest] = useState<{

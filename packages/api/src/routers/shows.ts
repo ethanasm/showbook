@@ -15,7 +15,7 @@ import {
   matchOrCreatePerformer,
   type PerformerInput,
 } from '../performer-matcher';
-import { searchEvents } from '../ticketmaster';
+import { searchEvents, selectBestImage } from '../ticketmaster';
 import { geocodeVenue } from '../geocode';
 import { child } from '@showbook/observability';
 import {
@@ -454,6 +454,7 @@ export const showsRouter = router({
         tourName: z.string().optional(),
         productionName: z.string().optional(),
         notes: z.string().max(5000).optional(),
+        coverImageUrl: z.string().url().optional(),
         performers: z.array(performerInputSchema).optional(),
         sourceRefs: z.any().optional(),
       })
@@ -539,6 +540,7 @@ export const showsRouter = router({
             productionName,
             setlists: Object.keys(setlistsMap).length > 0 ? setlistsMap : null,
             photos: null,
+            coverImageUrl: input.coverImageUrl ?? null,
             notes: input.notes ?? null,
             sourceRefs: input.sourceRefs ?? null,
           })
@@ -620,7 +622,9 @@ export const showsRouter = router({
       // TM ticket-URL enrichment is best-effort and non-blocking — it's a
       // nice-to-have, not part of the show's correctness, so it lives
       // outside the transaction. Failures are logged so we know if TM is
-      // down rather than silently swallowed.
+      // down rather than silently swallowed. We also opportunistically
+      // capture the TM event image as the show's cover (theatre playbills,
+      // tour artwork) when the caller didn't supply one.
       if (state === 'watching' && input.kind !== 'festival') {
         try {
           const tmVenueId = venueResult.venue.ticketmasterVenueId;
@@ -631,10 +635,17 @@ export const showsRouter = router({
             endDateTime: `${input.date}T23:59:59Z`,
             size: 1,
           });
-          if (events.length > 0 && events[0]!.url) {
+          const tmEvent = events[0];
+          const enrichment: Record<string, unknown> = {};
+          if (tmEvent?.url) enrichment.ticketUrl = tmEvent.url;
+          if (!input.coverImageUrl && tmEvent?.images) {
+            const cover = selectBestImage(tmEvent.images);
+            if (cover) enrichment.coverImageUrl = cover;
+          }
+          if (Object.keys(enrichment).length > 0) {
             await ctx.db
               .update(shows)
-              .set({ ticketUrl: events[0]!.url })
+              .set(enrichment)
               .where(eq(shows.id, show.id));
           }
         } catch (err) {

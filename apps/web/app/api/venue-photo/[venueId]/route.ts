@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db, eq, venues } from '@showbook/db';
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'web.api.venue-photo' });
 
 const PLACES_BASE_URL = 'https://places.googleapis.com/v1';
 
@@ -52,15 +55,22 @@ export async function GET(
     signal: AbortSignal.timeout(15_000),
   });
 
-  if (!upstream.ok || !upstream.body) {
-    return new NextResponse('Upstream error', {
-      status: 502,
-      headers: { 'Cache-Control': 'no-store' },
-    });
-  }
-
   const upstreamContentType = upstream.headers.get('content-type') ?? '';
-  if (!upstreamContentType.toLowerCase().startsWith('image/')) {
+  if (!upstream.ok || !upstream.body || !upstreamContentType.toLowerCase().startsWith('image/')) {
+    // Log the upstream status + content-type so we can distinguish stale
+    // photo resource names (Google rotates them ~weekly, returns 403/404)
+    // from quota / key errors. Without this we have no signal in Axiom
+    // when the page falls back to the initials placeholder.
+    log.warn(
+      {
+        event: 'venue.photo.proxy.upstream_error',
+        venueId,
+        photoUrl: venue.photoUrl,
+        upstreamStatus: upstream.status,
+        upstreamContentType,
+      },
+      'Google Places media fetch failed; serving 502 fallback',
+    );
     return new NextResponse('Upstream error', {
       status: 502,
       headers: { 'Cache-Control': 'no-store' },

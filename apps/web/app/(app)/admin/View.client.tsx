@@ -55,12 +55,18 @@ function BackfillCard({
 export default function AdminView() {
   const coordsMutation = trpc.admin.backfillVenueCoordinates.useMutation();
   const tmMutation = trpc.admin.backfillVenueTicketmaster.useMutation();
+  const pruneMutation = trpc.admin.enqueuePruneOrphanCatalog.useMutation();
 
   const coordsResult = coordsMutation.data
     ? `Last run: ${coordsMutation.data.geocoded} geocoded · ${coordsMutation.data.failed} failed · ${coordsMutation.data.total} total`
     : null;
   const tmResult = tmMutation.data
     ? `Last run: ${tmMutation.data.matched} matched · ${tmMutation.data.failed} failed · ${tmMutation.data.total} total`
+    : null;
+  const pruneResult = pruneMutation.data
+    ? pruneMutation.data.jobId
+      ? `Enqueued job ${pruneMutation.data.jobId}`
+      : 'Enqueue returned no job id (likely a duplicate already queued)'
     : null;
 
   return (
@@ -93,6 +99,17 @@ export default function AdminView() {
             errorMessage={coordsMutation.error?.message ?? null}
             resultLine={coordsResult}
             onRun={() => coordsMutation.mutate()}
+          />
+
+          <BackfillCard
+            title="Prune orphaned announcements & venues"
+            description="Enqueue the prune-orphan-catalog pg-boss job. Deletes announcements, venues, and performers with no remaining shows, follows, or references. Already runs nightly at 02:30 ET — use this for an on-demand sweep."
+            buttonLabel="Enqueue prune job"
+            confirmText="Enqueue the prune-orphan-catalog job? It will delete unreferenced announcements, venues, and performers."
+            isPending={pruneMutation.isPending}
+            errorMessage={pruneMutation.error?.message ?? null}
+            resultLine={pruneResult}
+            onRun={() => pruneMutation.mutate()}
           />
 
           <BackfillCard

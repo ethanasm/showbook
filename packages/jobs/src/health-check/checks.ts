@@ -75,9 +75,14 @@ interface ScheduledExpectation {
   /** APL filter clause that uniquely identifies the run summary. Should
    *  match a single event (or event-prefix) the cron emits on success. */
   matchClause: string;
+  /** APL relative-time literal for the lookback window. Defaults to
+   *  `'24h'` for daily jobs. Weekly jobs widen this so a single missed
+   *  cron firing (e.g., a deploy that pushed past the scheduled minute)
+   *  doesn't immediately page — multiple consecutive misses still do. */
+  agoWindow?: string;
   /** Predicate run against the day-of-week (0=Sun..6=Sat) for the
    *  configured timezone. Returns true when the job is expected to have
-   *  run in the prior 24h. Defaults to "every day". */
+   *  run within `agoWindow`. Defaults to "every day". */
   expectedOnDay?: (dow: number) => boolean;
 }
 
@@ -102,9 +107,12 @@ const SCHEDULED_EXPECTATIONS: readonly ScheduledExpectation[] = [
   {
     label: 'discover-ingest',
     matchClause: 'event startswith "discover.ingest." and event endswith ".summary"',
-    // Discover ingest is scheduled `0 6 * * 1` — Mondays only. We run at
-    // 7am Tuesday, so the Tuesday run is the one that should have seen
-    // the ingest in its 24h window.
+    // Discover ingest is scheduled `0 6 * * 1` — Mondays only, so it
+    // appears in two consecutive Tuesday windows if we use 8d. That
+    // grace catches a single missed Monday (deploy past 6am, brief
+    // outage) without hiding a genuinely broken cron: two missed
+    // Mondays in a row still leaves the 8d window empty.
+    agoWindow: '8d',
     expectedOnDay: (dow) => dow === 2,
   },
 ];
@@ -127,8 +135,9 @@ export async function checkMissedSchedules(
   let skipped = 0;
 
   for (const exp of expected) {
+    const window = exp.agoWindow ?? '24h';
     const apl = `["showbook-prod"]
-      | where _time > ago(24h) and ${exp.matchClause}
+      | where _time > ago(${window}) and ${exp.matchClause}
       | summarize cnt = count()`;
     const res = await queryAxiom<ScheduleHitRow>(apl);
     if (res.skipped) {

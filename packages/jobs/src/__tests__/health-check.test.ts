@@ -54,19 +54,19 @@ const noopPings: ExternalPingFns = {
 const noPreamble = async () => null;
 
 interface FakeResend extends ResendLike {
-  sendCalls: Array<unknown>;
+  sendCalls: Array<{ payload: unknown; options: unknown }>;
 }
 
 function makeResend(opts: {
   shouldThrow?: boolean;
   error?: { message: string } | null;
 } = {}): FakeResend {
-  const sendCalls: Array<unknown> = [];
+  const sendCalls: Array<{ payload: unknown; options: unknown }> = [];
   const fake: FakeResend = {
     sendCalls,
     emails: {
-      send: async (payload) => {
-        sendCalls.push(payload);
+      send: async (payload, options) => {
+        sendCalls.push({ payload, options });
         if (opts.shouldThrow) throw new Error('resend network');
         if (opts.error) return { error: opts.error, data: null };
         return { data: { id: 'email-1' }, error: null };
@@ -124,7 +124,7 @@ describe('runHealthCheck', () => {
     const result = await runHealthCheck({ pings: noopPings, resend: fake, generatePreamble: noPreamble });
     assert.equal(result.emailSent, true);
     assert.equal(fake.sendCalls.length, 1);
-    const sent = fake.sendCalls[0] as {
+    const sent = fake.sendCalls[0]!.payload as {
       to: string | string[];
       subject: string;
       html: string;
@@ -138,8 +138,59 @@ describe('runHealthCheck', () => {
     process.env.ADMIN_EMAILS = 'OPS@Example.com';
     const fake = makeResend();
     await runHealthCheck({ pings: noopPings, resend: fake, generatePreamble: noPreamble });
-    const sent = fake.sendCalls[0] as { to: string[] };
+    const sent = fake.sendCalls[0]!.payload as { to: string[] };
     assert.deepEqual(sent.to, ['ops@example.com']);
+  });
+
+  it('passes a per-day ET idempotency key so re-runs collapse to one delivery', async () => {
+    process.env.ADMIN_EMAILS = 'ops@example.com';
+    const fake = makeResend();
+    // 2026-05-05 11:00 UTC is 2026-05-05 07:00 ET — Tuesday morning.
+    const now = new Date('2026-05-05T11:00:00Z');
+    await runHealthCheck({
+      pings: noopPings,
+      resend: fake,
+      generatePreamble: noPreamble,
+      now,
+    });
+    const opts = fake.sendCalls[0]!.options as { idempotencyKey?: string };
+    assert.equal(opts.idempotencyKey, 'health-summary-2026-05-05');
+  });
+
+  it('uses the same idempotency key on a re-run within the same ET day', async () => {
+    process.env.ADMIN_EMAILS = 'ops@example.com';
+    const fake = makeResend();
+    // First call at 07:00 ET.
+    const seedExecute = () => {
+      EXECUTE.results = [
+        [],
+        [{ failed: 0, active_stuck: 0, active_total: 0, retry: 0 }],
+        [{ last_discovered: new Date('2026-05-05T11:00:00Z') }],
+        [{ cnt: 0 }],
+      ];
+    };
+    seedExecute();
+    await runHealthCheck({
+      pings: noopPings,
+      resend: fake,
+      generatePreamble: noPreamble,
+      now: new Date('2026-05-05T11:00:00Z'),
+    });
+    seedExecute();
+    // Hypothetical pg-boss retry one minute later — same ET day.
+    await runHealthCheck({
+      pings: noopPings,
+      resend: fake,
+      generatePreamble: noPreamble,
+      now: new Date('2026-05-05T11:01:00Z'),
+    });
+    assert.equal(fake.sendCalls.length, 2);
+    const k1 = (fake.sendCalls[0]!.options as { idempotencyKey?: string })
+      .idempotencyKey;
+    const k2 = (fake.sendCalls[1]!.options as { idempotencyKey?: string })
+      .idempotencyKey;
+    assert.equal(k1, k2);
+    assert.equal(k1, 'health-summary-2026-05-05');
   });
 
   it('marks emailSent=false when Resend send throws', async () => {
@@ -170,7 +221,7 @@ describe('runHealthCheck', () => {
     const fake = makeResend();
     EXECUTE.shouldThrow = new Error('boom');
     await runHealthCheck({ pings: noopPings, resend: fake, generatePreamble: noPreamble });
-    const sent = fake.sendCalls[0] as { subject: string };
+    const sent = fake.sendCalls[0]!.payload as { subject: string };
     assert.match(sent.subject, /FAIL/);
   });
 

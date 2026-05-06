@@ -149,12 +149,17 @@ export async function matchOrCreateVenue(
   let googlePlaceId = input.googlePlaceId ?? null;
   let photoUrl = input.photoUrl ?? null;
 
-  if (lat == null && input.name && input.city) {
+  // Run the Google Places lookup whenever we're missing coordinates OR a
+  // place id. Ticketmaster events ship lat/lng but no Place ID; without
+  // this, TM-ingested venues are saved with `googlePlaceId = null` and
+  // never get a hero photo. We keep TM's lat/lng when present and only
+  // adopt Google's lat/lng when ours are null.
+  if ((lat == null || googlePlaceId == null) && input.name && input.city) {
     try {
       const geo = await geocodeVenue(input.name, input.city, stateRegion);
       if (geo) {
-        lat = geo.lat;
-        lng = geo.lng;
+        if (lat == null) lat = geo.lat;
+        if (lng == null) lng = geo.lng;
         if (!stateRegion && geo.stateRegion) stateRegion = geo.stateRegion;
         if (geo.country) country = geo.country;
         if (!googlePlaceId && geo.googlePlaceId) googlePlaceId = geo.googlePlaceId;

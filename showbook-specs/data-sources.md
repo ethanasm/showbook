@@ -429,12 +429,12 @@ When a user has a physical playbill (the printed program you get at a theatre sh
 
 ### LLM example requests and responses
 
-**Chat-mode Add — text parsing** (model: `llama-3.3-70b-versatile`)
+**Chat-mode Add — text parsing** (model: `openai/gpt-oss-120b`, `reasoning_effort: 'low'`)
 
 Request:
 ```json
 {
-  "model": "llama-3.3-70b-versatile",
+  "model": "openai/gpt-oss-120b",
   "messages": [
     {
       "role": "system",

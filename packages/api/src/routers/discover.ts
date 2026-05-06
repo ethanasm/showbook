@@ -455,6 +455,21 @@ export const discoverRouter = router({
   }),
 
   /**
+   * Announcement IDs the current user is already watching. Used by the
+   * Discover view to seed its local watched-state set on mount so the
+   * yellow row + "Watching" button persist across navigation.
+   */
+  watchedAnnouncementIds: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const rows = await db
+      .select({ announcementId: showAnnouncementLinks.announcementId })
+      .from(showAnnouncementLinks)
+      .innerJoin(shows, eq(showAnnouncementLinks.showId, shows.id))
+      .where(eq(shows.userId, userId));
+    return rows.map((r) => r.announcementId);
+  }),
+
+  /**
    * Search Ticketmaster for attractions to follow as artists.
    */
   searchArtists: protectedProcedure

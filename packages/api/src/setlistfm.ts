@@ -229,6 +229,106 @@ interface SetlistSearchResponse {
   itemsPerPage: number;
 }
 
+// ---------------------------------------------------------------------------
+// User-attended import
+// ---------------------------------------------------------------------------
+
+export interface AttendedSetlist {
+  setlistId: string;
+  /** ISO YYYY-MM-DD (converted from setlist.fm's DD-MM-YYYY). */
+  date: string;
+  artist: { name: string; mbid: string };
+  venue: { name: string; city?: string; state?: string; country?: string };
+  tourName?: string;
+  setlist: PerformerSetlist;
+}
+
+export interface AttendedPage {
+  attended: AttendedSetlist[];
+  total: number;
+  page: number;
+  itemsPerPage: number;
+}
+
+function fromSetlistFmDate(d: string): string {
+  // setlist.fm returns DD-MM-YYYY; we store ISO YYYY-MM-DD on shows.
+  const [day, month, year] = d.split('-');
+  if (!day || !month || !year) return d;
+  return `${year}-${month}-${day}`;
+}
+
+function mapSetlistToAttended(s: SetlistFmSetlist): AttendedSetlist | null {
+  if (!s.artist?.mbid || !s.eventDate) return null;
+  const mainSongs: SetlistSection['songs'] = [];
+  const encoreSongs: SetlistSection['songs'] = [];
+  for (const set of s.sets?.set ?? []) {
+    const target = set.encore != null ? encoreSongs : mainSongs;
+    for (const song of set.song ?? []) {
+      if (!song.name) continue;
+      target.push({
+        title: song.name,
+        ...(song.info ? { note: song.info } : {}),
+      });
+    }
+  }
+  const sections: SetlistSection[] = [];
+  if (mainSongs.length > 0) sections.push({ kind: 'set', songs: mainSongs });
+  if (encoreSongs.length > 0)
+    sections.push({ kind: 'encore', songs: encoreSongs });
+
+  return {
+    setlistId: s.id,
+    date: fromSetlistFmDate(s.eventDate),
+    artist: { name: s.artist.name, mbid: s.artist.mbid },
+    venue: {
+      name: s.venue?.name ?? '',
+      city: s.venue?.city?.name,
+      state: s.venue?.city?.state,
+      country: s.venue?.city?.country?.name,
+    },
+    tourName: s.tour?.name,
+    setlist: { sections },
+  };
+}
+
+/**
+ * Fetch a page of a user's attended setlists. setlist.fm's `userId` URL
+ * segment is the user's username. Returns an empty page on 404 (user not
+ * found) so callers can surface an inline error rather than throwing.
+ */
+export async function getUserAttended(
+  username: string,
+  page = 1,
+): Promise<AttendedPage> {
+  const trimmed = username.trim();
+  if (!trimmed) {
+    return { attended: [], total: 0, page: 1, itemsPerPage: 0 };
+  }
+  const encoded = encodeURIComponent(trimmed);
+  let data: SetlistSearchResponse;
+  try {
+    data = await apiFetch<SetlistSearchResponse>(
+      `/user/${encoded}/attended?p=${page}`,
+    );
+  } catch (err) {
+    if (err instanceof SetlistFmError && err.status === 404) {
+      return { attended: [], total: 0, page, itemsPerPage: 0 };
+    }
+    throw err;
+  }
+  const attended: AttendedSetlist[] = [];
+  for (const s of data.setlist ?? []) {
+    const mapped = mapSetlistToAttended(s);
+    if (mapped) attended.push(mapped);
+  }
+  return {
+    attended,
+    total: data.total ?? attended.length,
+    page: data.page ?? page,
+    itemsPerPage: data.itemsPerPage ?? attended.length,
+  };
+}
+
 /**
  * Find a setlist for a given artist (by MusicBrainz ID) and date.
  * Returns null when no setlist is found.

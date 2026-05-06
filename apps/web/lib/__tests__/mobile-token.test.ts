@@ -316,7 +316,7 @@ describe('upsertUserFromGoogle', () => {
 
     const db = {
       ...tx,
-      transaction: async (fn: (tx: typeof tx) => Promise<unknown>) => fn(tx),
+      transaction: async (fn: (innerTx: unknown) => Promise<unknown>) => fn(tx),
     } as unknown as Database;
 
     return { db, getTxInsertCallCount: () => insertCallCount };
@@ -352,7 +352,7 @@ describe('upsertUserFromGoogle', () => {
 
     const fakeDb = {
       ...tx,
-      transaction: async (fn: (tx: typeof tx) => Promise<unknown>) => fn(tx),
+      transaction: async (fn: (innerTx: unknown) => Promise<unknown>) => fn(tx),
     } as unknown as Database;
 
     const result = await upsertUserFromGoogle({
@@ -422,7 +422,7 @@ describe('upsertUserFromGoogle', () => {
 
     const fakeDb = {
       ...tx,
-      transaction: async (fn: (tx: typeof tx) => Promise<unknown>) => fn(tx),
+      transaction: async (fn: (innerTx: unknown) => Promise<unknown>) => fn(tx),
     } as unknown as Database;
 
     const result1 = await upsertUserFromGoogle({
@@ -468,7 +468,7 @@ describe('upsertUserFromGoogle', () => {
 
     const fakeDb = {
       ...tx,
-      transaction: async (fn: (tx: typeof tx) => Promise<unknown>) => fn(tx),
+      transaction: async (fn: (innerTx: unknown) => Promise<unknown>) => fn(tx),
     } as unknown as Database;
 
     await assert.rejects(

@@ -58,6 +58,7 @@ export interface TMEvent {
   id: string;
   name: string;
   url?: string;
+  images?: TMImage[];
   dates: {
     start: {
       localDate: string;
