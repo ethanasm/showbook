@@ -143,7 +143,7 @@ export function GetStartedHub({
         >
           <X size={14} />
         </button>
-        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+        <div style={{ flex: isMobile ? "0 0 auto" : "1 1 220px", minWidth: 0 }}>
           <div
             style={{
               fontFamily: MONO,
@@ -172,7 +172,9 @@ export function GetStartedHub({
         <div
           style={{
             display: isMobile ? "grid" : "flex",
-            gridTemplateColumns: isMobile ? "1fr 1fr" : undefined,
+            gridTemplateColumns: isMobile
+              ? "minmax(0, 1fr) minmax(0, 1fr)"
+              : undefined,
             gap: 8,
             flexWrap: "wrap",
             width: isMobile ? "100%" : "auto",
