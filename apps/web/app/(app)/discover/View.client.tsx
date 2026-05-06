@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
 import {
@@ -1481,8 +1482,25 @@ const TABS = [
   { key: "Near You", label: "Followed regions" },
 ] as const;
 
+function tabFromParam(param: string | null): string {
+  if (param === "artists") return "Artists";
+  if (param === "venues") return "Followed";
+  if (param === "regions" || param === "near-you") return "Near You";
+  return "Followed";
+}
+
 export default function DiscoverView() {
-  const [activeTab, setActiveTab] = useState<string>("Followed");
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState<string>(() =>
+    tabFromParam(tabParam),
+  );
+  // Keep activeTab in sync when the URL changes while mounted (e.g. the
+  // Spotify importer redirects to /discover?tab=artists after a successful
+  // import — soft navigation reuses this view, so we react via the param).
+  useEffect(() => {
+    if (tabParam) setActiveTab(tabFromParam(tabParam));
+  }, [tabParam]);
   const watchedAnnouncementIds = trpc.discover.watchedAnnouncementIds.useQuery(
     undefined,
     { staleTime: 60_000 },

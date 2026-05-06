@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 
 // Shared with apps/web/app/api/spotify/callback/route.ts — both ends must
@@ -41,6 +42,7 @@ export interface UseSpotifyImportOptions {
 
 export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
   const utils = trpc.useUtils();
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [artists, setArtists] = useState<ListedArtist[] | null>(null);
   const [meta, setMeta] = useState<{
@@ -93,6 +95,11 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
         count: data.imported.length,
         performerIds: data.imported.map((i) => i.performerId),
       });
+      // Artist-source imports always land on the followed-artists tab in
+      // Discover. Soft navigation: when already on /discover, this only
+      // updates the search params (the View reacts via useSearchParams),
+      // so the modal's onClose timeout still runs without remounting.
+      router.push("/discover?tab=artists");
     },
     onError: (err) => setError(err.message),
   });
