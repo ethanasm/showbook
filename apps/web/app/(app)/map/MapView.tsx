@@ -79,6 +79,7 @@ interface VenueGroup {
   name: string;
   city: string;
   photoUrl: string | null;
+  googlePlaceId: string | null;
   latitude: number;
   longitude: number;
   shows: VenueShowData[];
@@ -492,7 +493,7 @@ function VenueInspector({
     <div className="venue-inspector">
       <div className="venue-inspector__photo">
         <RemoteImage
-          src={venue.photoUrl ? `/api/venue-photo/${venue.venueId}` : null}
+          src={venue.photoUrl || venue.googlePlaceId ? `/api/venue-photo/${venue.venueId}` : null}
           alt={`${venue.name} venue photo`}
           kind="venue"
           name={venue.name}
@@ -731,6 +732,7 @@ export default function MapView() {
           name: venue.name,
           city: venue.city,
           photoUrl: venue.photoUrl,
+          googlePlaceId: venue.googlePlaceId,
           latitude: venue.latitude,
           longitude: venue.longitude,
           shows: [showData],

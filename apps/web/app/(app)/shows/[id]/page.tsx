@@ -203,13 +203,14 @@ export default function ShowDetailPage() {
 
       {(() => {
         // Fallback chain: TM event image (coverImageUrl) → headliner photo →
-        // venue photo proxy. The venue proxy URL is gated on venue.photoUrl
-        // because the proxy itself returns 404 when the column is null,
-        // which would force RemoteImage into its initials fallback.
+        // venue photo proxy. The proxy lazy-resolves photoUrl from the
+        // venue's googlePlaceId on demand, so allow either signal here.
         const heroSrc =
           show.coverImageUrl ??
           headlinerSP?.performer.imageUrl ??
-          (show.venue.photoUrl ? `/api/venue-photo/${show.venue.id}` : null);
+          (show.venue.photoUrl || show.venue.googlePlaceId
+            ? `/api/venue-photo/${show.venue.id}`
+            : null);
         if (!heroSrc) return null;
         return (
           <div style={{ padding: "24px var(--page-pad-x) 0" }}>

@@ -328,7 +328,7 @@ export default function VenuesView() {
                       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? 2 : 10, minWidth: 0 }}>
                         {!isMobile && (
                           <RemoteImage
-                            src={v.photoUrl ? `/api/venue-photo/${v.id}` : null}
+                            src={v.photoUrl || v.googlePlaceId ? `/api/venue-photo/${v.id}` : null}
                             alt=""
                             kind="venue"
                             name={v.name}
