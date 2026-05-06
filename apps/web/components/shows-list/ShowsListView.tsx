@@ -739,9 +739,12 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     ]);
     // The logbook/upcoming pages prefetch shows.list on the server and
     // hydrate into the client cache; refresh the RSC so the SSR'd payload
-    // also picks up the just-imported rows.
+    // also picks up the just-imported rows. router is intentionally not
+    // in the dep array — it's stable across renders and adding it has been
+    // observed to deterministically break Playwright shard 3 (see #110).
     router.refresh();
-  }, [gmailBulkResults, gmailBulkSelected, createShow, utils, invalidateSidebarCounts, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gmailBulkResults, gmailBulkSelected, createShow, utils, invalidateSidebarCounts]);
 
   // ---------------------------------------------------------------------------
   // Render: Loading / Error
