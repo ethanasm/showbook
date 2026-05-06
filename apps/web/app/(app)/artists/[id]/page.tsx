@@ -6,6 +6,7 @@ import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft } from "lucide-react";
 import { FollowButton } from "@/components/FollowButton";
+import { useIsMobile } from "@/lib/useIsMobile";
 import {
   CenteredMessage,
   EmptyState,
@@ -101,6 +102,7 @@ function gradientLastWord(name: string) {
 export default function ArtistDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const isMobile = useIsMobile();
   const performerId = params?.id ?? "";
 
   const utils = trpc.useUtils();
@@ -195,7 +197,7 @@ export default function ArtistDetailPage() {
       {/* Breadcrumb */}
       <div
         style={{
-          padding: "14px 36px",
+          padding: "14px var(--page-pad-x)",
           borderBottom: "1px solid var(--rule)",
           display: "flex",
           alignItems: "center",
@@ -227,15 +229,26 @@ export default function ArtistDetailPage() {
       {/* Hero */}
       <div
         style={{
-          padding: "28px 36px 24px",
+          padding: isMobile
+            ? "20px var(--page-pad-x) 18px"
+            : "28px var(--page-pad-x) 24px",
           borderBottom: "1px solid var(--rule)",
-          display: "grid",
-          gridTemplateColumns: "1fr auto",
+          display: isMobile ? "flex" : "grid",
+          flexDirection: isMobile ? "column" : undefined,
+          gridTemplateColumns: isMobile ? undefined : "1fr auto",
           columnGap: 32,
-          alignItems: "end",
+          rowGap: isMobile ? 14 : undefined,
+          alignItems: isMobile ? "stretch" : "end",
         }}
       >
-        <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 20 }}>
+        <div
+          style={{
+            minWidth: 0,
+            display: "flex",
+            alignItems: "center",
+            gap: isMobile ? 14 : 20,
+          }}
+        >
           <RemoteImage
             src={performer.imageUrl}
             alt={`${performer.name} portrait`}
@@ -244,7 +257,7 @@ export default function ArtistDetailPage() {
             aspect="square"
             size="card"
           />
-          <div style={{ minWidth: 0 }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
             <div className="eyebrow">Performers you&apos;ve seen live</div>
             <EditableName
               value={performer.name}
@@ -252,26 +265,29 @@ export default function ArtistDetailPage() {
               onSave={(name) =>
                 renameMutation.mutate({ performerId: performer.id, name })
               }
+              compact={isMobile}
             />
           </div>
         </div>
 
-        <FollowButton
-          isFollowed={performer.isFollowed}
-          isLoading={followBusy}
-          onToggle={toggleFollow}
-        />
+        <div style={{ alignSelf: isMobile ? "flex-start" : "auto" }}>
+          <FollowButton
+            isFollowed={performer.isFollowed}
+            isLoading={followBusy}
+            onToggle={toggleFollow}
+          />
+        </div>
       </div>
 
       {/* Stat strip */}
       <div
         style={{
-          padding: "16px 36px",
+          padding: "16px var(--page-pad-x)",
           background: "var(--surface)",
           borderBottom: "1px solid var(--rule)",
           display: "grid",
           gridTemplateColumns: "repeat(3, 1fr)",
-          columnGap: 28,
+          columnGap: isMobile ? 12 : 28,
         }}
       >
         <Stat label="Your shows" value={String(performer.showCount)} />
@@ -292,7 +308,7 @@ export default function ArtistDetailPage() {
           minHeight: 0,
           overflow: "auto",
           background: "var(--bg)",
-          padding: "24px 36px 48px",
+          padding: "24px var(--page-pad-x) 48px",
           display: "flex",
           flexDirection: "column",
           gap: 36,
@@ -315,31 +331,33 @@ export default function ArtistDetailPage() {
             />
           ) : (
             <div style={{ background: "var(--surface)" }}>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns:
-                    "14px 32px 80px 110px 1.2fr 1fr 110px 64px 88px",
-                  columnGap: 16,
-                  padding: "10px 20px 10px 10px",
-                  borderBottom: "1px solid var(--rule)",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 9.5,
-                  color: "var(--faint)",
-                  letterSpacing: ".12em",
-                  textTransform: "uppercase",
-                }}
-              >
-                <div />
-                <div />
-                <div>Date</div>
-                <div>Kind</div>
-                <div>Headline</div>
-                <div>Venue</div>
-                <div>Seat</div>
-                <div style={{ textAlign: "right" }}>Paid</div>
-                <div style={{ textAlign: "right" }}>State</div>
-              </div>
+              {!isMobile && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "14px 32px 80px 110px 1.2fr 1fr 110px 64px 88px",
+                    columnGap: 16,
+                    padding: "10px 20px 10px 10px",
+                    borderBottom: "1px solid var(--rule)",
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 9.5,
+                    color: "var(--faint)",
+                    letterSpacing: ".12em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  <div />
+                  <div />
+                  <div>Date</div>
+                  <div>Kind</div>
+                  <div>Headline</div>
+                  <div>Venue</div>
+                  <div>Seat</div>
+                  <div style={{ textAlign: "right" }}>Paid</div>
+                  <div style={{ textAlign: "right" }}>State</div>
+                </div>
+              )}
               {userShows.map((s) => (
                 <ShowRowComponent
                   key={s.id}

@@ -745,11 +745,11 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
         {/* skeleton mode/filter header */}
-        <div style={{ padding: "14px 36px", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 52 }} />
+        <div style={{ padding: "14px var(--page-pad-x)", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 52 }} />
         {/* skeleton stats strip */}
-        <div style={{ padding: "12px 36px", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 64, background: "var(--surface)" }} />
+        <div style={{ padding: "12px var(--page-pad-x)", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 64, background: "var(--surface)" }} />
         {/* skeleton table rows */}
-        <div style={{ flex: 1, minHeight: 0, padding: "12px 36px 24px", overflow: "hidden" }}>
+        <div style={{ flex: 1, minHeight: 0, padding: "12px var(--page-pad-x) 24px", overflow: "hidden" }}>
           <div style={{ background: "var(--surface)" }}>
             {Array.from({ length: 10 }).map((_, i) => (
               <div key={i} style={{ height: 48, borderBottom: "1px solid var(--rule)", background: "var(--surface)" }} />
@@ -795,7 +795,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
 
     return (
       <div style={{
-        padding: isMobile ? "14px 16px" : "16px 36px",
+        padding: isMobile ? "14px 16px" : "16px var(--page-pad-x)",
         display: "flex",
         flexDirection: isMobile ? "column" : "row",
         alignItems: isMobile ? "stretch" : "center",
@@ -1013,7 +1013,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
 
     return (
       <div style={{
-        padding: isMobile ? "11px 16px" : "11px 36px",
+        padding: isMobile ? "11px 16px" : "11px var(--page-pad-x)",
         display: "flex",
         alignItems: "center",
         gap: isMobile ? 12 : 18,
@@ -1519,7 +1519,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
         </Link>
       );
       return (
-        <div style={{ padding: isMobile ? "20px 16px" : "28px 36px" }}>
+        <div style={{ padding: isMobile ? "20px 16px" : "28px var(--page-pad-x)" }}>
           <EmptyState
             kind="shows"
             title={labels.emptyTitle}
@@ -1542,7 +1542,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
             see but hasn't picked a night for. Surfaced separately so they
             don't sink to the bottom of a date-asc sort. */}
         {isUpcoming && dateTbdShows.length > 0 && (
-          <div data-testid="date-tbd-rail" style={{ padding: isMobile ? "12px 16px 0" : "14px 36px 0", display: "flex", flexDirection: "column", gap: 6 }}>
+          <div data-testid="date-tbd-rail" style={{ padding: isMobile ? "12px 16px 0" : "14px var(--page-pad-x) 0", display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{
               fontFamily: "var(--font-geist-mono), monospace",
               fontSize: 10.5,
@@ -1573,7 +1573,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
           </div>
         )}
         {/* Section label */}
-        <div style={{ padding: isMobile ? "16px 16px 8px" : "18px 36px 8px", display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
+        <div style={{ padding: isMobile ? "16px 16px 8px" : "18px var(--page-pad-x) 8px", display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
           <div style={{
             fontFamily: "var(--font-geist-mono), monospace",
             fontSize: 11,
@@ -1596,7 +1596,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
         </div>
 
         {/* Show list */}
-        <div className="shows-list-table" style={{ margin: isMobile ? "4px 12px 0" : "4px 36px 0", background: "var(--surface)" }}>
+        <div className="shows-list-table" style={{ margin: isMobile ? "4px 12px 0" : "4px var(--page-pad-x) 0", background: "var(--surface)" }}>
           {/* Column headers */}
           <div style={{
             display: "grid",
@@ -1848,7 +1848,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     return (
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: isMobile ? "18px 16px 24px" : "22px 36px 36px" }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: isMobile ? "18px 16px 24px" : "22px var(--page-pad-x) var(--page-pad-x)" }}>
         {/* Month toolbar */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
@@ -2023,7 +2023,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     }
 
     return (
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: isMobile ? "18px 16px 24px" : "22px 36px 36px" }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: isMobile ? "18px 16px 24px" : "22px var(--page-pad-x) var(--page-pad-x)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 30, fontWeight: 600, color: "var(--ink)", letterSpacing: -0.9 }}>
             {calYear}
@@ -2162,7 +2162,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
         : "All time";
 
     return (
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: isMobile ? "18px 16px 24px" : "22px 36px 36px" }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: isMobile ? "18px 16px 24px" : "22px var(--page-pad-x) var(--page-pad-x)" }}>
         {/* Timeframe selector */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
           <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".06em" }}>

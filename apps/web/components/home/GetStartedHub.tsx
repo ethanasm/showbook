@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Eye, Music, Plus, X, ArrowRight, Mail, Ticket } from "lucide-react";
 import { SpotifyImportModal } from "@/components/preferences/SpotifyImportModal";
+import { useIsMobile } from "@/lib/useIsMobile";
 
 const STORAGE_KEY = "showbook:get-started-dismissed";
 const MONO = "var(--font-geist-mono), monospace";
@@ -53,6 +54,7 @@ export function GetStartedHub({
   onDismiss?: () => void;
 }) {
   const [spotifyOpen, setSpotifyOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   const doors: Door[] = [
     {
@@ -108,16 +110,38 @@ export function GetStartedHub({
       <div
         data-testid="get-started-card"
         style={{
-          margin: "12px 36px 0",
+          margin: "12px var(--page-pad-x) 0",
           padding: "14px 16px",
           background: "var(--surface)",
           border: "1px solid var(--rule)",
           borderRadius: 8,
           display: "flex",
-          alignItems: "center",
-          gap: 16,
+          flexDirection: isMobile ? "column" : "row",
+          alignItems: isMobile ? "stretch" : "center",
+          gap: isMobile ? 12 : 16,
+          position: "relative",
         }}
       >
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss get started"
+          style={{
+            background: "none",
+            border: "none",
+            color: "var(--faint)",
+            cursor: "pointer",
+            padding: 4,
+            display: "inline-flex",
+            position: isMobile ? "absolute" : "static",
+            top: 8,
+            right: 8,
+            order: isMobile ? -1 : 0,
+            alignSelf: isMobile ? "flex-end" : "auto",
+          }}
+        >
+          <X size={14} />
+        </button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
@@ -137,13 +161,22 @@ export function GetStartedHub({
               fontSize: 12,
               color: "var(--muted)",
               letterSpacing: ".02em",
+              lineHeight: 1.5,
             }}
           >
             Backfill past shows, find upcoming events, or seed your follow
             graph.
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: isMobile ? "grid" : "flex",
+            gridTemplateColumns: isMobile ? "1fr 1fr" : undefined,
+            gap: 8,
+            flexWrap: "wrap",
+            width: isMobile ? "100%" : "auto",
+          }}
+        >
           {doors.map((d) => {
             const content = (
               <span
@@ -152,8 +185,9 @@ export function GetStartedHub({
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
+                  justifyContent: isMobile ? "flex-start" : "center",
                   gap: 6,
-                  padding: "6px 10px",
+                  padding: "8px 10px",
                   border: "1px solid var(--rule)",
                   borderRadius: 6,
                   fontFamily: MONO,
@@ -162,15 +196,25 @@ export function GetStartedHub({
                   textDecoration: "none",
                   cursor: "pointer",
                   letterSpacing: ".04em",
+                  width: isMobile ? "100%" : "auto",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
                 }}
               >
                 {d.icon}
-                <span>{d.title}</span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {d.title}
+                </span>
               </span>
             );
             if (d.href) {
               return (
-                <Link key={d.id} href={d.href} style={{ textDecoration: "none" }}>
+                <Link
+                  key={d.id}
+                  href={d.href}
+                  style={{ textDecoration: "none", display: "block" }}
+                >
                   {content}
                 </Link>
               );
@@ -185,6 +229,9 @@ export function GetStartedHub({
                   border: "none",
                   padding: 0,
                   cursor: "pointer",
+                  textAlign: "left",
+                  display: "block",
+                  width: "100%",
                 }}
               >
                 {content}
@@ -192,21 +239,6 @@ export function GetStartedHub({
             );
           })}
         </div>
-        <button
-          type="button"
-          onClick={onDismiss}
-          aria-label="Dismiss get started"
-          style={{
-            background: "none",
-            border: "none",
-            color: "var(--faint)",
-            cursor: "pointer",
-            padding: 4,
-            display: "inline-flex",
-          }}
-        >
-          <X size={14} />
-        </button>
         {spotifyOpen && (
           <SpotifyImportModal
             open={spotifyOpen}
