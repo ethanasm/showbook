@@ -46,6 +46,8 @@ export function determineOnSaleStatus(
 ): 'announced' | 'on_sale' | 'sold_out' {
   const now = new Date();
   if (event.dates?.status?.code === 'offsale') return 'sold_out';
+  // TM Discovery API uses American spelling 'canceled'; accept both defensively.
+  if (event.dates?.status?.code === 'canceled') return 'sold_out';
   if (event.dates?.status?.code === 'cancelled') return 'sold_out';
 
   const publicSale = event.sales?.public;
@@ -396,6 +398,36 @@ async function pruneDuplicateFestivalSinglesForRun(run: EventRun): Promise<void>
 }
 
 /**
+ * Refresh mutable fields on an already-ingested TM event. Without this, a
+ * show that flips from on_sale → sold_out (or has its sale window/ticket URL
+ * change) on Ticketmaster's side would be frozen to whatever status it had
+ * at first ingest, because the insert paths short-circuit on known IDs.
+ *
+ * Only fields derivable from the TMEvent alone are touched — venue/performer
+ * resolution is intentionally skipped to avoid extra external calls on every
+ * re-ingest of an existing row.
+ */
+async function refreshExistingFromTmEvent(event: TMEvent): Promise<void> {
+  const onSaleStatus = determineOnSaleStatus(event);
+  const onSaleDate = parseOnSaleDate(event);
+  const ticketUrl = event.url ?? null;
+
+  await db
+    .update(announcements)
+    .set({
+      onSaleStatus,
+      onSaleDate,
+      ...(ticketUrl ? { ticketUrl } : {}),
+    })
+    .where(
+      and(
+        eq(announcements.source, 'ticketmaster'),
+        sql`(${announcements.sourceEventId} = ${event.id} OR ${event.id} = ANY(${announcements.extraSourceEventIds}))`,
+      ),
+    );
+}
+
+/**
  * Take a flat list of TM events for a single (target, query), normalize and
  * group them, then write the announcements. Returns the number of new
  * announcement rows produced (insert + extend).
@@ -407,7 +439,17 @@ async function ingestTmEvents(
 ): Promise<number> {
   const normalized: NormalizedEvent[] = [];
   for (const event of events) {
-    if (existingSourceIds.has(event.id)) continue;
+    if (existingSourceIds.has(event.id)) {
+      try {
+        await refreshExistingFromTmEvent(event);
+      } catch (err) {
+        log.error(
+          { err, event: 'tm.refresh.failed', tmEventId: event.id, name: event.name },
+          'Failed to refresh existing announcement',
+        );
+      }
+      continue;
+    }
     try {
       const ne = await normalizeTmEvent(event, resolvedVenueId);
       if (ne) normalized.push(ne);
