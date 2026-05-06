@@ -117,6 +117,7 @@ export function GetStartedHub({
           borderRadius: 8,
           display: "flex",
           flexDirection: isMobile ? "column" : "row",
+          flexWrap: isMobile ? "nowrap" : "wrap",
           alignItems: isMobile ? "stretch" : "center",
           gap: isMobile ? 12 : 16,
           position: "relative",
@@ -142,7 +143,7 @@ export function GetStartedHub({
         >
           <X size={14} />
         </button>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
           <div
             style={{
               fontFamily: MONO,
