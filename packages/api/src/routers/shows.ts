@@ -296,6 +296,7 @@ export const showsRouter = router({
           latitude: venues.latitude,
           longitude: venues.longitude,
           photoUrl: venues.photoUrl,
+          googlePlaceId: venues.googlePlaceId,
         },
       })
       .from(shows)

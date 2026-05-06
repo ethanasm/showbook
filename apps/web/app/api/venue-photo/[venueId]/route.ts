@@ -17,19 +17,16 @@ async function fetchUpstream(mediaUrl: string) {
   return { upstream, contentType, ok } as const;
 }
 
-async function resolvePhotoName(
-  venueId: string,
-  googlePlaceId: string,
-): Promise<string | null> {
+async function lookupPhotoName(googlePlaceId: string): Promise<string | null> {
   const details = await getPlaceDetails(googlePlaceId);
-  const photoName = details?.photoUrl ?? null;
-  if (photoName) {
-    await db
-      .update(venues)
-      .set({ photoUrl: photoName })
-      .where(eq(venues.id, venueId));
-  }
-  return photoName;
+  return details?.photoUrl ?? null;
+}
+
+async function persistPhotoName(venueId: string, photoName: string) {
+  await db
+    .update(venues)
+    .set({ photoUrl: photoName })
+    .where(eq(venues.id, venueId));
 }
 
 export async function GET(
@@ -55,13 +52,16 @@ export async function GET(
   }
 
   let photoName = venue.photoUrl;
+  let photoNameWasFresh = false;
 
   // Lazy resolve: venue has a Place ID but no photo resource name yet.
   // Self-heals venues created via TM ingest that haven't been picked up
-  // by the daily backfill.
+  // by the daily backfill. Don't persist until we've confirmed the
+  // resource name actually serves bytes.
   if (!photoName && venue.googlePlaceId) {
     try {
-      photoName = await resolvePhotoName(venueId, venue.googlePlaceId);
+      photoName = await lookupPhotoName(venue.googlePlaceId);
+      photoNameWasFresh = Boolean(photoName);
     } catch (err) {
       log.warn(
         { err, event: 'venue.photo.lazy_resolve_failed', venueId },
@@ -103,11 +103,15 @@ export async function GET(
       'Refreshing stale Google Places photo resource name',
     );
     try {
-      const refreshed = await resolvePhotoName(venueId, venue.googlePlaceId);
+      const refreshed = await lookupPhotoName(venue.googlePlaceId);
       if (refreshed && refreshed !== photoName) {
         const refreshedMediaUrl = getPlacePhotoMediaUrl(refreshed);
         if (refreshedMediaUrl) {
           ({ upstream, contentType, ok } = await fetchUpstream(refreshedMediaUrl));
+          if (ok) {
+            photoName = refreshed;
+            photoNameWasFresh = true;
+          }
         }
       }
     } catch (err) {
@@ -133,6 +137,23 @@ export async function GET(
       status: 502,
       headers: { 'Cache-Control': 'no-store' },
     });
+  }
+
+  // Persist now that we've confirmed the resource name actually serves
+  // image bytes — avoids storing names that immediately fail.
+  if (photoNameWasFresh && photoName !== venue.photoUrl) {
+    try {
+      await persistPhotoName(venueId, photoName);
+      log.info(
+        { event: 'venue.photo.persisted', venueId },
+        'Persisted resolved Google Places photo resource name',
+      );
+    } catch (err) {
+      log.warn(
+        { err, event: 'venue.photo.persist_failed', venueId },
+        'Failed to persist photo resource name',
+      );
+    }
   }
 
   return new NextResponse(upstream.body, {
