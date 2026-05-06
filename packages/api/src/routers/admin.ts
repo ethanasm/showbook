@@ -5,6 +5,7 @@ import { findTmVenueId } from '../venue-matcher';
 import { geocodeVenue } from '../geocode';
 import { enforceRateLimit } from '../rate-limit';
 import { isAdminEmail } from '../admin';
+import { enqueuePruneOrphanCatalog } from '../job-queue';
 import { child } from '@showbook/observability';
 
 const log = child({ component: 'api.admin' });
@@ -154,5 +155,22 @@ export const adminRouter = router({
     );
 
     return { total: missing.length, matched, failed };
+  }),
+
+  /**
+   * Enqueue the prune-orphan-catalog pg-boss job. The job sweeps
+   * announcements / venues / performers that have no remaining preservers
+   * (no shows, follows, or referencing announcements). It already runs
+   * nightly at 02:30 ET; this lets an operator trigger it on demand
+   * after a manual cleanup or if the cron missed.
+   */
+  enqueuePruneOrphanCatalog: adminProcedure.mutation(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    log.info(
+      { event: 'admin.prune_orphan_catalog.enqueue', userId },
+      'Admin enqueued prune-orphan-catalog job',
+    );
+    const jobId = await enqueuePruneOrphanCatalog();
+    return { jobId };
   }),
 });
