@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db, eq, venues } from '@showbook/db';
 import { child } from '@showbook/observability';
-import { getPlaceDetails, getPlacePhotoMediaUrl } from '@showbook/api';
+import {
+  getPlaceDetails,
+  getPlacePhotoMediaUrl,
+  getVenue,
+  selectBestImage,
+} from '@showbook/api';
 
 const log = child({ component: 'web.api.venue-photo' });
 
@@ -22,6 +27,11 @@ async function lookupPhotoName(googlePlaceId: string): Promise<string | null> {
   return details?.photoUrl ?? null;
 }
 
+async function lookupTmVenueImage(tmVenueId: string): Promise<string | null> {
+  const venue = await getVenue(tmVenueId);
+  return selectBestImage(venue?.images);
+}
+
 async function persistPhotoName(venueId: string, photoName: string) {
   await db
     .update(venues)
@@ -39,7 +49,11 @@ export async function GET(
   }
   const { venueId } = await params;
   const [venue] = await db
-    .select({ photoUrl: venues.photoUrl, googlePlaceId: venues.googlePlaceId })
+    .select({
+      photoUrl: venues.photoUrl,
+      googlePlaceId: venues.googlePlaceId,
+      ticketmasterVenueId: venues.ticketmasterVenueId,
+    })
     .from(venues)
     .where(eq(venues.id, venueId))
     .limit(1);
@@ -51,13 +65,35 @@ export async function GET(
     });
   }
 
-  let photoName = venue.photoUrl;
+  let photoName: string | null = venue.photoUrl;
   let photoNameWasFresh = false;
 
-  // Lazy resolve: venue has a Place ID but no photo resource name yet.
-  // Self-heals venues created via TM ingest that haven't been picked up
-  // by the daily backfill. Don't persist until we've confirmed the
-  // resource name actually serves bytes.
+  // Prefer curated Ticketmaster venue images over Google Places. Google
+  // Places photos[0] is often a random user submission (interior, signage,
+  // parking lot), while TM curates a hero-quality 16:9 shot per venue.
+  // If the stored photoUrl is a Google Places resource name and the venue
+  // has a TM ID, try to upgrade. After the first successful upgrade we
+  // persist the TM URL, so subsequent requests skip the TM API call.
+  const storedIsGooglePlaces = Boolean(photoName) && !photoName!.startsWith('http');
+  const shouldTryTmUpgrade =
+    venue.ticketmasterVenueId && (!photoName || storedIsGooglePlaces);
+
+  if (shouldTryTmUpgrade) {
+    try {
+      const tmImage = await lookupTmVenueImage(venue.ticketmasterVenueId!);
+      if (tmImage) {
+        photoName = tmImage;
+        photoNameWasFresh = true;
+      }
+    } catch (err) {
+      log.warn(
+        { err, event: 'venue.photo.tm_lookup_failed', venueId },
+        'TM venue image lookup failed',
+      );
+    }
+  }
+
+  // Fall back to Google Places when nothing is stored and TM didn't help.
   if (!photoName && venue.googlePlaceId) {
     try {
       photoName = await lookupPhotoName(venue.googlePlaceId);

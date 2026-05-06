@@ -7,6 +7,7 @@ export type { ArtistSearchResult, SetlistResult, AttendedSetlist, AttendedPage }
 export {
   searchEvents,
   getEvent,
+  getVenue,
   searchAttractions,
   getAttraction,
   inferKind,
