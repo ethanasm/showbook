@@ -1672,27 +1672,24 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
   function renderCalendar() {
     const today = new Date();
 
-    // Compute bounds from all shows. Date-TBD watching rows have a null
-    // date and would crash `new Date(null + "T00:00:00")` if we mapped
-    // them blindly. They also have nothing to plot on a grid so dropping
-    // them is correct — the Date-TBD rail on /upcoming surfaces them
-    // separately.
-    const allDates = shows
+    // Bounds span from Jan of the earliest show year to Dec of the latest
+    // show year (always including the current year so "Today" is reachable
+    // even when the user has no shows yet). Use the unfiltered show set so
+    // that year filters in the toolbar don't shrink the navigable range.
+    // Date-TBD watching rows have a null date — they're surfaced on the
+    // Date-TBD rail and would crash `new Date(null + "T00:00:00")` if we
+    // mapped them blindly, so drop them here.
+    const boundsSource = (allShowsUnfiltered ?? shows) as ShowData[];
+    const showYears = boundsSource
       .filter((s) => s.date !== null)
-      .map((s) => new Date(s.date + "T00:00:00"));
-    const calMin = allDates.length > 0
-      ? { year: Math.min(...allDates.map((d) => d.getFullYear())), month: allDates.reduce((a, b) => a < b ? a : b).getMonth() }
-      : null;
-    const calMax = allDates.length > 0
-      ? { year: Math.max(...allDates.map((d) => d.getFullYear())), month: allDates.reduce((a, b) => a > b ? a : b).getMonth() }
-      : null;
+      .map((s) => new Date(s.date + "T00:00:00").getFullYear());
+    const minYear = Math.min(today.getFullYear(), ...showYears);
+    const maxYear = Math.max(today.getFullYear(), ...showYears);
 
-    // More precise bounds: earliest and latest show dates
-    const minDate = allDates.length > 0 ? allDates.reduce((a, b) => a < b ? a : b) : null;
-    const maxDate = allDates.length > 0 ? allDates.reduce((a, b) => a > b ? a : b) : null;
-
-    const atMin = minDate && calYear === minDate.getFullYear() && calMonth === minDate.getMonth();
-    const atMax = maxDate && calYear === maxDate.getFullYear() && calMonth === maxDate.getMonth();
+    const atMin = calYear === minYear && calMonth === 0;
+    const atMax = calYear === maxYear && calMonth === 11;
+    const atMinYear = calYear === minYear;
+    const atMaxYear = calYear === maxYear;
 
     const goToday = () => {
       setCalMonth(today.getMonth());
@@ -1702,9 +1699,11 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     const stepMonth = (dir: number) => {
       const m = calMonth + dir;
       if (m < 0) {
+        if (calYear <= minYear) return;
         setCalMonth(11);
         setCalYear((y) => y - 1);
       } else if (m > 11) {
+        if (calYear >= maxYear) return;
         setCalMonth(0);
         setCalYear((y) => y + 1);
       } else {
@@ -1815,7 +1814,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     );
 
     if (calView === "year") {
-      return renderCalendarYearView(today, toolbarNav, viewToggle);
+      return renderCalendarYearView(today, toolbarNav, viewToggle, atMinYear, atMaxYear);
     }
 
     const daysInMonth = getDaysInMonth(calYear, calMonth);
@@ -1951,6 +1950,8 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     today: Date,
     toolbarNav: React.ReactNode,
     viewToggle: React.ReactNode,
+    atMinYear: boolean,
+    atMaxYear: boolean,
   ) {
     // Build all-shows-by-date map
     const dateShowsMap = new Map<string, ShowData[]>();
@@ -2031,10 +2032,20 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {viewToggle}
             <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={() => setCalYear((y) => y - 1)} style={{ padding: "7px 12px", border: "1px solid var(--rule-strong)", background: "transparent", color: "var(--ink)", cursor: "pointer", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11 }}>
+              <button
+                onClick={() => { if (!atMinYear) setCalYear((y) => y - 1); }}
+                disabled={atMinYear}
+                data-testid="cal-year-prev"
+                style={{ padding: "7px 12px", border: "1px solid var(--rule-strong)", background: "transparent", color: atMinYear ? "var(--faint)" : "var(--ink)", cursor: atMinYear ? "not-allowed" : "pointer", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, opacity: atMinYear ? 0.4 : 1 }}
+              >
                 ‹ {calYear - 1}
               </button>
-              <button onClick={() => setCalYear((y) => y + 1)} style={{ padding: "7px 12px", border: "1px solid var(--rule-strong)", background: "transparent", color: "var(--ink)", cursor: "pointer", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11 }}>
+              <button
+                onClick={() => { if (!atMaxYear) setCalYear((y) => y + 1); }}
+                disabled={atMaxYear}
+                data-testid="cal-year-next"
+                style={{ padding: "7px 12px", border: "1px solid var(--rule-strong)", background: "transparent", color: atMaxYear ? "var(--faint)" : "var(--ink)", cursor: atMaxYear ? "not-allowed" : "pointer", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, opacity: atMaxYear ? 0.4 : 1 }}
+              >
                 {calYear + 1} ›
               </button>
             </div>

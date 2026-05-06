@@ -514,12 +514,36 @@ function MonthView({
     return { past, ticketed, watching };
   }, [rowsInMonth]);
 
+  // Bounds: Jan of earliest show year through Dec of latest show year,
+  // always including the current year so "Today" is reachable even with
+  // no shows yet. Date-TBD watching rows have a null date and are
+  // excluded from the bounds calculation.
+  const { minYear, maxYear } = React.useMemo(() => {
+    const years = rows
+      .map((r) => (r.date ? Number(r.date.slice(0, 4)) : NaN))
+      .filter((y) => Number.isFinite(y));
+    const todayYear = todayDate.getFullYear();
+    return {
+      minYear: Math.min(todayYear, ...years),
+      maxYear: Math.max(todayYear, ...years),
+    };
+  }, [rows, todayDate]);
+
+  const atMin = cursor.year === minYear && cursor.month === 0;
+  const atMax = cursor.year === maxYear && cursor.month === 11;
+
   const step = (delta: number) => {
     setSelected(null);
     setCursor((c) => {
       const m = c.month + delta;
-      if (m < 0) return { year: c.year - 1, month: 11 };
-      if (m > 11) return { year: c.year + 1, month: 0 };
+      if (m < 0) {
+        if (c.year <= minYear) return c;
+        return { year: c.year - 1, month: 11 };
+      }
+      if (m > 11) {
+        if (c.year >= maxYear) return c;
+        return { year: c.year + 1, month: 0 };
+      }
       return { year: c.year, month: m };
     });
   };
@@ -547,8 +571,10 @@ function MonthView({
         <View style={[styles.monthNav, { borderColor: colors.ruleStrong }]}>
           <Pressable
             onPress={() => step(-1)}
+            disabled={atMin}
             accessibilityLabel="Previous month"
-            style={[styles.monthNavBtn, { borderRightColor: colors.ruleStrong, borderRightWidth: StyleSheet.hairlineWidth }]}
+            accessibilityState={{ disabled: atMin }}
+            style={[styles.monthNavBtn, { borderRightColor: colors.ruleStrong, borderRightWidth: StyleSheet.hairlineWidth, opacity: atMin ? 0.4 : 1 }]}
           >
             <ChevronLeft size={16} color={colors.ink} />
           </Pressable>
@@ -561,8 +587,10 @@ function MonthView({
           </Pressable>
           <Pressable
             onPress={() => step(1)}
+            disabled={atMax}
             accessibilityLabel="Next month"
-            style={styles.monthNavBtn}
+            accessibilityState={{ disabled: atMax }}
+            style={[styles.monthNavBtn, { opacity: atMax ? 0.4 : 1 }]}
           >
             <ChevronRight size={16} color={colors.ink} />
           </Pressable>
