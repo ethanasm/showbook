@@ -71,6 +71,7 @@ export function RemoteImage({
   size = "thumb",
   priority = false,
   className,
+  unoptimized = false,
 }: {
   src: string | null | undefined;
   alt: string;
@@ -80,6 +81,7 @@ export function RemoteImage({
   size?: ImageSize;
   priority?: boolean;
   className?: string;
+  unoptimized?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   const imageSrc = src && !failed ? src : null;
@@ -108,6 +110,7 @@ export function RemoteImage({
           sizes={SIZE_HINTS[size]}
           className="remote-image__img"
           priority={priority}
+          unoptimized={unoptimized || imageSrc.startsWith("/api/")}
           onError={() => setFailed(true)}
         />
       ) : (
