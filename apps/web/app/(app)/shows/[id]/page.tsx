@@ -184,7 +184,7 @@ export default function ShowDetailPage() {
         }}
       >
         <Link
-          href={show.state === "past" ? "/logbook" : "/upcoming"}
+          href={showIsPast ? "/logbook" : "/upcoming"}
           style={{
             color: "var(--muted)",
             textDecoration: "none",
