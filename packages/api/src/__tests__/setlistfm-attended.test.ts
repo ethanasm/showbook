@@ -99,7 +99,13 @@ describe('getUserAttended', () => {
     );
   });
 
-  it('skips entries without an mbid (un-linked setlist.fm artists)', async () => {
+  it('keeps entries without an mbid but exposes mbid as null', async () => {
+    // setlist.fm sometimes returns attended setlists whose artist isn't
+    // linked to MusicBrainz (empty `mbid`). For the attended-import flow
+    // we already have the setlist payload, so we keep the entry and let
+    // downstream code treat the mbid as optional. Dropping these entries
+    // silently caused user-visible "missing concert" reports in the import
+    // dialog.
     globalThis.fetch = (async () =>
       jsonResponse({
         setlist: [
@@ -123,8 +129,36 @@ describe('getUserAttended', () => {
         itemsPerPage: 20,
       })) as typeof globalThis.fetch;
     const page = await getUserAttended('alice');
-    assert.equal(page.attended.length, 1);
-    assert.equal(page.attended[0]!.artist.mbid, 'good');
+    assert.equal(page.attended.length, 2);
+    assert.equal(page.attended[0]!.artist.mbid, null);
+    assert.equal(page.attended[0]!.artist.name, 'Unknown');
+    assert.equal(page.attended[1]!.artist.mbid, 'good');
+  });
+
+  it('still drops entries missing eventDate or artist name', async () => {
+    globalThis.fetch = (async () =>
+      jsonResponse({
+        setlist: [
+          {
+            id: 'sl-no-date',
+            artist: { mbid: 'm', name: 'Real' },
+            venue: { id: 'v', name: 'X', city: { id: 'c', name: 'C', country: { code: 'US', name: 'US' } } },
+            sets: { set: [] },
+          },
+          {
+            id: 'sl-no-name',
+            eventDate: '03-01-2024',
+            artist: { mbid: 'm', name: '' },
+            venue: { id: 'v', name: 'X', city: { id: 'c', name: 'C', country: { code: 'US', name: 'US' } } },
+            sets: { set: [] },
+          },
+        ],
+        total: 2,
+        page: 1,
+        itemsPerPage: 20,
+      })) as typeof globalThis.fetch;
+    const page = await getUserAttended('alice');
+    assert.equal(page.attended.length, 0);
   });
 
   it('returns empty result for blank username without hitting the network', async () => {

@@ -597,7 +597,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
         kind_hint: "concert",
         confidence: "high",
         setlistId: t.setlistId,
-        musicbrainzId: t.musicbrainzId,
+        musicbrainzId: t.musicbrainzId ?? undefined,
         tourName: t.tourName,
         setlist: t.setlist,
       }));

@@ -23,7 +23,7 @@ export interface SetlistFmReviewTicket {
   setlistId: string;
   date: string;
   headliner: string;
-  musicbrainzId: string;
+  musicbrainzId: string | null;
   venueName: string;
   venueCity: string | null;
   venueState: string | null;
@@ -125,7 +125,7 @@ export const importsRouter = router({
           setlistId: a.setlistId,
           date: a.date,
           headliner: a.artist.name,
-          musicbrainzId: a.artist.mbid,
+          musicbrainzId: a.artist.mbid ?? null,
           venueName: a.venue.name,
           venueCity: a.venue.city ?? null,
           venueState: a.venue.state ?? null,
