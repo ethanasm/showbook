@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@/auth';
 import { db, eq, venues } from '@showbook/db';
 import { child } from '@showbook/observability';
 import { getPlaceDetails, getPlacePhotoMediaUrl } from '@showbook/api';
@@ -33,10 +32,10 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ venueId: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
+  // No auth gate: this route is fetched server-side by the Next.js image
+  // optimizer, which does not forward request cookies, so requiring a
+  // session here always 401s and breaks the venue hero. The venue UUID is
+  // unguessable and the bytes proxied are public Google Places photos.
   const { venueId } = await params;
   const [venue] = await db
     .select({ photoUrl: venues.photoUrl, googlePlaceId: venues.googlePlaceId })
