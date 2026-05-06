@@ -71,7 +71,6 @@ export function RemoteImage({
   size = "thumb",
   priority = false,
   className,
-  unoptimized = false,
 }: {
   src: string | null | undefined;
   alt: string;
@@ -81,7 +80,6 @@ export function RemoteImage({
   size?: ImageSize;
   priority?: boolean;
   className?: string;
-  unoptimized?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   const imageSrc = src && !failed ? src : null;
@@ -110,7 +108,12 @@ export function RemoteImage({
           sizes={SIZE_HINTS[size]}
           className="remote-image__img"
           priority={priority}
-          unoptimized={unoptimized || imageSrc.startsWith("/api/")}
+          // The Next.js image optimizer fetches same-origin URLs
+          // server-to-server without forwarding cookies, so any
+          // session-gated /api/ proxy (e.g. /api/venue-photo/*) 401s
+          // and trips onError. Bypass the optimizer for those — the
+          // browser fetches them directly with the user's session.
+          unoptimized={imageSrc.startsWith("/api/")}
           onError={() => setFailed(true)}
         />
       ) : (

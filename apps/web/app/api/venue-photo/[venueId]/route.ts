@@ -94,6 +94,9 @@ export async function GET(
   }
 
   // Fall back to Google Places when nothing is stored and TM didn't help.
+  // Self-heals venues created via TM ingest that haven't been picked up
+  // by the daily backfill. Don't persist until we've confirmed the
+  // resource name actually serves bytes.
   if (!photoName && venue.googlePlaceId) {
     try {
       photoName = await lookupPhotoName(venue.googlePlaceId);

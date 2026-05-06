@@ -733,8 +733,17 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
 
     setGmailAdding(false);
     setImportSource(null);
-    utils.shows.invalidate();
-    invalidateSidebarCounts();
+    await Promise.all([
+      utils.shows.invalidate(),
+      invalidateSidebarCounts(),
+    ]);
+    // The logbook/upcoming pages prefetch shows.list on the server and
+    // hydrate into the client cache; refresh the RSC so the SSR'd payload
+    // also picks up the just-imported rows. router is intentionally not
+    // in the dep array — it's stable across renders and adding it has been
+    // observed to deterministically break Playwright shard 3 (see #110).
+    router.refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gmailBulkResults, gmailBulkSelected, createShow, utils, invalidateSidebarCounts]);
 
   // ---------------------------------------------------------------------------
@@ -1603,6 +1612,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
             gridTemplateColumns: SHOW_LIST_GRID_TEMPLATE,
             columnGap: 16,
             padding: "10px 20px 10px 10px",
+            marginBottom: 8,
             borderBottom: "1px solid var(--rule)",
             fontFamily: "var(--font-geist-mono), monospace",
             fontSize: 9.5,
