@@ -12,6 +12,7 @@ Personal entertainment tracker for live shows — concerts, theatre, comedy, fes
 - **Background Jobs:** pg-boss
 - **LLM:** Groq (chat-mode Add, playbill cast extraction)
 - **Data Sources:** Ticketmaster Discovery API, setlist.fm, Google Places
+- **Imports:** Spotify + Apple Music (followed artists), Gmail bulk scan, Eventbrite + setlist.fm attended (past shows)
 - **Auth:** Google OAuth (Auth.js)
 - **Media:** Cloudflare R2
 - **Monorepo:** Nx + pnpm
