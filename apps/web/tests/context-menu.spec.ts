@@ -130,11 +130,15 @@ test.describe('Context menus on list pages', () => {
     await page.waitForSelector('[data-testid="recent-row"]', { timeout: 10000 });
 
     const row = page.locator('[data-testid="recent-row"]').first();
-    // The recent-row grid is wider than the mobile viewport (390px), so
-    // Playwright's default center click lands outside the visible
-    // interactive area. Right-click at a fixed visible position so the
-    // contextmenu event fires on the row regardless of viewport.
-    await row.click({ button: 'right', position: { x: 10, y: 10 } });
+    // Dispatch the `contextmenu` event directly. Playwright's
+    // `.click({button:'right'})` on a CSS-grid row whose first column is a
+    // 56px date cell (the row at this breakpoint) is fragile in CI:
+    // depending on scroll position and pointer routing, the right-click
+    // can be intercepted by an ancestor before reaching the row's React
+    // handler, which then never opens the menu. Dispatching the event on
+    // the row is deterministic and exercises the same React handler
+    // (`onContextMenu` → `setMenu`).
+    await row.dispatchEvent('contextmenu', { bubbles: true, button: 2, clientX: 50, clientY: 50 });
 
     const menu = page.getByTestId('context-menu');
     await expect(menu).toBeVisible();
@@ -152,7 +156,7 @@ test.describe('Context menus on list pages', () => {
     await page
       .locator('[data-testid="recent-row"]')
       .first()
-      .click({ button: 'right', position: { x: 10, y: 10 } });
+      .dispatchEvent('contextmenu', { bubbles: true, button: 2, clientX: 50, clientY: 50 });
     const menu = page.getByTestId('context-menu');
     await expect(menu).toBeVisible();
 
