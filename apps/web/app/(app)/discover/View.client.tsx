@@ -419,7 +419,8 @@ function AnnouncementRow({
             </div>
             {announcement.support && announcement.support.length > 0 && (
               <div className="discover-row__support">
-                + {announcement.support.join(", ")}
+                {announcement.kind === "sports" && announcement.support.length === 1 ? "vs" : "+"}{" "}
+                {announcement.support.join(", ")}
               </div>
             )}
             {showReason && reasonText && (
