@@ -237,7 +237,7 @@ export interface AttendedSetlist {
   setlistId: string;
   /** ISO YYYY-MM-DD (converted from setlist.fm's DD-MM-YYYY). */
   date: string;
-  artist: { name: string; mbid: string };
+  artist: { name: string; mbid: string | null };
   venue: { name: string; city?: string; state?: string; country?: string };
   tourName?: string;
   setlist: PerformerSetlist;
@@ -258,7 +258,10 @@ function fromSetlistFmDate(d: string): string {
 }
 
 function mapSetlistToAttended(s: SetlistFmSetlist): AttendedSetlist | null {
-  if (!s.artist?.mbid || !s.eventDate) return null;
+  // For the attended-import flow we already have the setlist payload, so we
+  // don't need an mbid to call back into setlist.fm. Only drop entries that
+  // are missing the fields we genuinely can't recover (date + artist name).
+  if (!s.eventDate || !s.artist?.name) return null;
   const mainSongs: SetlistSection['songs'] = [];
   const encoreSongs: SetlistSection['songs'] = [];
   for (const set of s.sets?.set ?? []) {
@@ -279,7 +282,7 @@ function mapSetlistToAttended(s: SetlistFmSetlist): AttendedSetlist | null {
   return {
     setlistId: s.id,
     date: fromSetlistFmDate(s.eventDate),
-    artist: { name: s.artist.name, mbid: s.artist.mbid },
+    artist: { name: s.artist.name, mbid: s.artist.mbid ? s.artist.mbid : null },
     venue: {
       name: s.venue?.name ?? '',
       city: s.venue?.city?.name,
