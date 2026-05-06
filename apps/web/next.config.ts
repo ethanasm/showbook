@@ -29,6 +29,11 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "s1.ticketm.net" },
+      // Spotify artist images (saved to performers.imageUrl on Spotify import).
+      { protocol: "https", hostname: "i.scdn.co" },
+      { protocol: "https", hostname: "mosaic.scdn.co" },
+      // Apple Music artwork.
+      { protocol: "https", hostname: "**.mzstatic.com" },
     ],
   },
   transpilePackages: [
