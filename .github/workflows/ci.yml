@@ -153,6 +153,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
     # E2E still runs on every push/PR, but its failure does not fail the
     # workflow. The deploy workflow gates on the CI workflow_run conclusion,
     # so this keeps verify-coverage as the sole blocker for prod deploys.
