@@ -214,7 +214,10 @@ export default function HomeView() {
 
   if (noShows) {
     return (
-      <div data-testid="home-empty-state" style={{ height: "100%" }}>
+      <div
+        data-testid="home-empty-state"
+        style={{ height: "100%", overflowY: "auto" }}
+      >
         <GetStartedHub variant="expanded" />
       </div>
     );

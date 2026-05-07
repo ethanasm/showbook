@@ -261,15 +261,22 @@ export function GetStartedHub({
     );
   }
 
-  // Expanded variant — full empty-state hub.
+  // Expanded variant — full empty-state hub. On mobile we leave the layout
+  // top-aligned with extra bottom padding so the bottom row of doors clears
+  // the fixed bottom nav; on desktop we still vertically center the hub.
   return (
     <div
       data-testid="get-started-hub"
       style={{
-        height: "100%",
-        padding: "48px 24px",
-        display: "grid",
-        placeItems: "center",
+        minHeight: "100%",
+        padding: isMobile
+          ? "32px 20px calc(96px + env(safe-area-inset-bottom, 0px))"
+          : "48px 24px",
+        display: isMobile ? "flex" : "grid",
+        flexDirection: isMobile ? "column" : undefined,
+        alignItems: "center",
+        justifyContent: isMobile ? "flex-start" : "center",
+        placeItems: isMobile ? undefined : "center",
       }}
     >
       <div

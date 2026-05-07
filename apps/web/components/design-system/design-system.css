@@ -424,7 +424,11 @@
 @media (max-width: 767px) {
   .empty-state {
     grid-template-columns: 1fr;
-    padding: 28px 22px;
+    /* Extra bottom padding so action buttons clear the fixed bottom nav
+       (72px) plus the iOS browser toolbar / home indicator. Without this
+       buffer, scrolling to the end of the empty state still leaves the
+       buttons hidden behind the nav. */
+    padding: 28px 22px calc(96px + env(safe-area-inset-bottom, 0px));
   }
 
   .empty-state__visual {
@@ -1116,7 +1120,9 @@ a.show-row__support-link:hover {
 
   .app-shell__content {
     flex: 1;
-    padding-bottom: 72px;
+    /* 72px clears the fixed bottom nav; env() adds the iOS home-indicator
+       inset so content isn't tucked behind the indicator either. */
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   }
 
   .app-shell__bottom-bar {

@@ -732,6 +732,20 @@ a.discover-row__headliner-link:hover {
   flex: 1;
 }
 
+@media (max-width: 767px) {
+  /* Stop centering on mobile — the centered + flex:1 layout collapses the
+     EmptyState into the available height, and since .empty-state uses
+     overflow:hidden (to contain the glow backdrop) the action region gets
+     clipped behind the fixed bottom nav. Let the empty-state grow to its
+     natural content height so its mobile bottom padding can clear the nav. */
+  .discover-empty {
+    flex: 0 0 auto;
+    align-items: flex-start;
+    justify-content: flex-start;
+    min-height: 0;
+  }
+}
+
 .discover-empty__text {
   font-family: var(--font-geist-mono), monospace;
   font-size: 13px;
@@ -1107,11 +1121,24 @@ a.discover-row__headliner-link:hover {
     gap: 10px;
   }
 
+  /* Drop .discover-page's fixed-height + overflow:hidden constraint on
+     mobile so the empty-state (which uses overflow:hidden internally to
+     contain its glow backdrop) isn't clipped behind the bottom nav. The
+     page-level scroll container (.app-shell__content) handles scrolling. */
+  .discover-page {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+
   /* Stack chips above the feed instead of letting them become a
    * full-height row-flex sibling that stretches the chip buttons
    * to the viewport. */
   .discover-main {
     flex-direction: column;
+    flex: 0 0 auto;
+    overflow: visible;
+    min-height: 0;
   }
 
   /* Hide desktop rail, show mobile chips */
