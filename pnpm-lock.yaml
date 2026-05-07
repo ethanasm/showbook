@@ -463,8 +463,8 @@ importers:
         specifier: ^10.1.0
         version: 10.4.2
       resend:
-        specifier: ^6.12.2
-        version: 6.12.2(@react-email/render@2.0.8(react-dom@19.2.5(react@19.2.5))(react@19.2.5))
+        specifier: ^6.12.3
+        version: 6.12.3(@react-email/render@2.0.8(react-dom@19.2.5(react@19.2.5))(react@19.2.5))
     devDependencies:
       tsx:
         specifier: ^4.19.0
@@ -3503,6 +3503,7 @@ packages:
 
   '@ungap/structured-clone@1.3.0':
     resolution: {integrity: sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g==}
+    deprecated: Potential CWE-502 - Update to 1.3.1 or higher
 
   '@unrs/resolver-binding-android-arm-eabi@1.11.1':
     resolution: {integrity: sha512-ppLRUgHVaGRWUx0R0Ut06Mjo9gBaBkg3v/8AxusGLhsIotbBLuRk51rAzqLC8gq6NyyAojEXglNjzf6R948DNw==}
@@ -6693,8 +6694,8 @@ packages:
     resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
     engines: {node: '>=0.10.0'}
 
-  resend@6.12.2:
-    resolution: {integrity: sha512-xwgmU4b0OqoabJsIoK/x0Whk0Fcs3bpbK4i/DEWPiE5hYJHyHl0TbB6QbI3gIr+bLdLUJ1GYm/fe41aVFuHXgw==}
+  resend@6.12.3:
+    resolution: {integrity: sha512-FkEi6YPnVL96/LvH8+QP7NaeaBy5brYXwlRqUCqZZeNL0/iyKij18IPmyPXYauT/2ODn1JG04qKz+qlJfzqzTw==}
     engines: {node: '>=20'}
     peerDependencies:
       '@react-email/render': '*'
@@ -7100,6 +7101,11 @@ packages:
 
   terser@5.46.2:
     resolution: {integrity: sha512-uxfo9fPcSgLDYob/w1FuL0c99MWiJDnv+5qXSQc5+Ki5NjVNsYi66INnMFBjf6uFz6OnX12piJQPF4IpjJTNTw==}
+    engines: {node: '>=10'}
+    hasBin: true
+
+  terser@5.47.0:
+    resolution: {integrity: sha512-TV+JFkQFtljk12ffyYAA4+zVF4Hs+qaROsT+Qo9o2/z39x+IUn+pvsmomiCPlp5YigfR1OdbGHOvc0L+Ca1X7g==}
     engines: {node: '>=10'}
     hasBin: true
 
@@ -13600,7 +13606,7 @@ snapshots:
   metro-minify-terser@0.84.4:
     dependencies:
       flow-enums-runtime: 0.0.6
-      terser: 5.46.2
+      terser: 5.47.0
 
   metro-resolver@0.83.7:
     dependencies:
@@ -14787,7 +14793,7 @@ snapshots:
 
   require-from-string@2.0.2: {}
 
-  resend@6.12.2(@react-email/render@2.0.8(react-dom@19.2.5(react@19.2.5))(react@19.2.5)):
+  resend@6.12.3(@react-email/render@2.0.8(react-dom@19.2.5(react@19.2.5))(react@19.2.5)):
     dependencies:
       postal-mime: 2.7.4
       svix: 1.92.2
@@ -15255,6 +15261,13 @@ snapshots:
       supports-hyperlinks: 2.3.0
 
   terser@5.46.2:
+    dependencies:
+      '@jridgewell/source-map': 0.3.11
+      acorn: 8.16.0
+      commander: 2.20.3
+      source-map-support: 0.5.21
+
+  terser@5.47.0:
     dependencies:
       '@jridgewell/source-map': 0.3.11
       acorn: 8.16.0

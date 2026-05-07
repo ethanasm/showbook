@@ -23,7 +23,7 @@
     "@showbook/shared": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "pg-boss": "^10.1.0",
-    "resend": "^6.12.2"
+    "resend": "^6.12.3"
   },
   "devDependencies": {
     "tsx": "^4.19.0",
