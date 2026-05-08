@@ -24,6 +24,7 @@ export { matchOrCreatePerformer } from './performer-matcher';
 export { getPlacePhotoMediaUrl, getPlaceDetails } from './google-places';
 export {
   extractShowFromEmail,
+  extractShowFromPdfText,
   generateDigestPreamble,
   generateHealthSummaryPreamble,
   pingGroq,
@@ -36,8 +37,14 @@ export type {
 export {
   searchMessages,
   getMessageBody,
+  getAttachment,
   buildBulkScanQueries,
 } from './gmail';
+export type { GmailAttachmentRef, GmailMessageDetail } from './gmail';
+export {
+  scoreEmailLikelyTicket,
+  HEURISTIC_THRESHOLD,
+} from './email-heuristic';
 export { getFollowedArtists, SpotifyError } from './spotify';
 export type { SpotifyArtist } from './spotify';
 export { getMyPastOrders, EventbriteError } from './eventbrite';

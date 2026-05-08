@@ -2,13 +2,24 @@ import { auth } from '@/auth';
 import {
   searchMessages,
   getMessageBody,
+  getAttachment,
   buildBulkScanQueries,
   extractShowFromEmail,
+  extractShowFromPdfText,
+  scoreEmailLikelyTicket,
+  HEURISTIC_THRESHOLD,
   isRateLimited,
+  type GmailAttachmentRef,
+  type ExtractedTicketInfo,
 } from '@showbook/api';
+import { isFeatureOn } from '@showbook/shared';
+import { db, shows } from '@showbook/db';
+import { sql } from 'drizzle-orm';
 import { child } from '@showbook/observability';
 
 const log = child({ component: 'web.gmail.scan' });
+
+const PDF_MAX_BYTES = 200 * 1024;
 
 // Hard cap on emails processed per scan to bound Groq cost. A user with
 // thousands of confirmation emails should narrow their date range rather
@@ -54,6 +65,112 @@ interface ExtractedTicket {
   ticket_count: number | null;
   kind_hint: 'concert' | 'theatre' | 'comedy' | 'festival' | null;
   confidence: 'high' | 'medium' | 'low';
+}
+
+interface ProcessResult {
+  ticket: ExtractedTicket | null;
+  skippedByHeuristic: boolean;
+  usedPdfFallback: boolean;
+}
+
+async function tryExtractFromPdf(
+  accessToken: string,
+  messageId: string,
+  attachments: GmailAttachmentRef[],
+): Promise<ExtractedTicketInfo | null> {
+  const pdf = attachments.find(
+    (a) => a.mimeType === 'application/pdf' && a.size > 0 && a.size <= PDF_MAX_BYTES,
+  );
+  if (!pdf) return null;
+
+  let bytes: Buffer;
+  try {
+    bytes = await getAttachment(accessToken, messageId, pdf.attachmentId);
+  } catch (err) {
+    log.warn(
+      { err, event: 'gmail.scan.attachment.fetch_failed', messageId },
+      'Gmail attachment fetch failed',
+    );
+    return null;
+  }
+
+  let text: string;
+  try {
+    const { PDFParse } = await import(/* webpackIgnore: true */ 'pdf-parse');
+    const parser = new PDFParse({ data: new Uint8Array(bytes) });
+    const result = await parser.getText();
+    text = result.text.trim();
+  } catch (err) {
+    log.warn(
+      { err, event: 'gmail.scan.attachment.parse_failed', messageId },
+      'Gmail PDF parse failed',
+    );
+    return null;
+  }
+
+  if (!text) return null;
+
+  try {
+    return await extractShowFromPdfText(text);
+  } catch (err) {
+    log.warn(
+      { err, event: 'gmail.scan.attachment.llm_failed', messageId },
+      'PDF LLM extraction failed',
+    );
+    return null;
+  }
+}
+
+async function processMessage(
+  accessToken: string,
+  messageId: string,
+): Promise<ProcessResult> {
+  const detail = await getMessageBody(accessToken, messageId);
+
+  if (isFeatureOn('GmailScanHeuristicGate')) {
+    const score = scoreEmailLikelyTicket({
+      subject: detail.subject,
+      body: detail.body,
+      from: detail.from,
+    });
+    if (score < HEURISTIC_THRESHOLD) {
+      return { ticket: null, skippedByHeuristic: true, usedPdfFallback: false };
+    }
+  }
+
+  let extracted = await extractShowFromEmail(
+    detail.subject,
+    detail.body,
+    detail.from,
+    detail.date,
+  );
+
+  let usedPdfFallback = false;
+  if (
+    !extracted &&
+    isFeatureOn('GmailScanPdfAttachments') &&
+    detail.attachments.length > 0
+  ) {
+    extracted = await tryExtractFromPdf(accessToken, messageId, detail.attachments);
+    if (extracted) {
+      usedPdfFallback = true;
+      log.info(
+        { event: 'gmail.scan.attachment.used', messageId },
+        'Used PDF fallback for extraction',
+      );
+    }
+  }
+
+  if (!extracted) {
+    return { ticket: null, skippedByHeuristic: false, usedPdfFallback };
+  }
+
+  extracted.date = correctExtractedYear(extracted.date, detail.date);
+  return {
+    ticket: { ...extracted, gmailMessageId: messageId },
+    skippedByHeuristic: false,
+    usedPdfFallback,
+  };
 }
 
 function mergeTickets(allExtracted: ExtractedTicket[]): ExtractedTicket[] {
@@ -151,15 +268,43 @@ export async function POST(request: Request) {
           } while (pageToken);
         }
 
-        const total = allMessages.length;
-        send('progress', { phase: 'processing', processed: 0, total, found: 0 });
-
         if (truncated) {
           log.info(
             { event: 'gmail.scan.truncated', userId, cap: MAX_MESSAGES_PER_SCAN },
             'Gmail scan hit message cap',
           );
         }
+
+        // P4: cross-scan dedup. Pull every gmailMessageId already
+        // referenced by one of this user's saved Shows, drop those before
+        // we even fetch the body. The sourceRefs jsonb is queried with a
+        // text-extraction operator so we don't need a new column or
+        // migration.
+        let dedupSkipped = 0;
+        let messagesToProcess = allMessages;
+        if (isFeatureOn('GmailScanCrossScanDedup')) {
+          const seenRows = await db
+            .select({ id: sql<string>`source_refs ->> 'gmailMessageId'` })
+            .from(shows)
+            .where(
+              sql`${shows.userId} = ${userId} AND source_refs ? 'gmailMessageId'`,
+            );
+          const seenIds = new Set(seenRows.map((r) => r.id).filter(Boolean));
+          if (seenIds.size > 0) {
+            const before = allMessages.length;
+            messagesToProcess = allMessages.filter((m) => !seenIds.has(m.id));
+            dedupSkipped = before - messagesToProcess.length;
+            if (dedupSkipped > 0) {
+              log.info(
+                { event: 'gmail.scan.dedup.skipped', userId, count: dedupSkipped },
+                'Gmail scan skipped previously-saved messages',
+              );
+            }
+          }
+        }
+
+        const total = messagesToProcess.length;
+        send('progress', { phase: 'processing', processed: 0, total, found: 0 });
 
         if (total === 0) {
           send('done', { tickets: [], truncated });
@@ -170,26 +315,19 @@ export async function POST(request: Request) {
         // Step 2: extract in batches
         const BATCH_SIZE = 8;
         const allExtracted: ExtractedTicket[] = [];
+        let heuristicSkipped = 0;
+        let pdfFallbackUsed = 0;
 
-        for (let i = 0; i < allMessages.length; i += BATCH_SIZE) {
-          const batch = allMessages.slice(i, i + BATCH_SIZE);
+        for (let i = 0; i < messagesToProcess.length; i += BATCH_SIZE) {
+          const batch = messagesToProcess.slice(i, i + BATCH_SIZE);
           const results = await Promise.all(
-            batch.map(async (msg) => {
-              const detail = await getMessageBody(accessToken, msg.id);
-              const extracted = await extractShowFromEmail(
-                detail.subject,
-                detail.body,
-                detail.from,
-                detail.date,
-              );
-              if (extracted) {
-                extracted.date = correctExtractedYear(extracted.date, detail.date);
-              }
-              return extracted ? { ...extracted, gmailMessageId: msg.id } : null;
-            }),
+            batch.map((msg) => processMessage(accessToken, msg.id)),
           );
           for (const result of results) {
-            if (result) allExtracted.push(result);
+            if (!result) continue;
+            if (result.skippedByHeuristic) heuristicSkipped += 1;
+            if (result.usedPdfFallback) pdfFallbackUsed += 1;
+            if (result.ticket) allExtracted.push(result.ticket);
           }
 
           send('progress', {
@@ -198,6 +336,21 @@ export async function POST(request: Request) {
             total,
             found: allExtracted.length,
           });
+        }
+
+        if (heuristicSkipped > 0 || pdfFallbackUsed > 0 || dedupSkipped > 0) {
+          log.info(
+            {
+              event: 'gmail.scan.summary',
+              userId,
+              total,
+              heuristicSkipped,
+              pdfFallbackUsed,
+              dedupSkipped,
+              extracted: allExtracted.length,
+            },
+            'Gmail scan summary',
+          );
         }
 
         // Step 3: merge
