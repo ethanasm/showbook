@@ -17,6 +17,7 @@ import {
   Square,
 } from "lucide-react";
 import { formatDateParts as toDateParts } from "@showbook/shared";
+import { countdownText } from "@/lib/countdown";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import {
   getHeadliner,
@@ -31,21 +32,6 @@ import {
 } from "@/lib/useShowContextMenu";
 
 // ── Helpers ──────────────────────────────────────────────────────────────
-
-function countdownText(dateStr: string | null): string {
-  if (!dateStr) return "date TBD";
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const target = new Date(dateStr);
-  target.setHours(0, 0, 0, 0);
-  const days = Math.ceil(
-    (target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-  );
-  if (days < 0) return `${Math.abs(days)} days ago`;
-  if (days === 0) return "tonight";
-  if (days === 1) return "tomorrow";
-  return `in ${days} days`;
-}
 
 function getGreeting(): string {
   const hour = new Date().getHours();
