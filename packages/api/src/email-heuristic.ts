@@ -49,17 +49,20 @@ const NEGATIVE_KEYWORDS = [
 
 const DATE_PATTERNS = [
   // Mon, Aug 16, 2026 / Sun · Aug 16, 2026
-  /\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*[,.\s·]+\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}/i,
+  // Single character class avoids overlapping quantifiers (CodeQL ReDoS).
+  /\b(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*[,.\s·]+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}/i,
   // March 15, 2026
-  /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(,?\s*\d{4})?\b/i,
+  /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(?:,?\s*\d{4})?\b/i,
   // 03/15/2026 or 3-15-26
   /\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/,
   // 2026-03-15
   /\b\d{4}-\d{2}-\d{2}\b/,
 ];
 
-const PRICE_PATTERN = /\$\s?\d+(\.\d{2})?\b/;
-const QTY_PATTERN = /\b(qty|quantity|tickets?)\s*[:#]?\s*\d+\b/i;
+const PRICE_PATTERN = /\$\s?\d+(?:\.\d{2})?\b/;
+// Single character class for the optional separator avoids the overlapping
+// `\s*…\s*` quantifiers CodeQL flags as polynomial ReDoS.
+const QTY_PATTERN = /\b(?:qty|quantity|tickets?)[\s:#]*\d+\b/i;
 const VENUE_HINT_PATTERN = /\b(theatre|theater|hall|arena|stadium|amphitheater|amphitheatre|club|ballroom|coliseum|forum|fillmore|garden|pavilion)\b/i;
 
 export function scoreEmailLikelyTicket(input: ScoreInput): number {
@@ -85,9 +88,17 @@ export function scoreEmailLikelyTicket(input: ScoreInput): number {
   if (QTY_PATTERN.test(haystack)) score += 10;
   if (VENUE_HINT_PATTERN.test(haystack)) score += 12;
 
-  // Sender-side hints — domain looks ticket-shaped.
+  // Sender-side hints — domain looks ticket-shaped. Plain substring +
+  // anchored checks instead of one big regex with `.*`, which CodeQL
+  // flags as polynomial ReDoS.
   const fromLower = from.toLowerCase();
-  if (/(ticket|boxoffice|box-office|orders?@|noreply@.*\.(fm|com))/.test(fromLower)) {
+  if (
+    fromLower.includes('ticket') ||
+    fromLower.includes('boxoffice') ||
+    fromLower.includes('box-office') ||
+    /\borders?@/.test(fromLower) ||
+    (fromLower.startsWith('noreply@') && /\.(?:fm|com)\b/.test(fromLower))
+  ) {
     score += 8;
   }
 
