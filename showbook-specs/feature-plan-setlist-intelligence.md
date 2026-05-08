@@ -1919,3 +1919,557 @@ Outputs a JSON table comparing predicted core vs. actual played
 for the most recent N nights of each artist; we want
 `P(actual ∈ core ∪ likely)` ≥ 80% for stable-tour acts and
 graceful degradation (no surprise 100%-claims) for variable acts.
+
+---
+
+## 15. Critique and proposed improvements
+
+This section is a deliberate self-audit of §1–§14. Each item is a
+gap we'd hit in the wild that the existing plan doesn't address,
+or addresses only in a degraded way. Bullets are scored by the
+shipping question: *do we need this in v1, or is it a follow-up?*
+
+### 15a. The Phish problem: technical correctness ≠ user value
+
+**What the plan does today for Phish:** the algorithm sees a
+corpus with very low Jaccard consistency (~0.21) and 185 unique
+songs across 28 setlists. It returns:
+
+- `core: []`
+- `likely: ~5 jam vehicles at p ≈ 0.45`
+- `wildcards: ~30 songs at p ∈ [0.10, 0.35]`
+- `rotation: ~100+ one-offs`
+- `confidence: 0.38`
+- copy: *"We can't really predict this — Phish has played 185
+  unique songs in 27 shows. Here's the rotation."*
+
+**Why this is a cop-out.** Phish fans are exactly the audience
+that obsesses over setlist prediction — that's the *whole subculture*.
+"Here's a long list of stuff that could play, sorry" is the worst
+possible answer for them, because the question they're actually
+asking is different. They want:
+
+1. **What's overdue?** "Bag" hasn't been played in 47 shows; its
+   mean gap is 12. That's a much stronger signal than its 8%
+   raw frequency.
+2. **What pool will the opener / second-set opener / encore come
+   from?** Phish openers cluster into ~10 candidates per tour even
+   when full sets share <25% songs.
+3. **What can't they play tonight?** Songs from earlier nights of
+   a multi-night run are *anti-predictive*.
+4. **Is tonight a special show?** Halloween → musical costume; NYE
+   → 3 sets + a stunt; MSG NYE run → known song cycles; a
+   Sphere residency → fixed visual setlist tied to specific songs.
+5. **How long is tonight?** 2-set vs 3-set drives everything
+   downstream.
+
+The current plan gives them none of this. It returns
+*calibrated humility*, which is the right *floor*, but not the
+right *answer*. Phish is the load-bearing test of whether
+"setlist intelligence" is more than a Sabrina-Carpenter feature.
+
+The next four subsections (§15b–§15e) propose what to add; they
+also benefit other rotating-style artists (Pearl Jam, Springsteen,
+Dead & Co, Goose, Umphrey's, My Morning Jacket, Wilco).
+
+### 15b. Setlist-style classifier — switch the model, not just the confidence
+
+The single algorithm in §4c implicitly assumes the *same shape* for
+every artist and only varies the confidence dial. That's wrong.
+There are at least four genuinely different setlist styles, and
+each wants a different output and a different display:
+
+| Style | Examples | What "prediction" means | What we should show |
+|-------|----------|-------------------------|--------------------|
+| **Stable** | Sabrina Carpenter, Coldplay, Taylor Swift | Top-down structured probability over a small song pool | The current §4c output (core/likely/wildcards/rotation) |
+| **Rotating** | Phish, Dead & Co, Goose, Springsteen, Pearl Jam | Gap-based "what's due" + positional pools | A **gap chart** + per-slot pools (§15c, §15d) |
+| **Theatrical** | Broadway shows, Cirque, residencies with fixed cues, Eras Tour acts | The setlist *is* the show — 100% predictable except surprise slot | The known setlist as a static list, with the surprise-slot pool surfaced separately |
+| **Improvised** | DJ sets, free-form jazz, hardcore-punk shows under 30 min | No useful per-song prediction | An honest "no setlist signal — here's a vibe sketch from past appearances" empty state |
+
+Add to the schema:
+
+```sql
+ALTER TABLE performers
+  ADD COLUMN setlist_style text,                  -- 'stable'|'rotating'|'theatrical'|'improvised'|'unknown'
+  ADD COLUMN setlist_style_inferred_at timestamp;
+```
+
+Auto-classify from corpus stats (computed inline by the eval
+harness or a daily job):
+
+```ts
+function inferStyle(corpus): SetlistStyle {
+  if (corpus.size < 5) return 'unknown';
+
+  const jaccard      = meanPairwiseJaccard(corpus);   // 0..1
+  const uniqueRatio  = uniqueSongs / totalSlots;      // 0..1
+  const setlistLen   = mean(corpus.map(s => s.songCount));
+
+  if (jaccard >= 0.75 && uniqueRatio < 0.3)  return 'stable';
+  if (jaccard <= 0.45 && uniqueRatio > 0.5)  return 'rotating';
+  if (jaccard >= 0.95 && uniqueRatio < 0.1)  return 'theatrical';
+  if (setlistLen < 6 || corpus.every(noTrackedSongs)) return 'improvised';
+  return 'stable';                                    // safe default
+}
+```
+
+The classifier output drives which **prediction model** runs
+(§15c for rotating, §4c for stable, …) and which **display
+component** the UI mounts. The classifier is not user-visible
+itself — but the resulting display is dramatically different.
+
+### 15c. Gap-based prediction for rotating artists
+
+For `setlist_style = 'rotating'`, raw frequency is a bad
+predictor. Phish.net's entire gap-chart culture exists because
+the *real* signal is overdue-ness:
+
+```
+gap(song)            = shows since song was last played
+mean_gap(song)       = average of historical gaps
+overdue_score(song)  = current_gap / mean_gap
+```
+
+A song with overdue_score ≥ 1.5 is "due"; ≥ 3 is a "bustout
+candidate." That's the high-signal slice the model should
+surface — not the long tail of one-offs.
+
+Compute this from `setlist_song_appearances` per-performer.
+Schema additions:
+
+```sql
+ALTER TABLE songs
+  ADD COLUMN historical_play_count integer NOT NULL DEFAULT 0,
+  ADD COLUMN historical_mean_gap   real,             -- shows
+  ADD COLUMN last_played_date      date,
+  ADD COLUMN current_gap_shows     integer;          -- updated nightly
+
+CREATE INDEX songs_overdue_idx
+  ON songs (performer_id, current_gap_shows DESC)
+  WHERE historical_play_count >= 3;
+```
+
+Output extension:
+
+```ts
+export interface RotatingPredictedSetlist {
+  style: 'rotating';
+  // Songs ranked by overdue_score, capped at top 30:
+  due:        OverdueSong[];        // overdue_score ≥ 1.5
+  hot:        OverdueSong[];        // played in ≥40% of last 10 — "in the rotation right now"
+  bustoutCandidates: OverdueSong[]; // overdue_score ≥ 3 AND historical_play_count ≥ 5
+  // Position pools — see §15d
+  positions:  PositionPool[];
+  setCountPrediction: { sets: 2 | 3; confidence: number };  // see §15f
+  multiNightContext: MultiNightContext | null;              // see §15e
+  // Honest top-line:
+  copy: string;                     // e.g. "27 of the last 28 setlists were unique. Here's what's overdue."
+}
+
+export interface OverdueSong {
+  title: string;
+  currentGap: number;
+  meanGap: number;
+  overdueScore: number;
+  totalPlays: number;
+  lastPlayedAt: { date: string; venue: string };
+}
+```
+
+This is the **Phish answer**. It's not a probability list at all —
+it's a different visualization (gap chart) backed by a different
+model. It still uses the same `setlist_song_appearances` source.
+
+### 15d. Position-pool predictions
+
+Even when full setlists share <25% of songs, the *positional
+patterns* are extremely stable. Phish's first-set openers come
+from a known pool of ~12 songs per tour. Encores cluster around
+4–6 candidates. Springsteen virtually never opens with anything
+but `Born in the U.S.A.` or `My Love Will Not Let You Down` on a
+given tour leg.
+
+Compute per-(performer, tour_id, role):
+
+```sql
+SELECT
+  performer_id, tour_id, role, song_id,
+  COUNT(*)::float / SUM(COUNT(*)) OVER (PARTITION BY performer_id, tour_id, role) AS slot_share
+FROM setlist_song_appearances
+WHERE performer_id = $1 AND tour_id = $2
+GROUP BY performer_id, tour_id, role, song_id
+HAVING COUNT(*) >= 2
+ORDER BY slot_share DESC;
+```
+
+Output (subset of `RotatingPredictedSetlist`):
+
+```ts
+export interface PositionPool {
+  role: 'opener' | 'set2_opener' | 'closer' | 'encore_open' | 'encore_close';
+  // Songs that have filled this slot in the corpus, ranked by share:
+  candidates: { title: string; slotShare: number; lastFilledThisSlot: string | null }[];
+  poolEntropy: number;       // 0..1; higher = more random
+}
+```
+
+UI: a row of 5 stacked "slots" with a 3–8 item pool on each,
+shaded by share. Phish fans see "Tonight's opener will probably
+be one of these 8 songs (each ~12% likely)" — *useful* — instead
+of "we don't know" — *not useful*.
+
+For stable-style artists, each pool collapses to a single song
+with `slotShare > 0.9`, which is consistent with the current
+§4c output.
+
+### 15e. Multi-night-run anti-repeat
+
+Phish, Dead & Co, Goose, Pearl Jam — anyone who does residencies
+or 3-night arena runs — observes a hard "no song twice in a run"
+constraint (the Sphere, MSG NYE runs, Wrigley Field, etc.). When
+predicting night 2 of a 3-night run, the most recent night's
+setlist *removes* those songs from the candidate pool tonight, not
+adds them.
+
+Detect runs from the corpus:
+
+```ts
+function detectMultiNightRun(performerId, targetDate, venueId): RunContext | null {
+  // Two or more setlists at the same venue within the prior 7 days?
+  const earlierNights = await db.query.tourSetlists.findMany({
+    where: and(
+      eq(tourSetlists.performerId, performerId),
+      eq(tourSetlists.venueRefId, venueId),       // resolves through tour_setlists ↔ venues
+      between(tourSetlists.performanceDate, sub(targetDate, 7), sub(targetDate, 1)),
+    ),
+    orderBy: desc(tourSetlists.performanceDate),
+  });
+  if (earlierNights.length === 0) return null;
+  return {
+    runIndex: earlierNights.length + 1,
+    runLength: earlierNights.length + 1,         // estimated; refines if more nights ahead
+    songsAlreadyPlayed: collectSongs(earlierNights),
+    venueId,
+  };
+}
+```
+
+Apply during prediction:
+
+- For `style === 'rotating'`, songs already played earlier in the
+  run get a multiplicative penalty of 0.05 (effectively excluded).
+- The output's `multiNightContext` carries `runIndex` so the UI can
+  render "Night 2 of 3 at MSG — these are excluded:" with the
+  prior-night setlist as a visual aside.
+
+For stable-style artists this fires rarely (one show per venue per
+tour leg) and the penalty is a no-op. The check is cheap enough
+to run unconditionally.
+
+### 15f. Set count / show length prediction
+
+`How many songs?` is its own prediction problem the current plan
+doesn't address. Phish doing 2 sets vs 3 sets changes everything
+downstream; festival sets are 60–90 minutes vs headline 120–180.
+
+Predict from corpus + venue context:
+
+```ts
+export interface ShowLengthPrediction {
+  setCount: 1 | 2 | 3;
+  setCountConfidence: number;
+  expectedSongCount: { p25: number; p50: number; p75: number };
+  expectedDurationMin: { p25: number; p50: number; p75: number } | null;
+  context: 'festival' | 'headline' | 'support' | 'residency' | 'unknown';
+}
+```
+
+Inputs:
+- `tour_setlists.song_count` percentiles for the active tour.
+- Venue-shape detection: festival venues from the corpus carry a
+  short-set distribution; same artist at a festival vs an arena
+  produces a different prediction.
+- For multi-set artists: the modal `setCount` from the active leg.
+
+Display: a small "Tonight: 2 sets · ~24 songs · ~155 min" header
+above the prediction. For stable-style this is information; for
+rotating-style it's load-bearing context.
+
+### 15g. Special-event detection
+
+Halloween (Phish musical-costume), NYE, anniversary tours
+(Bruce playing *The River* in full), Sphere residencies, costume
+reveals, album-anniversary shows. Each of these breaks the
+prediction pattern entirely. The plan doesn't recognize them.
+
+Implement as a small ruleset, configurable per performer in a
+`special_events` table:
+
+```sql
+CREATE TABLE special_event_rules (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  performer_id uuid NOT NULL REFERENCES performers(id) ON DELETE CASCADE,
+  rule_kind    text NOT NULL,        -- 'date_match' | 'venue_run' | 'tour_name_pattern'
+  pattern      jsonb NOT NULL,       -- { month: 10, day: 31 } | { venueRegex: 'Sphere' } | etc.
+  effect       jsonb NOT NULL,       -- { suppressPrediction: true, copy: '...' }
+  source       text NOT NULL         -- 'manual' | 'auto'
+);
+```
+
+Auto-detected rules for the obvious classes (Halloween, NYE) seed
+the table for every artist. Manual rules cover residencies and
+album-anniversary tours. When a target date matches a rule, the
+prediction returns:
+
+```ts
+{
+  style: 'special_event',
+  copy: "Halloween is when Phish plays a full album in costume.
+         We won't predict this one — but here's what they did
+         on the last 5 Halloweens.",
+  pastEvents: [...],
+}
+```
+
+### 15h. Festival vs headline distinction
+
+The current plan treats every appearance the same. A 75-minute
+festival set and a 150-minute headline set produce dramatically
+different setlists. We *do* know venue type — festivals are
+already a `kind = 'festival'` show in our schema.
+
+Add to corpus filtering: when predicting a festival show, prefer
+festival appearances (the 'festival' subcorpus). When predicting
+a headline show, exclude festival appearances unless the festival
+subcorpus is the only data. Detect festival appearances from
+`tour_setlists.venue_name_raw` matching a known-festival list +
+the user-side `kind` flag where available.
+
+Doesn't need new schema; it's a filter at corpus-load time.
+
+### 15i. Confidence calibration — measure, don't claim
+
+The plan *says* `confidence: 0.92` for Sabrina. We never check
+whether 92%-confident predictions actually come true 92% of the
+time. Without this, the confidence number is decorative.
+
+Add an offline eval that, weekly:
+
+1. Loads every (performer, date) pair from `tour_setlists` for
+   the past 30 days.
+2. Runs `predictSetlist({ performerId, targetDate })` against the
+   corpus *as it would have looked before* that date (truncating
+   `tour_setlists` to `performance_date < target_date`).
+3. Compares predicted `core ∪ likely` against the actual played
+   songs.
+4. Bins predictions by their stated probability (5 bins:
+   0–20, 20–40, …, 80–100) and reports the *actual* hit rate per
+   bin. Plot the calibration curve.
+5. Weekly job posts a summary to the developer's Axiom dashboard.
+   Tracking over time, we re-tune `TIER_WEIGHTS` and the
+   smoothing prior when the curve drifts.
+
+Schema:
+
+```sql
+CREATE TABLE prediction_eval_runs (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  ran_at            timestamp NOT NULL DEFAULT now(),
+  predictions       integer NOT NULL,
+  brier_score       real NOT NULL,           -- mean (p − actual)²
+  calibration_curve jsonb NOT NULL,          -- per-bin counts + hit rates
+  precision_top10   real NOT NULL,
+  recall_top10      real NOT NULL,
+  by_style          jsonb NOT NULL           -- broken out per setlist_style
+);
+```
+
+Without this, every "confidence: X" claim in the UI is hand-wavy.
+
+### 15j. Personal song weighting — the songs *I* care about
+
+A 70%-likely song matters more if it's a user's favorite. Today
+the prediction is artist-centric and ignores the user. We have
+two free signals:
+
+- `user_song_stats.times_heard` — songs the user has heard live
+  before (some users want "songs I haven't heard yet"; others
+  want "yes, finally my favorite").
+- `user_spotify_saved_tracks.spotify_track_id` (§13c) — the user's
+  saved library.
+
+Add a per-row chip when a predicted song matches one of these:
+"💛 your top track" or "🎯 you've never heard this live." The
+core prediction doesn't change — this is an overlay. Two-line
+schema: a join at query time, no new table.
+
+This is the difference between "informational" and "personally
+exciting." Easy win.
+
+### 15k. Conditional / pair patterns
+
+Phish has known song-pair patterns (`Mike's Song > I Am Hydrogen >
+Weekapaug Groove`); jam bands generally do segues that constrain
+"what comes next." For rotating-style artists, conditional
+probability `P(B | A played earlier in this show)` is real signal.
+
+Cheap to compute: for each pair (A, B) within the same setlist,
+count co-occurrences and order. Surface as "if [A] plays, [B]
+follows ~85% of the time" annotations on the gap-chart UI. Out of
+v1 scope — list under §15s "deferred."
+
+### 15l. Real-time corpus refresh during a multi-night run
+
+If you're going to night 2 of a Phish run, night 1's setlist
+publishes to setlist.fm hours after the show. The current
+corpus-fill cadence (`predict` mode, debounced 24h) misses that
+window — you'd get last-updated-yesterday data when the
+just-played setlist is the most predictive thing on Earth.
+
+Add: on the day of a `watching` show, re-run corpus-fill *every
+3 hours* if (a) the artist's last seen setlist was the prior day,
+or (b) there are unfilled gaps in the active tour timeline. Cap
+to one performer per user per day to bound API spend.
+
+Schema: none — it's a job-scheduling tweak.
+
+### 15m. Album-drop forward signal
+
+Today the active-tour anchor catches album-drop additions
+*retroactively* once 3+ Tier-A setlists confirm them. Forward-
+looking signal: when an artist releases an album within the
+±60-day window of the target show, the model should *expect* new
+songs even before evidence accrues.
+
+Wiring: pull `albums.release_date` from the §13g album metadata
+once it ships, plus the album's tracklist. For each album track
+not yet seen in the corpus, seed a synthetic appearance with
+weight 0.3 and `evidence: "expected from new album [name]"`.
+Decays as real evidence comes in.
+
+This is one of the biggest accuracy unlocks — the current model
+has a 1-week lag on every new album. Worth shipping.
+
+### 15n. Community correction loop
+
+setlist.fm is community-curated and sometimes wrong, sometimes
+incomplete (early uploads get songs added in batches). The plan
+trusts the corpus blindly. Add a "report a missing/wrong song"
+CTA on the prediction view that:
+
+- Writes to a `setlist_corrections` table (per-user proposals).
+- After N concurring proposals, marks the local corpus row as
+  `disputed` and queues a setlist.fm refetch.
+- For the user's own attended setlists, the existing edit flow
+  already handles this — the gap is the *corpus* (other people's
+  setlists).
+
+Defer to v1.1 unless we see real misfires in dogfooding.
+
+### 15o. Spoiler discipline across surfaces
+
+`spoilerBlurDefault` exists in the prediction shape but the plan
+only describes it on the predicted-setlist tab. Other surfaces
+need to honor it too:
+
+- **Daily digest email** — the "tonight's predicted setlist" tile
+  must respect the user's spoiler preference (default = blur for
+  stable-style, default = show for rotating, since a gap chart
+  is harder to spoil).
+- **Brain replies** — the `predicted_setlist` card should not
+  pre-render song titles into the assistant's text; titles go in
+  the structured payload only.
+- **Home rails / push notifications** — same.
+
+Add a `userPreferences.setlist_spoilers` enum
+(`always_blur` | `never_blur` | `style_default`) so the user can
+override. Default to `style_default`.
+
+### 15p. Display variants per setlist style
+
+The plan describes one display: probability bars + lists. Real
+ship:
+
+- **Stable-style display** — current §4c + §12 design
+  (probability bars, segmented core/likely/wildcards/rotation).
+- **Rotating-style display** — gap-chart bar (each song a row,
+  bar length = `overdue_score`, color = `historical_play_count`),
+  position-pool sidecards, multi-night context banner.
+- **Theatrical-style display** — the deterministic setlist
+  rendered as a compact list, with the "surprise slot" pool
+  surfaced inline.
+- **Improvised-style display** — empty state with a one-line
+  "vibe sketch" pulled from the artist's most-recent show notes
+  / user reviews.
+
+These are four different React components, all mounted from a
+single `<PredictedSetlist />` switcher keyed on
+`prediction.style`. Mobile mirrors are the same shape.
+
+### 15q. Eval-driven release gate
+
+Today the release gate is "five hand-checked artists in the probe
+checklist." That's not enough. Block §L2 from shipping until:
+
+- Brier score across all stable-style artists ≤ 0.15.
+- Mean precision-at-10 across rotating-style artists ≥ 0.4
+  (a low bar honest about the harder problem).
+- No artist with ≥ 5 tour-A setlists has a calibration error >
+  20 percentage points in any bin.
+
+If we drop to the user without this, we'll either over-promise on
+high-confidence flat-tour artists (97% predictions that miss) or
+spam wildcards for jam bands.
+
+### 15r. Smaller gaps worth listing
+
+| Gap | Where it bites | Recommendation |
+|-----|---------------|----------------|
+| Festival headliner cuts unpredictable | Festival sets are short and tightly curated; the model uses the artist's full-length corpus | Festival-vs-headline filter (§15h) |
+| New-tour cold-start uses prior-tour weight 0.10 | Two weeks into a new tour with 4 setlists, the model is still anchored on the *old* tour's songs | When `Tier A ≥ 3`, drop Tier D entirely; rely on §15m album-drop signal |
+| `tour_id` synthesis collisions | An artist re-using a tour name across years fuses corpora | Salt the synthesized id with the year of the earliest setlist in the run |
+| Setlist.fm sometimes lags a day | Last-night's setlist not in corpus when predicting tonight | §15l real-time refresh |
+| User attended setlists from §1–§14 plan are weighted equally with corpus | A user's own (verified, often more accurate) setlist deserves a small boost when it falls in Tier A | Multiply own-attended Tier A weight by 1.1 |
+| Cover-song detection happens at song-resolution time | Misses "X covered Y tonight" announcements that happen mid-tour | Pull `song.info` from setlist.fm into `setlist_song_appearances.note`; surface "first cover of [X] this tour" |
+| No timezone awareness on `targetDate` | A user in PT watching a show that starts after midnight UTC could load yesterday's prediction | Use `shows.date` already in performer's local time; pass through unchanged |
+| `predictSetlist` cache has no TTL when corpus is stale | If the corpus-fill job fails, an old prediction sticks for hours | Cache TTL of 4h regardless of corpus signature |
+| No user feedback on prediction usefulness | We never learn that our 92%-confident Sabrina prediction was a hit and our 38% Phish wildcards-only response was useless | Add a tiny "was this useful?" thumbs row on each prediction after the show; aggregate per style for the eval dashboard |
+| Setlist style classifier needs a corpus to fire | Brand-new artists default to `'stable'`, which mis-predicts for new jam bands | Manual override field in the performers table for known-style artists; auto-flip on first style-conflict signal |
+| Multi-headliner shows (festivals, package tours) | We predict per-headliner only | Per-performer prediction; show-detail view stacks them with set-time anchors when known |
+
+### 15s. Deferred (not v1)
+
+- Conditional / pair patterns (§15k) — high value for jam bands
+  but a non-trivial second model.
+- Community correction loop (§15n) — wait for dogfooding pain
+  before building it.
+- Per-venue song boost ("this song lives at MSG") — needs
+  larger corpus per venue than we'll have at launch.
+- Band-specific data sources (Phish.net gap-chart API) — defer
+  until the generic gap algorithm proves not enough for jam-band
+  users.
+
+### 15t. The shortlist
+
+Ranked by impact-vs-effort for the next iteration:
+
+1. **§15b setlist-style classifier** + **§15p display variants** —
+   one effort, unlocks the entire jam-band experience.
+2. **§15c gap-based prediction** + **§15d position pools** —
+   the actual Phish answer.
+3. **§15i confidence calibration eval** + **§15q release gate** —
+   makes the confidence number trustworthy. Cheap and prevents
+   embarrassment.
+4. **§15m album-drop forward signal** — biggest single accuracy
+   unlock for stable-style artists when it matters most.
+5. **§15j personal weighting overlay** — small dev effort, large
+   "this app knows me" payoff.
+6. **§15e multi-night run anti-repeat** — load-bearing for
+   residency / multi-night users.
+7. **§15f set count / length prediction** — the missing structural
+   prediction.
+8. **§15g special-event detection** — protects against
+   embarrassing high-confidence misses on Halloween / NYE.
+9. **§15l real-time corpus refresh** — small infra change, large
+   accuracy lift on multi-night runs.
+10. **§15o spoiler discipline propagation** — small, easy win.
