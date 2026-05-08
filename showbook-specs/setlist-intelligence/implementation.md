@@ -1,7 +1,7 @@
 # Setlist intelligence — implementation plan
 
 The shipping plan for the full setlist intelligence feature, including
-the Spotify integration (§13 of `feature-plan-setlist-intelligence.md`,
+the Spotify integration (§13 of `feature-plan.md`,
 plain-language version in `…-music-layer.md`).
 
 This plan is opinionated: it commits to specific decisions where the
@@ -259,7 +259,7 @@ later ones except where called out.
 
 Schema migrations:
 - `tour_setlists`, `songs`, `setlist_song_appearances` per
-  `feature-plan-setlist-intelligence.md` §2
+  `feature-plan.md` §2
 - `user_song_stats` materialized view
 - `user_spotify_tokens` per §3.1 above
 - `prediction_eval_runs` per §15i
@@ -319,7 +319,7 @@ Code:
   - `setlistDiff({ showIdA, showIdB })`
   - `firstTimes({ })`
 - Web UI: predicted-setlist tab on `/(app)/shows/[id]/`, using the
-  components from `feature-plan-setlist-intelligence-ui-spec.md`:
+  components from `ui-spec.md`:
   - `PredictionHero`
   - `SpoilerCurtain`
   - `PredictionSongRow`
@@ -337,7 +337,7 @@ Exit criteria:
 - For a synthetic seeded user with 3 followed artists, the predicted-
   setlist tab loads on a `watching` show in <500ms
 - The Tate McRae worked example (
-  `feature-plan-setlist-intelligence-worked-examples.md` §1) renders
+  `worked-examples.md` §1) renders
   with the documented confidence + 21-song core
 - `pnpm verify:e2e` includes a Playwright spec for the spoiler-
   curtain reveal flow

@@ -1,6 +1,6 @@
 # Setlist intelligence — four worked examples (2026-05-04)
 
-Companion to `feature-plan-setlist-intelligence.md`. For each of the
+Companion to `feature-plan.md`. For each of the
 four setlist styles defined in §15b of that plan, this doc picks a
 real artist, gathers their recent corpus from setlist.fm, runs the
 algorithm by hand, and shows the UI output the implementation would

@@ -1,6 +1,6 @@
 # The Music Layer — what Spotify integration means for Showbook
 
-A plain-language expansion of §13 of `feature-plan-setlist-intelligence.md`. The
+A plain-language expansion of §13 of `feature-plan.md`. The
 technical version is for engineers. This one is for thinking through *what
 the user actually experiences* before we build it.
 

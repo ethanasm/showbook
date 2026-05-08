@@ -639,7 +639,7 @@ Cost dashboard target: median turn ≤ $0.005, p95 ≤ $0.02. Brain is
 | **B1** | Tool registry — identity, search, count tools (§3a/b/c). System prompt v1. Single-turn answers for "how many shows in X." Web `/brain` page minimal layout. |
 | **B2** | Multi-hop tool loop. Cards channel. Inline pills on Show/Venue/Artist detail pages. Streaming UI. |
 | **B3** | Notes search (§3e) — pgvector + tsvector + embedding job. Unlocks "the rainy MSG show with Sam." |
-| **B4** | Setlist tools (§3d) — depends on `feature-plan-setlist-intelligence` shipping the schema. |
+| **B4** | Setlist tools (§3d) — depends on `setlist-intelligence/` shipping the schema. |
 | **B5** | Action tools (§3f) — `add_show_draft`, `propose_export_playlist`, `propose_follow_artist`. The point at which Brain can *do* things, not just answer. |
 | **B6** | Mobile + iPad parity (see §12). Brain stack route + Me-tab entry, in-context pills on Show/Venue/Artist, iPad three-pane Brain layout, optional voice input. |
 

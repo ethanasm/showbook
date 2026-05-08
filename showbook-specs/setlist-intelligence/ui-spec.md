@@ -1,7 +1,7 @@
 # Setlist intelligence — UI specification
 
-Companion to `feature-plan-setlist-intelligence.md` (algorithm) and
-`feature-plan-setlist-intelligence-worked-examples.md` (per-style
+Companion to `feature-plan.md` (algorithm) and
+`worked-examples.md` (per-style
 example outputs).
 
 This doc is the *visual design* for what those algorithm outputs
