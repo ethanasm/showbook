@@ -27,6 +27,21 @@ async function getSender(): Promise<PgBoss> {
     const instance = new PgBoss({
       connectionString: process.env.DATABASE_URL!,
       max: 2, // send-only client; we don't need a big pool
+      // Critical: disable the timekeeper and the maintenance supervisor.
+      // Both are global-by-design — pg-boss's timekeeper races every
+      // boss instance's cron monitor against `pgboss.version.cron_on`,
+      // and on `instance.start()` it also runs `setImmediate(() =>
+      // onCron())`, which means the first tRPC enqueue after boot can
+      // fire an out-of-band cron check before the primary boss's
+      // monitor has caught up. That second cron path produced
+      // duplicate SEND_IT inserts and a phantom `health/morning-check`
+      // invocation on 2026-05-08 11:00:14 UTC (logged jobId not in
+      // pgboss.job nor archive — the row was archived before the
+      // primary boss ever saw it). The primary boss in
+      // `@showbook/jobs` owns scheduling + supervision; this client
+      // only needs `boss.send` / `boss.insert`, so opt out of both.
+      schedule: false,
+      supervise: false,
     });
     await instance.start();
     globalForBoss.__showbookBoss = instance;
