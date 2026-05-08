@@ -11,6 +11,7 @@ import { runSetlistRetry } from './setlist-retry';
 import { runShowsNightly } from './shows-nightly';
 import { runBackfillPerformerImages } from './backfill-performer-images';
 import { runBackfillVenuePhotos } from './backfill-venue-photos';
+import { runBackfillShowCoverImages } from './backfill-show-cover-images';
 import { runPruneOrphanCatalog } from './prune-orphan-catalog';
 import { runHealthCheck } from './health-check';
 // @showbook/scrapers pulls in Playwright, which the Next.js dev server
@@ -28,6 +29,7 @@ export const JOBS = {
   NOTIFICATIONS_DAILY_DIGEST: 'notifications/daily-digest',
   BACKFILL_PERFORMER_IMAGES: 'backfill/performer-images',
   BACKFILL_VENUE_PHOTOS: 'backfill/venue-photos',
+  BACKFILL_SHOW_COVER_IMAGES: 'backfill/show-cover-images',
   PRUNE_ORPHAN_CATALOG: 'prune/orphan-catalog',
   HEALTH_CHECK: 'health/morning-check',
 } as const;
@@ -82,6 +84,7 @@ const QUEUE_OPTIONS: Record<string, QueueOptions> = {
   'notifications/daily-digest': LONG_BATCH,
   'backfill/performer-images': LONG_BATCH,
   'backfill/venue-photos': LONG_BATCH,
+  'backfill/show-cover-images': LONG_BATCH,
   'prune/orphan-catalog': LONG_BATCH,
   'health/morning-check': LONG_BATCH,
 };
@@ -298,6 +301,25 @@ async function backfillVenuePhotosHandler(jobs: PgBoss.Job[]) {
   }
 }
 
+async function backfillShowCoverImagesHandler(jobs: PgBoss.Job[]) {
+  for (const job of jobs) {
+    await runJob(JOBS.BACKFILL_SHOW_COVER_IMAGES, job, async () => {
+      const result = await runBackfillShowCoverImages();
+      log.info(
+        {
+          event: 'backfill.show_cover_images.summary',
+          total: result.total,
+          updated: result.updated,
+          missing: result.missing,
+          failed: result.failed,
+        },
+        'Show cover image backfill complete',
+      );
+      return result;
+    });
+  }
+}
+
 async function pruneOrphanCatalogHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
     await runJob(JOBS.PRUNE_ORPHAN_CATALOG, job, async () => {
@@ -410,6 +432,7 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   await boss.work(JOBS.NOTIFICATIONS_DAILY_DIGEST, notificationsDailyDigestHandler);
   await boss.work(JOBS.BACKFILL_PERFORMER_IMAGES, backfillPerformerImagesHandler);
   await boss.work(JOBS.BACKFILL_VENUE_PHOTOS, backfillVenuePhotosHandler);
+  await boss.work(JOBS.BACKFILL_SHOW_COVER_IMAGES, backfillShowCoverImagesHandler);
   await boss.work(JOBS.PRUNE_ORPHAN_CATALOG, pruneOrphanCatalogHandler);
   await boss.work(JOBS.HEALTH_CHECK, healthCheckHandler);
 
@@ -423,6 +446,7 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   // pass are available when we look up TM attractions by name.
   await boss.schedule(JOBS.BACKFILL_PERFORMER_IMAGES, '30 5 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.BACKFILL_VENUE_PHOTOS, '45 5 * * *', {}, { tz: 'America/New_York' });
+  await boss.schedule(JOBS.BACKFILL_SHOW_COVER_IMAGES, '15 6 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.DISCOVER_INGEST, '0 6 * * 1', {}, { tz: 'America/New_York' });
   // Health summary at 07:00 ET — runs after every overnight cron has had
   // a chance to complete (digest fires at 08:00) so missing summary

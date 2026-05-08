@@ -8,4 +8,5 @@ export {
 } from './discover-ingest';
 export { runDailyDigest } from './notifications';
 export { runPruneOrphanCatalog } from './prune-orphan-catalog';
+export { runBackfillShowCoverImages } from './backfill-show-cover-images';
 export { runHealthCheck, type HealthCheckSummary } from './health-check';

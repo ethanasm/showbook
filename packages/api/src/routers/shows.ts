@@ -626,11 +626,24 @@ export const showsRouter = router({
       // down rather than silently swallowed. We also opportunistically
       // capture the TM event image as the show's cover (theatre playbills,
       // tour artwork) when the caller didn't supply one.
-      if (state === 'watching' && input.kind !== 'festival') {
+      // We hit TM for `watching` (need ticket URL) and any production show
+      // (theatre/comedy) that's missing cover art — concerts already have a
+      // headliner image, festivals match poorly by name. Past shows skip the
+      // lookup; their coverImageUrl can be backfilled by the daily job.
+      const wantsTicketEnrichment = state === 'watching' && input.kind !== 'festival';
+      const wantsCoverEnrichment =
+        state !== 'past' &&
+        !input.coverImageUrl &&
+        (input.kind === 'theatre' || input.kind === 'comedy');
+      if (wantsTicketEnrichment || wantsCoverEnrichment) {
         try {
           const tmVenueId = venueResult.venue.ticketmasterVenueId;
+          const tmKeyword =
+            input.kind === 'theatre'
+              ? productionName ?? input.headliner.name
+              : input.headliner.name;
           const { events } = await searchEvents({
-            keyword: input.headliner.name,
+            keyword: tmKeyword,
             venueId: tmVenueId ?? undefined,
             startDateTime: `${input.date}T00:00:00Z`,
             endDateTime: `${input.date}T23:59:59Z`,

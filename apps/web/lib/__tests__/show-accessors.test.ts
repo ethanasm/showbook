@@ -154,12 +154,14 @@ test("getHeadlinerId: returns the picked performer's id", () => {
 
 // ── getHeadlinerImageUrl ─────────────────────────────────────────────────
 
-test("getHeadlinerImageUrl: production show returns null", () => {
+test("getHeadlinerImageUrl: production show with id routes through self-heal proxy", () => {
   assert.equal(
     getHeadlinerImageUrl(
       show({
+        id: "show-123",
         kind: "theatre",
         productionName: "Hamilton",
+        coverImageUrl: "http://poster.png",
         showPerformers: [
           {
             role: "headliner",
@@ -169,7 +171,49 @@ test("getHeadlinerImageUrl: production show returns null", () => {
         ],
       }),
     ),
+    "/api/show-cover/show-123",
+  );
+});
+
+test("getHeadlinerImageUrl: production show without id falls back to stored coverImageUrl", () => {
+  assert.equal(
+    getHeadlinerImageUrl(
+      show({
+        kind: "theatre",
+        productionName: "Hamilton",
+        coverImageUrl: "http://poster.png",
+        showPerformers: [],
+      }),
+    ),
+    "http://poster.png",
+  );
+});
+
+test("getHeadlinerImageUrl: production show without id or coverImageUrl returns null", () => {
+  assert.equal(
+    getHeadlinerImageUrl(
+      show({
+        kind: "theatre",
+        productionName: "Hamilton",
+        showPerformers: [],
+      }),
+    ),
     null,
+  );
+});
+
+test("getHeadlinerImageUrl: concert falls back to coverImageUrl when performer has none", () => {
+  assert.equal(
+    getHeadlinerImageUrl(
+      show({
+        kind: "concert",
+        coverImageUrl: "http://event.png",
+        showPerformers: [
+          { role: "headliner", sortOrder: 0, performer: { id: "p1", name: "Main" } },
+        ],
+      }),
+    ),
+    "http://event.png",
   );
 });
 
