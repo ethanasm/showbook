@@ -204,6 +204,14 @@
   object-fit: cover;
 }
 
+/* Bias the hero crop upward — most artist/band photos place faces in the
+   upper third, so a 16:9 cover crop with default center positioning ends
+   up cutting heads off. 30% is a middle ground that still works for venue
+   photos and event posters where the subject sits closer to center. */
+.remote-image--hero .remote-image__img {
+  object-position: center 30%;
+}
+
 .monogram-fallback {
   width: 100%;
   height: 100%;
