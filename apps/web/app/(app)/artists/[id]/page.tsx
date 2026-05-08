@@ -250,7 +250,7 @@ export default function ArtistDetailPage() {
           }}
         >
           <RemoteImage
-            src={performer.imageUrl}
+            src={`/api/performer-photo/${performer.id}`}
             alt={`${performer.name} portrait`}
             kind="artists"
             name={performer.name}
@@ -366,7 +366,9 @@ export default function ArtistDetailPage() {
                     state: s.state,
                     headliner: getHeadliner(s),
                     headlinerId: getHeadlinerId(s),
-                    imageUrl: getHeadlinerImageUrl(s),
+                    imageUrl: getHeadlinerId(s)
+                      ? `/api/performer-photo/${getHeadlinerId(s)}`
+                      : getHeadlinerImageUrl(s),
                     support: getSupport(s),
                     supportPerformers: getSupportPerformers(s),
                     venue: s.venue.name,

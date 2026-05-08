@@ -379,7 +379,7 @@ export default function ArtistsView() {
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                     <RemoteImage
-                      src={artist.imageUrl}
+                      src={`/api/performer-photo/${artist.id}`}
                       alt=""
                       kind="artists"
                       name={artist.name}
