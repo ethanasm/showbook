@@ -424,7 +424,11 @@
 @media (max-width: 767px) {
   .empty-state {
     grid-template-columns: 1fr;
-    padding: 28px 22px;
+    /* Extra bottom padding so action buttons clear the fixed bottom nav
+       (72px) plus the iOS browser toolbar / home indicator. Without this
+       buffer, scrolling to the end of the empty state still leaves the
+       buttons hidden behind the nav. */
+    padding: 28px 22px calc(96px + env(safe-area-inset-bottom, 0px));
   }
 
   .empty-state__visual {
@@ -1068,6 +1072,17 @@ a.show-row__support-link:hover {
   background: var(--hover);
 }
 
+/* Preferences: admin link only surfaces on mobile (desktop sidebar covers it) */
+.preferences-mobile-only {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .preferences-mobile-only {
+    display: block;
+  }
+}
+
 /* ── AppShell ─────────────────────────────────────────────── */
 
 .app-shell {
@@ -1105,7 +1120,9 @@ a.show-row__support-link:hover {
 
   .app-shell__content {
     flex: 1;
-    padding-bottom: 72px;
+    /* 72px clears the fixed bottom nav; env() adds the iOS home-indicator
+       inset so content isn't tucked behind the indicator either. */
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   }
 
   .app-shell__bottom-bar {
@@ -1187,49 +1204,6 @@ a.show-row__support-link:hover {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
-  }
-
-  /* Add button wrapper + popover */
-  .bottom-bar__add-wrapper {
-    position: relative;
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .bottom-bar__add-popover {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--surface);
-    border: 1px solid var(--rule-strong);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.18);
-    min-width: 160px;
-    display: flex;
-    flex-direction: column;
-    z-index: 200;
-  }
-
-  .bottom-bar__add-popover-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 11px 16px;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    color: var(--ink);
-    font-family: var(--font-geist-sans), sans-serif;
-    font-size: 13px;
-    text-align: left;
-    white-space: nowrap;
-    transition: background 0.1s ease;
-  }
-
-  .bottom-bar__add-popover-item:hover {
-    background: var(--bg);
   }
 
   /* ShowRow: collapse to 5 essential columns at narrow widths so the row

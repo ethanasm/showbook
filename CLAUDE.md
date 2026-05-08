@@ -19,6 +19,15 @@ the default template before committing. Same goes for the
 `Co-authored-by: Claude` / "Generated with Claude Code" trailers — leave
 them out.
 
+When you have committed changes that need to ship, hand off to the
+`creating-prs` skill rather than driving `git push` + `mcp__github__*`
+manually — it owns the push/open/subscribe loop and delegates to
+`pr-screenshots` whenever the diff touches `apps/web/{app,components}`,
+`apps/web/lib/**/*.tsx`, or `apps/mobile/{app,components}`. Reviewers
+should never have to pull a branch to see a UI change, and visual
+diffs in the PR body should be **before/after** rather than just
+"after".
+
 ## Working environment (Claude on the web)
 
 When you're running in the Claude Code web sandbox, this checkout is a **shallow clone** (`git rev-parse --is-shallow-repository` → `true`) of a single branch. As a result:
@@ -131,11 +140,10 @@ All new code MUST use the shared `@showbook/observability` package — no `conso
 **Structured logs (pino → Axiom):**
 - Import `logger` (or `child({ component, ... })`) from `@showbook/observability` for every log line.
 - Use structured fields, short messages: `logger.info({ event: 'phase.start', phase: 1, venueId }, 'Phase 1 started')`.
-- Errors: `logger.error({ err }, 'message')` — pino's `err` serializer flattens the stack.
+- Errors: `logger.error({ err }, 'message')` — the custom `serializeErr` in `packages/observability/src/logger.ts` flattens the stack, surfaces `code` / `detail` (postgres-js / Drizzle SQLSTATE), and walks `err.cause` recursively, so wrapped errors keep their underlying SQLSTATE in Axiom.
 - Never log secrets, raw user PII, raw email bodies, or image bytes. Redaction covers `apiKey`/`authorization`/`token`/`password` but don't rely on it.
 - In jobs, bind `{ job, jobId }` on the child logger so Axiom queries can filter by run.
 - Logs go to stdout (pretty in dev, JSON in prod) and to Axiom when `AXIOM_TOKEN` is set; behaviour must work with the env unset (tests, offline dev).
-- **Caveat**: the pino err serializer currently does NOT include `err.cause`, so a thrown wrapped postgres error (Drizzle / postgres-js) loses the underlying SQLSTATE in Axiom. If you debug a `Failed query: …` and the cause matters, fix the serializer in `packages/observability/src/logger.ts` first rather than working around it.
 
 **Where logs go (per env):**
 - **dev / local** — stdout only, pretty-printed via `pino-pretty`. `AXIOM_TOKEN` and `AXIOM_DATASET` are intentionally unset in `.env.dev` / `apps/web/.env.local`, so dev runs never ship to Axiom. Tests rely on this — don't set `AXIOM_TOKEN` in CI.
@@ -175,10 +183,11 @@ The stdout copy in the prod web container (`docker logs showbook-prod-web`) is a
 - `shows.create.{tm_enrichment_failed,venue_place_backfill_failed}` — `shows.create` non-blocking enrichments.
 - `backfill.performer_images.summary`, `backfill.venue_photos.summary` — scheduled backfill jobs (daily 05:30 / 05:45 ET).
 - `notifications.digest.summary` — daily email digest.
-- `pgboss.{started,registered,unschedule_stale}` — pg-boss lifecycle.
+- `pgboss.{started,stopped,registered,unschedule_stale,shutdown.start,shutdown.complete,shutdown.failed,register.invoked,register.duplicate,boot.ok,boot.failed}` — pg-boss lifecycle. The `shutdown.*` events fire from the Next.js SIGTERM/SIGINT handler in `apps/web/instrumentation.ts`; absence of a `shutdown.start` before a `started` means the previous boot was killed without graceful release of in-flight jobs. `register.invoked` carries a per-process counter so Axiom can confirm whether Next.js invokes `register()` more than once per process; `register.duplicate` fires when `registerAllJobs` is called twice against the same boss instance and the second call is suppressed (this is the guard that prevents the doubled `boss.work` registrations that surfaced as duplicate `job.start` events for every cron job in May 2026).
 - `trpc.error` — last-resort tRPC procedure error log.
 - `admin.backfill_coordinates.{start,complete}`, `admin.backfill_ticketmaster.{start,complete}` — operator-triggered global venue backfills via the `/admin` page.
 - `job.{start,complete,failed}` — pg-boss job wrapper from `runJob` in `packages/jobs/src/registry.ts`.
+- `health.check.{start,summary}`, `health.check.<name>.{ok,warn,fail,unknown}`, `health.check.email.{skipped,skipped_duplicate,failed}`, `health.check.preamble.failed`, `health.check.axiom.{skipped,http_error,failed}` — daily morning health-check cron (`health/morning-check`, 07:00 ET). `<name>` is one of `failed_jobs`, `missed_schedules`, `error_volume`, `database`, `pgboss_queue`, `data_freshness`, `stalled_scrapes`, `external_apis`. `skipped_duplicate` fires when a concurrent run already claimed today's `health_summary_log` row — the loser of the DB-level dedup race takes that path instead of double-emailing. The job itself is queryable via these events, so `debugging-prod` can confirm the cron ran. The Groq-generated preamble at the top of the email is traced as `groq.generateHealthSummaryPreamble` in Langfuse; it falls back to a deterministic count line when Groq is unavailable.
 
 When adding a new external-call boundary, follow the `<component>.<action>.<outcome>` shape and add it to this list.
 

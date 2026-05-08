@@ -3,7 +3,7 @@ import type { Venue } from './venue';
 export interface Announcement {
   id: string;
   venueId: string;
-  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports';
+  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports' | 'film' | 'unknown';
   headliner: string;
   headlinerPerformerId?: string | null;
   support?: string[] | null;

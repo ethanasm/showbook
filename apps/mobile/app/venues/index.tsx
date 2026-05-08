@@ -25,30 +25,12 @@ import { RowSkeleton } from '../../components/skeletons';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
-import { trpc } from '../../lib/trpc';
+import { trpc, type RouterOutput } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
 
-interface VenueListRow {
-  id: string;
-  name: string;
-  city: string | null;
-  stateRegion: string | null;
-  country: string | null;
-  googlePlaceId: string | null;
-  photoUrl: string | null;
-  ticketmasterVenueId: string | null;
-  pastShowsCount: number;
-  futureShowsCount: number;
-  isFollowed: boolean;
-}
-
-interface FollowedVenueRow {
-  id: string;
-  name: string;
-  city: string | null;
-  stateRegion: string | null;
-  photoUrl: string | null;
-}
+type UtilsClient = ReturnType<typeof trpc.useUtils>['client'];
+type VenueListRow = RouterOutput<UtilsClient['venues']['list']['query']>[number];
+type FollowedVenueRow = RouterOutput<UtilsClient['venues']['followed']['query']>[number];
 
 export default function VenuesListScreen(): React.JSX.Element {
   const { tokens } = useTheme();
@@ -60,14 +42,13 @@ export default function VenuesListScreen(): React.JSX.Element {
 
   const listQuery = useCachedQuery<VenueListRow[]>({
     queryKey: ['mobile', 'venues', 'list'],
-    queryFn: () => utils.client.venues.list.query() as unknown as Promise<VenueListRow[]>,
+    queryFn: () => utils.client.venues.list.query(),
     enabled: Boolean(token),
   });
 
   const followedQuery = useCachedQuery<FollowedVenueRow[]>({
     queryKey: ['mobile', 'venues', 'followed'],
-    queryFn: () =>
-      utils.client.venues.followed.query() as unknown as Promise<FollowedVenueRow[]>,
+    queryFn: () => utils.client.venues.followed.query(),
     enabled: Boolean(token),
   });
 

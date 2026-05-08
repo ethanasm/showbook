@@ -84,11 +84,19 @@ export async function GET(req: NextRequest) {
     );
     return clearStateCookie(
       new NextResponse(
-        `<html><body><p>Token exchange failed.</p><script>
-        if (window.opener) {
-          window.opener.postMessage({type:"spotify-auth-error"}, window.location.origin);
-          setTimeout(function() { window.close(); }, 500);
-        }
+        `<html><body><p>Token exchange failed. You can close this window.</p><script>
+        try {
+          // Same-origin localStorage broadcast: the storage event fires in the
+          // originating tab even when window.opener is null (mobile Safari
+          // typically loses the opener after the cross-origin Spotify hop).
+          window.localStorage.setItem("showbook:spotify-auth", JSON.stringify({type:"spotify-auth-error",at:Date.now()}));
+        } catch (e) {}
+        try {
+          if (window.opener) {
+            window.opener.postMessage({type:"spotify-auth-error"}, window.location.origin);
+          }
+        } catch (e) {}
+        setTimeout(function() { try { window.close(); } catch (e) {} }, 500);
       </script></body></html>`,
         { headers: { 'Content-Type': 'text/html' } },
       ),
@@ -101,14 +109,18 @@ export async function GET(req: NextRequest) {
 
   return clearStateCookie(
     new NextResponse(
-      `<html><body><p>Authenticated. This window will close.</p><script>
+      `<html><body><p>Authenticated. You can close this window and return to Showbook.</p><script>
       try {
+        // Same-origin localStorage broadcast: the storage event fires in the
+        // originating tab even when window.opener is null (mobile Safari
+        // typically loses the opener after the cross-origin Spotify hop).
+        try {
+          window.localStorage.setItem("showbook:spotify-auth", JSON.stringify({type:"spotify-auth",accessToken:${accessToken},at:Date.now()}));
+        } catch (e) {}
         if (window.opener) {
           window.opener.postMessage({type:"spotify-auth",accessToken:${accessToken}}, window.location.origin);
-          setTimeout(function() { window.close(); }, 500);
-        } else {
-          document.body.innerText = "Popup lost connection to parent window.";
         }
+        setTimeout(function() { try { window.close(); } catch (e) {} }, 500);
       } catch(e) {
         document.body.innerText = "Error: " + e.message;
       }

@@ -6,8 +6,8 @@ type EmptyKind = "shows" | "venues" | "artists" | "discover" | "map";
 
 const EYEBROWS: Record<EmptyKind, string> = {
   shows: "Your live-show log",
-  venues: "Places you've been",
-  artists: "Performers you've seen live",
+  venues: "Venues from your shows",
+  artists: "Artists from your shows and follows",
   discover: "Discovery queue",
   map: "Geographic view",
 };

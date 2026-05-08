@@ -1,12 +1,13 @@
 export { appRouter, type AppRouter } from './root';
 export { createContext, type Session } from './trpc';
-export { searchArtist, searchSetlist } from './setlistfm';
-export type { ArtistSearchResult, SetlistResult } from './setlistfm';
+export { searchArtist, searchSetlist, getUserAttended, SetlistFmError } from './setlistfm';
+export type { ArtistSearchResult, SetlistResult, AttendedSetlist, AttendedPage } from './setlistfm';
 
 // Data-source clients & matchers
 export {
   searchEvents,
   getEvent,
+  getVenue,
   searchAttractions,
   getAttraction,
   inferKind,
@@ -16,11 +17,22 @@ export {
   type TMVenue,
   type TMAttraction,
 } from './ticketmaster';
-export { matchOrCreateVenue } from './venue-matcher';
+export { matchOrCreateVenue, isUniqueViolation } from './venue-matcher';
+export { geocodeVenue } from './geocode';
+export type { GeocodeResult } from './geocode';
 export { matchOrCreatePerformer } from './performer-matcher';
 export { getPlacePhotoMediaUrl, getPlaceDetails } from './google-places';
-export { extractShowFromEmail, generateDigestPreamble } from './groq';
-export type { ExtractedTicketInfo, DigestPreambleInput } from './groq';
+export {
+  extractShowFromEmail,
+  generateDigestPreamble,
+  generateHealthSummaryPreamble,
+  pingGroq,
+} from './groq';
+export type {
+  ExtractedTicketInfo,
+  DigestPreambleInput,
+  HealthSummaryPreambleInput,
+} from './groq';
 export {
   searchMessages,
   getMessageBody,
@@ -28,6 +40,8 @@ export {
 } from './gmail';
 export { getFollowedArtists, SpotifyError } from './spotify';
 export type { SpotifyArtist } from './spotify';
+export { getMyPastOrders, EventbriteError } from './eventbrite';
+export type { EventbriteTicket } from './eventbrite';
 export {
   scrapeConfigSchema,
   parseScrapeConfig,
@@ -36,3 +50,4 @@ export {
 export { storeLocalObject } from './media-storage';
 export { getMediaConfig } from './media-config';
 export { enforceRateLimit, isRateLimited } from './rate-limit';
+export { parseAdminEmails, isAdminEmail } from './admin';

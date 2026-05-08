@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
+import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
+import { useIsMobile } from "@/lib/useIsMobile";
 import { EditableName } from "@/components/EditableName";
 import {
   Music,
@@ -88,6 +90,7 @@ function gradientLastWord(name: string) {
 export default function VenueDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const isMobile = useIsMobile();
   const venueId = params?.id ?? "";
 
   const utils = trpc.useUtils();
@@ -133,11 +136,14 @@ export default function VenueDetailPage() {
     },
   });
 
+  const invalidateSidebarCounts = useInvalidateSidebarCounts();
+
   const updateState = trpc.shows.updateState.useMutation({
     onSuccess: () => {
       utils.venues.userShows.invalidate();
       utils.venues.detail.invalidate();
       utils.shows.invalidate();
+      invalidateSidebarCounts();
     },
   });
 
@@ -147,6 +153,7 @@ export default function VenueDetailPage() {
       utils.venues.userShows.invalidate();
       utils.venues.detail.invalidate();
       utils.shows.invalidate();
+      invalidateSidebarCounts();
     },
   });
 
@@ -237,7 +244,7 @@ export default function VenueDetailPage() {
       {/* Breadcrumb */}
       <div
         style={{
-          padding: "14px 36px",
+          padding: "14px var(--page-pad-x)",
           borderBottom: "1px solid var(--rule)",
           display: "flex",
           alignItems: "center",
@@ -253,9 +260,9 @@ export default function VenueDetailPage() {
         <span style={{ color: "var(--ink)" }}>{venue.name.toLowerCase()}</span>
       </div>
 
-      <div style={{ padding: "24px 36px 0" }}>
+      <div style={{ padding: "24px var(--page-pad-x) 0" }}>
         <div className="venue-photo-band">
-          {venue.photoUrl ? (
+          {venue.photoUrl || venue.googlePlaceId ? (
             <RemoteImage
               src={`/api/venue-photo/${venue.id}`}
               alt={`${venue.name} venue photo`}
@@ -277,12 +284,14 @@ export default function VenueDetailPage() {
       {/* Hero — title + compact inline meta + actions on right */}
       <div
         style={{
-          padding: "20px 36px 18px",
+          padding: "20px var(--page-pad-x) 18px",
           borderBottom: "1px solid var(--rule)",
-          display: "grid",
-          gridTemplateColumns: "1fr auto",
+          display: isMobile ? "flex" : "grid",
+          flexDirection: isMobile ? "column" : undefined,
+          gridTemplateColumns: isMobile ? undefined : "1fr auto",
           columnGap: 32,
-          alignItems: "end",
+          rowGap: isMobile ? 14 : undefined,
+          alignItems: isMobile ? "stretch" : "end",
         }}
       >
         <div style={{ minWidth: 0 }}>
@@ -291,6 +300,7 @@ export default function VenueDetailPage() {
             value={venue.name}
             displayValue={gradientLastWord(venue.name)}
             onSave={(name) => renameMutation.mutate({ venueId: venue.id, name })}
+            compact={isMobile}
           />
           {/* Compact meta line: location · visit count · first/last seen · upcoming */}
           <div
@@ -391,12 +401,14 @@ export default function VenueDetailPage() {
           </div>
         </div>
 
-        <FollowButton
-          isFollowed={venue.isFollowed}
-          isLoading={followBusy}
-          onToggle={toggleFollow}
-          variant="mono"
-        />
+        <div style={{ alignSelf: isMobile ? "flex-start" : "auto" }}>
+          <FollowButton
+            isFollowed={venue.isFollowed}
+            isLoading={followBusy}
+            onToggle={toggleFollow}
+            variant="mono"
+          />
+        </div>
       </div>
 
       {/* Body */}
@@ -406,7 +418,7 @@ export default function VenueDetailPage() {
           minHeight: 0,
           overflow: "auto",
           background: "var(--bg)",
-          padding: "20px 36px 40px",
+          padding: "20px var(--page-pad-x) 40px",
           display: "flex",
           flexDirection: "column",
           gap: 28,
@@ -434,7 +446,8 @@ export default function VenueDetailPage() {
             </CardMessage>
           ) : (
             <div style={{ background: "var(--surface)" }}>
-              {/* Column headers */}
+              {/* Column headers — desktop only; ShowRow collapses on mobile. */}
+              {!isMobile && (
               <div style={{
                 display: "grid",
                 gridTemplateColumns: "14px 32px 80px 110px 1.2fr 1fr 110px 64px 88px",
@@ -457,6 +470,7 @@ export default function VenueDetailPage() {
                 <div style={{ textAlign: "right" }}>Paid</div>
                 <div style={{ textAlign: "right" }}>State</div>
               </div>
+              )}
               {userShows.map((s) => (
                 <div key={s.id}>
                   <ShowRowComponent
@@ -515,7 +529,9 @@ export default function VenueDetailPage() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "100px 110px 1fr 110px 120px",
+                  gridTemplateColumns: isMobile
+                    ? "60px minmax(0, 1fr) 90px"
+                    : "100px 110px 1fr 110px 120px",
                   columnGap: 16,
                   padding: "10px 16px",
                   borderBottom: "1px solid var(--rule)",
@@ -527,9 +543,9 @@ export default function VenueDetailPage() {
                 }}
               >
                 <div>Show date</div>
-                <div>Kind</div>
+                {!isMobile && <div>Kind</div>}
                 <div>Headliner</div>
-                <div>On sale</div>
+                {!isMobile && <div>On sale</div>}
                 <div>Status</div>
               </div>
               {upcoming.map((a) => {
@@ -541,7 +557,9 @@ export default function VenueDetailPage() {
                     key={a.id}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "100px 110px 1fr 110px 120px",
+                      gridTemplateColumns: isMobile
+                    ? "60px minmax(0, 1fr) 90px"
+                    : "100px 110px 1fr 110px 120px",
                       columnGap: 16,
                       padding: "12px 16px",
                       borderBottom: "1px solid var(--rule)",
@@ -572,21 +590,23 @@ export default function VenueDetailPage() {
                         {date.year} &middot; {date.dow}
                       </div>
                     </div>
-                    <div
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 6,
-                        fontFamily: "var(--font-geist-mono), monospace",
-                        fontSize: 10.5,
-                        color: `var(--kind-${a.kind})`,
-                        letterSpacing: ".06em",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      <KindIcon size={12} />
-                      {KIND_LABELS[a.kind as ShowKind] ?? a.kind}
-                    </div>
+                    {!isMobile && (
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          fontFamily: "var(--font-geist-mono), monospace",
+                          fontSize: 10.5,
+                          color: `var(--kind-${a.kind})`,
+                          letterSpacing: ".06em",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        <KindIcon size={12} />
+                        {KIND_LABELS[a.kind as ShowKind] ?? a.kind}
+                      </div>
+                    )}
                     <div style={{ minWidth: 0 }}>
                       {a.headlinerPerformerId ? (
                         <Link
@@ -635,16 +655,18 @@ export default function VenueDetailPage() {
                         </div>
                       )}
                     </div>
-                    <div
-                      style={{
-                        fontFamily: "var(--font-geist-mono), monospace",
-                        fontSize: 11,
-                        color: isOnSale ? "var(--accent)" : "var(--muted)",
-                        fontWeight: isOnSale ? 500 : 400,
-                      }}
-                    >
-                      {formatOnSaleDate(a.onSaleDate)}
-                    </div>
+                    {!isMobile && (
+                      <div
+                        style={{
+                          fontFamily: "var(--font-geist-mono), monospace",
+                          fontSize: 11,
+                          color: isOnSale ? "var(--accent)" : "var(--muted)",
+                          fontWeight: isOnSale ? 500 : 400,
+                        }}
+                      >
+                        {formatOnSaleDate(a.onSaleDate)}
+                      </div>
+                    )}
                     <div>
                       <span
                         style={{

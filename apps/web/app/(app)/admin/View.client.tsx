@@ -55,12 +55,18 @@ function BackfillCard({
 export default function AdminView() {
   const coordsMutation = trpc.admin.backfillVenueCoordinates.useMutation();
   const tmMutation = trpc.admin.backfillVenueTicketmaster.useMutation();
+  const pruneMutation = trpc.admin.enqueuePruneOrphanCatalog.useMutation();
 
   const coordsResult = coordsMutation.data
     ? `Last run: ${coordsMutation.data.geocoded} geocoded · ${coordsMutation.data.failed} failed · ${coordsMutation.data.total} total`
     : null;
   const tmResult = tmMutation.data
     ? `Last run: ${tmMutation.data.matched} matched · ${tmMutation.data.failed} failed · ${tmMutation.data.total} total`
+    : null;
+  const pruneResult = pruneMutation.data
+    ? pruneMutation.data.jobId
+      ? `Enqueued job ${pruneMutation.data.jobId}`
+      : 'Enqueue returned no job id (likely a duplicate already queued)'
     : null;
 
   return (
@@ -96,6 +102,17 @@ export default function AdminView() {
           />
 
           <BackfillCard
+            title="Prune orphaned announcements & venues"
+            description="Enqueue the prune-orphan-catalog pg-boss job. Deletes announcements, venues, and performers with no remaining shows, follows, or references. Already runs nightly at 02:30 ET — use this for an on-demand sweep."
+            buttonLabel="Enqueue prune job"
+            confirmText="Enqueue the prune-orphan-catalog job? It will delete unreferenced announcements, venues, and performers."
+            isPending={pruneMutation.isPending}
+            errorMessage={pruneMutation.error?.message ?? null}
+            resultLine={pruneResult}
+            onRun={() => pruneMutation.mutate()}
+          />
+
+          <BackfillCard
             title="Backfill Ticketmaster venue IDs"
             description="Look up a Ticketmaster venueId for every venue that doesn't have one. Calls the Ticketmaster Discovery API once per row."
             buttonLabel="Run Ticketmaster backfill"
@@ -119,7 +136,7 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: 0,
   },
   header: {
-    padding: "16px 36px",
+    padding: "16px var(--page-pad-x)",
     borderBottom: "1px solid var(--rule)",
   },
   headerLabel: {
@@ -155,7 +172,7 @@ const styles: Record<string, React.CSSProperties> = {
   content: {
     flex: 1,
     overflow: "auto",
-    padding: "28px 36px 60px",
+    padding: "28px var(--page-pad-x) 60px",
   },
   contentInner: {
     maxWidth: 720,

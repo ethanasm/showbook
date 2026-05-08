@@ -10,7 +10,7 @@
 /* ── Header ──────────────────────────────────────────── */
 
 .discover-header {
-  padding: 16px 36px;
+  padding: 16px var(--page-pad-x);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -58,7 +58,7 @@
 /* ── Tabs Bar ────────────────────────────────────────── */
 
 .discover-tabs-bar {
-  padding: 11px 36px;
+  padding: 11px var(--page-pad-x);
   display: flex;
   align-items: center;
   gap: 14px;
@@ -318,7 +318,7 @@
   flex: 1;
   min-width: 0;
   overflow: auto;
-  padding: 20px 28px 36px;
+  padding: 20px var(--page-pad-x) 36px;
 }
 
 /* ── Column Headers ──────────────────────────────────── */
@@ -338,7 +338,7 @@
 
 /* Near You table has an extra Venue column between Kind and Headliner. */
 .discover-col-headers--region {
-  grid-template-columns: 72px 76px 196px minmax(0, 1fr) 120px 110px 200px;
+  grid-template-columns: 72px 76px 140px minmax(0, 1fr) 90px 80px 200px;
 }
 
 /* ── Venue Group ─────────────────────────────────────── */
@@ -438,7 +438,7 @@
 
 /* Near You row layout includes a Venue cell. */
 .discover-row.discover-row--region {
-  grid-template-columns: 72px 76px 196px minmax(0, 1fr) 120px 110px 200px;
+  grid-template-columns: 72px 76px 140px minmax(0, 1fr) 90px 80px 200px;
 }
 
 .discover-row__venue-cell {
@@ -730,6 +730,20 @@ a.discover-row__headliner-link:hover {
   justify-content: center;
   min-height: 200px;
   flex: 1;
+}
+
+@media (max-width: 767px) {
+  /* Stop centering on mobile — the centered + flex:1 layout collapses the
+     EmptyState into the available height, and since .empty-state uses
+     overflow:hidden (to contain the glow backdrop) the action region gets
+     clipped behind the fixed bottom nav. Let the empty-state grow to its
+     natural content height so its mobile bottom padding can clear the nav. */
+  .discover-empty {
+    flex: 0 0 auto;
+    align-items: flex-start;
+    justify-content: flex-start;
+    min-height: 0;
+  }
 }
 
 .discover-empty__text {
@@ -1087,21 +1101,12 @@ a.discover-row__headliner-link:hover {
   .discover-feed {
     overflow: visible;
   }
-
-  .discover-header {
-    padding: 16px 20px;
-  }
-
-  .discover-tabs-bar {
-    padding: 11px 20px;
-  }
 }
 
 /* ── Mobile ──────────────────────────────────────────── */
 
 @media (max-width: 767px) {
   .discover-header {
-    padding: 16px 20px;
     flex-direction: column;
     align-items: flex-start;
     gap: 4px;
@@ -1112,9 +1117,28 @@ a.discover-row__headliner-link:hover {
   }
 
   .discover-tabs-bar {
-    padding: 11px 20px;
     flex-wrap: wrap;
     gap: 10px;
+  }
+
+  /* Drop .discover-page's fixed-height + overflow:hidden constraint on
+     mobile so the empty-state (which uses overflow:hidden internally to
+     contain its glow backdrop) isn't clipped behind the bottom nav. The
+     page-level scroll container (.app-shell__content) handles scrolling. */
+  .discover-page {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+
+  /* Stack chips above the feed instead of letting them become a
+   * full-height row-flex sibling that stretches the chip buttons
+   * to the viewport. */
+  .discover-main {
+    flex-direction: column;
+    flex: 0 0 auto;
+    overflow: visible;
+    min-height: 0;
   }
 
   /* Hide desktop rail, show mobile chips */
@@ -1126,7 +1150,7 @@ a.discover-row__headliner-link:hover {
     display: flex;
     gap: 6px;
     overflow-x: auto;
-    padding: 8px 14px 10px;
+    padding: 8px var(--page-pad-x) 10px;
     border-bottom: 1px solid var(--rule);
     flex-shrink: 0;
     -webkit-overflow-scrolling: touch;
@@ -1188,11 +1212,15 @@ a.discover-row__headliner-link:hover {
 
   .discover-row {
     display: grid;
-    grid-template-columns: 54px 1fr auto;
-    column-gap: 12px;
-    padding: 12px 20px;
+    grid-template-columns: 72px minmax(0, 1fr) auto;
+    column-gap: 10px;
+    padding: 12px var(--page-pad-x);
     border-bottom: none;
     border-top: 1px solid var(--rule);
+  }
+
+  .discover-row.discover-row--region {
+    grid-template-columns: 72px minmax(0, 1fr) auto;
   }
 
   .discover-row__kind {
@@ -1214,14 +1242,37 @@ a.discover-row__headliner-link:hover {
     display: none;
   }
 
+  /* On the followed-regions feed, surface the headliner in the third
+   * column instead of the venue — the venue is already shown in the
+   * region group header, so duplicating it here just steals room from
+   * the headliner. */
+  .discover-row--region .discover-row__venue-cell {
+    display: none;
+  }
+
+  /* Compact icon-only Watch / Calendar / Tix buttons on mobile so the
+   * action column doesn't stack three full-width labelled buttons per
+   * row. `font-size: 0` hides the trailing text node; the SVG keeps
+   * its own width/height attrs from the lucide `size={11}` prop. */
   .discover-row__actions {
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 6px;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .discover-watch-btn,
+  .discover-tix-btn {
+    padding: 6px;
+    min-width: 28px;
+    width: 28px;
+    height: 28px;
+    justify-content: center;
+    gap: 0;
+    font-size: 0;
   }
 
   .discover-venue-group__header {
-    padding: 14px 20px 6px;
+    padding: 14px var(--page-pad-x) 6px;
     border-top: 1px solid var(--rule);
   }
 
@@ -1237,7 +1288,7 @@ a.discover-row__headliner-link:hover {
     margin: 0;
     border: none;
     border-top: 1px solid var(--rule);
-    padding: 14px 20px 18px;
+    padding: 14px var(--page-pad-x) 18px;
     justify-content: center;
     font-size: 9.5px;
   }

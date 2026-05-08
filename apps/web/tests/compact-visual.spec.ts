@@ -19,7 +19,7 @@ async function setCompact(page: Page, on: boolean) {
   }
 }
 
-const PAGES = ['/home', '/shows', '/venues', '/artists', '/discover', '/preferences'];
+const PAGES = ['/home', '/upcoming', '/logbook', '/venues', '/artists', '/discover', '/preferences'];
 
 test('capture loose vs compact for every list page', async ({ page }) => {
   test.setTimeout(180_000);

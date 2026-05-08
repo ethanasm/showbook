@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
+import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
 import {
   EmptyState,
   ShowRow,
@@ -34,6 +35,7 @@ import {
   Eye,
 } from "lucide-react";
 import { useCompactMode } from "@/lib/useCompactMode";
+import { useIsMobile } from "@/lib/useIsMobile";
 import { daysUntil, formatDateParts } from "@showbook/shared";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import { STATE_TRANSITIONS } from "@/lib/show-state";
@@ -214,15 +216,50 @@ function getFirstDayOfWeek(year: number, month: number): number {
 type CalView = "month" | "year";
 type StatsTimeframe = "year" | "5years" | "all";
 
-export default function ShowsView() {
+export type ShowsListMode = 'upcoming' | 'logbook';
+
+const MODE_LABELS: Record<ShowsListMode, { eyebrow: string; title: string; emptyTitle: string; emptyBody: string }> = {
+  upcoming: {
+    eyebrow: 'Plans on the horizon',
+    title: 'Upcoming',
+    emptyTitle: 'Nothing on the horizon',
+    emptyBody:
+      'Add a show or browse Discover for upcoming events from venues and artists you follow.',
+  },
+  logbook: {
+    eyebrow: 'Your live-show log',
+    title: 'Logbook',
+    emptyTitle: 'Your history starts here',
+    emptyBody:
+      "Once your first show happens it'll move into your logbook automatically. Or import receipts from Gmail to backfill past shows.",
+  },
+};
+
+interface ShowsListViewProps {
+  mode: ShowsListMode;
+}
+
+export default function ShowsListView({ mode }: ShowsListViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const compact = useCompactMode();
+  const isMobile = useIsMobile();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedYear, setSelectedYear] = useState<string>("All");
   const [selectedKind, setSelectedKind] = useState<ShowKind | null>(null);
-  const [sort, setSort] = useState<SortConfig>({ field: "date", dir: "desc" });
+  // Upcoming defaults to date-asc (next-up first); Logbook keeps date-desc.
+  // Stats is past-context only — never an option on /upcoming.
+  const [sort, setSort] = useState<SortConfig>({
+    field: "date",
+    dir: mode === "upcoming" ? "asc" : "desc",
+  });
+  // Sub-filter on /upcoming: All · Tickets · Watching. /logbook ignores it.
+  const [upcomingFilter, setUpcomingFilter] = useState<"all" | "ticketed" | "watching">("all");
   const [currentPage, setCurrentPage] = useState(0);
+
+  const labels = MODE_LABELS[mode];
+  const isUpcoming = mode === "upcoming";
+  const isLogbook = mode === "logbook";
 
   const PAGE_SIZE = compact ? 10 : 12;
 
@@ -251,30 +288,43 @@ export default function ShowsView() {
   // Stats timeframe
   const [statsTimeframe, setStatsTimeframe] = useState<StatsTimeframe>("all");
 
-  // Gmail bulk scan state
-  const [gmailModalOpen, setGmailModalOpen] = useState(false);
+  // Import (Gmail / setlist.fm / Eventbrite) state. The scan UIs are
+  // source-keyed but share the review list, dedupe, and "Add selected"
+  // creation logic.
+  type ImportSource = "gmail" | "setlistfm" | "eventbrite";
+  type BulkResult = {
+    gmailMessageId?: string;
+    headliner: string;
+    production_name: string | null;
+    venue_name: string | null;
+    venue_city: string | null;
+    venue_state: string | null;
+    date: string | null;
+    seat: string | null;
+    price: string | null;
+    ticket_count: number | null;
+    kind_hint: "concert" | "theatre" | "comedy" | "festival" | null;
+    confidence: "high" | "medium" | "low";
+    // Source-specific extras carried through to createShow:
+    setlistId?: string;
+    musicbrainzId?: string;
+    tourName?: string | null;
+    setlist?: import("@showbook/shared").PerformerSetlist;
+    orderId?: string;
+    eventId?: string;
+  };
+  const [importSource, setImportSource] = useState<ImportSource | null>(null);
   const [gmailBulkLoading, setGmailBulkLoading] = useState(false);
-  const [gmailBulkResults, setGmailBulkResults] = useState<
-    Array<{
-      gmailMessageId: string;
-      headliner: string;
-      production_name: string | null;
-      venue_name: string | null;
-      venue_city: string | null;
-      venue_state: string | null;
-      date: string | null;
-      seat: string | null;
-      price: string | null;
-      ticket_count: number | null;
-      kind_hint: "concert" | "theatre" | "comedy" | "festival" | null;
-      confidence: "high" | "medium" | "low";
-    }>
-  >([]);
+  const [gmailBulkResults, setGmailBulkResults] = useState<BulkResult[]>([]);
   const [gmailBulkSelected, setGmailBulkSelected] = useState<Set<number>>(new Set());
   const [gmailAdding, setGmailAdding] = useState(false);
   const [gmailAddedCount, setGmailAddedCount] = useState(0);
   const [gmailAccessToken, setGmailAccessToken] = useState<string | null>(null);
   const [gmailError, setGmailError] = useState<string | null>(null);
+  // Eventbrite + setlist.fm specific bits:
+  const [eventbriteAccessToken, setEventbriteAccessToken] = useState<string | null>(null);
+  const [setlistfmUsername, setSetlistfmUsername] = useState("");
+  const setlistfmFetchAttended = trpc.imports.setlistfmFetchAttended.useMutation();
 
   // Fetch shows
   const yearFilter = selectedYear === "All" ? undefined :
@@ -293,6 +343,7 @@ export default function ShowsView() {
   const deleteAllShows = trpc.shows.deleteAll.useMutation();
   const createShow = trpc.shows.create.useMutation();
   const utils = trpc.useUtils();
+  const invalidateSidebarCounts = useInvalidateSidebarCounts();
   const setTicketUrl = trpc.shows.setTicketUrl.useMutation({
     onSuccess: () => utils.shows.invalidate(),
   });
@@ -322,13 +373,28 @@ export default function ShowsView() {
     }
   }, [selectedYear, selectedKind]);
 
-  // Filtered shows
+  // Filtered shows. Mode-driven state filter is the primary cut:
+  //   /upcoming → state IN ('watching','ticketed')
+  //   /logbook  → state = 'past'
+  // The watching/ticketed sub-filter on /upcoming narrows further; /logbook
+  // keeps the existing year/kind filters.
   const filteredShows = useMemo(() => {
     let result = shows;
 
-    if (selectedYear === "older") {
+    if (isUpcoming) {
+      result = result.filter(
+        (s) => s.state === "watching" || s.state === "ticketed",
+      );
+      if (upcomingFilter !== "all") {
+        result = result.filter((s) => s.state === upcomingFilter);
+      }
+    } else {
+      result = result.filter((s) => s.state === "past");
+    }
+
+    if (isLogbook && selectedYear === "older") {
       const currentYear = new Date().getFullYear();
-      result = result.filter((s) => getYear(s.date) < currentYear - 2);
+      result = result.filter((s) => s.date && getYear(s.date) < currentYear - 2);
     }
 
     if (selectedKind) {
@@ -338,7 +404,16 @@ export default function ShowsView() {
     result = [...result].sort((a, b) => compareShows(a, b, sort));
 
     return result;
-  }, [shows, selectedKind, sort, selectedYear]);
+  }, [shows, selectedKind, sort, selectedYear, isUpcoming, isLogbook, upcomingFilter]);
+
+  // Date-TBD watching shows (no date set yet) deserve their own rail at
+  // the top of /upcoming so users can pick a night. The main filteredShows
+  // list below already includes them, but a dedicated rail signals they
+  // need attention.
+  const dateTbdShows = useMemo(() => {
+    if (!isUpcoming) return [];
+    return shows.filter((s) => s.state === "watching" && s.date === null);
+  }, [shows, isUpcoming]);
 
   const totalPages = Math.ceil(filteredShows.length / PAGE_SIZE);
   const pagedShows = filteredShows.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
@@ -370,6 +445,7 @@ export default function ShowsView() {
     await deleteAllShows.mutateAsync();
     utils.shows.invalidate();
     utils.performers.invalidate();
+    invalidateSidebarCounts();
   }
 
   // ---------------------------------------------------------------------------
@@ -449,29 +525,133 @@ export default function ShowsView() {
     }
   }, [isDuplicate]);
 
-  const handleOpenGmailModal = useCallback(() => {
-    setGmailModalOpen(true);
+  const startEventbriteScan = useCallback(async (token: string) => {
+    setGmailBulkLoading(true);
+    setGmailProgress(null);
+    try {
+      const res = await fetch("/api/eventbrite/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessToken: token }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "Scan failed");
+        throw new Error(text || "Scan failed");
+      }
+      const data = (await res.json()) as {
+        tickets: Array<{
+          orderId: string;
+          eventId: string;
+          date: string | null;
+          eventName: string | null;
+          venueName: string | null;
+          venueCity: string | null;
+          venueState: string | null;
+          price: string | null;
+          ticketCount: number;
+          kindHint: "concert" | "theatre" | "comedy" | "festival" | null;
+          duplicate: boolean;
+        }>;
+      };
+      const mapped: BulkResult[] = data.tickets.map((t) => ({
+        headliner: t.eventName ?? "(unknown)",
+        production_name: null,
+        venue_name: t.venueName,
+        venue_city: t.venueCity,
+        venue_state: t.venueState,
+        date: t.date,
+        seat: null,
+        price: t.price,
+        ticket_count: t.ticketCount,
+        kind_hint: t.kindHint,
+        confidence: "medium",
+        orderId: t.orderId,
+        eventId: t.eventId,
+      }));
+      setGmailBulkResults(mapped);
+      const initial = new Set<number>();
+      mapped.forEach((t, i) => { if (!isDuplicate(t)) initial.add(i); });
+      setGmailBulkSelected(initial);
+    } catch (err) {
+      setGmailError(err instanceof Error ? err.message : "Eventbrite scan failed");
+    } finally {
+      setGmailBulkLoading(false);
+    }
+  }, [isDuplicate]);
+
+  const startSetlistfmScan = useCallback(async (username: string) => {
+    setGmailBulkLoading(true);
+    setGmailError(null);
+    try {
+      const data = await setlistfmFetchAttended.mutateAsync({ username });
+      const mapped: BulkResult[] = data.tickets.map((t) => ({
+        headliner: t.headliner,
+        production_name: null,
+        venue_name: t.venueName,
+        venue_city: t.venueCity,
+        venue_state: t.venueState,
+        date: t.date,
+        seat: null,
+        price: null,
+        ticket_count: 1,
+        kind_hint: "concert",
+        confidence: "high",
+        setlistId: t.setlistId,
+        musicbrainzId: t.musicbrainzId ?? undefined,
+        tourName: t.tourName,
+        setlist: t.setlist,
+      }));
+      setGmailBulkResults(mapped);
+      const initial = new Set<number>();
+      mapped.forEach((t, i) => { if (!isDuplicate(t)) initial.add(i); });
+      setGmailBulkSelected(initial);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "setlist.fm import failed";
+      setGmailError(msg);
+    } finally {
+      setGmailBulkLoading(false);
+    }
+  }, [isDuplicate, setlistfmFetchAttended]);
+
+  const handleOpenImportModal = useCallback((source: ImportSource) => {
+    setImportSource(source);
     setGmailBulkResults([]);
     setGmailBulkSelected(new Set());
     setGmailAddedCount(0);
     setGmailAccessToken(null);
+    setEventbriteAccessToken(null);
+    setSetlistfmUsername("");
     setGmailError(null);
     setGmailProgress(null);
 
+    if (source === "setlistfm") {
+      // No popup — username form is shown inline in the modal.
+      return;
+    }
+
+    // OAuth-based sources (gmail, eventbrite) share the popup pattern.
+    const expectedAuth = source === "gmail" ? "gmail-auth" : "eventbrite-auth";
+    const expectedAuthError = source === "gmail" ? "gmail-auth-error" : "eventbrite-auth-error";
+    const popupPath = source === "gmail" ? "/api/gmail" : "/api/eventbrite";
+
     const handler = (e: MessageEvent) => {
-      if (e.data?.type === "gmail-auth" && e.data.accessToken) {
+      if (e.data?.type === expectedAuth && e.data.accessToken) {
         window.removeEventListener("message", handler);
-        setGmailAccessToken(e.data.accessToken);
-        startGmailScan(e.data.accessToken);
+        if (source === "gmail") {
+          setGmailAccessToken(e.data.accessToken);
+          startGmailScan(e.data.accessToken);
+        } else {
+          setEventbriteAccessToken(e.data.accessToken);
+          startEventbriteScan(e.data.accessToken);
+        }
       }
-      if (e.data?.type === "gmail-auth-error") {
+      if (e.data?.type === expectedAuthError) {
         window.removeEventListener("message", handler);
       }
     };
     window.addEventListener("message", handler);
 
-    const popup = window.open("/api/gmail", "gmail-auth", "width=500,height=600,popup=yes");
-
+    const popup = window.open(popupPath, `${source}-auth`, "width=500,height=600,popup=yes");
     if (popup) {
       const checkClosed = setInterval(() => {
         if (popup.closed) {
@@ -480,13 +660,19 @@ export default function ShowsView() {
         }
       }, 500);
     }
-  }, [startGmailScan]);
+  }, [startGmailScan, startEventbriteScan]);
 
-  // Auto-open Gmail modal when navigated from the empty-state CTA (?gmail=1)
+  // Back-compat: ?gmail=1 still opens Gmail. New: ?import=gmail|setlistfm|eventbrite.
   useEffect(() => {
+    const importParam = searchParams.get("import");
+    if (importParam === "gmail" || importParam === "setlistfm" || importParam === "eventbrite") {
+      handleOpenImportModal(importParam);
+      router.replace(isUpcoming ? "/upcoming" : "/logbook");
+      return;
+    }
     if (searchParams.get("gmail") === "1") {
-      handleOpenGmailModal();
-      router.replace("/shows");
+      handleOpenImportModal("gmail");
+      router.replace(isUpcoming ? "/upcoming" : "/logbook");
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -511,9 +697,21 @@ export default function ShowsView() {
 
     for (const ticket of selected) {
       try {
+        let sourceRefs: Record<string, unknown>;
+        if (ticket.setlistId) {
+          sourceRefs = { setlistfm: { setlistId: ticket.setlistId } };
+        } else if (ticket.orderId) {
+          sourceRefs = { eventbrite: { orderId: ticket.orderId, eventId: ticket.eventId } };
+        } else {
+          sourceRefs = { gmail: true };
+        }
         await createShow.mutateAsync({
           kind: ticket.kind_hint ?? "concert",
-          headliner: { name: ticket.headliner },
+          headliner: {
+            name: ticket.headliner,
+            ...(ticket.musicbrainzId ? { musicbrainzId: ticket.musicbrainzId } : {}),
+            ...(ticket.setlist ? { setlist: ticket.setlist } : {}),
+          },
           venue: {
             name: ticket.venue_name ?? "Unknown Venue",
             city: ticket.venue_city ?? "Unknown",
@@ -524,7 +722,8 @@ export default function ShowsView() {
           pricePaid: ticket.price ?? undefined,
           ticketCount: ticket.ticket_count ?? 1,
           productionName: ticket.production_name ?? undefined,
-          sourceRefs: { gmail: true },
+          tourName: ticket.tourName ?? undefined,
+          sourceRefs,
         });
         setGmailAddedCount((prev) => prev + 1);
       } catch {
@@ -533,9 +732,19 @@ export default function ShowsView() {
     }
 
     setGmailAdding(false);
-    setGmailModalOpen(false);
-    utils.shows.invalidate();
-  }, [gmailBulkResults, gmailBulkSelected, createShow, utils]);
+    setImportSource(null);
+    await Promise.all([
+      utils.shows.invalidate(),
+      invalidateSidebarCounts(),
+    ]);
+    // The logbook/upcoming pages prefetch shows.list on the server and
+    // hydrate into the client cache; refresh the RSC so the SSR'd payload
+    // also picks up the just-imported rows. router is intentionally not
+    // in the dep array — it's stable across renders and adding it has been
+    // observed to deterministically break Playwright shard 3 (see #110).
+    router.refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gmailBulkResults, gmailBulkSelected, createShow, utils, invalidateSidebarCounts]);
 
   // ---------------------------------------------------------------------------
   // Render: Loading / Error
@@ -545,11 +754,11 @@ export default function ShowsView() {
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
         {/* skeleton mode/filter header */}
-        <div style={{ padding: "14px 36px", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 52 }} />
+        <div style={{ padding: "14px var(--page-pad-x)", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 52 }} />
         {/* skeleton stats strip */}
-        <div style={{ padding: "12px 36px", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 64, background: "var(--surface)" }} />
+        <div style={{ padding: "12px var(--page-pad-x)", borderBottom: "1px solid var(--rule)", flexShrink: 0, height: 64, background: "var(--surface)" }} />
         {/* skeleton table rows */}
-        <div style={{ flex: 1, minHeight: 0, padding: "12px 36px 24px", overflow: "hidden" }}>
+        <div style={{ flex: 1, minHeight: 0, padding: "12px var(--page-pad-x) 24px", overflow: "hidden" }}>
           <div style={{ background: "var(--surface)" }}>
             {Array.from({ length: 10 }).map((_, i) => (
               <div key={i} style={{ height: 48, borderBottom: "1px solid var(--rule)", background: "var(--surface)" }} />
@@ -583,18 +792,24 @@ export default function ShowsView() {
   // ---------------------------------------------------------------------------
 
   function renderHeader() {
-    const modes: { k: ViewMode; l: string; Ic: React.ComponentType<{ size?: number; color?: string }>; count: string }[] = [
+    // Stats is past-context only — total spent / new artists / rhythm don't
+    // make sense for a future-only view. Calendar lives on both pages but
+    // is scoped to that page's state set via filteredShows.
+    const allModes: { k: ViewMode; l: string; Ic: React.ComponentType<{ size?: number; color?: string }>; count: string }[] = [
       { k: "list", l: "List", Ic: Archive, count: modeCounts.list },
       { k: "calendar", l: "Calendar", Ic: Calendar, count: modeCounts.calendar },
       { k: "stats", l: "Stats", Ic: ArrowDownUp, count: modeCounts.stats },
     ];
+    const modes = isUpcoming ? allModes.filter((m) => m.k !== "stats") : allModes;
 
     return (
       <div style={{
-        padding: "16px 36px",
+        padding: isMobile ? "14px 16px" : "16px var(--page-pad-x)",
         display: "flex",
-        alignItems: "center",
+        flexDirection: isMobile ? "column" : "row",
+        alignItems: isMobile ? "stretch" : "center",
         justifyContent: "space-between",
+        gap: isMobile ? 12 : 0,
         borderBottom: "1px solid var(--rule)",
       }}>
         <div>
@@ -605,7 +820,7 @@ export default function ShowsView() {
             letterSpacing: ".1em",
             textTransform: "uppercase",
           }}>
-            All shows &middot; one stream
+            {labels.eyebrow}
           </div>
           <div style={{
             fontFamily: "var(--font-display)",
@@ -616,30 +831,111 @@ export default function ShowsView() {
             lineHeight: 1.1,
             marginTop: 4,
           }}>
-            Shows
+            {labels.title}
           </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button
-            onClick={handleOpenGmailModal}
+          {/* Cross-link to the other half so the split doesn't feel siloed. */}
+          <Link
+            href={isUpcoming ? "/logbook" : "/upcoming"}
             style={{
-              border: "1px solid var(--rule-strong)",
-              cursor: "pointer",
-              background: "transparent",
-              color: "var(--ink)",
-              padding: "10px 16px",
-              fontFamily: "var(--font-geist-sans), sans-serif",
-              fontSize: 13,
-              fontWeight: 500,
-              letterSpacing: -0.2,
-              display: "flex",
-              alignItems: "center",
-              gap: 7,
+              display: "inline-block",
+              marginTop: 6,
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 10.5,
+              color: "var(--accent)",
+              letterSpacing: ".04em",
+              textDecoration: "none",
             }}
           >
-            <Mail size={14} />
-            <span>Import from Gmail</span>
-          </button>
+            {isUpcoming ? "View past →" : "View upcoming →"}
+          </Link>
+        </div>
+        <div style={{
+          display: "flex",
+          flexDirection: isMobile ? "column" : "row",
+          alignItems: isMobile ? "stretch" : "center",
+          gap: isMobile ? 8 : 12,
+        }}>
+          <div
+            role="group"
+            aria-label="Import past shows"
+            style={{
+              display: "flex",
+              alignItems: "stretch",
+              border: "1px solid var(--rule-strong)",
+              flexDirection: isMobile ? "column" : "row",
+            }}
+          >
+            <button
+              onClick={() => handleOpenImportModal("gmail")}
+              title="Import from Gmail"
+              style={{
+                border: "none",
+                borderRight: isMobile ? "none" : "1px solid var(--rule-strong)",
+                borderBottom: isMobile ? "1px solid var(--rule-strong)" : "none",
+                cursor: "pointer",
+                background: "transparent",
+                color: "var(--ink)",
+                padding: "10px 14px",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 13,
+                fontWeight: 500,
+                letterSpacing: -0.2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: isMobile ? "center" : "flex-start",
+                gap: 7,
+              }}
+            >
+              <Image src="/google-g.svg" alt="" width={14} height={14} />
+              <span>Gmail</span>
+            </button>
+            <button
+              onClick={() => handleOpenImportModal("setlistfm")}
+              title="Import attended shows from setlist.fm"
+              style={{
+                border: "none",
+                borderRight: isMobile ? "none" : "1px solid var(--rule-strong)",
+                borderBottom: isMobile ? "1px solid var(--rule-strong)" : "none",
+                cursor: "pointer",
+                background: "transparent",
+                color: "var(--ink)",
+                padding: "10px 14px",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 13,
+                fontWeight: 500,
+                letterSpacing: -0.2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: isMobile ? "center" : "flex-start",
+                gap: 7,
+              }}
+            >
+              <Mail size={14} />
+              <span>setlist.fm</span>
+            </button>
+            <button
+              onClick={() => handleOpenImportModal("eventbrite")}
+              title="Import past orders from Eventbrite"
+              style={{
+                border: "none",
+                cursor: "pointer",
+                background: "transparent",
+                color: "var(--ink)",
+                padding: "10px 14px",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 13,
+                fontWeight: 500,
+                letterSpacing: -0.2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: isMobile ? "center" : "flex-start",
+                gap: 7,
+              }}
+            >
+              <Ticket size={14} />
+              <span>Eventbrite</span>
+            </button>
+          </div>
           {totalShows > 0 && (
             <button
               onClick={handleDeleteAll}
@@ -677,14 +973,16 @@ export default function ShowsView() {
                     borderRight: i === modes.length - 1 ? "none" : "1px solid var(--rule-strong)",
                     background: active ? "var(--ink)" : "transparent",
                     color: active ? "var(--bg)" : "var(--ink)",
-                    padding: "10px 18px",
+                    padding: isMobile ? "10px 12px" : "10px 18px",
                     fontFamily: "var(--font-geist-sans), sans-serif",
                     fontSize: 14,
                     fontWeight: active ? 600 : 500,
                     letterSpacing: -0.2,
                     display: "flex",
                     alignItems: "center",
+                    justifyContent: "center",
                     gap: 8,
+                    flex: isMobile ? 1 : "0 0 auto",
                   }}
                 >
                   <Ic size={14} />
@@ -713,41 +1011,80 @@ export default function ShowsView() {
   // ---------------------------------------------------------------------------
 
   function renderFilterBar() {
+    // /upcoming swaps the year filter (which is misleading there — it
+    // pulls older years from date-TBD watching shows) for an
+    // All · Tickets · Watching chip toggle that narrows the state set.
+    const upcomingChips: { k: typeof upcomingFilter; l: string }[] = [
+      { k: "all", l: "All" },
+      { k: "ticketed", l: "Tickets" },
+      { k: "watching", l: "Watching" },
+    ];
+
     return (
       <div style={{
-        padding: "11px 36px",
+        padding: isMobile ? "11px 16px" : "11px var(--page-pad-x)",
         display: "flex",
         alignItems: "center",
-        gap: 18,
+        gap: isMobile ? 12 : 18,
         flexWrap: "wrap",
         background: "var(--surface)",
         borderBottom: "1px solid var(--rule)",
       }}>
-        {/* Year buttons */}
-        <div style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid var(--rule-strong)" }}>
-          {yearButtons.map((y, i, arr) => {
-            const active = y === selectedYear;
-            return (
-              <div
-                key={y}
-                onClick={() => setSelectedYear(y)}
-                style={{
-                  padding: "5px 11px",
-                  borderRight: i === arr.length - 1 ? "none" : "1px solid var(--rule-strong)",
-                  background: active ? "var(--ink)" : "transparent",
-                  color: active ? "var(--bg)" : "var(--ink)",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
-                  fontWeight: active ? 500 : 400,
-                  cursor: "pointer",
-                  letterSpacing: ".02em",
-                }}
-              >
-                {y}
-              </div>
-            );
-          })}
-        </div>
+        {/* Mode-specific primary filter */}
+        {isLogbook ? (
+          <div data-testid="logbook-year-filter" style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid var(--rule-strong)" }}>
+            {yearButtons.map((y, i, arr) => {
+              const active = y === selectedYear;
+              return (
+                <div
+                  key={y}
+                  onClick={() => setSelectedYear(y)}
+                  style={{
+                    padding: "5px 11px",
+                    borderRight: i === arr.length - 1 ? "none" : "1px solid var(--rule-strong)",
+                    background: active ? "var(--ink)" : "transparent",
+                    color: active ? "var(--bg)" : "var(--ink)",
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 11,
+                    fontWeight: active ? 500 : 400,
+                    cursor: "pointer",
+                    letterSpacing: ".02em",
+                  }}
+                >
+                  {y}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div data-testid="upcoming-state-filter" style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid var(--rule-strong)" }}>
+            {upcomingChips.map(({ k, l }, i, arr) => {
+              const active = upcomingFilter === k;
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  data-testid={`upcoming-filter-${k}`}
+                  onClick={() => setUpcomingFilter(k)}
+                  style={{
+                    padding: "5px 11px",
+                    borderRight: i === arr.length - 1 ? "none" : "1px solid var(--rule-strong)",
+                    border: "none",
+                    background: active ? "var(--ink)" : "transparent",
+                    color: active ? "var(--bg)" : "var(--ink)",
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 11,
+                    fontWeight: active ? 500 : 400,
+                    cursor: "pointer",
+                    letterSpacing: ".02em",
+                  }}
+                >
+                  {l}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Kind chips */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1066,36 +1403,141 @@ export default function ShowsView() {
 
   function renderList() {
     if (filteredShows.length === 0) {
+      // Empty-state asymmetry per the IA cleanup plan:
+      //   /upcoming → Discover-leaning ("Nothing on the horizon")
+      //   /logbook  → Gmail-leaning ("Your history starts here")
+      const primary = isUpcoming ? (
+        <Link
+          href="/discover"
+          style={{
+            padding: "10px 18px",
+            background: "var(--accent)",
+            color: "var(--accent-text)",
+            border: "none",
+            borderRadius: 8,
+            cursor: "pointer",
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 11,
+            letterSpacing: ".06em",
+            textTransform: "uppercase",
+            fontWeight: 500,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            textDecoration: "none",
+          }}
+        >
+          <Eye size={13} />
+          Find shows in Discover
+        </Link>
+      ) : (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+          <button
+            type="button"
+            onClick={() => handleOpenImportModal("gmail")}
+            style={{
+              padding: "10px 18px",
+              background: "var(--accent)",
+              color: "var(--accent-text)",
+              border: "none",
+              borderRadius: 8,
+              cursor: "pointer",
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 11,
+              letterSpacing: ".06em",
+              textTransform: "uppercase",
+              fontWeight: 500,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Image src="/google-g.svg" alt="" width={14} height={14} />
+            Gmail
+          </button>
+          <button
+            type="button"
+            onClick={() => handleOpenImportModal("setlistfm")}
+            style={{
+              padding: "10px 18px",
+              background: "transparent",
+              color: "var(--ink)",
+              border: "1px solid var(--rule-strong)",
+              borderRadius: 8,
+              cursor: "pointer",
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 11,
+              letterSpacing: ".06em",
+              textTransform: "uppercase",
+              fontWeight: 500,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Mail size={13} />
+            setlist.fm
+          </button>
+          <button
+            type="button"
+            onClick={() => handleOpenImportModal("eventbrite")}
+            style={{
+              padding: "10px 18px",
+              background: "transparent",
+              color: "var(--ink)",
+              border: "1px solid var(--rule-strong)",
+              borderRadius: 8,
+              cursor: "pointer",
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 11,
+              letterSpacing: ".06em",
+              textTransform: "uppercase",
+              fontWeight: 500,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Ticket size={13} />
+            Eventbrite
+          </button>
+        </div>
+      );
+      const secondary = (
+        <Link
+          href="/add"
+          style={{
+            padding: "10px 18px",
+            background: "transparent",
+            color: "var(--ink)",
+            border: "1px solid var(--rule-strong)",
+            borderRadius: 8,
+            cursor: "pointer",
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 11,
+            letterSpacing: ".06em",
+            textTransform: "uppercase",
+            fontWeight: 500,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            textDecoration: "none",
+          }}
+        >
+          {isUpcoming ? "Add a show" : "Add a past show"}
+        </Link>
+      );
       return (
-        <div style={{ padding: "28px 36px" }}>
+        <div style={{ padding: isMobile ? "20px 16px" : "28px var(--page-pad-x)" }}>
           <EmptyState
             kind="shows"
-            title="Start your logbook"
-            body="Add the first show you saw, the next one you are watching, or import ticket history from Gmail."
+            title={labels.emptyTitle}
+            body={labels.emptyBody}
             action={
-              <button
-                type="button"
-                onClick={handleOpenGmailModal}
-                style={{
-                  padding: "10px 18px",
-                  background: "var(--accent)",
-                  color: "var(--accent-text)",
-                  border: "none",
-                  borderRadius: 8,
-                  cursor: "pointer",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
-                  letterSpacing: ".06em",
-                  textTransform: "uppercase",
-                  fontWeight: 500,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <Image src="/google-g.svg" alt="" width={14} height={14} />
-                Import from Gmail
-              </button>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+                {primary}
+                {secondary}
+              </div>
             }
           />
         </div>
@@ -1104,8 +1546,43 @@ export default function ShowsView() {
 
     return (
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+        {/* Date-TBD rail (Upcoming only): watching shows with no date set
+            yet — typically a multi-night theatre run the user wants to
+            see but hasn't picked a night for. Surfaced separately so they
+            don't sink to the bottom of a date-asc sort. */}
+        {isUpcoming && dateTbdShows.length > 0 && (
+          <div data-testid="date-tbd-rail" style={{ padding: isMobile ? "12px 16px 0" : "14px var(--page-pad-x) 0", display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 10.5,
+              color: "var(--muted)",
+              letterSpacing: ".1em",
+              textTransform: "uppercase",
+            }}>
+              Date TBD &middot; {dateTbdShows.length}
+            </div>
+            <div style={{
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 11,
+              color: "var(--faint)",
+              lineHeight: 1.5,
+            }}>
+              {dateTbdShows.map((s, i) => (
+                <span key={s.id}>
+                  <Link
+                    href={`/shows/${s.id}`}
+                    style={{ color: "var(--ink)", textDecoration: "none" }}
+                  >
+                    {s.showPerformers?.[0]?.performer?.name ?? s.productionName ?? "Untitled"}
+                  </Link>
+                  {i < dateTbdShows.length - 1 ? " · " : ""}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Section label */}
-        <div style={{ padding: "18px 36px 8px", display: "flex", alignItems: "baseline", gap: 14 }}>
+        <div style={{ padding: isMobile ? "16px 16px 8px" : "18px var(--page-pad-x) 8px", display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
           <div style={{
             fontFamily: "var(--font-geist-mono), monospace",
             fontSize: 11,
@@ -1114,25 +1591,28 @@ export default function ShowsView() {
             textTransform: "uppercase",
             fontWeight: 500,
           }}>
-            All shows &middot; {filteredShows.length}
+            {labels.title} &middot; {filteredShows.length}
           </div>
           <div style={{
             fontFamily: "var(--font-geist-mono), monospace",
             fontSize: 10.5,
             color: "var(--faint)",
           }}>
-            {ticketedCount} tix &middot; {watchingCount} watching &middot; {pastCount} past
+            {isUpcoming
+              ? `${ticketedCount} tix · ${watchingCount} watching`
+              : `${pastCount} past`}
           </div>
         </div>
 
         {/* Show list */}
-        <div className="shows-list-table" style={{ margin: "4px 36px 0", background: "var(--surface)" }}>
+        <div className="shows-list-table" style={{ margin: isMobile ? "4px 12px 0" : "4px var(--page-pad-x) 0", background: "var(--surface)" }}>
           {/* Column headers */}
           <div style={{
             display: "grid",
             gridTemplateColumns: SHOW_LIST_GRID_TEMPLATE,
             columnGap: 16,
             padding: "10px 20px 10px 10px",
+            marginBottom: 8,
             borderBottom: "1px solid var(--rule)",
             fontFamily: "var(--font-geist-mono), monospace",
             fontSize: 9.5,
@@ -1202,21 +1682,24 @@ export default function ShowsView() {
   function renderCalendar() {
     const today = new Date();
 
-    // Compute bounds from all shows
-    const allDates = shows.map((s) => new Date(s.date + "T00:00:00"));
-    const calMin = allDates.length > 0
-      ? { year: Math.min(...allDates.map((d) => d.getFullYear())), month: allDates.reduce((a, b) => a < b ? a : b).getMonth() }
-      : null;
-    const calMax = allDates.length > 0
-      ? { year: Math.max(...allDates.map((d) => d.getFullYear())), month: allDates.reduce((a, b) => a > b ? a : b).getMonth() }
-      : null;
+    // Bounds span from Jan of the earliest show year to Dec of the latest
+    // show year (always including the current year so "Today" is reachable
+    // even when the user has no shows yet). Use the unfiltered show set so
+    // that year filters in the toolbar don't shrink the navigable range.
+    // Date-TBD watching rows have a null date — they're surfaced on the
+    // Date-TBD rail and would crash `new Date(null + "T00:00:00")` if we
+    // mapped them blindly, so drop them here.
+    const boundsSource = (allShowsUnfiltered ?? shows) as ShowData[];
+    const showYears = boundsSource
+      .filter((s) => s.date !== null)
+      .map((s) => new Date(s.date + "T00:00:00").getFullYear());
+    const minYear = Math.min(today.getFullYear(), ...showYears);
+    const maxYear = Math.max(today.getFullYear(), ...showYears);
 
-    // More precise bounds: earliest and latest show dates
-    const minDate = allDates.length > 0 ? allDates.reduce((a, b) => a < b ? a : b) : null;
-    const maxDate = allDates.length > 0 ? allDates.reduce((a, b) => a > b ? a : b) : null;
-
-    const atMin = minDate && calYear === minDate.getFullYear() && calMonth === minDate.getMonth();
-    const atMax = maxDate && calYear === maxDate.getFullYear() && calMonth === maxDate.getMonth();
+    const atMin = calYear === minYear && calMonth === 0;
+    const atMax = calYear === maxYear && calMonth === 11;
+    const atMinYear = calYear === minYear;
+    const atMaxYear = calYear === maxYear;
 
     const goToday = () => {
       setCalMonth(today.getMonth());
@@ -1226,9 +1709,11 @@ export default function ShowsView() {
     const stepMonth = (dir: number) => {
       const m = calMonth + dir;
       if (m < 0) {
+        if (calYear <= minYear) return;
         setCalMonth(11);
         setCalYear((y) => y - 1);
       } else if (m > 11) {
+        if (calYear >= maxYear) return;
         setCalMonth(0);
         setCalYear((y) => y + 1);
       } else {
@@ -1339,7 +1824,7 @@ export default function ShowsView() {
     );
 
     if (calView === "year") {
-      return renderCalendarYearView(today, toolbarNav, viewToggle);
+      return renderCalendarYearView(today, toolbarNav, viewToggle, atMinYear, atMaxYear);
     }
 
     const daysInMonth = getDaysInMonth(calYear, calMonth);
@@ -1364,6 +1849,7 @@ export default function ShowsView() {
     }
 
     const railShows = shows.filter((s) => {
+      if (!s.date) return false;
       const d = new Date(s.date + "T00:00:00");
       const m = d.getMonth();
       const y = d.getFullYear();
@@ -1371,7 +1857,7 @@ export default function ShowsView() {
     }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     return (
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: "22px 36px 36px" }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: isMobile ? "18px 16px 24px" : "22px var(--page-pad-x) var(--page-pad-x)" }}>
         {/* Month toolbar */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
@@ -1474,6 +1960,8 @@ export default function ShowsView() {
     today: Date,
     toolbarNav: React.ReactNode,
     viewToggle: React.ReactNode,
+    atMinYear: boolean,
+    atMaxYear: boolean,
   ) {
     // Build all-shows-by-date map
     const dateShowsMap = new Map<string, ShowData[]>();
@@ -1546,7 +2034,7 @@ export default function ShowsView() {
     }
 
     return (
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: "22px 36px 36px" }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: isMobile ? "18px 16px 24px" : "22px var(--page-pad-x) var(--page-pad-x)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 30, fontWeight: 600, color: "var(--ink)", letterSpacing: -0.9 }}>
             {calYear}
@@ -1554,10 +2042,20 @@ export default function ShowsView() {
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {viewToggle}
             <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={() => setCalYear((y) => y - 1)} style={{ padding: "7px 12px", border: "1px solid var(--rule-strong)", background: "transparent", color: "var(--ink)", cursor: "pointer", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11 }}>
+              <button
+                onClick={() => { if (!atMinYear) setCalYear((y) => y - 1); }}
+                disabled={atMinYear}
+                data-testid="cal-year-prev"
+                style={{ padding: "7px 12px", border: "1px solid var(--rule-strong)", background: "transparent", color: atMinYear ? "var(--faint)" : "var(--ink)", cursor: atMinYear ? "not-allowed" : "pointer", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, opacity: atMinYear ? 0.4 : 1 }}
+              >
                 ‹ {calYear - 1}
               </button>
-              <button onClick={() => setCalYear((y) => y + 1)} style={{ padding: "7px 12px", border: "1px solid var(--rule-strong)", background: "transparent", color: "var(--ink)", cursor: "pointer", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11 }}>
+              <button
+                onClick={() => { if (!atMaxYear) setCalYear((y) => y + 1); }}
+                disabled={atMaxYear}
+                data-testid="cal-year-next"
+                style={{ padding: "7px 12px", border: "1px solid var(--rule-strong)", background: "transparent", color: atMaxYear ? "var(--faint)" : "var(--ink)", cursor: atMaxYear ? "not-allowed" : "pointer", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, opacity: atMaxYear ? 0.4 : 1 }}
+              >
                 {calYear + 1} ›
               </button>
             </div>
@@ -1620,6 +2118,7 @@ export default function ShowsView() {
     // Rhythm chart — shows per month in current year
     const rhythm = MONTHS.map((_, i) => {
       const monthShows = allShowsList.filter((s) => {
+        if (!s.date) return false;
         const d = new Date(s.date + "T00:00:00");
         return d.getFullYear() === currentYear && d.getMonth() === i;
       });
@@ -1684,7 +2183,7 @@ export default function ShowsView() {
         : "All time";
 
     return (
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: "22px 36px 36px" }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: isMobile ? "18px 16px 24px" : "22px var(--page-pad-x) var(--page-pad-x)" }}>
         {/* Timeframe selector */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
           <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".06em" }}>
@@ -2084,6 +2583,7 @@ export default function ShowsView() {
               // Most shows in a month
               const monthCounts = new Map<number, number>();
               for (const s of thisYearShows) {
+                if (!s.date) continue;
                 const m = new Date(s.date + "T00:00:00").getMonth();
                 monthCounts.set(m, (monthCounts.get(m) ?? 0) + 1);
               }
@@ -2151,10 +2651,10 @@ export default function ShowsView() {
       {/* Show row context menu + watching → ticketed transition modal */}
       {showContextMenuPortal}
 
-      {/* Gmail bulk scan modal */}
-      {gmailModalOpen && (
+      {/* Bulk import modal — Gmail / setlist.fm / Eventbrite share this UI. */}
+      {importSource !== null && (
         <div
-          onClick={() => setGmailModalOpen(false)}
+          onClick={() => setImportSource(null)}
           style={{
             position: "fixed",
             inset: 0,
@@ -2195,7 +2695,9 @@ export default function ShowsView() {
                   letterSpacing: "-0.01em",
                   lineHeight: 1.1,
                 }}>
-                  Import from Gmail
+                  {importSource === "gmail" && "Import from Gmail"}
+                  {importSource === "setlistfm" && "Import from setlist.fm"}
+                  {importSource === "eventbrite" && "Import from Eventbrite"}
                 </div>
                 <div style={{
                   fontFamily: "var(--font-geist-mono), monospace",
@@ -2205,20 +2707,30 @@ export default function ShowsView() {
                   marginTop: 2,
                 }}>
                   {gmailBulkLoading
-                    ? gmailProgress?.phase === "processing"
-                      ? `Processing ${gmailProgress.processed} of ${gmailProgress.total} emails · ${gmailProgress.found} tickets found`
-                      : "Searching Gmail for ticket emails..."
+                    ? importSource === "gmail"
+                      ? gmailProgress?.phase === "processing"
+                        ? `Processing ${gmailProgress.processed} of ${gmailProgress.total} emails · ${gmailProgress.found} tickets found`
+                        : "Searching Gmail for ticket emails..."
+                      : importSource === "setlistfm"
+                        ? "Fetching attended setlists..."
+                        : "Fetching Eventbrite orders..."
                     : gmailError
                       ? gmailError
                       : gmailBulkResults.length > 0
                         ? `${gmailBulkResults.length} ticket${gmailBulkResults.length !== 1 ? "s" : ""} found · ${gmailBulkSelected.size} selected`
-                        : gmailAccessToken
-                          ? "No tickets found"
-                          : "Waiting for Gmail authorization..."}
+                        : importSource === "gmail"
+                          ? gmailAccessToken
+                            ? "No tickets found"
+                            : "Waiting for Gmail authorization..."
+                          : importSource === "eventbrite"
+                            ? eventbriteAccessToken
+                              ? "No tickets found"
+                              : "Waiting for Eventbrite authorization..."
+                            : "Enter your setlist.fm username"}
                 </div>
               </div>
               <button
-                onClick={() => setGmailModalOpen(false)}
+                onClick={() => setImportSource(null)}
                 style={{
                   border: "none",
                   background: "transparent",
@@ -2251,11 +2763,15 @@ export default function ShowsView() {
                   color: "var(--muted)",
                   letterSpacing: ".04em",
                 }}>
-                  {gmailProgress?.phase === "processing"
-                    ? `Processing ${gmailProgress.processed} of ${gmailProgress.total} · ${gmailProgress.found} found`
-                    : "Searching Gmail..."}
+                  {importSource === "gmail"
+                    ? gmailProgress?.phase === "processing"
+                      ? `Processing ${gmailProgress.processed} of ${gmailProgress.total} · ${gmailProgress.found} found`
+                      : "Searching Gmail..."
+                    : importSource === "setlistfm"
+                      ? "Fetching attended setlists from setlist.fm..."
+                      : "Fetching past orders from Eventbrite..."}
                 </span>
-                {gmailProgress?.phase === "processing" && gmailProgress.total > 0 && (
+                {importSource === "gmail" && gmailProgress?.phase === "processing" && gmailProgress.total > 0 && (
                   <div style={{
                     flex: 1,
                     height: 3,
@@ -2274,6 +2790,81 @@ export default function ShowsView() {
                 )}
                 <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
               </div>
+            )}
+
+            {/* setlist.fm: username form (no OAuth, just public username lookup). */}
+            {importSource === "setlistfm" && !gmailBulkLoading && gmailBulkResults.length === 0 && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const trimmed = setlistfmUsername.trim();
+                  if (!trimmed) return;
+                  startSetlistfmScan(trimmed);
+                }}
+                style={{
+                  padding: "20px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                  borderBottom: "1px solid var(--rule)",
+                }}
+              >
+                <label
+                  style={{
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 11,
+                    color: "var(--muted)",
+                    letterSpacing: ".06em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Your setlist.fm username
+                </label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    type="text"
+                    value={setlistfmUsername}
+                    onChange={(e) => setSetlistfmUsername(e.target.value)}
+                    placeholder="e.g. yourname"
+                    autoFocus
+                    style={{
+                      flex: 1,
+                      padding: "10px 12px",
+                      border: "1px solid var(--rule-strong)",
+                      background: "transparent",
+                      color: "var(--ink)",
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 13,
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!setlistfmUsername.trim()}
+                    style={{
+                      padding: "8px 16px",
+                      border: "none",
+                      background: setlistfmUsername.trim() ? "var(--ink)" : "var(--rule)",
+                      color: setlistfmUsername.trim() ? "var(--bg)" : "var(--muted)",
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: setlistfmUsername.trim() ? "pointer" : "default",
+                      letterSpacing: -0.1,
+                    }}
+                  >
+                    Fetch
+                  </button>
+                </div>
+                <div style={{
+                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontSize: 10.5,
+                  color: "var(--faint)",
+                  letterSpacing: ".02em",
+                }}>
+                  Pulls every concert you&rsquo;ve marked attended on setlist.fm,
+                  including the setlist itself.
+                </div>
+              </form>
             )}
 
             {/* Results list */}

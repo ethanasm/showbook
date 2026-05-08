@@ -38,7 +38,7 @@ test.describe('Pagination footer pinning', () => {
     });
   }
 
-  for (const path of ['/shows', '/venues', '/artists']) {
+  for (const path of ['/upcoming', '/logbook', '/venues', '/artists']) {
     test(`footer is pinned to viewport bottom on ${path}`, async ({ page }) => {
       await page.goto(path);
       // Scope to <main> — React streaming SSR briefly leaves a duplicate
@@ -59,7 +59,7 @@ test.describe('Pagination footer pinning', () => {
   }
 
   test('shows footer stays at viewport bottom while scrolling the list', async ({ page }) => {
-    await page.goto('/shows');
+    await page.goto('/logbook');
     const footer = page.getByRole('main').getByTestId('pagination-footer');
     await expect(footer).toBeVisible({ timeout: 10000 });
 

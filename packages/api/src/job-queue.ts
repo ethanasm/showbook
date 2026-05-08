@@ -39,6 +39,7 @@ export const JOB_NAMES = {
   INGEST_VENUE: 'discover/ingest-venue',
   INGEST_PERFORMER: 'discover/ingest-performer',
   INGEST_REGION: 'discover/ingest-region',
+  PRUNE_ORPHAN_CATALOG: 'prune/orphan-catalog',
 } as const;
 
 export async function enqueueIngestVenue(venueId: string): Promise<void> {
@@ -59,6 +60,11 @@ export async function enqueueIngestPerformer(performerId: string): Promise<void>
   } catch (err) {
     log.error({ err, event: 'job_queue.enqueue.failed', queue: JOB_NAMES.INGEST_PERFORMER, performerId }, 'enqueueIngestPerformer failed');
   }
+}
+
+export async function enqueuePruneOrphanCatalog(): Promise<string | null> {
+  const boss = await getSender();
+  return await boss.send(JOB_NAMES.PRUNE_ORPHAN_CATALOG, {});
 }
 
 export async function enqueueIngestRegion(

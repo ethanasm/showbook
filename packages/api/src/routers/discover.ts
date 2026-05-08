@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { eq, and, inArray, asc, sql, notInArray, or } from 'drizzle-orm';
+import { eq, and, inArray, asc, sql, notInArray, or, arrayOverlaps } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc';
 import {
@@ -14,6 +14,7 @@ import {
   userRegions,
   venues,
 } from '@showbook/db';
+import { isNonWatchableKind, KIND_LABELS } from '@showbook/shared';
 import { matchOrCreatePerformer } from '../performer-matcher';
 import {
   enqueueIngestVenue,
@@ -151,10 +152,14 @@ export const discoverRouter = router({
       // support_performer_ids; the headliner branch hits the btree
       // index on headliner_performer_id. PG can OR-combine bitmaps
       // from both, so this stays cheap.
-      const performerOverlap = sql`${announcements.supportPerformerIds} && ${performerIds}::uuid[]`;
+      //
+      // Use drizzle's arrayOverlaps helper rather than a raw sql template:
+      // interpolating a JS array into ${performerIds}::uuid[] expands as a
+      // parameter tuple ($1, $2, ...) which Postgres cannot cast to uuid[]
+      // (SQLSTATE 42846 "cannot cast type record to uuid[]").
       const followedMatch = or(
         inArray(announcements.headlinerPerformerId, performerIds),
-        performerOverlap,
+        arrayOverlaps(announcements.supportPerformerIds, performerIds),
       )!;
       const conditions = [followedMatch];
       const decoded = decodeCursor(cursor);
@@ -450,6 +455,21 @@ export const discoverRouter = router({
   }),
 
   /**
+   * Announcement IDs the current user is already watching. Used by the
+   * Discover view to seed its local watched-state set on mount so the
+   * yellow row + "Watching" button persist across navigation.
+   */
+  watchedAnnouncementIds: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const rows = await db
+      .select({ announcementId: showAnnouncementLinks.announcementId })
+      .from(showAnnouncementLinks)
+      .innerJoin(shows, eq(showAnnouncementLinks.showId, shows.id))
+      .where(eq(shows.userId, userId));
+    return rows.map((r) => r.announcementId);
+  }),
+
+  /**
    * Search Ticketmaster for attractions to follow as artists.
    */
   searchArtists: protectedProcedure
@@ -502,10 +522,13 @@ export const discoverRouter = router({
         throw new Error('Announcement not found');
       }
 
-      if (announcement.kind === 'sports') {
+      if (isNonWatchableKind(announcement.kind)) {
+        // Sports / film / unknown are surfaced on Discover but Showbook
+        // doesn't (yet) model them as watchable shows.
+        const label = KIND_LABELS[announcement.kind as keyof typeof KIND_LABELS] ?? announcement.kind;
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: 'Sports events cannot be added to your watchlist',
+          message: `${label} events cannot be added to your watchlist`,
         });
       }
 

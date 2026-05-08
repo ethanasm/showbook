@@ -18,6 +18,19 @@ import { API_URL } from './env';
 
 export const trpc = createTRPCReact<AppRouter>();
 
+/**
+ * Resolved output of a tRPC vanilla-client procedure — replaces
+ * hand-mirrored interfaces. Use as
+ * `RouterOutput<typeof utils.client.performers.detail.query>` (where
+ * `utils` is `trpc.useUtils()`); the alias defers to the procedure's
+ * inferred Promise return type so drift in the server contract becomes
+ * a compile error at the call site.
+ *
+ * We don't import `inferRouterOutputs` from `@trpc/server` because that
+ * package is a transitive dep, not declared in `apps/mobile/package.json`.
+ */
+export type RouterOutput<F> = F extends (...args: never[]) => Promise<infer R> ? R : never;
+
 export function createQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {

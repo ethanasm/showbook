@@ -5,10 +5,22 @@ import { inferKind, type TMEvent } from '../ticketmaster';
 type Classifications = NonNullable<TMEvent['classifications']>;
 type Classification = Classifications[number];
 
+// Stable TM IDs duplicated from ticketmaster.ts so the tests pin the
+// production code to the same constants without exporting internals.
+const SEGMENT = {
+  music: { id: 'KZFzniwnSyZfZ7v7nJ', name: 'Music' },
+  sports: { id: 'KZFzniwnSyZfZ7v7nE', name: 'Sports' },
+  artsTheatre: { id: 'KZFzniwnSyZfZ7v7na', name: 'Arts & Theatre' },
+  film: { id: 'KZFzniwnSyZfZ7v7nn', name: 'Film' },
+  miscellaneous: { id: 'KZFzniwnSyZfZ7v7n1', name: 'Miscellaneous' },
+} as const;
+
+const GENRE_COMEDY_ID = 'KnvZfZ7vAe1';
+
 function classification(overrides: Partial<Classification>): Classification {
   return {
     primary: true,
-    segment: { id: 'KZFzniwnSyZfZ7v7nJ', name: 'Music' },
+    segment: { ...SEGMENT.music },
     genre: { id: 'KnvZfZ7vAeA', name: 'Rock' },
     ...overrides,
   };
@@ -64,7 +76,7 @@ test('inferKind preserves existing non-music mappings', () => {
   assert.equal(
     inferKind([
       classification({
-        segment: { id: 's1', name: 'Sports' },
+        segment: { ...SEGMENT.sports },
         genre: { id: 'g1', name: 'Basketball' },
       }),
     ]),
@@ -73,8 +85,8 @@ test('inferKind preserves existing non-music mappings', () => {
   assert.equal(
     inferKind([
       classification({
-        segment: { id: 's2', name: 'Arts & Theatre' },
-        genre: { id: 'g2', name: 'Comedy' },
+        segment: { ...SEGMENT.artsTheatre },
+        genre: { id: GENRE_COMEDY_ID, name: 'Comedy' },
       }),
     ]),
     'comedy',
@@ -82,10 +94,82 @@ test('inferKind preserves existing non-music mappings', () => {
   assert.equal(
     inferKind([
       classification({
-        segment: { id: 's2', name: 'Arts & Theatre' },
-        genre: { id: 'g3', name: 'Musical' },
+        segment: { ...SEGMENT.artsTheatre },
+        genre: { id: 'KnvZfZ7v7l1', name: 'Theatre' },
       }),
     ]),
     'theatre',
   );
+});
+
+// Regression tests for the Orpheum Theatre miscategorisation. Touring stage
+// productions came back from TM with Arts & Theatre segment but with genre
+// labels that don't contain the literal substring "musical"/"theatre" —
+// previously fell through to "concert".
+test('inferKind: Arts & Theatre with an unfamiliar genre label maps to theatre by segment ID', () => {
+  // genre name "Theatrical Production" — does not contain "theatre" /
+  // "musical" / "theater" as a substring, but segment ID is the source of
+  // truth.
+  assert.equal(
+    inferKind([
+      classification({
+        segment: { ...SEGMENT.artsTheatre },
+        genre: { id: 'KnvZfZ7v7lJ', name: 'Theatrical Production' },
+      }),
+    ]),
+    'theatre',
+  );
+  assert.equal(
+    inferKind([
+      classification({
+        segment: { ...SEGMENT.artsTheatre },
+        genre: { id: 'KnvZfZ7v7lk', name: 'Performance Art' },
+      }),
+    ]),
+    'theatre',
+  );
+});
+
+test('inferKind: Arts & Theatre with no genre at all maps to theatre', () => {
+  assert.equal(
+    inferKind([classification({ segment: { ...SEGMENT.artsTheatre }, genre: undefined })]),
+    'theatre',
+  );
+});
+
+test('inferKind: Arts & Theatre comedy keyed by genre ID even if name is unusual', () => {
+  // Stand-up specials are sometimes labelled with non-obvious genre names
+  // but always carry the canonical Comedy genre ID.
+  assert.equal(
+    inferKind([
+      classification({
+        segment: { ...SEGMENT.artsTheatre },
+        genre: { id: GENRE_COMEDY_ID, name: 'Stand-Up' },
+      }),
+    ]),
+    'comedy',
+  );
+});
+
+test('inferKind: Film segment maps to film', () => {
+  assert.equal(
+    inferKind([classification({ segment: { ...SEGMENT.film }, genre: undefined })]),
+    'film',
+  );
+});
+
+test('inferKind: Miscellaneous segment falls back to unknown, not concert', () => {
+  // We don't have a watchable kind for Misc; surface as "unknown" so it
+  // shows up on Discover but can't be added to a watchlist.
+  assert.equal(
+    inferKind([classification({ segment: { ...SEGMENT.miscellaneous }, genre: undefined })]),
+    'unknown',
+  );
+});
+
+test('inferKind: empty / missing classifications surface as unknown', () => {
+  // The previous default of "concert" silently mislabelled events whose
+  // TM payload had no classification block at all.
+  assert.equal(inferKind(undefined), 'unknown');
+  assert.equal(inferKind([]), 'unknown');
 });

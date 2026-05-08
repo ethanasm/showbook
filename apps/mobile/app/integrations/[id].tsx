@@ -1,8 +1,9 @@
 /**
  * Integration manage stub — pushed from the Me tab integration rows.
  *
- * Connecting Gmail, Ticketmaster, or Google Places end-to-end is M3 work.
- * For M2 we render an EmptyState so the row tap has somewhere to go.
+ * Connecting Gmail, Ticketmaster, or Google Places end-to-end on mobile is
+ * a follow-up tracked in `showbook-specs/planned-improvements.md`. For now
+ * this screen renders an EmptyState so the row tap has somewhere to go.
  */
 
 import React from 'react';
@@ -18,6 +19,7 @@ const TITLES: Record<string, string> = {
   gmail: 'Gmail',
   ticketmaster: 'Ticketmaster',
   'google-places': 'Google Places',
+  spotify: 'Spotify',
 };
 
 export default function IntegrationStub(): React.JSX.Element {
@@ -48,8 +50,8 @@ export default function IntegrationStub(): React.JSX.Element {
       />
       <EmptyState
         icon={<Plug size={40} color={colors.muted} />}
-        title="Coming in M3"
-        subtitle={`Connecting ${title} end-to-end is part of the next mobile milestone.`}
+        title="Not yet on mobile"
+        subtitle={`Connecting ${title} from mobile isn't wired up yet — for now, manage this integration from the web app.`}
       />
     </View>
   );

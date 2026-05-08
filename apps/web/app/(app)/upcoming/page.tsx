@@ -4,17 +4,15 @@ import {
   getServerCaller,
   prefetch,
 } from "@/lib/trpc-server";
-import ShowsView from "./View.client";
+import UpcomingView from "./View.client";
 
-export default async function ShowsPage() {
+export default async function UpcomingPage() {
   const caller = await getServerCaller();
-  // Initial render uses selectedYear="All" → year filter undefined, which
-  // hashes identically to the unfiltered { } query React Query also issues.
   await prefetch("shows.list", {}, () => caller.shows.list({}));
 
   return (
     <Hydrate state={dehydrateState()}>
-      <ShowsView />
+      <UpcomingView />
     </Hydrate>
   );
 }

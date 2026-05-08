@@ -7,12 +7,14 @@ let boss: PgBoss | null = null;
 
 export function getBoss(): PgBoss {
   if (!boss) {
+    // pg-boss v10 ignores constructor-level retry / expiration options
+    // when queues are created via `createQueue` — those land on the
+    // queue row at INSERT time and the constructor values never reach
+    // them (plans.js, create_queue function). Per-queue retry/expire
+    // options live in `registry.ts` (`QUEUE_OPTIONS`); only options
+    // that genuinely apply at the boss level belong here.
     boss = new PgBoss({
       connectionString: process.env.DATABASE_URL!,
-      retryLimit: 3,
-      retryDelay: 60,
-      retryBackoff: true,
-      expireInHours: 23,
       archiveCompletedAfterSeconds: 86400,
       deleteAfterDays: 7,
     });
@@ -27,9 +29,9 @@ export async function startBoss(): Promise<PgBoss> {
   return b;
 }
 
-export async function stopBoss(): Promise<void> {
+export async function stopBoss(options?: PgBoss.StopOptions): Promise<void> {
   if (boss) {
-    await boss.stop();
+    await boss.stop(options);
     boss = null;
     log.info({ event: 'pgboss.stopped' }, 'pg-boss stopped');
   }

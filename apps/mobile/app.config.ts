@@ -19,6 +19,7 @@ const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
 const config: ExpoConfig = {
   name: 'Showbook',
   slug: 'showbook',
+  owner: 'ethanasm',
   version: '0.1.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
@@ -32,9 +33,15 @@ const config: ExpoConfig = {
   ios: {
     bundleIdentifier: 'com.showbook.app',
     supportsTablet: true,
-    config: GOOGLE_MAPS_API_KEY
-      ? { googleMapsApiKey: GOOGLE_MAPS_API_KEY }
-      : undefined,
+    // ios.config must always be a defined object — Expo SDK 55's
+    // withUsesNonExemptEncryption plugin does `'usesNonExemptEncryption' in
+    // config.ios.config` and crashes if it's undefined. usesNonExemptEncryption
+    // is the canonical place to declare the encryption-export answer; Expo
+    // mirrors it into Info.plist as ITSAppUsesNonExemptEncryption.
+    config: {
+      usesNonExemptEncryption: false,
+      ...(GOOGLE_MAPS_API_KEY ? { googleMapsApiKey: GOOGLE_MAPS_API_KEY } : {}),
+    },
     // iPhone stays portrait-locked (matches the top-level `orientation`
     // above); iPad gets all four orientations so the M6.C three-pane
     // landscape layout has somewhere to live. The `~ipad` suffix is the
@@ -49,6 +56,10 @@ const config: ExpoConfig = {
         'UIInterfaceOrientationLandscapeLeft',
         'UIInterfaceOrientationLandscapeRight',
       ],
+      // Showbook only uses standard HTTPS — no custom crypto. Declaring
+      // this here keeps App Store Connect from blocking TestFlight builds
+      // on the manual "Export Compliance" question per submission.
+      ITSAppUsesNonExemptEncryption: false,
     },
   },
   android: {
@@ -81,6 +92,11 @@ const config: ExpoConfig = {
   ],
   experiments: {
     typedRoutes: true,
+  },
+  extra: {
+    eas: {
+      projectId: '24b77f4d-8ac8-4fac-9920-3ee9155e51f6',
+    },
   },
 };
 

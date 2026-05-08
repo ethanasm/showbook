@@ -144,6 +144,11 @@ export default function ShowsScreen(): React.JSX.Element {
   const { token } = useAuth();
   const utils = trpc.useUtils();
   const [mode, setMode] = React.useState<Mode>('timeline');
+  // Top-level state cut: Upcoming (watching/ticketed) vs Past, mirroring
+  // the web /upcoming + /logbook split. Mobile keeps the single tab so
+  // the 5-tab budget stays intact (per the IA cleanup plan); the
+  // segmented control is the in-screen substitute.
+  const [stateBucket, setStateBucket] = React.useState<'upcoming' | 'past'>('past');
   const [actionSheetFor, setActionSheetFor] = React.useState<{
     id: string;
     state: ShowState;
@@ -157,7 +162,7 @@ export default function ShowsScreen(): React.JSX.Element {
 
   // Normalize the tRPC payload into the small shape our views need. Memoize
   // so re-renders from mode/selection changes don't reshape the list.
-  const rows: ShowRow[] = React.useMemo(() => {
+  const allRows: ShowRow[] = React.useMemo(() => {
     const data = showsQuery.data;
     if (!data) return [];
     return data.map((s) => ({
@@ -177,8 +182,29 @@ export default function ShowsScreen(): React.JSX.Element {
     }));
   }, [showsQuery.data]);
 
+  // Apply the Upcoming/Past state filter. Stats only makes sense for
+  // Past; if the user lands on Upcoming with stats selected, force back
+  // to timeline.
+  const rows: ShowRow[] = React.useMemo(() => {
+    if (stateBucket === 'upcoming') {
+      return allRows.filter((r) => r.state === 'watching' || r.state === 'ticketed');
+    }
+    return allRows.filter((r) => r.state === 'past');
+  }, [allRows, stateBucket]);
+
+  React.useEffect(() => {
+    if (stateBucket === 'upcoming' && mode === 'stats') {
+      setMode('timeline');
+    }
+  }, [stateBucket, mode]);
+
+  const bucketLabel = stateBucket === 'upcoming' ? 'UPCOMING' : 'PAST';
   const eyebrow =
-    mode === 'timeline' ? 'ALL · TIMELINE' : mode === 'month' ? 'ALL · MONTH' : 'ALL · STATS';
+    mode === 'timeline'
+      ? `${bucketLabel} · TIMELINE`
+      : mode === 'month'
+        ? `${bucketLabel} · MONTH`
+        : `${bucketLabel} · STATS`;
 
   const refreshControl = useThemedRefreshControl(
     showsQuery.isFetching && !showsQuery.isLoading,
@@ -201,15 +227,32 @@ export default function ShowsScreen(): React.JSX.Element {
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
       <TopBar title="Shows" eyebrow={eyebrow} large />
 
+      <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
+        <SegmentedControl<'upcoming' | 'past'>
+          value={stateBucket}
+          onChange={setStateBucket}
+          options={[
+            { value: 'upcoming', label: 'Upcoming' },
+            { value: 'past', label: 'Past' },
+          ]}
+        />
+      </View>
       <View style={{ paddingHorizontal: 20, paddingBottom: 12 }}>
         <SegmentedControl<Mode>
           value={mode}
           onChange={setMode}
-          options={[
-            { value: 'timeline', label: 'Timeline' },
-            { value: 'month', label: 'Month' },
-            { value: 'stats', label: 'Stats' },
-          ]}
+          options={
+            stateBucket === 'upcoming'
+              ? [
+                  { value: 'timeline', label: 'Timeline' },
+                  { value: 'month', label: 'Month' },
+                ]
+              : [
+                  { value: 'timeline', label: 'Timeline' },
+                  { value: 'month', label: 'Month' },
+                  { value: 'stats', label: 'Stats' },
+                ]
+          }
         />
       </View>
 
@@ -471,12 +514,36 @@ function MonthView({
     return { past, ticketed, watching };
   }, [rowsInMonth]);
 
+  // Bounds: Jan of earliest show year through Dec of latest show year,
+  // always including the current year so "Today" is reachable even with
+  // no shows yet. Date-TBD watching rows have a null date and are
+  // excluded from the bounds calculation.
+  const { minYear, maxYear } = React.useMemo(() => {
+    const years = rows
+      .map((r) => (r.date ? Number(r.date.slice(0, 4)) : NaN))
+      .filter((y) => Number.isFinite(y));
+    const todayYear = todayDate.getFullYear();
+    return {
+      minYear: Math.min(todayYear, ...years),
+      maxYear: Math.max(todayYear, ...years),
+    };
+  }, [rows, todayDate]);
+
+  const atMin = cursor.year === minYear && cursor.month === 0;
+  const atMax = cursor.year === maxYear && cursor.month === 11;
+
   const step = (delta: number) => {
     setSelected(null);
     setCursor((c) => {
       const m = c.month + delta;
-      if (m < 0) return { year: c.year - 1, month: 11 };
-      if (m > 11) return { year: c.year + 1, month: 0 };
+      if (m < 0) {
+        if (c.year <= minYear) return c;
+        return { year: c.year - 1, month: 11 };
+      }
+      if (m > 11) {
+        if (c.year >= maxYear) return c;
+        return { year: c.year + 1, month: 0 };
+      }
       return { year: c.year, month: m };
     });
   };
@@ -504,8 +571,10 @@ function MonthView({
         <View style={[styles.monthNav, { borderColor: colors.ruleStrong }]}>
           <Pressable
             onPress={() => step(-1)}
+            disabled={atMin}
             accessibilityLabel="Previous month"
-            style={[styles.monthNavBtn, { borderRightColor: colors.ruleStrong, borderRightWidth: StyleSheet.hairlineWidth }]}
+            accessibilityState={{ disabled: atMin }}
+            style={[styles.monthNavBtn, { borderRightColor: colors.ruleStrong, borderRightWidth: StyleSheet.hairlineWidth, opacity: atMin ? 0.4 : 1 }]}
           >
             <ChevronLeft size={16} color={colors.ink} />
           </Pressable>
@@ -518,8 +587,10 @@ function MonthView({
           </Pressable>
           <Pressable
             onPress={() => step(1)}
+            disabled={atMax}
             accessibilityLabel="Next month"
-            style={styles.monthNavBtn}
+            accessibilityState={{ disabled: atMax }}
+            style={[styles.monthNavBtn, { opacity: atMax ? 0.4 : 1 }]}
           >
             <ChevronRight size={16} color={colors.ink} />
           </Pressable>

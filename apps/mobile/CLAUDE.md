@@ -9,9 +9,10 @@ conventions; this file covers what's specific to the mobile app.
 The app is feature-complete against the design handoff. See
 [`showbook-specs/mobile-roadmap.md`](../../showbook-specs/mobile-roadmap.md)
 for the build plan and
-[`showbook-specs/reviews/mobile-review-2026-05-02.md`](../../showbook-specs/reviews/mobile-review-2026-05-02.md)
-for the latest audit + outstanding follow-ups (sign-out cache
-cleanup, real outbox on edit/setlist, push notifications wiring).
+[`showbook-specs/planned-improvements.md`](../../showbook-specs/planned-improvements.md)
+for outstanding follow-ups (push notifications wiring + the smaller
+remaining items called out in the post-M5 audit, which has otherwise
+been fully addressed).
 
 ## Layout
 
@@ -98,23 +99,43 @@ scope fails CI, and the report identifies which scope fell short.
 ## Maestro E2E flows
 
 Three flows live under `e2e/flows/` — sign-in, add-show, sign-out.
-They run on Maestro Cloud nightly + on every push to `main` via
-`.github/workflows/mobile-e2e.yml` (NOT per-PR, by design — see
-`showbook-specs/mobile-testing-strategy.md` § Wave F). The cloud run
-uses the `e2e` EAS profile (see `eas.json`) which sets
-`EXPO_PUBLIC_E2E_MODE=1`. With that flag on, `lib/auth.ts` skips the
-Google OAuth round-trip and instead reads a pre-baked Showbook JWT
-from SecureStore keys `e2e.test-token` + `e2e.test-user`. The pure
-helpers `isE2EMode` and `loadE2ETestSession` are unit-tested in
-`lib/__tests__/auth.test.ts`, including an explicit assertion that
-an unset env var is treated as not-E2E so a misconfigured deploy
-can't accidentally ship the bypass.
+The `e2e` EAS profile (`eas.json`) sets `EXPO_PUBLIC_E2E_MODE=1`,
+which makes `lib/auth.ts` skip the Google OAuth round-trip and read a
+pre-baked Showbook JWT from SecureStore keys `e2e.test-token` +
+`e2e.test-user`. The pure helpers `isE2EMode` and `loadE2ETestSession`
+are unit-tested in `lib/__tests__/auth.test.ts` with an explicit
+assertion that an unset env var is treated as not-E2E so a
+misconfigured deploy can't accidentally ship the bypass.
 
-Validate flow YAML locally without a device:
+**Automated (Android only):** `.github/workflows/mobile-e2e.yml`
+runs nightly + on push-to-`main` + on PRs labeled `mobile-visual`,
+on a self-hosted runner inside the prod WSL box. Maestro Cloud is
+not used (no free tier). One-time runner setup:
 
 ```bash
-npx maestro test --dry-run apps/mobile/e2e/flows/
+# On the prod box:
+bash scripts/setup-runner.sh           # GH Actions runner itself
+bash scripts/setup-runner-android.sh   # Android SDK + AVD + Maestro
 ```
+
+**Manual (iOS):** the dev Mac is the only Apple hardware in the loop
+and isn't always on, so iOS e2e is a pre-push hygiene step rather
+than CI gate. From the repo root with the iOS Simulator booted:
+
+```bash
+pnpm mobile:ios            # boot the simulator + start Metro
+# in another terminal once the app is installed and signed in:
+pnpm mobile:e2e:ios        # runs all 3 flows against the booted sim
+pnpm mobile:e2e:dry        # no device — just YAML validation
+```
+
+`MAESTRO_E2E_TOKEN` / `MAESTRO_E2E_USER_JSON` need to be exported in
+the shell when you run `e2e:ios`; otherwise the sign-in flow's
+deeplink seeds an empty session and `assertVisible: "Sign in with
+Google"` fails.
+
+See `showbook-specs/mobile-testing-strategy.md` § Wave F for the
+rationale on the Android-CI / iOS-manual split.
 
 ## When changing the app
 
@@ -126,10 +147,9 @@ npx maestro test --dry-run apps/mobile/e2e/flows/
   the screen calls a new tRPC procedure or mutation, the helper in
   `lib/` should pick up unit coverage.
 - Adding a new write path? It needs an outbox entry so the
-  optimistic mutation survives a kill / cold start. Don't repeat
-  the per-screen fake-DB shims that the latest mobile review
-  flagged — use `getCacheDatabase()` and
-  `createOutbox(db, { ensureMigrations: true })`.
+  optimistic mutation survives a kill / cold start. Don't reintroduce
+  the per-screen fake-DB shims that the post-M5 audit flagged — use
+  `getCacheDatabase()` and `createOutbox(db, { ensureMigrations: true })`.
 - Changing auth? Mirror `lib/__tests__/auth.test.ts` so the
   E2E-bypass guard stays watertight.
 
@@ -144,5 +164,5 @@ npx maestro test --dry-run apps/mobile/e2e/flows/
 - **Push notifications are not yet delivered.** The toggle in
   Preferences and the client-side permission prompt exist; the
   server side (Expo push token persistence + digest emission +
-  deep-link routing) is the open follow-up tracked in the root
-  `Planned Improvements.md`.
+  deep-link routing) is the open follow-up tracked in
+  `showbook-specs/planned-improvements.md`.

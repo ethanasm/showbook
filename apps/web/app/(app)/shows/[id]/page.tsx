@@ -4,6 +4,7 @@ import { useParams, useRouter, } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
+import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
 import {
   MapPin,
   MoreHorizontal,
@@ -19,6 +20,7 @@ import {
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import {
   CenteredMessage,
+  RemoteImage,
   SectionHeader,
   StateChip,
   type ShowKind,
@@ -56,6 +58,7 @@ export default function ShowDetailPage() {
   const showId = params?.id ?? "";
 
   const utils = trpc.useUtils();
+  const invalidateSidebarCounts = useInvalidateSidebarCounts();
   const detailQuery = trpc.shows.detail.useQuery(
     { showId },
     { enabled: Boolean(showId) },
@@ -65,13 +68,19 @@ export default function ShowDetailPage() {
     onSuccess: () => {
       utils.shows.detail.invalidate({ showId });
       utils.shows.invalidate();
+      invalidateSidebarCounts();
     },
   });
 
   const deleteShow = trpc.shows.delete.useMutation({
     onSuccess: () => {
       utils.shows.invalidate();
-      router.push("/shows");
+      invalidateSidebarCounts();
+      // After delete, route to the bucket the show used to live in so
+      // the user lands somewhere sensible. Past → /logbook; everything
+      // else → /upcoming.
+      const fallback = detailQuery.data?.state === "past" ? "/logbook" : "/upcoming";
+      router.push(fallback);
     },
   });
 
@@ -85,7 +94,7 @@ export default function ShowDetailPage() {
         Couldn&apos;t load show.{" "}
         <button
           type="button"
-          onClick={() => router.push("/shows")}
+          onClick={() => router.push("/logbook")}
           style={{
             background: "none",
             border: "none",
@@ -163,7 +172,7 @@ export default function ShowDetailPage() {
       {/* Breadcrumb */}
       <div
         style={{
-          padding: "14px 36px",
+          padding: "14px var(--page-pad-x)",
           borderBottom: "1px solid var(--rule)",
           display: "flex",
           alignItems: "center",
@@ -175,7 +184,7 @@ export default function ShowDetailPage() {
         }}
       >
         <Link
-          href="/shows"
+          href={showIsPast ? "/logbook" : "/upcoming"}
           style={{
             color: "var(--muted)",
             textDecoration: "none",
@@ -192,10 +201,39 @@ export default function ShowDetailPage() {
         </span>
       </div>
 
+      {(() => {
+        // Fallback chain: TM event image (coverImageUrl) → headliner photo →
+        // venue photo proxy. The proxy lazy-resolves photoUrl from the
+        // venue's googlePlaceId on demand, so allow either signal here.
+        const heroSrc =
+          show.coverImageUrl ??
+          headlinerSP?.performer.imageUrl ??
+          (show.venue.photoUrl || show.venue.googlePlaceId
+            ? `/api/venue-photo/${show.venue.id}`
+            : null);
+        if (!heroSrc) return null;
+        return (
+          <div style={{ padding: "24px var(--page-pad-x) 0" }}>
+            <div className="venue-photo-band">
+              <RemoteImage
+                src={heroSrc}
+                alt={`${titleText} cover`}
+                kind={show.kind as ShowKind}
+                name={titleText}
+                aspect="16/9"
+                size="hero"
+                priority
+              />
+              <div className="venue-photo-band__fade" />
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Hero */}
       <div
         style={{
-          padding: "28px 36px 24px",
+          padding: "28px var(--page-pad-x) 24px",
           borderBottom: "1px solid var(--rule)",
           display: "grid",
           gridTemplateColumns: "1fr auto",
@@ -299,7 +337,7 @@ export default function ShowDetailPage() {
       {/* Stat strip */}
       <div
         style={{
-          padding: "16px 36px",
+          padding: "16px var(--page-pad-x)",
           background: "var(--surface)",
           borderBottom: "1px solid var(--rule)",
           display: "grid",
@@ -362,7 +400,7 @@ export default function ShowDetailPage() {
           minHeight: 0,
           overflow: "auto",
           background: "var(--bg)",
-          padding: "24px 36px 48px",
+          padding: "24px var(--page-pad-x) 48px",
           display: "flex",
           flexDirection: "column",
           gap: 36,
@@ -641,10 +679,12 @@ function LineupSection({
   const [editing, setEditing] = useState(false);
   const utils = trpc.useUtils();
 
+  const invalidateSidebarCounts = useInvalidateSidebarCounts();
   const removePerformer = trpc.shows.removePerformer.useMutation({
     onSuccess: () => {
       utils.shows.detail.invalidate({ showId });
       utils.shows.invalidate();
+      invalidateSidebarCounts();
     },
   });
 
@@ -781,10 +821,12 @@ function LineupAddForm({ showId }: { showId: string }) {
     { enabled: debouncedName.length >= 1 },
   );
 
+  const invalidateSidebarCounts = useInvalidateSidebarCounts();
   const addPerformer = trpc.shows.addPerformer.useMutation({
     onSuccess: () => {
       utils.shows.detail.invalidate({ showId });
       utils.shows.invalidate();
+      invalidateSidebarCounts();
       setName("");
       setDebouncedName("");
       setCharacterName("");
@@ -1231,7 +1273,7 @@ function PickDateBanner({ showId }: { showId: string }) {
   return (
     <div
       style={{
-        margin: '12px 36px 0',
+        margin: '12px var(--page-pad-x) 0',
         padding: '14px 18px',
         background: 'var(--surface)',
         border: '1px solid var(--accent)',

@@ -12,6 +12,7 @@ Personal entertainment tracker for live shows — concerts, theatre, comedy, fes
 - **Background Jobs:** pg-boss
 - **LLM:** Groq (chat-mode Add, playbill cast extraction)
 - **Data Sources:** Ticketmaster Discovery API, setlist.fm, Google Places
+- **Imports:** Spotify + Apple Music (followed artists), Gmail bulk scan, Eventbrite + setlist.fm attended (past shows)
 - **Auth:** Google OAuth (Auth.js)
 - **Media:** Cloudflare R2
 - **Monorepo:** Nx + pnpm
@@ -70,6 +71,72 @@ pnpm prod:logs      # tail web logs
 pnpm prod:down      # stop
 ```
 
+### Querying the prod database from another machine
+
+Postgres is bound to `127.0.0.1:5434` on the prod host, so direct
+connections require either an SSH tunnel (DBeaver / `psql`) or the
+read-only HTTPS endpoint described here.
+
+`POST /api/admin/sql` accepts a single `SELECT`/`EXPLAIN`/`WITH`/`SHOW`/
+`TABLE`/`VALUES` statement, runs it inside a `BEGIN READ ONLY`
+transaction with a 5s `statement_timeout`, and returns up to 1000 rows
+as JSON. Bearer-auth'd via `ADMIN_QUERY_TOKEN`. Disabled (401) when the
+token is unset or shorter than 32 chars.
+
+```bash
+# One-time: generate the token and add to .env.prod, then restart prod web.
+openssl rand -hex 32     # → ADMIN_QUERY_TOKEN=<value>
+pnpm prod:up             # restart picks up the new env
+
+# From a dev machine (or Claude Code on the web):
+export ADMIN_QUERY_URL=https://<your-tunnel-hostname>
+export ADMIN_QUERY_TOKEN=<value-from-.env.prod>
+pnpm prod:query "select count(*) from shows"
+pnpm prod:query --file query.sql
+echo "select * from users limit 5" | pnpm prod:query
+```
+
+Writes are blocked at the Postgres engine — the `READ ONLY` transaction
+errors any INSERT/UPDATE/DELETE/DDL with SQLSTATE `25006`.
+
+#### Restricting the endpoint to a dedicated read-only role (recommended)
+
+By default, `/api/admin/sql` connects via `DATABASE_URL` — i.e. as the app's
+main role, which owns the schema. The `BEGIN READ ONLY` transaction blocks
+writes, but a privileged role can still SELECT pg_read_file, pg_authid, and
+the NextAuth `accounts` / `sessions` / `verification_tokens` tables (which
+hold OAuth refresh tokens and session material). If `ADMIN_QUERY_TOKEN`
+leaks, that's an account-takeover-class incident.
+
+Migration `0027_admin_query_role.sql` adds a dedicated `showbook_query` role
+with SELECT on public tables only, with explicit REVOKE on the three auth
+tables above. Wire the endpoint up to it as a one-time post-migration step:
+
+```bash
+# On the prod host, after `pnpm prod:migrate` has run 0027 (the role exists
+# as NOLOGIN until you do this). Use a long random password — it never needs
+# to be typed by a human, only loaded from .env.prod.
+PASSWORD=$(openssl rand -hex 32)
+docker compose -f docker-compose.prod.yml -p showbook-prod exec -T db \
+  psql -U showbook_prod -d showbook_prod \
+    -c "ALTER ROLE showbook_query WITH LOGIN PASSWORD '$PASSWORD'"
+
+# Then add to .env.prod and restart:
+echo "ADMIN_QUERY_DATABASE_URL=postgresql://showbook_query:$PASSWORD@db:5432/showbook_prod" >> .env.prod
+pnpm prod:up
+```
+
+The endpoint prefers `ADMIN_QUERY_DATABASE_URL` when set and falls back to
+`DATABASE_URL` otherwise, so this is a safe roll-forward — adopt it when
+ready without breaking existing flows. Verify the lockdown is live:
+
+```bash
+pnpm prod:query "select 1 from accounts limit 1"
+# expect: 500 server_error with details "permission denied for table accounts"
+pnpm prod:query "select count(*) from users"
+# expect: 200 with a row count
+```
+
 Dev and prod stacks coexist: dev web binds host port `3001`, prod
 binds `3002`, and postgres uses `5433` / `5434` respectively. The
 Cloudflare Tunnel ingress for the prod hostname must point at
@@ -117,6 +184,7 @@ defaults and inline notes. The required groups are:
 - **Data sources** — `TICKETMASTER_API_KEY`, `SETLISTFM_API_KEY`, `GROQ_API_KEY`, `GOOGLE_PLACES_API_KEY`
 - **Media (Cloudflare R2)** — `R2_*` plus `MEDIA_*` quotas/limits
 - **Email (Resend)** — `RESEND_API_KEY`, `EMAIL_FROM` (unset → digest job logs and skips delivery)
+- **Health-check cron (optional)** — `AXIOM_QUERY_TOKEN` (Axiom Personal Access Token with Query capability on `showbook-prod`; unset → axiom-backed checks report "unknown" instead of "ok"). The morning summary email is sent to every address in `ADMIN_EMAILS` (the same allowlist that gates the in-app Admin tab); empty/unset → cron still runs and logs to Axiom but no email is sent. Both are optional in dev — the cron no-ops the relevant pieces gracefully.
 - **Observability (optional)** — Langfuse and Axiom keys
 - **Per-user guardrails (optional overrides)** — `SHOWBOOK_LLM_CALLS_PER_DAY` (default 50), `SHOWBOOK_BULK_SCAN_PER_HOUR` (default 5), `SHOWBOOK_BULK_SCAN_MESSAGE_CAP` (default 200). See [`GUARDRAILS.md`](./GUARDRAILS.md) for the full list.
 
@@ -208,7 +276,7 @@ Defaults to the prod Cloudflare Tunnel hostname for its backend; override
 `EXPO_PUBLIC_API_URL` to your LAN IP or `http://localhost:3001` for
 local dev. Build / submit / push-notification follow-ups live in
 [`showbook-specs/mobile-deployment.md`](showbook-specs/mobile-deployment.md)
-and [`Planned Improvements.md`](./Planned%20Improvements.md).
+and [`showbook-specs/planned-improvements.md`](./showbook-specs/planned-improvements.md).
 
 ## E2E Database Isolation
 

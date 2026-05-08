@@ -21,6 +21,9 @@ export default async function DiscoverPage() {
       caller.performers.followed(),
     ),
     prefetch("preferences.get", undefined, () => caller.preferences.get()),
+    prefetch("discover.watchedAnnouncementIds", undefined, () =>
+      caller.discover.watchedAnnouncementIds(),
+    ),
   ]);
 
   return (

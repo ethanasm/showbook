@@ -190,6 +190,41 @@
       "when": 1789086400000,
       "tag": "0026_support_performer_ids",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1789172800000,
+      "tag": "0027_admin_query_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1789259200000,
+      "tag": "0028_extra_source_event_ids",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1789345600000,
+      "tag": "0029_add_film_unknown_kinds",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1789432000000,
+      "tag": "0030_show_cover_image",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1789518400000,
+      "tag": "0031_health_summary_log",
+      "breakpoints": true
     }
   ]
 }

@@ -127,7 +127,7 @@ test.describe('Shows list — row click navigates', () => {
   });
 
   test('row click navigates to detail (no inline expand any more)', async ({ page }) => {
-    await page.goto('/shows');
+    await page.goto('/logbook');
     await page.waitForSelector('.show-row', { timeout: 10000 });
 
     // Click the date cell — it has no inner link/button, so the row's

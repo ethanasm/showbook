@@ -2,7 +2,9 @@
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
+import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
 import {
   SortHeader,
   type SortConfig as SortConfigBase,
@@ -20,7 +22,9 @@ import {
   groupAnnouncementsByRegion,
   groupVenuesByRegion,
 } from "./region-helpers";
+import { computeAnnouncementGroupKeys } from "./grouping";
 import { DISCOVER_KIND_ICONS as KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
+import { isNonWatchableKind } from "@showbook/shared";
 import { ContextMenu } from "@/components/ContextMenu";
 import { VenueSearchModal } from "@/components/VenueSearchModal";
 import { RegionSearchModal } from "@/components/RegionSearchModal";
@@ -28,7 +32,7 @@ import { SpotifyImportModal } from "@/components/preferences/SpotifyImportModal"
 import { FollowArtistSearch } from "@/components/discover/FollowArtistSearch";
 import "./discover.css";
 
-type DiscoverKind = ShowKind | "sports";
+type DiscoverKind = ShowKind | "sports" | "film" | "unknown";
 type DiscoverSortField =
   | "showDate"
   | "kind"
@@ -48,6 +52,7 @@ type Announcement = {
   kind: DiscoverKind;
   headliner: string;
   headlinerPerformerId: string | null;
+  supportPerformerIds: string[] | null;
   support: string[] | null;
   productionName: string | null;
   showDate: string;
@@ -107,6 +112,8 @@ const DISCOVER_KIND_ORDER: Record<DiscoverKind, number> = {
   comedy: 2,
   festival: 3,
   sports: 4,
+  film: 5,
+  unknown: 6,
 };
 
 const ON_SALE_STATUS_ORDER: Record<Announcement["onSaleStatus"], number> = {
@@ -230,13 +237,26 @@ function WatchButton({
   isWatching: boolean;
   onToggle: (id: string, watching: boolean) => void;
 }) {
+  const utils = trpc.useUtils();
+  const invalidateSidebarCounts = useInvalidateSidebarCounts();
+
   const watchMutation = trpc.discover.watchlist.useMutation({
-    onSuccess: () => onToggle(announcementId, true),
+    onSuccess: () => {
+      onToggle(announcementId, true);
+      invalidateSidebarCounts();
+      utils.shows.invalidate();
+      utils.discover.watchedAnnouncementIds.invalidate();
+    },
     onError: () => onToggle(announcementId, false),
   });
 
   const unwatchMutation = trpc.discover.unwatchlist.useMutation({
-    onSuccess: () => onToggle(announcementId, false),
+    onSuccess: () => {
+      onToggle(announcementId, false);
+      invalidateSidebarCounts();
+      utils.shows.invalidate();
+      utils.discover.watchedAnnouncementIds.invalidate();
+    },
     onError: () => onToggle(announcementId, true),
   });
 
@@ -400,7 +420,8 @@ function AnnouncementRow({
             </div>
             {announcement.support && announcement.support.length > 0 && (
               <div className="discover-row__support">
-                + {announcement.support.join(", ")}
+                {announcement.kind === "sports" && announcement.support.length === 1 ? "vs" : "+"}{" "}
+                {announcement.support.join(", ")}
               </div>
             )}
             {showReason && reasonText && (
@@ -430,7 +451,7 @@ function AnnouncementRow({
 
       {/* Actions */}
       <div className="discover-row__actions">
-        {announcement.kind !== "sports" && (
+        {!isNonWatchableKind(announcement.kind) && (
           <WatchButton
             announcementId={announcement.id}
             isWatching={isWatching}
@@ -774,6 +795,7 @@ function FeedSection({
   activeRegions,
   regionCount,
   onRegionAdded,
+  onSpotifyImported,
 }: {
   items: Announcement[] | undefined;
   isLoading: boolean;
@@ -792,6 +814,7 @@ function FeedSection({
   activeRegions?: { id: string; cityName: string; radiusMiles: number }[];
   regionCount?: number;
   onRegionAdded?: (regionId: string) => void;
+  onSpotifyImported?: (result: { count: number; performerIds: string[] }) => void;
 }) {
   // The rail and the per-group headers consume a single pending set whose
   // members depend on the tab: venues for Followed, performers for Artists,
@@ -876,8 +899,8 @@ function FeedSection({
     });
   }, []);
 
-  function getGroupKey(item: Announcement): string | null {
-    return groupBy === "artist" ? item.headlinerPerformerId : item.venue.id;
+  function getGroupKeys(item: Announcement): string[] {
+    return computeAnnouncementGroupKeys(item, groupBy, allFollowedArtists);
   }
 
   // Extract unique groups (venues or artists) with counts
@@ -906,20 +929,24 @@ function FeedSection({
 
     if (items) {
       for (const item of items) {
-        const key = getGroupKey(item);
-        if (!key) continue;
-        if (!seen.has(key)) {
-          seen.set(key, {
-            id: key,
-            name: groupBy === "artist" ? item.headliner : item.venue.name,
-            label: groupBy === "artist" ? undefined : item.venue.city,
-            count: 0,
-          });
+        const keys = getGroupKeys(item);
+        for (const key of keys) {
+          if (!seen.has(key)) {
+            seen.set(key, {
+              id: key,
+              name: groupBy === "artist" ? item.headliner : item.venue.name,
+              label: groupBy === "artist" ? undefined : item.venue.city,
+              count: 0,
+            });
+          }
+          seen.get(key)!.count++;
         }
-        seen.get(key)!.count++;
       }
     }
-    return Array.from(seen.values());
+    return Array.from(seen.values()).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.name.localeCompare(b.name);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, groupBy, allFollowedVenues, allFollowedArtists]);
 
@@ -927,7 +954,7 @@ function FeedSection({
   const filteredItems = useMemo(() => {
     if (!items) return [];
     if (!selectedGroupId) return items;
-    return items.filter((item) => getGroupKey(item) === selectedGroupId);
+    return items.filter((item) => getGroupKeys(item).includes(selectedGroupId));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, selectedGroupId, groupBy]);
 
@@ -949,7 +976,7 @@ function FeedSection({
     }
     return groupList.map((g) => ({
       group: g,
-      items: sortedFilteredItems.filter((item) => getGroupKey(item) === g.id),
+      items: sortedFilteredItems.filter((item) => getGroupKeys(item).includes(g.id)),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortedFilteredItems, groupList, selectedGroupId, groupBy]);
@@ -1015,6 +1042,7 @@ function FeedSection({
     <SpotifyImportModal
       open={spotifyModalOpen}
       onClose={() => setSpotifyModalOpen(false)}
+      onImported={onSpotifyImported}
     />
   );
   const totalRegionCount = regionCount ?? activeRegions?.length ?? 0;
@@ -1455,9 +1483,42 @@ const TABS = [
   { key: "Near You", label: "Followed regions" },
 ] as const;
 
+function tabFromParam(param: string | null): string {
+  if (param === "artists") return "Artists";
+  if (param === "venues") return "Followed";
+  if (param === "regions" || param === "near-you") return "Near You";
+  return "Followed";
+}
+
 export default function DiscoverView() {
-  const [activeTab, setActiveTab] = useState<string>("Followed");
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState<string>(() =>
+    tabFromParam(tabParam),
+  );
+  // Keep activeTab in sync when the URL changes while mounted (e.g. the
+  // Spotify importer redirects to /discover?tab=artists after a successful
+  // import — soft navigation reuses this view, so we react via the param).
+  useEffect(() => {
+    if (tabParam) setActiveTab(tabFromParam(tabParam));
+  }, [tabParam]);
+  const watchedAnnouncementIds = trpc.discover.watchedAnnouncementIds.useQuery(
+    undefined,
+    { staleTime: 60_000 },
+  );
   const [watchedIds, setWatchedIds] = useState<Set<string>>(new Set());
+  // Seed the local watched set from the server so the yellow row + "Watching"
+  // button persist when the user navigates back to Discover. Merge with any
+  // optimistic local additions instead of replacing wholesale.
+  useEffect(() => {
+    const serverIds = watchedAnnouncementIds.data;
+    if (!serverIds) return;
+    setWatchedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of serverIds) next.add(id);
+      return next;
+    });
+  }, [watchedAnnouncementIds.data]);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [headerSpotifyModalOpen, setHeaderSpotifyModalOpen] = useState(false);
   const [pendingIngest, setPendingIngest] = useState<{
@@ -1559,6 +1620,23 @@ export default function DiscoverView() {
       setTimeout(() => setRefreshError(null), 6000);
     },
   });
+
+  // Seed the pending-ingest set with newly-imported performer IDs the moment
+  // import completes, so per-artist loading dots and the "Loading shows…"
+  // header light up in the same render rather than waiting for the next
+  // ingestStatus poll cycle.
+  const handleSpotifyImported = useCallback(
+    ({ performerIds }: { count: number; performerIds: string[] }) => {
+      if (performerIds.length === 0) return;
+      setPendingIngest((prev) => {
+        const next = new Set(prev.performerIds);
+        for (const id of performerIds) next.add(id);
+        return { ...prev, performerIds: next };
+      });
+      setPeakPending((prev) => prev + performerIds.length);
+    },
+    [],
+  );
 
   function handleVenueFollowed() {
     utils.venues.followed.invalidate();
@@ -1691,7 +1769,8 @@ export default function DiscoverView() {
             fontFamily: "var(--font-geist-mono), monospace",
             fontSize: 11,
             color: "var(--muted)",
-            margin: "0 0 12px",
+            margin: "0 0 16px",
+            padding: "12px 0 4px 16px",
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
@@ -1737,6 +1816,7 @@ export default function DiscoverView() {
           groupBy="venue"
           allFollowedVenues={followedVenuesList.data}
           pendingIngestVenueIds={pendingIngest.venueIds}
+          onSpotifyImported={handleSpotifyImported}
         />
       )}
 
@@ -1752,6 +1832,7 @@ export default function DiscoverView() {
           groupBy="artist"
           allFollowedArtists={followedArtistsList.data}
           pendingIngestPerformerIds={pendingIngest.performerIds}
+          onSpotifyImported={handleSpotifyImported}
         />
       )}
 
@@ -1773,11 +1854,13 @@ export default function DiscoverView() {
             // Poller picks up the new region within ~one round-trip.
             utils.discover.ingestStatus.invalidate();
           }}
+          onSpotifyImported={handleSpotifyImported}
         />
       )}
       <SpotifyImportModal
         open={headerSpotifyModalOpen}
         onClose={() => setHeaderSpotifyModalOpen(false)}
+        onImported={handleSpotifyImported}
       />
     </div>
   );

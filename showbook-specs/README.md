@@ -19,7 +19,7 @@ Technical specifications for the Showbook data layer: entity schemas, external d
 | [`pipelines.md`](pipelines.md) | Add-flow enrichment sequence, Discover feed ingestion, delayed enrichment retries |
 | [`decisions.md`](decisions.md) | Resolved design decisions + remaining open questions |
 | [`infrastructure.md`](infrastructure.md) | Stack (TypeScript/Nx), service architecture, costs, offline strategy, Drizzle migration path |
-| [`mobile-roadmap.md`](mobile-roadmap.md) | Mobile build plan — M1–M6 milestones, stack decisions, status tracker |
+| [`mobile-roadmap.md`](mobile-roadmap.md) | Mobile build plan — milestones, stack decisions, status tracker |
 
 ### Build Tasks
 

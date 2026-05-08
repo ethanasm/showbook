@@ -290,36 +290,38 @@ describe('discoverRouter (with mocked db)', () => {
       );
     });
 
-    it('rejects sports announcements', async () => {
-      reset({
-        selectResults: [
-          [
-            {
-              id: 'a1',
-              kind: 'sports',
-              headliner: 'Yankees',
-              venueId: 'v1',
-              showDate: '2026-08-01',
-              runStartDate: null,
-              runEndDate: null,
-              headlinerPerformerId: null,
-              ticketUrl: null,
-              productionName: null,
-            },
+    for (const kind of ['sports', 'film', 'unknown'] as const) {
+      it(`rejects ${kind} announcements`, async () => {
+        reset({
+          selectResults: [
+            [
+              {
+                id: 'a1',
+                kind,
+                headliner: 'Yankees',
+                venueId: 'v1',
+                showDate: '2026-08-01',
+                runStartDate: null,
+                runEndDate: null,
+                headlinerPerformerId: null,
+                ticketUrl: null,
+                productionName: null,
+              },
+            ],
           ],
-        ],
+        });
+        await assert.rejects(
+          () =>
+            caller().call((c) =>
+              c.watchlist({
+                announcementId: '11111111-1111-4111-8111-111111111111',
+              }),
+            ),
+          (err: unknown) =>
+            err instanceof TRPCError && err.code === 'BAD_REQUEST',
+        );
       });
-      await assert.rejects(
-        () =>
-          caller().call((c) =>
-            c.watchlist({
-              announcementId: '11111111-1111-4111-8111-111111111111',
-            }),
-          ),
-        (err: unknown) =>
-          err instanceof TRPCError && err.code === 'BAD_REQUEST',
-      );
-    });
+    }
 
     it('creates a watching show for a single-night announcement', async () => {
       reset({

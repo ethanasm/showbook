@@ -13,51 +13,26 @@ test.describe('Bottom nav — mobile viewport', () => {
     await loginSeeded(page);
   });
 
-  test('center + button opens popover with five entries', async ({ page }) => {
-    // Locate the Add button by its aria-label
-    const addBtn = page.getByRole('button', { name: /^Add$/i });
+  test('center + button navigates to /add directly', async ({ page }) => {
+    const addBtn = page.getByRole('button', { name: /^Add a show$/i });
     await expect(addBtn).toBeVisible({ timeout: 8000 });
 
     await addBtn.click();
-
-    // Popover should appear with all five entries
-    await expect(page.getByRole('menuitem', { name: 'Add a show' })).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: 'Discover' })).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: 'Venues' })).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: 'Artists' })).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: 'Map' })).toBeVisible();
-
-    await page.screenshot({
-      path: 'test-results/screenshots/bottom-nav-add-popover.png',
-      fullPage: true,
-    });
+    await page.waitForURL('**/add', { timeout: 8000 });
   });
 
-  test('clicking Discover in popover navigates to /discover', async ({ page }) => {
-    const addBtn = page.getByRole('button', { name: /^Add$/i });
-    await addBtn.click();
-
-    await page.getByRole('menuitem', { name: 'Discover' }).click();
+  test('Discover tab navigates to /discover', async ({ page }) => {
+    const discoverBtn = page.getByRole('button', { name: /^Discover$/i });
+    await expect(discoverBtn).toBeVisible({ timeout: 8000 });
+    await discoverBtn.click();
     await page.waitForURL('**/discover', { timeout: 8000 });
   });
 
-  test('popover dismisses on Escape', async ({ page }) => {
-    const addBtn = page.getByRole('button', { name: /^Add$/i });
-    await addBtn.click();
-    await expect(page.getByRole('menuitem', { name: 'Discover' })).toBeVisible();
-
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('menuitem', { name: 'Discover' })).not.toBeVisible();
-  });
-
-  test('popover dismisses on outside click', async ({ page }) => {
-    const addBtn = page.getByRole('button', { name: /^Add$/i });
-    await addBtn.click();
-    await expect(page.getByRole('menuitem', { name: 'Discover' })).toBeVisible();
-
-    // Click on a safe area outside the popover
-    await page.mouse.click(5, 5);
-    await expect(page.getByRole('menuitem', { name: 'Discover' })).not.toBeVisible();
+  test('Shows tab navigates to /upcoming', async ({ page }) => {
+    const showsBtn = page.getByRole('button', { name: /^Shows$/i });
+    await expect(showsBtn).toBeVisible({ timeout: 8000 });
+    await showsBtn.click();
+    await page.waitForURL('**/upcoming', { timeout: 8000 });
   });
 
   test('right-most Me tab navigates to /preferences not /me', async ({ page }) => {

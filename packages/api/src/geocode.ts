@@ -14,6 +14,12 @@ async function rateLimit() {
 }
 
 export interface GeocodeResult {
+  // Canonical display name from the upstream provider. Set when Google
+  // Places returns a `displayName`; left undefined for the Nominatim
+  // fallback path (OSM doesn't return a clean venue name). Callers that
+  // want a "clean" venue name (e.g. matchOrCreateVenue replacing a
+  // verbose Gmail-extracted name) should prefer this over the input.
+  name?: string;
   lat: number;
   lng: number;
   stateRegion?: string;
@@ -52,6 +58,7 @@ export async function geocodeVenue(
       const details = await getPlaceDetails(suggestions[0].placeId);
       if (details && details.latitude && details.longitude) {
         return {
+          name: details.name || undefined,
           lat: details.latitude,
           lng: details.longitude,
           stateRegion: details.stateRegion ?? undefined,

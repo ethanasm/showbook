@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { MapPin, Check, Plus, Search, X, LogOut, Music } from "lucide-react";
+import { MapPin, Check, Plus, Search, X, LogOut, Music, ShieldCheck } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useTheme } from "@/components/design-system/ThemeProvider";
 import { SegmentedControl } from "@/components/design-system/SegmentedControl";
@@ -616,6 +617,13 @@ export default function PreferencesView() {
   const followedArtistsQuery = trpc.performers.followed.useQuery(undefined, {
     staleTime: 60_000,
   });
+  // Mirrors AppShell's gating — same tRPC procedure, same staleTime. Used
+  // to surface the admin link on mobile, where the desktop sidebar (which
+  // already exposes /admin) is hidden.
+  const amIAdminQuery = trpc.admin.amIAdmin.useQuery(undefined, {
+    staleTime: 5 * 60_000,
+  });
+  const isAdmin = amIAdminQuery.data?.isAdmin ?? false;
 
   const updatePrefs = trpc.preferences.update.useMutation({
     onSuccess: () => prefsQuery.refetch(),
@@ -647,9 +655,9 @@ export default function PreferencesView() {
     return (
       <div style={styles.container}>
         {/* skeleton header */}
-        <div style={{ padding: "16px 36px", borderBottom: "1px solid var(--rule)", height: 52 }} />
+        <div style={{ padding: "16px var(--page-pad-x)", borderBottom: "1px solid var(--rule)", height: 52 }} />
         {/* skeleton sections */}
-        <div style={{ padding: "28px 36px", display: "grid", gap: 28, alignContent: "start" }}>
+        <div style={{ padding: "28px var(--page-pad-x)", display: "grid", gap: 28, alignContent: "start" }}>
           {Array.from({ length: 3 }).map((_, sectionIdx) => (
             <div key={sectionIdx} style={{ display: "grid", gap: 10 }}>
               <div style={{ height: 14, width: 140, background: "var(--rule)" }} />
@@ -705,6 +713,29 @@ export default function PreferencesView() {
               </button>
             </SettingRow>
           </div>
+
+          {/* ── Admin (mobile-only — desktop has the sidebar entry) ───── */}
+          {isAdmin && (
+            <div className="preferences-mobile-only">
+              <SectionHead label="Admin" sub="operator tools" />
+              <div style={styles.card}>
+                <SettingRow
+                  label="Admin dashboard"
+                  description="ingest jobs, backfills, scrapers"
+                  last
+                >
+                  <Link
+                    href="/admin"
+                    style={styles.signOutButton}
+                    aria-label="Open admin dashboard"
+                  >
+                    <ShieldCheck size={12} />
+                    <span>Open admin</span>
+                  </Link>
+                </SettingRow>
+              </div>
+            </div>
+          )}
 
           {/* ── Appearance ───────────────────────────── */}
           <SectionHead label="Appearance" sub="theme and display" />
@@ -1134,7 +1165,7 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: 0,
   },
   header: {
-    padding: "16px 36px",
+    padding: "16px var(--page-pad-x)",
     borderBottom: "1px solid var(--rule)",
   },
   headerLabel: {
@@ -1156,7 +1187,7 @@ const styles: Record<string, React.CSSProperties> = {
   content: {
     flex: 1,
     overflow: "auto",
-    padding: "28px 36px 60px",
+    padding: "28px var(--page-pad-x) 60px",
   },
   contentInner: {
     maxWidth: 720,

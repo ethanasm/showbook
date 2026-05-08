@@ -13,18 +13,24 @@ interface Script {
   insertResults: unknown[][];
   updateResults: unknown[][];
   insertThrows: unknown | null;
+  geocode: ((name: string, city: string, stateRegion?: string | null) => Promise<unknown>) | null;
+  searchVenues: ((params: unknown) => Promise<unknown[]>) | null;
 }
 const SCRIPT: Script = {
   selectResults: [],
   insertResults: [],
   updateResults: [],
   insertThrows: null,
+  geocode: null,
+  searchVenues: null,
 };
 function reset(opts: Partial<Script> = {}) {
   SCRIPT.selectResults = opts.selectResults ?? [];
   SCRIPT.insertResults = opts.insertResults ?? [];
   SCRIPT.updateResults = opts.updateResults ?? [];
   SCRIPT.insertThrows = opts.insertThrows ?? null;
+  SCRIPT.geocode = opts.geocode ?? null;
+  SCRIPT.searchVenues = opts.searchVenues ?? null;
 }
 function mkChain(getResult: () => unknown) {
   const handler: ProxyHandler<object> = {
@@ -64,13 +70,15 @@ mock.module('@showbook/db', {
 
 mock.module('../geocode.js', {
   namedExports: {
-    geocodeVenue: async () => null,
+    geocodeVenue: async (name: string, city: string, stateRegion?: string | null) =>
+      SCRIPT.geocode ? SCRIPT.geocode(name, city, stateRegion) : null,
   },
 });
 
 mock.module('../ticketmaster.js', {
   namedExports: {
-    searchVenues: async () => [],
+    searchVenues: async (params: unknown) =>
+      SCRIPT.searchVenues ? SCRIPT.searchVenues(params) : [],
   },
 });
 
@@ -168,6 +176,67 @@ describe('matchOrCreateVenue (mocked db)', () => {
     assert.equal(result.venue.id, 'a');
   });
 
+  // Regression: TM splits "Orpheum Theatre" between a search-side id
+  // (KovZpZAFaanA) and an event-side id with city-suffixed name "Orpheum
+  // Theatre-San Francisco" (ZFr9jZedke). Without the normalized-name match
+  // we'd create a duplicate venue and the announcements would land on it.
+  it('matches an event-side "Name-City" against an existing "Name" via stripped match', async () => {
+    const existing = {
+      id: 'v-orpheum',
+      name: 'Orpheum Theatre',
+      city: 'San Francisco',
+      stateRegion: 'California',
+      country: 'US',
+      ticketmasterVenueId: 'KovZpZAFaanA',
+      googlePlaceId: null,
+      photoUrl: null,
+      latitude: 37.78,
+      longitude: -122.4,
+    };
+    reset({
+      selectResults: [
+        [], // step 1: TM id match miss (event-side id ≠ stored id)
+        [], // step 3: exact name+city miss
+        [existing], // step 3b: stripped name match hits
+      ],
+    });
+    const result = await mod.matchOrCreateVenue({
+      name: 'Orpheum Theatre-San Francisco',
+      city: 'San Francisco',
+      tmVenueId: 'ZFr9jZedke',
+    });
+    assert.equal(result.created, false);
+    assert.equal(result.venue.id, 'v-orpheum');
+  });
+
+  it('matches input "Name" against existing "Name-City" via reverse stripped match', async () => {
+    const existing = {
+      id: 'v-orpheum',
+      name: 'Orpheum Theatre-San Francisco',
+      city: 'San Francisco',
+      stateRegion: 'California',
+      country: 'US',
+      ticketmasterVenueId: 'ZFr9jZedke',
+      googlePlaceId: null,
+      photoUrl: null,
+      latitude: 37.78,
+      longitude: -122.4,
+    };
+    reset({
+      selectResults: [
+        [], // step 3: exact name+city miss
+        // step 3b skipped: input "Orpheum Theatre" has no city suffix to strip
+        [existing], // step 3c: same-city scan finds the long-named row
+      ],
+    });
+    const result = await mod.matchOrCreateVenue({
+      name: 'Orpheum Theatre',
+      city: 'San Francisco',
+    });
+    assert.equal(result.created, false);
+    assert.equal(result.venue.id, 'v-orpheum');
+  });
+
   it('creates a new venue when none exists', async () => {
     const created = {
       id: 'new',
@@ -197,6 +266,164 @@ describe('matchOrCreateVenue (mocked db)', () => {
     assert.equal(result.created, true);
     assert.equal(result.venue.id, 'new');
   });
+
+  it('uses Ticketmaster canonical name when input name is verbose', async () => {
+    let insertedName: string | undefined;
+    const fakeInsertingDb = {
+      ...fakeDb,
+      insert: () => {
+        const proxy: any = new Proxy({}, {
+          get(_t, prop) {
+            if (prop === 'values') {
+              return (vals: { name: string }) => {
+                insertedName = vals.name;
+                return proxy;
+              };
+            }
+            if (prop === 'then') {
+              return (resolve: (v: unknown) => unknown) =>
+                Promise.resolve([{
+                  id: 'v-tm', name: insertedName, city: 'New York',
+                  stateRegion: 'NY', country: 'US',
+                  ticketmasterVenueId: 'tm-canonical', googlePlaceId: null,
+                  photoUrl: null, latitude: null, longitude: null,
+                }]).then(resolve);
+            }
+            return () => proxy;
+          },
+        });
+        return proxy;
+      },
+    };
+    // Substitute the smarter db just for this test by re-mocking via the
+    // existing transaction wrapper — since fakeDb.transaction passes itself
+    // as `tx`, we briefly replace its insert.
+    const origInsert = fakeDb.insert;
+    (fakeDb as any).insert = fakeInsertingDb.insert;
+
+    try {
+      reset({
+        selectResults: [
+          [], // step 3 name+city miss
+          [], // step 3b stripped name miss
+          [], // step 3b reverse — same-city venues query
+          [], // step 4 post-canonical name+city miss (after canonical resolved)
+          [], // recheck inside tx miss
+          [], // tm_id_mismatch same-city scan
+        ],
+        searchVenues: async () => [
+          { id: 'tm-canonical', name: 'Beacon Theatre', city: { name: 'New York' } },
+        ],
+      });
+      const result = await mod.matchOrCreateVenue({
+        name: 'The Beacon Theatre @ Beacon Theater (NY)',
+        city: 'New York',
+      });
+      assert.equal(result.created, true);
+      assert.equal(insertedName, 'Beacon Theatre');
+      assert.equal(result.venue.ticketmasterVenueId, 'tm-canonical');
+    } finally {
+      (fakeDb as any).insert = origInsert;
+    }
+  });
+
+  it('falls back to Google Places name when TM has no match', async () => {
+    let insertedName: string | undefined;
+    const origInsert = fakeDb.insert;
+    (fakeDb as any).insert = () => {
+      const proxy: any = new Proxy({}, {
+        get(_t, prop) {
+          if (prop === 'values') {
+            return (vals: { name: string }) => {
+              insertedName = vals.name;
+              return proxy;
+            };
+          }
+          if (prop === 'then') {
+            return (resolve: (v: unknown) => unknown) =>
+              Promise.resolve([{
+                id: 'v-gp', name: insertedName, city: 'San Francisco',
+                stateRegion: 'CA', country: 'US',
+                ticketmasterVenueId: null, googlePlaceId: 'gp-1',
+                photoUrl: null, latitude: 37.78, longitude: -122.43,
+              }]).then(resolve);
+          }
+          return () => proxy;
+        },
+      });
+      return proxy;
+    };
+
+    try {
+      reset({
+        selectResults: [
+          [], // step 3 name+city miss
+          [], // step 3b stripped miss
+          [], // step 3b reverse
+          [], // post-canonical name+city miss
+          [], // recheck inside tx miss
+        ],
+        geocode: async () => ({
+          name: 'The Fillmore',
+          lat: 37.78,
+          lng: -122.43,
+          stateRegion: 'CA',
+          country: 'US',
+          googlePlaceId: 'gp-1',
+        }),
+        searchVenues: async () => [], // TM miss
+      });
+      const result = await mod.matchOrCreateVenue({
+        name: 'The Fillmore Auditorium @ Fillmore SF',
+        city: 'San Francisco',
+      });
+      assert.equal(result.created, true);
+      assert.equal(insertedName, 'The Fillmore');
+    } finally {
+      (fakeDb as any).insert = origInsert;
+    }
+  });
+
+  it('keeps input name when neither TM nor Google returns a canonical', async () => {
+    let insertedName: string | undefined;
+    const origInsert = fakeDb.insert;
+    (fakeDb as any).insert = () => {
+      const proxy: any = new Proxy({}, {
+        get(_t, prop) {
+          if (prop === 'values') {
+            return (vals: { name: string }) => {
+              insertedName = vals.name;
+              return proxy;
+            };
+          }
+          if (prop === 'then') {
+            return (resolve: (v: unknown) => unknown) =>
+              Promise.resolve([{
+                id: 'v-plain', name: insertedName, city: 'Nowhere',
+                stateRegion: null, country: 'US',
+                ticketmasterVenueId: null, googlePlaceId: null,
+                photoUrl: null, latitude: null, longitude: null,
+              }]).then(resolve);
+          }
+          return () => proxy;
+        },
+      });
+      return proxy;
+    };
+    try {
+      reset({
+        selectResults: [[], [], []],
+      });
+      const result = await mod.matchOrCreateVenue({
+        name: 'Some Verbose Gmail Name',
+        city: 'Nowhere',
+      });
+      assert.equal(result.created, true);
+      assert.equal(insertedName, 'Some Verbose Gmail Name');
+    } finally {
+      (fakeDb as any).insert = origInsert;
+    }
+  });
 });
 
 describe('venue-matcher helpers', () => {
@@ -221,7 +448,28 @@ describe('venue-matcher helpers', () => {
   });
 
   it('findTmVenueId returns null when results are empty', async () => {
+    reset({ searchVenues: async () => [] });
     const result = await mod.findTmVenueId('Anywhere', 'NYC', 'NY');
+    assert.equal(result, null);
+  });
+
+  it('findTmVenue returns id and canonical name when matched', async () => {
+    reset({
+      searchVenues: async () => [
+        { id: 'tm-1', name: 'Beacon Theatre', city: { name: 'New York' } },
+      ],
+    });
+    const result = await mod.findTmVenue('Beacon Theater', 'New York', 'NY');
+    assert.deepEqual(result, { id: 'tm-1', name: 'Beacon Theatre' });
+  });
+
+  it('findTmVenue returns null when no result city matches', async () => {
+    reset({
+      searchVenues: async () => [
+        { id: 'tm-other', name: 'Beacon Theatre', city: { name: 'Hopewell' } },
+      ],
+    });
+    const result = await mod.findTmVenue('Beacon Theatre', 'New York', 'NY');
     assert.equal(result, null);
   });
 });

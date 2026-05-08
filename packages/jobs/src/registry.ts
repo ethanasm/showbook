@@ -12,6 +12,7 @@ import { runShowsNightly } from './shows-nightly';
 import { runBackfillPerformerImages } from './backfill-performer-images';
 import { runBackfillVenuePhotos } from './backfill-venue-photos';
 import { runPruneOrphanCatalog } from './prune-orphan-catalog';
+import { runHealthCheck } from './health-check';
 // @showbook/scrapers pulls in Playwright, which the Next.js dev server
 // tries to bundle. Import it lazily inside the handler so it stays out of
 // the web app's static dependency graph.
@@ -28,12 +29,62 @@ export const JOBS = {
   BACKFILL_PERFORMER_IMAGES: 'backfill/performer-images',
   BACKFILL_VENUE_PHOTOS: 'backfill/venue-photos',
   PRUNE_ORPHAN_CATALOG: 'prune/orphan-catalog',
+  HEALTH_CHECK: 'health/morning-check',
 } as const;
 
 const STALE_SCHEDULES = [
   'notifications/digest',
   'notifications/weekly-digest',
 ] as const;
+
+// pg-boss v10 ignores constructor-level retry/expiration options when
+// `createQueue` runs without them (see plans.js create_queue: it INSERTs
+// the queue row directly from the options arg). The previous setup
+// relied on the constructor's `expireInHours: 23` and got the pg-boss
+// default of 15 min instead — so when the web container was killed
+// mid-job, the orphaned active row sat there for the full 15 min before
+// expire-maintenance moved it to retry. We now set queue-level options
+// explicitly and `updateQueue` so existing prod queues pick up the new
+// values on next boot.
+type QueueOptions = {
+  expireInSeconds: number;
+  retryLimit: number;
+  retryDelay: number;
+  retryBackoff: boolean;
+};
+
+// Fast user-triggered ingests (Spotify import, follow, refresh-now). A
+// killed handler should recover within minutes, not 15+.
+const FAST_INGEST: QueueOptions = {
+  expireInSeconds: 300,
+  retryLimit: 3,
+  retryDelay: 60,
+  retryBackoff: true,
+};
+
+// Long batch jobs (digest, backfills, scrapers, weekly discover ingest).
+// Half-hour ceiling fits the longest observed runs with margin and is
+// short enough that an orphan recovers same-day.
+const LONG_BATCH: QueueOptions = {
+  expireInSeconds: 1800,
+  retryLimit: 2,
+  retryDelay: 300,
+  retryBackoff: true,
+};
+
+const QUEUE_OPTIONS: Record<string, QueueOptions> = {
+  'shows/nightly': LONG_BATCH,
+  'enrichment/setlist-retry': LONG_BATCH,
+  'discover/ingest': LONG_BATCH,
+  'discover/ingest-venue': FAST_INGEST,
+  'discover/ingest-performer': FAST_INGEST,
+  'discover/ingest-region': FAST_INGEST,
+  'notifications/daily-digest': LONG_BATCH,
+  'backfill/performer-images': LONG_BATCH,
+  'backfill/venue-photos': LONG_BATCH,
+  'prune/orphan-catalog': LONG_BATCH,
+  'health/morning-check': LONG_BATCH,
+};
 
 const log = child({ component: 'jobs.registry' });
 
@@ -265,6 +316,25 @@ async function pruneOrphanCatalogHandler(jobs: PgBoss.Job[]) {
   }
 }
 
+async function healthCheckHandler(jobs: PgBoss.Job[]) {
+  for (const job of jobs) {
+    await runJob(JOBS.HEALTH_CHECK, job, async () => {
+      const result = await runHealthCheck();
+      // The orchestrator already emits health.check.summary; rebroadcast
+      // the rolled-up status here so the registry-level `job.complete`
+      // payload includes it for log consumers that key off jobName.
+      return {
+        status: result.status,
+        okCount: result.okCount,
+        warnCount: result.warnCount,
+        failCount: result.failCount,
+        unknownCount: result.unknownCount,
+        emailSent: result.emailSent,
+      };
+    });
+  }
+}
+
 async function notificationsDailyDigestHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
     await runJob(JOBS.NOTIFICATIONS_DAILY_DIGEST, job, async () => {
@@ -278,7 +348,41 @@ async function notificationsDailyDigestHandler(jobs: PgBoss.Job[]) {
   }
 }
 
+// Guard so a second invocation of `registerAllJobs` against the same
+// boss instance is a no-op rather than re-registering every queue's
+// worker on top of the existing one. Empirically (Axiom over
+// 2026-05-01..05-08), every scheduled cron in prod fires two
+// `job.start` events with two distinct jobIds — but only one row exists
+// in `pgboss.job` per firing, and the "missing" jobIds are absent from
+// `pgboss.archive` too. The shape matches "two `boss.work(name,
+// handler)` workers polling the same queue, each receiving the same DB
+// row through separate fetches." `boss.work` does not de-dupe by name,
+// so a second `registerAllJobs` call would silently add a parallel
+// worker for every queue.
+//
+// We don't yet know what's invoking `register()` (and therefore
+// `registerAllJobs`) twice in the prod Next.js process — single
+// container, single `pgboss.started` event per restart. The guard
+// closes the bug regardless of the trigger and the
+// `pgboss.register.duplicate` event surfaces the second call to Axiom
+// so we can keep hunting the cause.
+//
+// The guard is keyed on the boss instance (WeakSet, not a module-level
+// boolean) so each test that constructs a fake boss starts fresh. In
+// prod `getBoss()` returns a process-wide singleton, so subsequent
+// `register()` invocations against that same instance hit the guard.
+const REGISTERED_INSTANCES = new WeakSet<object>();
+
 export async function registerAllJobs(boss: PgBoss): Promise<void> {
+  if (REGISTERED_INSTANCES.has(boss as unknown as object)) {
+    log.warn(
+      { event: 'pgboss.register.duplicate' },
+      'registerAllJobs called more than once against this boss instance; second call ignored',
+    );
+    return;
+  }
+  REGISTERED_INSTANCES.add(boss as unknown as object);
+
   for (const stale of STALE_SCHEDULES) {
     try {
       await boss.unschedule(stale);
@@ -289,7 +393,12 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   }
 
   for (const name of Object.values(JOBS)) {
-    await boss.createQueue(name);
+    const opts = { name, ...QUEUE_OPTIONS[name] };
+    await boss.createQueue(name, opts);
+    // create_queue is ON CONFLICT DO NOTHING, so existing queues keep
+    // whatever options they were originally created with. Force-apply
+    // the current options every boot.
+    await boss.updateQueue(name, opts);
   }
 
   await boss.work(JOBS.SHOWS_NIGHTLY, showsNightlyHandler);
@@ -302,6 +411,7 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   await boss.work(JOBS.BACKFILL_PERFORMER_IMAGES, backfillPerformerImagesHandler);
   await boss.work(JOBS.BACKFILL_VENUE_PHOTOS, backfillVenuePhotosHandler);
   await boss.work(JOBS.PRUNE_ORPHAN_CATALOG, pruneOrphanCatalogHandler);
+  await boss.work(JOBS.HEALTH_CHECK, healthCheckHandler);
 
   // Backstop sweep for the orphan-cleanup triggers (0002 / 0014 / 0023 /
   // 0025). Runs before shows-nightly so the nightly transition operates on
@@ -314,6 +424,11 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   await boss.schedule(JOBS.BACKFILL_PERFORMER_IMAGES, '30 5 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.BACKFILL_VENUE_PHOTOS, '45 5 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.DISCOVER_INGEST, '0 6 * * 1', {}, { tz: 'America/New_York' });
+  // Health summary at 07:00 ET — runs after every overnight cron has had
+  // a chance to complete (digest fires at 08:00) so missing summary
+  // events are reliable signal, and lands one hour ahead of the digest
+  // so the operator can intervene before users see the consequences.
+  await boss.schedule(JOBS.HEALTH_CHECK, '0 7 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.NOTIFICATIONS_DAILY_DIGEST, '0 8 * * *', {}, { tz: 'America/New_York' });
 
   log.info(

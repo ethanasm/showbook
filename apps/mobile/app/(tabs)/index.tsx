@@ -22,14 +22,16 @@ import React from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Link, useRouter } from 'expo-router';
-import { Music, Calendar, Compass } from 'lucide-react-native';
+import { Calendar, Compass } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { EmptyState } from '../../components/EmptyState';
+import { GetStartedHub } from '../../components/GetStartedHub';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { ShowCardListSkeleton } from '../../components/skeletons';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
+import { isNonWatchableKind } from '@showbook/shared';
 import { useAuth } from '../../lib/auth';
 import { trpc } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
@@ -83,9 +85,10 @@ function toShowCardShow(row: ShowsListItem): ShowCardShow {
     firstSp?.performer.name ??
     'Untitled show';
 
-  // ShowCardShow's Kind union doesn't include 'sports'; treat it as a
-  // concert visually until the design adds a sports accent.
-  const kind: Kind = row.kind === 'sports' ? 'concert' : (row.kind as Kind);
+  // Non-watchable kinds (sports / film / unknown) shouldn't reach the
+  // user's saved shows in normal flow — the discover.watch guard rejects
+  // them — but if legacy data exists, fall back to 'concert' visually.
+  const kind: Kind = isNonWatchableKind(row.kind) ? 'concert' : (row.kind as Kind);
 
   return {
     id: row.id,
@@ -189,11 +192,7 @@ export default function HomeScreen(): React.JSX.Element {
             <ShowCardListSkeleton count={4} />
           </View>
         ) : sections.total === 0 ? (
-          <EmptyState
-            icon={<Music size={40} color={colors.faint} strokeWidth={1.5} />}
-            title="No shows yet"
-            subtitle="Add your first show from the Add tab — concerts, theatre, comedy, festivals."
-          />
+          <GetStartedHub variant="expanded" />
         ) : (
           <>
             {sections.nowPlaying ? (

@@ -1,2 +1,8 @@
 export { DailyDigest, type DailyDigestProps } from './DailyDigest';
-export { renderDailyDigest } from './render';
+export {
+  HealthSummary,
+  type HealthSummaryProps,
+  type HealthCheckStatus,
+  type HealthCheckSummaryRow,
+} from './HealthSummary';
+export { renderDailyDigest, renderHealthSummary } from './render';

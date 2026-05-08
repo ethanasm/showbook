@@ -13,7 +13,7 @@ const log = child({ component: 'web.gmail.scan' });
 // Hard cap on emails processed per scan to bound Groq cost. A user with
 // thousands of confirmation emails should narrow their date range rather
 // than have the server burn through them all in one request.
-const MAX_MESSAGES_PER_SCAN = 200;
+const MAX_MESSAGES_PER_SCAN = 300;
 
 function correctExtractedYear(
   extractedDate: string | null,

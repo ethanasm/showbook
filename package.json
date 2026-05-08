@@ -36,12 +36,15 @@
     "prod:down": "docker compose --env-file .env.prod -f docker-compose.prod.yml down",
     "prod:logs": "docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f web",
     "prod:migrate": "docker compose --env-file .env.prod -f docker-compose.prod.yml exec web pnpm --filter @showbook/db drizzle-kit migrate",
+    "prod:query": "node scripts/prod-query.mjs",
     "mobile:start": "pnpm --filter mobile start",
     "mobile:ios": "pnpm --filter mobile ios",
     "mobile:android": "pnpm --filter mobile android",
     "mobile:typecheck": "pnpm --filter mobile typecheck",
     "mobile:lint": "pnpm --filter mobile lint",
     "mobile:test": "pnpm --filter mobile test",
+    "mobile:e2e:ios": "pnpm --filter mobile e2e:ios",
+    "mobile:e2e:dry": "pnpm --filter mobile e2e:dry",
     "setup:runner": "bash scripts/setup-runner.sh"
   },
   "devDependencies": {
@@ -58,7 +61,12 @@
       "nx>minimatch@<9.0.7": "^9.0.7",
       "@esbuild-kit/core-utils>esbuild": "^0.25.0",
       "follow-redirects@<1.16.0": "^1.16.0",
-      "uuid@<14.0.0": "^14.0.0"
+      "axios@<1.16.0": "^1.16.0",
+      "uuid@<14.0.0": "^14.0.0",
+      "react-native-screens": "~4.23.0",
+      "react-native-gesture-handler": "~2.30.0",
+      "react-native-safe-area-context": "~5.6.2",
+      "typescript": "~5.9.2"
     }
   }
 }

@@ -59,8 +59,12 @@ test.describe('Add Show redesign', () => {
   });
 
   test('clicking timeframe manually then changing date keeps manual choice', async ({ page }) => {
+    // Scope to the form: the sidebar now has its own "Upcoming" nav button
+    // (added in the IA cleanup), so an unscoped /upcoming/i locator would
+    // match the sidebar nav first and click-navigate the test off /add.
+    const form = page.getByRole('main');
     // Manually click "upcoming" (ticketed)
-    const upcomingButton = page.getByRole('button', { name: /upcoming/i }).first();
+    const upcomingButton = form.getByRole('button', { name: /upcoming/i }).first();
     await upcomingButton.click();
     await page.waitForTimeout(100);
 
@@ -74,7 +78,7 @@ test.describe('Add Show redesign', () => {
     expect(style).toBe('2px');
 
     // And past should not be active
-    const pastButton = page.getByRole('button', { name: /past/i }).first();
+    const pastButton = form.getByRole('button', { name: /past/i }).first();
     const pastStyle = await pastButton.evaluate((el) => window.getComputedStyle(el).borderLeftWidth);
     expect(pastStyle).toBe('2px'); // past was first in the list and would have been auto-selected
     // Better: verify upcoming still looks selected via font-weight

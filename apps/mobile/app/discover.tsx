@@ -39,32 +39,20 @@ import {
 import { TopBar } from '../components/TopBar';
 import { EmptyState } from '../components/EmptyState';
 import { KindBadge } from '../components/KindBadge';
-import { useTheme, type Kind } from '../lib/theme';
+import { useTheme } from '../lib/theme';
 import { useAuth } from '../lib/auth';
-import { trpc } from '../lib/trpc';
+import { trpc, type RouterOutput } from '../lib/trpc';
 import { useCachedQuery } from '../lib/cache';
 import { useThemedRefreshControl } from '../components/PullToRefresh';
 
-interface AnnouncementVenue {
-  id: string;
-  name: string;
-  city: string | null;
-  stateRegion?: string | null;
-}
-
-interface AnnouncementItem {
-  id: string;
-  kind: Kind;
-  headliner: string;
-  productionName: string | null;
-  showDate: string;
-  venue: AnnouncementVenue;
-  ticketUrl: string | null;
-}
-
-interface FeedShape {
-  items: AnnouncementItem[];
-}
+// Derive feed shapes from the tRPC vanilla client. The three "followed*"
+// feeds and `nearbyFeed` all return `items` of the same row shape — but the
+// nearby variant additionally exposes `hasRegions`, so cache the full server
+// payload (including cursors and the regions flag) per query.
+type UtilsClient = ReturnType<typeof trpc.useUtils>['client'];
+type FollowedFeed = RouterOutput<UtilsClient['discover']['followedFeed']['query']>;
+type NearbyFeed = RouterOutput<UtilsClient['discover']['nearbyFeed']['query']>;
+type AnnouncementItem = FollowedFeed['items'][number];
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
@@ -83,30 +71,21 @@ export default function DiscoverScreen(): React.JSX.Element {
   const { token } = useAuth();
   const utils = trpc.useUtils();
 
-  const followedVenuesQuery = useCachedQuery<FeedShape>({
+  const followedVenuesQuery = useCachedQuery<FollowedFeed>({
     queryKey: ['mobile', 'discover', 'followedFeed'],
-    queryFn: async () => {
-      const data = await utils.client.discover.followedFeed.query({ limit: 12 });
-      return { items: data.items as unknown as AnnouncementItem[] };
-    },
+    queryFn: () => utils.client.discover.followedFeed.query({ limit: 12 }),
     enabled: Boolean(token),
   });
 
-  const followedArtistsQuery = useCachedQuery<FeedShape>({
+  const followedArtistsQuery = useCachedQuery<FollowedFeed>({
     queryKey: ['mobile', 'discover', 'followedArtistsFeed'],
-    queryFn: async () => {
-      const data = await utils.client.discover.followedArtistsFeed.query({ limit: 12 });
-      return { items: data.items as unknown as AnnouncementItem[] };
-    },
+    queryFn: () => utils.client.discover.followedArtistsFeed.query({ limit: 12 }),
     enabled: Boolean(token),
   });
 
-  const nearbyQuery = useCachedQuery<FeedShape>({
+  const nearbyQuery = useCachedQuery<NearbyFeed>({
     queryKey: ['mobile', 'discover', 'nearbyFeed'],
-    queryFn: async () => {
-      const data = await utils.client.discover.nearbyFeed.query({ perRegionLimit: 8 });
-      return { items: data.items as unknown as AnnouncementItem[] };
-    },
+    queryFn: () => utils.client.discover.nearbyFeed.query({ perRegionLimit: 8 }),
     enabled: Boolean(token),
   });
 
@@ -197,7 +176,7 @@ export default function DiscoverScreen(): React.JSX.Element {
               icon={<Calendar size={13} color={colors.ink} strokeWidth={2} />}
               items={nearby}
               emptyHint={
-                nearbyQuery.data && (nearbyQuery.data as unknown as { hasRegions?: boolean }).hasRegions === false
+                nearbyQuery.data && nearbyQuery.data.hasRegions === false
                   ? 'Add a region in Me → Region to see shows in your area.'
                   : 'No upcoming announcements in your saved regions yet.'
               }
