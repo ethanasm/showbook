@@ -61,6 +61,10 @@ services:
       target: prod
     container_name: showbook-prod-web
     restart: unless-stopped
+    # Give pg-boss room to release in-flight jobs on SIGTERM before
+    # docker escalates to SIGKILL. instrumentation.ts caps its own
+    # stop at 8 s so flushObservability has time to drain after.
+    stop_grace_period: 30s
     env_file:
       - path: .env.prod
         required: true

@@ -5,7 +5,7 @@ export async function register() {
   // causes the edge build to try to resolve `fs`.
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     const { logger, flushObservability } = await import('@showbook/observability');
-    const { startBoss, registerAllJobs } = await import('@showbook/jobs');
+    const { startBoss, stopBoss, registerAllJobs } = await import('@showbook/jobs');
 
     try {
       const boss = await startBoss();
@@ -26,5 +26,32 @@ export async function register() {
       );
       await flushObservability();
     }
+
+    // Without graceful shutdown, jobs that are mid-handler when the
+    // container dies stay in `pgboss.job` with state='active' until
+    // expire-maintenance times them out (queue `expireInSeconds`, set
+    // in registry.ts). For users of the Spotify importer that meant
+    // the per-artist "still importing" bullet stayed lit for minutes
+    // after each deploy that landed during their import. `boss.stop`
+    // with `graceful: true` waits for in-flight handlers to finish,
+    // then `failWip()` releases anything still running so it retries
+    // immediately on next boot rather than waiting for expire.
+    //
+    // Docker's default SIGTERM-to-SIGKILL grace is 10 s; we cap at
+    // 8 s so flushObservability still has time to drain. The compose
+    // files set `stop_grace_period: 30s` to give us headroom.
+    const shutdown = async (signal: NodeJS.Signals) => {
+      logger.info({ event: 'pgboss.shutdown.start', signal }, 'pg-boss shutdown initiated');
+      try {
+        await stopBoss({ graceful: true, timeout: 8000 });
+        logger.info({ event: 'pgboss.shutdown.complete' }, 'pg-boss stopped');
+      } catch (err) {
+        logger.error({ event: 'pgboss.shutdown.failed', err }, 'pg-boss shutdown failed');
+      }
+      await flushObservability();
+    };
+
+    process.once('SIGTERM', () => void shutdown('SIGTERM'));
+    process.once('SIGINT', () => void shutdown('SIGINT'));
   }
 }

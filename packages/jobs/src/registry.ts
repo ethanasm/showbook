@@ -37,6 +37,55 @@ const STALE_SCHEDULES = [
   'notifications/weekly-digest',
 ] as const;
 
+// pg-boss v10 ignores constructor-level retry/expiration options when
+// `createQueue` runs without them (see plans.js create_queue: it INSERTs
+// the queue row directly from the options arg). The previous setup
+// relied on the constructor's `expireInHours: 23` and got the pg-boss
+// default of 15 min instead — so when the web container was killed
+// mid-job, the orphaned active row sat there for the full 15 min before
+// expire-maintenance moved it to retry. We now set queue-level options
+// explicitly and `updateQueue` so existing prod queues pick up the new
+// values on next boot.
+type QueueOptions = {
+  expireInSeconds: number;
+  retryLimit: number;
+  retryDelay: number;
+  retryBackoff: boolean;
+};
+
+// Fast user-triggered ingests (Spotify import, follow, refresh-now). A
+// killed handler should recover within minutes, not 15+.
+const FAST_INGEST: QueueOptions = {
+  expireInSeconds: 300,
+  retryLimit: 3,
+  retryDelay: 60,
+  retryBackoff: true,
+};
+
+// Long batch jobs (digest, backfills, scrapers, weekly discover ingest).
+// Half-hour ceiling fits the longest observed runs with margin and is
+// short enough that an orphan recovers same-day.
+const LONG_BATCH: QueueOptions = {
+  expireInSeconds: 1800,
+  retryLimit: 2,
+  retryDelay: 300,
+  retryBackoff: true,
+};
+
+const QUEUE_OPTIONS: Record<string, QueueOptions> = {
+  'shows/nightly': LONG_BATCH,
+  'enrichment/setlist-retry': LONG_BATCH,
+  'discover/ingest': LONG_BATCH,
+  'discover/ingest-venue': FAST_INGEST,
+  'discover/ingest-performer': FAST_INGEST,
+  'discover/ingest-region': FAST_INGEST,
+  'notifications/daily-digest': LONG_BATCH,
+  'backfill/performer-images': LONG_BATCH,
+  'backfill/venue-photos': LONG_BATCH,
+  'prune/orphan-catalog': LONG_BATCH,
+  'health/morning-check': LONG_BATCH,
+};
+
 const log = child({ component: 'jobs.registry' });
 
 /**
@@ -310,7 +359,12 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   }
 
   for (const name of Object.values(JOBS)) {
-    await boss.createQueue(name);
+    const opts = { name, ...QUEUE_OPTIONS[name] };
+    await boss.createQueue(name, opts);
+    // create_queue is ON CONFLICT DO NOTHING, so existing queues keep
+    // whatever options they were originally created with. Force-apply
+    // the current options every boot.
+    await boss.updateQueue(name, opts);
   }
 
   await boss.work(JOBS.SHOWS_NIGHTLY, showsNightlyHandler);
