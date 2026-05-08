@@ -154,12 +154,13 @@ test("getHeadlinerId: returns the picked performer's id", () => {
 
 // ── getHeadlinerImageUrl ─────────────────────────────────────────────────
 
-test("getHeadlinerImageUrl: production show returns null", () => {
+test("getHeadlinerImageUrl: production show ignores performer image, uses coverImageUrl", () => {
   assert.equal(
     getHeadlinerImageUrl(
       show({
         kind: "theatre",
         productionName: "Hamilton",
+        coverImageUrl: "http://poster.png",
         showPerformers: [
           {
             role: "headliner",
@@ -169,7 +170,35 @@ test("getHeadlinerImageUrl: production show returns null", () => {
         ],
       }),
     ),
+    "http://poster.png",
+  );
+});
+
+test("getHeadlinerImageUrl: production show with no coverImageUrl returns null", () => {
+  assert.equal(
+    getHeadlinerImageUrl(
+      show({
+        kind: "theatre",
+        productionName: "Hamilton",
+        showPerformers: [],
+      }),
+    ),
     null,
+  );
+});
+
+test("getHeadlinerImageUrl: concert falls back to coverImageUrl when performer has none", () => {
+  assert.equal(
+    getHeadlinerImageUrl(
+      show({
+        kind: "concert",
+        coverImageUrl: "http://event.png",
+        showPerformers: [
+          { role: "headliner", sortOrder: 0, performer: { id: "p1", name: "Main" } },
+        ],
+      }),
+    ),
+    "http://event.png",
   );
 });
 

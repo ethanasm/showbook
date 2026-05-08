@@ -18,6 +18,7 @@ export interface ShowPerformerLike {
 export interface ShowLike {
   kind?: string;
   productionName?: string | null;
+  coverImageUrl?: string | null;
   showPerformers: ShowPerformerLike[];
 }
 
@@ -49,8 +50,14 @@ export function getHeadlinerId(show: ShowLike): string | undefined {
 }
 
 export function getHeadlinerImageUrl(show: ShowLike): string | null {
-  if (isProductionShow(show)) return null;
-  return pickHeadliner(show)?.performer.imageUrl ?? null;
+  // Theatre/festival productions don't have a headliner performer record —
+  // their poster art lives on the show row itself (`coverImageUrl`,
+  // populated from the Ticketmaster event/attraction at create time or by
+  // the `backfill-show-cover-images` job).
+  if (isProductionShow(show)) return show.coverImageUrl ?? null;
+  return (
+    pickHeadliner(show)?.performer.imageUrl ?? show.coverImageUrl ?? null
+  );
 }
 
 export function getSupport(show: ShowLike): string[] {
