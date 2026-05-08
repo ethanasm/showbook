@@ -16,6 +16,7 @@ export interface ShowPerformerLike {
 }
 
 export interface ShowLike {
+  id?: string;
   kind?: string;
   productionName?: string | null;
   coverImageUrl?: string | null;
@@ -51,10 +52,15 @@ export function getHeadlinerId(show: ShowLike): string | undefined {
 
 export function getHeadlinerImageUrl(show: ShowLike): string | null {
   // Theatre/festival productions don't have a headliner performer record —
-  // their poster art lives on the show row itself (`coverImageUrl`,
-  // populated from the Ticketmaster event/attraction at create time or by
-  // the `backfill-show-cover-images` job).
-  if (isProductionShow(show)) return show.coverImageUrl ?? null;
+  // their poster art lives on the show row itself. Route through the
+  // self-healing `/api/show-cover/<id>` proxy so the cover lazy-resolves
+  // on first request rather than waiting for the nightly backfill job
+  // (mirrors the `/api/performer-photo/<id>` pattern). The proxy serves
+  // the persisted URL when present, falls back to a TM lookup, and
+  // persists what it finds.
+  if (isProductionShow(show)) {
+    return show.id ? `/api/show-cover/${show.id}` : (show.coverImageUrl ?? null);
+  }
   return (
     pickHeadliner(show)?.performer.imageUrl ?? show.coverImageUrl ?? null
   );
