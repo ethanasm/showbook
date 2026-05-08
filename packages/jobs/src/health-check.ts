@@ -7,6 +7,7 @@ import {
   generateHealthSummaryPreamble,
 } from '@showbook/api';
 import { renderHealthSummary } from '@showbook/emails';
+import { db, sql } from '@showbook/db';
 import { child } from '@showbook/observability';
 import {
   checkFailedJobs,
@@ -132,16 +133,46 @@ export interface ResendLike {
 
 /**
  * Calendar date `d` falls on in America/New_York, formatted YYYY-MM-DD.
- * Used to derive a per-day idempotency key for the Resend send so that
- * a pg-boss retry, a duplicate cron firing, or any other accidental
- * re-run within the same ET day collapses into a single delivered
- * email rather than spamming the inbox.
+ * Used as the dedup key for the morning email so any accidental re-run
+ * within the same ET day (pg-boss retry, duplicate cron firing, two
+ * boss instances racing) collapses into a single delivery.
  */
 function etDateString(d: Date): string {
   const local = new Date(
     d.toLocaleString('en-US', { timeZone: 'America/New_York' }),
   );
   return local.toISOString().split('T')[0]!;
+}
+
+/**
+ * Atomically claim the right to send today's morning summary. Inserts
+ * a row into `health_summary_log` keyed on the ET calendar date; the PK
+ * + ON CONFLICT DO NOTHING serialises concurrent runs through Postgres.
+ *
+ * Returns true when this caller won the race and should send the email,
+ * false when another run already claimed today (in which case the
+ * caller must skip the send — the winning run is already on the way).
+ *
+ * Why this exists despite the Resend idempotency key on `emails.send`:
+ * the prior fix (PR #103) relied on Resend collapsing concurrent
+ * idempotent requests, but in prod we observed two cron firings ~500ms
+ * apart both succeeding with the same key and Resend shipping both
+ * messages. Deduping at the DB before we ever call Resend is the
+ * correct boundary; the idempotency key stays as belt-and-braces.
+ */
+async function claimDailySend(etDate: string): Promise<boolean> {
+  const result = await db.execute(sql`
+    INSERT INTO health_summary_log (et_date)
+    VALUES (${etDate})
+    ON CONFLICT (et_date) DO NOTHING
+    RETURNING et_date
+  `);
+  // postgres-js returns the rows array directly; node-postgres wraps in
+  // { rows }. Existing checks.ts handles both shapes the same way.
+  const rows =
+    (result as unknown as { rows?: unknown[] }).rows ??
+    (result as unknown as unknown[]);
+  return Array.isArray(rows) && rows.length > 0;
 }
 
 function getResend(): ResendLike | null {
@@ -232,52 +263,80 @@ export async function runHealthCheck(
       'Health summary email skipped (RESEND_API_KEY or ADMIN_EMAILS unset)',
     );
   } else {
+    const etDate = etDateString(now);
+    let claimed = false;
     try {
-      // Generate the LLM preamble before render. Catches its own errors
-      // and returns null, so a Groq blip never blocks the email.
-      const preambleFn = opts.generatePreamble ?? generateHealthSummaryPreamble;
-      let preamble: string | null = null;
+      claimed = await claimDailySend(etDate);
+    } catch (err) {
+      // A failed claim attempt should not silently send anyway — that's
+      // the duplicate this guard exists to prevent. Log and skip; the
+      // operator will see `health.check.email.failed` and can re-run
+      // manually if needed.
+      log.error(
+        { err, event: 'health.check.email.failed', etDate, reason: 'claim_failed' },
+        'Failed to claim daily send slot; skipping email',
+      );
+    }
+
+    if (!claimed) {
+      // Another run already owns today's send. This is the path the
+      // duplicate cron firings now take instead of double-sending.
+      log.info(
+        {
+          event: 'health.check.email.skipped_duplicate',
+          etDate,
+          recipientCount: recipients.length,
+        },
+        'Health summary email skipped (already claimed for this ET day)',
+      );
+    } else {
       try {
-        preamble = await preambleFn({ status, checks });
+        // Generate the LLM preamble before render. Catches its own errors
+        // and returns null, so a Groq blip never blocks the email.
+        const preambleFn = opts.generatePreamble ?? generateHealthSummaryPreamble;
+        let preamble: string | null = null;
+        try {
+          preamble = await preambleFn({ status, checks });
+        } catch (err) {
+          log.warn(
+            { err, event: 'health.check.preamble.failed' },
+            'Preamble generation failed; falling back to deterministic email',
+          );
+        }
+
+        const html = await renderHealthSummary({
+          status,
+          checks,
+          runAt: now,
+          appUrl: getAppUrl(),
+          preamble,
+        });
+        const subject = formatSubject(status, failCount, warnCount);
+        // Idempotency key derived from the same ET calendar date as the
+        // claim above. The DB row is the primary dedup boundary; the
+        // Resend key is defence in depth in case a future bug ever
+        // manages to issue the send twice without a fresh DB claim
+        // (e.g. a retry after the first response was lost).
+        const idempotencyKey = `health-summary-${etDate}`;
+        const sendResult = await resend.emails.send(
+          {
+            from: getFromAddress(),
+            to: recipients,
+            subject,
+            html,
+          },
+          { idempotencyKey },
+        );
+        if (sendResult.error) {
+          throw new Error(sendResult.error.message);
+        }
+        emailSent = true;
       } catch (err) {
-        log.warn(
-          { err, event: 'health.check.preamble.failed' },
-          'Preamble generation failed; falling back to deterministic email',
+        log.error(
+          { err, event: 'health.check.email.failed' },
+          'Failed to send health summary email',
         );
       }
-
-      const html = await renderHealthSummary({
-        status,
-        checks,
-        runAt: now,
-        appUrl: getAppUrl(),
-        preamble,
-      });
-      const subject = formatSubject(status, failCount, warnCount);
-      // Idempotency key derived from the ET calendar date so any
-      // accidental re-run within the same day (pg-boss retry of a
-      // failed handler, the cron firing twice during a deploy, two
-      // workers competing) collapses to a single delivery at the
-      // Resend layer. Resend retains the prior response for 24h.
-      const idempotencyKey = `health-summary-${etDateString(now)}`;
-      const sendResult = await resend.emails.send(
-        {
-          from: getFromAddress(),
-          to: recipients,
-          subject,
-          html,
-        },
-        { idempotencyKey },
-      );
-      if (sendResult.error) {
-        throw new Error(sendResult.error.message);
-      }
-      emailSent = true;
-    } catch (err) {
-      log.error(
-        { err, event: 'health.check.email.failed' },
-        'Failed to send health summary email',
-      );
     }
   }
 

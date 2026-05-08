@@ -28,6 +28,7 @@ type Call = { name: string; opts: unknown };
 function makeFakeBoss() {
   const created: Call[] = [];
   const updated: Call[] = [];
+  const workCalls: Array<{ name: string }> = [];
   const fakeBoss = {
     unschedule: async () => {},
     createQueue: async (name: string, opts: unknown) => {
@@ -36,10 +37,13 @@ function makeFakeBoss() {
     updateQueue: async (name: string, opts: unknown) => {
       updated.push({ name, opts });
     },
-    work: async () => 'worker-id',
+    work: async (name: string) => {
+      workCalls.push({ name });
+      return 'worker-id';
+    },
     schedule: async () => {},
   };
-  return { fakeBoss, created, updated };
+  return { fakeBoss, created, updated, workCalls };
 }
 
 describe('registerAllJobs queue options', () => {
@@ -120,5 +124,37 @@ describe('registerAllJobs queue options', () => {
       assert.ok(opts, `${c.name}: opts must be defined (omitting them re-introduces the 15-min default)`);
       assert.equal(typeof opts.expireInSeconds, 'number', `${c.name}: expireInSeconds is set explicitly`);
     }
+  });
+
+  it('is idempotent against the same boss instance — second call adds zero workers', async () => {
+    // Regression for the prod symptom: every scheduled cron firing
+    // produces two `job.start` events with two distinct jobIds, only
+    // one DB row per firing, "missing" jobIds absent from
+    // `pgboss.archive`. Shape matches a doubled `boss.work` worker
+    // pool. Whatever invokes `register()` twice in prod, the guard
+    // keeps the second call from doubling the worker count.
+    const { fakeBoss, workCalls, created, updated } = makeFakeBoss();
+    await registerAllJobs(fakeBoss as never);
+    const workCallsAfterFirst = workCalls.length;
+    const createdAfterFirst = created.length;
+    const updatedAfterFirst = updated.length;
+
+    await registerAllJobs(fakeBoss as never);
+
+    assert.equal(
+      workCalls.length,
+      workCallsAfterFirst,
+      'second registerAllJobs must not call boss.work again',
+    );
+    assert.equal(
+      created.length,
+      createdAfterFirst,
+      'second registerAllJobs must not re-create queues',
+    );
+    assert.equal(
+      updated.length,
+      updatedAfterFirst,
+      'second registerAllJobs must not re-update queues',
+    );
   });
 });

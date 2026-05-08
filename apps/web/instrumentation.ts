@@ -1,3 +1,12 @@
+// Counts how many times Next.js invokes `register()` in this process.
+// Prod logs in 2026-05 showed every scheduled cron firing two
+// `job.start` events with two distinct jobIds — strongly suggesting
+// `boss.work(name, handler)` was registered twice per queue. The
+// counter (logged on every call as `pgboss.register.invoked`) lets
+// Axiom answer "is Next.js calling this twice in the same process?"
+// independently of whether `registerAllJobs` itself dedupes.
+let registerCallCount = 0;
+
 export async function register() {
   // Gate node-only imports inside the `=== 'nodejs'` form so Next's
   // bundler statically excludes `pg` / `pg-boss` from the edge bundle.
@@ -6,6 +15,12 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     const { logger, flushObservability } = await import('@showbook/observability');
     const { startBoss, stopBoss, registerAllJobs } = await import('@showbook/jobs');
+
+    registerCallCount += 1;
+    logger.info(
+      { event: 'pgboss.register.invoked', call: registerCallCount, runtime: process.env.NEXT_RUNTIME },
+      `instrumentation.register() invocation #${registerCallCount}`,
+    );
 
     try {
       const boss = await startBoss();
