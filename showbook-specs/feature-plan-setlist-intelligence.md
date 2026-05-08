@@ -60,13 +60,24 @@ artists with multiple followed users.
 CREATE TABLE "tour_setlists" (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   performer_id      uuid NOT NULL REFERENCES performers(id) ON DELETE CASCADE,
-  tour_name         text,                        -- e.g. "Eras Tour"; nullable when artist tags inconsistently
+  -- setlist.fm exposes both `tour.name` and (in the URL slug) a stable
+  -- per-tour ID. We capture both: the ID is the join key for prediction
+  -- bucketing, the name is the display label. When setlist.fm hasn't
+  -- tagged a setlist with a tour both stay null.
+  tour_id           text,
+  tour_name         text,
+  -- Some artists slice a tour into named legs ("North America Leg 2").
+  -- We store the leg label when present; one tour ID, multiple legs.
+  tour_leg          text,
   performance_date  date NOT NULL,
-  venue_name_raw    text,                        -- not always matchable to our venues table
+  venue_name_raw    text,
   city              text,
   country_code      text,
   setlistfm_id      text NOT NULL,
   setlist           jsonb NOT NULL,              -- PerformerSetlist shape
+  -- Number of songs in the setlist; denormalized so the prediction
+  -- pipeline doesn't have to re-parse the JSON for every weight calc.
+  song_count        smallint NOT NULL,
   fetched_at        timestamp NOT NULL DEFAULT now()
 );
 
@@ -75,7 +86,7 @@ CREATE UNIQUE INDEX tour_setlists_setlistfm_unique
 CREATE INDEX tour_setlists_performer_date_idx
   ON tour_setlists (performer_id, performance_date DESC);
 CREATE INDEX tour_setlists_performer_tour_idx
-  ON tour_setlists (performer_id, tour_name, performance_date DESC);
+  ON tour_setlists (performer_id, tour_id, performance_date DESC);
 ```
 
 Retention: prune entries older than 18 months whose performer has
@@ -133,7 +144,16 @@ CREATE TABLE "setlist_song_appearances" (
   section_index   smallint NOT NULL,
   song_index      smallint NOT NULL,
   is_encore       boolean NOT NULL DEFAULT false,
-  -- For "tour debut" / rarity scoring later:
+  -- Role within the setlist; computed at fill time so the prediction
+  -- pipeline can group by role without re-walking the setlist JSON.
+  -- 'opener'   = first song of the first non-encore section
+  -- 'closer'   = last song before any encore
+  -- 'encore_open' = first song of the encore section
+  -- 'encore_close' = last song of the entire setlist
+  -- 'core'     = everything else
+  role            text NOT NULL DEFAULT 'core',
+  -- For "tour debut" / rarity scoring + bucketing:
+  tour_id         text,
   tour_name       text
 );
 
@@ -143,6 +163,9 @@ CREATE INDEX appearances_performer_date_idx
   ON setlist_song_appearances (performer_id, performance_date DESC);
 CREATE INDEX appearances_show_idx
   ON setlist_song_appearances (show_id) WHERE show_id IS NOT NULL;
+-- Hot path for prediction: pull a performer's recent corpus by tour.
+CREATE INDEX appearances_performer_tour_date_idx
+  ON setlist_song_appearances (performer_id, tour_id, performance_date DESC);
 ```
 
 This denormalization is the trick that makes every stat below cheap.
@@ -184,36 +207,99 @@ the order of "songs × users" rows.
 
 ### 3a. `enrichment/setlist-corpus-fill`
 
-Lazy-fills `tour_setlists` for an artist when needed.
+Lazy-fills `tour_setlists` for an artist when prediction needs it.
+
+The setlist.fm endpoint we lean on is
+`GET /1.0/artist/{mbid}/setlists?p=<page>` (paginated, **20 setlists
+per page, newest first**). The existing client at
+`packages/api/src/setlistfm.ts` already wraps `searchArtist`,
+`searchSetlist` (single artist + date) and `getUserAttended` — we add
+one more public function:
 
 ```ts
-registerJob('enrichment/setlist-corpus-fill', async ({ performerId, sinceDate }) => {
-  const performer = await db.query.performers.findFirst({ where: eq(performers.id, performerId) });
+// packages/api/src/setlistfm.ts
+export async function fetchArtistSetlists(
+  artistMbid: string,
+  opts: { maxPages?: number; sinceDate?: string } = {},
+): Promise<SetlistFmSetlist[]> {
+  // Walk pages until we've covered `sinceDate` or hit `maxPages`.
+  // setlist.fm's `tour.id` is NOT in the JSON response, only the URL —
+  // we synthesize a stable id from the slug below. tour.name is in JSON.
+}
+```
+
+Tour id synthesis: setlist.fm exposes the per-tour identifier in URLs
+of the form `…?tour=3bddb874` (visible on the website, not in the
+JSON payload). To avoid scraping HTML, we synthesize a stable id from
+`(performerId, normalizeLower(tour.name))` — collisions are
+acceptable because the same artist re-using a tour name is itself
+the equivalence we want.
+
+The job:
+
+```ts
+registerJob('enrichment/setlist-corpus-fill', async ({ performerId, mode }) => {
+  const performer = await db.query.performers.findFirst({
+    where: eq(performers.id, performerId),
+  });
   if (!performer?.musicbrainzId) {
     log.info({ event: 'corpus.fill.no_mbid', performerId }, 'Skip: no MBID');
     return;
   }
-  // setlist.fm: GET /artist/{mbid}/setlists?p=<page>
-  // Already wrapped in setlistfm.ts — extend to take a since-date filter
-  // on the client side (the API doesn't support date filtering directly).
-  const recent = await fetchRecentSetlists(performer.musicbrainzId, sinceDate, /*maxPages=*/3);
-  for (const sl of recent) {
-    await upsertTourSetlist({ performerId, ...sl });
+
+  // Pull windows differ by mode — see triggers below for which gets used:
+  //   'predict'  : 3 pages (60 setlists), most recent — covers the active tour
+  //   'deep'     : 10 pages (200 setlists), all tours — for stats/Songs page
+  //   'refresh'  : 1 page (20 setlists), used by daily cron to keep current
+  const maxPages = mode === 'deep' ? 10 : mode === 'refresh' ? 1 : 3;
+  const raw = await fetchArtistSetlists(performer.musicbrainzId, { maxPages });
+
+  for (const sl of raw) {
+    const songCount = countSongs(sl);
+    if (songCount === 0) continue;             // skip setlist.fm placeholder rows
+
+    const tourName = sl.tour?.name ?? null;
+    const tourId   = tourName
+      ? synthesizeTourId(performerId, tourName)  // stable hash key
+      : null;
+
+    await upsertTourSetlist({
+      performerId,
+      tourId,
+      tourName,
+      tourLeg: extractLeg(tourName),           // null unless name has "Leg N"
+      performanceDate: fromSetlistFmDate(sl.eventDate),
+      venueNameRaw: sl.venue?.name,
+      city: sl.venue?.city?.name,
+      countryCode: sl.venue?.city?.country?.code,
+      setlistfmId: sl.id,
+      setlist: mapToPerformerSetlist(sl),
+      songCount,
+    });
   }
-  log.info({
-    event: 'corpus.fill.complete',
-    performerId, fetched: recent.length,
-  });
 });
 ```
 
-Triggers:
-- On user follow of an artist (chain after `discover/ingest-performer`).
+Triggers (unchanged from previous plan unless noted):
+
+- On user follow of an artist → `mode: 'predict'` (chain after
+  `discover/ingest-performer`).
 - On `shows-nightly` for any artist with a `watching` show in the
-  next 30 days (so we have fresh data when the user opens
-  show detail).
+  next 30 days → `mode: 'predict'`.
 - On opening Show detail for a watching show whose performer's
-  corpus is older than 24 hours (UI-triggered, debounced).
+  corpus is older than 24 hours → `mode: 'predict'`, debounced.
+- On opening the **artist Songs page** (new screen) when the
+  corpus is older than 7 days or has <20 setlists → `mode: 'deep'`.
+- Daily cron at 04:45 ET → `mode: 'refresh'` for the top-N
+  performers by user-followed count (cap at 500/day to stay well
+  under setlist.fm's 1440-call default daily quota).
+
+Rate-budget math: setlist.fm's default key allows 1440 calls/day. Our
+two heavy users are: the existing `setlist-retry` and this corpus
+fill. If the latter touches at most 500 artists/day × 1 page each,
+we burn 500 calls; setlist-retry remains the larger consumer. Stay
+on the default tier; if we trip the quota, request the upgrade
+(documented free upgrade path on setlist.fm).
 
 ### 3b. `enrichment/song-index-rebuild` (one-shot + nightly delta)
 
@@ -324,60 +410,327 @@ LIMIT $2;
 Display: "🎯 Rare catch — at your show on Jul 12, [artist] played
 [song] (5% of the tour)."
 
-### 4c. Predicted setlist
+### 4c. Predicted setlist — tour-aware probability model
 
-Look at the last N tour setlists for the performer (default N=10),
-weight by recency, build a song → probability map.
+This is the centerpiece of the feature. The naive "frequency in
+the last 10 setlists" approach (the previous draft of this section)
+breaks for three real-world cases we verified against setlist.fm:
+
+1. **Tour phases** — Sabrina Carpenter's *Short n' Sweet Tour* added
+   "Manchild", "House Tour", and "Tears" to the setlist on
+   Oct 23, 2025 alongside the *Man's Best Friend* deluxe drop. A
+   setlist from March 2025 and one from November 2025 both belong
+   to the same tour, but only one predicts the next show.
+2. **Surprise-song / one-off pollution** — Sabrina's "spin the
+   bottle" segment plays a different cover or rotation song each
+   night; Phish bustouts pull songs back from a 200-show shelf.
+   Naive frequency would surface these as 5–10% predictions; their
+   real probability of a *specific* song on the next night is near
+   zero. They belong in a separate "rotation" pile.
+3. **Variability extremes** — Phish played 185 unique songs in 28
+   shows on Summer Tour 2025. Confidence in any given prediction
+   slot is much lower than for an arena pop tour. The output must
+   convey that, not paper over it.
+
+#### Inputs
+
+The prediction takes a target performer and a target date (the
+user's `watching` show date). It returns a `PredictedSetlist`:
+
+```ts
+export interface PredictedSetlist {
+  // Per-song predictions, sorted by avgPosition.
+  core:      PredictedSong[];   // p ≥ 0.65 — "almost certain"
+  likely:    PredictedSong[];   // 0.35 ≤ p < 0.65
+  wildcards: PredictedSong[];   // 0.10 ≤ p < 0.35 — appeared multiple times recently
+  rotation:  PredictedSong[];   // appeared once in the corpus → "watch for"
+  // Overall confidence in the *whole* prediction (0..1):
+  // - corpus size in the active tour
+  // - intra-tour set-list variance
+  // - recency density
+  confidence: number;
+  sampleSize: number;     // setlists used
+  tourId:     string | null;
+  tourName:   string | null;
+  tourCoverage: 'active_tour' | 'recent_tour' | 'last_year' | 'cold';
+  // Optional spoiler-blur flag — UI hides song titles by default
+  // when this is true, behind a "show me anyway" CTA.
+  spoilerBlurDefault: boolean;
+}
+
+export interface PredictedSong {
+  title: string;
+  songId: string | null;        // null until song-index sees it
+  probability: number;          // 0..1
+  // Where in the show this slot tends to land:
+  role: 'opener' | 'closer' | 'encore_open' | 'encore_close' | 'core';
+  avgPosition: number;          // mean song_index across role
+  encoreProbability: number;    // 0..1 — given played, P(encore)
+  lastPlayedDate: string | null;
+  // Provenance / explainability for the UI:
+  appearancesInWindow: number;
+  windowSize: number;
+  evidence: string;             // human-readable: "12 of last 14 shows"
+}
+```
+
+#### The corpus, in tiers
+
+For a given (performer, target date) we pull setlists from
+`tour_setlists` (and the user's own attended `shows.setlists` —
+both flow through `setlist_song_appearances`) and bucket them:
+
+| Tier | Definition | Weight |
+|------|-----------|--------|
+| **A — current leg** | Same `tour_id`, played within 30 days of the target date | 1.00 |
+| **B — current tour** | Same `tour_id`, played within 180 days of the target date | 0.55 |
+| **C — earlier same tour** | Same `tour_id`, older than 180 days | 0.20 |
+| **D — most recent prior tour** | The previous distinct `tour_id` (last 365 days) | 0.10 |
+| **E — anything else recent** | Any setlist within last 365 days, no other tier match | 0.04 |
+
+Three nuances:
+
+- A setlist from *after* the target date (i.e. the artist played
+  yesterday and you go tomorrow) gets the same Tier-A weight.
+  Setlists *exactly* on the target date are excluded — that's
+  the answer key, not a feature.
+- The "current tour" is whatever tour appears most often in the
+  ±30-day window around the target date. If no tour name is
+  populated by setlist.fm for any setlist (small artists, indie
+  acts), we collapse Tiers A–C into a single "recent" bucket
+  weighted purely by date and tag the prediction as
+  `tourCoverage: 'last_year'`.
+- We never blend across performers — each prediction is performer-
+  scoped. (Festivals are predicted per-headliner.)
+
+#### The probability formula
+
+For each unique song title that appears at least once in the
+corpus, compute four numbers:
+
+```
+W_total  = Σ tier_weight(s) over all setlists s in the corpus
+W_song   = Σ tier_weight(s) over setlists s that contain this song
+N_song   = count of distinct setlists in the corpus that contain
+           this song
+N_recent = count of distinct setlists in Tier A that contain
+           this song
+N_corpus = count of distinct setlists in the corpus
+```
+
+The headline probability with Bayesian smoothing
+(Beta(α=2, β=2) prior):
+
+```
+p = (W_song + α * W_total / N_corpus) / (W_total + (α + β) * W_total / N_corpus)
+```
+
+The smoothing matters for small N: a song that's appeared 3/3
+times in the only 3 recent setlists shouldn't immediately read as
+100% — the model has very little evidence yet. With α=β=2 the
+3-of-3 case lands at ~71% rather than 100%, which is the calibrated
+truth.
+
+Then **two adjustments**:
+
+1. **Active-tour anchor**: if a song appears in ≥80% of Tier A
+   *and* the artist's recent leg started within the last 60 days,
+   floor `p` at 0.85. This catches the post-album-drop case
+   (Sabrina's "Manchild" goes from 0% in March to 100% in
+   November; the model would naturally see this as it accrues
+   evidence, but the floor short-circuits the catch-up window).
+
+2. **One-off suppression**: if `N_song == 1` *and* its single
+   appearance is older than the most recent Tier-A setlist (i.e.
+   the song hasn't shown up since), bucket the song into
+   `rotation` regardless of `p`. This is the "spin the bottle"
+   filter.
+
+#### Position / role assignment
+
+For each song we also pick a most-likely role from
+`setlist_song_appearances.role`:
+
+```
+role = mode_with_threshold(roles_seen, threshold=0.5)
+       || 'core'
+avgPosition = mean(song_index) within that role
+encoreProbability = count(is_encore) / N_song
+```
+
+The display orders songs by `(role_rank, avgPosition)`:
+`opener → core (by avgPosition) → closer → encore_open → encore_close`.
+
+#### Overall confidence
+
+```
+confidence =
+    0.5 * tier_a_density          // 1.0 if ≥6 Tier-A setlists, scaled below
+  + 0.3 * setlist_consistency     // 1.0 if Jaccard mean ≥ 0.75 across tier A
+  + 0.2 * recency_density         // 1.0 if the latest Tier-A setlist is ≤7 days old
+```
+
+`setlist_consistency` is the mean pairwise Jaccard similarity
+between Tier-A setlists. For Sabrina Carpenter on the Short n'
+Sweet Tour this lands around 0.85; for Phish Summer 2025 it's
+around 0.20. That's the signal that does the right thing for
+both: a Phish prediction comes back with `confidence: 0.4`,
+`spoilerBlurDefault: false`, and the UI naturally surfaces a
+short `core` list with a long `wildcards` and `rotation` pile
+("we don't really know — here's what's been rotating").
+
+#### Cold-start fallbacks
+
+| Situation | Behavior |
+|-----------|----------|
+| Artist has 0 corpus setlists | Empty state. Queue an immediate corpus-fill, return `tourCoverage: 'cold'`. |
+| Artist has corpus but no `tour_id` populated | Run the same algorithm with all setlists in the last 365 days; `tourCoverage: 'last_year'`; cap confidence at 0.5. |
+| Artist has corpus from prior tour only (new tour just started) | Use Tier D as the corpus, blend with the artist's Spotify top tracks (§13e once shipped). Cap confidence at 0.4. Show explanatory copy: "New tour — based on top tracks + the last tour." |
+| 1 or 2 Tier-A setlists | Show the prediction but cap confidence at 0.5; show evidence string per song ("seen in 1 of 1 shows so far"). |
+
+#### Code shape
 
 ```ts
 // packages/api/src/setlist-predict.ts
-export async function predictSetlist(performerId: string): Promise<PredictedSetlist> {
-  const recent = await db.query.tourSetlists.findMany({
-    where: eq(tourSetlists.performerId, performerId),
-    orderBy: desc(tourSetlists.performanceDate),
-    limit: 10,
-  });
-  if (recent.length === 0) return { confidence: 0, songs: [] };
+import { addDays, differenceInDays } from 'date-fns';
 
-  // Weight: most recent show = 1.0, oldest = 0.5.
-  const weights = recent.map((_, i) => 1.0 - (0.5 * i / recent.length));
+const TIER_WEIGHTS = {
+  a: 1.0, b: 0.55, c: 0.2, d: 0.1, e: 0.04,
+} as const;
 
-  const totals = new Map<string, { sum: number; orders: number[]; encore: number }>();
-  recent.forEach((sl, i) => {
-    const flat = flattenWithMeta(sl.setlist);
-    for (const [pos, song] of flat.entries()) {
-      const existing = totals.get(song.title) ?? { sum: 0, orders: [], encore: 0 };
-      existing.sum += weights[i];
-      existing.orders.push(pos);
-      if (song.isEncore) existing.encore += weights[i];
-      totals.set(song.title, existing);
+const PRIOR_ALPHA = 2;
+const PRIOR_BETA  = 2;
+
+export async function predictSetlist(input: {
+  performerId: string;
+  targetDate: string;       // YYYY-MM-DD
+}): Promise<PredictedSetlist> {
+  const corpus = await loadCorpus(input);              // joins tour_setlists + own shows
+  if (corpus.setlists.length === 0) return emptyPrediction(input);
+
+  const tier = bucketTiers(corpus.setlists, input.targetDate);
+  const totals = aggregate(tier);                      // per-title W_song, role votes, etc.
+
+  const W_total  = sum(tier.map(t => t.weight));
+  const N_corpus = tier.length;
+  const tierA    = tier.filter(t => t.tier === 'a');
+  const recentLegStart = corpus.activeTour?.firstSeen ?? null;
+
+  const songs: PredictedSong[] = [];
+  for (const [title, t] of totals) {
+    const prior = (PRIOR_ALPHA * W_total) / N_corpus;
+    let p = (t.W_song + prior) / (W_total + (PRIOR_ALPHA + PRIOR_BETA) * W_total / N_corpus);
+
+    // Active-tour anchor.
+    const tierAHits = tierA.filter(s => s.songsLower.has(title.toLowerCase())).length;
+    if (
+      tierA.length >= 3 &&
+      tierAHits / tierA.length >= 0.8 &&
+      recentLegStart &&
+      differenceInDays(new Date(input.targetDate), recentLegStart) <= 60
+    ) {
+      p = Math.max(p, 0.85);
     }
-  });
 
-  const totalWeight = weights.reduce((a, b) => a + b, 0);
-  const songs = [...totals.entries()]
-    .map(([title, t]) => ({
-      title,
-      probability: t.sum / totalWeight,
-      avgOrder: t.orders.reduce((a, b) => a + b, 0) / t.orders.length,
-      encoreProb: t.encore / t.sum,
-    }))
-    .filter(s => s.probability >= 0.4)        // 40%+ inclusion bar
-    .sort((a, b) => a.avgOrder - b.avgOrder); // average ordering
+    songs.push({
+      title, songId: t.songId,
+      probability: p,
+      role: pickRole(t.roles),
+      avgPosition: mean(t.positionsInRole),
+      encoreProbability: t.encoreCount / t.N_song,
+      lastPlayedDate: t.lastPlayedDate,
+      appearancesInWindow: t.N_song,
+      windowSize: N_corpus,
+      evidence: `${t.N_song} of last ${N_corpus} ${t.N_song === 1 ? 'show' : 'shows'}`,
+    });
+  }
+
+  // One-off suppression.
+  const latestTierA = tierA[0]?.performanceDate ?? null;
+  const buckets = bucketByProbability(songs, latestTierA);
 
   return {
-    confidence: Math.min(1, recent.length / 6),
-    sampleSize: recent.length,
-    songs,
+    ...buckets,
+    confidence: computeConfidence(tierA, totals, latestTierA),
+    sampleSize: corpus.setlists.length,
+    tourId: corpus.activeTour?.id ?? null,
+    tourName: corpus.activeTour?.name ?? null,
+    tourCoverage: corpus.coverage,
+    spoilerBlurDefault: corpus.coverage === 'active_tour',
   };
 }
 ```
 
-Display rules:
-- `confidence < 0.3` (fewer than ~2 setlists in the corpus) → "not
-  enough data yet" empty state.
-- Otherwise: ordered list with confidence bars per song; an "encore"
-  pill on songs whose `encoreProb > 0.6`.
+Each helper (`loadCorpus`, `bucketTiers`, `aggregate`, `pickRole`,
+`bucketByProbability`, `computeConfidence`) is its own pure
+function with unit tests. The whole pipeline runs server-side in
+~30ms for a 60-setlist corpus on local dev.
+
+#### Concrete worked examples
+
+**Sabrina Carpenter · Short n' Sweet Tour · target Dec 1, 2025**
+
+Corpus: 28 setlists from Sep 23 – Nov 30, 2025, all
+`tour_id = 'short-n-sweet'`. Setlist consistency ≈ 0.88
+(Jaccard mean on Tier A).
+
+- `core` (≥0.65): "Taste", "Bed Chem", "Espresso", "Please Please
+  Please", "Manchild", "Tears", "Juno", … (~16 songs). All flagged
+  by the active-tour anchor since they're in 100% of post-Oct-23
+  setlists.
+- `likely`: a couple of late-leg adds that haven't fully stabilized.
+- `wildcards`: rare — most slots are stable.
+- `rotation`: the surprise-song slot ("spin the bottle"). The
+  songs that have appeared once each (e.g. "15 Minutes",
+  "Bad Reviews") all land here, not in the headline list.
+- `confidence: 0.92`, `spoilerBlurDefault: true`.
+
+**Phish · Summer Tour 2025 · target Jul 26, 2025**
+
+Corpus: 27 setlists from Jun 20 – Jul 25, 2025.
+Setlist consistency ≈ 0.21.
+
+- `core`: empty or near-empty.
+- `likely`: a handful of frequently-played jam vehicles
+  ("Tweezer", "You Enjoy Myself") at p ≈ 0.45.
+- `wildcards`: 30+ songs with p between 0.10 and 0.35 — the
+  rotating book.
+- `rotation`: 100+ songs — the long tail.
+- `confidence: 0.38`, `spoilerBlurDefault: false`. UI surfaces:
+  "We can't really predict this one — Phish has played 185 unique
+  songs in 27 shows. Here's the rotation."
+
+**Indie act with no tour name and 4 recent setlists**
+
+Coverage falls to `'last_year'`. Confidence capped at 0.5.
+Display still useful — "based on the last 4 shows you'll probably
+hear …" — but the user knows the model is guessing more.
+
+#### Display rules (web + mobile + iPad pane)
+
+- `confidence < 0.25` → render the empty-state copy plus the
+  rotation pile only ("we'll know more closer to showtime").
+- `0.25 ≤ confidence < 0.55` → render `likely` + `wildcards` +
+  `rotation` with a prominent confidence chip.
+- `confidence ≥ 0.55` → render the full structured output:
+  `core` first (with progress bars), then `likely`, then a
+  collapsed "Wildcards" disclosure, then a collapsed "Rotation"
+  disclosure.
+- Each `PredictedSong` row carries the `evidence` string
+  ("12 of last 14 shows") in a tooltip / long-press info, so the
+  prediction is *explainable* — the user can see why we think a
+  song is likely.
+- The encore section in the UI is rendered from the songs whose
+  `role` resolves to `encore_open` / `encore_close` and whose
+  `encoreProbability ≥ 0.5`.
+
+#### Caching
+
+The output of `predictSetlist({ performerId, targetDate })` is
+deterministic for a fixed corpus. Cache server-side keyed by
+`(performerId, targetDate, max(tour_setlists.fetched_at))`. Most
+prediction reads hit the cache; cache invalidates whenever the
+corpus-fill job touches a setlist for the performer.
 
 ### 4d. Setlist diff
 
@@ -1437,3 +1790,132 @@ fallback in §13b/§13e.
 | ISRC drift — Spotify's ISRC for a track sometimes differs from MusicBrainz's | Don't hard-merge on ISRC alone for songs that already have a populated `songs.id`; treat ISRC as a *secondary* index. |
 | 30s preview deprecation | Some tracks already have null `preview_url`; treat as graceful degradation (row hides the play button). Spotify hasn't formally deprecated, but the field has been quietly thinning since 2024. |
 | Cover-art generation cost | Cache covers in R2 keyed by `(playlistId, version)`; regenerate only when the show set changes. |
+
+---
+
+## 14. Setlist.fm research notes (2026-05-04)
+
+Findings from probing setlist.fm directly while designing §4c.
+Recorded here so the prediction implementation has a single
+reference point and so future revisits don't re-test the same
+ground.
+
+### 14a. What the API exposes
+
+- **`GET /1.0/artist/{mbid}/setlists?p=<page>`** — paginated,
+  newest first, **20 setlists per page**. This is the corpus-fill
+  endpoint. Response includes `tour.name` per setlist when the
+  community has tagged the tour; smaller artists frequently lack
+  it.
+- **`GET /1.0/search/setlists`** — supports many filters:
+  `artistMbid`, `date`, `year`, `tourName`, `venueId`, `cityName`,
+  `p`. We use it today only for `(artistMbid, date)` lookups in
+  the post-show enrichment path.
+- **`GET /1.0/venue/{venueId}/setlists`** — paginated venue
+  history. Useful for venue-detail enrichment but not for
+  prediction.
+- **`GET /1.0/setlist/{setlistId}`** — single fetch. Used for
+  refreshes when an `import_suggestions` row points at a setlist
+  the user wants to import as a Show.
+- **`GET /1.0/user/{username}/attended`** — already used by the
+  setlist.fm-attended import flow shipped in #108 / #109.
+
+### 14b. What the API does NOT expose
+
+- **No tour ID in the JSON payload.** The website encodes a stable
+  per-tour ID in URL slugs (`?tour=3bddb874`) but it's not
+  surfaced in the API response. The corpus-fill job synthesizes
+  a stable id from `(performerId, lower(tour.name))` — collisions
+  are intentional (same artist re-using a tour name *is* the
+  equivalence we want).
+- **No aggregated "average setlist of tour" endpoint.** The
+  website renders this stat at
+  `/stats/average-setlist/<artist>.html?tour=<tourId>` but it's
+  HTML-only. We compute the equivalent ourselves from
+  `tour_setlists` — that's exactly what §4c is for, and it's
+  cheap once `setlist_song_appearances` is populated.
+- **No "is this song an opener / encore" tag** beyond the per-set
+  `encore: 1|2|3` boundary. Role detection (`opener` / `closer` /
+  `encore_open` / `encore_close` / `core`) is computed at fill
+  time from song position.
+- **No "song X is from album Y" relation.** Album context comes
+  from Spotify (§13g) when we resolve titles; setlist.fm is
+  song-title-only.
+- **No "tour leg" structure.** Some artists encode legs in the
+  tour name ("North America Leg 2"); we extract those with a
+  regex and store as `tour_setlists.tour_leg`.
+- **No popularity / cover / debut markers.** Covers are sometimes
+  noted in `song.info` as `"Talk Talk cover"` — we already
+  surface this via the existing `setlistFmFromInfo` parsing in
+  the import flow. Tour debuts we detect ourselves from
+  `setlist_song_appearances`.
+
+### 14c. Rate limits
+
+- **Default tier**: 2 req/s, 1440 requests/day.
+- **Upgraded tier** (free, requires posting a request to
+  setlist.fm's forum): 16 req/s, 50,000 requests/day.
+
+The existing client at `packages/api/src/setlistfm.ts:10` enforces
+a 500ms minimum interval (= 2 req/s) which matches the default
+tier exactly. The §3a corpus-fill triggers cap to:
+
+- `predict` mode: 3 pages × 1 call = 3 calls per fill.
+- `deep` mode: 10 pages × 1 call = 10 calls per fill.
+- `refresh` mode: 1 call per artist per day.
+
+For a 500-followed-artist user, daily refresh consumes 500 calls,
+leaving 940 of the 1440-call budget for setlist-retry +
+on-demand predict mode. Headroom is acceptable; if it gets
+tight, request the upgrade.
+
+### 14d. Tour data quality observed
+
+| Artist | Tour tagging | Predict-friendly? | Notes |
+|--------|-------------|-------------------|-------|
+| Sabrina Carpenter — Short n' Sweet Tour | High | Yes | Tour name consistent across legs. Album-drop on Oct 23, 2025 expanded the setlist by 3 songs; algorithm's active-tour anchor handles it. |
+| Coldplay — Music of the Spheres | High | Yes | Multi-year tour with a stable core; minor variation per leg. |
+| Phish — Summer Tour 2025 | High | Partial | Tour name is correct, but the *concept* of a predicted setlist is weak (185 unique / 28 shows). Confidence = 0.38; UI surfaces this honestly. |
+| Pearl Jam — Dark Matter | High | Yes | "Three-songs-rotate-each-night" pattern within a stable core; algorithm correctly buckets the rotators into `wildcards` rather than `core`. |
+| Indie act on a one-off run | Often null | Partial | Falls back to last-365-days bucket; confidence capped at 0.5. |
+| Festival headliner | Varies | Yes | Festival sets are usually a "greatest hits" subset of the artist's main tour; we use the artist's own tour corpus. |
+
+### 14e. Alternative / complementary aggregation sources
+
+Each band-specific community runs its own setlist database. We
+**do not** integrate any of these in v1 — setlist.fm is the
+single source — but they're documented so the next iteration can
+evaluate.
+
+| Source | Coverage | API? | Use case |
+|--------|----------|------|----------|
+| **Phish.net** | Phish only | Yes (free, registered) | Gap charts, jam charts, debut tracking. Best Phish data. Could swap in for Phish-only flows if jam-band UX warrants. |
+| **Phantasy Tour** | Phish + similar jam acts | No public API | Aggregated jam-band stats; HTML-only. |
+| **MusicBrainz** | Recordings + works | Yes | Already in our stack via MBID. Doesn't store live setlists. |
+| **Last.fm** | Listener-side scrobbles | Yes | Track popularity + similar-artist; useful for §13e but not for live setlist prediction. |
+| **ConcertArchives** | All concerts | No public API | Smaller dataset than setlist.fm; not worth a separate integration. |
+| **Wikipedia tour articles** | Major tours only | Via Wikidata | Tour-level metadata (legs, dates, venues) when present. Worth a probe for `tour_setlists.tour_leg` in a later phase. |
+
+### 14f. Probe checklist before shipping §4c
+
+Before turning the predicted-setlist UI on for real users,
+manually verify the algorithm's output against five real artists
+with different setlist personalities:
+
+1. **Sabrina Carpenter** — should produce confidence ≥ 0.85 and
+   a near-complete `core`.
+2. **Phish** — should produce confidence ≤ 0.45 and most songs in
+   `wildcards` / `rotation`.
+3. **Pearl Jam** — mid-confidence (~0.7), with 4–5 known rotators
+   correctly placed in `likely` not `core`.
+4. **An indie act with sparse setlist.fm coverage** — the cold
+   fallback path; output should still be useful.
+5. **A new tour just kicked off (≤ 3 setlists)** — should cap
+   confidence at 0.5 and lean on prior tour + Spotify top tracks
+   when available.
+
+The eval harness lives at `scripts/eval-setlist-predictor.ts`.
+Outputs a JSON table comparing predicted core vs. actual played
+for the most recent N nights of each artist; we want
+`P(actual ∈ core ∪ likely)` ≥ 80% for stable-tour acts and
+graceful degradation (no surprise 100%-claims) for variable acts.
