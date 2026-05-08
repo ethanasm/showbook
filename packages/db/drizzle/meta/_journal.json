@@ -218,6 +218,13 @@
       "when": 1789432000000,
       "tag": "0030_show_cover_image",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1789518400000,
+      "tag": "0031_health_summary_log",
+      "breakpoints": true
     }
   ]
 }

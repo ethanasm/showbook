@@ -11,3 +11,4 @@ export * from './media';
 export * from './relations';
 export * from './auth';
 export * from './scrape-runs';
+export * from './health-summary-log';
