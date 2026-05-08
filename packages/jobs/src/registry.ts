@@ -348,7 +348,41 @@ async function notificationsDailyDigestHandler(jobs: PgBoss.Job[]) {
   }
 }
 
+// Guard so a second invocation of `registerAllJobs` against the same
+// boss instance is a no-op rather than re-registering every queue's
+// worker on top of the existing one. Empirically (Axiom over
+// 2026-05-01..05-08), every scheduled cron in prod fires two
+// `job.start` events with two distinct jobIds — but only one row exists
+// in `pgboss.job` per firing, and the "missing" jobIds are absent from
+// `pgboss.archive` too. The shape matches "two `boss.work(name,
+// handler)` workers polling the same queue, each receiving the same DB
+// row through separate fetches." `boss.work` does not de-dupe by name,
+// so a second `registerAllJobs` call would silently add a parallel
+// worker for every queue.
+//
+// We don't yet know what's invoking `register()` (and therefore
+// `registerAllJobs`) twice in the prod Next.js process — single
+// container, single `pgboss.started` event per restart. The guard
+// closes the bug regardless of the trigger and the
+// `pgboss.register.duplicate` event surfaces the second call to Axiom
+// so we can keep hunting the cause.
+//
+// The guard is keyed on the boss instance (WeakSet, not a module-level
+// boolean) so each test that constructs a fake boss starts fresh. In
+// prod `getBoss()` returns a process-wide singleton, so subsequent
+// `register()` invocations against that same instance hit the guard.
+const REGISTERED_INSTANCES = new WeakSet<object>();
+
 export async function registerAllJobs(boss: PgBoss): Promise<void> {
+  if (REGISTERED_INSTANCES.has(boss as unknown as object)) {
+    log.warn(
+      { event: 'pgboss.register.duplicate' },
+      'registerAllJobs called more than once against this boss instance; second call ignored',
+    );
+    return;
+  }
+  REGISTERED_INSTANCES.add(boss as unknown as object);
+
   for (const stale of STALE_SCHEDULES) {
     try {
       await boss.unschedule(stale);
