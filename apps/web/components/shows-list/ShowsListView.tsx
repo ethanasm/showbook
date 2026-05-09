@@ -702,6 +702,14 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
           sourceRefs = { setlistfm: { setlistId: ticket.setlistId } };
         } else if (ticket.orderId) {
           sourceRefs = { eventbrite: { orderId: ticket.orderId, eventId: ticket.eventId } };
+        } else if (ticket.gmailMessageId) {
+          // Persisted so the next scan can dedup against this message
+          // before paying for another LLM call (P4 cross-scan dedup).
+          sourceRefs = {
+            gmail: true,
+            gmailMessageId: ticket.gmailMessageId,
+            scanAt: new Date().toISOString(),
+          };
         } else {
           sourceRefs = { gmail: true };
         }

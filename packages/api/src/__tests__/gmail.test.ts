@@ -9,6 +9,7 @@ import {
   GmailError,
   searchMessages,
   getMessageBody,
+  getAttachment,
   buildTicketSearchQuery,
   buildBulkScanQueries,
 } from '../gmail';
@@ -292,6 +293,101 @@ describe('getMessageBody', () => {
     assert.equal(r.body, '');
   });
 
+  it('returns empty attachments[] for plain bodies', async () => {
+    globalThis.fetch = (async () =>
+      jsonResponse({
+        payload: {
+          headers: [],
+          mimeType: 'text/plain',
+          body: { data: b64url('plain body') },
+        },
+      })) as typeof globalThis.fetch;
+    const r = await getMessageBody('token', 'mid-noatt');
+    assert.deepEqual(r.attachments, []);
+  });
+
+  it('collects PDF attachment refs but ignores non-PDF mimes', async () => {
+    globalThis.fetch = (async () =>
+      jsonResponse({
+        payload: {
+          headers: [],
+          mimeType: 'multipart/mixed',
+          parts: [
+            {
+              mimeType: 'text/html',
+              body: { data: b64url('<p>see attached</p>') },
+            },
+            {
+              mimeType: 'application/pdf',
+              filename: 'ticket.pdf',
+              body: { attachmentId: 'att-1', size: 12345 },
+            },
+            {
+              mimeType: 'image/png',
+              filename: 'logo.png',
+              body: { attachmentId: 'att-2', size: 800 },
+            },
+            {
+              mimeType: 'text/calendar',
+              filename: 'event.ics',
+              body: { attachmentId: 'att-3', size: 500 },
+            },
+          ],
+        },
+      })) as typeof globalThis.fetch;
+    const r = await getMessageBody('token', 'mid-pdf');
+    assert.equal(r.attachments.length, 1);
+    assert.equal(r.attachments[0]?.attachmentId, 'att-1');
+    assert.equal(r.attachments[0]?.filename, 'ticket.pdf');
+    assert.equal(r.attachments[0]?.mimeType, 'application/pdf');
+    assert.equal(r.attachments[0]?.size, 12345);
+  });
+
+  it('walks nested parts to find PDF attachments', async () => {
+    globalThis.fetch = (async () =>
+      jsonResponse({
+        payload: {
+          headers: [],
+          mimeType: 'multipart/mixed',
+          parts: [
+            {
+              mimeType: 'multipart/alternative',
+              parts: [
+                { mimeType: 'text/plain', body: { data: b64url('A'.repeat(200)) } },
+              ],
+            },
+            {
+              mimeType: 'multipart/related',
+              parts: [
+                {
+                  mimeType: 'application/pdf',
+                  filename: 'nested.pdf',
+                  body: { attachmentId: 'nested-att', size: 5000 },
+                },
+              ],
+            },
+          ],
+        },
+      })) as typeof globalThis.fetch;
+    const r = await getMessageBody('token', 'mid-nested-pdf');
+    assert.equal(r.attachments.length, 1);
+    assert.equal(r.attachments[0]?.attachmentId, 'nested-att');
+  });
+
+  it('returns the attached body field unchanged for old fixtures', async () => {
+    globalThis.fetch = (async () =>
+      jsonResponse({
+        payload: {
+          headers: [{ name: 'Subject', value: 'x' }],
+          mimeType: 'text/plain',
+          body: { data: b64url('A'.repeat(150)) },
+        },
+      })) as typeof globalThis.fetch;
+    const r = await getMessageBody('token', 'mid-back-compat');
+    assert.equal(r.body, 'A'.repeat(150));
+    assert.deepEqual(r.attachments, []);
+  });
+
   it('decodes html entities and replaces br/block tags with newlines', async () => {
     globalThis.fetch = (async () =>
       jsonResponse({
@@ -311,5 +407,38 @@ describe('getMessageBody', () => {
     assert.match(r.body, /Line one\nLine two\nLine three/);
     assert.match(r.body, /AT&T/);
     assert.match(r.body, /<ok>/);
+  });
+});
+
+describe('getAttachment', () => {
+  it('decodes base64url payload to a Buffer', async () => {
+    const original = Buffer.from('%PDF-1.4 fake', 'utf8');
+    const data = original
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_');
+    globalThis.fetch = (async () =>
+      jsonResponse({ data })) as typeof globalThis.fetch;
+    const buf = await getAttachment('t', 'mid', 'att-1');
+    assert.ok(Buffer.isBuffer(buf));
+    assert.equal(buf.toString('utf8'), '%PDF-1.4 fake');
+  });
+
+  it('throws GmailError when the response has no data field', async () => {
+    globalThis.fetch = (async () =>
+      jsonResponse({})) as typeof globalThis.fetch;
+    await assert.rejects(getAttachment('t', 'mid', 'att-1'), (err: GmailError) => {
+      assert.equal(err.name, 'GmailError');
+      return true;
+    });
+  });
+
+  it('throws GmailError on non-OK', async () => {
+    globalThis.fetch = (async () =>
+      new Response('nope', { status: 404 })) as typeof globalThis.fetch;
+    await assert.rejects(getAttachment('t', 'mid', 'att-1'), (err: GmailError) => {
+      assert.equal(err.status, 404);
+      return true;
+    });
   });
 });

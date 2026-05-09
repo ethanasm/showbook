@@ -17,11 +17,19 @@ export interface GmailSearchResult {
   resultSizeEstimate: number;
 }
 
+export interface GmailAttachmentRef {
+  attachmentId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+}
+
 export interface GmailMessageDetail {
   subject: string;
   from: string;
   date: string;
   body: string;
+  attachments: GmailAttachmentRef[];
 }
 
 // ---------------------------------------------------------------------------
@@ -130,23 +138,9 @@ export async function getMessageBody(
     throw new GmailError('Gmail message fetch failed', response.status, detail);
   }
 
-  const data = (await response.json()) as {
-    payload: {
-      headers: Array<{ name: string; value: string }>;
-      mimeType: string;
-      body?: { data?: string };
-      parts?: Array<{
-        mimeType: string;
-        body?: { data?: string };
-        parts?: Array<{
-          mimeType: string;
-          body?: { data?: string };
-        }>;
-      }>;
-    };
-  };
+  const data = (await response.json()) as { payload: MimePart };
 
-  const headers = data.payload.headers;
+  const headers = data.payload.headers ?? [];
   const subject =
     headers.find((h) => h.name.toLowerCase() === 'subject')?.value ?? '';
   const from =
@@ -155,8 +149,39 @@ export async function getMessageBody(
     headers.find((h) => h.name.toLowerCase() === 'date')?.value ?? '';
 
   const body = extractBody(data.payload);
+  const attachments = collectPdfAttachments(data.payload);
 
-  return { subject, from, date, body };
+  return { subject, from, date, body, attachments };
+}
+
+/**
+ * Fetch a single attachment payload by id. Used by the Gmail scan to
+ * pull a PDF when the email body alone wasn't enough to extract a show.
+ * The Gmail API returns base64url-encoded bytes; we decode here so the
+ * caller deals only in Node Buffers.
+ */
+export async function getAttachment(
+  accessToken: string,
+  messageId: string,
+  attachmentId: string,
+): Promise<Buffer> {
+  const url = `${GMAIL_BASE}/messages/${messageId}/attachments/${attachmentId}`;
+  const response = await rateLimitedFetch(url, {
+    Authorization: `Bearer ${accessToken}`,
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new GmailError('Gmail attachment fetch failed', response.status, detail);
+  }
+
+  const payload = (await response.json()) as { data?: string };
+  if (!payload.data) {
+    throw new GmailError('Gmail attachment missing data', 502);
+  }
+  // Gmail uses base64url; Node's Buffer accepts standard base64.
+  const base64 = payload.data.replace(/-/g, '+').replace(/_/g, '/');
+  return Buffer.from(base64, 'base64');
 }
 
 // ---------------------------------------------------------------------------
@@ -276,8 +301,33 @@ function stripHtml(html: string): string {
 
 interface MimePart {
   mimeType: string;
-  body?: { data?: string };
+  filename?: string;
+  headers?: Array<{ name: string; value: string }>;
+  body?: { data?: string; attachmentId?: string; size?: number };
   parts?: MimePart[];
+}
+
+function collectPdfAttachments(payload: MimePart): GmailAttachmentRef[] {
+  const out: GmailAttachmentRef[] = [];
+  function walk(part: MimePart) {
+    if (
+      part.mimeType === 'application/pdf' &&
+      part.body?.attachmentId &&
+      typeof part.body.size === 'number'
+    ) {
+      out.push({
+        attachmentId: part.body.attachmentId,
+        filename: part.filename ?? 'attachment.pdf',
+        mimeType: part.mimeType,
+        size: part.body.size,
+      });
+    }
+    if (part.parts) {
+      for (const child of part.parts) walk(child);
+    }
+  }
+  walk(payload);
+  return out;
 }
 
 function extractBody(payload: MimePart): string {
