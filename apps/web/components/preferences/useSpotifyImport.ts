@@ -25,6 +25,7 @@ function messageForReason(reason: string | null): string {
       return "Couldn't reach Spotify. Please try again.";
     case "misconfigured":
       return "Spotify import isn't configured on this server.";
+    case "unknown":
     default:
       return "Spotify authorization failed.";
   }

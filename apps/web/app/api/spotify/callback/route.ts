@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { child } from '@showbook/observability';
 import { auth } from '@/auth';
-import { popupResponse } from '@/lib/spotify-popup-response';
+import { popupResponse, coerceReason } from '@/lib/spotify-popup-response';
 
 const logger = child({ component: 'web.spotify.callback' });
 const STATE_COOKIE = 'spotify_oauth_state';
@@ -29,7 +29,12 @@ export async function GET(req: NextRequest) {
       'Spotify OAuth denied or rejected by Spotify',
     );
     return popupResponse({
-      payload: { type: 'spotify-auth-error', reason: errorParam },
+      // Map Spotify's free-form `error` param through a fixed whitelist
+      // before it reaches the popup HTML — never let URL-derived strings
+      // flow into the inline <script> payload (CodeQL alert #34).
+      // `access_denied` is in the whitelist; anything else collapses to
+      // `unknown`.
+      payload: { type: 'spotify-auth-error', reason: coerceReason(errorParam) },
       message:
         errorParam === 'access_denied'
           ? 'Spotify connection canceled. You can close this window.'
