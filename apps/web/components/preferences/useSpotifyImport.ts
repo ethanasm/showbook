@@ -8,6 +8,28 @@ import { trpc } from "@/lib/trpc";
 // agree on this key for the localStorage fallback to work.
 const SPOTIFY_AUTH_LS_KEY = "showbook:spotify-auth";
 
+// Map the `reason` string the popup broadcasts back into a user-facing
+// message. Reasons correspond to branches in apps/web/app/api/spotify/
+// (route.ts + callback/route.ts).
+function messageForReason(reason: string | null): string {
+  switch (reason) {
+    case "access_denied":
+      return "Spotify connection canceled.";
+    case "session_missing":
+      return "Your Showbook session was lost during the Spotify hop. Please sign in again and retry.";
+    case "state_mismatch":
+      return "Spotify connection failed (security check). Please try again.";
+    case "token_exchange_failed":
+      return "Spotify rejected the token exchange. Please try again.";
+    case "network":
+      return "Couldn't reach Spotify. Please try again.";
+    case "misconfigured":
+      return "Spotify import isn't configured on this server.";
+    default:
+      return "Spotify authorization failed.";
+  }
+}
+
 export type ListedArtist = {
   spotifyId: string;
   name: string;
@@ -141,13 +163,23 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
       }
     };
 
+    // Track whether we received a payload from the popup. Used by the
+    // checkClosed interval below to decide whether to show "popup closed
+    // before completing" feedback.
+    let payloadReceived = false;
+
     const handlePayload = (data: unknown): boolean => {
       if (!data || typeof data !== "object") return false;
-      const payload = data as { type?: unknown; accessToken?: unknown };
+      const payload = data as {
+        type?: unknown;
+        accessToken?: unknown;
+        reason?: unknown;
+      };
       if (
         payload.type === "spotify-auth" &&
         typeof payload.accessToken === "string"
       ) {
+        payloadReceived = true;
         cleanup();
         try {
           window.localStorage.removeItem(SPOTIFY_AUTH_LS_KEY);
@@ -158,13 +190,16 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
         return true;
       }
       if (payload.type === "spotify-auth-error") {
+        payloadReceived = true;
         cleanup();
         try {
           window.localStorage.removeItem(SPOTIFY_AUTH_LS_KEY);
         } catch {
           /* ignore */
         }
-        setError("Spotify authorization failed");
+        const reason =
+          typeof payload.reason === "string" ? payload.reason : null;
+        setError(messageForReason(reason));
         return true;
       }
       return false;
@@ -198,14 +233,31 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
       "width=500,height=700,popup=yes",
     );
     popupRef.current = popup;
-    if (popup) {
-      const checkClosed = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(checkClosed);
-          cleanup();
-        }
-      }, 500);
+    if (!popup) {
+      // Popup blocked by the browser (most often Safari with default
+      // settings, or content blockers). Without this, the user clicks
+      // Connect Spotify and absolutely nothing visible happens.
+      cleanup();
+      setError(
+        "Couldn't open the Spotify popup. Allow popups for Showbook and try again.",
+      );
+      return;
     }
+    const checkClosed = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(checkClosed);
+        cleanup();
+        // The popup closed without ever sending us an auth-success or
+        // auth-error payload — most often the user dismissed the Spotify
+        // dialog or closed the tab. Surface that so the connect button
+        // doesn't look broken.
+        if (!payloadReceived) {
+          setError(
+            "Spotify connection canceled. Click Connect Spotify to try again.",
+          );
+        }
+      }
+    }, 500);
   }, [listFollowed]);
 
   const toggle = useCallback((spotifyId: string, importable: boolean) => {
