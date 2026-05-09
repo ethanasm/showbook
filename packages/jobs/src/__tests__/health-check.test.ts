@@ -19,22 +19,9 @@ mock.module('@showbook/db', {
     db: {
       execute: async () => {
         if (EXECUTE.shouldThrow) throw EXECUTE.shouldThrow;
-        const next = EXECUTE.results.shift();
-        // Letting tests script per-call throws (e.g. "the claim INSERT
-        // fails but the prior 4 checks succeed") by parking an Error
-        // instance at the right slot in `results`.
-        if (next instanceof Error) throw next;
-        return next ?? [];
+        return EXECUTE.results.shift() ?? [];
       },
     },
-    // The orchestrator imports `sql` to build its INSERT … ON CONFLICT
-    // claim. Tests don't inspect the SQL string itself — they assert on
-    // the values shifted out of EXECUTE.results — so a no-op tag that
-    // captures the template fragments is enough to satisfy the import.
-    sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({
-      strings,
-      values,
-    }),
   },
 });
 
@@ -92,21 +79,13 @@ function makeResend(opts: {
   return fake;
 }
 
-// 5th execute call is the daily-send claim: a non-empty array means
-// "this run won the dedup race, proceed with the email"; an empty array
-// means "another run already claimed today, skip cleanly".
-const CLAIM_WON: ReadonlyArray<unknown> = [{ et_date: '2026-05-05' }];
-const CLAIM_LOST: ReadonlyArray<unknown> = [];
-
 beforeEach(() => {
-  // Default: clean queue, fresh announcements, no stalled scrapes,
-  // claim won.
+  // Default: clean queue, fresh announcements, no stalled scrapes.
   EXECUTE.results = [
     [], // checkDatabaseConnectivity SELECT 1
     [{ failed: 0, active_stuck: 0, active_total: 0, retry: 0 }], // pgboss queue
     [{ last_discovered: new Date(Date.now() - 60 * 60 * 1000) }], // freshness
     [{ cnt: 0 }], // stalled scrapes
-    CLAIM_WON, // claimDailySend → INSERT RETURNING et_date
   ];
   EXECUTE.shouldThrow = null;
   delete process.env.RESEND_API_KEY;
@@ -178,72 +157,40 @@ describe('runHealthCheck', () => {
     assert.equal(opts.idempotencyKey, 'health-summary-2026-05-05');
   });
 
-  it('skips the second send when another run already claimed today (dedup)', async () => {
-    // This is the regression that put two health-check emails in the
-    // operator's inbox on 2026-05-07: pg-boss ran the cron handler
-    // twice ~500ms apart, both reached `resend.emails.send` with the
-    // same idempotency key, and Resend shipped both. The DB-backed
-    // claim is the new boundary — only one of the two concurrent runs
-    // is allowed to send.
+  it('uses the same idempotency key on a re-run within the same ET day', async () => {
     process.env.ADMIN_EMAILS = 'ops@example.com';
     const fake = makeResend();
-    const seedExecute = (claim: ReadonlyArray<unknown>) => {
+    // First call at 07:00 ET.
+    const seedExecute = () => {
       EXECUTE.results = [
         [],
         [{ failed: 0, active_stuck: 0, active_total: 0, retry: 0 }],
         [{ last_discovered: new Date('2026-05-05T11:00:00Z') }],
         [{ cnt: 0 }],
-        claim,
       ];
     };
-    // First run wins the claim and sends.
-    seedExecute(CLAIM_WON);
-    const first = await runHealthCheck({
+    seedExecute();
+    await runHealthCheck({
       pings: noopPings,
       resend: fake,
       generatePreamble: noPreamble,
       now: new Date('2026-05-05T11:00:00Z'),
     });
-    assert.equal(first.emailSent, true);
-    assert.equal(fake.sendCalls.length, 1);
-
-    // Second run, ~500ms later, loses the claim and must skip.
-    seedExecute(CLAIM_LOST);
-    const second = await runHealthCheck({
+    seedExecute();
+    // Hypothetical pg-boss retry one minute later — same ET day.
+    await runHealthCheck({
       pings: noopPings,
       resend: fake,
       generatePreamble: noPreamble,
-      now: new Date('2026-05-05T11:00:00.5Z'),
+      now: new Date('2026-05-05T11:01:00Z'),
     });
-    assert.equal(second.emailSent, false);
-    assert.equal(
-      fake.sendCalls.length,
-      1,
-      'second run must not call Resend when the daily claim is lost',
-    );
-  });
-
-  it('skips the send when the claim INSERT throws (fail closed)', async () => {
-    // A transient DB error on the claim must not silently degrade to
-    // "send anyway" — that's the duplicate this guard exists to
-    // prevent. We park an Error in the claim slot so the 5th execute
-    // throws while the 4 prior checks succeed.
-    process.env.ADMIN_EMAILS = 'ops@example.com';
-    const fake = makeResend();
-    EXECUTE.results = [
-      [],
-      [{ failed: 0, active_stuck: 0, active_total: 0, retry: 0 }],
-      [{ last_discovered: new Date('2026-05-05T11:00:00Z') }],
-      [{ cnt: 0 }],
-      new Error('db boom'),
-    ];
-    const result = await runHealthCheck({
-      pings: noopPings,
-      resend: fake,
-      generatePreamble: noPreamble,
-    });
-    assert.equal(result.emailSent, false);
-    assert.equal(fake.sendCalls.length, 0);
+    assert.equal(fake.sendCalls.length, 2);
+    const k1 = (fake.sendCalls[0]!.options as { idempotencyKey?: string })
+      .idempotencyKey;
+    const k2 = (fake.sendCalls[1]!.options as { idempotencyKey?: string })
+      .idempotencyKey;
+    assert.equal(k1, k2);
+    assert.equal(k1, 'health-summary-2026-05-05');
   });
 
   it('marks emailSent=false when Resend send throws', async () => {
@@ -270,19 +217,9 @@ describe('runHealthCheck', () => {
   });
 
   it('subject reflects rollup status', async () => {
-    // Trigger a failure on the first check (DB) only, leaving the
-    // claim INSERT intact so the email still ships and we can inspect
-    // its subject. Using the per-result Error pattern instead of
-    // EXECUTE.shouldThrow keeps the claim slot reachable.
     process.env.ADMIN_EMAILS = 'ops@example.com';
     const fake = makeResend();
-    EXECUTE.results = [
-      new Error('boom'), // checkDatabaseConnectivity
-      [{ failed: 0, active_stuck: 0, active_total: 0, retry: 0 }],
-      [{ last_discovered: new Date(Date.now() - 60 * 60 * 1000) }],
-      [{ cnt: 0 }],
-      CLAIM_WON,
-    ];
+    EXECUTE.shouldThrow = new Error('boom');
     await runHealthCheck({ pings: noopPings, resend: fake, generatePreamble: noPreamble });
     const sent = fake.sendCalls[0]!.payload as { subject: string };
     assert.match(sent.subject, /FAIL/);

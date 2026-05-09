@@ -225,6 +225,13 @@
       "when": 1789518400000,
       "tag": "0031_health_summary_log",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1789604800000,
+      "tag": "0032_drop_health_summary_log",
+      "breakpoints": true
     }
   ]
 }
