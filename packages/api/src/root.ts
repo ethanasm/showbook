@@ -7,6 +7,7 @@ import { enrichmentRouter } from './routers/enrichment';
 import { preferencesRouter } from './routers/preferences';
 import { searchRouter } from './routers/search';
 import { mediaRouter } from './routers/media';
+import { spotifyRouter } from './routers/spotify';
 import { spotifyImportRouter } from './routers/spotify-import';
 import { appleMusicImportRouter } from './routers/apple-music-import';
 import { adminRouter } from './routers/admin';
@@ -20,6 +21,7 @@ export const appRouter = router({
   preferences: preferencesRouter,
   search: searchRouter,
   media: mediaRouter,
+  spotify: spotifyRouter,
   spotifyImport: spotifyImportRouter,
   appleMusicImport: appleMusicImportRouter,
   imports: importsRouter,

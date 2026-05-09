@@ -16,6 +16,11 @@ export const performers = pgTable(
     musicbrainzId: text('musicbrainz_id'),
     ticketmasterAttractionId: text('ticketmaster_attraction_id'),
     imageUrl: text('image_url'),
+    // One of 'stable' | 'rotating' | 'theatrical' | 'improvised' | 'unknown'.
+    // Filled by the §15b classifier in Phase 5; null in Phase 0 means the
+    // prediction served falls back to the cold-empty-state branch.
+    setlistStyle: text('setlist_style'),
+    setlistStyleInferredAt: timestamp('setlist_style_inferred_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [

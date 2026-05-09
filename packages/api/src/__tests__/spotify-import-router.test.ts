@@ -10,12 +10,26 @@
  * to higher-level integration tests.
  */
 
-import { describe, it, beforeEach, afterEach } from 'node:test';
+import { describe, it, before, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { TRPCError } from '@trpc/server';
-import { spotifyImportRouter } from '../routers/spotify-import';
-import { enforceRateLimit } from '../rate-limit';
 import { fakeCtx, makeFakeDb, type FakeDb } from './_fake-db';
+import { enforceRateLimit } from '../rate-limit';
+
+// Stub `ensureFreshUserToken` so the listFollowed path doesn't need a
+// real `user_spotify_tokens` row in ctx.db. Tests that exercise the
+// "not connected" path override the stub via `MOCKED_TOKEN`.
+let MOCKED_TOKEN: string | null = 'valid-stub-token';
+mock.module('../spotify-tokens.js', {
+  namedExports: {
+    ensureFreshUserToken: async () => MOCKED_TOKEN,
+  },
+});
+
+let spotifyImportRouter: typeof import('../routers/spotify-import').spotifyImportRouter;
+before(async () => {
+  ({ spotifyImportRouter } = await import('../routers/spotify-import'));
+});
 
 function caller(db: FakeDb, userId = 'spotify-test-user') {
   return spotifyImportRouter.createCaller(fakeCtx(db, userId) as never);
@@ -97,9 +111,18 @@ function setupFetchMock(opts: {
 }
 
 describe('spotifyImportRouter.listFollowed', () => {
-  it('rejects empty access token (zod min(1))', async () => {
+  beforeEach(() => {
+    MOCKED_TOKEN = 'valid-stub-token';
+  });
+
+  it('throws PRECONDITION_FAILED when the user is not connected', async () => {
+    MOCKED_TOKEN = null;
     const db = makeFakeDb();
-    await assert.rejects(() => caller(db).listFollowed({ accessToken: '' }));
+    await assert.rejects(
+      () => caller(db).listFollowed({}),
+      (err: unknown) =>
+        err instanceof TRPCError && err.code === 'PRECONDITION_FAILED',
+    );
   });
 
   it('returns enriched artist list with TM matches and follow status', async () => {
@@ -122,9 +145,7 @@ describe('spotifyImportRouter.listFollowed', () => {
       selectResults: [[{ tmAttractionId: 'tm1' }]],
     });
 
-    const result = await caller(db, 'list-user-1').listFollowed({
-      accessToken: 'valid-token',
-    });
+    const result = await caller(db, 'list-user-1').listFollowed({});
 
     assert.equal(result.artists.length, 2);
     assert.equal(result.totalCount, 2);
@@ -152,7 +173,7 @@ describe('spotifyImportRouter.listFollowed', () => {
     });
 
     const db = makeFakeDb({ selectResults: [[]] });
-    const result = await caller(db).listFollowed({ accessToken: 'tok' });
+    const result = await caller(db).listFollowed({});
 
     assert.equal(result.artists.length, 1);
     assert.equal(result.artists[0]?.tmMatch, null);
@@ -167,7 +188,7 @@ describe('spotifyImportRouter.listFollowed', () => {
 
     const db = makeFakeDb();
     await assert.rejects(
-      () => caller(db).listFollowed({ accessToken: 'expired' }),
+      () => caller(db).listFollowed({}),
       (err: unknown) =>
         err instanceof TRPCError && err.code === 'UNAUTHORIZED',
     );
@@ -180,7 +201,7 @@ describe('spotifyImportRouter.listFollowed', () => {
     }
     const db = makeFakeDb();
     await assert.rejects(
-      () => caller(db, userId).listFollowed({ accessToken: 't' }),
+      () => caller(db, userId).listFollowed({}),
       (err: unknown) =>
         err instanceof TRPCError && err.code === 'TOO_MANY_REQUESTS',
     );
@@ -203,7 +224,7 @@ describe('spotifyImportRouter.listFollowed', () => {
       },
     });
     const db = makeFakeDb({ selectResults: [[]] });
-    const result = await caller(db).listFollowed({ accessToken: 'tok' });
+    const result = await caller(db).listFollowed({});
     assert.equal(result.artists[0]?.tmMatch?.musicbrainzId, 'mbid-phoebe-bridgers');
   });
 
@@ -215,7 +236,7 @@ describe('spotifyImportRouter.listFollowed', () => {
       },
     });
     const db = makeFakeDb({ selectResults: [[]] });
-    const result = await caller(db).listFollowed({ accessToken: 'tok' });
+    const result = await caller(db).listFollowed({});
     assert.equal(result.artists[0]?.tmMatch?.tmAttractionId, 'tm-sam-short');
     assert.equal(result.artists[0]?.tmMatch?.musicbrainzId, null);
   });
@@ -227,9 +248,7 @@ describe('spotifyImportRouter.listFollowed', () => {
     });
 
     const db = makeFakeDb();
-    const result = await caller(db, 'empty-user').listFollowed({
-      accessToken: 'tok',
-    });
+    const result = await caller(db, 'empty-user').listFollowed({});
 
     assert.equal(result.artists.length, 0);
     assert.equal(result.totalCount, 0);

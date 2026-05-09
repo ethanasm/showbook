@@ -232,6 +232,20 @@
       "when": 1789604800000,
       "tag": "0032_drop_health_summary_log",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789691200000,
+      "tag": "0033_setlist_intel_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1789777600000,
+      "tag": "0034_user_spotify_tokens",
+      "breakpoints": true
     }
   ]
 }

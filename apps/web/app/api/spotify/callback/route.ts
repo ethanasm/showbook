@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { child } from '@showbook/observability';
+import {
+  exchangeAuthorizationCode,
+  getCurrentUser,
+  persistInitialToken,
+  SpotifyError,
+} from '@showbook/api';
 import { auth } from '@/auth';
 
-const logger = child({ component: 'web.spotify.callback' });
+const logger = child({ component: 'web.spotify.callback', provider: 'spotify' });
 const STATE_COOKIE = 'spotify_oauth_state';
-
-// Backslash-escape any '</' in a JSON-encoded value so the embedded literal
-// can't break out of the surrounding <script> tag.
-function escapeForScript(value: string): string {
-  return JSON.stringify(value).replace(/<\//g, '<\\/');
-}
 
 function clearStateCookie(response: NextResponse, isSecure: boolean): NextResponse {
   response.cookies.set(STATE_COOKIE, '', {
@@ -20,6 +20,46 @@ function clearStateCookie(response: NextResponse, isSecure: boolean): NextRespon
     maxAge: 0,
   });
   return response;
+}
+
+/**
+ * Browser-side glue for the popup.
+ *
+ * Connect-once flow: the access token is persisted server-side before the
+ * popup ever closes, so the message we post to the opener carries
+ * `spotify-connected` (no token). The opener invalidates
+ * `spotify.connectionStatus` and resumes whatever action triggered the
+ * popup. Mobile Safari nulls out `window.opener` after the cross-origin
+ * Spotify hop, so we *also* broadcast via localStorage — the originating
+ * tab listens for the `storage` event.
+ *
+ * Body never contains user data — just status flags. That keeps the
+ * inline `<script>` literal safe even though the document is generated
+ * server-side.
+ */
+function popupHtml(payload: 'spotify-connected' | 'spotify-auth-error'): string {
+  const message = JSON.stringify({ type: payload, at: Date.now() });
+  return `<!doctype html><html><body><p>${
+    payload === 'spotify-connected'
+      ? 'Connected. You can close this window and return to Showbook.'
+      : 'Spotify connection failed. You can close this window and try again.'
+  }</p><script>
+    try {
+      try {
+        // Same-origin localStorage broadcast — the storage event fires in
+        // the originating tab even when window.opener is null.
+        window.localStorage.setItem("showbook:spotify-auth", ${JSON.stringify(message)});
+      } catch (e) {}
+      try {
+        if (window.opener) {
+          window.opener.postMessage(${message}, window.location.origin);
+        }
+      } catch (e) {}
+      setTimeout(function () { try { window.close(); } catch (e) {} }, 500);
+    } catch (e) {
+      document.body.innerText = "Error: " + e.message;
+    }
+  </script></body></html>`;
 }
 
 export async function GET(req: NextRequest) {
@@ -38,7 +78,8 @@ export async function GET(req: NextRequest) {
   if (!code || !state || !expectedState || state !== expectedState) {
     logger.warn(
       {
-        event: 'spotify.callback.state_mismatch',
+        event: 'spotify.connect.failed',
+        reason: 'state_mismatch',
         userId: session.user.id,
         hasCode: !!code,
         hasState: !!state,
@@ -47,86 +88,51 @@ export async function GET(req: NextRequest) {
       'Spotify callback rejected: state mismatch',
     );
     return clearStateCookie(
-      new NextResponse(
-        '<html><body><script>window.close();</script></body></html>',
-        { headers: { 'Content-Type': 'text/html' } },
-      ),
+      new NextResponse(popupHtml('spotify-auth-error'), {
+        headers: { 'Content-Type': 'text/html' },
+      }),
       isSecure,
     );
   }
 
-  const credentials = Buffer.from(
-    `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`,
-  ).toString('base64');
-
-  const tokenRes = await fetch('https://accounts.spotify.com/api/token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${credentials}`,
-    },
-    body: new URLSearchParams({
+  // Exchange code → tokens → /me → persist row. Each hop has its own
+  // failure mode; we surface a generic "auth-error" to the popup but
+  // log specifics.
+  try {
+    const tokens = await exchangeAuthorizationCode({
       code,
-      redirect_uri: `${baseUrl}/api/spotify/callback`,
-      grant_type: 'authorization_code',
-    }),
-    signal: AbortSignal.timeout(10_000),
-  });
-
-  if (!tokenRes.ok) {
-    // Don't echo Spotify's response body into HTML — it can contain hostile
-    // content. The popup just signals failure to the opener; details are
-    // logged server-side.
-    const errBody = await tokenRes.text();
-    logger.warn(
-      { event: 'spotify.callback.token_exchange_failed', status: tokenRes.status, body: errBody.slice(0, 500) },
-      'Spotify token exchange failed',
+      redirectUri: `${baseUrl}/api/spotify/callback`,
+    });
+    const profile = await getCurrentUser(tokens.accessToken);
+    await persistInitialToken({
+      userId: session.user.id,
+      tokens,
+      profile,
+    });
+  } catch (err) {
+    const status = err instanceof SpotifyError ? err.status : 0;
+    logger.error(
+      {
+        err,
+        event: 'spotify.connect.failed',
+        reason: 'token_exchange_or_persist',
+        status,
+        userId: session.user.id,
+      },
+      'Spotify token exchange / persistence failed',
     );
     return clearStateCookie(
-      new NextResponse(
-        `<html><body><p>Token exchange failed. You can close this window.</p><script>
-        try {
-          // Same-origin localStorage broadcast: the storage event fires in the
-          // originating tab even when window.opener is null (mobile Safari
-          // typically loses the opener after the cross-origin Spotify hop).
-          window.localStorage.setItem("showbook:spotify-auth", JSON.stringify({type:"spotify-auth-error",at:Date.now()}));
-        } catch (e) {}
-        try {
-          if (window.opener) {
-            window.opener.postMessage({type:"spotify-auth-error"}, window.location.origin);
-          }
-        } catch (e) {}
-        setTimeout(function() { try { window.close(); } catch (e) {} }, 500);
-      </script></body></html>`,
-        { headers: { 'Content-Type': 'text/html' } },
-      ),
+      new NextResponse(popupHtml('spotify-auth-error'), {
+        headers: { 'Content-Type': 'text/html' },
+      }),
       isSecure,
     );
   }
 
-  const tokens = (await tokenRes.json()) as { access_token: string };
-  const accessToken = escapeForScript(tokens.access_token);
-
   return clearStateCookie(
-    new NextResponse(
-      `<html><body><p>Authenticated. You can close this window and return to Showbook.</p><script>
-      try {
-        // Same-origin localStorage broadcast: the storage event fires in the
-        // originating tab even when window.opener is null (mobile Safari
-        // typically loses the opener after the cross-origin Spotify hop).
-        try {
-          window.localStorage.setItem("showbook:spotify-auth", JSON.stringify({type:"spotify-auth",accessToken:${accessToken},at:Date.now()}));
-        } catch (e) {}
-        if (window.opener) {
-          window.opener.postMessage({type:"spotify-auth",accessToken:${accessToken}}, window.location.origin);
-        }
-        setTimeout(function() { try { window.close(); } catch (e) {} }, 500);
-      } catch(e) {
-        document.body.innerText = "Error: " + e.message;
-      }
-    </script></body></html>`,
-      { headers: { 'Content-Type': 'text/html' } },
-    ),
+    new NextResponse(popupHtml('spotify-connected'), {
+      headers: { 'Content-Type': 'text/html' },
+    }),
     isSecure,
   );
 }
