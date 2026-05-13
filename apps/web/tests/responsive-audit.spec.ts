@@ -4,8 +4,17 @@ import { mkdirSync } from "node:fs";
 import { loginAndSeedAsWorker } from "./helpers/auth";
 
 const WIDTHS = [
+  // iPhone Pro Max portrait — should always render mobile layout.
   { name: "mobile", width: 390, height: 844 },
+  // iPad-ish / half-width browser — under the 900 cutoff so still
+  // mobile, but tests the upper bound of the mobile breakpoint.
   { name: "half", width: 720, height: 900 },
+  // Just below the 900 threshold — last viewport where the mobile
+  // CSS rules should still apply.
+  { name: "edge", width: 899, height: 900 },
+  // Just above the cutoff — first viewport where desktop layout
+  // should kick in. Used to confirm the breakpoint isn't off by one.
+  { name: "desk-min", width: 900, height: 900 },
   { name: "full", width: 1280, height: 900 },
 ];
 

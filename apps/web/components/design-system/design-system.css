@@ -429,7 +429,7 @@
   pointer-events: none;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 899px) {
   .empty-state {
     grid-template-columns: 1fr;
     /* Extra bottom padding so action buttons clear the fixed bottom nav
@@ -1085,7 +1085,7 @@ a.show-row__support-link:hover {
   display: none;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 899px) {
   .preferences-mobile-only {
     display: block;
   }
@@ -1117,7 +1117,7 @@ a.show-row__support-link:hover {
 
 /* ── Mobile (<768px): bottom bar visible, sidebar hidden ── */
 
-@media (max-width: 767px) {
+@media (max-width: 899px) {
   .app-shell {
     flex-direction: column;
   }
@@ -1258,7 +1258,7 @@ a.show-row__support-link:hover {
 @media (min-width: 768px) {
   .mobile-only { display: none !important; }
 }
-@media (max-width: 767px) {
+@media (max-width: 899px) {
   .desktop-only { display: none !important; }
 }
 
@@ -1342,7 +1342,7 @@ a.show-row__support-link:hover {
   margin-top: 4px;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 899px) {
   .hero-card {
     padding: 20px 18px;
   }
@@ -1441,7 +1441,7 @@ a.show-row__support-link:hover {
   flex-shrink: 0;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 899px) {
   .home-topbar__stat { padding: 5px 10px; }
   /* Reserve room for the fixed `.global-search__trigger` puck pinned at
      `top: 10px; right: 12px` on mobile so the trailing stat label
@@ -1461,7 +1461,7 @@ a.show-row__support-link:hover {
   background: var(--rule);
 }
 
-@media (max-width: 767px) {
+@media (max-width: 899px) {
   .home-mini-cards {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1496,7 +1496,7 @@ a.show-row__support-link:hover {
 
 [data-compact="true"] .home-recent-row { padding-top: 6px; padding-bottom: 6px; }
 
-@media (max-width: 767px) {
+@media (max-width: 899px) {
   .home-recent-row {
     grid-template-columns: 56px minmax(0, 1fr) 14px;
     column-gap: 10px;
@@ -1573,7 +1573,7 @@ a.show-row__support-link:hover {
 .get-started-card__door-label--mobile { display: none; }
 .get-started-card__door-label--desktop { display: inline; }
 
-@media (max-width: 767px) {
+@media (max-width: 899px) {
   .get-started-card {
     flex-direction: column;
     flex-wrap: nowrap;
@@ -1627,7 +1627,7 @@ a.show-row__support-link:hover {
   gap: 12px;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 899px) {
   .get-started-hub {
     padding: 32px 20px calc(96px + env(safe-area-inset-bottom, 0px));
     display: flex;
