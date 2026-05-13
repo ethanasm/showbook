@@ -1,10 +1,215 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Tag, Trash2, Upload, Video, X, ImagePlus } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { uploadPhotoForShow, uploadVideoForShow } from "./uploadHelpers";
 import "./media.css";
+
+// Inline structural styles. media.css used to be the only source of these
+// rules; when its chunk failed to apply (FOUC, bad cache, partial CSS
+// load, etc.) the section dropped to unstyled HTML — file inputs visible,
+// no card backgrounds, no typographic hierarchy. The page renders the
+// rest of the show detail with inline styles, so this aligns the media
+// section with the same pattern. media.css is still imported for hover
+// states and the narrow-viewport (<=760px) responsive breakpoint.
+const S: Record<string, CSSProperties> = {
+  section: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 14,
+  },
+  sectionHeader: {
+    display: "flex",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: 18,
+  },
+  eyebrow: {
+    fontFamily: "var(--font-geist-mono), monospace",
+    fontSize: 11,
+    color: "var(--ink)",
+    letterSpacing: "0.1em",
+    textTransform: "uppercase",
+    fontWeight: 500,
+  },
+  note: {
+    marginTop: 4,
+    fontFamily: "var(--font-geist-mono), monospace",
+    fontSize: 10.5,
+    color: "var(--faint)",
+    letterSpacing: "0.04em",
+  },
+  uploader: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 18,
+    alignItems: "center",
+    padding: 16,
+    background: "var(--surface)",
+    border: "1px solid var(--rule)",
+  },
+  uploaderTitle: {
+    fontFamily: "var(--font-geist-sans), sans-serif",
+    fontSize: 15,
+    fontWeight: 600,
+    color: "var(--ink)",
+    letterSpacing: "-0.2px",
+  },
+  uploaderMeta: {
+    marginTop: 4,
+    fontFamily: "var(--font-geist-mono), monospace",
+    fontSize: 10.5,
+    color: "var(--muted)",
+    letterSpacing: "0.03em",
+    lineHeight: 1.45,
+  },
+  uploaderActions: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+  button: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    minHeight: 34,
+    padding: "8px 12px",
+    border: "1px solid var(--rule-strong)",
+    background: "transparent",
+    color: "var(--ink)",
+    fontFamily: "var(--font-geist-sans), sans-serif",
+    fontSize: 12.5,
+    fontWeight: 500,
+    cursor: "pointer",
+  },
+  buttonPrimary: {
+    background: "var(--ink)",
+    color: "var(--bg)",
+    borderColor: "var(--ink)",
+  },
+  buttonDisabled: {
+    cursor: "default",
+    opacity: 0.45,
+  },
+  quota: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 12,
+    alignItems: "center",
+    padding: "10px 12px",
+    background: "color-mix(in srgb, var(--surface) 82%, var(--bg))",
+    border: "1px solid var(--rule)",
+  },
+  quotaTrack: {
+    height: 4,
+    background: "var(--rule)",
+    overflow: "hidden",
+  },
+  quotaBar: {
+    height: "100%",
+    background: "var(--accent)",
+  },
+  quotaCopy: {
+    fontFamily: "var(--font-geist-mono), monospace",
+    fontSize: 10,
+    color: "var(--muted)",
+    letterSpacing: "0.04em",
+    whiteSpace: "nowrap",
+  },
+  status: {
+    padding: "10px 12px",
+    background: "var(--surface)",
+    borderLeft: "3px solid var(--accent)",
+    fontFamily: "var(--font-geist-mono), monospace",
+    fontSize: 10.5,
+    color: "var(--muted)",
+    letterSpacing: "0.04em",
+  },
+  statusError: {
+    borderLeftColor: "#E63946",
+    color: "#E63946",
+  },
+  empty: {
+    display: "grid",
+    placeItems: "center",
+    minHeight: 150,
+    padding: "24px 16px",
+    background: "var(--surface)",
+    border: "1px dashed var(--rule-strong)",
+    textAlign: "center",
+  },
+  emptyTitle: {
+    fontFamily: "var(--font-geist-sans), sans-serif",
+    fontSize: 15,
+    color: "var(--ink)",
+    fontWeight: 600,
+  },
+  emptyBody: {
+    marginTop: 5,
+    maxWidth: 420,
+    fontFamily: "var(--font-geist-mono), monospace",
+    fontSize: 10.5,
+    lineHeight: 1.55,
+    color: "var(--muted)",
+    letterSpacing: "0.04em",
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(188px, 1fr))",
+    gap: 12,
+  },
+  card: {
+    position: "relative",
+    overflow: "hidden",
+    minWidth: 0,
+    background: "var(--surface)",
+    border: "1px solid var(--rule)",
+    borderRadius: 6,
+  },
+  cardFrame: {
+    aspectRatio: "4 / 3",
+    background: "var(--surface2, var(--surface))",
+  },
+  cardMedia: {
+    width: "100%",
+    height: "100%",
+    display: "block",
+    objectFit: "cover",
+  },
+  cardMeta: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    minHeight: 40,
+    padding: "8px 10px",
+  },
+  cardLabel: {
+    minWidth: 0,
+    fontFamily: "var(--font-geist-mono), monospace",
+    fontSize: 10,
+    color: "var(--muted)",
+    letterSpacing: "0.04em",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  cardDelete: {
+    flex: "0 0 auto",
+    width: 26,
+    height: 26,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    border: "1px solid var(--rule)",
+    background: "transparent",
+    color: "var(--muted)",
+    cursor: "pointer",
+  },
+};
 
 type MediaScope = "show" | "venue" | "performer";
 
@@ -261,14 +466,17 @@ export function MediaSection({
     return `${show.title} · ${formatDate(show.date)}${scope === "performer" ? place : ""}`;
   }
 
+  const photoDisabled = Boolean(uploadBlocked) || isUploading;
+  const videoDisabled = Boolean(uploadBlocked) || isUploading;
+
   return (
-    <section className="media-section" data-testid="media-section">
-      <div className="media-section__header">
+    <section className="media-section" style={S.section} data-testid="media-section">
+      <div className="media-section__header" style={S.sectionHeader}>
         <div>
-          <div className="media-section__eyebrow">
+          <div className="media-section__eyebrow" style={S.eyebrow}>
             {scope === "show" ? `Media · ${assets.length}` : `Media from your shows · ${assets.length}`}
           </div>
-          <div className="media-section__note">
+          <div className="media-section__note" style={S.note}>
             photos and short mp4 memories stored in Showbook
           </div>
         </div>
@@ -276,19 +484,24 @@ export function MediaSection({
 
       {scope === "show" && canUpload && (
         <>
-          <div className="media-uploader">
+          <div className="media-uploader" style={S.uploader}>
             <div>
-              <div className="media-uploader__title">Add event media</div>
-              <div className="media-uploader__meta">
+              <div className="media-uploader__title" style={S.uploaderTitle}>Add event media</div>
+              <div className="media-uploader__meta" style={S.uploaderMeta}>
                 Up to {quotaData?.limits.showMaxPhotos ?? 30} photos and{" "}
                 {quotaData?.limits.showMaxVideos ?? 2} videos for this show. Videos must be MP4.
               </div>
             </div>
-            <div className="media-uploader__actions">
+            <div className="media-uploader__actions" style={S.uploaderActions}>
               <button
                 type="button"
                 className="media-button media-button--primary"
-                disabled={Boolean(uploadBlocked) || isUploading}
+                style={{
+                  ...S.button,
+                  ...S.buttonPrimary,
+                  ...(photoDisabled ? S.buttonDisabled : {}),
+                }}
+                disabled={photoDisabled}
                 onClick={() => photoInputRef.current?.click()}
               >
                 <ImagePlus size={14} /> Photo
@@ -296,7 +509,11 @@ export function MediaSection({
               <button
                 type="button"
                 className="media-button"
-                disabled={Boolean(uploadBlocked) || isUploading}
+                style={{
+                  ...S.button,
+                  ...(videoDisabled ? S.buttonDisabled : {}),
+                }}
+                disabled={videoDisabled}
                 onClick={() => videoInputRef.current?.click()}
               >
                 <Video size={14} /> Video
@@ -331,11 +548,11 @@ export function MediaSection({
           </div>
 
           {quotaData && (
-            <div className="media-quota" data-testid="media-quota">
-              <div className="media-quota__track" aria-hidden="true">
-                <div className="media-quota__bar" style={{ width: `${quotaPct}%` }} />
+            <div className="media-quota" style={S.quota} data-testid="media-quota">
+              <div className="media-quota__track" style={S.quotaTrack} aria-hidden="true">
+                <div className="media-quota__bar" style={{ ...S.quotaBar, width: `${quotaPct}%` }} />
               </div>
-              <div className="media-quota__copy">
+              <div className="media-quota__copy" style={S.quotaCopy}>
                 {formatBytes(showUsed)} / {formatBytes(showLimit)} show ·{" "}
                 {formatBytes(userUsed)} / {formatBytes(userLimit)} user
               </div>
@@ -345,27 +562,35 @@ export function MediaSection({
       )}
 
       {status && (
-        <div className="media-status" data-testid="media-upload-status">
+        <div className="media-status" style={S.status} data-testid="media-upload-status">
           <Upload size={12} style={{ verticalAlign: -2, marginRight: 6 }} />
           {status}…
         </div>
       )}
       {error && (
-        <div className="media-status media-status--error" data-testid="media-upload-error">
+        <div
+          className="media-status media-status--error"
+          style={{ ...S.status, ...S.statusError }}
+          data-testid="media-upload-error"
+        >
           {error}
         </div>
       )}
       {uploadBlocked && (
-        <div className="media-status media-status--error" data-testid="media-quota-blocked">
+        <div
+          className="media-status media-status--error"
+          style={{ ...S.status, ...S.statusError }}
+          data-testid="media-quota-blocked"
+        >
           This show has reached its media limit.
         </div>
       )}
 
       {isLoading ? (
-        <div className="media-empty">
+        <div className="media-empty" style={S.empty}>
           <div>
-            <div className="media-empty__title">Loading media</div>
-            <div className="media-empty__body">Collecting photos and videos for this view.</div>
+            <div className="media-empty__title" style={S.emptyTitle}>Loading media</div>
+            <div className="media-empty__body" style={S.emptyBody}>Collecting photos and videos for this view.</div>
           </div>
         </div>
       ) : assets.length === 0 ? (
@@ -374,10 +599,10 @@ export function MediaSection({
         // itself conveys the empty state. For venue/performer scopes (no
         // uploader) we still need this card to fill the section.
         scope === "show" && canUpload ? null : (
-          <div className="media-empty">
+          <div className="media-empty" style={S.empty}>
             <div>
-              <div className="media-empty__title">No media yet</div>
-              <div className="media-empty__body">
+              <div className="media-empty__title" style={S.emptyTitle}>No media yet</div>
+              <div className="media-empty__body" style={S.emptyBody}>
                 {scope === "show"
                   ? "Add a few photos or a short video from the night."
                   : "Media uploaded to matching shows will collect here automatically."}
@@ -386,28 +611,38 @@ export function MediaSection({
           </div>
         )
       ) : (
-        <div className="media-grid" data-testid="media-gallery">
+        <div className="media-grid" style={S.grid} data-testid="media-gallery">
           {assets.map((asset) => {
             const showTagPicker = scope === "show";
             const isPickerOpen = openTagPickerFor === asset.id;
             return (
-              <article className="media-card" key={asset.id}>
-                <div className="media-card__frame">
+              <article className="media-card" style={S.card} key={asset.id}>
+                <div className="media-card__frame" style={S.cardFrame}>
                   {asset.mediaType === "photo" ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={asset.urls.card ?? asset.urls.full ?? asset.urls.thumb} alt="" />
+                    <img
+                      src={asset.urls.card ?? asset.urls.full ?? asset.urls.thumb}
+                      alt=""
+                      style={S.cardMedia}
+                    />
                   ) : (
-                    <video src={asset.urls.source} controls preload="metadata" />
+                    <video
+                      src={asset.urls.source}
+                      controls
+                      preload="metadata"
+                      style={{ ...S.cardMedia, background: "#050505" }}
+                    />
                   )}
                 </div>
-                <div className="media-card__meta">
-                  <div className="media-card__label" title={sourceLabel(asset)}>
+                <div className="media-card__meta" style={S.cardMeta}>
+                  <div className="media-card__label" style={S.cardLabel} title={sourceLabel(asset)}>
                     {sourceLabel(asset)}
                   </div>
                   {scope === "show" && (
                     <button
                       type="button"
                       className="media-card__delete"
+                      style={S.cardDelete}
                       aria-label="Delete media"
                       onClick={() => deleteMedia.mutate({ assetId: asset.id })}
                     >
