@@ -452,7 +452,7 @@
   padding: 24px;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 899px) {
   /* On mobile the EmptyState can be taller than the visible map pane, so
      centering clips the action buttons. Switch to top-aligned, scrollable
      flow so the .empty-state mobile bottom padding clears the fixed nav. */

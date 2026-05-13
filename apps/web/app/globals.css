@@ -42,7 +42,7 @@
   --marquee-gold: var(--accent);
 }
 
-@media (max-width: 767px) {
+@media (max-width: 899px) {
   :root {
     --page-pad-x: 14px;
   }

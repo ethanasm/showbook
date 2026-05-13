@@ -429,7 +429,7 @@
   pointer-events: none;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 899px) {
   .empty-state {
     grid-template-columns: 1fr;
     /* Extra bottom padding so action buttons clear the fixed bottom nav
@@ -1085,7 +1085,7 @@ a.show-row__support-link:hover {
   display: none;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 899px) {
   .preferences-mobile-only {
     display: block;
   }
@@ -1117,7 +1117,7 @@ a.show-row__support-link:hover {
 
 /* ── Mobile (<768px): bottom bar visible, sidebar hidden ── */
 
-@media (max-width: 767px) {
+@media (max-width: 899px) {
   .app-shell {
     flex-direction: column;
   }
@@ -1242,3 +1242,399 @@ a.show-row__support-link:hover {
     font-size: 9px;
   }
 }
+
+/* ── Responsive helpers ─────────────────────────────────────
+   Visibility helpers keyed off the same 767px breakpoint used
+   elsewhere. Prefer these over JS-side useIsMobile() for layout
+   decisions — they apply server-side so there's no hydration flash
+   between the SSR-default desktop layout and the post-mount mobile
+   layout.
+
+   Strategy: the class only forces `display: none` on the *wrong*
+   breakpoint. On the right breakpoint the element keeps whatever
+   `display` value its inline style / element default specifies
+   (inline-flex, grid, block, etc.) so we never have to encode
+   per-element display in the class. */
+@media (min-width: 768px) {
+  .mobile-only { display: none !important; }
+}
+@media (max-width: 899px) {
+  .desktop-only { display: none !important; }
+}
+
+/* Page container: prevent any descendant from causing the page to
+   scroll horizontally. Body already has overflow-x: hidden but
+   `overflow-x: clip` here pins the inner scroll container so iOS
+   touch-scroll can't drag overflowing children into view. */
+.app-shell__content {
+  overflow-x: clip;
+}
+
+/* ── HeroCard (used on Home `/upcoming` next-up slot) ──────── */
+.hero-card {
+  position: relative;
+  overflow: hidden;
+  padding: 28px 32px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+}
+
+.hero-card__grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 32px;
+  align-items: center;
+}
+
+.hero-card__main { min-width: 0; }
+
+.hero-card__title {
+  font-family: var(--font-display);
+  font-size: 52px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  color: var(--ink);
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.hero-card__support {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 16px;
+  color: var(--muted);
+  margin-top: 8px;
+  letter-spacing: 0;
+  overflow-wrap: break-word;
+}
+
+.hero-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  row-gap: 10px;
+  margin-top: 22px;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.hero-card__date {
+  padding-left: 32px;
+  padding-top: 0;
+  border-left: 1px solid var(--rule);
+  border-top: none;
+  min-width: 180px;
+  text-align: center;
+  display: block;
+}
+
+.hero-card__date-day {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 120px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 0.85;
+  font-feature-settings: "tnum";
+  margin-top: 4px;
+}
+
+@media (max-width: 899px) {
+  .hero-card {
+    padding: 20px 18px;
+  }
+  .hero-card__grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+  .hero-card__title { font-size: 32px; }
+  .hero-card__meta {
+    gap: 14px;
+    margin-top: 14px;
+  }
+  .hero-card__date {
+    padding-left: 0;
+    padding-top: 14px;
+    border-left: none;
+    border-top: 1px solid var(--rule);
+    min-width: 0;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .hero-card__date-day {
+    font-size: 56px;
+    margin-top: 0;
+  }
+  /* Reorder the date strip: day | month | dow | countdown(right) */
+  .hero-card__date-day { order: 0; }
+  .hero-card__date-month { order: 1; margin-top: 0; }
+  .hero-card__date-dow { order: 2; margin-top: 0; }
+  .hero-card__date-countdown {
+    order: 3;
+    margin-top: 0;
+    margin-left: auto;
+  }
+}
+
+/* ── Home top bar ───────────────────────────────────────────
+   Stats pill scrolls horizontally inside itself rather than
+   pushing past the viewport. */
+.home-topbar {
+  padding: 14px var(--page-pad-x);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--rule);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.home-topbar__wordmark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.home-topbar__stats {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 4px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(245, 245, 243, 0.035);
+  box-shadow: inset 0 1px 0 rgba(245, 245, 243, 0.04);
+  /* Horizontal scroll keeps the pill inside the viewport even if
+     all stat columns put together wouldn't fit. */
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.home-topbar__stats::-webkit-scrollbar { display: none; }
+
+.home-topbar__stats-year {
+  padding: 0 12px 0 10px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  color: var(--faint);
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.home-topbar__stat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 13px;
+  border-left: 1px solid var(--rule);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+@media (max-width: 899px) {
+  .home-topbar__stat { padding: 5px 10px; }
+  /* Reserve room for the fixed `.global-search__trigger` puck pinned at
+     `top: 10px; right: 12px` on mobile so the trailing stat label
+     doesn't sit underneath it. The puck is ~36px wide + 12px offset =
+     ~52px clearance. */
+  .home-topbar { padding-right: calc(var(--page-pad-x) + 52px); }
+}
+
+/* ── Home: mini-upcoming card row ──────────────────────────
+   3-up on desktop, 1-up on mobile. Driven by CSS so the layout
+   doesn't shift between SSR (default desktop) and hydrated state. */
+.home-mini-cards {
+  display: grid;
+  grid-template-columns: repeat(var(--mini-card-count, 3), minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 1px;
+  background: var(--rule);
+}
+
+@media (max-width: 899px) {
+  .home-mini-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── Home: Recent table row ────────────────────────────────
+   3-column collapse on mobile (date | headline+venue inline | chevron).
+   The desktop layout (7 cols) is rendered with extra cells that
+   are display: none on mobile. */
+.home-recent-row {
+  display: grid;
+  grid-template-columns: 72px 110px minmax(0, 1fr) minmax(0, 1fr) 110px 64px 28px;
+  column-gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--rule);
+  align-items: center;
+  cursor: pointer;
+}
+
+.home-recent-headers {
+  display: grid;
+  grid-template-columns: 72px 110px minmax(0, 1fr) minmax(0, 1fr) 110px 64px 28px;
+  column-gap: 16px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  color: var(--faint);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+[data-compact="true"] .home-recent-row { padding-top: 6px; padding-bottom: 6px; }
+
+@media (max-width: 899px) {
+  .home-recent-row {
+    grid-template-columns: 56px minmax(0, 1fr) 14px;
+    column-gap: 10px;
+    padding: 12px var(--page-pad-x);
+  }
+  .home-recent-headers { display: none; }
+}
+
+/* ── GetStartedHub: card variant ───────────────────────────
+   Desktop: text on left, button cluster on right (wraps below at
+   narrow desktop). Mobile: stacked — text on top, 2x3 grid of
+   buttons below. */
+.get-started-card {
+  margin: 12px var(--page-pad-x) 0;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+}
+
+.get-started-card__copy {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.get-started-card__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.get-started-card__dismiss {
+  background: none;
+  border: none;
+  color: var(--faint);
+  cursor: pointer;
+  padding: 4px;
+  display: inline-flex;
+}
+
+.get-started-card__door {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  color: var(--ink);
+  text-decoration: none;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: transparent;
+  min-width: 0;
+}
+
+.get-started-card__door-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.get-started-card__door-label--mobile { display: none; }
+.get-started-card__door-label--desktop { display: inline; }
+
+@media (max-width: 899px) {
+  .get-started-card {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 12px;
+    padding-top: 28px;
+  }
+  .get-started-card__copy {
+    flex: 0 0 auto;
+  }
+  .get-started-card__dismiss {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+  }
+  .get-started-card__buttons {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+    width: 100%;
+  }
+  .get-started-card__door {
+    justify-content: flex-start;
+    width: 100%;
+  }
+  .get-started-card__door-label--mobile { display: inline; }
+  .get-started-card__door-label--desktop { display: none; }
+}
+
+/* ── GetStartedHub: expanded variant (empty-state hub) ──── */
+.get-started-hub {
+  min-height: 100%;
+  padding: 48px 24px;
+  display: grid;
+  place-items: center;
+}
+
+.get-started-hub__inner {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+}
+
+.get-started-hub__doors {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 899px) {
+  .get-started-hub {
+    padding: 32px 20px calc(96px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    place-items: initial;
+  }
+}
+
