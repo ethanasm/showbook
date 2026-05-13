@@ -160,6 +160,8 @@ export function AddShowMediaStaging({
             type="file"
             multiple
             accept={PHOTO_ACCEPT}
+            hidden
+            style={{ display: "none" }}
             onChange={(event) => {
               if (event.target.files) addFiles(event.target.files);
               if (photoInputRef.current) photoInputRef.current.value = "";
@@ -172,6 +174,8 @@ export function AddShowMediaStaging({
             type="file"
             multiple
             accept={VIDEO_ACCEPT}
+            hidden
+            style={{ display: "none" }}
             onChange={(event) => {
               if (event.target.files) addFiles(event.target.files);
               if (videoInputRef.current) videoInputRef.current.value = "";

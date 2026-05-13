@@ -307,6 +307,8 @@ export function MediaSection({
                 data-testid="media-photo-input"
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                hidden
+                style={{ display: "none" }}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file) void handlePhoto(file);
@@ -318,6 +320,8 @@ export function MediaSection({
                 data-testid="media-video-input"
                 type="file"
                 accept="video/mp4"
+                hidden
+                style={{ display: "none" }}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file) void handleVideo(file);
@@ -365,16 +369,22 @@ export function MediaSection({
           </div>
         </div>
       ) : assets.length === 0 ? (
-        <div className="media-empty">
-          <div>
-            <div className="media-empty__title">No media yet</div>
-            <div className="media-empty__body">
-              {scope === "show"
-                ? "Add a few photos or a short video from the night."
-                : "Media uploaded to matching shows will collect here automatically."}
+        // When the uploader card is already showing for an empty show, the
+        // standalone "No media yet" card is redundant noise — the uploader
+        // itself conveys the empty state. For venue/performer scopes (no
+        // uploader) we still need this card to fill the section.
+        scope === "show" && canUpload ? null : (
+          <div className="media-empty">
+            <div>
+              <div className="media-empty__title">No media yet</div>
+              <div className="media-empty__body">
+                {scope === "show"
+                  ? "Add a few photos or a short video from the night."
+                  : "Media uploaded to matching shows will collect here automatically."}
+              </div>
             </div>
           </div>
-        </div>
+        )
       ) : (
         <div className="media-grid" data-testid="media-gallery">
           {assets.map((asset) => {
