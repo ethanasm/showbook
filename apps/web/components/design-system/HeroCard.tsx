@@ -5,14 +5,8 @@ import Link from "next/link";
 import "./design-system.css";
 import type { ShowKind } from "./KindBadge";
 import { PulseLabel } from "./PulseLabel";
-import {
-  MapPin,
-  Ticket,
-  Clock,
-  Check,
-} from "lucide-react";
+import { MapPin, Ticket, Clock, Check } from "lucide-react";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
-import { useIsMobile } from "@/lib/useIsMobile";
 
 export interface HeroShow {
   headliner: string;
@@ -38,20 +32,9 @@ interface HeroCardProps {
 export function HeroCard({ show }: HeroCardProps) {
   const KindIcon = KIND_ICONS[show.kind];
   const kindColor = `var(--kind-${show.kind})`;
-  const isMobile = useIsMobile();
 
   return (
-    <div
-      style={{
-        position: "relative",
-        overflow: "hidden",
-        padding: isMobile ? "20px 18px" : "28px 32px",
-        background: "var(--surface)",
-        border: "1px solid var(--rule)",
-        borderRadius: 12,
-        borderLeft: `3px solid ${kindColor}`,
-      }}
-    >
+    <div className="hero-card" style={{ borderLeft: `3px solid ${kindColor}` }}>
       <div className="glow-backdrop" style={{ opacity: 0.55 }} />
       {show.headlinerImageUrl && (
         <div
@@ -86,284 +69,243 @@ export function HeroCard({ show }: HeroCardProps) {
           />
         </div>
       )}
-      <div
-        style={{
-          position: "relative",
-          zIndex: 1,
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "1fr auto",
-          gap: isMobile ? 18 : 32,
-          alignItems: "center",
-      }}
-    >
-      {/* Left side */}
-      <div style={{ minWidth: 0 }}>
-        <div style={{ marginBottom: 16 }}>
-          <PulseLabel>
-            Next up &middot; {show.countdown} &middot; doors 7:00 pm
-          </PulseLabel>
+      <div className="hero-card__grid">
+        {/* Left side */}
+        <div className="hero-card__main">
+          <div style={{ marginBottom: 16 }}>
+            <PulseLabel>
+              Next up &middot; {show.countdown} &middot; doors 7:00 pm
+            </PulseLabel>
+          </div>
+
+          {/* Kind badge + Ticketed chip row */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              marginBottom: 14,
+              flexWrap: "wrap",
+            }}
+          >
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: 10.5,
+                color: kindColor,
+                letterSpacing: ".1em",
+                textTransform: "uppercase",
+                fontWeight: 500,
+              }}
+            >
+              <KindIcon size={13} color={kindColor} />
+              {KIND_LABELS[show.kind]}
+            </span>
+            {show.hasTix && (
+              <span
+                style={{
+                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontSize: 10.5,
+                  color: "var(--ink)",
+                  padding: "3px 8px",
+                  border: "1px solid var(--accent)",
+                  letterSpacing: ".06em",
+                  textTransform: "uppercase",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                }}
+              >
+                <Check size={11} color="var(--accent)" /> Ticketed
+              </span>
+            )}
+          </div>
+
+          {/* Headliner */}
+          <div className="hero-card__title">
+            {show.headlinerId ? (
+              <Link
+                href={`/artists/${show.headlinerId}`}
+                style={{ color: "inherit", textDecoration: "none" }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.textDecoration = "underline")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.textDecoration = "none")
+                }
+              >
+                {show.headliner}
+              </Link>
+            ) : (
+              show.headliner
+            )}
+          </div>
+
+          {/* Support artists */}
+          {show.support.length > 0 && (
+            <div className="hero-card__support">
+              with{" "}
+              {show.support.map((name, i) => {
+                const id = show.supportPerformers?.find(
+                  (p) => p.name === name,
+                )?.id;
+                return (
+                  <span key={`${name}-${i}`}>
+                    {id ? (
+                      <Link
+                        href={`/artists/${id}`}
+                        style={{ color: "inherit", textDecoration: "none" }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.textDecoration = "underline")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.textDecoration = "none")
+                        }
+                      >
+                        {name}
+                      </Link>
+                    ) : (
+                      name
+                    )}
+                    {i < show.support.length - 1 ? ", " : ""}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Meta row */}
+          <div className="hero-card__meta">
+            {/* Venue */}
+            <div
+              style={{ display: "flex", alignItems: "flex-start", gap: 8 }}
+            >
+              <MapPin size={14} color="var(--muted)" />
+              <div>
+                <div>
+                  {show.venueId ? (
+                    <Link
+                      href={`/venues/${show.venueId}`}
+                      style={{ color: "inherit", textDecoration: "none" }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.textDecoration = "underline")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.textDecoration = "none")
+                      }
+                    >
+                      {show.venue}
+                    </Link>
+                  ) : (
+                    show.venue
+                  )}
+                </div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 11,
+                    color: "var(--muted)",
+                    marginTop: 2,
+                  }}
+                >
+                  {show.city}
+                </div>
+              </div>
+            </div>
+
+            {/* Seat */}
+            <div
+              style={{ display: "flex", alignItems: "flex-start", gap: 8 }}
+            >
+              <Ticket size={14} color="var(--muted)" />
+              <div>
+                <div>{show.seat}</div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 11,
+                    color: "var(--muted)",
+                    marginTop: 2,
+                  }}
+                >
+                  ${show.paid} &middot; paid
+                </div>
+              </div>
+            </div>
+
+            {/* Doors / Show time */}
+            <div
+              style={{ display: "flex", alignItems: "flex-start", gap: 8 }}
+            >
+              <Clock size={14} color="var(--muted)" />
+              <div>
+                <div>doors 7:00 pm</div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 11,
+                    color: "var(--muted)",
+                    marginTop: 2,
+                  }}
+                >
+                  show 8:00 pm
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Kind badge + Ticketed chip row */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            marginBottom: 14,
-          }}
-        >
-          <span
+        {/* Right side — date column. On mobile this becomes a horizontal
+            strip below the headliner so the day digit doesn't crowd the title. */}
+        <div className="hero-card__date">
+          <div
+            className="hero-card__date-dow"
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 7,
               fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
+              fontSize: 11,
               color: kindColor,
-              letterSpacing: ".1em",
+              letterSpacing: ".12em",
               textTransform: "uppercase",
               fontWeight: 500,
             }}
           >
-            <KindIcon size={13} color={kindColor} />
-            {KIND_LABELS[show.kind]}
-          </span>
-          {show.hasTix && (
-            <span
-              style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
-                color: "var(--ink)",
-                padding: "3px 8px",
-                border: "1px solid var(--accent)",
-                letterSpacing: ".06em",
-                textTransform: "uppercase",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-              }}
-            >
-              <Check size={11} color="var(--accent)" /> Ticketed
-            </span>
-          )}
-        </div>
-
-        {/* Headliner */}
-        <div
-          style={{
-            fontFamily: "var(--font-display)",
-            fontSize: isMobile ? 32 : 52,
-            fontWeight: 700,
-            letterSpacing: "-0.01em",
-            color: "var(--ink)",
-            lineHeight: 1.1,
-            overflowWrap: "break-word",
-            wordBreak: "break-word",
-          }}
-        >
-          {show.headlinerId ? (
-            <Link
-              href={`/artists/${show.headlinerId}`}
-              style={{ color: "inherit", textDecoration: "none" }}
-              onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
-              onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
-            >
-              {show.headliner}
-            </Link>
-          ) : (
-            show.headliner
-          )}
-        </div>
-
-        {/* Support artists */}
-        {show.support.length > 0 && (
+            {show.date.dow}
+          </div>
           <div
-            style={{
-            fontFamily: "var(--font-geist-sans), sans-serif",
-            fontSize: 16,
-            color: "var(--muted)",
-            marginTop: 8,
-            letterSpacing: 0,
-          }}
+            className="hero-card__date-day gradient-emphasis"
           >
-            with{" "}
-            {show.support.map((name, i) => {
-              const id = show.supportPerformers?.find((p) => p.name === name)?.id;
-              return (
-                <span key={`${name}-${i}`}>
-                  {id ? (
-                    <Link
-                      href={`/artists/${id}`}
-                      style={{ color: "inherit", textDecoration: "none" }}
-                      onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
-                      onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
-                    >
-                      {name}
-                    </Link>
-                  ) : (
-                    name
-                  )}
-                  {i < show.support.length - 1 ? ", " : ""}
-                </span>
-              );
-            })}
+            {show.date.day}
           </div>
-        )}
-
-        {/* Meta row */}
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: isMobile ? 14 : 32,
-            rowGap: 10,
-            marginTop: isMobile ? 14 : 22,
-            fontFamily: "var(--font-geist-sans), sans-serif",
-            fontSize: 13,
-            color: "var(--ink)",
-          }}
-        >
-          {/* Venue */}
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-            <MapPin size={14} color="var(--muted)" />
-            <div>
-              <div>
-                {show.venueId ? (
-                  <Link
-                    href={`/venues/${show.venueId}`}
-                    style={{ color: "inherit", textDecoration: "none" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
-                    onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
-                  >
-                    {show.venue}
-                  </Link>
-                ) : (
-                  show.venue
-                )}
-              </div>
-              <div
-                style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
-                  color: "var(--muted)",
-                  marginTop: 2,
-                }}
-              >
-                {show.city}
-              </div>
-            </div>
+          <div
+            className="hero-card__date-month"
+            style={{
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 12,
+              color: "var(--ink)",
+              letterSpacing: ".14em",
+              marginTop: 4,
+              textTransform: "uppercase",
+              fontWeight: 500,
+            }}
+          >
+            {show.date.month}
           </div>
-
-          {/* Seat */}
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-            <Ticket size={14} color="var(--muted)" />
-            <div>
-              <div>{show.seat}</div>
-              <div
-                style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
-                  color: "var(--muted)",
-                  marginTop: 2,
-                }}
-              >
-                ${show.paid} &middot; paid
-              </div>
-            </div>
-          </div>
-
-          {/* Doors / Show time */}
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-            <Clock size={14} color="var(--muted)" />
-          <div>
-            <div>doors 7:00 pm</div>
-              <div
-                style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
-                  color: "var(--muted)",
-                  marginTop: 2,
-                }}
-              >
-                show 8:00 pm
-              </div>
-            </div>
+          <div
+            className="hero-card__date-countdown"
+            style={{
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 10.5,
+              color: "var(--muted)",
+              marginTop: 10,
+              letterSpacing: ".06em",
+            }}
+          >
+            {show.countdown}
           </div>
         </div>
-      </div>
-
-      {/* Right side — date column. On mobile this becomes a horizontal
-          strip below the headliner so the day digit doesn't crowd the title. */}
-      <div
-        style={{
-          textAlign: isMobile ? "left" : "center",
-          paddingLeft: isMobile ? 0 : 32,
-          paddingTop: isMobile ? 14 : 0,
-          borderLeft: isMobile ? "none" : "1px solid var(--rule)",
-          borderTop: isMobile ? "1px solid var(--rule)" : "none",
-          minWidth: isMobile ? 0 : 180,
-          display: isMobile ? "flex" : "block",
-          alignItems: "center",
-          gap: isMobile ? 14 : 0,
-        }}
-      >
-        <div
-          style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
-            color: kindColor,
-            letterSpacing: ".12em",
-            textTransform: "uppercase",
-            fontWeight: 500,
-            order: isMobile ? 2 : 0,
-          }}
-        >
-          {show.date.dow}
-        </div>
-        <div
-          style={{
-            fontFamily: "var(--font-geist-sans), sans-serif",
-            fontSize: isMobile ? 56 : 120,
-            fontWeight: 500,
-            letterSpacing: 0,
-            lineHeight: 0.85,
-            fontFeatureSettings: '"tnum"',
-            marginTop: isMobile ? 0 : 4,
-            order: isMobile ? 0 : 0,
-          }}
-          className="gradient-emphasis"
-        >
-          {show.date.day}
-        </div>
-        <div
-          style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 12,
-            color: "var(--ink)",
-            letterSpacing: ".14em",
-            marginTop: isMobile ? 0 : 4,
-            textTransform: "uppercase",
-            fontWeight: 500,
-            order: isMobile ? 1 : 0,
-          }}
-        >
-          {show.date.month}
-        </div>
-        <div
-          style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
-            color: "var(--muted)",
-            marginTop: isMobile ? 0 : 10,
-            marginLeft: isMobile ? "auto" : 0,
-            letterSpacing: ".06em",
-            order: isMobile ? 3 : 0,
-          }}
-        >
-          {show.countdown}
-        </div>
-      </div>
       </div>
     </div>
   );

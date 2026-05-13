@@ -116,6 +116,9 @@ export async function GET(request: Request) {
   const TEST_EMAIL = workerEmail(worker);
   const TEST_NAME = workerName(worker);
   const isWorkerSeed = worker != null;
+  // Visual-audit option: leave the user with shows but no venue follows so
+  // the `GetStartedHub` "card" variant renders on /home.
+  const noFollows = url.searchParams.get('noFollows') === '1';
 
   // If ?addRegion is present, just add a single region without re-seeding
   if (url.searchParams.has('addRegion')) {
@@ -309,8 +312,11 @@ export async function GET(request: Request) {
       { userId: user.id, cityName: 'Brooklyn', latitude: 40.6782, longitude: -73.9442, radiusMiles: 10, active: true },
     ]);
 
-    // Follow 3 venues
-    const followVenues = ['Madison Square Garden', 'Brooklyn Steel', 'The Beacon Theatre', 'Radio City Music Hall'];
+    // Follow 3 venues (unless ?noFollows=1, which reproduces the
+    // shows-but-no-follow-graph state where GetStartedHub renders).
+    const followVenues = noFollows
+      ? []
+      : ['Madison Square Garden', 'Brooklyn Steel', 'The Beacon Theatre', 'Radio City Music Hall'];
     for (const name of followVenues) {
       const vid = venueMap.get(name);
       if (vid) {

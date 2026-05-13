@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { useCompactMode } from "@/lib/useCompactMode";
-import { useIsMobile } from "@/lib/useIsMobile";
 import { EmptyState, HeroCard } from "@/components/design-system";
 import { GetStartedHub, useGetStartedDismissed } from "@/components/home/GetStartedHub";
+import "@/components/design-system/design-system.css";
 import type { ShowKind } from "@/components/design-system/KindBadge";
 import {
   ArrowRight,
@@ -69,7 +69,6 @@ const SANS = "var(--font-geist-sans), sans-serif";
 export default function HomeView() {
   const router = useRouter();
   const compact = useCompactMode();
-  const isMobile = useIsMobile();
   const { data: shows, isLoading } = trpc.shows.list.useQuery({});
   const { data: followedArtists } = trpc.performers.followed.useQuery();
   const { data: followedVenues } = trpc.venues.followed.useQuery();
@@ -227,20 +226,12 @@ export default function HomeView() {
       }}
     >
       {/* ── Top bar ─────────────────────────────────────────── */}
-      <div
-        style={{
-          padding: "14px var(--page-pad-x)",
-          display: "flex",
-          alignItems: isMobile ? "flex-start" : "center",
-          justifyContent: "space-between",
-          gap: isMobile ? 10 : 0,
-          flexWrap: isMobile ? "wrap" : "nowrap",
-          borderBottom: "1px solid var(--rule)",
-          flexShrink: 0,
-        }}
-      >
+      <div className="home-topbar">
         {/* Wordmark */}
-        <div data-testid="home-wordmark" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div
+          data-testid="home-wordmark"
+          className="home-topbar__wordmark"
+        >
           <Music size={15} color="var(--accent)" strokeWidth={2} />
           <span
             style={{
@@ -259,29 +250,9 @@ export default function HomeView() {
           <div
             data-testid="home-stats"
             aria-label="This year summary"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 0,
-              padding: 4,
-              border: "1px solid var(--rule)",
-              borderRadius: 999,
-              background: "rgba(245,245,243,.035)",
-              boxShadow: "inset 0 1px 0 rgba(245,245,243,.04)",
-            }}
+            className="home-topbar__stats"
           >
-            <div
-              style={{
-                padding: "0 12px 0 10px",
-                fontFamily: MONO,
-                fontSize: 9.5,
-                color: "var(--faint)",
-                lineHeight: 1,
-                letterSpacing: ".08em",
-                textTransform: "uppercase",
-                whiteSpace: "nowrap",
-              }}
-            >
+            <div className="home-topbar__stats-year">
               {new Date().getFullYear()}
             </div>
             {[
@@ -289,17 +260,7 @@ export default function HomeView() {
               { label: "Venues", value: String(stats.venues) },
               { label: "Artists", value: String(stats.artists) },
             ].map(({ label, value }) => (
-              <div
-                key={label}
-                style={{
-                  display: "flex",
-                  alignItems: "baseline",
-                  gap: 6,
-                  padding: isMobile ? "5px 10px" : "6px 13px",
-                  borderLeft: "1px solid var(--rule)",
-                  whiteSpace: "nowrap",
-                }}
-              >
+              <div key={label} className="home-topbar__stat">
                 <div
                   style={{
                     fontFamily: MONO,
@@ -423,15 +384,12 @@ export default function HomeView() {
           {/* Mini upcoming cards (3 columns on desktop, stacked on mobile) */}
           {miniCards.length > 0 && (
             <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: isMobile
-                  ? "1fr"
-                  : `repeat(${miniCards.length}, 1fr)`,
-                gap: 1,
-                marginTop: 1,
-                background: "var(--rule)",
-              }}
+              className="home-mini-cards"
+              style={
+                {
+                  ["--mini-card-count" as string]: String(miniCards.length),
+                } as React.CSSProperties
+              }
             >
               {miniCards.map((u) => {
                 const kind = u.kind as ShowKind;
@@ -646,31 +604,15 @@ export default function HomeView() {
           {/* Recent table */}
           <div style={{ background: "var(--surface)" }}>
             {/* Column headers — hidden on mobile (3-col layout is self-evident). */}
-            {!isMobile && (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns:
-                    "72px 110px 1fr 1fr 110px 64px 28px",
-                  columnGap: 16,
-                  padding: "10px 20px",
-                  borderBottom: "1px solid var(--rule)",
-                  fontFamily: MONO,
-                  fontSize: 9.5,
-                  color: "var(--faint)",
-                  letterSpacing: ".12em",
-                  textTransform: "uppercase",
-                }}
-              >
-                <div>Date</div>
-                <div>Kind</div>
-                <div>Headline</div>
-                <div>Venue</div>
-                <div>Seat</div>
-                <div style={{ textAlign: "right" }}>Paid</div>
-                <div />
-              </div>
-            )}
+            <div className="home-recent-headers">
+              <div>Date</div>
+              <div>Kind</div>
+              <div>Headline</div>
+              <div>Venue</div>
+              <div>Seat</div>
+              <div style={{ textAlign: "right" }}>Paid</div>
+              <div />
+            </div>
 
             {/* Rows */}
             {recentShows.length > 0 ? (
@@ -702,21 +644,7 @@ export default function HomeView() {
                     onContextMenu={(e) =>
                       handleRecentContextMenu(e, s as ShowForContextMenu)
                     }
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: isMobile
-                        ? "56px minmax(0, 1fr) 14px"
-                        : "72px 110px 1fr 1fr 110px 64px 28px",
-                      columnGap: isMobile ? 10 : 16,
-                      padding: compact
-                        ? "6px var(--page-pad-x)"
-                        : isMobile
-                        ? "12px var(--page-pad-x)"
-                        : "14px 20px",
-                      borderBottom: "1px solid var(--rule)",
-                      alignItems: "center",
-                      cursor: "pointer",
-                    }}
+                    className="home-recent-row"
                     onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg)")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "")}
                   >
@@ -750,24 +678,23 @@ export default function HomeView() {
 
                     {/* Kind — desktop only; on mobile we show the kind icon
                         next to the venue name to keep the row to 3 cols. */}
-                    {!isMobile && (
-                      <div
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 7,
-                          fontFamily: MONO,
-                          fontSize: 10.5,
-                          color: kindColor,
-                          letterSpacing: ".08em",
-                          textTransform: "uppercase",
-                          fontWeight: 500,
-                        }}
-                      >
-                        <KindIcon size={12} color={kindColor} />
-                        {KIND_LABELS[kind]}
-                      </div>
-                    )}
+                    <div
+                      className="desktop-only"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 7,
+                        fontFamily: MONO,
+                        fontSize: 10.5,
+                        color: kindColor,
+                        letterSpacing: ".08em",
+                        textTransform: "uppercase",
+                        fontWeight: 500,
+                      }}
+                    >
+                      <KindIcon size={12} color={kindColor} />
+                      {KIND_LABELS[kind]}
+                    </div>
 
                     {/* Headline + support */}
                     <div style={{ minWidth: 0 }}>
@@ -839,33 +766,31 @@ export default function HomeView() {
                           venue is rendered as plain text — wrapping it in
                           a Link with stopPropagation made tapping the row
                           ambiguous and intermittently swallowed the click. */}
-                      {isMobile && (
-                        <div
-                          style={{
-                            fontFamily: SANS,
-                            fontSize: 12,
-                            color: "var(--muted)",
-                            marginTop: 4,
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 6,
-                            maxWidth: "100%",
-                          }}
-                        >
-                          <KindIcon size={11} color={kindColor} />
-                          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {s.venue.name}
-                          </span>
-                        </div>
-                      )}
+                      <div
+                        className="mobile-only"
+                        style={{
+                          display: "inline-flex",
+                          fontFamily: SANS,
+                          fontSize: 12,
+                          color: "var(--muted)",
+                          marginTop: 4,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          alignItems: "center",
+                          gap: 6,
+                          maxWidth: "100%",
+                        }}
+                      >
+                        <KindIcon size={11} color={kindColor} />
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {s.venue.name}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Venue — desktop only; mobile merges venue into the headline cell. */}
-                    {!isMobile && (
-                    <div style={{ minWidth: 0 }}>
+                    <div className="desktop-only" style={{ minWidth: 0 }}>
                       <div
                         style={{
                           fontFamily: SANS,
@@ -899,36 +824,33 @@ export default function HomeView() {
                         </div>
                       )}
                     </div>
-                    )}
 
                     {/* Seat — desktop only */}
-                    {!isMobile && (
-                      <div
-                        style={{
-                          fontFamily: MONO,
-                          fontSize: 11,
-                          color: "var(--muted)",
-                        }}
-                      >
-                        {s.seat ?? "—"}
-                      </div>
-                    )}
+                    <div
+                      className="desktop-only"
+                      style={{
+                        fontFamily: MONO,
+                        fontSize: 11,
+                        color: "var(--muted)",
+                      }}
+                    >
+                      {s.seat ?? "—"}
+                    </div>
 
                     {/* Paid — desktop only */}
-                    {!isMobile && (
-                      <div
-                        style={{
-                          textAlign: "right",
-                          fontFamily: MONO,
-                          fontSize: 12,
-                          color: "var(--ink)",
-                          fontWeight: 500,
-                          fontFeatureSettings: '"tnum"',
-                        }}
-                      >
-                        {paidDisplay}
-                      </div>
-                    )}
+                    <div
+                      className="desktop-only"
+                      style={{
+                        textAlign: "right",
+                        fontFamily: MONO,
+                        fontSize: 12,
+                        color: "var(--ink)",
+                        fontWeight: 500,
+                        fontFeatureSettings: '"tnum"',
+                      }}
+                    >
+                      {paidDisplay}
+                    </div>
 
                     {/* Chevron */}
                     <ChevronRight
