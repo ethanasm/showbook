@@ -1,22 +1,30 @@
 import { test, expect } from '@playwright/test';
 import { loginAndSeedAsWorker } from './helpers/auth';
 
-// Regression test for the mobile-layout bug fixed alongside this spec: when
-// `.discover-row` used `64px minmax(0, 1fr) auto`, the centered kind chip's
-// x-position depended on the auto column's content width. Rows with long
-// venue or headliner text squeezed the 1fr column narrower and dragged the
-// chip left, so the kind column was visibly misaligned across rows on
-// mobile. The grid now uses a fixed-width middle column so the chip lives
-// at the same x on every row.
+// Regression tests for the Discover-feed grid template that the surrounding
+// commit re-tuned:
+//
+//   - Mobile: rows used `64px minmax(0, 1fr) auto`. The kind chip sat in
+//     the 1fr middle column, so its centered x-position depended on how
+//     wide the auto third column rendered for each row. Long venue text
+//     squeezed the middle column narrower and dragged the chip ~10 px left
+//     compared to short-text rows.
+//   - Desktop: rows used `72px 100px 1fr 120px 110px 200px`. Fixed columns
+//     summed to more than a 1280 px viewport could afford after the
+//     220 px main sidebar and 240 px discover rail, leaving the 1fr
+//     headliner cell at ~40 px — short names like "Bon Iver" rendered as
+//     "Bon…".
+//
+// Both assertions exercise the seeded feed (e2e-w<idx>@showbook.dev,
+// followed-venues view, ~3 announcements).
 
-test.describe('Discover kind column alignment (mobile)', () => {
-  test.skip(({ viewport }) => (viewport?.width ?? 1440) >= 900, 'mobile-only layout');
-
+test.describe('Discover kind alignment + headliner width', () => {
   test.beforeEach(async ({ page }) => {
     await loginAndSeedAsWorker(page);
   });
 
-  test('kind chip x-position is identical across rows regardless of venue name length', async ({ page }) => {
+  test('mobile: kind chip x-position is identical across rows', async ({ page, viewport }) => {
+    test.skip((viewport?.width ?? 1440) >= 900, 'mobile-only layout');
     await page.goto('/discover');
     await page.waitForLoadState('networkidle');
     await page.locator('.discover-row').first().waitFor({ state: 'visible' });
@@ -32,8 +40,30 @@ test.describe('Discover kind column alignment (mobile)', () => {
 
     expect(centers.length, 'expected the seeded discover feed to have rows').toBeGreaterThanOrEqual(2);
     const spread = Math.max(...centers) - Math.min(...centers);
-    // Sub-pixel rounding (deviceScaleFactor=2) leaves up to ~0.5 px of
-    // wobble; require well under the 9.6 px shift the bug used to produce.
+    // Sub-pixel rounding at deviceScaleFactor=2 leaves up to ~0.5 px of
+    // wobble; the broken layout produced ~9.6 px of drift.
     expect(spread, `kind chip x-positions drifted by ${spread.toFixed(2)} px across rows`).toBeLessThan(1);
+  });
+
+  test('desktop: headliner cell renders wide enough to show typical names without truncation', async ({ page, viewport }) => {
+    test.skip((viewport?.width ?? 0) < 900, 'desktop-only layout');
+    // Use a 1280 px viewport — narrower than the default desktop project
+    // (1440) — to exercise the case where the original template starved
+    // the 1fr headliner column.
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/discover');
+    await page.waitForLoadState('networkidle');
+    await page.locator('.discover-row').first().waitFor({ state: 'visible' });
+
+    const widths = await page.$$eval('.discover-row__headliner-cell', (cells) =>
+      cells.map((c) => c.getBoundingClientRect().width),
+    );
+    expect(widths.length, 'expected the seeded discover feed to have rows').toBeGreaterThanOrEqual(2);
+    const minWidth = Math.min(...widths);
+    // Sized to fit the shortest seeded headliner ("Hamilton", "Bon Iver")
+    // at 14 px sans (~60 px text width) plus margin. The broken layout
+    // collapsed this cell to ~40 px, hiding most of every name behind the
+    // ellipsis.
+    expect(minWidth, `headliner cell width was ${minWidth.toFixed(2)} px`).toBeGreaterThanOrEqual(100);
   });
 });

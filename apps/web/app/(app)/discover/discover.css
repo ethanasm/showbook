@@ -325,7 +325,14 @@
 
 .discover-col-headers {
   display: grid;
-  grid-template-columns: 72px 100px 1fr 120px 110px 200px;
+  /* Headliner column is `minmax(0, 1fr)` so it can shrink with ellipsis
+     instead of forcing the row to overflow. Fixed columns sized for typical
+     content: dates ~"Aug 1 – Oct 29", kind chips up to "FESTIVAL", on-sale
+     dates ~"Sep 12, 2026", status badge "ANNOUNCED", actions auto-size to
+     the Watch + Calendar buttons. Original template (72/100/1fr/120/110/200)
+     left only ~40 px for the headliner at a 1280 px viewport, truncating
+     names like "Bon Iver" to "Bon…". */
+  grid-template-columns: 72px 84px minmax(0, 1fr) 96px 88px auto;
   column-gap: 16px;
   padding: 0 12px 10px;
   font-family: var(--font-geist-mono), monospace;
@@ -338,7 +345,7 @@
 
 /* Near You table has an extra Venue column between Kind and Headliner. */
 .discover-col-headers--region {
-  grid-template-columns: 72px 76px 140px minmax(0, 1fr) 90px 80px 200px;
+  grid-template-columns: 72px 84px 100px minmax(0, 1fr) 88px 80px auto;
 }
 
 /* ── Venue Group ─────────────────────────────────────── */
@@ -428,7 +435,9 @@
 
 .discover-row {
   display: grid;
-  grid-template-columns: 72px 100px 1fr 120px 110px 200px;
+  /* Keep this in lock-step with `.discover-col-headers`. See that block for
+     why the columns were re-sized. */
+  grid-template-columns: 72px 84px minmax(0, 1fr) 96px 88px auto;
   column-gap: 16px;
   padding: 12px;
   align-items: center;
@@ -438,7 +447,7 @@
 
 /* Near You row layout includes a Venue cell. */
 .discover-row.discover-row--region {
-  grid-template-columns: 72px 76px 140px minmax(0, 1fr) 90px 80px 200px;
+  grid-template-columns: 72px 84px 100px minmax(0, 1fr) 88px 80px auto;
 }
 
 .discover-row__venue-cell {
