@@ -1,5 +1,5 @@
 FROM node:20-alpine AS base
-RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+RUN corepack enable && corepack prepare pnpm@10.33.4 --activate
 WORKDIR /app
 
 # ---------- deps: install pnpm workspace deps once, reused by dev + prod ----------
