@@ -1614,8 +1614,10 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
 
         {/* Show list */}
         <div className="shows-list-table" style={{ margin: isMobile ? "4px 12px 0" : "4px var(--page-pad-x) 0", background: "var(--surface)" }}>
-          {/* Column headers */}
-          <div style={{
+          {/* Column headers — hidden on mobile via CSS because the row
+              grid collapses to a 5-col layout there and the 10-col header
+              template would otherwise force horizontal overflow. */}
+          <div className="shows-list-table__col-headers" style={{
             display: "grid",
             gridTemplateColumns: SHOW_LIST_GRID_TEMPLATE,
             columnGap: 16,
