@@ -292,6 +292,17 @@ Add to the curated list in repo-root `CLAUDE.md`:
    and it passes.
 4. The Phase 0 migration runs cleanly on a freshly-created DB and
    on a copy of prod data.
+5. **Mobile connect flow manually smoke-tested on iOS Simulator AND
+   Android emulator (SI-08).** `WebBrowser.openAuthSessionAsync`
+   resolves only when the in-app browser intercepts a redirect to
+   the registered URL — for the HTTPS callback URL we use, that
+   depends on whether the app supports universal links for the
+   Showbook domain. If the auth session never resolves (the
+   in-app browser stays open after the callback's HTML loads),
+   the fallback is to register a `showbook://spotify-connected`
+   deep-link scheme + redirect to it from the callback. Tracked
+   for follow-up; do NOT mark Phase 0 mobile parity done until
+   this test passes on both platforms.
 
 ---
 

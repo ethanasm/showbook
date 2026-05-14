@@ -132,46 +132,80 @@ procedure and the segment-render gate in
 `apps/web/app/(app)/shows/[id]/page.tsx`. Phase 1 + Phase 5 specs
 updated to call this out.
 
-### SI-04 · Corpus-fill skips performers with no MBID, with no fallback
+### SI-04 · Corpus-fill skips performers with no MBID, with no fallback ✅ RESOLVED
 
 Most small artists — Ticketmaster gives us MBIDs for major performers,
 MusicBrainz coverage thins fast for indie acts. Their
 `predictedSetlist` will permanently return `tourCoverage: 'cold'`. The
 plan never names this; the §15h "festival vs headline" filter is the
-closest thing. Need either a name-based fallback or a UX path that
-says "we can't predict this artist" honestly.
+closest thing.
 
-### SI-05 · Phase 3's "hype button hidden for rotating-style" depends on Phase 5
+**Resolved with option A (cold "no_mbid" empty state):** Phase 1
+spec extended to emit `corpus.fill.no_mbid` when the performer
+lacks an MBID, and `predictedSetlist` returns the `cold` empty
+state with `reason: 'no_mbid'` and copy *"We can't pull recent
+setlists for [artist] — they're not in the MusicBrainz database
+we use as the ID source. We'll try to match on the next nightly
+enrichment pass."* The existing `matchOrCreatePerformer`
+enrichment back-fills MBIDs over time, so the empty state is
+self-healing for any performer who eventually gets a MusicBrainz
+record. Name-based search fallback (option B) considered but
+deferred — false matches would poison the corpus permanently.
+
+### SI-05 · Phase 3's "hype button hidden for rotating-style" depends on Phase 5 ✅ RESOLVED
 
 Phase 3 spec line 159 says hide for rotating, but
 `performer.setlistStyle` doesn't get classified until Phase 5.
 Sequence-wise, Phase 3 ships hype buttons that show for Phish too.
-Either Phase 3 needs to inline a quick classifier, or Phase 5 has to
-land first.
 
-### SI-06 · Prediction-cache signature has a race
+**Resolved with option C (ship Phase 3 with the button visible
+everywhere; Phase 5 adds the style guard):** Phase 3 spec updated
+to drop the `setlistStyle === 'rotating'` hide rule from its
+ship-list. The button is visible for every concert/festival in
+the Phase 3 → Phase 5 window. Phish fans get a low-relevance
+playlist of recent-rotation songs briefly; Phase 5 adds the hide
+rule when the classifier lands. The cost is acceptable brief
+misleading UX; the win is Phase 3 doesn't block on Phase 5.
+
+### SI-06 · Prediction-cache signature has a race ✅ RESOLVED
 
 `corpus_signature = max(tour_setlists.fetched_at)` is computed
 *outside* the SELECT that returns the corpus rows. If the corpus-fill
 job inserts a row between those two queries, we cache a stale-marked
-prediction that includes the new row. Fix: take both inside one
-transaction, or hash the row IDs instead.
+prediction that includes the new row.
+
+**Resolved with option C (`REPEATABLE READ` transaction):** Phase
+1 spec adds a `loadCorpusForPrediction` helper that wraps both
+queries in a `SET TRANSACTION ISOLATION LEVEL REPEATABLE READ` —
+MVCC pins both reads to the same snapshot. Both queries are
+SELECT-only so isolation adds no contention. The spec includes a
+unit-test outline asserting concurrent corpus-fill + prediction
+read produces a consistent signature.
 
 ---
 
 ## Significant — can ship Phase 0 but need a plan
 
-### SI-07 · Tour-ID synthesis collisions are real, not theoretical
+### SI-07 · Tour-ID synthesis collisions are real, not theoretical ✅ RESOLVED
 
 §15r mentions year-salting but punts to Phase 11. Sabrina has reused
 tour names across years; Phish has "Summer Tour 2025"/"2026";
 Coldplay's "Music of the Spheres" runs three years. The current
-`(performerId, lower(tour.name))` synthesis fuses them, and the
-365-day Tier D bound doesn't help when the same tour name
-*legitimately* spans multiple years. Worth salting now, not in
-Phase 11.
+`(performerId, lower(tour.name))` synthesis fuses them.
 
-### SI-08 · Mobile connect flow is plausibly broken in practice
+**Resolved with option A (year salt, run-bucketed by 365-day
+gap):** Phase 1 spec updated. `tour_id = hash(performerId,
+lower(tour.name), runYear)` where `runYear = year of
+MIN(performance_date)` across rows matching the same performer +
+tour name within a ±365-day window of the new setlist. A gap
+larger than 365 days from any existing same-named tour starts a
+fresh run with its own salt. Catches the Sabrina/Coldplay
+multi-year wraparound case while cleanly separating
+clearly-distinct eras with the same name. The §15r option C
+sliding-window with ≤90-day gaps deferred — 365 days is the right
+v1 tradeoff.
+
+### SI-08 · Mobile connect flow is plausibly broken in practice ✅ RESOLVED (pending manual smoke test)
 
 `WebBrowser.openAuthSessionAsync(authUrl, redirectUri)` resolves on
 redirect-to-redirectUri *with the URL*, but the iOS
@@ -179,8 +213,22 @@ ASWebAuthenticationSession only intercepts redirects matching its
 registered URL scheme. Pointing at our HTTPS web callback works only
 if the app supports universal links for that domain — Showbook today
 uses `showbook://` for deep links and we didn't verify universal-link
-config. Worth a manual smoke test in iOS Simulator before claiming
-Phase 0 mobile parity.
+config.
+
+**Resolved with option B (manual smoke test required):** Phase 0
+exit criteria #5 added — mobile connect flow must be manually
+smoke-tested on both iOS Simulator AND Android emulator before
+claiming Phase 0 mobile parity done. If the auth session never
+resolves on iOS, the fallback path is to register a
+`showbook://spotify-connected` deep-link scheme + redirect to it
+from the callback for in-app browser User-Agents. Tracked as a
+ship-blocker on Phase 0 — code stays as-is until smoke test
+either confirms it works or reveals the fix is needed.
+
+**Owner action item:** run `pnpm mobile:ios`, click Connect Spotify,
+walk through OAuth, confirm the sheet closes + connection state
+updates. Same on Android emulator. Report back; if either fails,
+file follow-up to wire the deep-link fallback.
 
 ### SI-09 · `disconnectSpotify`'s cascading-purge story isn't owned phase-by-phase
 

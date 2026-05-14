@@ -176,6 +176,24 @@ Nightly job updating `songs.current_gap_shows` and
 - **`BustoutCandidateRow`** — `✨` prefix + fine-print historical
   context
 
+#### Phase 3 cleanup (SI-05)
+
+Per SI-05 option C, Phase 3 shipped the **Hype playlist** button
+visible for every concert/festival regardless of style. Phase 5
+adds the rotating-style hide rule the spec originally called for:
+
+```tsx
+{performer.setlistStyle !== 'rotating' && (
+  <HypePlaylistButton ... />
+)}
+```
+
+Why now: with the classifier landed, we can finally tell the
+difference between Tate McRae (stable; useful hype playlist) and
+Phish (rotating; low-relevance hype playlist would just be the
+recent-rotation pile). The brief Phase 3 → Phase 5 window of
+misleading UX for jam-band fans ends here.
+
 The show-detail predicted-setlist segment becomes a switcher on
 `prediction.style`:
 
