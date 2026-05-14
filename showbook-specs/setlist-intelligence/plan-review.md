@@ -489,17 +489,24 @@ That means ~100% miss rate for any song released in 2023 or
 later. The vibe radar for a 2025 pop tour would be empty.
 
 **Resolved with option D (probe-gated).** Phase 8 spec commits to
-the gate: Phase 0 ends with a single test call against
-`audio-features` and writes the result to a config flag. At the
-start of Phase 8, the flag decides:
-- **Granted** → ship Phase 8 as designed (Spotify-native).
-- **Denied** → drop Phase 8 from v1 (vibe radar / energy arc /
-  set-length are nice-to-haves, not core). Revisit in a v2 with
-  a third-party data source if user demand is high.
+the gate: Phase 0 ships a probe script
+(`pnpm --filter @showbook/api probe-audio-features <userId>`) the
+operator runs once against their own connected Spotify; the
+result decides the in-code feature flag
+`FeatureFlag.SpotifyAudioFeaturesAvailable` (in
+`packages/shared/src/feature-flags.ts`). Phase 8 reads
+`isFeatureOn('SpotifyAudioFeaturesAvailable')` at job start:
 
-The plan already structured Phase 8 this way; this resolution
-commits to enforcing it (no AcousticBrainz fallback as a default
-— it's too thin for new music to be useful).
+- **`ON`** (probe returned 200) → ship Phase 8 as designed
+  (Spotify-native).
+- **`OFF`** (probe returned 403, or never run) → drop Phase 8
+  from v1. Revisit in v2 with a third-party data source if user
+  demand is high.
+
+The flag lives in code (per Showbook's "feature decisions change
+by PR" convention) rather than an env var or DB config. No
+AcousticBrainz fallback ships by default — it's frozen at 2022,
+too thin for new music to be useful.
 
 ---
 

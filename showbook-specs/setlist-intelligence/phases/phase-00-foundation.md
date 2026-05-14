@@ -286,8 +286,14 @@ Add to the curated list in repo-root `CLAUDE.md`:
 ## Exit criteria
 
 1. Existing artist-import works end-to-end with persistent tokens.
-2. A scaffolding "echo my Spotify name" tRPC procedure round-trips
-   the persisted token (hidden behind admin flag; removed in P3).
+2. The audio-features probe has been run by the operator against
+   their own connected Spotify account, and the in-code feature
+   flag `SpotifyAudioFeaturesAvailable` (in
+   `packages/shared/src/feature-flags.ts`) reflects the result.
+   Phase 8 reads `isFeatureOn('SpotifyAudioFeaturesAvailable')`
+   at job start to decide whether to ship natively or get dropped
+   from v1 (SI-16). See the "Audio-features probe" section below
+   for the runbook.
 3. `pnpm verify:e2e` includes the connect-modal Playwright spec
    and it passes.
 4. The Phase 0 migration runs cleanly on a freshly-created DB and
@@ -303,6 +309,68 @@ Add to the curated list in repo-root `CLAUDE.md`:
    deep-link scheme + redirect to it from the callback. Tracked
    for follow-up; do NOT mark Phase 0 mobile parity done until
    this test passes on both platforms.
+
+(The earlier draft of this list included a scaffolding "echo my
+Spotify name" admin tRPC procedure as exit #2. Dropped — the
+audio-features probe script already exercises the same chain
+end-to-end (decrypt persisted token → live Spotify API call →
+print result), so a separate echo procedure was redundant.)
+
+### Audio-features probe (runbook)
+
+The setlist-intel spec includes a Phase 8 feature (vibe radar +
+energy arc) that depends on Spotify's `audio-features` endpoint,
+which Spotify deprecated for new applications in late 2024.
+Showbook's app registration may or may not have been
+grandfathered. Per SI-16, Phase 8 is **hard-gated** on the result.
+
+The probe needs a real connected Spotify token, so it can't run
+at deploy time. The operator runs it once after their own Spotify
+connects:
+
+```bash
+# After connecting Spotify in Preferences for an admin account:
+pnpm --filter @showbook/api probe-audio-features <userId>
+```
+
+Pass the Showbook user id (look up via
+`SELECT id FROM users WHERE email = '<your email>';`). The script
+hits `GET /v1/audio-features/3n3Ppam7vgaVa1iaRUc9Lp`
+("Mr. Brightside" — a stable, well-known track) and reports
+either:
+
+- **200 OK** → access intact. Open a PR flipping the in-code
+  flag `SpotifyAudioFeaturesAvailable` from `'OFF'` to `'ON'` in
+  `packages/shared/src/feature-flags.ts`. Phase 8 will ship as
+  designed once that PR merges.
+- **403 Forbidden** → access denied. Leave the flag at its
+  default `'OFF'`. Phase 8 will be dropped from v1; revisit in
+  v2 only when a viable third-party data source is identified.
+- **Other status** → transient; re-run.
+
+The flag lives in code rather than env / config because Showbook's
+convention is "feature decisions change by PR" — see the header
+comment in `feature-flags.ts`.
+
+### Disconnect cleanup registry (SI-09)
+
+Ships in Phase 0 alongside `disconnectSpotify`:
+`packages/api/src/spotify-disconnect-registry.ts` declares four
+arrays (`USER_SCOPED_PURGE_COLUMNS`, `USER_SCOPED_PURGE_TABLES`,
+`CATALOG_KEEP_COLUMNS`, `USER_SCOPED_AUDIT`) that future phases
+populate as they add Spotify-derived columns. A build-failing
+test (`spotify-disconnect-registry.test.ts`) introspects the
+schema, finds anything Spotify-shaped, and asserts each appears
+in exactly one of the four arrays — anything missing fails the
+build in the PR that adds it, forcing an explicit "purge or
+keep?" categorization decision.
+
+Phase 0's arrays are empty except for the seed entries: the
+`user_spotify_tokens` table is in `USER_SCOPED_AUDIT` (handled
+directly by `disconnectSpotify` via `revoked_at`), and
+`songs.spotify_track_id` is in `CATALOG_KEEP_COLUMNS` (Phase 0
+shipped the column ahead of the Phase 3 resolver job). Phases 3,
+7, 8, 9, 11 each add entries as their columns land.
 
 ---
 

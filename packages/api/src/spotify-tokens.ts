@@ -34,6 +34,10 @@ import {
   type SpotifyMe,
   type SpotifyTokenSet,
 } from './spotify';
+import {
+  USER_SCOPED_PURGE_COLUMNS,
+  USER_SCOPED_PURGE_TABLES,
+} from './spotify-disconnect-registry';
 
 const log = child({ component: 'api.spotify-tokens', provider: 'spotify' });
 
@@ -252,32 +256,75 @@ export async function getConnectionStatus(
  * job (Phase 11+) drops rows that have been revoked > 30 days. Idempotent
  * — re-running on an already-revoked row is a no-op.
  *
- * Cascading purge of Spotify-derived columns on `shows` (fan-loyalty %,
- * priming counts, playlist URLs) lands as those columns ship in Phase 3
- * / 7. In Phase 0 the caller is the only thing that needs to know.
+ * Cascading purge of Spotify-derived columns on `shows` / `users` /
+ * Spotify-scoped tables is driven by the SI-09 registry in
+ * `spotify-disconnect-registry.ts`. Phase 0 ships the scaffold with
+ * empty arrays; Phases 3, 7, 9 add entries as their columns land.
+ * The companion schema-scan test fails the build if a new
+ * Spotify-shaped column is added without being categorized.
  */
 export async function disconnectSpotify(
   userId: string,
   reason: string,
 ): Promise<void> {
   const now = new Date();
-  await db
-    .update(userSpotifyTokens)
-    .set({
-      revokedAt: now,
-      revokedReason: reason,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(userSpotifyTokens.userId, userId),
-        // Only flip rows that aren't already revoked — keeps the original
-        // revoked_at / revoked_reason for auditing the first event.
-        sql`${userSpotifyTokens.revokedAt} IS NULL`,
-      ),
-    );
+
+  await db.transaction(async (tx) => {
+    // 1. Mark the token row revoked (the soft-delete; Phase 11's
+    //    cron hard-deletes after 30 days).
+    await tx
+      .update(userSpotifyTokens)
+      .set({
+        revokedAt: now,
+        revokedReason: reason,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(userSpotifyTokens.userId, userId),
+          // Only flip rows that aren't already revoked — keeps the
+          // original revoked_at / revoked_reason for auditing the
+          // first event.
+          sql`${userSpotifyTokens.revokedAt} IS NULL`,
+        ),
+      );
+
+    // Identifier names (table / column / filter) come from the
+    // hardcoded registry — never user input — so quoting them via
+    // `sql.raw` is safe. The userId value is parameterized via the
+    // `sql` tag (no string concatenation), so it goes through
+    // postgres-js's parameter binding.
+
+    // 2. Clear every user-personal Spotify-derived column registered
+    //    in USER_SCOPED_PURGE_COLUMNS. Empty in Phase 0; Phases 3, 7
+    //    add entries.
+    for (const entry of USER_SCOPED_PURGE_COLUMNS) {
+      await tx.execute(sql`
+        UPDATE ${sql.raw(`"${entry.table}"`)}
+        SET ${sql.raw(`"${entry.column}"`)} = NULL
+        WHERE ${sql.raw(`"${entry.filter}"`)} = ${userId}
+      `);
+    }
+
+    // 3. Delete user-scoped Spotify tables registered in
+    //    USER_SCOPED_PURGE_TABLES. Empty in Phase 0; Phase 9 adds
+    //    `user_spotify_skipped_artists`.
+    for (const entry of USER_SCOPED_PURGE_TABLES) {
+      await tx.execute(sql`
+        DELETE FROM ${sql.raw(`"${entry.table}"`)}
+        WHERE ${sql.raw(`"${entry.filter}"`)} = ${userId}
+      `);
+    }
+  });
+
   log.info(
-    { event: 'spotify.connect.revoked', userId, reason },
+    {
+      event: 'spotify.connect.revoked',
+      userId,
+      reason,
+      purgedColumns: USER_SCOPED_PURGE_COLUMNS.length,
+      purgedTables: USER_SCOPED_PURGE_TABLES.length,
+    },
     'Spotify connection revoked',
   );
 }
