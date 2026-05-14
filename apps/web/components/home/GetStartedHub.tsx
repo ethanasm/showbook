@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Eye, Music, Plus, X, ArrowRight, Mail, Ticket } from "lucide-react";
 import { SpotifyImportModal } from "@/components/preferences/SpotifyImportModal";
-import { useIsMobile } from "@/lib/useIsMobile";
+import "@/components/design-system/design-system.css";
 
 const STORAGE_KEY = "showbook:get-started-dismissed";
 const MONO = "var(--font-geist-mono), monospace";
@@ -57,7 +57,6 @@ export function GetStartedHub({
   onDismiss?: () => void;
 }) {
   const [spotifyOpen, setSpotifyOpen] = useState(false);
-  const isMobile = useIsMobile();
 
   const doors: Door[] = [
     {
@@ -116,43 +115,16 @@ export function GetStartedHub({
 
   if (variant === "card") {
     return (
-      <div
-        data-testid="get-started-card"
-        style={{
-          margin: "12px var(--page-pad-x) 0",
-          padding: "14px 16px",
-          background: "var(--surface)",
-          border: "1px solid var(--rule)",
-          borderRadius: 8,
-          display: "flex",
-          flexDirection: isMobile ? "column" : "row",
-          flexWrap: isMobile ? "nowrap" : "wrap",
-          alignItems: isMobile ? "stretch" : "center",
-          gap: isMobile ? 12 : 16,
-          position: "relative",
-        }}
-      >
+      <div className="get-started-card" data-testid="get-started-card">
         <button
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss get started"
-          style={{
-            background: "none",
-            border: "none",
-            color: "var(--faint)",
-            cursor: "pointer",
-            padding: 4,
-            display: "inline-flex",
-            position: isMobile ? "absolute" : "static",
-            top: 8,
-            right: 8,
-            order: isMobile ? -1 : 0,
-            alignSelf: isMobile ? "flex-end" : "auto",
-          }}
+          className="get-started-card__dismiss"
         >
           <X size={14} />
         </button>
-        <div style={{ flex: isMobile ? "0 0 auto" : "1 1 220px", minWidth: 0 }}>
+        <div className="get-started-card__copy">
           <div
             style={{
               fontFamily: MONO,
@@ -178,45 +150,20 @@ export function GetStartedHub({
             graph.
           </div>
         </div>
-        <div
-          style={{
-            display: isMobile ? "grid" : "flex",
-            gridTemplateColumns: isMobile
-              ? "minmax(0, 1fr) minmax(0, 1fr)"
-              : undefined,
-            gap: 8,
-            flexWrap: "wrap",
-            width: isMobile ? "100%" : "auto",
-          }}
-        >
+        <div className="get-started-card__buttons">
           {doors.map((d) => {
             const content = (
               <span
                 key={d.id}
                 title={d.subtitle}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: isMobile ? "flex-start" : "center",
-                  gap: 6,
-                  padding: "8px 10px",
-                  border: "1px solid var(--rule)",
-                  borderRadius: 6,
-                  fontFamily: MONO,
-                  fontSize: 10.5,
-                  color: "var(--ink)",
-                  textDecoration: "none",
-                  cursor: "pointer",
-                  letterSpacing: ".04em",
-                  width: isMobile ? "100%" : "auto",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
+                className="get-started-card__door"
               >
                 {d.icon}
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {isMobile ? d.shortTitle : d.title}
+                <span className="get-started-card__door-label get-started-card__door-label--desktop">
+                  {d.title}
+                </span>
+                <span className="get-started-card__door-label get-started-card__door-label--mobile">
+                  {d.shortTitle}
                 </span>
               </span>
             );
@@ -265,30 +212,8 @@ export function GetStartedHub({
   // top-aligned with extra bottom padding so the bottom row of doors clears
   // the fixed bottom nav; on desktop we still vertically center the hub.
   return (
-    <div
-      data-testid="get-started-hub"
-      style={{
-        minHeight: "100%",
-        padding: isMobile
-          ? "32px 20px calc(96px + env(safe-area-inset-bottom, 0px))"
-          : "48px 24px",
-        display: isMobile ? "flex" : "grid",
-        flexDirection: isMobile ? "column" : undefined,
-        alignItems: "center",
-        justifyContent: isMobile ? "flex-start" : "center",
-        placeItems: isMobile ? undefined : "center",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 640,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 28,
-        }}
-      >
+    <div className="get-started-hub" data-testid="get-started-hub">
+      <div className="get-started-hub__inner">
         <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 10 }}>
           <div
             style={{
@@ -327,14 +252,7 @@ export function GetStartedHub({
           </p>
         </div>
 
-        <div
-          style={{
-            width: "100%",
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 12,
-          }}
-        >
+        <div className="get-started-hub__doors">
           {doors.map((d) => {
             const cardContent = (
               <div

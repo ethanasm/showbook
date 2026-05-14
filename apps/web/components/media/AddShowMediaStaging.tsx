@@ -1,8 +1,66 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import { ImagePlus, Trash2, Video } from "lucide-react";
 import "./media.css";
+
+// Structural styles inlined so the uploader renders correctly even when
+// media.css doesn't apply (FOUC / chunk failure). See the matching block
+// in MediaSection.tsx for the rationale.
+const UPLOADER_STYLE: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) auto",
+  gap: 18,
+  alignItems: "center",
+  padding: 16,
+  background: "var(--surface)",
+  border: "1px solid var(--rule)",
+};
+const UPLOADER_TITLE_STYLE: CSSProperties = {
+  fontFamily: "var(--font-geist-sans), sans-serif",
+  fontSize: 15,
+  fontWeight: 600,
+  color: "var(--ink)",
+  letterSpacing: "-0.2px",
+};
+const UPLOADER_META_STYLE: CSSProperties = {
+  marginTop: 4,
+  fontFamily: "var(--font-geist-mono), monospace",
+  fontSize: 10.5,
+  color: "var(--muted)",
+  letterSpacing: "0.03em",
+  lineHeight: 1.45,
+};
+const UPLOADER_ACTIONS_STYLE: CSSProperties = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  justifyContent: "flex-end",
+};
+const BUTTON_STYLE: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 7,
+  minHeight: 34,
+  padding: "8px 12px",
+  border: "1px solid var(--rule-strong)",
+  background: "transparent",
+  color: "var(--ink)",
+  fontFamily: "var(--font-geist-sans), sans-serif",
+  fontSize: 12.5,
+  fontWeight: 500,
+  cursor: "pointer",
+};
+const BUTTON_PRIMARY_STYLE: CSSProperties = {
+  background: "var(--ink)",
+  color: "var(--bg)",
+  borderColor: "var(--ink)",
+};
+const BUTTON_DISABLED_STYLE: CSSProperties = {
+  cursor: "default",
+  opacity: 0.45,
+};
 
 export type StagedMediaItem = {
   id: string;
@@ -129,17 +187,22 @@ export function AddShowMediaStaging({
 
   return (
     <div data-testid="add-show-media-staging">
-      <div className="media-uploader">
+      <div className="media-uploader" style={UPLOADER_STYLE}>
         <div>
-          <div className="media-uploader__title">Photos & videos</div>
-          <div className="media-uploader__meta">
+          <div className="media-uploader__title" style={UPLOADER_TITLE_STYLE}>Photos & videos</div>
+          <div className="media-uploader__meta" style={UPLOADER_META_STYLE}>
             Optional. Files upload after the show is saved. JPEG/PNG/HEIC photos and MP4 videos.
           </div>
         </div>
-        <div className="media-uploader__actions">
+        <div className="media-uploader__actions" style={UPLOADER_ACTIONS_STYLE}>
           <button
             type="button"
             className="media-button media-button--primary"
+            style={{
+              ...BUTTON_STYLE,
+              ...BUTTON_PRIMARY_STYLE,
+              ...(disabled ? BUTTON_DISABLED_STYLE : {}),
+            }}
             disabled={disabled}
             onClick={() => photoInputRef.current?.click()}
           >
@@ -148,6 +211,10 @@ export function AddShowMediaStaging({
           <button
             type="button"
             className="media-button"
+            style={{
+              ...BUTTON_STYLE,
+              ...(disabled ? BUTTON_DISABLED_STYLE : {}),
+            }}
             disabled={disabled}
             onClick={() => videoInputRef.current?.click()}
           >
@@ -160,6 +227,8 @@ export function AddShowMediaStaging({
             type="file"
             multiple
             accept={PHOTO_ACCEPT}
+            hidden
+            style={{ display: "none" }}
             onChange={(event) => {
               if (event.target.files) addFiles(event.target.files);
               if (photoInputRef.current) photoInputRef.current.value = "";
@@ -172,6 +241,8 @@ export function AddShowMediaStaging({
             type="file"
             multiple
             accept={VIDEO_ACCEPT}
+            hidden
+            style={{ display: "none" }}
             onChange={(event) => {
               if (event.target.files) addFiles(event.target.files);
               if (videoInputRef.current) videoInputRef.current.value = "";
