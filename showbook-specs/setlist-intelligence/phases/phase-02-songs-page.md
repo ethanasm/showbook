@@ -72,12 +72,17 @@ New sections below the existing tagged-photos grid:
 1. **Songs you've heard live** — list of `(song, count)` rows
    ordered by frequency (cap at 25; reuse the `/songs` table
    chrome).
-2. **Tour debuts you caught** — only when the user has any. Single
-   line per row: `"Light Years" · Sep 12, 2019` with a tap to
-   per-song detail.
 
-Empty states for both sections — when the user has zero songs from
-this artist indexed, the section collapses entirely.
+Empty state — when the user has zero songs from this artist
+indexed, the section collapses entirely.
+
+(SI-17: the originally-planned **"Tour debuts you caught"**
+section was dropped from Phase 2. It computed an
+artist-corpus-wide `MIN(performance_date)` and needed honesty
+caveats around "earliest known per our corpus, not the universe"
+that confused more than they helped. The user-scoped
+`firstTimes` feed on Home — "first time YOU heard this song
+live" — replaces it; that anchors to attended-only data.)
 
 ### `apps/web/app/(app)/shows/[id]/page.tsx` (edit)
 
@@ -85,8 +90,9 @@ The third segment in the `SegmentedControl` (`Setlist · Predicted ·
 Songs`) gets its content. Renders a list of the songs played at
 this show with badges:
 
-- 🆕 **First time** — pulled from `tourDebutsCaught`
-- 🎯 **Rare** — pulled from `rareCatches` with frequency tooltip
+- 🆕 **First time** — pulled from `firstTimes` (user-scoped per
+  SI-17 — "first time YOU heard this song live").
+- 🎯 **Rare** — pulled from `rareCatches` with frequency tooltip.
 
 Each row taps through to the song detail page.
 
@@ -106,8 +112,9 @@ Each row taps through to the song detail page.
 - Seed a corpus where one song appeared in 3% of recent setlists;
   assert it surfaces as a rare catch on a user's show that included
   it
-- Seed a song that's a tour debut; assert it appears in
-  `tourDebutsCaught`
+- Seed a song the user heard for the first time at a specific
+  show; assert it appears in `firstTimes` and the badge renders
+  on the Songs segment of that show's detail.
 
 ### E2E (Playwright)
 

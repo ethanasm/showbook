@@ -243,8 +243,65 @@ Integrations). Tap → confirms → calls `trpc.spotify.disconnect`. The
 server marks `revoked_at`, clears any Spotify-derived stats from
 `shows` rows (fan-loyalty %, priming counts, playlist URLs), and
 returns success. The token row stays in the DB with the revoked
-flag for audit purposes; a nightly job hard-deletes rows revoked
-more than 30 days ago.
+flag for audit purposes; Phase 11 ships a weekly cron that hard-
+deletes rows where `revoked_at < now() - interval '30 days'`.
+
+#### Disconnect cleanup registry (SI-09)
+
+`disconnectSpotify(userId, reason)` walks two named lists kept
+beside the helper:
+
+- `USER_SCOPED_PURGE` — every column / table that contains
+  user-specific Spotify-derived data. On disconnect, each entry is
+  cleared / deleted for the disconnecting user only.
+- `CATALOG_KEEP` — every Spotify-shaped column / table that is
+  catalog-shared (true for every Showbook user, not personalized).
+  Disconnect leaves these untouched; wiping them would break the
+  feature for every other user.
+
+A unit test introspects the schema, finds every Spotify-shaped
+entity — `spotify_*` columns on user-owned tables (`users`,
+`shows`) and any table named `user_spotify_*` — and asserts each
+appears in exactly one of the two arrays. Anything missing fails
+the build. When a future phase adds a new Spotify column, the
+failing test forces an explicit categorization decision in the
+same PR. The contract is documented in implementation.md §11 Q10.
+
+V1 lists (extend as new phases ship columns):
+
+```ts
+const USER_SCOPED_PURGE = [
+  // Phase 3
+  { table: 'shows', column: 'spotify_playlist_url', filter: 'user_id' },
+  { table: 'shows', column: 'spotify_attended_playlist_url', filter: 'user_id' },
+  // Phase 7
+  { table: 'shows', column: 'spotify_prep_track_count', filter: 'user_id' },
+  { table: 'shows', column: 'spotify_post_track_count', filter: 'user_id' },
+  { table: 'users', column: 'spotify_year_playlists', filter: 'id' },
+  // Phase 9
+  { table: 'user_spotify_skipped_artists', mode: 'delete', filter: 'user_id' },
+  // Phase 11+ phase columns go here as they land...
+] as const;
+
+const CATALOG_KEEP = [
+  // Phase 3
+  'songs.spotify_track_id',
+  'songs.spotify_track_id_resolved_at',   // SI-11
+  // Phase 7+
+  'songs.spotify_audio_features',
+  'songs.spotify_preview_url',
+  'songs.isrc',
+  'songs.spotify_album_id',
+  'songs.spotify_album_name',
+  'songs.spotify_album_release',
+  'songs.spotify_album_type',
+] as const;
+```
+
+Note: there is **no** `user_spotify_saved_tracks` table — Phase 7
+uses on-demand `/me/tracks/contains` calls instead of caching the
+user's library (privacy decision, see §13c). One less entry in
+`USER_SCOPED_PURGE`.
 
 ---
 

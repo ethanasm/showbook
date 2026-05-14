@@ -39,15 +39,33 @@ Resolves song titles to Spotify track URIs in batches of 50.
 
 ```ts
 registerJob('spotify/track-resolve', async ({ performerId, limit = 50 }) => {
-  // Find songs for this performer with no spotify_track_id and at
-  // least one appearance.
+  // Find songs for this performer with either:
+  //   - spotify_track_id IS NULL (never tried), or
+  //   - spotify_track_id = '__none__' AND
+  //     spotify_track_id_resolved_at < now() - interval '90 days'
+  //     (we tried before but Spotify's catalog may have grown — SI-11)
+  // …and at least one appearance.
+  //
   // Resolve via Spotify search filtered by artist:<name> track:<title>.
   // Cache negative results with sentinel (spotify_track_id = '__none__')
-  // to avoid retrying every job run.
+  // AND set spotify_track_id_resolved_at = now() so the 90-day re-check
+  // fires next time.
 });
 ```
 
 Concurrency 1, 200ms minimum interval, 100-track cap per run.
+
+Schema addition (SI-11):
+
+```sql
+ALTER TABLE songs
+  ADD COLUMN spotify_track_id_resolved_at timestamp;
+```
+
+Set on every resolution attempt (success OR `__none__`). Lets the
+job re-try previously-unresolvable songs after 90 days, in case
+Spotify has uploaded the live cut / re-issue since. One column,
+one filter line in the job; bounded cost.
 
 Triggers:
 - After each `setlist-corpus-fill` completion → enqueue resolve

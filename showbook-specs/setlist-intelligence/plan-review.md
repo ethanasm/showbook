@@ -230,7 +230,7 @@ walk through OAuth, confirm the sheet closes + connection state
 updates. Same on Android emulator. Report back; if either fails,
 file follow-up to wire the deep-link fallback.
 
-### SI-09 · Disconnect doesn't actually clean up the user's Spotify-derived stats
+### SI-09 · Disconnect doesn't actually clean up the user's Spotify-derived stats ✅ RESOLVED
 
 **What "disconnect Spotify" is.** A button in Preferences (Phase 0+)
 that lets the user sever Showbook's link to their Spotify account.
@@ -278,24 +278,25 @@ discovered-live now use on-demand `/me/tracks/contains` calls so
 we never persist a copy of the user's saved library. One less
 column for SI-09 to track.)
 
-**Options:**
+**Resolved with option B (two named lists + a build-failing
+test).** `disconnectSpotify` walks the `USER_SCOPED_PURGE` array
+(columns + tables to clear). The `CATALOG_KEEP` array names the
+shared catalog columns that explicitly survive. A unit test
+introspects the schema, finds every Spotify-shaped column / table
+(`spotify_*` columns on user-owned tables, `user_spotify_*`
+tables) and asserts each appears in exactly one of the two lists
+— anything missing fails the build, forcing an explicit decision
+when a new Spotify column lands.
 
-- **A. Reminder comment.** Put a `// also clear: X, Y, Z` comment
-  in `disconnectSpotify`. Fragile — comments rot.
-- **B. Two named lists + a build-failing test.** Maintain a
-  `USER_SCOPED_PURGE` list and a `CATALOG_KEEP` list in code. A
-  test scans the schema for anything Spotify-shaped (`spotify_*`
-  columns / `user_spotify_*` tables) and fails the build if
-  something appears in neither list — forces an explicit decision
-  whenever a new Spotify column lands.
-- **C. Database-level cascade.** Use foreign-key cascades to auto-
-  delete derived rows when the token row goes. Doesn't fit our
-  schema (the derived columns live on `shows`/`songs`, which don't
-  FK to `user_spotify_tokens`).
+The Phase 7 drop of `user_spotify_saved_tracks` (we use on-demand
+`/me/tracks/contains` instead) removes one entry from the
+purge list. Phases 3 + 7 + 8 each introduce additional columns;
+the test makes "remember to add it to the registry" the build's
+problem, not a checklist's.
 
 ---
 
-### SI-10 · Revoked token rows pile up forever
+### SI-10 · Revoked token rows pile up forever ✅ RESOLVED
 
 **What revoked rows are.** When a user disconnects Spotify (SI-09)
 or Spotify itself revokes our access, we don't delete their token
@@ -316,16 +317,15 @@ with 10,000 users and 10% disconnecting per year, that's about
 200 KB of orphan data per year. Negligible storage; just an
 unkept promise.
 
-**Options:**
-
-- **A. Add a small weekly cron** that deletes rows where
-  `revoked_at < now() - interval '30 days'`. About five lines of
-  code; fits the existing pg-boss cron framework.
-- **B. Skip it.** Accept the slight bloat as not worth fixing.
+**Resolved with option A.** Phase 11 adds a small weekly pg-boss
+cron (`spotify/purge-revoked-tokens`) running
+`DELETE FROM user_spotify_tokens WHERE revoked_at < now() -
+interval '30 days'`. ~5 lines of code; not blocking earlier
+phases.
 
 ---
 
-### SI-11 · Once Spotify says "no match" for a song, we never re-check
+### SI-11 · Once Spotify says "no match" for a song, we never re-check ✅ RESOLVED
 
 **What this is about.** When Phase 3 ships, a background job
 tries to look up the Spotify track ID for each song in our
@@ -344,16 +344,13 @@ show. A song that doesn't match today might match in 6 months.
 We'd never re-check and the user sees "no Spotify link" forever,
 even after the artist actually uploaded it.
 
-**Options:**
-
-- **A. Add a "last attempted at" timestamp; re-check sentinels
-  older than 90 days.** One small column, one filter in the job.
-  Cheap and bounded.
-- **B. Track every attempt in a separate `song_resolution_attempts`
-  table.** Heavier; useful for debugging which songs we've tried
-  and failed.
-- **C. Accept staleness.** No automatic re-check; user has to
-  manually trigger a re-resolve (button somewhere?).
+**Resolved with option A.** Phase 3 adds a
+`spotify_track_id_resolved_at timestamp` column on `songs`. The
+resolution job re-checks any row where
+`spotify_track_id = '__none__' AND spotify_track_id_resolved_at <
+now() - interval '90 days'`. Catches live cuts and re-issues that
+land on streaming after our initial lookup, bounded so we don't
+re-ask Spotify every job run.
 
 ---
 
@@ -374,7 +371,7 @@ spec for the `tracksContains` wrapper.
 
 ---
 
-### SI-13 · No way to tune the prediction algorithm after launch
+### SI-13 · No way to tune the prediction algorithm after launch ✅ RESOLVED (deferred)
 
 **What this is about.** The prediction algorithm has knobs:
 - Weights for recent setlists vs older ones (1.0 → 0.04 across 5 tiers)
@@ -396,20 +393,17 @@ Slow and error-prone.
 **How big the problem is.** Zero until calibration drifts. Could
 be months, could be never. The math is sound today.
 
-**Options:**
-
-- **A. A small tuning script.** Grid-search across knob values
-  using saved eval history; print the configuration that
-  minimizes Brier score on a held-out test set. Manual to run,
-  but replaces guesswork with data.
-- **B. Full A/B harness.** Production runs two model versions in
-  shadow; eval picks the winner. Much heavier infra; the right
-  call only after multiple major model overhauls.
-- **C. Defer until we actually need to re-tune.** Build A then.
+**Resolved with option C (defer + tracked follow-up).** Don't
+pre-build tuning infrastructure against a hypothetical drift.
+When the first calibration-drift signal appears in
+`prediction_eval_runs`, that's the time to build option A (the
+grid-search script). Logged in the "Deferred follow-ups" section
+at the bottom of this doc so a future agent can pick it up
+without re-deriving the design.
 
 ---
 
-### SI-14 · The release gate for Phish-style artists measures the wrong thing
+### SI-14 · The release gate for Phish-style artists measures the wrong thing ✅ RESOLVED
 
 **What the release gate is.** Phase 4 sets a quality bar that the
 prediction algorithm has to clear before Phase 5 (the rotating-
@@ -432,21 +426,18 @@ measures "did we cover the actual setlist with our broader pool?"
 For the way the Phish UX is shown, the second question is the
 one users will judge.
 
-**Options:**
-
-- **A. Switch to recall-at-K (K≈15, a typical Phish set length).**
-  Better matches the UX's mental model. Single config change.
-- **B. Use both: precision-at-10 ≥ 0.4 AND recall-at-15 ≥ 0.55.**
-  Tighter gate, harder to pass; rejects models that are
-  precise-but-narrow.
-- **C. Switch to F1 (balanced precision/recall).** Harder to
-  communicate to non-stats users.
+**Resolved with option A.** Phase 4 spec updated: the rotating-
+style release gate measures `recall-at-15 ≥ 0.55` instead of
+`precision-at-10 ≥ 0.4`. K=15 matches a typical Phish set length;
+recall measures "did the gap chart cover the actual setlist?"
+which is the question users will judge. Stable-style gate stays
+on Brier ≤ 0.15 (precision is fine for a 21-song-locked tour).
 
 ---
 
 ## Minor / nice-to-have
 
-### SI-15 · Math treats all songs as equally likely before evidence
+### SI-15 · Math treats all songs as equally likely before evidence ✅ RESOLVED (deferred)
 
 **What this is about.** The prediction algorithm uses Bayesian
 smoothing — a math trick that keeps the model honest when
@@ -469,18 +460,16 @@ history) should have a stronger baseline than "Camel Walk"
 **How big the problem is.** Probably small. The model self-
 corrects as corpus fills.
 
-**Options:**
-
-- **A. Weight each song's prior by `historical_play_count`** —
-  we already track this column for §15c (gap-based predictions).
-  Songs played a lot get a stronger baseline.
-- **B. Drop smoothing entirely for songs with N≥5 appearances.**
-  Simpler but loses cold-start calibration.
-- **C. Wait and see.** Let Phase 4's eval tell us if this matters.
+**Resolved with option C (defer + tracked follow-up).** Don't
+tune speculatively. Let Phase 4's calibration eval reveal whether
+the uniform prior underpredicts staples for big-catalogue
+artists. If it does, ship option A (weight prior by
+`historical_play_count`) at that point. Logged in the "Deferred
+follow-ups" section for a future agent.
 
 ---
 
-### SI-16 · The vibe radar might have no data for new tours
+### SI-16 · The vibe radar might have no data for new tours ✅ RESOLVED
 
 **What the vibe radar is.** Phase 8 ships a 7-axis chart on Show
 detail showing the audio profile of the show — energy,
@@ -499,22 +488,22 @@ If we don't have access, the backup data source is
 That means ~100% miss rate for any song released in 2023 or
 later. The vibe radar for a 2025 pop tour would be empty.
 
-**Options:**
+**Resolved with option D (probe-gated).** Phase 8 spec commits to
+the gate: Phase 0 ends with a single test call against
+`audio-features` and writes the result to a config flag. At the
+start of Phase 8, the flag decides:
+- **Granted** → ship Phase 8 as designed (Spotify-native).
+- **Denied** → drop Phase 8 from v1 (vibe radar / energy arc /
+  set-length are nice-to-haves, not core). Revisit in a v2 with
+  a third-party data source if user demand is high.
 
-- **A. If Spotify denies access, drop Phase 8 from v1 entirely.**
-  Vibe radar / energy arc are nice-to-haves, not core.
-- **B. Build a tiny on-device ML model** that estimates audio
-  features from Spotify's 30-second preview MP3s. Heavy infra; a
-  separate project on its own.
-- **C. Pay for a third-party data source** (Reccobeats, Songdata,
-  etc.). New external dependency + monthly cost.
-- **D. Make Phase 8 conditional on the probe result.** Probe
-  ends Phase 0, decide at the start of Phase 8 based on what we
-  got back.
+The plan already structured Phase 8 this way; this resolution
+commits to enforcing it (no AcousticBrainz fallback as a default
+— it's too thin for new music to be useful).
 
 ---
 
-### SI-17 · "First time hearing this song live" claim might be wrong
+### SI-17 · "First time hearing this song live" claim might be wrong ✅ RESOLVED
 
 **What this rail is.** A user-facing feed (Phase 2) titled
 something like "Songs you heard live for the first time" — fun
@@ -534,22 +523,18 @@ wrong from the user's point of view.
 **How big the problem is.** Common — the corpus typically has
 more setlists than any single user attended.
 
-**Options:**
-
-- **A. Compute "first time" only across the user's own attended
-  shows.** Honest from the user's perspective. The semantic
-  shifts to "first time YOU heard this song live."
-- **B. Keep the global semantic but rename the rail.** Call it
-  "Tour debut you caught" instead — that's actually accurate for
-  the global MIN query.
-- **C. Ship both rails.** "First time you heard it" (user-scoped,
-  option A semantic) AND "Tour debut you caught" (global, option
-  B semantic). They answer different questions; both are
-  interesting.
+**Resolved with option A (user-scoped only).** Phase 2 ships
+`firstTimes` as `MIN(performance_date) WHERE show.user_id =
+$you` — answers "first time YOU heard this song live," anchored
+to the user's own attended history. The global
+"tour debut you caught" rail (option B's semantic) is dropped
+from the plan; it required honesty caveats ("earliest known per
+our corpus, not the universe") that added more confusion than
+the stat was worth.
 
 ---
 
-### SI-18 · We collect user feedback we have no plan to use
+### SI-18 · We collect user feedback we have no plan to use ✅ RESOLVED
 
 **What this is about.** Phase 11 ships a "was this prediction
 useful?" thumbs-up/down on every prediction. Data goes into a
@@ -568,17 +553,14 @@ be collecting data with no closing-the-loop step.
 worse than not collecting — it implies a promise to the user
 ("your feedback matters") that we don't keep.
 
-**Options:**
-
-- **A. Drop the thumbs UI.** Don't collect what we won't use.
-- **B. Commit to a Phase 12** that wires feedback into the eval
-  harness (per-style satisfaction score alongside Brier).
-- **C. Defer the wiring; collect data passively.** Use later if
-  we ever need it.
+**Resolved with option A.** Phase 11 spec drops the thumbs UI
+and the `prediction_feedback` table. If a future phase decides
+feedback is worth collecting, ship the UI, the table, and the
+closing-the-loop wiring together at that point.
 
 ---
 
-### SI-19 · Spotify's developer policy on branded playlists
+### SI-19 · Spotify's developer policy on branded playlists ✅ RESOLVED
 
 **What this is about.** Phase 3 creates playlists on the user's
 Spotify with custom cover art and "Showbook" branding in the
@@ -595,18 +577,18 @@ once.
 to confirm what's required (mandatory "Powered by Spotify"
 attribution? Logo placement? Disclaimer text?).
 
-**Options:**
-
-- **A. 30-minute legal sanity-check before Phase 3 ships.**
-  Owner reads Spotify's developer policy + branding guidelines,
-  lists any required attributions, updates the playlist cover /
-  description templates. Cheap.
-- **B. Ship and react if Spotify complains.** Risky — the
-  reaction is account suspension, not a friendly email.
+**Resolved with option A (research task).** A standalone research
+brief lives at
+[`spotify-policy-research-task.md`](spotify-policy-research-task.md)
+— self-contained prompt for a future Claude (or any owner) to
+read Spotify's current developer policy + branding guidelines and
+report back with concrete requirements for playlist
+description / cover art / app metadata. Block Phase 3 from
+shipping until that brief is closed.
 
 ---
 
-### SI-20 · The Phase 1 backfill script can't resume if it crashes
+### SI-20 · The Phase 1 backfill script can't resume if it crashes ✅ RESOLVED
 
 **What the backfill script is.** A one-shot job that walks every
 existing show's setlist and indexes the songs into the new
@@ -625,11 +607,54 @@ to start over from row 1.
 (thousands of shows, full run ~17 minutes). Real for a hypo-
 thetical hosted Showbook at 100k+ shows.
 
-**Options:**
+**Resolved with option C.** The script is already idempotent; a
+full re-walk of self-hosted Showbook's actual data is ~17
+minutes. Acceptable for v1. If we ever hit a multi-hour backfill
+at scale, ship option A (the `--since-show-id` resume flag) at
+that point.
 
-- **A. Add a `--since-show-id` resume flag** so a crashed run
-  picks up where it died.
-- **B. Track progress in a `backfill_runs` cursor table.**
-  Heavier; only needed if we run multiple backfills.
-- **C. Accept that a full re-run takes 17 minutes** and is
-  re-runnable from scratch. Idempotent already.
+---
+
+## Deferred follow-ups (tracked, not actioned in v1)
+
+Items marked RESOLVED (deferred) above need *no* action for the
+current shipping plan but should be picked up when the relevant
+trigger fires. Recorded here so a future agent can find them
+without re-deriving the design.
+
+### Prediction-tuning grid-search script (from SI-13)
+
+**Trigger:** Phase 4's calibration eval shows drift — Brier
+score creeping above 0.15 for stable-style, or a calibration bin
+landing >20 pp off perfect for ≥2 consecutive weekly runs.
+
+**What to build:** `scripts/tune-prediction-weights.ts`. Grid-
+search across `TIER_WEIGHTS` (5 values), `PRIOR_ALPHA` (2-3
+values), `PRIOR_BETA` (2-3 values), and the active-tour anchor
+threshold (3 values) — ≈360 configurations. Score each against
+the most recent 30 days of `prediction_eval_runs` data on a 70/30
+train/test split (use the held-out test set to pick the winner so
+we don't overfit to the eval corpus). Print the top 5 configs +
+their Brier / calibration / precision-at-10 / recall-at-15.
+Manual run; output gets pasted into a tuning PR.
+
+**Why not now:** the math is sound today; pre-building wastes
+effort against a hypothesized drift.
+
+### Prior-weighted-by-play-count smoothing (from SI-15)
+
+**Trigger:** Phase 4 eval shows the algorithm consistently
+underpredicts certified staples for big-catalogue artists (Phish,
+Pearl Jam, Springsteen). The signal: per-style precision drops
+sharply for songs with `historical_play_count > 100`.
+
+**What to build:** in `packages/api/src/setlist-predict.ts`,
+swap the uniform prior for a play-count-weighted one. Today the
+prior contribution is `α * W_total / N_corpus` for every song;
+the proposed form is
+`α * (historical_play_count / max_play_count) * W_total /
+N_corpus` (so staples get a stronger pull). Add a unit test that
+asserts a Phish staple's prior is >5× a Phish rarity's.
+
+**Why not now:** speculative; the existing prior is calibrated
+for stable-style artists and might be fine for rotating too.

@@ -1,14 +1,16 @@
 # Phase 8 — Vibe radar + energy arc
 
 > **Goal.** Add the audio-feature-driven displays — vibe radar, energy
-> arc, set length to the second. **Gated** on whether Spotify
+> arc, set length to the second. **Hard-gated** on whether Spotify
 > grandfathered our app's access to the deprecated audio-features
-> endpoint (probed in Phase 0).
+> endpoint (probed in Phase 0). If access is denied, Phase 8 is
+> **dropped from v1** (SI-16) — see "The probe" below.
 
-| Estimated effort | ~1 week |
+| Estimated effort | ~1 week (only if probe returns access) |
 | Critical path? | No |
 | Prerequisites | Phase 0 (probe), Phase 3 (track resolve) |
-| Ships | `VibeRadar` + `EnergyArc` cards on web show detail; set-length inline; AcousticBrainz fallback for older tracks |
+| Ships (if access granted) | `VibeRadar` + `EnergyArc` cards on web show detail; set-length inline |
+| Ships (if access denied) | Nothing in v1; revisit when a third-party data source warrants. AcousticBrainz is NOT a default fallback — it's frozen at 2022 and useless for current tours. |
 
 References:
 - [`../feature-plan.md`](../feature-plan.md) §13a (deprecation),
@@ -25,18 +27,27 @@ A single test call:
 const test = await spotifyFetch('/audio-features/3n3Ppam7vgaVa1iaRUc9Lp', accessToken);
 ```
 
-Outcomes:
+Outcomes (SI-16 hard-gate):
 
 - **200** with audio features → access intact. Phase 8 ships
-  natively. AcousticBrainz used only as fallback for tracks Spotify
-  doesn't have.
+  natively. Spotify is the data source for everything.
 - **403** "this endpoint is no longer available for new
-  applications" → access denied. Phase 8 ships AcousticBrainz-only;
-  coverage drops for tracks released after mid-2022.
+  applications" → access denied. **Phase 8 is dropped from v1.**
+  AcousticBrainz was considered as a fallback but rejected — it's
+  frozen as of 2022 and returns ~100% miss rate for songs from
+  2023+, which would ship a feature that's empty for any current
+  tour. Better to skip the feature entirely until a viable data
+  source exists (third-party API or on-device ML; revisit in v2).
 - **Other error** → log + retry; don't gate on transient failures.
 
 The result is written to a config flag (e.g.
 `spotify.audio_features_available`) that's read at job start.
+
+If the flag is `false` when Phase 8's scheduled work begins, the
+phase exits without shipping. The AcousticBrainz fallback code
+paths (`packages/jobs/src/acousticbrainz-features.ts`,
+`packages/api/src/acousticbrainz.ts`) from the v1 plan are NOT
+built.
 
 ---
 

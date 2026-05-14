@@ -173,10 +173,17 @@ Phase 1 procedures:
 ```ts
 setlistIntel.predictedSetlist({ showId })
 setlistIntel.songsHeardMost({ scope: 'all'|'performerId', limit })
-setlistIntel.tourDebutsCaught({ performerId? })
 setlistIntel.setlistDiff({ showIdA, showIdB })
 setlistIntel.firstTimes()
 ```
+
+Note (SI-17): the originally-planned `tourDebutsCaught` global-
+debut procedure is dropped. It needed honesty caveats around
+"earliest known appearance per our corpus, not the universe" that
+added more confusion than the stat was worth. `firstTimes` is
+user-scoped (`MIN(performance_date) WHERE show.user_id = $you`)
+— answers "first time YOU heard this song live" anchored to the
+user's own attended history.
 
 `predictedSetlist` takes `showId` (not `performerId`) so the client
 doesn't have to know which performer is headlining — the procedure
