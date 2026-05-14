@@ -51,3 +51,6 @@ apps/web/certificates/
 
 # Brainstorming companion server (Superpowers skill)
 .superpowers/
+
+# One-off scratch outputs (venue-photo comparison, etc.)
+tmp/

@@ -408,7 +408,8 @@
 
 .venue-photo-band {
   position: relative;
-  height: 180px;
+  aspect-ratio: 16 / 9;
+  max-height: 360px;
   overflow: hidden;
   border: 1px solid var(--rule);
   border-radius: 12px 12px 0 0;
@@ -419,6 +420,14 @@
   height: 100%;
   border: none;
   border-radius: 12px 12px 0 0;
+}
+
+/* Venue subjects (buildings, interiors) are usually mid-frame; override
+   the .remote-image--hero face-bias (center 30%) so we don't crop the
+   bottom of a venue photo. Later in source order than the hero rule,
+   same specificity — wins. */
+.venue-photo-band .remote-image__img {
+  object-position: center 45%;
 }
 
 .venue-photo-band__fade {

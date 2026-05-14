@@ -232,6 +232,13 @@
       "when": 1789604800000,
       "tag": "0032_drop_health_summary_log",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789691200000,
+      "tag": "0033_clear_tm_venue_photos",
+      "breakpoints": true
     }
   ]
 }
