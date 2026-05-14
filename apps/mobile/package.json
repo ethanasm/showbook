@@ -62,7 +62,7 @@
     "@types/node": "^25.8.0",
     "@types/react": "^19.1.0",
     "babel-preset-expo": "~55.0.21",
-    "eslint": "^10.3.0",
+    "eslint": "^9.39.4",
     "eslint-config-expo": "~55.0.1",
     "react-test-renderer": "^19.2.6",
     "tsx": "^4.22.0",
