@@ -97,8 +97,29 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
     latitude: data.location?.latitude ?? 0,
     longitude: data.location?.longitude ?? 0,
     googlePlaceId: placeId,
-    photoUrl: data.photos?.[0]?.name ?? null,
+    photoUrl: pickBestPhotoName(data.photos),
   };
+}
+
+// Iterate the top 5 Places photos and pick the first that looks like a hero:
+// landscape (ratio >= 1.3) and large enough (width >= 1600px). Google's
+// top-ranked photo is usually fine, but for ~20% of venues it's a portrait
+// food shot or a tight marquee close-up — this picks the next viable
+// landscape instead. Falls back to photos[0] when nothing matches so we
+// never regress to "no photo at all".
+export function pickBestPhotoName(photos: any): string | null {
+  if (!Array.isArray(photos) || photos.length === 0) return null;
+  const MIN_RATIO = 1.3;
+  const MIN_WIDTH = 1600;
+  const candidates = photos.slice(0, 5);
+  for (const photo of candidates) {
+    const name = photo?.name;
+    const w = Number(photo?.widthPx);
+    const h = Number(photo?.heightPx);
+    if (!name || !Number.isFinite(w) || !Number.isFinite(h) || h <= 0) continue;
+    if (w / h >= MIN_RATIO && w >= MIN_WIDTH) return name;
+  }
+  return photos[0]?.name ?? null;
 }
 
 export function getPlacePhotoMediaUrl(photoName: string, maxWidthPx = 1200): string | null {
