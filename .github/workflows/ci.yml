@@ -136,6 +136,11 @@ jobs:
           # results so integration tests stay hermetic. When the secret is
           # configured, integration tests exercise the real client.
           TICKETMASTER_API_KEY: ${{ secrets.TICKETMASTER_API_KEY }}
+          # AES key for encrypting persisted Spotify tokens. Unit tests
+          # set their own per-test key (hermetic); this stub keeps the
+          # integration suite + any future test that touches
+          # packages/api/src/crypto.ts at module-load time happy.
+          TOKEN_KEY: 0000000000000000000000000000000000000000000000000000000000000000
         run: pnpm verify:coverage
 
       - name: Upload coverage report
@@ -181,6 +186,11 @@ jobs:
     env:
       DEV_DATABASE_URL: postgresql://showbook:showbook_dev@localhost:5433/showbook
       E2E_DATABASE_URL: postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e
+      # Stub AES key so the Playwright-owned Next.js dev server can boot
+      # any Spotify-touching code without throwing. The connect spec
+      # mocks the popup so the real callback never runs; this stub is
+      # defense in depth for future specs that drive the real flow.
+      TOKEN_KEY: 0000000000000000000000000000000000000000000000000000000000000000
     steps:
       - uses: actions/checkout@v6
 

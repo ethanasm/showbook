@@ -8,7 +8,7 @@ keyed `SI-NN` so we can reference them in commits / PRs.
 
 ## Critical — will bite the moment we start Phase 1 (or sooner)
 
-### SI-01 · `TOKEN_KEY` env var isn't plumbed into any environment
+### SI-01 · `TOKEN_KEY` env var isn't plumbed into any environment ✅ RESOLVED
 
 Phase 0 introduced `TOKEN_KEY` (32-byte hex/base64) and the
 encrypt/decrypt path in `packages/api/src/crypto.ts`, but nobody set
@@ -17,17 +17,65 @@ it in `.env.dev`, `.env.prod`, the Docker compose files, or the
 in dev/prod (not the unit/integration tests, which set it locally)
 `getKey()` throws.
 
-We have a runbook gap and a config gap.
+**Resolved** by:
+- Documenting `TOKEN_KEY` in `apps/web/.env.example` (canonical
+  reference) with generation instructions
+  (`openssl rand -hex 32`) and rotation guidance.
+- Adding a stub key to `apps/web/.env.local` for native `pnpm dev`.
+- Setting a hardcoded dev default in `docker-compose.yml` so
+  `pnpm dev:up` works on a clean machine without an `.env.dev`.
+- Making `TOKEN_KEY` REQUIRED in `docker-compose.prod.yml` via
+  `${TOKEN_KEY:?...}` — boot fails fast if missing from `.env.prod`.
+- Setting a stub key in `.github/workflows/ci.yml` for both the
+  verify-coverage and Playwright e2e jobs.
+- Updating `implementation.md` §11 Q2: rotation is "don't, unless a
+  leak is suspected" — rotating invalidates every persisted token.
+  `scripts/rotate-token-key.ts` dropped from the plan.
 
-### SI-02 · No `headliner_performer_id` on `shows`
+**Operator action required for prod:** generate the key on the
+deployment host and append to `.env.prod`:
+
+```bash
+echo "TOKEN_KEY=$(openssl rand -hex 32)" >> .env.prod
+```
+
+### SI-02 · No `headliner_performer_id` on `shows` ✅ RESOLVED
 
 Multiple phases (Phase 3 `exportPlaylistPredicted({ showId,
 performerId })`, Phase 5 `predictedSetlist({ showId })` switching on
 `performer.setlistStyle`) assume "the headliner" is a first-class
 lookup. Today it's a query against `show_performers WHERE role =
-'headliner' ORDER BY sort_order LIMIT 1`. Either we ship that lookup
-as a helper everyone uses, or we add a denormalized FK. Currently
-nobody owns it.
+'headliner' ORDER BY sort_order LIMIT 1`.
+
+**Investigation:** `show_performers` has been the model since
+migration `0000_marvelous_landau.sql` — never changed. The
+asymmetry with `announcements` (which has a denormalized
+`headliner_performer_id uuid` + `support_performer_ids uuid[]`) is
+deliberate and longstanding: shows need `role` + `characterName` +
+`sortOrder` per performer (theatre cast lists need this);
+announcements just need to know who's headlining for the
+follow/feed pipeline.
+
+**Resolved** by:
+- Lifting the existing 3-tier-fallback helper from
+  `apps/web/lib/show-accessors.ts` into
+  `packages/shared/src/show-accessors.ts` (`pickHeadliner`,
+  `getHeadlinerId`, `getHeadliner`, `isProductionShow`,
+  `getSupportPerformers`). Lives in `@showbook/shared` rather than
+  `@showbook/api` because the latter transitively pulls pg-boss,
+  which webpack refuses to bundle for client routes. The web file
+  becomes a thin re-export plus the web-only `getHeadlinerImageUrl`
+  accessor; `@showbook/api` re-exports for server-side consumers.
+- Updating Phase 5 spec to use `getHeadlinerId(show)` in the
+  procedure dispatch instead of the imaginary
+  `show.headlinerPerformerId` column.
+- Updating Phase 1 spec to document that `predictedSetlist({ showId
+  })` resolves the headliner server-side via the helper, and that
+  production shows (theatre/festival with `productionName`) route
+  to the cold empty state because they have no performer-anchored
+  predicted setlist.
+
+No migration needed.
 
 ### SI-03 · `shows.date` is nullable for `watching` shows
 

@@ -75,3 +75,15 @@ export { storeLocalObject } from './media-storage';
 export { getMediaConfig } from './media-config';
 export { enforceRateLimit, isRateLimited } from './rate-limit';
 export { parseAdminEmails, isAdminEmail } from './admin';
+// `show-accessors` lives in @showbook/shared so client bundles can use
+// it without dragging pg-boss / drizzle through. Imported here for
+// server-side procedures that need the same helpers.
+export {
+  pickHeadliner,
+  isProductionShow,
+  getHeadliner,
+  getHeadlinerId,
+  getSupportPerformers,
+  type ShowLike,
+  type ShowPerformerLike,
+} from '@showbook/shared';

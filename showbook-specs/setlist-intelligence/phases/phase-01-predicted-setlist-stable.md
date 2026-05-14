@@ -96,6 +96,18 @@ setlistIntel.setlistDiff({ showIdA, showIdB })
 setlistIntel.firstTimes()
 ```
 
+`predictedSetlist` takes `showId` (not `performerId`) so the client
+doesn't have to know which performer is headlining — the procedure
+resolves it server-side via `getHeadlinerId` from `@showbook/shared`
+(see `packages/shared/src/show-accessors.ts`). That helper walks the
+canonical 3-tier fallback on `show.showPerformers`
+(`role='headliner'` + `sortOrder=0` → any `'headliner'` → first
+row). Production shows (theatre/festival with a `productionName`)
+return `undefined` from the helper and short-circuit to the cold
+empty state — they don't have a performer-anchored predicted
+setlist. Festival multi-headliner support arrives in Phase 5+ via a
+separate `predictedSetlist({ showId, performerId })` overload.
+
 `predictedSetlist` returns the `PredictedSetlist` union; only the
 stable-style branch is populated in this phase. Other styles return
 the `cold` empty state with `tourCoverage: 'cold'` until Phase 5/6.

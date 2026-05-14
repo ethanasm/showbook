@@ -110,11 +110,22 @@ Existing `predictedSetlist({ showId })` becomes a discriminated
 union switcher:
 
 ```ts
+import { getHeadlinerId } from '@showbook/shared'; // packages/shared/src/show-accessors.ts
+
 predictedSetlist: protectedProcedure
   .input(z.object({ showId: z.string().uuid() }))
   .query(async ({ ctx, input }) => {
+    // `shows` doesn't carry a denormalized headliner column — performers
+    // attach via the `show_performers` join table with role + sortOrder.
+    // `getHeadlinerId` walks the canonical 3-tier fallback
+    // (role='headliner' + sortOrder=0 → any 'headliner' → first row).
+    // Production shows (theatre/festival with a productionName)
+    // intentionally return undefined: they don't have a performer-
+    // anchored predicted setlist and route to cold-empty-state instead.
     const show = await loadShow(ctx, input.showId);
-    const performer = await loadPerformer(show.headlinerPerformerId);
+    const performerId = getHeadlinerId(show);
+    if (!performerId) return coldEmptyState({ reason: 'no_performer' });
+    const performer = await loadPerformer(performerId);
     if (!performer.setlistStyle) return coldEmptyState(performer);
 
     switch (performer.setlistStyle) {

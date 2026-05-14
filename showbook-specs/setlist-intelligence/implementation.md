@@ -761,7 +761,7 @@ Release gate (additive to existing CI):
 | Risk | Mitigation |
 |------|-----------|
 | Spotify revokes the API access between phases | Probe at start of Phase 0; AcousticBrainz fallback for vibe features only; rest of feature is unaffected |
-| TOKEN_KEY rotation strategy unclear | Per-environment key in env vars; rotation via re-encrypt batch job (one-time per rotation; documented runbook) |
+| TOKEN_KEY rotation strategy unclear | Generate once per environment with `openssl rand -hex 32`; don't rotate unless a leak is suspected, in which case every user reconnects on next Spotify action (no batch re-encrypt). See §11 Q2. |
 | Persisted token leaks via logging | Pino redaction already covers `accessToken`/`refreshToken`; add tests that `JSON.stringify(row)` masks the encrypted columns; never log raw token in any path |
 | OAuth popup blocked by browser | Detect `popupRef === null` and surface a "Allow popups for showbook.app and try again" toast |
 | Spotify rate limits during a heavy backfill | Concurrency 1 per token, 200ms minimum interval (mirror Gmail client); `spotify-track-resolve` job is the heaviest — cap to 100 tracks/run |
@@ -811,11 +811,24 @@ fallback; don't request the upgrade from Spotify.
 
 ### Q2. TOKEN_KEY rotation
 
-How often do we rotate the AES key? Today: never. **Action:** ship
-a `scripts/rotate-token-key.ts` that re-encrypts all rows with a new
-key in batch; document the runbook. **Default:** rotate annually,
-manually via the runbook. Auto-rotation is overkill for a self-hosted
-app.
+How often do we rotate the AES key? **Resolved: don't, for v1.**
+Rotating the key invalidates every persisted `user_spotify_tokens`
+row (decrypt fails → `ensureFreshUserToken` returns null → every
+connected user is re-prompted on their next Spotify action). For a
+self-hosted single-tenant app with a static `.env.prod`, the
+operational tax of regular rotation isn't worth the marginal
+defense.
+
+**Decision:** generate `TOKEN_KEY` once per environment with
+`openssl rand -hex 32`, commit it to `.env.prod`, and forget about
+it unless a leak is suspected. If a leak is suspected, the runbook
+is "generate a new key, paste it into `.env.prod`, redeploy" —
+every user reconnects Spotify once, no batch re-encrypt job needed.
+`scripts/rotate-token-key.ts` is dropped from the plan.
+
+**What's still required:** document this stance in `.env.example`
+so an operator who rotates the key understands they're about to
+log out every Spotify connection.
 
 ### Q3. Style classifier seed list
 

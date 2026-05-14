@@ -36,6 +36,12 @@ services:
       DATABASE_URL: postgresql://showbook:showbook_dev@db:5432/showbook
       PORT: "3001"
       NODE_OPTIONS: "--max-old-space-size=4096"
+      # AES key for persisted Spotify tokens (Phase 0 of setlist
+      # intelligence). Dev compose accepts a stub via $TOKEN_KEY in the
+      # shell or .env.dev; falls through to a hardcoded dev value so
+      # `pnpm dev:up` works on a clean machine. Don't reuse this in
+      # prod — see docker-compose.prod.yml.
+      TOKEN_KEY: "${TOKEN_KEY:-dev0000000000000000000000000000000000000000000000000000000000000}"
     ports:
       - "127.0.0.1:3001:3001"
     volumes:
