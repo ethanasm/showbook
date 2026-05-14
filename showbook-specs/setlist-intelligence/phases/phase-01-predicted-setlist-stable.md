@@ -102,11 +102,30 @@ resolves it server-side via `getHeadlinerId` from `@showbook/shared`
 (see `packages/shared/src/show-accessors.ts`). That helper walks the
 canonical 3-tier fallback on `show.showPerformers`
 (`role='headliner'` + `sortOrder=0` → any `'headliner'` → first
-row). Production shows (theatre/festival with a `productionName`)
-return `undefined` from the helper and short-circuit to the cold
-empty state — they don't have a performer-anchored predicted
-setlist. Festival multi-headliner support arrives in Phase 5+ via a
-separate `predictedSetlist({ showId, performerId })` overload.
+row).
+
+**Eligibility gate** (returns the `cold` empty state with a
+specific `reason` when any of these fail; the UI hides the segment
+when the show isn't eligible):
+
+- `show.kind` must be `'concert'` or `'festival'`. Setlist
+  intelligence doesn't apply to comedy (a curated bit list, not
+  songs) or theatre (a play has a script, not a rotating setlist).
+- `show.date` must be set. The residency-watchlist path can leave
+  `date=NULL` for a multi-night concert run (e.g. Sphere
+  residencies) until the user picks a night via
+  `shows.setPerformanceDate`. Until then the prediction returns
+  the "pick a night" empty state.
+- `getHeadlinerId(show)` must return a value. Production shows
+  (theatre/festival with a `productionName`) return `undefined` —
+  but theatre is already gated above; the only relevant case here
+  is a festival rendered as a production (rare; falls through to
+  the cold state).
+
+For multi-headliner festivals, Phase 5+ adds a
+`predictedSetlist({ showId, performerId })` overload so the UI can
+ask per-headliner. Phase 1 ships the headliner-only branch; the
+helper picks whoever wins the 3-tier fallback.
 
 `predictedSetlist` returns the `PredictedSetlist` union; only the
 stable-style branch is populated in this phase. Other styles return

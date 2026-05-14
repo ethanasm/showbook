@@ -115,16 +115,27 @@ import { getHeadlinerId } from '@showbook/shared'; // packages/shared/src/show-a
 predictedSetlist: protectedProcedure
   .input(z.object({ showId: z.string().uuid() }))
   .query(async ({ ctx, input }) => {
-    // `shows` doesn't carry a denormalized headliner column — performers
-    // attach via the `show_performers` join table with role + sortOrder.
-    // `getHeadlinerId` walks the canonical 3-tier fallback
-    // (role='headliner' + sortOrder=0 → any 'headliner' → first row).
-    // Production shows (theatre/festival with a productionName)
-    // intentionally return undefined: they don't have a performer-
-    // anchored predicted setlist and route to cold-empty-state instead.
     const show = await loadShow(ctx, input.showId);
+
+    // Eligibility gates (see Phase 1 spec for full reasoning):
+    // 1. Setlist intel applies only to concerts + festivals.
+    // 2. `date` may be NULL for residency-watchlist concerts; the
+    //    user picks a night via shows.setPerformanceDate first.
+    // 3. `shows` doesn't carry a denormalized headliner column —
+    //    `getHeadlinerId` walks `show.showPerformers` via the
+    //    canonical 3-tier fallback (role='headliner' + sortOrder=0
+    //    → any 'headliner' → first row). Production shows return
+    //    undefined; they're already excluded by gate (1) for
+    //    theatre, and rare-but-possible for festivals.
+    if (show.kind !== 'concert' && show.kind !== 'festival') {
+      return coldEmptyState({ reason: 'kind_unsupported' });
+    }
+    if (!show.date) {
+      return coldEmptyState({ reason: 'no_date' });
+    }
     const performerId = getHeadlinerId(show);
     if (!performerId) return coldEmptyState({ reason: 'no_performer' });
+
     const performer = await loadPerformer(performerId);
     if (!performer.setlistStyle) return coldEmptyState(performer);
 
@@ -136,6 +147,14 @@ predictedSetlist: protectedProcedure
     }
   })
 ```
+
+For festivals, `targetDate = show.date` (the festival start). The
+corpus weighting naturally pulls neighbouring-day setlists in as
+Tier A — festivals span at most ~7 days, well inside the ±30-day
+Tier A window. No per-performer day-of-festival mapping is needed
+in v1; the festival-vs-headline filter (§15h, Phase 11) handles the
+"festival sets are a curated short subset" accuracy issue
+separately.
 
 ### `packages/jobs/src/song-gap-refresh.ts` (new)
 

@@ -77,12 +77,60 @@ follow/feed pipeline.
 
 No migration needed.
 
-### SI-03 · `shows.date` is nullable for `watching` shows
+### SI-03 · `shows.date` is nullable for `watching` shows ✅ RESOLVED
 
 Phase 1 makes Predicted the default segment for `watching/ticketed`
 shows, but the algorithm needs a `targetDate`. What's the prediction
 for a multi-night theatre run the user hasn't picked a night for?
 Spec is silent.
+
+**Investigation:**
+- `shows.date` is nullable; `shows.endDate` is also nullable.
+- `concert` + `comedy` rows always have `date` from the `shows.create`
+  path (`date: z.string()` is required).
+- `theatre` rows can have `date=NULL` when added from a multi-night
+  Discover announcement without picking a night
+  (`apps/web/.../discover.ts:541-545`,
+  `isDatePickingRun = isRun && kind !== 'festival'`).
+- `festival` rows **always** have both `date` (= run start) and
+  `endDate` (= run end) — `discover.ts:547-550`. The festival is
+  modeled as a single experience spanning the run.
+- **Edge case the spec missed:** a `concert` residency (Adele/Bruno
+  Mars at the Sphere) added via the Discover watchlist also takes
+  the date-picking run path → `date=NULL` is possible for concerts
+  too, not just theatre.
+
+**Resolved by tightening the setlist-intel spec:**
+
+1. **Setlist intelligence applies only to `kind in ('concert',
+   'festival')`** — comedy and theatre have no useful setlist
+   semantics (a stand-up set is a curated bit list, not a song
+   list; a play has a script, not a rotating setlist). The
+   predicted-setlist tab, the corpus-fill triggers, the `songs`
+   index, and every related procedure short-circuit to the cold
+   empty state for other kinds.
+2. **`shows.setlists` jsonb column stays on all kinds.** It's
+   harmless on theatre/comedy rows (just unused); enforcing a
+   CHECK constraint would require a migration and pay nothing.
+3. **`date IS NULL` → cold empty state**, even for concerts. The
+   residency-watchlist case (concert + null date) returns the same
+   "we'll know more once you pick a night" empty state as a
+   theatre run. The user picks a date via the existing
+   `shows.setPerformanceDate` mutation; the prediction populates on
+   re-fetch.
+4. **Festivals: per-headliner prediction.** Each headliner is
+   predicted using `date` as the `targetDate` — the corpus weighting
+   naturally pulls neighbouring-day setlists in as Tier A. No
+   per-performer day-of-festival mapping is needed because
+   festivals span at most ~7 days, well within the Tier A ±30-day
+   window. The festival-vs-headline filter (§15h, Phase 11) handles
+   the "festival sets are a short subset" accuracy issue
+   separately.
+
+These rules attach to Phase 1's `predictedSetlist({ showId })`
+procedure and the segment-render gate in
+`apps/web/app/(app)/shows/[id]/page.tsx`. Phase 1 + Phase 5 specs
+updated to call this out.
 
 ### SI-04 · Corpus-fill skips performers with no MBID, with no fallback
 
