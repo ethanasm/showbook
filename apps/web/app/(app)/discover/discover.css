@@ -1212,7 +1212,11 @@ a.discover-row__headliner-link:hover {
 
   .discover-row {
     display: grid;
-    grid-template-columns: 64px minmax(0, 1fr) auto;
+    /* Fixed kind column (col 2) keeps the chip at the same x-position on
+       every row regardless of how long the headliner / venue text is in
+       col 3. When col 2 was 1fr and col 3 was auto, a long venue name
+       squeezed col 2 narrower and dragged the centered kind chip left. */
+    grid-template-columns: 64px 84px minmax(0, 1fr);
     column-gap: 14px;
     padding: 12px 18px;
     border-bottom: none;
@@ -1220,13 +1224,11 @@ a.discover-row__headliner-link:hover {
   }
 
   .discover-row.discover-row--region {
-    grid-template-columns: 64px minmax(0, 1fr) auto;
+    grid-template-columns: 64px 84px minmax(0, 1fr);
   }
 
   .discover-row__kind {
     font-size: 9.5px;
-    /* Center the kind chip in its 1fr column so it doesn't crowd the
-       date on the left. */
     justify-self: center;
   }
 
