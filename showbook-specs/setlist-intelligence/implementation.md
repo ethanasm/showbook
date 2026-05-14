@@ -906,10 +906,16 @@ who feel pestered turn off.
 Today's `disconnectSpotify` clears: fan-loyalty %, priming counts,
 playlist URLs (the URLs themselves on Spotify are private to the
 user — disconnecting just unlinks them from Showbook). **Action:**
-also purge `user_spotify_saved_tracks` rows, `songs.spotify_track_id`
-remains (the catalog data is shared across users), `tour_setlists`
-remain. **Default:** purge user-personal data only; keep the catalog
-data that's not user-derived.
+purge user-personal columns on `shows` and `users` (playlist URLs,
+prep/post counts, year-playlists map); `songs.spotify_track_id`
+remains (catalog data, shared across users); `tour_setlists`
+remain. **Default:** purge user-personal data only; keep the
+catalog data that's not user-derived.
+
+There is no `user_spotify_saved_tracks` table to purge — the v1
+plan's nightly library cache was dropped in favor of on-demand
+`/me/tracks/contains` calls (see §13c + Phase 7). One less table
+to purge, one less privacy surface to defend.
 
 ---
 

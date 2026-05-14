@@ -1396,9 +1396,9 @@ credentials token already used by `track-resolve`.
 
 ### 13c. Library cross-reference → fan loyalty score
 
-User-scoped: `GET /me/tracks` (saved tracks) and
-`GET /me/playlists/{id}/tracks` (playlist contents). Cross-reference
-against the songs they heard live.
+User-scoped: `GET /me/tracks/contains` (per-track saved
+predicate). Cross-reference against the songs they heard live, on
+demand — no bulk cache of the user's library in our database.
 
 #### What it unlocks
 
@@ -1409,35 +1409,32 @@ against the songs they heard live.
   have saved but heard at the show, plus a "save to library" CTA
   per row. Spotify lets us write to the library with `PUT
   /me/tracks?ids=...`.
-- **"Songs you keep hearing live but never play"** — saved-track
-  appearances minus monthly play count. Brain answer fodder.
+- **"Songs you keep hearing live but never play"** — was the
+  third bullet here in earlier drafts; needs play-count data
+  which on-demand `/me/tracks/contains` doesn't provide.
+  Deferred.
 
 #### Schema
 
-```sql
-CREATE TABLE user_spotify_saved_tracks (
-  user_id     text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  spotify_track_id text NOT NULL,
-  added_at    timestamp NOT NULL,
-  fetched_at  timestamp NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id, spotify_track_id)
-);
-CREATE INDEX user_spotify_saved_tracks_user_idx
-  ON user_spotify_saved_tracks (user_id);
-```
+None. The fan-loyalty + discovered-live procedures answer per-
+show, on demand, by sending the show's resolved Spotify track IDs
+to `GET /me/tracks/contains` (up to 50 IDs per call) and reading
+back a boolean array. The user's full saved library never enters
+our database — only the per-show boolean result, held in memory
+for the page render.
 
 #### Job
 
-`spotify/library-sync` runs nightly per opted-in user. Pages
-through `GET /me/tracks` (50 per page, may run 20+ pages for power
-users). Stores `(track_id, added_at)`. Pruned + fully-rewritten on
-each run — Spotify's library is small enough that a full resync is
-cheaper than diff logic.
+None. There is no nightly library sync; the v1 plan's
+`spotify/library-sync` was dropped to keep the user's full
+library out of our system. The on-demand call adds one Spotify
+round-trip per show-detail pageload (for the fan-loyalty ring +
+discovered-live rail) and one per predicted-setlist render (for
+the `💛 saved` chips). Spotify's per-token limit (≈180 req/min)
+absorbs typical user load comfortably.
 
-Token: needs `user-library-read` scope. Granted on a separate
-"Connect library" CTA in Preferences/Integrations — we keep the
-import-only `user-follow-read` scope as the baseline so granting
-extra scope is opt-in.
+Token: needs `user-library-read` scope (in the connect-once
+upfront grant; no separate prompt).
 
 ### 13d. Recently played + currently playing → live mode + listening peaks
 
@@ -2295,8 +2292,8 @@ two free signals:
 - `user_song_stats.times_heard` — songs the user has heard live
   before (some users want "songs I haven't heard yet"; others
   want "yes, finally my favorite").
-- `user_spotify_saved_tracks.spotify_track_id` (§13c) — the user's
-  saved library.
+- On-demand `/me/tracks/contains` (§13c) — the user's saved
+  library, checked per-show without caching.
 
 Add a per-row chip when a predicted song matches one of these:
 "💛 your top track" or "🎯 you've never heard this live." The

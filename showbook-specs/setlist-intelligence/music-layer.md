@@ -609,11 +609,13 @@ But three features need to act *on their own:*
 
 - The "year-end soundtrack" email goes out on Dec 31 at 6 PM. You're
   not there.
-- The fan-loyalty ring needs to compare every show's setlist against
-  your *current* Spotify library. That comparison runs in the
-  background, not when you open the show.
 - The priming stat needs to be checked the morning after each show,
   not when you click anything.
+
+(An earlier draft also listed the fan-loyalty ring here. We
+revised that — fan-loyalty is now a per-show "ask Spotify which of
+these tracks you saved" call that runs only when you open the
+show. No bulk copy of your library lives on our server.)
 
 For these, we need to *keep* a key to your Spotify so the background
 jobs can act when you're not around.

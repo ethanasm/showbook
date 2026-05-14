@@ -266,12 +266,17 @@ break down like this:
 | Playlist URLs we created on the user's behalf | User's show | Yes |
 | Pre-show / post-show track counts | User's show | Yes |
 | Year-end playlist IDs | User's row | Yes |
-| The user's saved-tracks library cache | User's row | Yes |
 | The user's top-tracks cache | User's row | Yes |
 | Skipped-artist list (Discover preference) | User's row | Yes |
 | Spotify track IDs on songs | Shared catalog | No |
 | Audio features (energy, valence…) on songs | Shared catalog | No |
 | Album / preview / ISRC metadata on songs | Shared catalog | No |
+
+(The earlier draft included a `user_spotify_saved_tracks` cache
+on this list. That table was dropped — fan-loyalty and
+discovered-live now use on-demand `/me/tracks/contains` calls so
+we never persist a copy of the user's saved library. One less
+column for SI-09 to track.)
 
 **Options:**
 
@@ -352,41 +357,20 @@ even after the artist actually uploaded it.
 
 ---
 
-### SI-12 · Nightly Spotify-library sync might exceed daily API budget
+### SI-12 · Nightly Spotify-library sync might exceed daily API budget ✅ RESOLVED (obsolete)
 
-**What library sync is.** Phase 7 introduces a nightly background
-job that pulls each connected user's Spotify "saved tracks" into
-our database. We need this so the **fan-loyalty ring** can compute
-"you had 12 of the 18 songs at this show already saved before
-walking in — 67% fan loyalty."
+The original concern: Phase 7's nightly job pulled each user's
+full Spotify saved-tracks library (~100 paged calls per power
+user × 250 users/run × 4 runs = 25k calls/night), brushing
+Spotify's daily quota.
 
-**Why it matters.** Powers a marquee feature. Without the saved-
-tracks cache, fan-loyalty can't be computed.
-
-**The bug.** A heavy user with 5000 saved tracks needs ~100 paged
-Spotify API calls per nightly sync. Across 250 users per run, 4
-runs per night = 25,000 calls. Combined with `/me/top/tracks`,
-recently-played, and audio-features fill (other Phase 7+ jobs),
-we brush Spotify's undocumented daily quota. The plan's "one call
-per user at a time" guard keeps any single user under the limit
-but doesn't address total cross-user load.
-
-**How big the problem is.** Only matters when we have many
-active users on hosted infra. Self-hosted (one or a few users) →
-no issue. A hosted Showbook with 1000+ active power users → real
-problem; Spotify could globally rate-limit our app.
-
-**Options:**
-
-- **A. Smart sync: only fetch new saved tracks since last sync.**
-  Spotify returns them in `added_at` order; bail when we hit a
-  known timestamp. Typical sync drops from ~100 calls to 1-3.
-  Monthly full re-sync catches the edge case where the user
-  removed an old track.
-- **B. Reduce the per-night user cap.** 100/run × 4 = 10,000
-  calls/night. Slows feature rollout for power-user accounts.
-- **C. Sync each user weekly instead of nightly.** Fan-loyalty
-  is up to 7 days stale.
+**Resolved by dropping the library cache entirely.** Fan-loyalty
++ discovered-live now use Spotify's `/me/tracks/contains`
+endpoint on demand, per show — one API call per show pageload
+covering ~20 track IDs. No nightly job, no bulk cache, no
+cross-user batch load. The privacy footprint also shrinks (no
+mirror of the user's saved library lives in our DB). See Phase 7
+spec for the `tracksContains` wrapper.
 
 ---
 
