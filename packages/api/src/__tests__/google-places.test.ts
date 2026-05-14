@@ -5,7 +5,12 @@
 
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { autocomplete, getPlaceDetails, getPlacePhotoMediaUrl } from '../google-places';
+import {
+  autocomplete,
+  getPlaceDetails,
+  getPlacePhotoMediaUrl,
+  pickBestPhotoName,
+} from '../google-places';
 
 const ORIGINAL_FETCH = globalThis.fetch;
 const ORIGINAL_KEY = process.env.GOOGLE_PLACES_API_KEY;
@@ -272,4 +277,53 @@ test('getPlacePhotoMediaUrl: url-encodes the API key', () => {
   const url = getPlacePhotoMediaUrl('p/x');
   assert.ok(url);
   assert.ok(url!.includes('key=a%20key%20%26%20special'));
+});
+
+// ── pickBestPhotoName ──────────────────────────────────────────────────
+
+test('pickBestPhotoName: returns null for empty / non-array input', () => {
+  assert.equal(pickBestPhotoName(undefined), null);
+  assert.equal(pickBestPhotoName(null), null);
+  assert.equal(pickBestPhotoName([]), null);
+});
+
+test('pickBestPhotoName: picks first landscape >=1.3 ratio and >=1600 width', () => {
+  const photos = [
+    { name: 'p/portrait', widthPx: 3000, heightPx: 4000 },         // ratio 0.75 (portrait)
+    { name: 'p/small-landscape', widthPx: 1200, heightPx: 800 },   // landscape but < 1600 wide
+    { name: 'p/good-hero', widthPx: 3000, heightPx: 2000 },        // ratio 1.5, 3000 wide ← pick
+    { name: 'p/another-good', widthPx: 4800, heightPx: 2700 },     // also good, but later
+  ];
+  assert.equal(pickBestPhotoName(photos), 'p/good-hero');
+});
+
+test('pickBestPhotoName: falls back to photos[0] when none of the top 5 qualify', () => {
+  const photos = [
+    { name: 'p/portrait-1', widthPx: 2000, heightPx: 3000 },
+    { name: 'p/portrait-2', widthPx: 1800, heightPx: 2400 },
+    { name: 'p/tiny-landscape', widthPx: 800, heightPx: 600 },
+  ];
+  assert.equal(pickBestPhotoName(photos), 'p/portrait-1');
+});
+
+test('pickBestPhotoName: only considers the top 5 candidates', () => {
+  const photos = [
+    { name: 'p/portrait', widthPx: 1000, heightPx: 2000 },
+    { name: 'p/portrait', widthPx: 1000, heightPx: 2000 },
+    { name: 'p/portrait', widthPx: 1000, heightPx: 2000 },
+    { name: 'p/portrait', widthPx: 1000, heightPx: 2000 },
+    { name: 'p/portrait', widthPx: 1000, heightPx: 2000 },
+    { name: 'p/late-but-good', widthPx: 4000, heightPx: 2500 },
+  ];
+  // The good landscape is at index 5, so it's ignored; falls back to photos[0].
+  assert.equal(pickBestPhotoName(photos), 'p/portrait');
+});
+
+test('pickBestPhotoName: skips entries missing dimensions but still returns photos[0] fallback', () => {
+  const photos = [
+    { name: 'p/no-dims' },
+    { name: 'p/zero-height', widthPx: 2000, heightPx: 0 },
+    { name: 'p/good', widthPx: 3000, heightPx: 1800 },
+  ];
+  assert.equal(pickBestPhotoName(photos), 'p/good');
 });
