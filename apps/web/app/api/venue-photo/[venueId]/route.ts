@@ -68,19 +68,36 @@ export async function GET(
   let photoName: string | null = venue.photoUrl;
   let photoNameWasFresh = false;
 
-  // Prefer curated Ticketmaster venue images over Google Places. Google
-  // Places photos[0] is often a random user submission (interior, signage,
-  // parking lot), while TM curates a hero-quality 16:9 shot per venue.
-  // If the stored photoUrl is a Google Places resource name and the venue
-  // has a TM ID, try to upgrade. After the first successful upgrade we
-  // persist the TM URL, so subsequent requests skip the TM API call.
-  const storedIsGooglePlaces = Boolean(photoName) && !photoName!.startsWith('http');
-  const shouldTryTmUpgrade =
-    venue.ticketmasterVenueId && (!photoName || storedIsGooglePlaces);
+  // Prefer Google Places over Ticketmaster. TM's `venue.images[]` is for
+  // ticket-listing grids and surfaces a wordmark logo on a white
+  // background for nearly every venue (Sphere, Fillmore, Warfield, Chase
+  // Center, etc.) — not a hero photo. Google's top-ranked Places photo,
+  // by contrast, is the curated representative shot (typically a
+  // high-res exterior or interior). Baseline eval in
+  // scripts/compare-venue-photos.mjs.
+  const storedIsPlaces = Boolean(photoName) && !photoName!.startsWith('http');
 
-  if (shouldTryTmUpgrade) {
+  if (venue.googlePlaceId && !storedIsPlaces) {
     try {
-      const tmImage = await lookupTmVenueImage(venue.ticketmasterVenueId!);
+      const fresh = await lookupPhotoName(venue.googlePlaceId);
+      if (fresh) {
+        photoName = fresh;
+        photoNameWasFresh = true;
+      }
+    } catch (err) {
+      log.warn(
+        { err, event: 'venue.photo.lazy_resolve_failed', venueId },
+        'Lazy photo resolve failed',
+      );
+    }
+  }
+
+  // TM is a fallback only — used when Places returned nothing (or the
+  // venue has no Place ID at all). Persist so we don't pay the TM API
+  // call on every request.
+  if (!photoName && venue.ticketmasterVenueId) {
+    try {
+      const tmImage = await lookupTmVenueImage(venue.ticketmasterVenueId);
       if (tmImage) {
         photoName = tmImage;
         photoNameWasFresh = true;
@@ -89,22 +106,6 @@ export async function GET(
       log.warn(
         { err, event: 'venue.photo.tm_lookup_failed', venueId },
         'TM venue image lookup failed',
-      );
-    }
-  }
-
-  // Fall back to Google Places when nothing is stored and TM didn't help.
-  // Self-heals venues created via TM ingest that haven't been picked up
-  // by the daily backfill. Don't persist until we've confirmed the
-  // resource name actually serves bytes.
-  if (!photoName && venue.googlePlaceId) {
-    try {
-      photoName = await lookupPhotoName(venue.googlePlaceId);
-      photoNameWasFresh = Boolean(photoName);
-    } catch (err) {
-      log.warn(
-        { err, event: 'venue.photo.lazy_resolve_failed', venueId },
-        'Lazy photo resolve failed',
       );
     }
   }

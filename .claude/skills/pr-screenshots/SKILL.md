@@ -85,15 +85,27 @@ order:
 1. Run the spec on the current branch (HEAD) to produce the "after"
    PNGs, then rename / move them into a `…-after.png` set so the next
    run doesn't overwrite them.
-2. `git stash` (or `git checkout <merge-base>` in a clean tree) to
-   reach the parent state, re-run the same spec, rename the output to
-   `…-before.png`.
-3. Restore the working tree (`git stash pop` / `git checkout -`),
-   upload both sets, and embed them in the PR body as a two-row layout
-   (one row "Before", one row "After") so reviewers can scan the
-   delta. If the "before" capture isn't possible (route didn't exist,
-   transient state can't be reproduced), say so explicitly in the PR
-   body rather than silently shipping only the "after".
+2. Revert just the changed source files to the parent commit and
+   re-run the same spec, renaming the output to `…-before.png`:
+
+   ```
+   # Caller (bug-fixing / creating-prs) typically has already
+   # committed the diff, so `git stash` is a no-op trap that silently
+   # captures the AFTER state twice. Use per-file checkout instead:
+   git checkout HEAD^ -- <changed-files>
+   node ...your capture script... before
+   git checkout HEAD -- <changed-files>  # restore AFTER state
+   ```
+
+   If you use `git stash`, **first verify it actually moved the tree**:
+   `git status` after stash must show no modified files. If it shows
+   `No local changes to save`, the captures are coming from the same
+   tree state — both PNGs are AFTER — and any "before/after" framing
+   you post is a lie.
+3. Restore the working tree, upload both sets, and embed them in the
+   PR body. If the "before" capture isn't possible (route didn't
+   exist, transient state can't be reproduced), say so explicitly in
+   the PR body rather than silently shipping only the "after".
 
 ### 3. Push to the orphan branch
 
@@ -121,31 +133,97 @@ so re-runs replace cleanly:
 
 Edit via `mcp__github__update_pull_request`.
 
-### 5. Visually verify the screenshots before posting
+### 5. Pixel-diff the captures and pick a layout the reader can see
 
-Screenshots are a **quality gate**, not just decoration. Before
-attaching them to the PR, open each PNG with the `Read` tool and
-confirm with your own eyes:
+Screenshots are a **quality gate**, not just decoration. After capture
+and before posting, you must verify the change is actually perceptible
+in the form a reviewer will see it. Two failures kill this gate:
 
-- **The intended change is actually visible.** If the diff is `padding`,
-  `margin`, color, copy, or sizing on element X, element X must be on
-  screen *and* the change must be perceptible between before and after.
-  A passing Playwright run does not prove the visual change works —
-  CI green + invisible-on-screenshot is still a failed task.
-- **The element you changed is in the right state.** Many UI elements
-  render conditionally (loading rows, empty states, hover/focus, error
-  banners). If the seeded fixture doesn't put the element in that
-  state, mock the upstream API (tRPC route, fetch, etc.) inside the
-  spec to force it — don't ship "after" screenshots of a route that
-  doesn't even contain the element you changed.
-- **The before/after delta matches the user's request.** Re-read what
-  the user actually asked for ("more left padding", "tighter line
-  height", "bigger gap below"). If your screenshot shows a different
-  axis moving (or barely moving at all), the code change is wrong —
-  go back and fix it before pushing.
+- **Sub-pixel deltas.** A 4 px CSS padding change on a 390 px-wide
+  full-page mobile screenshot is ~1% of width. GitHub will then
+  render that PNG inside the PR body at a fraction of native size
+  (worse if you put it in a multi-column markdown table — each cell
+  may be 60–80 px wide, turning a 4 px source delta into ~0.5 px on
+  screen, i.e. invisible). The reviewer cannot validate what they
+  cannot see.
+- **Wrong frame.** A full-page screenshot wastes most of its pixels
+  on chrome (header, nav, filters) that didn't change. The 50 px tall
+  row you actually edited gets ~3% of the embedded image.
 
-If the screenshot doesn't reflect the change, do **not** post it and
-declare done. Iterate on the code until the visual matches the intent,
+**Mandatory pixel-diff sanity check.** After capture, run a per-image
+diff and read it yourself. Use the repo-local `pngjs` (already a
+dep) — no install required:
+
+```
+node -e "
+const {PNG}=require('pngjs');const fs=require('fs');
+function load(p){return PNG.sync.read(fs.readFileSync(p));}
+function pct(a,b){if(a.width!==b.width||a.height!==b.height)return'size-mismatch';
+  const t=a.width*a.height;let d=0;
+  for(let i=0;i<a.data.length;i+=4)if(a.data[i]!==b.data[i]||a.data[i+1]!==b.data[i+1]||a.data[i+2]!==b.data[i+2])d++;
+  return{dim:a.width+'x'+a.height,total:t,diff:d,pct:+(d/t*100).toFixed(2)};}
+for (const [a,b] of [['before.png','after.png']]) console.log(JSON.stringify(pct(load(a),load(b))));"
+```
+
+Interpret the result against the embedded display size, not the raw
+pixel count:
+
+| pct diff | meaning | action |
+|---|---|---|
+| `0%` | identical | capture failed — usually the before/after revert step (see step 2) didn't actually change the tree. Investigate and re-shoot. |
+| `< 2%` | invisible at thumbnail scale | re-shoot with an element-level crop (see below) or full-width display, no multi-column table |
+| `2–5%` | borderline | usually needs element-level crop; full-width stacked layout at minimum |
+| `> 5%` | clearly visible | full-page is fine if the layout puts it at usable size |
+
+**Element-level capture for subtle changes.** When the change is
+spacing, padding, gap, or border on a specific element, screenshot
+that element — not the whole page. Playwright supports this directly:
+
+```js
+await page.locator('.discover-row').first().screenshot({
+  path: 'discover-row-after.png',
+});
+```
+
+For a top-of-component framing (e.g. table header + first few rows),
+use `clip` with the bounding box of the container plus a small
+margin:
+
+```js
+const box = await page.locator('.shows-list-table').first().boundingBox();
+await page.screenshot({
+  path: 'shows-table-top.png',
+  clip: { x: box.x - 2, y: box.y - 2, width: box.width + 4, height: 360 },
+});
+```
+
+Bumping `deviceScaleFactor: 2` on the context doubles the raw image
+resolution so the embedded PNG stays sharp at GitHub's render size
+even after the browser scales it down.
+
+**Embedding layout.** Put each route's before/after on consecutive
+lines as full-width images (`![alt](url)` on its own line), not in a
+2- or 3-column markdown table:
+
+```md
+**Before**
+![row before](…/before-row.png)
+
+**After**
+![row after](…/after-row.png)
+```
+
+GitHub renders these at the body's full width, so a 780 px source
+image stays large enough to read. Reserve multi-column tables for
+*responsive comparisons* where each column is a different viewport —
+and only when the per-cell render width is still readable.
+
+**Cross-check the user's ask.** Re-read what the user actually asked
+for ("more left padding", "tighter line height", "table doesn't
+fit"). If your final screenshot doesn't show that specific axis
+moving in the expected direction, the code change is wrong — go
+back and fix it. If the after-screenshot looks identical to before,
+**do not post it and declare done.** Re-shoot with a tighter frame,
 or surface the blocker to the user explicitly.
 
 ## Mobile flow
@@ -179,3 +257,17 @@ the workflow finish and the body update arrive as webhook events.
 - Re-running the mobile workflow without removing the label first
   when the user only wanted one capture — they're EAS-build-minutes
   expensive.
+- **Posting before/after PNGs without running the pixel-diff in step 5.**
+  Identical hashes, < 2% diff at thumbnail render size, or a
+  full-page frame for a 4 px CSS change — all of these ship a PR
+  the user can't validate. The diff check is non-optional.
+- **`git stash` for the before-capture when the change is already
+  committed.** Stash silently no-ops when the tree is clean, so both
+  the "before" and "after" runs capture AFTER. Use
+  `git checkout HEAD^ -- <files>` (or against the PR base) and
+  confirm with `git status` that the tree actually moved before
+  capturing.
+- Embedding subtle visual changes in a multi-column markdown table.
+  GitHub shrinks each cell to a fraction of the body width; a 4 px
+  delta becomes sub-pixel and disappears. Stack before/after as
+  full-width images instead.

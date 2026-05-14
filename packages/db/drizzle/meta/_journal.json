@@ -234,16 +234,23 @@
       "breakpoints": true
     },
     {
-      "idx": 34,
+      "idx": 33,
       "version": "7",
       "when": 1789691200000,
+      "tag": "0033_clear_tm_venue_photos",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1789777600000,
       "tag": "0034_setlist_intel_foundation",
       "breakpoints": true
     },
     {
       "idx": 35,
       "version": "7",
-      "when": 1789777600000,
+      "when": 1789864000000,
       "tag": "0035_user_spotify_tokens",
       "breakpoints": true
     }

@@ -1212,19 +1212,22 @@ a.discover-row__headliner-link:hover {
 
   .discover-row {
     display: grid;
-    grid-template-columns: 72px minmax(0, 1fr) auto;
-    column-gap: 10px;
-    padding: 12px var(--page-pad-x);
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    column-gap: 14px;
+    padding: 12px 18px;
     border-bottom: none;
     border-top: 1px solid var(--rule);
   }
 
   .discover-row.discover-row--region {
-    grid-template-columns: 72px minmax(0, 1fr) auto;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
   }
 
   .discover-row__kind {
     font-size: 9.5px;
+    /* Center the kind chip in its 1fr column so it doesn't crowd the
+       date on the left. */
+    justify-self: center;
   }
 
   .discover-row__date-main {
@@ -1234,6 +1237,15 @@ a.discover-row__headliner-link:hover {
 
   .discover-row__date-sub {
     font-size: 9px;
+  }
+
+  /* Right-align the second line under the headliner (city for followed-
+     artists view, support acts for followed-venues view, reason badge,
+     etc.) so it hangs to the row's right edge instead of left-aligning
+     under the start of the headliner. */
+  .discover-row__headliner-cell,
+  .discover-row__venue-cell {
+    text-align: right;
   }
 
   /* Hide desktop-only columns on mobile */
@@ -1253,11 +1265,17 @@ a.discover-row__headliner-link:hover {
   /* Compact icon-only Watch / Calendar / Tix buttons on mobile so the
    * action column doesn't stack three full-width labelled buttons per
    * row. `font-size: 0` hides the trailing text node; the SVG keeps
-   * its own width/height attrs from the lucide `size={11}` prop. */
+   * its own width/height attrs from the lucide `size={11}` prop. The
+   * actions span the full second row and right-align so they sit
+   * under the headliner's right edge instead of bunching under the
+   * date on the left. */
   .discover-row__actions {
+    grid-column: 1 / -1;
     flex-direction: row;
     align-items: center;
-    gap: 4px;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 4px;
   }
 
   .discover-watch-btn,
@@ -1272,7 +1290,7 @@ a.discover-row__headliner-link:hover {
   }
 
   .discover-venue-group__header {
-    padding: 14px var(--page-pad-x) 6px;
+    padding: 14px 18px 6px;
     border-top: 1px solid var(--rule);
   }
 
@@ -1288,7 +1306,7 @@ a.discover-row__headliner-link:hover {
     margin: 0;
     border: none;
     border-top: 1px solid var(--rule);
-    padding: 14px var(--page-pad-x) 18px;
+    padding: 14px 18px 18px;
     justify-content: center;
     font-size: 9.5px;
   }

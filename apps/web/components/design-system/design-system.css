@@ -408,7 +408,8 @@
 
 .venue-photo-band {
   position: relative;
-  height: 180px;
+  aspect-ratio: 16 / 9;
+  max-height: 360px;
   overflow: hidden;
   border: 1px solid var(--rule);
   border-radius: 12px 12px 0 0;
@@ -419,6 +420,14 @@
   height: 100%;
   border: none;
   border-radius: 12px 12px 0 0;
+}
+
+/* Venue subjects (buildings, interiors) are usually mid-frame; override
+   the .remote-image--hero face-bias (center 30%) so we don't crop the
+   bottom of a venue photo. Later in source order than the hero rule,
+   same specificity — wins. */
+.venue-photo-band .remote-image__img {
+  object-position: center 45%;
 }
 
 .venue-photo-band__fade {
@@ -468,6 +477,13 @@
   border: 1px solid var(--rule);
   border-radius: 12px;
   margin-bottom: 8px;
+}
+
+.shows-list-table {
+  /* Pin the inner content to the table's own width so a wide inline-styled
+     descendant (e.g. the desktop 10-col column-headers grid) can't push the
+     table past the viewport on mobile. */
+  min-width: 0;
 }
 
 .shows-list-table .show-row {
@@ -1212,6 +1228,20 @@ a.show-row__support-link:hover {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
+  }
+
+  /* The desktop 10-col column-headers grid (inline-styled, fixed widths
+     totalling ~500px) doesn't fit a 390px viewport and would misalign
+     with the collapsed mobile rows anyway. The row labels (Date / Headliner
+     / Venue / State) are clear from the content itself on mobile. */
+  .shows-list-table__col-headers {
+    display: none !important;
+  }
+
+  /* Tighten the table container's mobile inset so the row card edge has
+     proper breathing room from the screen edge. */
+  .shows-list-table {
+    overflow: hidden;
   }
 
   /* ShowRow: collapse to 5 essential columns at narrow widths so the row
