@@ -325,7 +325,18 @@
 
 .discover-col-headers {
   display: grid;
-  grid-template-columns: 72px 100px 1fr 120px 110px 200px;
+  /* Headliner column is `minmax(0, 1fr)` so it can shrink with ellipsis
+     instead of forcing the row to overflow. Fixed columns sized for typical
+     content: dates ~"Aug 1 – Oct 29", kind chips up to "FESTIVAL", on-sale
+     dates ~"Sep 12, 2026", status badge "ANNOUNCED", actions 180 px to fit
+     the Watch + Calendar buttons (the Tix button on `ticketUrl` rows is
+     allowed to overflow slightly rather than steal width from headliner).
+     The actions column is a fixed width — not `auto` — so the header row
+     (which has an empty 6th cell) keeps the same 1fr column as the data
+     rows; otherwise the "ON SALE" / "STATUS" headers drift right of their
+     data. Original template (72/100/1fr/120/110/200) left only ~40 px for
+     the headliner at a 1280 px viewport, truncating "Bon Iver" to "Bon…". */
+  grid-template-columns: 72px 84px minmax(0, 1fr) 96px 88px 180px;
   column-gap: 16px;
   padding: 0 12px 10px;
   font-family: var(--font-geist-mono), monospace;
@@ -338,7 +349,7 @@
 
 /* Near You table has an extra Venue column between Kind and Headliner. */
 .discover-col-headers--region {
-  grid-template-columns: 72px 76px 140px minmax(0, 1fr) 90px 80px 200px;
+  grid-template-columns: 72px 84px 100px minmax(0, 1fr) 88px 80px 180px;
 }
 
 /* ── Venue Group ─────────────────────────────────────── */
@@ -428,7 +439,9 @@
 
 .discover-row {
   display: grid;
-  grid-template-columns: 72px 100px 1fr 120px 110px 200px;
+  /* Keep this in lock-step with `.discover-col-headers`. See that block for
+     why the columns were re-sized. */
+  grid-template-columns: 72px 84px minmax(0, 1fr) 96px 88px 180px;
   column-gap: 16px;
   padding: 12px;
   align-items: center;
@@ -438,7 +451,7 @@
 
 /* Near You row layout includes a Venue cell. */
 .discover-row.discover-row--region {
-  grid-template-columns: 72px 76px 140px minmax(0, 1fr) 90px 80px 200px;
+  grid-template-columns: 72px 84px 100px minmax(0, 1fr) 88px 80px 180px;
 }
 
 .discover-row__venue-cell {
@@ -1212,7 +1225,11 @@ a.discover-row__headliner-link:hover {
 
   .discover-row {
     display: grid;
-    grid-template-columns: 64px minmax(0, 1fr) auto;
+    /* Fixed kind column (col 2) keeps the chip at the same x-position on
+       every row regardless of how long the headliner / venue text is in
+       col 3. When col 2 was 1fr and col 3 was auto, a long venue name
+       squeezed col 2 narrower and dragged the centered kind chip left. */
+    grid-template-columns: 64px 84px minmax(0, 1fr);
     column-gap: 14px;
     padding: 12px 18px;
     border-bottom: none;
@@ -1220,13 +1237,11 @@ a.discover-row__headliner-link:hover {
   }
 
   .discover-row.discover-row--region {
-    grid-template-columns: 64px minmax(0, 1fr) auto;
+    grid-template-columns: 64px 84px minmax(0, 1fr);
   }
 
   .discover-row__kind {
     font-size: 9.5px;
-    /* Center the kind chip in its 1fr column so it doesn't crowd the
-       date on the left. */
     justify-self: center;
   }
 
