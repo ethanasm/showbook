@@ -288,6 +288,11 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
   // Stats timeframe
   const [statsTimeframe, setStatsTimeframe] = useState<StatsTimeframe>("all");
 
+  // Mobile import action sheet — collapses Gmail / setlist.fm / Eventbrite
+  // (and Delete All) behind a single "Import" button on phone-sized viewports
+  // so the header doesn't eat the entire screen.
+  const [mobileImportOpen, setMobileImportOpen] = useState(false);
+
   // Import (Gmail / setlist.fm / Eventbrite) state. The scan UIs are
   // source-keyed but share the review list, dedupe, and "Add selected"
   // creation logic.
@@ -810,58 +815,162 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     ];
     const modes = isUpcoming ? allModes.filter((m) => m.k !== "stats") : allModes;
 
-    return (
-      <div style={{
-        padding: isMobile ? "14px 16px" : "16px var(--page-pad-x)",
-        display: "flex",
-        flexDirection: isMobile ? "column" : "row",
-        alignItems: isMobile ? "stretch" : "center",
-        justifyContent: "space-between",
-        gap: isMobile ? 12 : 0,
-        borderBottom: "1px solid var(--rule)",
-      }}>
-        <div>
-          <div style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
-            color: "var(--muted)",
-            letterSpacing: ".1em",
-            textTransform: "uppercase",
-          }}>
-            {labels.eyebrow}
-          </div>
-          <div style={{
-            fontFamily: "var(--font-display)",
-            fontSize: 26,
-            fontWeight: 700,
-            color: "var(--ink)",
-            letterSpacing: "-0.01em",
-            lineHeight: 1.1,
-            marginTop: 4,
-          }}>
-            {labels.title}
-          </div>
-          {/* Cross-link to the other half so the split doesn't feel siloed. */}
-          <Link
-            href={isUpcoming ? "/logbook" : "/upcoming"}
-            style={{
-              display: "inline-block",
-              marginTop: 6,
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
-              color: "var(--accent)",
-              letterSpacing: ".04em",
-              textDecoration: "none",
-            }}
-          >
-            {isUpcoming ? "View past →" : "View upcoming →"}
-          </Link>
+    const tabsRow = (
+      <div style={{ display: "flex", alignItems: "stretch", border: "1px solid var(--rule-strong)" }}>
+        {modes.map(({ k, l, Ic, count }, i) => {
+          const active = k === viewMode;
+          return (
+            <button
+              key={k}
+              onClick={() => setViewMode(k)}
+              style={{
+                border: "none",
+                cursor: "pointer",
+                borderRight: i === modes.length - 1 ? "none" : "1px solid var(--rule-strong)",
+                background: active ? "var(--ink)" : "transparent",
+                color: active ? "var(--bg)" : "var(--ink)",
+                padding: isMobile ? "10px 12px" : "10px 18px",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 14,
+                fontWeight: active ? 600 : 500,
+                letterSpacing: -0.2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                flex: isMobile ? 1 : "0 0 auto",
+              }}
+            >
+              <Ic size={14} />
+              <span>{l}</span>
+              <span style={{
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: 10.5,
+                color: active ? "var(--bg)" : "var(--faint)",
+                opacity: active ? 0.7 : 1,
+                letterSpacing: ".04em",
+                fontWeight: 400,
+              }}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    );
+
+    const titleBlock = (
+      <div>
+        <div style={{
+          fontFamily: "var(--font-geist-mono), monospace",
+          fontSize: 10.5,
+          color: "var(--muted)",
+          letterSpacing: ".1em",
+          textTransform: "uppercase",
+        }}>
+          {labels.eyebrow}
         </div>
         <div style={{
+          fontFamily: "var(--font-display)",
+          fontSize: 26,
+          fontWeight: 700,
+          color: "var(--ink)",
+          letterSpacing: "-0.01em",
+          lineHeight: 1.1,
+          marginTop: 4,
+        }}>
+          {labels.title}
+        </div>
+        {/* Cross-link to the other half so the split doesn't feel siloed. */}
+        <Link
+          href={isUpcoming ? "/logbook" : "/upcoming"}
+          style={{
+            display: "inline-block",
+            marginTop: 6,
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 10.5,
+            color: "var(--accent)",
+            letterSpacing: ".04em",
+            textDecoration: "none",
+          }}
+        >
+          {isUpcoming ? "View past →" : "View upcoming →"}
+        </Link>
+      </div>
+    );
+
+    if (isMobile) {
+      // Mobile header: title + single Import button on one row, then
+      // full-width tabs below. The three import sources + Delete All
+      // live in a bottom sheet behind the Import button — collapsing
+      // four stacked rows of buttons frees the screen for actual content.
+      // The right padding (52px) leaves room for the floating
+      // GlobalSearch trigger at top-right (position: fixed; right: 12px;
+      // ~30px wide) so the Import button doesn't sit under it.
+      return (
+        <div style={{
+          padding: "14px 16px 14px 16px",
           display: "flex",
-          flexDirection: isMobile ? "column" : "row",
-          alignItems: isMobile ? "stretch" : "center",
-          gap: isMobile ? 8 : 12,
+          flexDirection: "column",
+          gap: 14,
+          borderBottom: "1px solid var(--rule)",
+        }}>
+          <div style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 12,
+            paddingRight: 52,
+          }}>
+            {titleBlock}
+            <button
+              type="button"
+              onClick={() => setMobileImportOpen(true)}
+              aria-haspopup="menu"
+              aria-expanded={mobileImportOpen}
+              data-testid="mobile-import-trigger"
+              style={{
+                border: "1px solid var(--rule-strong)",
+                cursor: "pointer",
+                background: "transparent",
+                color: "var(--ink)",
+                padding: "7px 12px",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 13,
+                fontWeight: 500,
+                letterSpacing: -0.2,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                flexShrink: 0,
+                marginTop: 2,
+              }}
+            >
+              <span>Import</span>
+              <span aria-hidden style={{ fontSize: 9 }}>▾</span>
+            </button>
+          </div>
+          {tabsRow}
+        </div>
+      );
+    }
+
+    return (
+      <div style={{
+        padding: "16px var(--page-pad-x)",
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 0,
+        borderBottom: "1px solid var(--rule)",
+      }}>
+        {titleBlock}
+        <div style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
         }}>
           <div
             role="group"
@@ -870,7 +979,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
               display: "flex",
               alignItems: "stretch",
               border: "1px solid var(--rule-strong)",
-              flexDirection: isMobile ? "column" : "row",
+              flexDirection: "row",
             }}
           >
             <button
@@ -878,8 +987,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
               title="Import from Gmail"
               style={{
                 border: "none",
-                borderRight: isMobile ? "none" : "1px solid var(--rule-strong)",
-                borderBottom: isMobile ? "1px solid var(--rule-strong)" : "none",
+                borderRight: "1px solid var(--rule-strong)",
                 cursor: "pointer",
                 background: "transparent",
                 color: "var(--ink)",
@@ -890,7 +998,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                 letterSpacing: -0.2,
                 display: "flex",
                 alignItems: "center",
-                justifyContent: isMobile ? "center" : "flex-start",
+                justifyContent: "flex-start",
                 gap: 7,
               }}
             >
@@ -902,8 +1010,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
               title="Import attended shows from setlist.fm"
               style={{
                 border: "none",
-                borderRight: isMobile ? "none" : "1px solid var(--rule-strong)",
-                borderBottom: isMobile ? "1px solid var(--rule-strong)" : "none",
+                borderRight: "1px solid var(--rule-strong)",
                 cursor: "pointer",
                 background: "transparent",
                 color: "var(--ink)",
@@ -914,7 +1021,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                 letterSpacing: -0.2,
                 display: "flex",
                 alignItems: "center",
-                justifyContent: isMobile ? "center" : "flex-start",
+                justifyContent: "flex-start",
                 gap: 7,
               }}
             >
@@ -936,7 +1043,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                 letterSpacing: -0.2,
                 display: "flex",
                 alignItems: "center",
-                justifyContent: isMobile ? "center" : "flex-start",
+                justifyContent: "flex-start",
                 gap: 7,
               }}
             >
@@ -968,47 +1075,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
               <span>{deleteAllShows.isPending ? "Deleting..." : "Delete All"}</span>
             </button>
           )}
-          <div style={{ display: "flex", alignItems: "stretch", border: "1px solid var(--rule-strong)" }}>
-            {modes.map(({ k, l, Ic, count }, i) => {
-              const active = k === viewMode;
-              return (
-                <button
-                  key={k}
-                  onClick={() => setViewMode(k)}
-                  style={{
-                    border: "none",
-                    cursor: "pointer",
-                    borderRight: i === modes.length - 1 ? "none" : "1px solid var(--rule-strong)",
-                    background: active ? "var(--ink)" : "transparent",
-                    color: active ? "var(--bg)" : "var(--ink)",
-                    padding: isMobile ? "10px 12px" : "10px 18px",
-                    fontFamily: "var(--font-geist-sans), sans-serif",
-                    fontSize: 14,
-                    fontWeight: active ? 600 : 500,
-                    letterSpacing: -0.2,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 8,
-                    flex: isMobile ? 1 : "0 0 auto",
-                  }}
-                >
-                  <Ic size={14} />
-                  <span>{l}</span>
-                  <span style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 10.5,
-                    color: active ? "var(--bg)" : "var(--faint)",
-                    opacity: active ? 0.7 : 1,
-                    letterSpacing: ".04em",
-                    fontWeight: 400,
-                  }}>
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          {tabsRow}
         </div>
       </div>
     );
@@ -1553,7 +1620,16 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     }
 
     return (
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+      <div style={{
+        background: "var(--bg)",
+        display: "flex",
+        flexDirection: "column",
+        // Desktop keeps the inner scroll so the toolbar above stays
+        // pinned. Mobile lets the page scroll as a whole — otherwise
+        // the visible list area shrinks to ~1.5 rows once the header
+        // and filter bar take their share of a 700px viewport.
+        ...(isMobile ? {} : { flex: 1, minHeight: 0, overflow: "auto" }),
+      }}>
         {/* Date-TBD rail (Upcoming only): watching shows with no date set
             yet — typically a multi-night theatre run the user wants to
             see but hasn't picked a night for. Surfaced separately so they
@@ -1867,9 +1943,20 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     return (
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: isMobile ? "18px 16px 24px" : "22px var(--page-pad-x) var(--page-pad-x)" }}>
+      <div style={{
+        background: "var(--bg)",
+        padding: isMobile ? "18px 16px 24px" : "22px var(--page-pad-x) var(--page-pad-x)",
+        ...(isMobile ? {} : { flex: 1, minHeight: 0, overflow: "auto" }),
+      }}>
         {/* Month toolbar */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{
+          display: "flex",
+          alignItems: isMobile ? "stretch" : "center",
+          justifyContent: "space-between",
+          flexDirection: isMobile ? "column" : "row",
+          gap: isMobile ? 10 : 0,
+          marginBottom: 14,
+        }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
             <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 30, fontWeight: 600, color: "var(--ink)", letterSpacing: -0.9 }}>
               {MONTH_NAMES[calMonth]} <span style={{ color: "var(--faint)", fontWeight: 400 }}>{calYear}</span>
@@ -1884,7 +1971,12 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 22, minHeight: 0 }}>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 320px",
+          gap: isMobile ? 18 : 22,
+          minHeight: 0,
+        }}>
           {/* Calendar grid */}
           <div style={{ background: "var(--surface)", border: "1px solid var(--rule)" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "1px solid var(--rule)" }}>
@@ -2044,8 +2136,19 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     }
 
     return (
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: isMobile ? "18px 16px 24px" : "22px var(--page-pad-x) var(--page-pad-x)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+      <div style={{
+        background: "var(--bg)",
+        padding: isMobile ? "18px 16px 24px" : "22px var(--page-pad-x) var(--page-pad-x)",
+        ...(isMobile ? {} : { flex: 1, minHeight: 0, overflow: "auto" }),
+      }}>
+        <div style={{
+          display: "flex",
+          alignItems: isMobile ? "stretch" : "center",
+          justifyContent: "space-between",
+          flexDirection: isMobile ? "column" : "row",
+          gap: isMobile ? 10 : 0,
+          marginBottom: 14,
+        }}>
           <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 30, fontWeight: 600, color: "var(--ink)", letterSpacing: -0.9 }}>
             {calYear}
           </div>
@@ -2073,7 +2176,11 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
         </div>
         <div
           data-testid="year-view-grid"
-          style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(4, 1fr)",
+            gap: 10,
+          }}
         >
           {YEAR_MONTHS.map((m) => miniMonthGrid(calYear, m))}
         </div>
@@ -2192,17 +2299,50 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
         ? `${currentYear - 4}–${currentYear}`
         : "All time";
 
+    // Compact dollar formatting for mobile — "$6,754.58" overflows a
+    // narrow stat card; "$6.7k" tells the same story without forcing
+    // a horizontal scroll.
+    const compactSpent = (() => {
+      if (totalSpent <= 0) return "$0";
+      if (!isMobile) return `$${totalSpent.toLocaleString()}`;
+      if (totalSpent >= 10_000) return `$${(totalSpent / 1000).toFixed(1)}k`;
+      return `$${Math.round(totalSpent).toLocaleString()}`;
+    })();
+
     return (
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", padding: isMobile ? "18px 16px 24px" : "22px var(--page-pad-x) var(--page-pad-x)" }}>
+      <div style={{
+        background: "var(--bg)",
+        padding: isMobile ? "16px 16px 24px" : "22px var(--page-pad-x) var(--page-pad-x)",
+        ...(isMobile ? {} : { flex: 1, minHeight: 0, overflow: "auto" }),
+      }}>
         {/* Timeframe selector */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".06em" }}>
+        <div style={{
+          display: "flex",
+          alignItems: isMobile ? "stretch" : "center",
+          justifyContent: "space-between",
+          flexDirection: isMobile ? "column" : "row",
+          gap: isMobile ? 10 : 0,
+          marginBottom: 18,
+        }}>
+          <div style={{
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 11,
+            color: "var(--muted)",
+            letterSpacing: ".06em",
+          }}>
             {timeframeLabel} &middot; {total} show{total !== 1 ? "s" : ""}
           </div>
-          <div style={{ display: "flex", alignItems: "stretch", border: "1px solid var(--rule-strong)" }}>
+          <div style={{
+            display: "flex",
+            alignItems: "stretch",
+            border: "1px solid var(--rule-strong)",
+            // Full-width segmented control on mobile so all three options
+            // are equally tappable; auto-width on desktop.
+            ...(isMobile ? { width: "100%" } : {}),
+          }}>
             {([
               { k: "year" as StatsTimeframe, l: "This year" },
-              { k: "5years" as StatsTimeframe, l: "Last 5 years" },
+              { k: "5years" as StatsTimeframe, l: "Last 5 yrs" },
               { k: "all" as StatsTimeframe, l: "All time" },
             ]).map(({ k, l }, i, arr) => {
               const active = statsTimeframe === k;
@@ -2212,7 +2352,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                   onClick={() => setStatsTimeframe(k)}
                   data-testid={`stats-timeframe-${k}`}
                   style={{
-                    padding: "6px 13px",
+                    padding: isMobile ? "8px 0" : "6px 13px",
                     border: "none",
                     borderRight: i < arr.length - 1 ? "1px solid var(--rule-strong)" : "none",
                     background: active ? "var(--ink)" : "transparent",
@@ -2222,6 +2362,8 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                     fontWeight: active ? 500 : 400,
                     cursor: "pointer",
                     letterSpacing: ".04em",
+                    flex: isMobile ? 1 : "0 0 auto",
+                    whiteSpace: "nowrap",
                   }}
                 >
                   {l}
@@ -2231,52 +2373,84 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
           </div>
         </div>
 
-        {/* Big headline numbers */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 1, background: "var(--rule)", marginBottom: 22 }}>
+        {/* Big headline numbers — 4-col on desktop, 2x2 on mobile so each
+            card keeps a readable headline number without forcing a
+            horizontal scroll. */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
+          gap: 1,
+          background: "var(--rule)",
+          border: isMobile ? "1px solid var(--rule)" : undefined,
+          marginBottom: isMobile ? 18 : 22,
+        }}>
           {[
             [String(total), "shows", "all time"],
-            [totalSpent > 0 ? `$${totalSpent.toLocaleString()}` : "$0", "spent", `avg $${avgPerShow} / show`],
+            [compactSpent, "spent", total > 0 ? `avg $${avgPerShow} / show` : ""],
             [String(uniqueVenues), "venues", `${rotationVenues} in rotation`],
             [String(uniqueArtists), "artists", `+ ${newArtistsThisYear} new in ${currentYear}`],
           ].map(([v, l, sub]) => (
-            <div key={l} style={{ background: "var(--surface)", padding: "22px 22px 20px" }}>
+            <div key={l} style={{
+              background: "var(--surface)",
+              padding: isMobile ? "16px 14px 14px" : "22px 22px 20px",
+              minWidth: 0,
+            }}>
               <div style={{
                 fontFamily: "var(--font-geist-sans), sans-serif",
-                fontSize: 44,
+                fontSize: isMobile ? 30 : 44,
                 fontWeight: 500,
                 color: "var(--ink)",
-                letterSpacing: -1.6,
+                letterSpacing: isMobile ? -0.9 : -1.6,
                 lineHeight: 0.95,
                 fontFeatureSettings: '"tnum"',
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
               }}>
                 {v}
               </div>
               <div style={{
                 fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
+                fontSize: isMobile ? 10 : 11,
                 color: "var(--ink)",
                 letterSpacing: ".1em",
                 textTransform: "uppercase",
-                marginTop: 10,
+                marginTop: isMobile ? 6 : 10,
                 fontWeight: 500,
               }}>
                 {l}
               </div>
-              <div style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
-                color: "var(--faint)",
-                marginTop: 3,
-              }}>
-                {sub}
-              </div>
+              {sub && (
+                <div style={{
+                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontSize: 10,
+                  color: "var(--faint)",
+                  marginTop: 3,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}>
+                  {sub}
+                </div>
+              )}
             </div>
           ))}
         </div>
 
         {/* Rhythm chart */}
-        <div style={{ background: "var(--surface)", padding: "22px 26px", marginBottom: 22 }}>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 18 }}>
+        <div style={{
+          background: "var(--surface)",
+          padding: isMobile ? "16px 14px" : "22px 26px",
+          marginBottom: isMobile ? 18 : 22,
+        }}>
+          <div style={{
+            display: "flex",
+            alignItems: isMobile ? "flex-start" : "baseline",
+            justifyContent: "space-between",
+            flexDirection: isMobile ? "column" : "row",
+            gap: isMobile ? 10 : 0,
+            marginBottom: isMobile ? 14 : 18,
+          }}>
             <div>
               <div style={{
                 fontFamily: "var(--font-geist-mono), monospace",
@@ -2309,20 +2483,21 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
           <div style={{
             display: "grid",
             gridTemplateColumns: "repeat(12, 1fr)",
-            gap: 6,
+            gap: isMobile ? 3 : 6,
             alignItems: "end",
-            height: 96,
+            height: isMobile ? 72 : 96,
             position: "relative",
           }}>
             {rhythm.map((m, i) => {
               const isNow = i === currentMonth;
+              const cellH = isMobile ? 12 : 18;
               return (
                 <div key={i} style={{ display: "flex", flexDirection: "column-reverse", gap: 2, height: "100%", position: "relative" }}>
                   {Array.from({ length: m.a }).map((_, j) => (
-                    <div key={"a" + j} style={{ height: 18, background: "var(--ink)" }} />
+                    <div key={"a" + j} style={{ height: cellH, background: "var(--ink)" }} />
                   ))}
                   {Array.from({ length: m.t }).map((_, j) => (
-                    <div key={"t" + j} style={{ height: 18, border: "1.25px solid var(--ink)", background: "transparent" }} />
+                    <div key={"t" + j} style={{ height: cellH, border: "1.25px solid var(--ink)", background: "transparent" }} />
                   ))}
                   {isNow && (
                     <div style={{
@@ -2344,27 +2519,37 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
               );
             })}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 6, marginTop: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: isMobile ? 3 : 6, marginTop: 10 }}>
             {MONTHS.map((m, i) => (
               <div key={i} style={{
                 textAlign: "center",
                 fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10,
+                fontSize: isMobile ? 8.5 : 10,
                 color: i === currentMonth ? "var(--ink)" : "var(--faint)",
-                letterSpacing: ".06em",
+                letterSpacing: isMobile ? ".02em" : ".06em",
                 fontWeight: i === currentMonth ? 500 : 400,
               }}>
-                {m}
+                {isMobile ? m[0] : m}
               </div>
             ))}
           </div>
         </div>
 
-        {/* Three columns: Most seen / Most frequented / By kind */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 340px", gap: 22 }}>
+        {/* Most seen / Most frequented / By kind. Desktop runs them as a
+            3-col grid; mobile stacks them so the 8-cell sparkline doesn't
+            collapse into an unreadable smear and the venue/artist names
+            keep their full width. */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 340px",
+          gap: isMobile ? 18 : 22,
+        }}>
           {/* Most seen artists */}
-          <div style={{ background: "var(--surface)", padding: "22px 22px 18px" }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 16 }}>
+          <div style={{
+            background: "var(--surface)",
+            padding: isMobile ? "16px 14px 12px" : "22px 22px 18px",
+          }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: isMobile ? 12 : 16 }}>
               <div style={{
                 fontFamily: "var(--font-geist-mono), monospace",
                 fontSize: 11,
@@ -2376,82 +2561,57 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                 Most seen
               </div>
               <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--faint)" }}>
-                all time
+                artists &middot; {timeframeLabel.toLowerCase()}
               </div>
             </div>
-            {topArtists.map(([name, { count, kind }]) => (
-              <div key={name} style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 80px 30px",
-                columnGap: 14,
-                alignItems: "center",
-                padding: "11px 0",
-                borderBottom: "1px solid var(--rule)",
-              }}>
-                <div style={{
-                  fontFamily: "var(--font-geist-sans), sans-serif",
-                  fontSize: 14,
-                  color: "var(--ink)",
-                  letterSpacing: -0.1,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
+            {topArtists.map(([name, { count, kind }]) => {
+              const pct = Math.max(8, Math.round((count / maxArtistCount) * 100));
+              if (isMobile) {
+                // Mobile: two-line layout with a proper progress bar.
+                // The desktop 8-cell sparkline gets crushed below ~120px;
+                // a continuous bar reads clearly at any width.
+                return (
+                  <div key={name} style={{ padding: "10px 0", borderBottom: "1px solid var(--rule)" }}>
+                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
+                      <div style={{
+                        fontFamily: "var(--font-geist-sans), sans-serif",
+                        fontSize: 14,
+                        fontWeight: 500,
+                        color: "var(--ink)",
+                        letterSpacing: -0.1,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        flex: 1,
+                        minWidth: 0,
+                      }}>
+                        {name}
+                      </div>
+                      <div style={{
+                        fontFamily: "var(--font-geist-mono), monospace",
+                        fontSize: 11.5,
+                        color: "var(--ink)",
+                        fontWeight: 500,
+                        flexShrink: 0,
+                      }}>
+                        {count}&times;
+                      </div>
+                    </div>
+                    <div style={{ height: 6, background: "var(--surface2)" }}>
+                      <div style={{ width: `${pct}%`, height: "100%", background: `var(--kind-${kind})` }} />
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div key={name} style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 80px 30px",
+                  columnGap: 14,
+                  alignItems: "center",
+                  padding: "11px 0",
+                  borderBottom: "1px solid var(--rule)",
                 }}>
-                  {name}
-                </div>
-                <div style={{ display: "flex", gap: 2 }}>
-                  {Array.from({ length: SPARKLINE_MAX }).map((_, i) => (
-                    <div key={i} style={{
-                      height: 9,
-                      flex: 1,
-                      background: i < count ? `var(--kind-${kind})` : "transparent",
-                      border: i < count ? "none" : "1px solid var(--rule-strong)",
-                    }} />
-                  ))}
-                </div>
-                <div style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11.5,
-                  color: "var(--ink)",
-                  textAlign: "right",
-                  fontWeight: 500,
-                }}>
-                  {count}&times;
-                </div>
-              </div>
-            ))}
-            {topArtists.length === 0 && (
-              <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--faint)" }}>No data</div>
-            )}
-          </div>
-
-          {/* Most frequented venues */}
-          <div style={{ background: "var(--surface)", padding: "22px 22px 18px" }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 16 }}>
-              <div style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
-                color: "var(--ink)",
-                letterSpacing: ".1em",
-                textTransform: "uppercase",
-                fontWeight: 500,
-              }}>
-                Most frequented
-              </div>
-              <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--faint)" }}>
-                venues &middot; all time
-              </div>
-            </div>
-            {topVenues.map(([name, { count, neighborhood }]) => (
-              <div key={name} style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 80px 30px",
-                columnGap: 14,
-                alignItems: "center",
-                padding: "11px 0",
-                borderBottom: "1px solid var(--rule)",
-              }}>
-                <div style={{ minWidth: 0 }}>
                   <div style={{
                     fontFamily: "var(--font-geist-sans), sans-serif",
                     fontSize: 14,
@@ -2463,44 +2623,165 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                   }}>
                     {name}
                   </div>
+                  <div style={{ display: "flex", gap: 2 }}>
+                    {Array.from({ length: SPARKLINE_MAX }).map((_, i) => (
+                      <div key={i} style={{
+                        height: 9,
+                        flex: 1,
+                        background: i < count ? `var(--kind-${kind})` : "transparent",
+                        border: i < count ? "none" : "1px solid var(--rule-strong)",
+                      }} />
+                    ))}
+                  </div>
                   <div style={{
                     fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 10,
-                    color: "var(--muted)",
-                    marginTop: 2,
+                    fontSize: 11.5,
+                    color: "var(--ink)",
+                    textAlign: "right",
+                    fontWeight: 500,
                   }}>
-                    {neighborhood.toLowerCase()}
+                    {count}&times;
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 2 }}>
-                  {Array.from({ length: SPARKLINE_MAX }).map((_, i) => (
-                    <div key={i} style={{
-                      height: 9,
-                      flex: 1,
-                      background: i < count ? "var(--ink)" : "transparent",
-                      border: i < count ? "none" : "1px solid var(--rule-strong)",
-                    }} />
-                  ))}
-                </div>
-                <div style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11.5,
-                  color: "var(--ink)",
-                  textAlign: "right",
-                  fontWeight: 500,
-                }}>
-                  {count}
-                </div>
+              );
+            })}
+            {topArtists.length === 0 && (
+              <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--faint)" }}>No data</div>
+            )}
+          </div>
+
+          {/* Most frequented venues */}
+          <div style={{
+            background: "var(--surface)",
+            padding: isMobile ? "16px 14px 12px" : "22px 22px 18px",
+          }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: isMobile ? 12 : 16 }}>
+              <div style={{
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: 11,
+                color: "var(--ink)",
+                letterSpacing: ".1em",
+                textTransform: "uppercase",
+                fontWeight: 500,
+              }}>
+                Most frequented
               </div>
-            ))}
+              <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--faint)" }}>
+                venues &middot; {timeframeLabel.toLowerCase()}
+              </div>
+            </div>
+            {topVenues.map(([name, { count, neighborhood }]) => {
+              const pct = Math.max(8, Math.round((count / maxVenueCount) * 100));
+              if (isMobile) {
+                return (
+                  <div key={name} style={{ padding: "10px 0", borderBottom: "1px solid var(--rule)" }}>
+                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{
+                          fontFamily: "var(--font-geist-sans), sans-serif",
+                          fontSize: 14,
+                          fontWeight: 500,
+                          color: "var(--ink)",
+                          letterSpacing: -0.1,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}>
+                          {name}
+                        </div>
+                        {neighborhood && (
+                          <div style={{
+                            fontFamily: "var(--font-geist-mono), monospace",
+                            fontSize: 10,
+                            color: "var(--muted)",
+                            marginTop: 1,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}>
+                            {neighborhood.toLowerCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{
+                        fontFamily: "var(--font-geist-mono), monospace",
+                        fontSize: 11.5,
+                        color: "var(--ink)",
+                        fontWeight: 500,
+                        flexShrink: 0,
+                      }}>
+                        {count}
+                      </div>
+                    </div>
+                    <div style={{ height: 6, background: "var(--surface2)" }}>
+                      <div style={{ width: `${pct}%`, height: "100%", background: "var(--ink)" }} />
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div key={name} style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 80px 30px",
+                  columnGap: 14,
+                  alignItems: "center",
+                  padding: "11px 0",
+                  borderBottom: "1px solid var(--rule)",
+                }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 14,
+                      color: "var(--ink)",
+                      letterSpacing: -0.1,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}>
+                      {name}
+                    </div>
+                    <div style={{
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: 10,
+                      color: "var(--muted)",
+                      marginTop: 2,
+                    }}>
+                      {neighborhood.toLowerCase()}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 2 }}>
+                    {Array.from({ length: SPARKLINE_MAX }).map((_, i) => (
+                      <div key={i} style={{
+                        height: 9,
+                        flex: 1,
+                        background: i < count ? "var(--ink)" : "transparent",
+                        border: i < count ? "none" : "1px solid var(--rule-strong)",
+                      }} />
+                    ))}
+                  </div>
+                  <div style={{
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 11.5,
+                    color: "var(--ink)",
+                    textAlign: "right",
+                    fontWeight: 500,
+                  }}>
+                    {count}
+                  </div>
+                </div>
+              );
+            })}
             {topVenues.length === 0 && (
               <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--faint)" }}>No data</div>
             )}
           </div>
 
           {/* Kind mix */}
-          <div style={{ background: "var(--surface)", padding: "22px 22px 18px" }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 16 }}>
+          <div style={{
+            background: "var(--surface)",
+            padding: isMobile ? "16px 14px 12px" : "22px 22px 18px",
+          }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: isMobile ? 12 : 16 }}>
               <div style={{
                 fontFamily: "var(--font-geist-mono), monospace",
                 fontSize: 11,
@@ -2557,7 +2838,11 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
         </div>
 
         {/* Superlatives strip */}
-        <div style={{ marginTop: 22, background: "var(--surface)", padding: "20px 26px" }}>
+        <div style={{
+          marginTop: isMobile ? 18 : 22,
+          background: "var(--surface)",
+          padding: isMobile ? "16px 14px" : "20px 26px",
+        }}>
           <div style={{
             fontFamily: "var(--font-geist-mono), monospace",
             fontSize: 11,
@@ -2569,7 +2854,11 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
           }}>
             Superlatives &middot; {currentYear}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24 }}>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
+            gap: isMobile ? 16 : 24,
+          }}>
             {(() => {
               const thisYearShows = allShowsList.filter((s) => getYear(s.date) === currentYear);
 
@@ -2608,7 +2897,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                 [`${currentYear} spent`, yearSpent > 0 ? `$${yearSpent.toLocaleString()}` : "--", `${thisYearShows.length} shows`],
               ];
             })().map(([l, v, sub]) => (
-              <div key={l}>
+              <div key={l} style={{ minWidth: 0 }}>
                 <div style={{
                   fontFamily: "var(--font-geist-mono), monospace",
                   fontSize: 10,
@@ -2620,12 +2909,15 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                 </div>
                 <div style={{
                   fontFamily: "var(--font-geist-sans), sans-serif",
-                  fontSize: 26,
+                  fontSize: isMobile ? 22 : 26,
                   fontWeight: 500,
                   color: "var(--ink)",
                   letterSpacing: -0.7,
                   marginTop: 6,
                   fontFeatureSettings: '"tnum"',
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
                 }}>
                   {v}
                 </div>
@@ -2634,6 +2926,9 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                   fontSize: 10.5,
                   color: "var(--muted)",
                   marginTop: 4,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
                 }}>
                   {sub}
                 </div>
@@ -2650,13 +2945,164 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
   // ---------------------------------------------------------------------------
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      // Desktop pins the whole shell to the viewport height and lets the
+      // inner list/stats/calendar scroll inside their own container.
+      // Mobile lets the entire page scroll naturally so the user can
+      // reach the pagination footer and Stats sections beyond the fold
+      // without fighting a nested scroll inside a 700px-tall column.
+      ...(isMobile ? {} : { height: "100%", minHeight: 0 }),
+    }}>
       {renderHeader()}
       {renderFilterBar()}
 
       {viewMode === "list" && renderList()}
       {viewMode === "calendar" && renderCalendar()}
       {viewMode === "stats" && renderStats()}
+
+      {isMobile && mobileImportOpen && (
+        <div
+          onClick={() => setMobileImportOpen(false)}
+          role="presentation"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.45)",
+            zIndex: 150,
+            display: "flex",
+            alignItems: "flex-end",
+          }}
+        >
+          <div
+            role="menu"
+            aria-label="Import past shows"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "var(--bg)",
+              width: "100%",
+              borderTop: "1px solid var(--rule-strong)",
+              padding: "16px 16px calc(20px + env(safe-area-inset-bottom, 0px))",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <div style={{
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 10.5,
+              color: "var(--muted)",
+              letterSpacing: ".1em",
+              textTransform: "uppercase",
+              marginBottom: 4,
+              padding: "0 2px",
+            }}>
+              Import from
+            </div>
+            {([
+              { source: "gmail" as const, label: "Gmail", desc: "Scan confirmation emails", icon: <Image src="/google-g.svg" alt="" width={16} height={16} /> },
+              { source: "setlistfm" as const, label: "setlist.fm", desc: "Import attended setlists", icon: <Mail size={16} /> },
+              { source: "eventbrite" as const, label: "Eventbrite", desc: "Sync past orders", icon: <Ticket size={16} /> },
+            ]).map(({ source, label, desc, icon }) => (
+              <button
+                key={source}
+                type="button"
+                data-testid={`mobile-import-${source}`}
+                onClick={() => {
+                  setMobileImportOpen(false);
+                  handleOpenImportModal(source);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  width: "100%",
+                  padding: "14px 14px",
+                  border: "1px solid var(--rule-strong)",
+                  background: "var(--surface)",
+                  color: "var(--ink)",
+                  cursor: "pointer",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  textAlign: "left",
+                }}
+              >
+                <span style={{ width: 18, display: "inline-flex", justifyContent: "center", flexShrink: 0 }}>{icon}</span>
+                <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: -0.2 }}>{label}</span>
+                  <span style={{
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 10.5,
+                    color: "var(--muted)",
+                    marginTop: 2,
+                    letterSpacing: ".02em",
+                  }}>{desc}</span>
+                </span>
+              </button>
+            ))}
+            {totalShows > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileImportOpen(false);
+                  handleDeleteAll();
+                }}
+                disabled={deleteAllShows.isPending}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  width: "100%",
+                  padding: "14px 14px",
+                  border: "1px solid var(--kind-theatre)",
+                  background: "transparent",
+                  color: "var(--kind-theatre)",
+                  cursor: deleteAllShows.isPending ? "not-allowed" : "pointer",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  textAlign: "left",
+                  marginTop: 4,
+                  opacity: deleteAllShows.isPending ? 0.5 : 1,
+                }}
+              >
+                <span style={{ width: 18, display: "inline-flex", justifyContent: "center", flexShrink: 0 }}><Trash2 size={16} /></span>
+                <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: -0.2 }}>
+                    {deleteAllShows.isPending ? "Deleting..." : "Delete all shows"}
+                  </span>
+                  <span style={{
+                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontSize: 10.5,
+                    color: "var(--muted)",
+                    marginTop: 2,
+                    letterSpacing: ".02em",
+                  }}>
+                    Permanently remove every show in your logbook
+                  </span>
+                </span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setMobileImportOpen(false)}
+              style={{
+                marginTop: 6,
+                width: "100%",
+                padding: "12px",
+                border: "1px solid var(--rule)",
+                background: "transparent",
+                color: "var(--muted)",
+                cursor: "pointer",
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: 11,
+                letterSpacing: ".06em",
+                textTransform: "uppercase",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Show row context menu + watching → ticketed transition modal */}
       {showContextMenuPortal}
