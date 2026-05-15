@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Refuses to proceed if DATABASE_URL points at the prod database.
-// Wired into the dev/e2e workspace scripts (db:migrate, db:studio,
+// Wired into the dev/e2e workspace scripts (dev:migrate, db:studio,
 // db:prepare:e2e, test:integration, ...) so a misconfigured env can't
 // accidentally run a destructive dev command against prod data.
 //

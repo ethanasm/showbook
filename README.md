@@ -31,7 +31,7 @@ cp apps/web/.env.example apps/web/.env.local   # for `pnpm dev` outside Docker
 cp apps/web/.env.example .env.dev              # for the dev compose
 pnpm install
 pnpm dev:up                                    # docker compose up -d (loopback only)
-pnpm db:migrate
+pnpm dev:migrate
 pnpm db:prepare:e2e
 open http://localhost:3001
 ```
@@ -235,7 +235,7 @@ pnpm test:e2e           # Prepare showbook_e2e and run Playwright on port 3003
 pnpm email:smoke        # Render the daily digest with sample data to /tmp/showbook-digest.html
 pnpm email:preview      # react-email dev server (localhost:3030, hot reload)
 pnpm db:generate        # Generate Drizzle migrations
-pnpm db:migrate         # Run dev DB migrations against showbook
+pnpm dev:migrate        # Run dev DB migrations against showbook
 pnpm db:prepare:e2e     # Reset/migrate the isolated showbook_e2e DB
 pnpm db:studio          # Open Drizzle Studio
 ```
