@@ -34,11 +34,6 @@ export const JOBS = {
   HEALTH_CHECK: 'health/morning-check',
 } as const;
 
-const STALE_SCHEDULES = [
-  'notifications/digest',
-  'notifications/weekly-digest',
-] as const;
-
 // pg-boss v10 ignores constructor-level retry/expiration options when
 // `createQueue` runs without them (see plans.js create_queue: it INSERTs
 // the queue row directly from the options arg). The previous setup
@@ -404,15 +399,6 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
     return;
   }
   REGISTERED_INSTANCES.add(boss as unknown as object);
-
-  for (const stale of STALE_SCHEDULES) {
-    try {
-      await boss.unschedule(stale);
-      log.info({ event: 'pgboss.unschedule_stale', name: stale }, 'Unscheduled stale cron');
-    } catch {
-      // unschedule throws if no schedule exists — safe to ignore
-    }
-  }
 
   for (const name of Object.values(JOBS)) {
     const opts = { name, ...QUEUE_OPTIONS[name] };
