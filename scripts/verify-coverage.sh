@@ -90,7 +90,7 @@ postgres_available() {
 prepare_e2e_db() {
   if [ "$CI" = "true" ]; then
     # In CI the postgres service container is reachable directly; bypass
-    # the docker-compose helpers in db:prepare:e2e.
+    # the docker-compose helpers in dev:db:prepare:e2e.
     PGPASSWORD=showbook_dev psql -h localhost -p 5433 -U showbook -d showbook \
       -c 'DROP DATABASE IF EXISTS showbook_e2e WITH (FORCE);' && \
     PGPASSWORD=showbook_dev psql -h localhost -p 5433 -U showbook -d showbook \
@@ -100,7 +100,7 @@ prepare_e2e_db() {
     DATABASE_URL="${E2E_DATABASE_URL:-postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e}" \
       pnpm --filter @showbook/jobs bootstrap-pgboss
   else
-    pnpm db:prepare:e2e
+    pnpm dev:db:prepare:e2e
   fi
 }
 

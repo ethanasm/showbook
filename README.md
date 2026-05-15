@@ -32,7 +32,7 @@ cp apps/web/.env.example .env.dev              # for the dev compose
 pnpm install
 pnpm dev:up                                    # docker compose up -d (loopback only)
 pnpm dev:db:migrate
-pnpm db:prepare:e2e
+pnpm dev:db:prepare:e2e
 open http://localhost:3001
 ```
 
@@ -234,10 +234,10 @@ pnpm test:e2e           # Prepare showbook_e2e and run Playwright on port 3003
 # Email + DB
 pnpm email:smoke        # Render the daily digest with sample data to /tmp/showbook-digest.html
 pnpm email:preview      # react-email dev server (localhost:3030, hot reload)
-pnpm db:generate        # Generate Drizzle migrations
+pnpm dev:db:generate    # Generate Drizzle migrations
 pnpm dev:db:migrate        # Run dev DB migrations against showbook
-pnpm db:prepare:e2e     # Reset/migrate the isolated showbook_e2e DB
-pnpm db:studio          # Open Drizzle Studio
+pnpm dev:db:prepare:e2e     # Reset/migrate the isolated showbook_e2e DB
+pnpm dev:db:studio      # Open Drizzle Studio
 ```
 
 ## Email Notifications
@@ -284,7 +284,7 @@ Development data lives in the `showbook` database. Playwright tests use a separa
 `showbook_e2e` database in the same Postgres container so `/api/test/seed` can
 wipe and rebuild fixtures without touching local dev data.
 
-`pnpm test:e2e` runs `pnpm db:prepare:e2e` first, then starts a Playwright-owned
+`pnpm test:e2e` runs `pnpm dev:db:prepare:e2e` first, then starts a Playwright-owned
 Next.js dev server at `https://localhost:3003` (override with `PLAYWRIGHT_PORT`)
 with:
 
