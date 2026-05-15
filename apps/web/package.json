@@ -25,6 +25,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@showbook/api": "workspace:*",
     "@showbook/db": "workspace:*",
+    "drizzle-orm": "^0.45.2",
     "@showbook/jobs": "workspace:*",
     "@showbook/observability": "workspace:*",
     "@showbook/shared": "workspace:*",
