@@ -12,7 +12,7 @@ name: Deploy (prod)
 #   - have docker, docker compose, git, and pnpm on PATH
 #   - have a checked-out prod tree at $PROD_DIR (default /opt/showbook)
 #     containing a populated `.env.prod` file. The deploy fetches + resets
-#     this tree to the deploy SHA, then runs `pnpm prod:up && pnpm prod:migrate`.
+#     this tree to the deploy SHA, then runs `pnpm prod:up && pnpm prod:db:migrate`.
 #
 # See README.md → "Continuous deployment" for runner install steps.
 
@@ -102,7 +102,7 @@ jobs:
 
       - name: Apply DB migrations
         working-directory: ${{ env.PROD_DIR }}
-        run: pnpm prod:migrate
+        run: pnpm prod:db:migrate
 
       - name: Prune dangling images
         run: docker image prune -f

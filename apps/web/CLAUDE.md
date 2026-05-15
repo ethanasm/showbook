@@ -32,7 +32,7 @@ doesn't collide with either stack.
 
 `scripts/guard-not-prod-db.mjs` refuses any dev/test workspace command
 whose `DATABASE_URL` points at `showbook_prod*` — prod migrations must
-go through `pnpm prod:migrate`.
+go through `pnpm prod:db:migrate`.
 
 ## E2E database isolation
 
