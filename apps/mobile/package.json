@@ -23,7 +23,7 @@
     "@trpc/client": "^11.17.0",
     "@trpc/react-query": "^11.17.0",
     "expo": "~55.0.24",
-    "expo-auth-session": "~55.0.16",
+    "expo-auth-session": "~55.0.15",
     "expo-constants": "~55.0.16",
     "expo-crypto": "~55.0.15",
     "expo-font": "~55.0.7",
