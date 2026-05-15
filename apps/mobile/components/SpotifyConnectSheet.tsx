@@ -53,7 +53,7 @@ export function SpotifyConnectSheet({
         </Text>
 
         <Text style={[styles.privacy, { color: colors.muted, fontFamily: 'Geist Mono' }]}>
-          We'll never post on your behalf. Disconnect any time from Preferences.
+          {"We'll never post on your behalf. Disconnect any time from Preferences."}
         </Text>
 
         <Pressable
