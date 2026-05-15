@@ -43,16 +43,17 @@ jobs:
     #
     # To enable this workflow:
     #   1. Add secrets under Settings → Secrets and variables → Actions:
-    #        - EXPO_TOKEN
     #        - MAESTRO_E2E_TOKEN, MAESTRO_E2E_USER_JSON (used by the run step)
-    #      (MAESTRO_CLOUD_API_KEY is no longer needed — Maestro runs
-    #      locally on the self-hosted runner.)
+    #      (EXPO_TOKEN / MAESTRO_CLOUD_API_KEY are no longer needed —
+    #      the APK is built locally on the runner via Gradle and
+    #      Maestro runs locally too.)
     #   2. Set repo variable `MOBILE_E2E_ENABLED` to `true`.
     #   3. Optional: set repo variable `ANDROID_SDK_ROOT` to the install
     #      path on the runner; defaults to /opt/android-sdk.
     #   4. Run scripts/setup-runner.sh on the prod box (already done if
     #      the runner is up), then scripts/setup-runner-android.sh once
-    #      to install Android SDK + create the e2e AVD.
+    #      to install Android SDK (incl. build-tools + NDK), create the
+    #      e2e AVD, and install Maestro.
     if: >-
       vars.MOBILE_E2E_ENABLED == 'true' &&
       (github.event_name != 'pull_request' ||
@@ -63,7 +64,6 @@ jobs:
     runs-on: [self-hosted, showbook-prod]
     timeout-minutes: 45
     env:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       ANDROID_SDK_ROOT: ${{ vars.ANDROID_SDK_ROOT || '/opt/android-sdk' }}
       ANDROID_AVD_NAME: showbook_e2e
     steps:
@@ -71,7 +71,7 @@ jobs:
 
       - uses: pnpm/action-setup@v6
         with:
-          version: 9.15.4
+          version: 10.33.4
 
       - uses: actions/setup-node@v6
         with:
@@ -81,53 +81,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Setup EAS
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-
-      # The `e2e` EAS profile bakes EXPO_PUBLIC_E2E_MODE=1 so the
-      # SecureStore-bypass branch in apps/mobile/lib/auth.ts kicks in
-      # and the sign-in flow doesn't need real Google OAuth.
-      - name: Build Android APK on EAS
-        id: build
-        working-directory: apps/mobile
-        run: |
-          eas build \
-            --platform android \
-            --profile e2e \
-            --non-interactive \
-            --no-wait \
-            --json > /tmp/eas-build.json
-          BUILD_ID=$(node -e "const b=require('/tmp/eas-build.json'); console.log(Array.isArray(b)?b[0].id:b.id)")
-          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
-
-      - name: Wait for EAS build to finish
+      # Build the APK locally on the runner instead of going through EAS
+      # Build. The runner already has Android SDK + build-tools + NDK
+      # from scripts/setup-runner-android.sh, and EAS Build's free tier
+      # is too tight to cover per-PR runs. Mirrors what
+      # `pnpm mobile:android` does locally on a dev machine.
+      #
+      # EXPO_PUBLIC_E2E_MODE=1 is set here (matching the `e2e` profile
+      # in eas.json) so apps/mobile/lib/auth.ts takes the SecureStore-
+      # bypass branch and Maestro doesn't need real Google OAuth.
+      - name: Build Android APK locally
         working-directory: apps/mobile
         env:
-          BUILD_ID: ${{ steps.build.outputs.build_id }}
+          EXPO_PUBLIC_E2E_MODE: '1'
         run: |
-          for i in $(seq 1 60); do
-            STATUS=$(eas build:view "$BUILD_ID" --json | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const b=JSON.parse(d);console.log(b.status)})")
-            echo "build status: $STATUS"
-            case "$STATUS" in
-              finished) exit 0 ;;
-              errored|canceled) exit 1 ;;
-            esac
-            sleep 30
-          done
-          echo "EAS build timed out" >&2
-          exit 1
-
-      - name: Download APK artifact
-        working-directory: apps/mobile
-        env:
-          BUILD_ID: ${{ steps.build.outputs.build_id }}
-        run: |
-          APK_URL=$(eas build:view "$BUILD_ID" --json | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const b=JSON.parse(d);console.log(b.artifacts.buildUrl)})")
-          curl -sSL -o /tmp/showbook-e2e.apk "$APK_URL"
-          ls -lh /tmp/showbook-e2e.apk
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+          pnpm exec expo prebuild --platform android --non-interactive --no-install
+          cd android
+          ./gradlew :app:assembleDebug --no-daemon --console=plain
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          ls -lh "$APK"
+          cp "$APK" /tmp/showbook-e2e.apk
 
       - name: Install Maestro CLI
         run: |

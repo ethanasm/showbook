@@ -86,11 +86,11 @@ Local development uses the `showbook` database. Playwright uses a separate
 delete and recreate fixtures without touching manually entered dev data.
 
 ```bash
-pnpm db:prepare:e2e
+pnpm dev:db:prepare:e2e
 pnpm test:e2e
 ```
 
-`pnpm db:prepare:e2e` drops/recreates disposable `showbook_e2e` and applies
+`pnpm dev:db:prepare:e2e` drops/recreates disposable `showbook_e2e` and applies
 Drizzle migrations with:
 
 ```bash
@@ -147,7 +147,7 @@ docker compose up -d
 DATABASE_URL=postgresql://showbook:showbook_dev@localhost:5433/showbook npx drizzle-kit migrate
 
 # Prepare the isolated e2e DB
-pnpm db:prepare:e2e
+pnpm dev:db:prepare:e2e
 
 # Verify
 docker compose logs web       # Next.js output

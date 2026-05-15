@@ -66,7 +66,7 @@ fi
 
 # 4. Run database migrations.
 log "Running drizzle migrations..."
-pnpm db:migrate
+pnpm dev:db:migrate
 
 # 5. Install Playwright Chromium.
 #    cdn.playwright.dev is blocked in the sandbox network, so try the standard

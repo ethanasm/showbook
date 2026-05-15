@@ -82,7 +82,7 @@ Cloudflare Tunnel reaches web via loopback.
   `.env.prod`, sealed image with `next build` baked in,
   `NODE_ENV=production`. Postgres on host port `5434`, web on `3002`,
   db `showbook_prod`, role `showbook_prod`. Start with `pnpm prod:up`,
-  then `pnpm prod:migrate` once after first up. `.env.prod` must set
+  then `pnpm prod:db:migrate` once after first up. `.env.prod` must set
   `POSTGRES_PASSWORD` — the compose builds `DATABASE_URL` from it
   (don't set both).
 - Dev and prod stacks coexist on the same host: web ports 3001 vs 3002,
@@ -92,7 +92,7 @@ Cloudflare Tunnel reaches web via loopback.
   collide with either stack.
 - `scripts/guard-not-prod-db.mjs` refuses any dev/test workspace
   command whose `DATABASE_URL` points at a `showbook_prod*` database —
-  prod migrations must go through `pnpm prod:migrate`. See README.md
+  prod migrations must go through `pnpm prod:db:migrate`. See README.md
   "Production deployment" for the env checklist.
 
 ## Verification

@@ -32,7 +32,7 @@ doesn't collide with either stack.
 
 `scripts/guard-not-prod-db.mjs` refuses any dev/test workspace command
 whose `DATABASE_URL` points at `showbook_prod*` — prod migrations must
-go through `pnpm prod:migrate`.
+go through `pnpm prod:db:migrate`.
 
 ## E2E database isolation
 
@@ -40,7 +40,7 @@ Playwright tests use a separate `showbook_e2e` database in the same
 Postgres container so `/api/test/seed` can wipe and rebuild fixtures
 without touching local dev data.
 
-`pnpm test:e2e` runs `pnpm db:prepare:e2e` first, then starts a
+`pnpm test:e2e` runs `pnpm dev:db:prepare:e2e` first, then starts a
 Playwright-owned Next.js dev server at `https://localhost:3003`
 (override with `PLAYWRIGHT_PORT`) with:
 

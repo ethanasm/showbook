@@ -99,18 +99,20 @@ scope fails CI, and the report identifies which scope fell short.
 ## Maestro E2E flows
 
 Three flows live under `e2e/flows/` — sign-in, add-show, sign-out.
-The `e2e` EAS profile (`eas.json`) sets `EXPO_PUBLIC_E2E_MODE=1`,
-which makes `lib/auth.ts` skip the Google OAuth round-trip and read a
-pre-baked Showbook JWT from SecureStore keys `e2e.test-token` +
-`e2e.test-user`. The pure helpers `isE2EMode` and `loadE2ETestSession`
-are unit-tested in `lib/__tests__/auth.test.ts` with an explicit
-assertion that an unset env var is treated as not-E2E so a
-misconfigured deploy can't accidentally ship the bypass.
+CI sets `EXPO_PUBLIC_E2E_MODE=1` directly in the workflow step env
+(matching the `e2e` profile in `eas.json` for parity with local EAS
+builds), which makes `lib/auth.ts` skip the Google OAuth round-trip
+and read a pre-baked Showbook JWT from SecureStore keys
+`e2e.test-token` + `e2e.test-user`. The pure helpers `isE2EMode` and
+`loadE2ETestSession` are unit-tested in `lib/__tests__/auth.test.ts`
+with an explicit assertion that an unset env var is treated as
+not-E2E so a misconfigured deploy can't accidentally ship the bypass.
 
 **Automated (Android only):** `.github/workflows/mobile-e2e.yml`
 runs nightly + on push-to-`main` + on PRs labeled `mobile-visual`,
-on a self-hosted runner inside the prod WSL box. Maestro Cloud is
-not used (no free tier). One-time runner setup:
+on a self-hosted runner inside the prod WSL box. Both the APK build
+(local Gradle, no EAS round-trip) and the Maestro flows run on that
+runner — no paid services. One-time runner setup:
 
 ```bash
 # On the prod box:
