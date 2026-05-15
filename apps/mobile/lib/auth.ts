@@ -112,10 +112,19 @@ export function AuthProvider({
   // We use useIdTokenAuthRequest (not useAuthRequest) because it asks the
   // hook to populate `response.params.id_token` after the internal code
   // exchange completes. See the note at the top of this file.
+  //
+  // The hook throws synchronously during render if the platform-specific
+  // clientId is undefined ("Client Id property `iosClientId` must be
+  // defined..."). To preserve the env.ts contract that missing config
+  // surfaces a friendly error from the sign-in screen rather than a fatal
+  // render crash, fall back to a placeholder so the hook constructs.
+  // `signIn` guards on `describeGoogleOAuthMisconfiguration` before ever
+  // invoking `promptAsync`, so the placeholder is never used.
+  const PLACEHOLDER_CLIENT_ID = 'unconfigured.apps.googleusercontent.com';
   const [, response, promptAsync] = Google.useIdTokenAuthRequest({
-    iosClientId: GOOGLE_OAUTH_CLIENT_ID_IOS,
-    androidClientId: GOOGLE_OAUTH_CLIENT_ID_ANDROID,
-    webClientId: GOOGLE_OAUTH_CLIENT_ID_WEB,
+    iosClientId: GOOGLE_OAUTH_CLIENT_ID_IOS ?? PLACEHOLDER_CLIENT_ID,
+    androidClientId: GOOGLE_OAUTH_CLIENT_ID_ANDROID ?? PLACEHOLDER_CLIENT_ID,
+    webClientId: GOOGLE_OAUTH_CLIENT_ID_WEB ?? PLACEHOLDER_CLIENT_ID,
   });
 
   // Keep a ref to promptAsync so signIn (returned in context) reads the

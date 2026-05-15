@@ -69,7 +69,7 @@ Inside the web container, DATABASE_URL uses the Docker service name:
 
 Playwright uses an isolated database and server:
 ```bash
-pnpm db:prepare:e2e
+pnpm dev:db:prepare:e2e
 pnpm test:e2e
 ```
 

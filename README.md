@@ -31,8 +31,8 @@ cp apps/web/.env.example apps/web/.env.local   # for `pnpm dev` outside Docker
 cp apps/web/.env.example .env.dev              # for the dev compose
 pnpm install
 pnpm dev:up                                    # docker compose up -d (loopback only)
-pnpm db:migrate
-pnpm db:prepare:e2e
+pnpm dev:db:migrate
+pnpm dev:db:prepare:e2e
 open http://localhost:3001
 ```
 
@@ -66,7 +66,7 @@ cp apps/web/.env.example .env.prod
 #   - set real API keys, leave ENABLE_TEST_ROUTES unset
 
 pnpm prod:up        # build + start
-pnpm prod:migrate   # apply migrations against the prod DB (run once after up)
+pnpm prod:db:migrate   # apply migrations against the prod DB (run once after up)
 pnpm prod:logs      # tail web logs
 pnpm prod:down      # stop
 ```
@@ -113,7 +113,7 @@ with SELECT on public tables only, with explicit REVOKE on the three auth
 tables above. Wire the endpoint up to it as a one-time post-migration step:
 
 ```bash
-# On the prod host, after `pnpm prod:migrate` has run 0027 (the role exists
+# On the prod host, after `pnpm prod:db:migrate` has run 0027 (the role exists
 # as NOLOGIN until you do this). Use a long random password — it never needs
 # to be typed by a human, only loaded from .env.prod.
 PASSWORD=$(openssl rand -hex 32)
@@ -150,7 +150,7 @@ with either stack.
 `.github/workflows/deploy.yml` redeploys the prod box every time CI passes
 on `main`. It runs on a **self-hosted GitHub Actions runner** installed on
 the prod machine, fetches the deploy SHA into a fixed prod tree, and runs
-`pnpm prod:up && pnpm prod:migrate`. No inbound ports are required — the
+`pnpm prod:up && pnpm prod:db:migrate`. No inbound ports are required — the
 runner connects out to GitHub, so this works behind Cloudflare Tunnel.
 
 One-time setup on the prod host:
@@ -223,7 +223,7 @@ pnpm dev:logs           # Tail web container logs
 pnpm prod:up            # docker compose -f docker-compose.prod.yml up -d --build
 pnpm prod:down          # Stop prod services
 pnpm prod:logs          # Tail prod web container logs
-pnpm prod:migrate       # Run drizzle migrations against the prod DB
+pnpm prod:db:migrate       # Run drizzle migrations against the prod DB
 
 # Verify / test
 pnpm verify             # build + lint + unit tests, with status summary
@@ -234,10 +234,10 @@ pnpm test:e2e           # Prepare showbook_e2e and run Playwright on port 3003
 # Email + DB
 pnpm email:smoke        # Render the daily digest with sample data to /tmp/showbook-digest.html
 pnpm email:preview      # react-email dev server (localhost:3030, hot reload)
-pnpm db:generate        # Generate Drizzle migrations
-pnpm db:migrate         # Run dev DB migrations against showbook
-pnpm db:prepare:e2e     # Reset/migrate the isolated showbook_e2e DB
-pnpm db:studio          # Open Drizzle Studio
+pnpm dev:db:generate    # Generate Drizzle migrations
+pnpm dev:db:migrate        # Run dev DB migrations against showbook
+pnpm dev:db:prepare:e2e     # Reset/migrate the isolated showbook_e2e DB
+pnpm dev:db:studio      # Open Drizzle Studio
 ```
 
 ## Email Notifications
@@ -284,7 +284,7 @@ Development data lives in the `showbook` database. Playwright tests use a separa
 `showbook_e2e` database in the same Postgres container so `/api/test/seed` can
 wipe and rebuild fixtures without touching local dev data.
 
-`pnpm test:e2e` runs `pnpm db:prepare:e2e` first, then starts a Playwright-owned
+`pnpm test:e2e` runs `pnpm dev:db:prepare:e2e` first, then starts a Playwright-owned
 Next.js dev server at `https://localhost:3003` (override with `PLAYWRIGHT_PORT`)
 with:
 

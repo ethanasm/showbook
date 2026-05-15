@@ -16,6 +16,12 @@ ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-/opt/android-sdk}"
 CMDLINE_TOOLS_VERSION="${CMDLINE_TOOLS_VERSION:-13114758}" # latest as of 2026-05
 SYSTEM_IMAGE="${SYSTEM_IMAGE:-system-images;android-34;google_apis;x86_64}"
 PLATFORM="${PLATFORM:-platforms;android-34}"
+# Gradle build prerequisites — versions match what Expo SDK 55's prebuild
+# emits (apps/mobile/android/build.gradle ext block). Keep these in sync
+# when bumping Expo.
+BUILD_TOOLS="${BUILD_TOOLS:-build-tools;36.0.0}"
+COMPILE_PLATFORM="${COMPILE_PLATFORM:-platforms;android-36}"
+NDK="${NDK:-ndk;27.1.12297006}"
 AVD_NAME="${AVD_NAME:-showbook_e2e}"
 
 GREEN='\033[0;32m'
@@ -70,12 +76,18 @@ export ANDROID_SDK_ROOT
 export PATH="$CMDLINE_BIN:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
 
 # ── 3. SDK packages ───────────────────────────────────────────────────
-step "Installing SDK packages (platform-tools, emulator, $PLATFORM, $SYSTEM_IMAGE)…"
+step "Installing SDK packages (platform-tools, emulator, $PLATFORM, $COMPILE_PLATFORM, $BUILD_TOOLS, $NDK, $SYSTEM_IMAGE)…"
 yes | sdkmanager --licenses >/dev/null
+# build-tools + compile-platform + NDK are needed for the local Gradle
+# build that produces the e2e APK (see .github/workflows/mobile-e2e.yml).
+# The system image + emulator platform are needed to run Maestro flows.
 sdkmanager --install \
   "platform-tools" \
   "emulator" \
   "$PLATFORM" \
+  "$COMPILE_PLATFORM" \
+  "$BUILD_TOOLS" \
+  "$NDK" \
   "$SYSTEM_IMAGE" >/dev/null
 info "SDK packages installed"
 

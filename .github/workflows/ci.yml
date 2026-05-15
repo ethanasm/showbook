@@ -237,7 +237,7 @@ jobs:
             -tAc "SELECT 1 FROM pg_database WHERE datname = 'showbook_e2e'" \
             | grep -q 1 || \
           PGPASSWORD=showbook_dev createdb -h localhost -p 5433 -U showbook showbook_e2e
-          pnpm db:migrate:e2e
+          pnpm dev:db:migrate:e2e
           pnpm --filter @showbook/jobs bootstrap-pgboss
         env:
           DATABASE_URL: postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e

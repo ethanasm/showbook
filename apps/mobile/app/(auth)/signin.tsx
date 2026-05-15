@@ -24,6 +24,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Redirect } from 'expo-router';
 import { useTheme } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { KindBadge } from '../../components/KindBadge';
@@ -50,7 +51,11 @@ const SAMPLE_CARDS: PeekCardData[] = [
 export default function SignInScreen(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
-  const { signIn, isSigningIn, error } = useAuth();
+  const { signIn, isSigningIn, error, user, isFirstRun } = useAuth();
+
+  if (user) {
+    return <Redirect href={isFirstRun ? '/(auth)/first-run/welcome' : '/(tabs)'} />;
+  }
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: colors.bg }]} edges={['top', 'bottom']}>

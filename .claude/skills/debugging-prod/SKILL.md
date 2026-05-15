@@ -25,7 +25,7 @@ The runbook below turns a vague prod report into the next concrete query. CLAUDE
 
 - **LLM regressions** (bad output, slow generations, missing tool calls) → Langfuse, not Axiom. Traces from `traceLLM` / `withTrace` are not in this dataset.
 - **Local/dev debugging** → `AXIOM_TOKEN` is intentionally unset in `.env.dev`; just read stdout.
-- **Migration issues** → check `pnpm prod:migrate` output. (Schema *introspection* is fine via `/api/admin/sql` — see below — but applying migrations isn't.)
+- **Migration issues** → check `pnpm prod:db:migrate` output. (Schema *introspection* is fine via `/api/admin/sql` — see below — but applying migrations isn't.)
 - **Cloud / web-sandbox sessions, Axiom queries only** — the Axiom recipes rely on `AXIOM_QUERY_TOKEN` exported into the shell, which isn't pre-populated in cloud envs. Ask the user to paste the token (or run the Axiom recipes locally and share the output). The DB recipes (`/api/admin/sql`) DO work from cloud sandboxes since they go through public HTTPS — just have the user paste `ADMIN_QUERY_TOKEN` and `ADMIN_QUERY_URL` into the session env.
 
 ## Pre-flight
@@ -250,6 +250,6 @@ docker logs showbook-prod-web --since 30m 2>&1 | jq -c 'select(.level=="error") 
 | App / job logs | Axiom `showbook-prod` (this skill) |
 | LLM traces | Langfuse |
 | Prod DB state (read-only) | `pnpm prod:query "..."` → `/api/admin/sql` |
-| Migration output | `pnpm prod:migrate` |
+| Migration output | `pnpm prod:db:migrate` |
 | Container health | `docker ps`, `docker logs showbook-prod-web` |
 | Event-name catalog | `CLAUDE.md` → "Structured event names worth knowing" |
