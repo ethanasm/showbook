@@ -363,6 +363,7 @@ export default function MapScreen(): React.JSX.Element {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.filterScroll}
         contentContainerStyle={[
           styles.filterStrip,
           { borderBottomColor: colors.rule },
@@ -679,11 +680,13 @@ function Stat({ label, value }: { label: string; value: string }): React.JSX.Ele
 
 const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  filterScroll: { flexGrow: 0 },
   filterStrip: {
     paddingHorizontal: 20,
     paddingBottom: 12,
     gap: 6,
     flexDirection: 'row',
+    alignItems: 'center',
     borderBottomWidth: 1,
   },
   filterChip: {
