@@ -5,8 +5,8 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
-    "ios": "expo run:ios",
-    "android": "expo run:android",
+    "ios": "expo start --ios",
+    "android": "expo start --android",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
