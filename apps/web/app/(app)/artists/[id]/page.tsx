@@ -18,7 +18,7 @@ import {
 } from "@/components/design-system";
 import { EditableName } from "@/components/EditableName";
 import { MediaSection } from "@/components/media";
-import { formatDateMedium as formatDateLong, formatDateParts } from "@showbook/shared";
+import { formatDateMedium as formatDateLong, formatDateParts, isFeatureOn } from "@showbook/shared";
 import {
   getHeadliner,
   getHeadlinerId,
@@ -115,6 +115,21 @@ export default function ArtistDetailPage() {
   const userShowsQuery = trpc.performers.userShows.useQuery(
     { performerId },
     { enabled: Boolean(performerId) },
+  );
+
+  // Phase 2 — Songs section. The list is bounded server-side; only
+  // request the top 25 frequencies. Hide the section when there are
+  // no rows so artists with no setlist data don't render an empty
+  // chrome.
+  const songsFlagOn = isFeatureOn("SetlistIntelSongs");
+  const songsQuery = trpc.songs.list.useQuery(
+    {
+      performerId,
+      firstHeardOnly: false,
+      tourDebutOnly: false,
+      limit: 25,
+    },
+    { enabled: Boolean(performerId) && songsFlagOn, staleTime: 60_000 },
   );
 
   const followMutation = trpc.performers.follow.useMutation({
@@ -315,6 +330,99 @@ export default function ArtistDetailPage() {
         }}
       >
         <MediaSection scope="performer" performerId={performer.id} />
+
+        {songsFlagOn && (songsQuery.data?.length ?? 0) > 0 && (
+          <section data-testid="artist-songs-section">
+            <SectionHeader
+              label={`Songs you've heard live · ${songsQuery.data!.length}`}
+              note="top by count"
+            />
+            <div style={{ background: "var(--surface)" }}>
+              {songsQuery.data!.map((row) => (
+                <Link
+                  key={row.songId}
+                  href={`/songs/${row.songId}`}
+                  data-testid="artist-songs-row"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 50px 70px",
+                    columnGap: 16,
+                    padding: "12px 20px",
+                    borderBottom: "1px solid var(--rule)",
+                    alignItems: "baseline",
+                    color: "inherit",
+                    textDecoration: "none",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      minWidth: 0,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: "var(--font-geist-sans), sans-serif",
+                        fontSize: 14,
+                        color: "var(--ink)",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {row.title}
+                    </span>
+                    {row.isUserDebut && (
+                      <span
+                        title="You heard this song live exactly once"
+                        style={{
+                          fontFamily:
+                            "var(--font-geist-mono), monospace",
+                          fontSize: 9.5,
+                          color: "var(--accent)",
+                          letterSpacing: ".04em",
+                          padding: "1px 6px",
+                          border: "1px solid var(--accent)",
+                        }}
+                      >
+                        🆕 Once
+                      </span>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      textAlign: "right",
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: 12,
+                      fontWeight: 500,
+                      color:
+                        row.timesHeard > 1
+                          ? "var(--ink)"
+                          : "var(--faint)",
+                      fontFeatureSettings: '"tnum"',
+                    }}
+                  >
+                    {row.timesHeard}×
+                  </div>
+                  <div
+                    style={{
+                      textAlign: "right",
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: 11,
+                      color: "var(--muted)",
+                      letterSpacing: ".02em",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {formatDateLong(row.lastHeard)}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section>
           <SectionHeader

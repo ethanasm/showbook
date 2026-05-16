@@ -19,6 +19,7 @@ import {
   type PerformerSetlistsMap,
   singleMainSet,
 } from '@showbook/shared';
+import { runSongIndexRebuild } from '@showbook/jobs';
 
 const VENUES = [
   { name: 'Madison Square Garden', city: 'New York', stateRegion: 'NY', country: 'US', latitude: 40.7505, longitude: -73.9934, ticketmasterVenueId: 'KovZpZA7AAEA', googlePlaceId: 'ChIJhRwB-yFawokR5Phil-QQ3zM' },
@@ -230,6 +231,7 @@ export async function GET(request: Request) {
 
     // Insert shows with performers
     let showCount = 0;
+    const insertedShowIds: string[] = [];
     for (const s of SHOWS) {
       const venueId = venueMap.get(s.venueName);
       if (!venueId) continue;
@@ -267,6 +269,7 @@ export async function GET(request: Request) {
 
       if (!show) continue;
       showCount++;
+      insertedShowIds.push(show.id);
 
       // Headliner — skipped for theatre (production goes on shows.productionName)
       if (s.kind !== 'theatre') {
@@ -370,6 +373,13 @@ export async function GET(request: Request) {
         ...(irvingPlazaId ? [{ venueId: irvingPlazaId, kind: 'concert' as const, headliner: 'Mitski', showDate: '2026-09-12', runStartDate: '2026-09-12', runEndDate: '2026-09-12', performanceDates: ['2026-09-12'], onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
         ...(comedyCellarId ? [{ venueId: comedyCellarId, kind: 'comedy' as const, headliner: 'Sam Morril', showDate: '2026-08-05', runStartDate: '2026-08-05', runEndDate: '2026-08-05', performanceDates: ['2026-08-05'], onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
       ]);
+    }
+
+    // Rebuild the song-index for this user's just-inserted shows so
+    // the Phase 2 Songs surface has data. Scoping by showIds keeps
+    // parallel workers from re-indexing each other's rows.
+    if (insertedShowIds.length > 0) {
+      await runSongIndexRebuild({ showIds: insertedShowIds });
     }
 
     return NextResponse.json({

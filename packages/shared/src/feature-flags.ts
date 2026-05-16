@@ -45,6 +45,16 @@ export const FeatureFlag = {
       'against the same `shows.detail` payload.',
     state: 'ON',
   },
+  SetlistIntelSongs: {
+    description:
+      'Phase 2 (setlist-intelligence) songs surface. Gates the /(app)/songs ' +
+      'index + per-song detail pages, the Songs section on artist detail, ' +
+      'and the inline 🆕 / 🎯 badges on the Setlist tab. Showbook is a ' +
+      "single-user app so 'ON' for the developer's user id is equivalent " +
+      'to ON globally; flip OFF before broader rollout if the song-index ' +
+      'matview falls behind and badges go stale.',
+    state: 'ON',
+  },
 } as const satisfies Record<string, { description: string; state: 'ON' | 'OFF' }>;
 
 export type FeatureFlagKey = keyof typeof FeatureFlag;
