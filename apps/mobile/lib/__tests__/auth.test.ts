@@ -15,7 +15,10 @@ import assert from 'node:assert/strict';
 import {
   exchangeGoogleIdTokenForSession,
   describeSignInError,
+  isExpoGoAuthUnsupported,
   isE2EMode,
+  mobileTokenEndpointCandidates,
+  mobileTokenEndpoint,
   loadE2ETestSession,
   E2E_TOKEN_KEY,
   E2E_USER_KEY,
@@ -66,6 +69,76 @@ describe('exchangeGoogleIdTokenForSession', () => {
     );
     assert.equal(capturedInit?.body, JSON.stringify({ idToken: 'google-id-token' }));
     assert.deepEqual(result, VALID_BODY);
+  });
+
+  it('normalizes trailing slashes in the API URL', async () => {
+    let capturedUrl = '';
+    const fetchImpl = makeFetch(async (url) => {
+      capturedUrl = url;
+      return jsonResponse(VALID_BODY, 200);
+    });
+
+    await exchangeGoogleIdTokenForSession({
+      idToken: 'google-id-token',
+      apiUrl: 'https://showbook.example.com/',
+      fetchImpl,
+    });
+
+    assert.equal(capturedUrl, 'https://showbook.example.com/api/auth/mobile-token');
+  });
+
+  it('falls back across localhost endpoints after network errors', async () => {
+    const attempted: string[] = [];
+    const fetchImpl = makeFetch(async (url) => {
+      attempted.push(url);
+      if (url !== 'http://127.0.0.1:3001/api/auth/mobile-token') {
+        throw new Error('Network request failed');
+      }
+      return jsonResponse(VALID_BODY, 200);
+    });
+
+    const result = await exchangeGoogleIdTokenForSession({
+      idToken: 'google-id-token',
+      apiUrl: 'https://localhost:3001',
+      fetchImpl,
+    });
+
+    assert.deepEqual(result, VALID_BODY);
+    assert.deepEqual(attempted, [
+      'https://localhost:3001/api/auth/mobile-token',
+      'https://127.0.0.1:3001/api/auth/mobile-token',
+      'http://localhost:3001/api/auth/mobile-token',
+      'http://127.0.0.1:3001/api/auth/mobile-token',
+    ]);
+  });
+
+  it('does not fallback after an HTTP response from the server', async () => {
+    const attempted: string[] = [];
+    const fetchImpl = makeFetch(async (url) => {
+      attempted.push(url);
+      return jsonResponse({ error: 'invalid_token' }, 401);
+    });
+
+    await assert.rejects(
+      exchangeGoogleIdTokenForSession({
+        idToken: 'x',
+        apiUrl: 'https://localhost:3001',
+        fetchImpl,
+      }),
+      /invalid_google_token/,
+    );
+    assert.deepEqual(attempted, ['https://localhost:3001/api/auth/mobile-token']);
+  });
+
+  it('rejects an invalid API URL before fetch', async () => {
+    await assert.rejects(
+      exchangeGoogleIdTokenForSession({
+        idToken: 'x',
+        apiUrl: 'localhost:3001',
+        fetchImpl: makeFetch(async () => jsonResponse(VALID_BODY, 200)),
+      }),
+      /api_url_invalid/,
+    );
   });
 
   it('happy path with null name and image (acceptable shape)', async () => {
@@ -121,6 +194,20 @@ describe('exchangeGoogleIdTokenForSession', () => {
         fetchImpl,
       }),
       /server_error_500/,
+    );
+  });
+
+  it('429 → throws rate_limited', async () => {
+    const fetchImpl = makeFetch(async () =>
+      jsonResponse({ error: 'rate_limited' }, 429),
+    );
+    await assert.rejects(
+      exchangeGoogleIdTokenForSession({
+        idToken: 'x',
+        apiUrl: 'https://e.co',
+        fetchImpl,
+      }),
+      /rate_limited/,
     );
   });
 
@@ -201,7 +288,7 @@ describe('exchangeGoogleIdTokenForSession', () => {
     );
   });
 
-  it('network error propagates verbatim', async () => {
+  it('network error becomes api_unreachable', async () => {
     const fetchImpl = makeFetch(async () => {
       throw new Error('network down');
     });
@@ -211,15 +298,68 @@ describe('exchangeGoogleIdTokenForSession', () => {
         apiUrl: 'https://e.co',
         fetchImpl,
       }),
-      /network down/,
+      /api_unreachable:network down/,
     );
   });
 });
 
+describe('mobileTokenEndpoint', () => {
+  it('appends the mobile-token path', () => {
+    assert.equal(
+      mobileTokenEndpoint('http://localhost:3001'),
+      'http://localhost:3001/api/auth/mobile-token',
+    );
+  });
+
+  it('preserves a base path and removes query/hash', () => {
+    assert.equal(
+      mobileTokenEndpoint('https://example.com/base/?x=1#top'),
+      'https://example.com/base/api/auth/mobile-token',
+    );
+  });
+});
+
+describe('mobileTokenEndpointCandidates', () => {
+  it('returns localhost fallback candidates', () => {
+    assert.deepEqual(mobileTokenEndpointCandidates('https://localhost:3001'), [
+      'https://localhost:3001/api/auth/mobile-token',
+      'https://127.0.0.1:3001/api/auth/mobile-token',
+      'http://localhost:3001/api/auth/mobile-token',
+      'http://127.0.0.1:3001/api/auth/mobile-token',
+    ]);
+  });
+
+  it('does not fallback for non-localhost URLs', () => {
+    assert.deepEqual(mobileTokenEndpointCandidates('https://showbook.example.com'), [
+      'https://showbook.example.com/api/auth/mobile-token',
+    ]);
+  });
+});
+
 describe('describeSignInError', () => {
+  it('maps invalid API URLs to a configuration message', () => {
+    const msg = describeSignInError(new Error('api_url_invalid'));
+    assert.match(msg, /EXPO_PUBLIC_API_URL|http/i);
+  });
+
+  it('maps unreachable API URLs to a backend reachability message', () => {
+    const msg = describeSignInError(new Error('api_unreachable'));
+    assert.match(msg, /Showbook is not reachable|web app/i);
+  });
+
+  it('preserves native fetch details for unreachable API URLs', () => {
+    const msg = describeSignInError(new Error('api_unreachable:certificate rejected'));
+    assert.match(msg, /certificate rejected/i);
+  });
+
+  it('maps generic React Native network failures to a localhost cert hint', () => {
+    const msg = describeSignInError(new Error('api_unreachable:Network request failed'));
+    assert.match(msg, /mkcert root CA|iOS simulator/i);
+  });
+
   it('maps invalid_google_token to a retry message', () => {
     const msg = describeSignInError(new Error('invalid_google_token'));
-    assert.match(msg, /try again/i);
+    assert.match(msg, /GOOGLE_OAUTH_MOBILE_AUDIENCES|token/i);
   });
 
   it('maps access_denied to an allowlist message', () => {
@@ -229,12 +369,22 @@ describe('describeSignInError', () => {
 
   it('maps server_error_500 to a connectivity message', () => {
     const msg = describeSignInError(new Error('server_error_500'));
-    assert.match(msg, /reach showbook|moment/i);
+    assert.match(msg, /AUTH_SECRET|GOOGLE_OAUTH_MOBILE_AUDIENCES/i);
+  });
+
+  it('maps rate_limited to a retry-later message', () => {
+    const msg = describeSignInError(new Error('rate_limited'));
+    assert.match(msg, /wait|try again/i);
   });
 
   it('maps oauth_dismissed to a cancellation message', () => {
     const msg = describeSignInError(new Error('oauth_dismissed'));
     assert.match(msg, /cancel/i);
+  });
+
+  it('maps Expo Go OAuth attempts to a development build message', () => {
+    const msg = describeSignInError(new Error('expo_go_oauth_unsupported'));
+    assert.match(msg, /Expo Go|development build|redirect URI/i);
   });
 
   it('falls back to a generic message for unknown errors', () => {
@@ -245,6 +395,16 @@ describe('describeSignInError', () => {
   it('handles non-Error throwables', () => {
     const msg = describeSignInError('string thrown');
     assert.match(msg, /couldn'?t sign you in/i);
+  });
+});
+
+describe('isExpoGoAuthUnsupported', () => {
+  it('returns true only for Expo Go ownership', () => {
+    assert.equal(isExpoGoAuthUnsupported('expo'), true);
+    assert.equal(isExpoGoAuthUnsupported('standalone'), false);
+    assert.equal(isExpoGoAuthUnsupported('guest'), false);
+    assert.equal(isExpoGoAuthUnsupported(null), false);
+    assert.equal(isExpoGoAuthUnsupported(undefined), false);
   });
 });
 

@@ -44,6 +44,11 @@ sent to the web app's `POST /api/auth/mobile-token` endpoint, which
 returns a NextAuth-compatible JWT stored in `expo-secure-store`.
 Every tRPC request attaches that JWT as `Authorization: Bearer`.
 
+Google sign-in cannot be validated in Expo Go because Expo Go produces
+an `exp://...` redirect URI that Google rejects for this native flow.
+Use a development build locally (`pnpm mobile:ios`, then
+`pnpm mobile:start` for JS-only reloads) or a signed native build.
+
 The web side is documented in
 [`../web/CLAUDE.md`](../web/CLAUDE.md). The web env must set
 `GOOGLE_OAUTH_MOBILE_AUDIENCES` to the comma-separated list of iOS +
@@ -57,7 +62,7 @@ Set locally via shell or `.env.local`. Mobile-side vars are prefixed
 
 | Var | Default | Required for |
 |---|---|---|
-| `EXPO_PUBLIC_API_URL` | `https://showbook.example.com` | tRPC target. Override to your LAN IP or `http://localhost:3001` for local dev against the web stack. |
+| `EXPO_PUBLIC_API_URL` | - | tRPC target. Use `https://localhost:3001` for an iOS simulator pointed at the local web stack with the dev cert, or a LAN/tunnel URL for a physical device. |
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS` | - | iOS sign-in |
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID` | - | Android sign-in |
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB` | - | Expo web preview sign-in |
@@ -68,9 +73,11 @@ Set locally via shell or `.env.local`. Mobile-side vars are prefixed
 From the repo root:
 
 ```bash
-pnpm mobile:start      # Metro bundler
-pnpm mobile:ios        # open in iOS Simulator
-pnpm mobile:android    # open in Android emulator
+pnpm mobile:start      # Metro bundler for development client
+pnpm mobile:ios        # build + install iOS development client
+pnpm mobile:android    # build + install Android development client
+pnpm mobile:ios:go     # Expo Go only; Google sign-in will not work
+pnpm mobile:android:go
 pnpm mobile:typecheck
 pnpm mobile:lint
 pnpm mobile:test
