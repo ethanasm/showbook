@@ -260,31 +260,12 @@ export default function VenueDetailPage() {
         <span style={{ color: "var(--ink)" }}>{venue.name.toLowerCase()}</span>
       </div>
 
-      <div style={{ padding: "24px var(--page-pad-x) 0" }}>
-        <div className="venue-photo-band">
-          {venue.photoUrl || venue.googlePlaceId ? (
-            <RemoteImage
-              src={`/api/venue-photo/${venue.id}`}
-              alt={`${venue.name} venue photo`}
-              kind="venue"
-              name={venue.name}
-              aspect="16/9"
-              size="hero"
-              priority
-            />
-          ) : (
-            <div style={{ position: "absolute", inset: 0 }}>
-              <div className="glow-backdrop" />
-            </div>
-          )}
-          <div className="venue-photo-band__fade" />
-        </div>
-      </div>
-
-      {/* Hero — title + compact inline meta + actions on right */}
+      {/* Hero — small image + title + eyebrow, Follow on right */}
       <div
         style={{
-          padding: "20px var(--page-pad-x) 18px",
+          padding: isMobile
+            ? "20px var(--page-pad-x) 18px"
+            : "28px var(--page-pad-x) 24px",
           borderBottom: "1px solid var(--rule)",
           display: isMobile ? "flex" : "grid",
           flexDirection: isMobile ? "column" : undefined,
@@ -294,109 +275,46 @@ export default function VenueDetailPage() {
           alignItems: isMobile ? "stretch" : "end",
         }}
       >
-        <div style={{ minWidth: 0 }}>
-          <div className="eyebrow">Venue</div>
-          <EditableName
-            value={venue.name}
-            displayValue={gradientLastWord(venue.name)}
-            onSave={(name) => renameMutation.mutate({ venueId: venue.id, name })}
-            compact={isMobile}
+        <div
+          style={{
+            minWidth: 0,
+            display: "flex",
+            alignItems: "center",
+            gap: isMobile ? 14 : 20,
+          }}
+        >
+          <RemoteImage
+            src={
+              venue.photoUrl || venue.googlePlaceId
+                ? `/api/venue-photo/${venue.id}`
+                : null
+            }
+            alt={`${venue.name} venue photo`}
+            kind="venue"
+            name={venue.name}
+            aspect="square"
+            size="card"
           />
-          {/* Compact meta line: location · visit count · first/last seen · upcoming */}
-          <div
-            style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 11.5,
-              color: "var(--muted)",
-              marginTop: 8,
-              letterSpacing: ".02em",
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              columnGap: 10,
-              rowGap: 4,
-            }}
-          >
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div className="eyebrow">Venue</div>
+            <EditableName
+              value={venue.name}
+              displayValue={gradientLastWord(venue.name)}
+              onSave={(name) => renameMutation.mutate({ venueId: venue.id, name })}
+              compact={isMobile}
+            />
             {locationLine && (
-              <span style={{ color: "var(--ink)" }}>{locationLine}</span>
-            )}
-            {locationLine && <span style={{ color: "var(--faint)" }}>·</span>}
-            <span>
-              <span style={{ color: "var(--ink)" }}>
-                {venue.userShowCount}
-              </span>{" "}
-              {venue.userShowCount === 1 ? "visit" : "visits"}
-            </span>
-            {stats.first && (
-              <>
-                <span style={{ color: "var(--faint)" }}>·</span>
-                <span>
-                  {stats.first === stats.last
-                    ? formatDateLong(stats.first)
-                    : `${formatDateLong(stats.first)} – ${formatDateLong(stats.last!)}`}
-                </span>
-              </>
-            )}
-            <span style={{ color: "var(--faint)" }}>·</span>
-            <span>
-              <span
-                style={{
-                  color: venue.upcomingCount > 0 ? "var(--accent)" : "var(--muted)",
-                }}
-              >
-                {venue.upcomingCount}
-              </span>{" "}
-              upcoming
-            </span>
-          </div>
-          {/* Source-link chips */}
-          <div style={{ display: "inline-flex", gap: 8, marginTop: 10 }}>
-            <span
-              style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10,
-                letterSpacing: ".06em",
-                textTransform: "uppercase",
-                padding: "3px 8px",
-                border: `1px solid ${venue.ticketmasterVenueId ? "var(--accent)" : "var(--faint)"}`,
-                color: venue.ticketmasterVenueId ? "var(--accent)" : "var(--faint)",
-              }}
-            >
-              {venue.ticketmasterVenueId ? "TM linked" : "No TM ID"}
-            </span>
-            <span
-              style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10,
-                letterSpacing: ".06em",
-                textTransform: "uppercase",
-                padding: "3px 8px",
-                border: `1px solid ${venue.googlePlaceId ? "var(--kind-concert)" : "var(--faint)"}`,
-                color: venue.googlePlaceId ? "var(--kind-concert)" : "var(--faint)",
-              }}
-            >
-              {venue.googlePlaceId ? "Places linked" : "No Place ID"}
-            </span>
-            {venue.latitude != null && venue.longitude != null && (
-              <Link
-                href={`/map?venue=${venue.id}`}
-                data-testid="view-on-map"
+              <div
                 style={{
                   fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10,
-                  letterSpacing: ".06em",
-                  textTransform: "uppercase",
-                  padding: "3px 8px",
-                  border: "1px solid var(--rule-strong)",
+                  fontSize: 11.5,
                   color: "var(--muted)",
-                  textDecoration: "none",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
+                  marginTop: 6,
+                  letterSpacing: ".02em",
                 }}
               >
-                View on map <ArrowUpRight size={10} />
-              </Link>
+                {locationLine}
+              </div>
             )}
           </div>
         </div>
@@ -409,6 +327,104 @@ export default function VenueDetailPage() {
             variant="mono"
           />
         </div>
+      </div>
+
+      {/* Stat strip — visits, first/last seen, upcoming */}
+      <div
+        style={{
+          padding: "16px var(--page-pad-x)",
+          background: "var(--surface)",
+          borderBottom: "1px solid var(--rule)",
+          display: "grid",
+          gridTemplateColumns: isMobile
+            ? "repeat(2, 1fr)"
+            : "repeat(4, 1fr)",
+          columnGap: isMobile ? 12 : 28,
+          rowGap: isMobile ? 12 : 0,
+        }}
+      >
+        <Stat label="Your visits" value={String(venue.userShowCount)} />
+        <Stat
+          label="First seen"
+          value={stats.first ? formatDateLong(stats.first) : "—"}
+        />
+        <Stat
+          label="Last seen"
+          value={stats.last ? formatDateLong(stats.last) : "—"}
+        />
+        <Stat
+          label="Upcoming"
+          value={
+            <span
+              style={{
+                color:
+                  venue.upcomingCount > 0 ? "var(--accent)" : "var(--ink)",
+              }}
+            >
+              {venue.upcomingCount}
+            </span>
+          }
+        />
+      </div>
+
+      {/* Source-link chips */}
+      <div
+        style={{
+          padding: "12px var(--page-pad-x)",
+          borderBottom: "1px solid var(--rule)",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 8,
+          alignItems: "center",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 10,
+            letterSpacing: ".06em",
+            textTransform: "uppercase",
+            padding: "3px 8px",
+            border: `1px solid ${venue.ticketmasterVenueId ? "var(--accent)" : "var(--faint)"}`,
+            color: venue.ticketmasterVenueId ? "var(--accent)" : "var(--faint)",
+          }}
+        >
+          {venue.ticketmasterVenueId ? "TM linked" : "No TM ID"}
+        </span>
+        <span
+          style={{
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 10,
+            letterSpacing: ".06em",
+            textTransform: "uppercase",
+            padding: "3px 8px",
+            border: `1px solid ${venue.googlePlaceId ? "var(--kind-concert)" : "var(--faint)"}`,
+            color: venue.googlePlaceId ? "var(--kind-concert)" : "var(--faint)",
+          }}
+        >
+          {venue.googlePlaceId ? "Places linked" : "No Place ID"}
+        </span>
+        {venue.latitude != null && venue.longitude != null && (
+          <Link
+            href={`/map?venue=${venue.id}`}
+            data-testid="view-on-map"
+            style={{
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 10,
+              letterSpacing: ".06em",
+              textTransform: "uppercase",
+              padding: "3px 8px",
+              border: "1px solid var(--rule-strong)",
+              color: "var(--muted)",
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+            }}
+          >
+            View on map <ArrowUpRight size={10} />
+          </Link>
+        )}
       </div>
 
       {/* Body */}
@@ -694,6 +710,36 @@ export default function VenueDetailPage() {
   );
 }
 
+
+function Stat({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <div
+        style={{
+          fontFamily: "var(--font-geist-mono), monospace",
+          fontSize: 9.5,
+          color: "var(--faint)",
+          letterSpacing: ".12em",
+          textTransform: "uppercase",
+          marginBottom: 6,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 14,
+          fontWeight: 500,
+          color: "var(--ink)",
+          letterSpacing: -0.2,
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
 
 function CardMessage({ children }: { children: React.ReactNode }) {
   return (
