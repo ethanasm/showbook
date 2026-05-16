@@ -78,7 +78,7 @@ export function describeSignInError(err: unknown): string {
       case 'api_unreachable':
         return 'Showbook is not reachable. Start the web app and make EXPO_PUBLIC_API_URL point to it.';
       case 'expo_go_oauth_unsupported':
-        return 'Google sign-in cannot run in Expo Go. Use a development build so Google receives the app redirect URI.';
+        return 'Google sign-in cannot run in Expo Go. Run pnpm mobile:ios to install the Showbook development client, then open Showbook.';
       case 'invalid_google_token':
         return 'Google rejected the sign-in token. Check GOOGLE_OAUTH_MOBILE_AUDIENCES on the web app.';
       case 'access_denied':

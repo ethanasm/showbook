@@ -20,20 +20,19 @@ pnpm install
 Then from this directory:
 
 ```bash
-pnpm start         # start Metro bundler
-pnpm ios           # start Metro and open iOS Simulator with Expo Go
-pnpm android       # start Metro and open Android emulator with Expo Go
-pnpm ios:dev       # build + install the iOS development client
-pnpm android:dev   # build + install the Android development client
-pnpm start:dev-client
+pnpm start         # Metro bundler for the development client
+pnpm ios           # build + install the iOS development client
+pnpm android       # build + install the Android development client
+pnpm ios:go        # Expo Go only; Google sign-in will not work there
+pnpm android:go    # Expo Go only; Google sign-in will not work there
 pnpm typecheck
 pnpm lint
 pnpm test
 ```
 
 Or use the repo-root shortcuts (`pnpm mobile:start`, `pnpm mobile:ios`,
-`pnpm mobile:ios:dev`, `pnpm mobile:start:dev-client`,
-`pnpm mobile:typecheck`, etc.) — they forward to this package.
+`pnpm mobile:ios:go`, `pnpm mobile:typecheck`, etc.) — they forward
+to this package.
 
 ## Test coverage
 
@@ -73,9 +72,8 @@ Google sign-in must run from a development build or signed native
 build. Expo Go uses an `exp://...` redirect URI, which Google rejects
 for this native OAuth flow. If the iOS status bar back label says
 `Expo Go`, you are still in the wrong runtime. For local simulator
-testing, run `pnpm mobile:ios:dev` once after native dependency
-changes, then use `pnpm mobile:start:dev-client` for subsequent
-JS-only reloads.
+testing, run `pnpm mobile:ios` once after native dependency changes,
+then use `pnpm mobile:start` for subsequent JS-only reloads.
 
 For the local web stack, set `EXPO_PUBLIC_API_URL=https://localhost:3001`
 before starting Metro so the OAuth token exchange posts to the dev

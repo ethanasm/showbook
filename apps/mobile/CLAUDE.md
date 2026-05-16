@@ -46,9 +46,8 @@ Every tRPC request attaches that JWT as `Authorization: Bearer`.
 
 Google sign-in cannot be validated in Expo Go because Expo Go produces
 an `exp://...` redirect URI that Google rejects for this native flow.
-Use a development build locally (`pnpm mobile:ios:dev`, then
-`pnpm mobile:start:dev-client` for JS-only reloads) or a signed native
-build.
+Use a development build locally (`pnpm mobile:ios`, then
+`pnpm mobile:start` for JS-only reloads) or a signed native build.
 
 The web side is documented in
 [`../web/CLAUDE.md`](../web/CLAUDE.md). The web env must set
@@ -74,12 +73,11 @@ Set locally via shell or `.env.local`. Mobile-side vars are prefixed
 From the repo root:
 
 ```bash
-pnpm mobile:start      # Metro bundler
-pnpm mobile:ios        # open in iOS Simulator with Expo Go
-pnpm mobile:android    # open in Android emulator with Expo Go
-pnpm mobile:ios:dev    # build + install iOS development client
-pnpm mobile:android:dev
-pnpm mobile:start:dev-client
+pnpm mobile:start      # Metro bundler for development client
+pnpm mobile:ios        # build + install iOS development client
+pnpm mobile:android    # build + install Android development client
+pnpm mobile:ios:go     # Expo Go only; Google sign-in will not work
+pnpm mobile:android:go
 pnpm mobile:typecheck
 pnpm mobile:lint
 pnpm mobile:test

@@ -264,12 +264,11 @@ authenticates against the web backend via the
 `@showbook/api` tRPC routers as the web client.
 
 ```bash
-pnpm mobile:start       # Metro bundler for Expo Go
-pnpm mobile:ios         # open iOS Simulator with Expo Go
-pnpm mobile:android     # open Android emulator with Expo Go
-pnpm mobile:ios:dev     # build + install iOS development client
-pnpm mobile:android:dev # build + install Android development client
-pnpm mobile:start:dev-client
+pnpm mobile:start       # Metro bundler for the development client
+pnpm mobile:ios         # build + install iOS development client
+pnpm mobile:android     # build + install Android development client
+pnpm mobile:ios:go      # Expo Go only; Google sign-in will not work
+pnpm mobile:android:go  # Expo Go only; Google sign-in will not work
 pnpm mobile:typecheck
 pnpm mobile:lint
 pnpm mobile:test
