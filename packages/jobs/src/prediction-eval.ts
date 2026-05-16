@@ -35,7 +35,7 @@ import {
   emptyCalibrationCurve,
   evaluateShow,
   flattenPrediction,
-  inferStyle,
+  inferStyleForEval,
   loadTruncatedCorpus,
   mergeCalibrationBuckets,
   predictSetlist,
@@ -44,6 +44,7 @@ import {
   type CalibrationBin,
   type EvalStyle,
   type PerShowEvalRow,
+  type SetlistStyleOrUnknown,
 } from '@showbook/api';
 import type { PerformerSetlist } from '@showbook/shared';
 
@@ -85,7 +86,7 @@ export interface RunDailyBacktestResult {
 }
 
 export type { PerShowEvalRow, EvalStyle } from '@showbook/api';
-export { rerunEvalForShow, evaluateShow } from '@showbook/api';
+export { rerunEvalForShow, evaluateShow, inferStyleForEval } from '@showbook/api';
 
 /** Pure helper — aggregate per-show rows into a per-run summary. Exported
  * for unit tests. */
@@ -259,11 +260,25 @@ export async function runDailyBacktest(
     const performerIds = Array.from(new Set(setlistsInWindow.map((s) => s.performerId)));
     const performerRows = performerIds.length
       ? await db
-          .select({ id: performers.id, name: performers.name })
+          .select({
+            id: performers.id,
+            name: performers.name,
+            setlistStyle: performers.setlistStyle,
+            setlistStyleOverride: performers.setlistStyleOverride,
+          })
           .from(performers)
           .where(inArray(performers.id, performerIds))
       : [];
     const performerName = new Map(performerRows.map((p) => [p.id, p.name]));
+    const performerStyle = new Map(
+      performerRows.map((p) => [
+        p.id,
+        {
+          stored: (p.setlistStyle ?? null) as SetlistStyleOrUnknown | null,
+          override: (p.setlistStyleOverride ?? null) as SetlistStyleOrUnknown | null,
+        },
+      ]),
+    );
 
     const rows: PerShowEvalRow[] = [];
     let curve = emptyCalibrationCurve(10);
@@ -284,6 +299,7 @@ export async function runDailyBacktest(
       const actualTitles = setlistTitles(tsRow.setlist as PerformerSetlist);
       if (actualTitles.length === 0) continue;
       const flat = flattenPrediction(prediction);
+      const styleHints = performerStyle.get(tsRow.performerId);
       const row = evaluateShow({
         tourSetlistId: tsRow.id,
         performerId: tsRow.performerId,
@@ -292,7 +308,11 @@ export async function runDailyBacktest(
         predicted: flat,
         sampleSize: prediction.sampleSize,
         actualTitles,
-        style: inferStyle(tsRow.performerId),
+        style: inferStyleForEval({
+          corpus,
+          override: styleHints?.override ?? null,
+          seed: styleHints?.stored ?? null,
+        }),
       });
       rows.push(row);
       curve = mergeCalibrationBuckets(

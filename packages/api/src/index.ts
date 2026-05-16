@@ -177,9 +177,50 @@ export {
   setlistTitles,
   flattenPrediction,
   inferStyle,
+  inferStyleForEval,
   loadTruncatedCorpus,
   rerunEvalForShow,
   latestRunId,
   type EvalStyle,
   type PerShowEvalRow,
 } from './eval-show';
+
+// Phase 5 — setlist-style classifier (§15b). Pure helpers used by the
+// nightly refresh cron, the eval back-test bucketer, and the predicted-
+// setlist surface.
+export {
+  inferStyle as inferSetlistStyle,
+  classifyFromSignals,
+  reconcileStyleTransition,
+  styleSignals,
+  meanPairwiseJaccard,
+  uniqueSongRatio,
+  meanSetlistLength,
+  setlistSongSet,
+  type SetlistStyle,
+  type SetlistStyleOrUnknown,
+  type StyleSignals,
+} from './setlist-style';
+export { lookupSeedStyle, allSeedEntries } from './setlist-style-seeds';
+
+// Phase 5 — rotating-style prediction + multi-night run detection.
+export {
+  detectMultiNightRun,
+  type RunContext,
+} from './multi-night-run-detector';
+export {
+  predictRotating,
+  type RotatingPrediction,
+  type OverdueSong,
+  type HotSong,
+  type PositionPool,
+  type PositionRole,
+  type MultiNightContext,
+  type RotatingPredictionResult,
+} from './setlist-predict-rotating';
+export {
+  evaluateReleaseGate,
+  type ReleaseGateResult,
+  type ReleaseGateBreach,
+  RELEASE_GATE_THRESHOLDS,
+} from './setlist-release-gate';
