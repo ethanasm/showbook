@@ -112,7 +112,7 @@ export function SpotifyImport() {
                 style={connectButtonStyle}
               >
                 <Music size={12} />
-                <span>Show artists</span>
+                <span>Refresh from Spotify</span>
               </button>
               <button
                 type="button"
