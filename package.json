@@ -40,6 +40,7 @@
     "mobile:start": "pnpm --filter mobile start",
     "mobile:start:dev-client": "pnpm --filter mobile start:dev-client",
     "mobile:start:go": "pnpm --filter mobile start:go",
+    "mobile:trust-localhost-cert": "node scripts/trust-ios-localhost-cert.mjs",
     "mobile:ios": "pnpm --filter mobile ios",
     "mobile:ios:dev": "pnpm --filter mobile ios:dev",
     "mobile:ios:go": "pnpm --filter mobile ios:go",

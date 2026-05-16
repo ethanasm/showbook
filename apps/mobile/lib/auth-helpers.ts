@@ -93,7 +93,11 @@ export function describeSignInError(err: unknown): string {
         return 'Too many sign-in attempts. Wait a minute and try again.';
       default:
         if (err.message.startsWith('api_unreachable:')) {
-          return `Showbook is not reachable. Native fetch failed: ${err.message.slice('api_unreachable:'.length)}`;
+          const detail = err.message.slice('api_unreachable:'.length);
+          if (/network request failed/i.test(detail)) {
+            return 'Showbook is not reachable. Native fetch failed: Network request failed. If the web app is running, trust the localhost HTTPS cert in the iOS simulator.';
+          }
+          return `Showbook is not reachable. Native fetch failed: ${detail}`;
         }
         if (err.message === 'server_error_500') {
           return 'Showbook sign-in is misconfigured. Check AUTH_SECRET and GOOGLE_OAUTH_MOBILE_AUDIENCES on the web app.';

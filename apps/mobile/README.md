@@ -81,6 +81,14 @@ server using the trusted local cert. If this native config changes,
 rebuild the development client with `pnpm mobile:ios`; Metro reloads
 alone will not update `Info.plist`.
 
+`pnpm mobile:ios` attempts to install a local HTTPS cert into the
+booted iOS simulator when it finds one under `certs/`, `certificates/`,
+or `.cert/`. If your cert lives elsewhere, run:
+
+```bash
+LOCALHOST_CERT_PATH=/absolute/path/to/localhost-cert.pem pnpm mobile:ios
+```
+
 ## Status
 
 See [`showbook-specs/mobile-roadmap.md`](../../showbook-specs/mobile-roadmap.md)

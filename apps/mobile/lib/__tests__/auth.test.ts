@@ -291,6 +291,11 @@ describe('describeSignInError', () => {
     assert.match(msg, /certificate rejected/i);
   });
 
+  it('maps generic React Native network failures to a localhost cert hint', () => {
+    const msg = describeSignInError(new Error('api_unreachable:Network request failed'));
+    assert.match(msg, /localhost HTTPS cert|iOS simulator/i);
+  });
+
   it('maps invalid_google_token to a retry message', () => {
     const msg = describeSignInError(new Error('invalid_google_token'));
     assert.match(msg, /GOOGLE_OAUTH_MOBILE_AUDIENCES|token/i);
