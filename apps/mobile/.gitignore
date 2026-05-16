@@ -1,6 +1,7 @@
 node_modules/
 .expo/
 dist/
+dist-web/
 .DS_Store
 *.log
 *.tsbuildinfo
@@ -8,6 +9,8 @@ dist/
 .metro-cache/
 ios/
 android/
+web-tests/.results/
+playwright-report/
 
 # Local env files
 .env.local

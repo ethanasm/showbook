@@ -52,6 +52,9 @@
     "mobile:test": "pnpm --filter mobile test",
     "mobile:e2e:ios": "pnpm --filter mobile e2e:ios",
     "mobile:e2e:dry": "pnpm --filter mobile e2e:dry",
+    "mobile:web:build": "pnpm --filter mobile web:build",
+    "mobile:web:test": "pnpm --filter mobile web:test",
+    "mobile:web:verify": "pnpm --filter mobile web:verify",
     "setup:runner": "bash scripts/setup-runner.sh"
   },
   "devDependencies": {
