@@ -128,4 +128,4 @@ if (result.status !== 0) {
   process.exit(0);
 }
 
-console.log(`[mobile] Trusted localhost cert in booted iOS simulator: ${certPath}`);
+console.log('[mobile] Trusted localhost cert in booted iOS simulator.');
