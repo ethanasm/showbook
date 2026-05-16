@@ -151,31 +151,82 @@ jobs:
           restore-keys: |
             avd-${{ runner.os }}-android-34-google_apis-
 
-      # Seed the workspace cache dir from the runner's home directory
-      # on first run. Subsequent runs restore from actions/cache; either
-      # way the emulator boots against ANDROID_AVD_HOME so the snapshot
-      # follows the workspace, not the runner (sharing a runner-home
-      # path would race across concurrent workflow_dispatch runs).
+      # Seed the workspace cache dir from any AVD the runner already
+      # has, OR create one inline. Subsequent runs restore from
+      # actions/cache; either way the emulator boots against
+      # ANDROID_AVD_HOME so the snapshot follows the workspace, not
+      # the runner (sharing a runner-home path would race across
+      # concurrent workflow_dispatch runs).
+      #
+      # The inline create branch makes the workflow self-bootstrapping:
+      # the runner only needs the Android SDK (incl. emulator,
+      # platform-tools, system-image, and the cmdline-tools that ship
+      # `avdmanager`) — `scripts/setup-runner-android.sh § 4`'s AVD
+      # creation step is no longer a prerequisite.
       - name: Materialize AVD into workspace
         shell: bash
+        env:
+          ANDROID_AVD_SYSTEM_IMAGE: ${{ vars.ANDROID_AVD_SYSTEM_IMAGE || 'system-images;android-34;google_apis;x86_64' }}
         run: |
           set -euo pipefail
           mkdir -p "$ANDROID_AVD_HOME"
-          if [ ! -d "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd" ]; then
-            if [ -d "$HOME/.android/avd/${ANDROID_AVD_NAME}.avd" ]; then
-              echo "Seeding workspace AVD from runner home (one-time)"
-              cp -a "$HOME/.android/avd/${ANDROID_AVD_NAME}.ini"  "$ANDROID_AVD_HOME/" 2>/dev/null || true
-              cp -a "$HOME/.android/avd/${ANDROID_AVD_NAME}.avd"  "$ANDROID_AVD_HOME/"
-              # Rewrite path= in the .ini so the emulator finds the AVD
-              # under the new ANDROID_AVD_HOME instead of the runner's
-              # original $HOME/.android path.
+          if [ -d "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd" ]; then
+            echo "AVD already present in workspace (restored from cache)"
+          else
+            # Look for a runner-hosted copy in the usual locations
+            # before falling through to inline creation.
+            CANDIDATES=(
+              "$HOME/.android/avd"
+              "${ANDROID_USER_HOME:-}/avd"
+              "/opt/android-sdk/.android/avd"
+            )
+            FOUND=""
+            for dir in "${CANDIDATES[@]}"; do
+              [ -z "$dir" ] && continue
+              if [ -d "$dir/${ANDROID_AVD_NAME}.avd" ]; then
+                FOUND="$dir"
+                break
+              fi
+            done
+
+            if [ -n "$FOUND" ]; then
+              echo "Seeding workspace AVD from $FOUND (one-time)"
+              cp -a "$FOUND/${ANDROID_AVD_NAME}.ini"  "$ANDROID_AVD_HOME/" 2>/dev/null || true
+              cp -a "$FOUND/${ANDROID_AVD_NAME}.avd"  "$ANDROID_AVD_HOME/"
               if [ -f "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.ini" ]; then
                 sed -i "s#path=.*#path=$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd#" \
                   "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.ini"
               fi
             else
-              echo "::error::AVD '${ANDROID_AVD_NAME}' not found at \$HOME/.android/avd — run scripts/setup-runner-android.sh on the runner"
-              exit 1
+              echo "AVD '${ANDROID_AVD_NAME}' not found on runner — creating inline"
+              SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+              AVDMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/avdmanager"
+              if [ ! -x "$SDKMANAGER" ] || [ ! -x "$AVDMANAGER" ]; then
+                echo "::error::cmdline-tools missing — run scripts/setup-runner-android.sh on the runner so sdkmanager + avdmanager are installed"
+                exit 1
+              fi
+              # Make sure the system image is present (idempotent — sdkmanager
+              # skips already-installed packages).
+              yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+              "$SDKMANAGER" --install "$ANDROID_AVD_SYSTEM_IMAGE" >/dev/null
+              ANDROID_AVD_HOME="$ANDROID_AVD_HOME" \
+                echo "no" | "$AVDMANAGER" create avd \
+                  --name "$ANDROID_AVD_NAME" \
+                  --package "$ANDROID_AVD_SYSTEM_IMAGE" \
+                  --device "pixel_6" \
+                  --path "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd" \
+                  --force
+              # Mirror the runner setup script's perf-tuning tweaks.
+              CFG="$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd/config.ini"
+              if [ -f "$CFG" ]; then
+                {
+                  echo "hw.ramSize=2048"
+                  echo "vm.heapSize=512"
+                  echo "disk.dataPartition.size=4096M"
+                  echo "hw.gpu.enabled=yes"
+                  echo "hw.gpu.mode=swiftshader_indirect"
+                } >> "$CFG"
+              fi
             fi
           fi
           ls -la "$ANDROID_AVD_HOME"
@@ -291,11 +342,12 @@ jobs:
         shell: bash
         run: |
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$HOME/.maestro/bin:$PATH"
-          # --debug-output writes detailed step traces + screenshots to
-          # the named dir. Uploaded as an artifact below regardless of
-          # outcome so reviewers see exactly what Maestro saw.
+          # `--debug-output` is a flag on the `test` subcommand, not a
+          # global flag — it writes detailed step traces + screenshots
+          # to the named dir. Uploaded as an artifact below regardless
+          # of outcome so reviewers see exactly what Maestro saw.
           mkdir -p /tmp/maestro-debug
-          maestro --debug-output /tmp/maestro-debug test \
+          maestro test --debug-output /tmp/maestro-debug \
             apps/mobile/e2e/flows/
 
       - name: Upload Maestro debug artifacts
