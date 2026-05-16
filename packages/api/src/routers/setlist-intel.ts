@@ -116,6 +116,7 @@ export const setlistIntelRouter = router({
         return await predictedSetlistCached({
           performerId: headlinerId,
           targetDate: show.date,
+          snapshotContext: { userId, showId: input.showId },
         });
       } catch (err) {
         log.error(

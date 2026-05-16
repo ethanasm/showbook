@@ -16,4 +16,5 @@ export * from './tour-setlists';
 export * from './setlist-song-appearances';
 export * from './prediction-cache';
 export * from './prediction-eval-runs';
+export * from './prediction-snapshots';
 export * from './user-spotify-tokens';

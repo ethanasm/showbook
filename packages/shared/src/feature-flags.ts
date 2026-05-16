@@ -45,6 +45,18 @@ export const FeatureFlag = {
       'against the same `shows.detail` payload.',
     state: 'ON',
   },
+  SetlistIntelEvalHarness: {
+    description:
+      'Phase 4 (setlist-intelligence) eval-harness admin surface. ' +
+      'Gates the /admin/eval page that renders the 30-day Brier + P@10 ' +
+      'chart, calibration curve, and per-show breakdown. The pg-boss ' +
+      'eval back-test job runs in all envs regardless of this flag — ' +
+      'we need the data on disk before flipping the release gate in ' +
+      'Phase 5. ON only behind admin auth; default OFF so a stray ' +
+      'admin login outside the operator account does not see the ' +
+      'harness UI.',
+    state: 'OFF',
+  },
 } as const satisfies Record<string, { description: string; state: 'ON' | 'OFF' }>;
 
 export type FeatureFlagKey = keyof typeof FeatureFlag;
