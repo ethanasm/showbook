@@ -181,9 +181,25 @@ Smaller wins from the §15r table that fit naturally here:
 - **`predictSetlist` cache TTL** — add 4-hour TTL even when the
   corpus is stale (per
   [`../implementation.md`](../implementation.md) §11 Q6)
-- **Per-row "was this useful?" thumbs** — small
-  `prediction_feedback` table; aggregated by style for the eval
-  dashboard
+- (SI-18 cut) **Per-row "was this useful?" thumbs** — dropped.
+  We were planning to collect feedback without a concrete plan to
+  use it, which is data debt. If a future phase wants the signal,
+  ship the UI, the table, and the closing-the-loop wiring
+  together at that point.
+
+### §SI-10 revoked-token hard-delete cron
+
+Small weekly pg-boss cron (`spotify/purge-revoked-tokens`):
+
+```ts
+DELETE FROM user_spotify_tokens
+WHERE revoked_at IS NOT NULL
+  AND revoked_at < now() - interval '30 days';
+```
+
+About 5 lines of registry code. Closes the 30-day audit window
+the spec promised for revoked rows. Runs weekly on Sundays so
+audit queries during a triage window have full coverage.
 
 ---
 
@@ -213,7 +229,7 @@ Smaller wins from the §15r table that fit naturally here:
 - `setlist.album_drop.boosted`
 - `setlist.special_event.matched`
 - `setlist.tour_watch.refreshed`
-- `prediction_feedback.received`
+- `spotify.purge_revoked.summary` (count of rows deleted per run)
 
 ---
 

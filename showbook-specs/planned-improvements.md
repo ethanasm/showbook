@@ -14,6 +14,29 @@
   `runOptimisticMutation` snapshot-undefined gating, and renaming
   the Map "Search this area" button (or wiring a real bbox filter).
 
+### Setlist intelligence (post-launch follow-ups)
+
+Two deferred items from the Phase 0 plan review
+([`setlist-intelligence/plan-review.md`](setlist-intelligence/plan-review.md)
+"Deferred follow-ups" section):
+
+- **Prediction-tuning grid-search script (SI-13).** Build
+  `scripts/tune-prediction-weights.ts` if Phase 4's calibration
+  eval shows drift (Brier > 0.15 stable, or per-bin error > 20pp
+  for two consecutive weekly runs). Plan-review has the design
+  notes.
+- **Prior-weighted-by-play-count smoothing (SI-15).** If the eval
+  reveals consistent underprediction of staples for big-catalogue
+  artists (Phish, Pearl Jam, Springsteen), swap the uniform
+  Bayesian prior for one weighted by `historical_play_count`.
+
+Plus one open research task —
+[`setlist-intelligence/spotify-policy-research-task.md`](setlist-intelligence/spotify-policy-research-task.md)
+(SI-19) — blocks Phase 3 of setlist intelligence from shipping
+until a future agent reads Spotify's developer policy and reports
+back on required attribution / branding on Showbook-created
+playlists.
+
 ### Code Health (next batch from the audit)
 - **Refactor mega-pages.** `add/page.tsx` (~2.9k LOC), `discover/page.tsx` (~2.1k LOC), `venues/[id]/page.tsx`, `preferences/page.tsx` each bundle 5+ concerns. Round-1 audit identified clear extraction targets (`VenueSearchModal`, `RegionSearchModal`, `VenueRail`, `FormStateManager`, `SetlistFetcher`, `MediaUploadOrchestrator`, `DiscoveryImportUI`).
 - **Consolidate `KIND_ICONS`/`KIND_LABELS`.** Same constant redefined in 9 files; should live once in `packages/shared` or `apps/web/lib`.

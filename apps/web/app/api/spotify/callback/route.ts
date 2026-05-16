@@ -1,9 +1,15 @@
 import { NextRequest } from 'next/server';
 import { child } from '@showbook/observability';
+import {
+  exchangeAuthorizationCode,
+  getCurrentUser,
+  persistInitialToken,
+  SpotifyError,
+} from '@showbook/api';
 import { auth } from '@/auth';
 import { popupResponse, coerceReason } from '@/lib/spotify-popup-response';
 
-const logger = child({ component: 'web.spotify.callback' });
+const logger = child({ component: 'web.spotify.callback', provider: 'spotify' });
 const STATE_COOKIE = 'spotify_oauth_state';
 
 export async function GET(req: NextRequest) {
@@ -23,7 +29,7 @@ export async function GET(req: NextRequest) {
   if (errorParam) {
     logger.info(
       {
-        event: 'spotify.callback.user_denied',
+        event: 'spotify.connect.failed',
         reason: errorParam,
       },
       'Spotify OAuth denied or rejected by Spotify',
@@ -31,9 +37,7 @@ export async function GET(req: NextRequest) {
     return popupResponse({
       // Map Spotify's free-form `error` param through a fixed whitelist
       // before it reaches the popup HTML — never let URL-derived strings
-      // flow into the inline <script> payload (CodeQL alert #34).
-      // `access_denied` is in the whitelist; anything else collapses to
-      // `unknown`.
+      // flow into the inline <script> payload.
       payload: { type: 'spotify-auth-error', reason: coerceReason(errorParam) },
       message:
         errorParam === 'access_denied'
@@ -46,7 +50,8 @@ export async function GET(req: NextRequest) {
   if (!code || !state || !expectedState || state !== expectedState) {
     logger.warn(
       {
-        event: 'spotify.callback.state_mismatch',
+        event: 'spotify.connect.failed',
+        reason: 'state_mismatch',
         hasCode: !!code,
         hasState: !!state,
         hasExpected: !!expectedState,
@@ -69,7 +74,7 @@ export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     logger.warn(
-      { event: 'spotify.callback.session_missing' },
+      { event: 'spotify.connect.failed', reason: 'session_missing' },
       'Spotify callback hit without a Showbook session',
     );
     return popupResponse({
@@ -80,68 +85,69 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const credentials = Buffer.from(
-    `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`,
-  ).toString('base64');
-
-  let tokenRes: Response;
+  // Connect-once: exchange code → tokens → /me → persist row, all
+  // server-side, so the popup never has to hand a raw access token back
+  // to the parent tab. On any failure here, the popup signals
+  // `spotify-auth-error` with a typed reason; the picker hook maps that
+  // to user-facing copy.
   try {
-    tokenRes = await fetch('https://accounts.spotify.com/api/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: `Basic ${credentials}`,
-      },
-      body: new URLSearchParams({
-        code,
-        redirect_uri: `${baseUrl}/api/spotify/callback`,
-        grant_type: 'authorization_code',
-      }),
-      signal: AbortSignal.timeout(10_000),
+    const tokens = await exchangeAuthorizationCode({
+      code,
+      redirectUri: `${baseUrl}/api/spotify/callback`,
+    });
+    const profile = await getCurrentUser(tokens.accessToken);
+    await persistInitialToken({
+      userId: session.user.id,
+      tokens,
+      profile,
     });
   } catch (err) {
+    if (err instanceof SpotifyError) {
+      // SpotifyError carries an HTTP status. Status `0` is our
+      // "didn't reach Spotify" sentinel (env-config issue) — surface
+      // as `network`. Anything else means Spotify itself rejected
+      // the request — surface as `token_exchange_failed`. Both copies
+      // tell the user how to recover.
+      const reason = err.status === 0 ? 'network' : 'token_exchange_failed';
+      logger.warn(
+        {
+          err,
+          event: 'spotify.connect.failed',
+          reason,
+          status: err.status,
+          userId: session.user.id,
+        },
+        'Spotify token exchange failed',
+      );
+      return popupResponse({
+        payload: { type: 'spotify-auth-error', reason },
+        message:
+          reason === 'network'
+            ? "Couldn't reach Spotify. Please try again."
+            : 'Spotify token exchange failed. You can close this window.',
+        isSecure,
+      });
+    }
     logger.error(
-      { err, event: 'spotify.callback.token_exchange_network' },
-      'Spotify token exchange threw',
-    );
-    return popupResponse({
-      payload: { type: 'spotify-auth-error', reason: 'network' },
-      message: "Couldn't reach Spotify. Please try again.",
-      isSecure,
-    });
-  }
-
-  if (!tokenRes.ok) {
-    // Don't echo Spotify's response body into HTML — it can contain hostile
-    // content. The popup just signals failure to the opener; details are
-    // logged server-side.
-    const errBody = await tokenRes.text();
-    logger.warn(
       {
-        event: 'spotify.callback.token_exchange_failed',
+        err,
+        event: 'spotify.connect.failed',
+        reason: 'token_exchange_or_persist',
         userId: session.user.id,
-        status: tokenRes.status,
-        body: errBody.slice(0, 500),
       },
-      'Spotify token exchange failed',
+      'Spotify token exchange / persistence failed',
     );
     return popupResponse({
-      payload: { type: 'spotify-auth-error', reason: 'token_exchange_failed' },
-      message: 'Spotify token exchange failed. You can close this window.',
+      payload: { type: 'spotify-auth-error', reason: 'unknown' },
+      message: 'Spotify connection failed. You can close this window.',
       isSecure,
     });
   }
 
-  const tokens = (await tokenRes.json()) as { access_token: string };
-  logger.info(
-    {
-      event: 'spotify.callback.success',
-      userId: session.user.id,
-    },
-    'Spotify OAuth completed',
-  );
+  // Note: `persistInitialToken` emits the `spotify.connect.success`
+  // event itself, so we don't double-log here.
   return popupResponse({
-    payload: { type: 'spotify-auth', accessToken: tokens.access_token },
+    payload: { type: 'spotify-connected' },
     message: 'Connected to Spotify. You can close this window.',
     isSecure,
   });

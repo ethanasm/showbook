@@ -25,6 +25,14 @@ export function coerceReason(raw: string | null | undefined): PopupErrorReason {
 }
 
 export type PopupPayload =
+  // `spotify-connected` is the connect-once success payload — the
+  // OAuth callback persists the access + refresh tokens server-side
+  // and signals the parent tab without ever exposing them to the
+  // browser. The legacy `spotify-auth` shape (which carried the raw
+  // access token) is kept in the union so any in-flight popup that
+  // started against an older callback build still parses cleanly on
+  // the consuming side.
+  | { type: 'spotify-connected' }
   | { type: 'spotify-auth'; accessToken: string }
   | { type: 'spotify-auth-error'; reason: PopupErrorReason };
 

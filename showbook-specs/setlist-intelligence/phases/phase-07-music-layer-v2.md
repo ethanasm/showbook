@@ -21,16 +21,6 @@ References:
 ### Schema additions
 
 ```sql
-CREATE TABLE user_spotify_saved_tracks (
-  user_id           text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  spotify_track_id  text NOT NULL,
-  added_at          timestamp NOT NULL,
-  fetched_at        timestamp NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id, spotify_track_id)
-);
-CREATE INDEX user_spotify_saved_tracks_user_idx
-  ON user_spotify_saved_tracks (user_id);
-
 ALTER TABLE shows
   ADD COLUMN spotify_prep_track_count  smallint,
   ADD COLUMN spotify_post_track_count  smallint;
@@ -39,14 +29,48 @@ ALTER TABLE users
   ADD COLUMN spotify_year_playlists jsonb;   -- { "2025": "spotify:playlist:abc", ... }
 ```
 
-### `packages/jobs/src/spotify-library-sync.ts` (new)
+**No `user_spotify_saved_tracks` table.** The fan-loyalty ring +
+discovered-live rail use Spotify's `/me/tracks/contains` endpoint
+on demand instead of caching the user's full saved library in our
+database. The privacy footprint shrinks from "Showbook holds an
+encrypted index of your entire Spotify library" to "Showbook asks
+Spotify, per show, which of these N songs you saved" — never
+persisted, only the per-show boolean answer is held in memory for
+the page render. See **`spotify.tracksContains` query** below for
+the wrapper.
 
-Nightly per-user `/me/tracks` sync. Pages through (50 per page);
-fully rewrites `user_spotify_saved_tracks` for the user (cheaper
-than diff).
+### `packages/api/src/spotify-catalog.ts` extension
 
-Schedule: 02:30 ET nightly. Skip users without persisted tokens or
-with `revoked_at` set.
+```ts
+/**
+ * Check whether each of `trackIds` is in the connected user's
+ * saved library. Wraps `GET /v1/me/tracks/contains?ids=...` —
+ * Spotify accepts up to 50 IDs per call and returns a boolean
+ * array in the same order. Larger setlists batch into multiple
+ * calls; results stitched back into the original order.
+ *
+ * Used by the fan-loyalty + discovered-live procedures (per-show
+ * intersection, on demand). Replaces the v1 plan's nightly
+ * `/me/tracks` page-through into a `user_spotify_saved_tracks`
+ * table — that bulk cache was dropped to keep the user's full
+ * library out of our database.
+ */
+export async function tracksContains(
+  accessToken: string,
+  trackIds: string[],
+): Promise<boolean[]>;
+```
+
+### Removed: `packages/jobs/src/spotify-library-sync.ts`
+
+The nightly library-sync job is **not** in Phase 7. The fan-
+loyalty + discovered-live procedures call `tracksContains` per
+show, on demand, so there's nothing to pre-sync.
+
+Knock-on: the SI-12 daily Spotify API budget concern collapses —
+typical show pageload is one `tracksContains` call covering 15-25
+song IDs (well under the 50-per-call cap). One call per show
+view, only when the user actually opens it.
 
 ### `packages/jobs/src/spotify-recently-played.ts` (new)
 
@@ -100,9 +124,26 @@ setlistIntel.saveDiscoveredSong({ songId })   // user-tap save-to-library
 setlistIntel.primingStat({ showId })          // for the one-liner
 ```
 
+`fanLoyalty` + `discoveredLive` both walk the same on-demand path:
+load the show's `songs.spotify_track_id` set → call
+`tracksContains` once → return the intersection / its inverse plus
+the count. No persisted intermediate state; the answer recomputes
+on next call. Per-show latency dominated by one Spotify round-trip
+(~150ms cold, much faster behind the in-process Spotify token
+cache).
+
+For predicted-setlist rows that want the `💛 saved` chip across
+many songs in one render, the same `tracksContains` call covers
+the predicted set (typically 15-25 IDs, well under the 50-per-call
+cap). The procedure returning the prediction can attach the saved-
+status array alongside `PredictedSong[]` so the chip renders
+without a second round-trip.
+
 `saveDiscoveredSong` calls Spotify's `PUT /me/tracks?ids=...` —
 requires `user-library-modify` (in the upfront scope set, so no
-re-prompt).
+re-prompt). Doesn't write to any Showbook DB column — Spotify
+itself is the source of truth, and the next `tracksContains` call
+picks up the new saved status.
 
 ### Web UI additions
 
@@ -118,10 +159,10 @@ sections to the show detail (only when state='past'):
 
 `apps/web/components/predicted-setlist/PredictionSongRow.tsx`
 (edit) — `PersonalWeightChip` overlays now actually have data
-backing them (the `💛 saved` chip pulls from
-`user_spotify_saved_tracks`; the `🎯 first-time` chip from
-`user_song_stats`; the `⭐ top-track` chip from a new top-tracks
-sync).
+backing them. The `💛 saved` chip pulls from the per-prediction
+`tracksContains` call described above (no library cache). The
+`🎯 first-time` chip from `user_song_stats`. The `⭐ top-track`
+chip from a new top-tracks sync.
 
 ### `packages/jobs/src/spotify-top-tracks-sync.ts` (new)
 
@@ -137,8 +178,9 @@ just a jsonb column on `users` — pick one, not both).
 
 - `packages/jobs/src/__tests__/year-end-soundtrack.test.ts` —
   signature-track scoring; DJ-set ordering; idempotency on rerun
-- `packages/jobs/src/__tests__/spotify-library-sync.test.ts` —
-  rewrite semantics; scope-missing graceful skip
+- `packages/api/src/__tests__/tracks-contains.test.ts` — batches
+  >50 IDs across multiple calls; stitches results back in order;
+  empty input short-circuits without an HTTP call
 - `packages/jobs/src/__tests__/spotify-recently-played.test.ts` —
   prep vs post bucketing edge cases (show right at midnight)
 

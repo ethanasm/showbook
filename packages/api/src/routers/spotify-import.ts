@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc';
 import { getFollowedArtists, SpotifyError } from '../spotify';
+import { ensureFreshUserToken } from '../spotify-tokens';
 import {
   resolveArtistsForImport,
   importSelectedArtists,
@@ -22,17 +23,30 @@ export const spotifyImportRouter = router({
    * we don't want react-query auto-refetching on focus.
    */
   listFollowed: protectedProcedure
-    .input(z.object({ accessToken: z.string().min(1) }))
-    .mutation(async ({ ctx, input }) => {
+    .input(z.object({}).optional())
+    .mutation(async ({ ctx }) => {
       const userId = ctx.session.user.id;
       enforceRateLimit(`spotify.list:${userId}`, {
         max: 5,
         windowMs: 60_000,
       });
 
+      // Connect-once: the access token is resolved server-side from the
+      // persisted `user_spotify_tokens` row (auto-refresh + revoked
+      // handling). Caller no longer passes a token. A null result means
+      // the user isn't connected; surface as PRECONDITION_FAILED so the
+      // client can route into the connect modal.
+      const accessToken = await ensureFreshUserToken(userId);
+      if (!accessToken) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'spotify_not_connected',
+        });
+      }
+
       let spotifyArtists;
       try {
-        spotifyArtists = await getFollowedArtists(input.accessToken);
+        spotifyArtists = await getFollowedArtists(accessToken);
       } catch (err) {
         if (err instanceof SpotifyError && err.status === 401) {
           throw new TRPCError({

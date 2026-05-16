@@ -45,8 +45,25 @@ export {
   scoreEmailLikelyTicket,
   HEURISTIC_THRESHOLD,
 } from './email-heuristic';
-export { getFollowedArtists, SpotifyError } from './spotify';
-export type { SpotifyArtist } from './spotify';
+export {
+  getFollowedArtists,
+  SpotifyError,
+  SPOTIFY_SCOPES,
+  SPOTIFY_SCOPE_STRING,
+  exchangeAuthorizationCode,
+  refreshSpotifyToken,
+  getCurrentUser,
+} from './spotify';
+export type { SpotifyArtist, SpotifyTokenSet, SpotifyMe } from './spotify';
+export {
+  ensureFreshUserToken,
+  isSpotifyConnected,
+  getConnectionStatus,
+  disconnectSpotify,
+  persistInitialToken,
+} from './spotify-tokens';
+export type { SpotifyConnectionStatus } from './spotify-tokens';
+export { encrypt, decrypt, CryptoError } from './crypto';
 export { getMyPastOrders, EventbriteError } from './eventbrite';
 export type { EventbriteTicket } from './eventbrite';
 export {
@@ -58,3 +75,15 @@ export { storeLocalObject } from './media-storage';
 export { getMediaConfig } from './media-config';
 export { enforceRateLimit, isRateLimited } from './rate-limit';
 export { parseAdminEmails, isAdminEmail } from './admin';
+// `show-accessors` lives in @showbook/shared so client bundles can use
+// it without dragging pg-boss / drizzle through. Imported here for
+// server-side procedures that need the same helpers.
+export {
+  pickHeadliner,
+  isProductionShow,
+  getHeadliner,
+  getHeadlinerId,
+  getSupportPerformers,
+  type ShowLike,
+  type ShowPerformerLike,
+} from '@showbook/shared';

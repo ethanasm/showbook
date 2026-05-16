@@ -171,14 +171,19 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
 
     const handlePayload = (data: unknown): boolean => {
       if (!data || typeof data !== "object") return false;
+      // Connect-once flow: the callback persists tokens server-side and
+      // posts `spotify-connected` (no token in payload). The legacy
+      // `spotify-auth` shape (with an `accessToken` field) stays accepted
+      // as a fallback for any in-flight popup that started against an
+      // older callback build during the rollout. `accessToken` is no
+      // longer threaded into `listFollowed` either way.
       const payload = data as {
         type?: unknown;
-        accessToken?: unknown;
         reason?: unknown;
       };
       if (
-        payload.type === "spotify-auth" &&
-        typeof payload.accessToken === "string"
+        payload.type === "spotify-connected" ||
+        payload.type === "spotify-auth"
       ) {
         payloadReceived = true;
         cleanup();
@@ -187,7 +192,8 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
         } catch {
           /* ignore */
         }
-        listFollowed.mutate({ accessToken: payload.accessToken });
+        utils.spotify.connectionStatus.invalidate();
+        listFollowed.mutate({});
         return true;
       }
       if (payload.type === "spotify-auth-error") {
@@ -259,7 +265,7 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
         }
       }
     }, 500);
-  }, [listFollowed]);
+  }, [listFollowed, utils.spotify.connectionStatus]);
 
   const toggle = useCallback((spotifyId: string, importable: boolean) => {
     if (!importable) return;

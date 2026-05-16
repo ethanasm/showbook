@@ -1,24 +1,11 @@
-/**
- * Sheet — declarative bottom sheet wrapper over @gorhom/bottom-sheet.
- *
- * DEPENDENCY NOTE: BottomSheetModalProvider must be an ancestor in the React
- * tree. This is added in Task 6's root layout (_layout.tsx). If Sheet is
- * rendered without a provider, @gorhom/bottom-sheet will throw a context error
- * at runtime.
- *
- * Implementation pattern: BottomSheetModal is imperative (uses a ref to
- * present/dismiss). This component wraps it declaratively via an open prop,
- * calling ref.current.present() / ref.current.dismiss() in a useEffect that
- * responds to prop changes.
- */
-
-import React, { useCallback, useEffect, useRef } from 'react';
+import React from 'react';
 import {
-  BottomSheetModal,
-  BottomSheetBackdrop,
-  type BottomSheetBackdropProps,
-  type BottomSheetModalProps,
-} from '@gorhom/bottom-sheet';
+  Modal,
+  Pressable,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { useTheme } from '../lib/theme';
 
 export interface SheetProps {
@@ -34,47 +21,79 @@ export function Sheet({
   snapPoints = ['50%'],
   children,
 }: SheetProps): React.JSX.Element {
-  const ref = useRef<BottomSheetModal>(null);
   const { tokens } = useTheme();
   const { colors } = tokens;
-
-  // Sync declarative prop → imperative API
-  useEffect(() => {
-    if (open) {
-      ref.current?.present();
-    } else {
-      ref.current?.dismiss();
-    }
-  }, [open]);
-
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        disappearsOnIndex={-1}
-        appearsOnIndex={0}
-        opacity={0.5}
-        pressBehavior="close"
-      />
-    ),
-    [],
-  );
-
-  const handleDismiss: BottomSheetModalProps['onDismiss'] = useCallback(() => {
-    onClose();
-  }, [onClose]);
+  const { height } = useWindowDimensions();
+  const sheetHeight = resolveSnapPoint(snapPoints[0] ?? '50%', height);
 
   return (
-    <BottomSheetModal
-      ref={ref}
-      snapPoints={snapPoints}
-      onDismiss={handleDismiss}
-      backdropComponent={renderBackdrop}
-      backgroundStyle={{ backgroundColor: colors.surfaceRaised }}
-      handleIndicatorStyle={{ backgroundColor: colors.ruleStrong }}
-      enablePanDownToClose
+    <Modal
+      visible={open}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+      statusBarTranslucent
     >
-      {children}
-    </BottomSheetModal>
+      <View style={styles.root}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close sheet"
+          onPress={onClose}
+          style={styles.backdrop}
+        />
+        <View
+          style={[
+            styles.sheet,
+            {
+              maxHeight: sheetHeight,
+              backgroundColor: colors.surfaceRaised,
+            },
+          ]}
+        >
+          <View style={[styles.handle, { backgroundColor: colors.ruleStrong }]} />
+          {children}
+        </View>
+      </View>
+    </Modal>
   );
 }
+
+function resolveSnapPoint(snapPoint: string | number, screenHeight: number): number {
+  if (typeof snapPoint === 'number') return Math.min(snapPoint, screenHeight);
+
+  const percentMatch = snapPoint.match(/^(\d+(?:\.\d+)?)%$/);
+  if (percentMatch) {
+    const percent = Number(percentMatch[1]);
+    if (Number.isFinite(percent)) {
+      return Math.round(screenHeight * (percent / 100));
+    }
+  }
+
+  return Math.round(screenHeight * 0.5);
+}
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  sheet: {
+    width: '100%',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingTop: 10,
+    paddingBottom: 18,
+    overflow: 'hidden',
+  },
+  handle: {
+    alignSelf: 'center',
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    marginBottom: 8,
+  },
+});

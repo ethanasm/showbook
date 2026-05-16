@@ -332,6 +332,162 @@ export async function getUserAttended(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Per-artist paginated setlists (corpus fill for predicted setlists)
+// ---------------------------------------------------------------------------
+
+export interface ArtistSetlistEntry {
+  /** setlist.fm setlist ID — used as the unique key in `tour_setlists`. */
+  setlistfmId: string;
+  /** ISO YYYY-MM-DD (converted from setlist.fm's DD-MM-YYYY). */
+  performanceDate: string;
+  artist: { name: string; mbid: string | null };
+  venue: {
+    name: string | null;
+    city: string | null;
+    countryCode: string | null;
+  };
+  /** Tour name as setlist.fm reports it. May be null/undefined for casual gigs. */
+  tourName?: string;
+  /** Setlist payload in our internal `PerformerSetlist` shape. */
+  setlist: PerformerSetlist;
+  /** Total song count across all sections. Denormalized for cheap weight calcs. */
+  songCount: number;
+}
+
+function mapArtistSetlist(s: SetlistFmSetlist): ArtistSetlistEntry | null {
+  if (!s.eventDate || !s.artist?.name) return null;
+  const mainSongs: SetlistSection['songs'] = [];
+  const encoreSongs: SetlistSection['songs'] = [];
+  for (const set of s.sets?.set ?? []) {
+    const target = set.encore != null ? encoreSongs : mainSongs;
+    for (const song of set.song ?? []) {
+      if (!song.name) continue;
+      target.push({
+        title: song.name,
+        ...(song.info ? { note: song.info } : {}),
+      });
+    }
+  }
+  const sections: SetlistSection[] = [];
+  if (mainSongs.length > 0) sections.push({ kind: 'set', songs: mainSongs });
+  if (encoreSongs.length > 0)
+    sections.push({ kind: 'encore', songs: encoreSongs });
+  if (sections.length === 0) return null;
+  const songCount = mainSongs.length + encoreSongs.length;
+  return {
+    setlistfmId: s.id,
+    performanceDate: fromSetlistFmDate(s.eventDate),
+    artist: {
+      name: s.artist.name,
+      mbid: s.artist.mbid && s.artist.mbid.length > 0 ? s.artist.mbid : null,
+    },
+    venue: {
+      name: s.venue?.name ?? null,
+      city: s.venue?.city?.name ?? null,
+      countryCode: s.venue?.city?.country?.code ?? null,
+    },
+    ...(s.tour?.name ? { tourName: s.tour.name } : {}),
+    setlist: { sections },
+    songCount,
+  };
+}
+
+export interface FetchArtistSetlistsOptions {
+  /**
+   * Maximum number of pages to walk. Each page returns up to 20 setlists,
+   * newest first. Caller picks the cap based on the corpus-fill mode:
+   *   - `predict` mode: 3 pages (most recent ~60 setlists).
+   *   - `deep`    mode: 10 pages (~200 setlists for the Songs page).
+   *   - `refresh` mode: 1 page (daily cron).
+   * Defaults to 3 to match the predict mode.
+   */
+  maxPages?: number;
+  /**
+   * Stop walking once a returned setlist's `eventDate` is older than this
+   * ISO YYYY-MM-DD cutoff. Lets a `predict` corpus fill bail early once it
+   * has covered the active leg without burning all 3 pages.
+   */
+  sinceDate?: string;
+}
+
+interface ArtistSetlistsResponse {
+  setlist?: SetlistFmSetlist[];
+  total?: number;
+  page?: number;
+  itemsPerPage?: number;
+}
+
+/**
+ * Walk `GET /1.0/artist/{mbid}/setlists` paginated, newest first. Each
+ * page yields up to 20 setlists. Returns mapped entries — empty (zero
+ * songs) and malformed setlists are dropped so the caller can persist
+ * directly without re-checking. Skips entries with `mbid` blank.
+ *
+ * Implementation rules:
+ *   - One page = one HTTP request through the shared rate-limited
+ *     `apiFetch` (sequential 500ms cadence + 429 retry — same as the
+ *     rest of the client).
+ *   - Stops after `maxPages` pages OR when the API returns an empty page
+ *     OR when a setlist is older than `sinceDate` (whichever first).
+ *   - Returns `[]` on 404 (mbid not in setlist.fm) — caller treats this
+ *     as "cold corpus" rather than an error.
+ */
+export async function fetchArtistSetlists(
+  artistMbid: string,
+  opts: FetchArtistSetlistsOptions = {},
+): Promise<ArtistSetlistEntry[]> {
+  if (!artistMbid) return [];
+  const maxPages = Math.max(1, opts.maxPages ?? 3);
+  const sinceDate = opts.sinceDate ?? null;
+  const encoded = encodeURIComponent(artistMbid);
+  const out: ArtistSetlistEntry[] = [];
+
+  for (let page = 1; page <= maxPages; page++) {
+    let data: ArtistSetlistsResponse;
+    try {
+      data = await apiFetch<ArtistSetlistsResponse>(
+        `/artist/${encoded}/setlists?p=${page}`,
+      );
+    } catch (err) {
+      if (err instanceof SetlistFmError && err.status === 404) {
+        log.debug(
+          { event: 'setlistfm.artist_setlists.not_found', artistMbid, page },
+          'setlist.fm returned 404 for artist setlists',
+        );
+        break;
+      }
+      throw err;
+    }
+    const items = data.setlist ?? [];
+    if (items.length === 0) break;
+
+    let stoppedEarly = false;
+    for (const raw of items) {
+      const mapped = mapArtistSetlist(raw);
+      if (!mapped) continue;
+      if (sinceDate && mapped.performanceDate < sinceDate) {
+        stoppedEarly = true;
+        break;
+      }
+      out.push(mapped);
+    }
+    if (stoppedEarly) break;
+    if (items.length < 20) break;
+  }
+
+  log.info(
+    {
+      event: 'setlistfm.artist_setlists.fetched',
+      artistMbid,
+      pages: Math.min(maxPages, Math.ceil(out.length / 20) || 1),
+      count: out.length,
+    },
+    'setlist.fm artist setlists fetched',
+  );
+  return out;
+}
+
 /**
  * Find a setlist for a given artist (by MusicBrainz ID) and date.
  * Returns null when no setlist is found.

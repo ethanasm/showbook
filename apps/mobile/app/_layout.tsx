@@ -8,7 +8,6 @@
  *   AuthProvider             (must wrap tRPC because tRPC needs the token)
  *   tRPC Provider            (sub-component reads useAuth() to mint client)
  *   QueryClientProvider      (mounted via the same sub-component)
- *   BottomSheetModalProvider (must be inside GestureHandlerRootView)
  *   Slot                     (the active route)
  *
  * The trpc client is created once per app session. Its `getToken` getter
@@ -24,7 +23,6 @@
 
 import React from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -84,17 +82,15 @@ export default function RootLayout(): React.JSX.Element {
               <AuthProvider>
                 <TrpcProviders>
                   <CacheBridge>
-                    <BottomSheetModalProvider>
-                      <NetworkProvider>
-                        <OfflineBridge>
-                          <BannerHost />
-                          <Slot />
-                          <ToastHost />
-                          <StatusBar style="auto" />
-                          <PendingWritesDrawerHost />
-                        </OfflineBridge>
-                      </NetworkProvider>
-                    </BottomSheetModalProvider>
+                    <NetworkProvider>
+                      <OfflineBridge>
+                        <BannerHost />
+                        <Slot />
+                        <ToastHost />
+                        <StatusBar style="auto" />
+                        <PendingWritesDrawerHost />
+                      </OfflineBridge>
+                    </NetworkProvider>
                   </CacheBridge>
                 </TrpcProviders>
               </AuthProvider>

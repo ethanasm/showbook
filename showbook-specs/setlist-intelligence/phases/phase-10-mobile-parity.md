@@ -188,6 +188,20 @@ specific log context: `child({ component: 'mobile.predicted-setlist' })`.
    PR description).
 5. Mobile Spotify export uses the outbox correctly — kill the app
    mid-export and verify the mutation replays on relaunch.
+6. **SI-08 (deferred from Phase 0) is validated.** Manually walk
+   the Connect Spotify flow on both iOS and Android: tap a Hype
+   playlist / Save-tonight button on Show detail → the
+   `SpotifyConnectSheet` slides up → tap Connect → Spotify OAuth
+   in the in-app browser → approve → **in-app browser must
+   auto-dismiss** after the HTTPS callback. If it doesn't on iOS
+   (ASWebAuthenticationSession doesn't intercept HTTPS redirects
+   without universal-link config), implement the fallback:
+   register a `showbook://spotify-connected` URL scheme, redirect
+   to it from the callback for in-app-browser User-Agents, and
+   pass that scheme as the `redirectUrl` to
+   `WebBrowser.openAuthSessionAsync`. See
+   [`../plan-review.md`](../plan-review.md) SI-08 for the full
+   rationale.
 
 ---
 

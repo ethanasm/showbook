@@ -54,6 +54,19 @@ via the cron below.
 Daily cron at 02:00 ET. Calls the same eval logic, writes a row
 to `prediction_eval_runs`:
 
+The base table was created in Phase 0 (`0034_setlist_intel_foundation.sql`)
+with `precision_top10 real NOT NULL` and `recall_top10 real NOT NULL`.
+Phase 4 adds the rotating-style gate metric:
+
+```sql
+-- Phase 4 migration
+ALTER TABLE prediction_eval_runs
+  ADD COLUMN recall_top15 real;
+-- Backfill is unnecessary — the cron starts populating new rows.
+```
+
+The full table after Phase 4:
+
 ```sql
 CREATE TABLE prediction_eval_runs (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -61,8 +74,17 @@ CREATE TABLE prediction_eval_runs (
   predictions       integer NOT NULL,
   brier_score       real NOT NULL,
   calibration_curve jsonb NOT NULL,
+  -- Stable-style success metric (precision-at-10).
   precision_top10   real NOT NULL,
+  -- Legacy from the Phase 0 schema; eval still writes this for
+  -- historical comparison but the rotating-style release gate
+  -- moved to recall_top15 (SI-14).
   recall_top10      real NOT NULL,
+  -- Rotating-style success metric (SI-14). The rotating UX shows a
+  -- ~30-candidate gap chart; users judge it by "did the songs that
+  -- played appear in the chart somewhere?" — recall, not precision.
+  -- K=15 matches a typical Phish set length.
+  recall_top15      real,
   by_style          jsonb NOT NULL
 );
 ```
@@ -89,7 +111,11 @@ Uses the same `MiniChart` shape the brain plan introduces.
 Phase 5 ships with the gate enforced:
 
 - Stable-style mean Brier ≤ 0.15
-- Rotating-style mean precision-at-10 ≥ 0.4
+- Rotating-style mean **recall-at-15 ≥ 0.55** (SI-14: switched
+  from precision-at-10 because the rotating UX is a ~30-candidate
+  gap chart; the question users will judge is "did the played
+  songs appear in the chart?" — that's recall, not precision).
+  K=15 matches a typical Phish set length.
 - No artist with ≥5 Tier-A setlists has calibration error >20pp in
   any bin
 
@@ -125,7 +151,7 @@ turning on the gate.
 ## Observability events
 
 - `setlist.eval.run_complete` (payload: brier, precision_top10,
-  per-style breakdown)
+  recall_top15, per-style breakdown)
 - `setlist.eval.run_failed`
 
 ---
@@ -135,8 +161,9 @@ turning on the gate.
 1. The eval cron runs cleanly for 14 consecutive days.
 2. Stable-style Brier comes in ≤ 0.15 across all stable-style
    performers in the corpus.
-3. Rotating-style precision-at-10 comes in ≥ 0.4 (a low bar
-   honest about the harder problem — see Phase 5).
+3. Rotating-style recall-at-15 comes in ≥ 0.55 (per SI-14 — the
+   metric the gap-chart UX is judged by; supersedes the original
+   precision-at-10 ≥ 0.4 gate).
 4. Calibration curve is within 20pp of perfect for every
    probability bin in the stable-style cohort.
 5. The admin page renders the curve cleanly on prod data.

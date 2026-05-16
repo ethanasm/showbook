@@ -243,8 +243,65 @@ Integrations). Tap → confirms → calls `trpc.spotify.disconnect`. The
 server marks `revoked_at`, clears any Spotify-derived stats from
 `shows` rows (fan-loyalty %, priming counts, playlist URLs), and
 returns success. The token row stays in the DB with the revoked
-flag for audit purposes; a nightly job hard-deletes rows revoked
-more than 30 days ago.
+flag for audit purposes; Phase 11 ships a weekly cron that hard-
+deletes rows where `revoked_at < now() - interval '30 days'`.
+
+#### Disconnect cleanup registry (SI-09)
+
+`disconnectSpotify(userId, reason)` walks two named lists kept
+beside the helper:
+
+- `USER_SCOPED_PURGE` — every column / table that contains
+  user-specific Spotify-derived data. On disconnect, each entry is
+  cleared / deleted for the disconnecting user only.
+- `CATALOG_KEEP` — every Spotify-shaped column / table that is
+  catalog-shared (true for every Showbook user, not personalized).
+  Disconnect leaves these untouched; wiping them would break the
+  feature for every other user.
+
+A unit test introspects the schema, finds every Spotify-shaped
+entity — `spotify_*` columns on user-owned tables (`users`,
+`shows`) and any table named `user_spotify_*` — and asserts each
+appears in exactly one of the two arrays. Anything missing fails
+the build. When a future phase adds a new Spotify column, the
+failing test forces an explicit categorization decision in the
+same PR. The contract is documented in implementation.md §11 Q10.
+
+V1 lists (extend as new phases ship columns):
+
+```ts
+const USER_SCOPED_PURGE = [
+  // Phase 3
+  { table: 'shows', column: 'spotify_playlist_url', filter: 'user_id' },
+  { table: 'shows', column: 'spotify_attended_playlist_url', filter: 'user_id' },
+  // Phase 7
+  { table: 'shows', column: 'spotify_prep_track_count', filter: 'user_id' },
+  { table: 'shows', column: 'spotify_post_track_count', filter: 'user_id' },
+  { table: 'users', column: 'spotify_year_playlists', filter: 'id' },
+  // Phase 9
+  { table: 'user_spotify_skipped_artists', mode: 'delete', filter: 'user_id' },
+  // Phase 11+ phase columns go here as they land...
+] as const;
+
+const CATALOG_KEEP = [
+  // Phase 3
+  'songs.spotify_track_id',
+  'songs.spotify_track_id_resolved_at',   // SI-11
+  // Phase 7+
+  'songs.spotify_audio_features',
+  'songs.spotify_preview_url',
+  'songs.isrc',
+  'songs.spotify_album_id',
+  'songs.spotify_album_name',
+  'songs.spotify_album_release',
+  'songs.spotify_album_type',
+] as const;
+```
+
+Note: there is **no** `user_spotify_saved_tracks` table — Phase 7
+uses on-demand `/me/tracks/contains` calls instead of caching the
+user's library (privacy decision, see §13c). One less entry in
+`USER_SCOPED_PURGE`.
 
 ---
 
@@ -761,7 +818,7 @@ Release gate (additive to existing CI):
 | Risk | Mitigation |
 |------|-----------|
 | Spotify revokes the API access between phases | Probe at start of Phase 0; AcousticBrainz fallback for vibe features only; rest of feature is unaffected |
-| TOKEN_KEY rotation strategy unclear | Per-environment key in env vars; rotation via re-encrypt batch job (one-time per rotation; documented runbook) |
+| TOKEN_KEY rotation strategy unclear | Generate once per environment with `openssl rand -hex 32`; don't rotate unless a leak is suspected, in which case every user reconnects on next Spotify action (no batch re-encrypt). See §11 Q2. |
 | Persisted token leaks via logging | Pino redaction already covers `accessToken`/`refreshToken`; add tests that `JSON.stringify(row)` masks the encrypted columns; never log raw token in any path |
 | OAuth popup blocked by browser | Detect `popupRef === null` and surface a "Allow popups for showbook.app and try again" toast |
 | Spotify rate limits during a heavy backfill | Concurrency 1 per token, 200ms minimum interval (mirror Gmail client); `spotify-track-resolve` job is the heaviest — cap to 100 tracks/run |
@@ -811,11 +868,24 @@ fallback; don't request the upgrade from Spotify.
 
 ### Q2. TOKEN_KEY rotation
 
-How often do we rotate the AES key? Today: never. **Action:** ship
-a `scripts/rotate-token-key.ts` that re-encrypts all rows with a new
-key in batch; document the runbook. **Default:** rotate annually,
-manually via the runbook. Auto-rotation is overkill for a self-hosted
-app.
+How often do we rotate the AES key? **Resolved: don't, for v1.**
+Rotating the key invalidates every persisted `user_spotify_tokens`
+row (decrypt fails → `ensureFreshUserToken` returns null → every
+connected user is re-prompted on their next Spotify action). For a
+self-hosted single-tenant app with a static `.env.prod`, the
+operational tax of regular rotation isn't worth the marginal
+defense.
+
+**Decision:** generate `TOKEN_KEY` once per environment with
+`openssl rand -hex 32`, commit it to `.env.prod`, and forget about
+it unless a leak is suspected. If a leak is suspected, the runbook
+is "generate a new key, paste it into `.env.prod`, redeploy" —
+every user reconnects Spotify once, no batch re-encrypt job needed.
+`scripts/rotate-token-key.ts` is dropped from the plan.
+
+**What's still required:** document this stance in `.env.example`
+so an operator who rotates the key understands they're about to
+log out every Spotify connection.
 
 ### Q3. Style classifier seed list
 
@@ -893,10 +963,16 @@ who feel pestered turn off.
 Today's `disconnectSpotify` clears: fan-loyalty %, priming counts,
 playlist URLs (the URLs themselves on Spotify are private to the
 user — disconnecting just unlinks them from Showbook). **Action:**
-also purge `user_spotify_saved_tracks` rows, `songs.spotify_track_id`
-remains (the catalog data is shared across users), `tour_setlists`
-remain. **Default:** purge user-personal data only; keep the catalog
-data that's not user-derived.
+purge user-personal columns on `shows` and `users` (playlist URLs,
+prep/post counts, year-playlists map); `songs.spotify_track_id`
+remains (catalog data, shared across users); `tour_setlists`
+remain. **Default:** purge user-personal data only; keep the
+catalog data that's not user-derived.
+
+There is no `user_spotify_saved_tracks` table to purge — the v1
+plan's nightly library cache was dropped in favor of on-demand
+`/me/tracks/contains` calls (see §13c + Phase 7). One less table
+to purge, one less privacy surface to defend.
 
 ---
 

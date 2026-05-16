@@ -39,15 +39,33 @@ Resolves song titles to Spotify track URIs in batches of 50.
 
 ```ts
 registerJob('spotify/track-resolve', async ({ performerId, limit = 50 }) => {
-  // Find songs for this performer with no spotify_track_id and at
-  // least one appearance.
+  // Find songs for this performer with either:
+  //   - spotify_track_id IS NULL (never tried), or
+  //   - spotify_track_id = '__none__' AND
+  //     spotify_track_id_resolved_at < now() - interval '90 days'
+  //     (we tried before but Spotify's catalog may have grown — SI-11)
+  // …and at least one appearance.
+  //
   // Resolve via Spotify search filtered by artist:<name> track:<title>.
   // Cache negative results with sentinel (spotify_track_id = '__none__')
-  // to avoid retrying every job run.
+  // AND set spotify_track_id_resolved_at = now() so the 90-day re-check
+  // fires next time.
 });
 ```
 
 Concurrency 1, 200ms minimum interval, 100-track cap per run.
+
+Schema addition (SI-11):
+
+```sql
+ALTER TABLE songs
+  ADD COLUMN spotify_track_id_resolved_at timestamp;
+```
+
+Set on every resolution attempt (success OR `__none__`). Lets the
+job re-try previously-unresolvable songs after 90 days, in case
+Spotify has uploaded the live cut / re-issue since. One column,
+one filter line in the job; bounded cost.
 
 Triggers:
 - After each `setlist-corpus-fill` completion → enqueue resolve
@@ -154,9 +172,17 @@ subsequent visits.
 `apps/web/app/(app)/shows/[id]/page.tsx` action bar gains:
 
 - **🎵 Hype playlist on Spotify** — visible when `state ∈
-  {watching, ticketed}` AND `kind === 'concert'`. Hidden for
-  rotating-style artists (per [`../ui-spec.md`](../ui-spec.md) §3.4
-  rule — confidence too low for a useful playlist).
+  {watching, ticketed}` AND `kind ∈ {'concert', 'festival'}` (per
+  SI-03). **Phase 3 does NOT gate on `setlistStyle === 'rotating'`**
+  — the classifier doesn't land until Phase 5. Per SI-05 option C,
+  the button shows for Phish too in the Phase 3 → Phase 5 window;
+  Phish fans get a low-relevance playlist of "songs that have been
+  rotating recently" rather than the documented "we can't predict"
+  empty state. The cost is briefly misleading UX for rotating-style
+  fans during the Phase 3 → Phase 5 gap; the win is Phase 3 ships
+  without waiting on Phase 5's classifier. Phase 5 adds the
+  `setlistStyle === 'rotating'` hide rule per
+  [`../ui-spec.md`](../ui-spec.md) §3.4.
 - **🎵 Save tonight to Spotify** — visible when `state === 'past'`
   AND a setlist exists (either user-typed or fetched from
   setlist.fm).
@@ -249,4 +275,7 @@ flips to **Open in Spotify** and short-circuits to opening the URL.
 - Year-end soundtrack playlist (Phase 7)
 - 30-second previews (Phase 9)
 - Personal-weight chip data (Phase 7)
-- The button on rotating-style shows (deliberately hidden)
+- The rotating-style style-guard on the Hype button — that lands
+  in Phase 5 along with the classifier (SI-05 option C: ship Phase
+  3 with the button visible everywhere, accept brief
+  low-relevance UX for rotating-style fans in the gap).
