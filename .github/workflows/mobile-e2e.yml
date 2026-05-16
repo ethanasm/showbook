@@ -69,9 +69,11 @@ jobs:
       ANDROID_SDK_ROOT: ${{ vars.ANDROID_SDK_ROOT || '/opt/android-sdk' }}
       ANDROID_AVD_NAME: showbook_e2e
       ANDROID_AVD_HOME: ${{ github.workspace }}/.android-avd
-      # Gradle in CI: no daemon (single-job runner), but keep the
-      # configuration cache + build cache hot via actions/cache below.
-      GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2 -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g"'
+      # Gradle in CI: no daemon (single-job runner), single worker
+      # process, and a 2 GB heap cap. The previous 4 GB cap + parallel
+      # emulator (2 GB AVD) + Metro overran the WSL runner's memory
+      # budget and Gradle got OOM-killed ~16 min into the build.
+      GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=1 -Dorg.gradle.parallel=false -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m"'
     steps:
       - uses: actions/checkout@v6
 
@@ -231,30 +233,6 @@ jobs:
           fi
           ls -la "$ANDROID_AVD_HOME"
 
-      # ── Boot the emulator in the background ─────────────────────────
-      #
-      # Booting in parallel with prebuild + Gradle eliminates the 5–10
-      # min serial cost the previous workflow paid. We poll for boot
-      # completion *after* the Gradle build wraps, so the wait usually
-      # collapses to a no-op.
-      - name: Start Android emulator (background)
-        shell: bash
-        run: |
-          set -euo pipefail
-          export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
-          adb kill-server || true
-          adb start-server
-          # -no-snapshot-save: don't write back into the cached AVD
-          # -accel auto: use KVM when available, fall through to TCG
-          # -gpu swiftshader_indirect: software GL, only sane option headless
-          nohup env ANDROID_AVD_HOME="$ANDROID_AVD_HOME" \
-            emulator -avd "$ANDROID_AVD_NAME" \
-              -no-window -no-audio -no-boot-anim -no-snapshot-save \
-              -accel auto \
-              -gpu swiftshader_indirect \
-            > /tmp/emulator.log 2>&1 &
-          echo "emulator pid: $!"
-
       - name: Install Maestro CLI
         shell: bash
         run: |
@@ -299,8 +277,37 @@ jobs:
           APK="app/build/outputs/apk/debug/app-debug.apk"
           ls -lh "$APK"
           cp "$APK" /tmp/showbook-e2e.apk
+          echo "::group::Memory after build"
+          free -h || true
+          df -h "$HOME" || true
+          echo "::endgroup::"
 
-      # ── Wait for the emulator that started before Gradle ───────────
+      # ── Boot the emulator now that Gradle is done ──────────────────
+      #
+      # An earlier revision booted in parallel with the Gradle build to
+      # save 5–10 min on cold cache runs, but on the WSL self-hosted
+      # runner the 2 GB AVD + 4 GB Gradle heap + Metro overran memory
+      # and Gradle was OOM-killed mid-build. Sequencing the two phases
+      # keeps the peak footprint within budget; the warm-cache Gradle
+      # build is short enough that the lost parallelism doesn't matter.
+      - name: Start Android emulator (background)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
+          adb kill-server || true
+          adb start-server
+          # -no-snapshot-save: don't write back into the cached AVD
+          # -accel auto: use KVM when available, fall through to TCG
+          # -gpu swiftshader_indirect: software GL, only sane option headless
+          nohup env ANDROID_AVD_HOME="$ANDROID_AVD_HOME" \
+            emulator -avd "$ANDROID_AVD_NAME" \
+              -no-window -no-audio -no-boot-anim -no-snapshot-save \
+              -accel auto \
+              -gpu swiftshader_indirect \
+            > /tmp/emulator.log 2>&1 &
+          echo "emulator pid: $!"
+
       - name: Wait for emulator
         shell: bash
         run: |
