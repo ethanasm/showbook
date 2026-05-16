@@ -155,3 +155,31 @@ export {
   type TourCoverage,
   type CorpusRow,
 } from './setlist-predict';
+
+// Eval-harness pure metric helpers — Phase 4.
+export {
+  brierScore,
+  precisionAtK,
+  recallAtK,
+  recallActual,
+  calibrationBuckets,
+  calibrationError,
+  mergeCalibrationBuckets,
+  emptyCalibrationCurve,
+  type CalibrationBin,
+  type PredictedSongLike,
+} from './eval-metrics';
+
+// Phase 4 per-show eval primitives — used by the cron in @showbook/jobs
+// and by the `eval.rerunShow` tRPC mutation.
+export {
+  evaluateShow,
+  setlistTitles,
+  flattenPrediction,
+  inferStyle,
+  loadTruncatedCorpus,
+  rerunEvalForShow,
+  latestRunId,
+  type EvalStyle,
+  type PerShowEvalRow,
+} from './eval-show';

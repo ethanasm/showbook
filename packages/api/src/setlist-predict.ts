@@ -19,7 +19,7 @@
 
 import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { db } from '@showbook/db';
-import { predictionCache, tourSetlists } from '@showbook/db';
+import { predictionCache, predictionSnapshots, tourSetlists } from '@showbook/db';
 import { child } from '@showbook/observability';
 import type { PerformerSetlist } from '@showbook/shared';
 
@@ -574,6 +574,14 @@ export function computeConfidence(opts: {
 export interface PredictSetlistInput {
   performerId: string;
   targetDate: string; // YYYY-MM-DD
+  /** Optional audit context — when present, a row is appended to
+   * `prediction_snapshots` recording the exact payload served. Lets the
+   * Phase-4 eval harness compare "what we showed" rather than only
+   * "what we'd say today." */
+  snapshotContext?: {
+    userId?: string | null;
+    showId?: string | null;
+  };
 }
 
 /**
@@ -745,6 +753,15 @@ export async function predictedSetlistCached(
       },
       'predicted-setlist served from cache',
     );
+    if (input.snapshotContext) {
+      await writePredictionSnapshot({
+        performerId: input.performerId,
+        targetDate: input.targetDate,
+        corpusSignature: signature,
+        prediction: payload,
+        context: input.snapshotContext,
+      });
+    }
     return payload;
   }
 
@@ -792,5 +809,45 @@ export async function predictedSetlistCached(
     },
     'predicted-setlist served fresh',
   );
+  if (input.snapshotContext) {
+    await writePredictionSnapshot({
+      performerId: input.performerId,
+      targetDate: input.targetDate,
+      corpusSignature: signature,
+      prediction: result,
+      context: input.snapshotContext,
+    });
+  }
   return result;
+}
+
+/** Append-only snapshot write. Failures don't propagate — losing an audit
+ * row is preferable to dropping the user-facing prediction. */
+async function writePredictionSnapshot(opts: {
+  performerId: string;
+  targetDate: string;
+  corpusSignature: string;
+  prediction: HotPrediction | ColdPrediction;
+  context: { userId?: string | null; showId?: string | null };
+}): Promise<void> {
+  try {
+    await db.insert(predictionSnapshots).values({
+      performerId: opts.performerId,
+      targetDate: opts.targetDate,
+      corpusSignature: opts.corpusSignature,
+      predictionJson: opts.prediction,
+      servedToUserId: opts.context.userId ?? null,
+      showId: opts.context.showId ?? null,
+    });
+  } catch (err) {
+    log.error(
+      {
+        event: 'setlist.predict.snapshot_failed',
+        err,
+        performerId: opts.performerId,
+        targetDate: opts.targetDate,
+      },
+      'predicted-setlist snapshot write failed (non-fatal)',
+    );
+  }
 }

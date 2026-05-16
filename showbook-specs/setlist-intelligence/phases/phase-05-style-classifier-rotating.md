@@ -265,8 +265,19 @@ function PredictedSetlistView({ prediction }: { prediction: PredictedSetlistUnio
 4. `setlist-style-refresh` cron has been running cleanly for 7
    consecutive days.
 5. **The calibration release gate from Phase 4 is now enforced.**
-   Stable-style Brier ≤ 0.15; rotating-style precision-at-10 ≥
-   0.4; per-bin calibration error ≤ 20pp.
+   Stable-style Brier ≤ 0.15; rotating-style recall-at-15 ≥ 0.55
+   (switched from precision-at-10 per SI-14 — rotating UX is a
+   ~30-candidate gap chart so recall is the meaningful metric);
+   per-bin calibration error ≤ 20pp. Source of truth: most recent
+   `prediction_eval_runs` row (`brierScore`, `recallTop15`,
+   `byStyle`, `calibrationCurve`) shipped by Phase 4. Gate enforcement
+   reads from the `eval.summary()` and `eval.latest()` tRPC procedures
+   in `packages/api/src/routers/eval.ts`; a new
+   `setlistIntel.releaseGate` procedure (or equivalent server-side
+   check) compares the latest run against thresholds and blocks
+   the rotating-display feature flag from going ON if any threshold
+   is breached. Phase 4 ships in shadow mode with a trailing window
+   of 14 days; the gate evaluates that same window.
 6. The mode-switch on `prediction.style` works with `cold` empty-
    state for performers below the corpus threshold.
 

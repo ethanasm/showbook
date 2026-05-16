@@ -21,6 +21,7 @@ import {
   type CorpusFillMode,
 } from './setlist-corpus-fill';
 import { runSongIndexRebuild } from './song-index-rebuild';
+import { runDailyBacktest } from './prediction-eval';
 // @showbook/scrapers pulls in Playwright, which the Next.js dev server
 // tries to bundle. Import it lazily inside the handler so it stays out of
 // the web app's static dependency graph.
@@ -42,6 +43,7 @@ export const JOBS = {
   SETLIST_CORPUS_FILL: 'enrichment/setlist-corpus-fill',
   SETLIST_CORPUS_FILL_REFRESH: 'enrichment/setlist-corpus-fill-refresh',
   SONG_INDEX_REBUILD: 'enrichment/song-index-rebuild',
+  EVAL_RUN_DAILY_BACKTEST: 'eval/run-daily-backtest',
 } as const;
 
 // pg-boss v10 ignores constructor-level retry/expiration options when
@@ -98,6 +100,7 @@ const QUEUE_OPTIONS: Record<string, QueueOptions> = {
   'enrichment/setlist-corpus-fill': FAST_INGEST,
   'enrichment/setlist-corpus-fill-refresh': LONG_BATCH,
   'enrichment/song-index-rebuild': LONG_BATCH,
+  'eval/run-daily-backtest': LONG_BATCH,
 };
 
 const log = child({ component: 'jobs.registry' });
@@ -458,6 +461,29 @@ async function songIndexRebuildHandler(
   }
 }
 
+async function evalRunDailyBacktestHandler(jobs: PgBoss.Job[]) {
+  for (const job of jobs) {
+    await runJob(JOBS.EVAL_RUN_DAILY_BACKTEST, job, async () => {
+      const result = await runDailyBacktest({});
+      log.info(
+        {
+          event: 'eval.run.summary',
+          runId: result.runId,
+          windowDays: result.windowDays,
+          evaluatedShows: result.evaluatedShows,
+          predictionCount: result.predictionCount,
+          brierScore: result.brierScore,
+          precisionTop10: result.precisionTop10,
+          recallTop15: result.recallTop15,
+          calibrationError: result.calibrationError,
+        },
+        'Prediction-eval back-test complete',
+      );
+      return result;
+    });
+  }
+}
+
 async function notificationsDailyDigestHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
     await runJob(JOBS.NOTIFICATIONS_DAILY_DIGEST, job, async () => {
@@ -530,6 +556,7 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   await boss.work(JOBS.SETLIST_CORPUS_FILL, setlistCorpusFillHandler);
   await boss.work(JOBS.SETLIST_CORPUS_FILL_REFRESH, setlistCorpusFillRefreshHandler);
   await boss.work(JOBS.SONG_INDEX_REBUILD, songIndexRebuildHandler);
+  await boss.work(JOBS.EVAL_RUN_DAILY_BACKTEST, evalRunDailyBacktestHandler);
 
   // Backstop sweep for the orphan-cleanup triggers (0002 / 0014 / 0023 /
   // 0025). Runs before shows-nightly so the nightly transition operates on
@@ -557,6 +584,11 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
     {},
     { tz: 'America/New_York' },
   );
+  // Prediction-eval back-test at 03:00 ET. Runs against `tour_setlists`
+  // already on disk (no external API calls); the corpus-fill refresh at
+  // 04:45 ET later that morning brings fresh setlists in for *tomorrow's*
+  // back-test. Phase 4 ships this in shadow mode — no release gate yet.
+  await boss.schedule(JOBS.EVAL_RUN_DAILY_BACKTEST, '0 3 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.NOTIFICATIONS_DAILY_DIGEST, '0 8 * * *', {}, { tz: 'America/New_York' });
 
   log.info(

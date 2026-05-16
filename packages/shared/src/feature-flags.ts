@@ -71,6 +71,19 @@ export const FeatureFlag = {
       'the placeholder absorbs taps with disabled CTAs.',
     state: 'ON',
   },
+  SetlistIntelEvalHarness: {
+    description:
+      'Phase 4 (setlist-intelligence) eval-harness admin surface. ' +
+      'Gates the /admin/eval page that renders the 30-day Brier + P@10 ' +
+      'chart, calibration curve, and per-show breakdown. The pg-boss ' +
+      'eval back-test job runs in all envs regardless of this flag — ' +
+      'we need the data on disk before flipping the release gate in ' +
+      "Phase 5. Single-user app, so 'ON' is equivalent to ON for the " +
+      'developer; admin allowlist is the actual gate. Flip OFF if the ' +
+      'page regresses (DB calls fall over, chart math wrong) — the ' +
+      'backtest cron keeps writing rows in the background.',
+    state: 'ON',
+  },
 } as const satisfies Record<string, { description: string; state: 'ON' | 'OFF' }>;
 
 export type FeatureFlagKey = keyof typeof FeatureFlag;
