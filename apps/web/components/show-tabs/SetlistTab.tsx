@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { SectionFrame } from "./SectionFrame";
 import { SpoilerCurtain } from "./SpoilerCurtain";
 import { HypePlaylistCardPlaceholder } from "./HypePlaylistCardPlaceholder";
+import { HypePlaylistCard } from "./HypePlaylistCard";
 import { PredictedSetlistRow } from "./PredictedSetlistRow";
 import { EncoreDivider } from "./EncoreDivider";
 import type { PredictedSetlistResult } from "@showbook/api";
@@ -22,6 +23,13 @@ interface SetlistTabProps {
   /** Actual setlist (post-show). Each entry is `{ title, isEncore }`. */
   actualSongs?: ActualSong[];
   onOpenSpoilerSettings?: () => void;
+  /**
+   * Phase 3 — when true, render the real Spotify-backed `HypePlaylistCard`
+   * in the top slot; otherwise fall back to the P1 placeholder. The
+   * `SetlistIntelHypePlaylist` flag gates this; the page level resolves
+   * the flag and passes it down.
+   */
+  hypePlaylistEnabled?: boolean;
 }
 
 export interface ActualSong {
@@ -45,7 +53,7 @@ export function SetlistTab(props: SetlistTabProps) {
 // ─────────────────────────────────────────────────────────────────────
 
 function SetlistTabUpcoming(props: SetlistTabProps) {
-  const { prediction, predictionLoading, artistName } = props;
+  const { prediction, predictionLoading, artistName, hypePlaylistEnabled } = props;
   const [spoilerShown, setSpoilerShown] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -98,11 +106,21 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
       />
 
       <SectionFrame title="Hype playlist">
-        <HypePlaylistCardPlaceholder
-          artist={prediction.tourName ?? artistName}
-          trackCount={totalCount}
-          approxMinutes={approxMinutes}
-        />
+        {hypePlaylistEnabled ? (
+          <HypePlaylistCard
+            showId={props.showId}
+            kind="hype"
+            artist={artistName}
+            trackCount={totalCount}
+            approxMinutes={approxMinutes}
+          />
+        ) : (
+          <HypePlaylistCardPlaceholder
+            artist={prediction.tourName ?? artistName}
+            trackCount={totalCount}
+            approxMinutes={approxMinutes}
+          />
+        )}
       </SectionFrame>
 
       {!spoilerShown && prediction.spoilerBlurDefault ? (
@@ -344,10 +362,13 @@ function coldReasonCopy(
 function SetlistTabPast({
   artistName,
   actualSongs = [],
+  hypePlaylistEnabled,
+  showId,
 }: SetlistTabProps) {
   const mainSet = actualSongs.filter((s) => !s.isEncore);
   const encore = actualSongs.filter((s) => s.isEncore);
   const total = actualSongs.length;
+  const approxMinutes = total > 0 ? Math.round(total * 4) : null;
   if (total === 0) {
     return (
       <div
@@ -391,6 +412,17 @@ function SetlistTabPast({
   return (
     <div>
       <ActualBanner total={total} />
+      {hypePlaylistEnabled && (
+        <SectionFrame title={`I Heard ${artistName}`}>
+          <HypePlaylistCard
+            showId={showId}
+            kind="heard"
+            artist={artistName}
+            trackCount={total}
+            approxMinutes={approxMinutes}
+          />
+        </SectionFrame>
+      )}
       <SectionFrame title="Setlist" count={total}>
         <div className="predicted-grid" data-testid="actual-setlist-grid">
           {mainSet.map((song, idx) => (

@@ -45,6 +45,20 @@ export const FeatureFlag = {
       'against the same `shows.detail` payload.',
     state: 'ON',
   },
+  SetlistIntelHypePlaylist: {
+    description:
+      'Phase 3 (setlist-intelligence) hype/heard playlist export. ' +
+      'Replaces the P1 HypePlaylistCard placeholder with the real ' +
+      'Spotify-backed card on the Setlist tab + desktop right rail, ' +
+      'and enables `spotify.createHypePlaylist` / ' +
+      '`spotify.createHeardPlaylist` tRPC mutations. OFF in prod by ' +
+      'default; the developer (ADMIN_EMAILS allowlist) bypasses the ' +
+      'gate so the feature can be validated end-to-end against real ' +
+      'Spotify before opening it to all users. Flip to ON once the ' +
+      'Phase 5 rotating-style hide rule lands so we can stop showing a ' +
+      'low-relevance hype playlist to Phish-style fans.',
+    state: 'OFF',
+  },
 } as const satisfies Record<string, { description: string; state: 'ON' | 'OFF' }>;
 
 export type FeatureFlagKey = keyof typeof FeatureFlag;

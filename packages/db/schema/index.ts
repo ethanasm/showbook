@@ -17,3 +17,4 @@ export * from './setlist-song-appearances';
 export * from './prediction-cache';
 export * from './prediction-eval-runs';
 export * from './user-spotify-tokens';
+export * from './show-spotify-playlists';

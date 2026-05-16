@@ -57,11 +57,40 @@ export {
   SpotifyError,
   SPOTIFY_SCOPES,
   SPOTIFY_SCOPE_STRING,
+  HYPE_PLAYLIST_SCOPES,
   exchangeAuthorizationCode,
   refreshSpotifyToken,
   getCurrentUser,
+  searchTrack,
+  createPlaylist,
+  addTracksToPlaylist,
+  diffScopes,
 } from './spotify';
-export type { SpotifyArtist, SpotifyTokenSet, SpotifyMe } from './spotify';
+export type {
+  SpotifyArtist,
+  SpotifyTokenSet,
+  SpotifyMe,
+  SpotifyTrack,
+  SpotifyPlaylist,
+  MissingScopesResult,
+} from './spotify';
+export {
+  buildPlaylistName,
+  buildPlaylistDescription,
+  resolveTrackUris,
+  getExistingPlaylist,
+  probePlaylistScopes,
+  createHypePlaylist,
+  createHeardPlaylist,
+  __resetTrackResolveCacheForTests,
+} from './spotify-playlist';
+export type {
+  PlaylistKind,
+  SetlistTrack,
+  PlaylistMetadata,
+  PlaylistResolution,
+  CreatePlaylistResult,
+} from './spotify-playlist';
 export {
   ensureFreshUserToken,
   isSpotifyConnected,

@@ -24,6 +24,7 @@ import { SetlistTab, SetlistTabComingSoon, type ActualSong } from "./SetlistTab"
 import { MediaTab } from "./MediaTab";
 import { NotesTab } from "./NotesTab";
 import { MusicLayerEmpty } from "./MusicLayerEmpty";
+import { HypePlaylistCard } from "./HypePlaylistCard";
 import { useTrackTabView } from "./use-track-tab-view";
 import { computeShowTabBadges } from "./types";
 import type { StatCell } from "./StatRow";
@@ -79,6 +80,16 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
       staleTime: 1000 * 60 * 5,
     },
   );
+
+  // Phase 3 — global flag + admin override decides whether the real
+  // Spotify-backed HypePlaylistCard renders in place of the P1
+  // placeholder. Query is cheap (a single users select) and cached
+  // for the session.
+  const hypeFeatureQuery = trpc.spotify.hypePlaylistFeature.useQuery(
+    undefined,
+    { staleTime: 5 * 60_000 },
+  );
+  const hypePlaylistEnabled = Boolean(hypeFeatureQuery.data?.enabled);
 
   const setNotes = trpc.shows.setNotes.useMutation({
     onSuccess: () => {
@@ -262,6 +273,7 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
         prediction={predictionQuery.data ?? null}
         predictionLoading={predictionQuery.isLoading}
         actualSongs={actualSongs}
+        hypePlaylistEnabled={hypePlaylistEnabled}
       />
     );
 
@@ -307,6 +319,31 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
     />
   );
 
+  // Right-rail slots. Phase 3 fills the pre-show HypePlaylistCard slot;
+  // the post-show FanLoyaltyRing slot lands in Phase 7. The rail hides
+  // itself entirely when every slot is null (Phase 1 shell logic).
+  const railHypeMeta = useMemo(() => {
+    if (isPast) return null;
+    if (!hypePlaylistEnabled) return null;
+    if (!predictionQuery.data || predictionQuery.data.style !== "stable") return null;
+    const core = predictionQuery.data.core;
+    const total = core.length;
+    return { total, approxMinutes: total > 0 ? Math.round(total * 4) : null };
+  }, [hypePlaylistEnabled, isPast, predictionQuery.data]);
+
+  const rightRailSlots = {
+    hypePlaylistCard: railHypeMeta ? (
+      <HypePlaylistCard
+        showId={show.id}
+        kind="hype"
+        artist={headlinerName}
+        trackCount={railHypeMeta.total}
+        approxMinutes={railHypeMeta.approxMinutes}
+        compact
+      />
+    ) : null,
+  };
+
   // Header — collapsed hero strip. Tab bar is sticky below.
   return (
     <div
@@ -330,6 +367,7 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
             media: mediaPanel,
             notes: notesPanel,
           }}
+          rightRail={rightRailSlots}
           onTabChange={trackTabView}
         />
       </div>

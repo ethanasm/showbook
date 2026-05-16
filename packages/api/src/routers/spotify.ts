@@ -9,18 +9,74 @@
  * Phase 0 surface area:
  *   - `connectionStatus` — drives `useSpotifyConnection` on web/mobile.
  *   - `disconnect` — operator-/user-initiated revoke from Preferences.
+ *
+ * Phase 3 (this file's expansion):
+ *   - `hypePlaylistFeature` — gate the new HypePlaylistCard UI by the
+ *     `SetlistIntelHypePlaylist` flag (global ON) or admin allowlist.
+ *   - `existingPlaylist` — idempotency lookup the UI uses to flip
+ *     "Open in Spotify" instead of re-creating.
+ *   - `createHypePlaylist` / `createHeardPlaylist` — the playlist
+ *     mutations.
  */
 
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { child } from '@showbook/observability';
+import { isFeatureOn, type FeatureFlagKey } from '@showbook/shared';
+import { users } from '@showbook/db';
 import { router, protectedProcedure } from '../trpc';
 import {
   disconnectSpotify,
   getConnectionStatus,
 } from '../spotify-tokens';
+import {
+  createHeardPlaylist,
+  createHypePlaylist,
+  getExistingPlaylist,
+} from '../spotify-playlist';
+import { isAdminEmail } from '../admin';
 
 const log = child({ component: 'api.spotify.router', provider: 'spotify' });
+
+const FLAG_KEY: FeatureFlagKey = 'SetlistIntelHypePlaylist';
+
+/**
+ * Resolves the SetlistIntelHypePlaylist gate for a given user. The flag
+ * is OFF in prod by default; admins (per ADMIN_EMAILS) bypass the gate
+ * so the developer can validate the feature in prod before flipping it
+ * for everyone.
+ */
+async function isHypePlaylistEnabledForUser(
+  dbi: typeof import('@showbook/db').db,
+  userId: string,
+): Promise<boolean> {
+  if (isFeatureOn(FLAG_KEY)) return true;
+  const [user] = await dbi
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return isAdminEmail(user?.email);
+}
+
+async function requireHypePlaylistEnabled(
+  dbi: typeof import('@showbook/db').db,
+  userId: string,
+): Promise<void> {
+  if (!(await isHypePlaylistEnabledForUser(dbi, userId))) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'feature_disabled:SetlistIntelHypePlaylist',
+    });
+  }
+}
+
+const showIdInput = z.object({ showId: z.string().uuid() });
+const existingPlaylistInput = z.object({
+  showId: z.string().uuid(),
+  kind: z.union([z.literal('hype'), z.literal('heard')]),
+});
 
 export const spotifyRouter = router({
   /**
@@ -32,6 +88,82 @@ export const spotifyRouter = router({
   connectionStatus: protectedProcedure.query(async ({ ctx }) => {
     return getConnectionStatus(ctx.session.user.id);
   }),
+
+  /**
+   * Gate query for the Phase 3 HypePlaylistCard UI. Returns `enabled`
+   * when the global feature flag is ON or the caller is on the
+   * `ADMIN_EMAILS` allowlist (the in-prod developer override).
+   */
+  hypePlaylistFeature: protectedProcedure.query(async ({ ctx }) => {
+    const enabled = await isHypePlaylistEnabledForUser(
+      ctx.db,
+      ctx.session.user.id,
+    );
+    return { enabled };
+  }),
+
+  /**
+   * Look up the existing hype or heard playlist row for a show. Used by
+   * the UI to flip the card's primary button from "Open in Spotify"
+   * (build new) to "Open in Spotify" (open existing) without a new
+   * mutation.
+   */
+  existingPlaylist: protectedProcedure
+    .input(existingPlaylistInput)
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      return getExistingPlaylist({ userId, showId: input.showId, kind: input.kind });
+    }),
+
+  /**
+   * Create (or return existing) hype playlist for a pre-show. Loads the
+   * predicted setlist, resolves to Spotify URIs, creates a private
+   * playlist, and adds tracks in setlist order. Idempotent —
+   * re-tapping returns the previously persisted row.
+   */
+  createHypePlaylist: protectedProcedure
+    .input(showIdInput)
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      await requireHypePlaylistEnabled(ctx.db, userId);
+      try {
+        return await createHypePlaylist({ userId, showId: input.showId });
+      } catch (err) {
+        if (err instanceof TRPCError) throw err;
+        log.error(
+          { err, event: 'spotify.hype_playlist.failed', userId, showId: input.showId },
+          'Hype playlist creation failed',
+        );
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'hype_playlist_failed',
+        });
+      }
+    }),
+
+  /**
+   * Post-show counterpart of `createHypePlaylist`. Uses the actual
+   * setlist rather than the prediction.
+   */
+  createHeardPlaylist: protectedProcedure
+    .input(showIdInput)
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      await requireHypePlaylistEnabled(ctx.db, userId);
+      try {
+        return await createHeardPlaylist({ userId, showId: input.showId });
+      } catch (err) {
+        if (err instanceof TRPCError) throw err;
+        log.error(
+          { err, event: 'spotify.heard_playlist.failed', userId, showId: input.showId },
+          'Heard playlist creation failed',
+        );
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'heard_playlist_failed',
+        });
+      }
+    }),
 
   /**
    * User-initiated disconnect. Marks `revoked_at` (soft delete for
