@@ -33,7 +33,11 @@ historical setlist, and compares against the actual played songs.
 ### `scripts/eval-setlist-predictor.ts` (new)
 
 For each (performer, date) pair from `tour_setlists` over the past
-30 days:
+**14 days** (shipped as the default window; the spec originally
+read "30 days" but the harness landed with `windowDays = 14` to
+keep nightly compute bounded — column `window_days` on
+`prediction_eval_runs` records the window each run actually used,
+defaulting to 14):
 
 1. Truncate `tour_setlists` to `performance_date < target_date` (in
    memory; we don't actually delete from the DB).
@@ -65,7 +69,9 @@ ALTER TABLE prediction_eval_runs
 -- Backfill is unnecessary — the cron starts populating new rows.
 ```
 
-The full table after Phase 4:
+The full table after Phase 4 (migration `0036_prediction_eval_phase4.sql`,
+shipped on the Phase 4 branch — adds `recall_top15`, `window_days`,
+and two new tables `prediction_eval_shows` + `prediction_snapshots`):
 
 ```sql
 CREATE TABLE prediction_eval_runs (
@@ -85,11 +91,28 @@ CREATE TABLE prediction_eval_runs (
   -- played appear in the chart somewhere?" — recall, not precision.
   -- K=15 matches a typical Phish set length.
   recall_top15      real,
+  -- Trailing window the run evaluated. Default 14; a future schedule
+  -- change records the new window per row so historical comparisons
+  -- stay honest.
+  window_days       integer NOT NULL DEFAULT 14,
   by_style          jsonb NOT NULL
 );
 ```
 
-(Migration ships in Phase 0.)
+In addition to the run-level aggregate, Phase 4 ships:
+
+- **`prediction_eval_shows`** — per-show breakdown so the admin
+  page can render a "predicted vs played" table and the
+  "Re-run for show" button has a row to target. FK on
+  `prediction_eval_runs.id` (cascade delete). Holds the predicted-
+  title array (with per-song probability + hit flag) and the
+  actual-title array as JSONB.
+- **`prediction_snapshots`** — append-only audit row written from
+  `predictedSetlistCached` whenever the procedure is called with a
+  `snapshotContext: { userId, showId }`. Captures the exact
+  prediction served to the user along with the corpus signature.
+  Lets a future eval pass score "what the user actually saw" rather
+  than re-derive from the current corpus.
 
 ### `apps/web/app/(app)/admin/eval/page.tsx` (new)
 
