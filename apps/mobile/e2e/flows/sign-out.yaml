@@ -14,6 +14,13 @@ tags:
     clearState: true
     clearKeychain: true
 
+# The signin CTA is below the fold on Pixel-6-sized AVDs — see
+# sign-in.yaml for context. Scroll into view before tapping.
+- scrollUntilVisible:
+    element:
+      text: "Sign in with Google"
+    direction: DOWN
+
 - tapOn:
     text: "Sign in with Google"
 - runFlow:

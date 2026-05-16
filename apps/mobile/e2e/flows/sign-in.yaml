@@ -20,6 +20,15 @@ tags:
     clearState: true
     clearKeychain: true
 
+# The signin screen wraps the button in a ScrollView below a 4-card
+# preview block + brand intro, so on Pixel-6-sized AVDs the CTA is
+# below the fold on first paint. Scroll to it before asserting /
+# tapping — Maestro's assertVisible / tapOn don't auto-scroll.
+- scrollUntilVisible:
+    element:
+      text: "Sign in with Google"
+    direction: DOWN
+
 - assertVisible:
     text: "Sign in with Google"
 
