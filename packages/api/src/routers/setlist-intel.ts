@@ -12,8 +12,13 @@
  * - `firstTimes({ limit })` — user-scoped only (SI-17). "First time YOU
  *   heard this song live."
  *
- * The corresponding mutations (cache invalidation, manual edits) live
- * elsewhere; this router is read-only.
+ * Phase 9 additions:
+ * - `spotifyFollowsDiff()` — Spotify-only artists for the Discover rail.
+ * - `skipSpotifyArtist({ spotifyArtistId })` — × on a rail card.
+ * - `trackPreviewsForShow({ showId })` — cached 30s preview URLs per
+ *   row in the show's predicted/actual setlist.
+ * - `resolveTrackPreview({ showId, title })` — lazy resolve a single
+ *   row's preview/URI via Spotify search.
  */
 
 import { z } from 'zod';
@@ -25,10 +30,13 @@ import {
   showPerformers,
   shows,
   songs,
+  userPerformerFollows,
+  userSpotifySkippedArtists,
   users,
 } from '@showbook/db';
 import { getHeadlinerId, isProductionShow, type ShowLike } from '@showbook/shared';
 import { child } from '@showbook/observability';
+import { isFeatureOn } from '@showbook/shared';
 import { protectedProcedure, router } from '../trpc';
 import {
   coldPrediction,
@@ -36,6 +44,15 @@ import {
   type ColdPrediction,
   type HotPrediction,
 } from '../setlist-predict';
+import { ensureFreshUserToken } from '../spotify-tokens';
+import {
+  getFollowedArtists,
+  searchTrack,
+  SpotifyError,
+  type SpotifyArtist,
+} from '../spotify';
+import { diffSpotifyFollows } from '../spotify-follows-diff';
+import { enforceRateLimit } from '../rate-limit';
 
 const log = child({ component: 'api.setlist-intel' });
 
@@ -293,6 +310,344 @@ export const setlistIntelRouter = router({
           performerName: row.performer_name,
         };
       });
+    }),
+
+  // ─────────────────────────────────────────────────────────────────
+  // Phase 9 — Spotify-follow rail (Discover)
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Spotify artists the user follows on Spotify but NOT on Showbook,
+   * minus any explicitly skipped via the rail's × button. Returns an
+   * empty list (and `connected: false`) when the user hasn't
+   * connected Spotify so the rail can hide itself without a separate
+   * status hop.
+   */
+  spotifyFollowsDiff: protectedProcedure.query(
+    async ({ ctx }): Promise<{
+      connected: boolean;
+      artists: SpotifyArtist[];
+    }> => {
+      const userId = ctx.session.user.id;
+      if (!isFeatureOn('SetlistIntelPreviews')) {
+        log.debug(
+          { event: 'spotify.follow_diff.empty', reason: 'flag_off', userId },
+          'follow-diff served empty (flag off)',
+        );
+        return { connected: false, artists: [] };
+      }
+      const accessToken = await ensureFreshUserToken(userId);
+      if (!accessToken) {
+        return { connected: false, artists: [] };
+      }
+      enforceRateLimit(`setlist-intel.follow-diff:${userId}`, {
+        max: 30,
+        windowMs: 60_000,
+      });
+
+      let spotifyArtists: SpotifyArtist[];
+      try {
+        spotifyArtists = await getFollowedArtists(accessToken);
+      } catch (err) {
+        if (err instanceof SpotifyError && err.status === 401) {
+          // ensureFreshUserToken handled the refresh; this hop was
+          // still rejected. Surface as a disconnected state so the
+          // rail collapses; the next page load picks up the connect
+          // modal via the global hook.
+          return { connected: false, artists: [] };
+        }
+        log.error(
+          { err, event: 'spotify.follow_diff.failed', userId },
+          'Spotify follow-diff failed',
+        );
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'spotify_follow_diff_failed',
+        });
+      }
+
+      // Showbook-followed performers (lowercase name match — see
+      // diffSpotifyFollows for the trade-off note).
+      const followedNames = await ctx.db
+        .select({ name: performers.name })
+        .from(userPerformerFollows)
+        .innerJoin(
+          performers,
+          eq(performers.id, userPerformerFollows.performerId),
+        )
+        .where(eq(userPerformerFollows.userId, userId));
+      const followedSet = new Set(
+        followedNames.map((r) => r.name.toLowerCase()),
+      );
+
+      const skipped = await ctx.db
+        .select({ id: userSpotifySkippedArtists.spotifyArtistId })
+        .from(userSpotifySkippedArtists)
+        .where(eq(userSpotifySkippedArtists.userId, userId));
+      const skippedSet = new Set(skipped.map((r) => r.id));
+
+      const artists = diffSpotifyFollows({
+        spotifyArtists,
+        showbookFollowedNames: followedSet,
+        skippedSpotifyArtistIds: skippedSet,
+      });
+
+      if (artists.length === 0) {
+        log.info(
+          { event: 'spotify.follow_diff.empty', userId, total: spotifyArtists.length },
+          'follow-diff empty',
+        );
+      } else {
+        log.info(
+          {
+            event: 'spotify.follow_diff.served',
+            userId,
+            served: artists.length,
+            spotifyTotal: spotifyArtists.length,
+            followedTotal: followedSet.size,
+            skippedTotal: skippedSet.size,
+          },
+          'follow-diff served',
+        );
+      }
+
+      return { connected: true, artists };
+    },
+  ),
+
+  /**
+   * Dismiss a Spotify artist from the rail. Writes to
+   * `user_spotify_skipped_artists` so the same card never re-surfaces.
+   * Idempotent — duplicate (userId, spotifyArtistId) is a no-op via
+   * the primary-key constraint.
+   */
+  skipSpotifyArtist: protectedProcedure
+    .input(z.object({ spotifyArtistId: z.string().min(1).max(120) }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      await ctx.db
+        .insert(userSpotifySkippedArtists)
+        .values({
+          userId,
+          spotifyArtistId: input.spotifyArtistId,
+        })
+        .onConflictDoNothing();
+      return { ok: true as const };
+    }),
+
+  // ─────────────────────────────────────────────────────────────────
+  // Phase 9 — Track previews (30s clips + Spotify URIs)
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Cached preview/URI map for every title in the show's predicted or
+   * actual setlist. Used by the row-play button to flip directly into
+   * "ready" without a Spotify hop on every render.
+   *
+   * Returns a record keyed by lower(title) so the client can resolve
+   * a row in O(1). Values:
+   *   - `previewUrl` — null if Spotify never had a preview (the row's
+   *     play button stays disabled with a "no preview available"
+   *     tooltip per the Phase-9 spec).
+   *   - `spotifyTrackId` — null until the song-resolution path has
+   *     cached one; Premium users use this to call Web Playback SDK.
+   */
+  trackPreviewsForShow: protectedProcedure
+    .input(z.object({ showId: z.string().uuid() }))
+    .query(async ({ ctx, input }): Promise<{
+      previews: Record<
+        string,
+        { previewUrl: string | null; spotifyTrackId: string | null }
+      >;
+    }> => {
+      const userId = ctx.session.user.id;
+      const show = await ctx.db.query.shows.findFirst({
+        where: and(eq(shows.id, input.showId), eq(shows.userId, userId)),
+        with: { showPerformers: { with: { performer: true } } },
+      });
+      if (!show) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+      }
+      const headlinerId = getHeadlinerId(show as ShowLike);
+      if (!headlinerId) return { previews: {} };
+
+      const rows = await ctx.db
+        .select({
+          title: songs.title,
+          previewUrl: songs.spotifyPreviewUrl,
+          spotifyTrackId: songs.spotifyTrackId,
+        })
+        .from(songs)
+        .where(eq(songs.performerId, headlinerId));
+
+      const previews: Record<
+        string,
+        { previewUrl: string | null; spotifyTrackId: string | null }
+      > = {};
+      for (const row of rows) {
+        const trackId =
+          row.spotifyTrackId && row.spotifyTrackId !== '__none__'
+            ? row.spotifyTrackId
+            : null;
+        previews[row.title.toLowerCase()] = {
+          previewUrl: row.previewUrl ?? null,
+          spotifyTrackId: trackId,
+        };
+      }
+      return { previews };
+    }),
+
+  /**
+   * Lazy-resolve a single setlist row's Spotify preview + URI on
+   * tap. Persists the result to `songs.spotify_preview_url` /
+   * `songs.spotify_track_id` so future visits skip the search. The
+   * sentinel `__none__` value on `spotify_track_id` is preserved
+   * from the Phase-3 resolver — re-tapping a known-miss returns
+   * `{ previewUrl: null, spotifyTrackId: null }` without re-searching.
+   */
+  resolveTrackPreview: protectedProcedure
+    .input(
+      z.object({
+        showId: z.string().uuid(),
+        title: z.string().min(1).max(300),
+      }),
+    )
+    .mutation(async ({ ctx, input }): Promise<{
+      previewUrl: string | null;
+      spotifyTrackId: string | null;
+    }> => {
+      const userId = ctx.session.user.id;
+      enforceRateLimit(`setlist-intel.resolve-preview:${userId}`, {
+        max: 60,
+        windowMs: 60_000,
+      });
+      const accessToken = await ensureFreshUserToken(userId);
+      if (!accessToken) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'spotify_not_connected',
+        });
+      }
+      const show = await ctx.db.query.shows.findFirst({
+        where: and(eq(shows.id, input.showId), eq(shows.userId, userId)),
+        with: { showPerformers: { with: { performer: true } } },
+      });
+      if (!show) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+      }
+      const headlinerId = getHeadlinerId(show as ShowLike);
+      if (!headlinerId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'no_headliner',
+        });
+      }
+      const headlinerName =
+        show.showPerformers.find((sp) => sp.performer.id === headlinerId)
+          ?.performer.name ?? '';
+
+      // Catalog cache first — re-tapping a row should never hit Spotify.
+      const titleLower = input.title.toLowerCase();
+      const [cached] = await ctx.db
+        .select({
+          id: songs.id,
+          previewUrl: songs.spotifyPreviewUrl,
+          spotifyTrackId: songs.spotifyTrackId,
+        })
+        .from(songs)
+        .where(
+          and(
+            eq(songs.performerId, headlinerId),
+            sql`LOWER(${songs.title}) = ${titleLower}`,
+          ),
+        )
+        .limit(1);
+      if (cached?.previewUrl || cached?.spotifyTrackId === '__none__') {
+        return {
+          previewUrl: cached.previewUrl ?? null,
+          spotifyTrackId:
+            cached.spotifyTrackId && cached.spotifyTrackId !== '__none__'
+              ? cached.spotifyTrackId
+              : null,
+        };
+      }
+
+      let track;
+      try {
+        track = await searchTrack(accessToken, headlinerName, input.title);
+      } catch (err) {
+        log.warn(
+          {
+            err,
+            event: 'spotify.preview.unavailable',
+            userId,
+            showId: input.showId,
+            title: input.title,
+          },
+          'Track preview lookup failed',
+        );
+        return { previewUrl: null, spotifyTrackId: null };
+      }
+
+      if (!track) {
+        // Cache the negative as `__none__` so re-taps don't re-search.
+        if (cached) {
+          await ctx.db
+            .update(songs)
+            .set({ spotifyTrackId: '__none__' })
+            .where(eq(songs.id, cached.id));
+        }
+        log.info(
+          {
+            event: 'spotify.preview.unavailable',
+            userId,
+            title: input.title,
+            reason: 'not_found',
+          },
+          'No Spotify match for track',
+        );
+        return { previewUrl: null, spotifyTrackId: null };
+      }
+
+      // Persist the catalog row. We upsert by (performerId, lower(title))
+      // to interoperate with the song-index-rebuild job, which is the
+      // authoritative writer for everything else on the songs row.
+      if (cached) {
+        await ctx.db
+          .update(songs)
+          .set({
+            spotifyTrackId: track.id,
+            spotifyPreviewUrl: track.previewUrl,
+            durationMs: track.durationMs,
+          })
+          .where(eq(songs.id, cached.id));
+      } else {
+        await ctx.db
+          .insert(songs)
+          .values({
+            performerId: headlinerId,
+            title: input.title,
+            spotifyTrackId: track.id,
+            spotifyPreviewUrl: track.previewUrl,
+            durationMs: track.durationMs,
+          })
+          .onConflictDoNothing();
+      }
+
+      log.info(
+        {
+          event: 'spotify.preview.resolved',
+          userId,
+          title: input.title,
+          hasPreview: !!track.previewUrl,
+        },
+        'Track preview resolved',
+      );
+
+      return {
+        previewUrl: track.previewUrl,
+        spotifyTrackId: track.id,
+      };
     }),
 });
 

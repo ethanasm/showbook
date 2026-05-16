@@ -316,6 +316,12 @@ export interface SpotifyTrack {
   name: string;
   artists: string[];
   durationMs: number;
+  /**
+   * 30-second preview clip URL. Often null since Spotify started
+   * thinning these in 2024 — callers must treat absence as graceful
+   * degradation (hide the play button on the row).
+   */
+  previewUrl: string | null;
 }
 
 interface SpotifyTrackRaw {
@@ -324,6 +330,7 @@ interface SpotifyTrackRaw {
   name: string;
   artists: Array<{ name: string }>;
   duration_ms: number;
+  preview_url?: string | null;
 }
 
 interface SpotifyTrackSearchResponse {
@@ -367,6 +374,7 @@ export async function searchTrack(
     name: top.name,
     artists: top.artists.map((a) => a.name),
     durationMs: top.duration_ms,
+    previewUrl: top.preview_url ?? null,
   };
 }
 

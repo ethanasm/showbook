@@ -18,4 +18,5 @@ export * from './prediction-cache';
 export * from './prediction-eval-runs';
 export * from './prediction-snapshots';
 export * from './user-spotify-tokens';
+export * from './user-spotify-skipped-artists';
 export * from './show-spotify-playlists';

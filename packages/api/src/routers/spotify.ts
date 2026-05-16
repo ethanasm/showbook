@@ -28,6 +28,7 @@ import { users } from '@showbook/db';
 import { router, protectedProcedure } from '../trpc';
 import {
   disconnectSpotify,
+  ensureFreshUserToken,
   getConnectionStatus,
 } from '../spotify-tokens';
 import {
@@ -87,6 +88,29 @@ export const spotifyRouter = router({
    */
   connectionStatus: protectedProcedure.query(async ({ ctx }) => {
     return getConnectionStatus(ctx.session.user.id);
+  }),
+
+  /**
+   * Phase 9 — return a fresh Spotify access token for the Web
+   * Playback SDK (Premium-only). The SDK runs in the browser and
+   * cannot use the server-side encrypted refresh token directly; it
+   * needs a bearer access token to instantiate. Tokens are
+   * short-lived (~1h) and Premium-gated server-side so a non-
+   * Premium user can't accidentally request one.
+   *
+   * Returns `null` when the user isn't connected or isn't on
+   * Premium — the client renders the preview-only experience in
+   * that case.
+   */
+  playbackToken: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const status = await getConnectionStatus(userId);
+    if (!status.connected || status.product !== 'premium') {
+      return null;
+    }
+    const accessToken = await ensureFreshUserToken(userId);
+    if (!accessToken) return null;
+    return { accessToken };
   }),
 
   /**

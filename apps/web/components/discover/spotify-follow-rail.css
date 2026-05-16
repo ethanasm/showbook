@@ -1,0 +1,157 @@
+/* Phase 9 — Spotify-follow rail on Discover Artists tab.
+   Horizontally-scrolling row of cards above the existing tab body. */
+
+.spotify-follow-rail {
+  padding: 16px var(--page-pad-x) 20px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.spotify-follow-rail__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.spotify-follow-rail__kicker {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  color: var(--faint);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.spotify-follow-rail__hint {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  margin-top: 4px;
+  letter-spacing: 0.02em;
+}
+
+.spotify-follow-rail__follow-all {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+  color: var(--ink);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.spotify-follow-rail__follow-all:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.spotify-follow-rail__scroller {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 180px;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.spotify-follow-rail__card {
+  position: relative;
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.spotify-follow-rail__skip {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.spotify-follow-rail__skip:hover {
+  color: var(--ink);
+}
+
+.spotify-follow-rail__avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--surface), var(--surface2));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 18px;
+}
+
+.spotify-follow-rail__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.spotify-follow-rail__name {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 13.5px;
+  color: var(--ink);
+  font-weight: 500;
+  letter-spacing: -0.1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spotify-follow-rail__genre {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  color: var(--faint);
+  letter-spacing: 0.04em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spotify-follow-rail__follow {
+  margin-top: auto;
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+  color: var(--ink);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: center;
+}
+
+.spotify-follow-rail__follow:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.spotify-follow-rail__follow:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}

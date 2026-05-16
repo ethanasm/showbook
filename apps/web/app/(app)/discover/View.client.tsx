@@ -30,6 +30,7 @@ import { VenueSearchModal } from "@/components/VenueSearchModal";
 import { RegionSearchModal } from "@/components/RegionSearchModal";
 import { SpotifyImportModal } from "@/components/preferences/SpotifyImportModal";
 import { FollowArtistSearch } from "@/components/discover/FollowArtistSearch";
+import { SpotifyFollowRail } from "@/components/discover/SpotifyFollowRail";
 import "./discover.css";
 
 type DiscoverKind = ShowKind | "sports" | "film" | "unknown";
@@ -1821,19 +1822,22 @@ export default function DiscoverView() {
       )}
 
       {activeTab === "Artists" && (
-        <FeedSection
-          items={artistItems}
-          isLoading={followedArtistsFeed.isLoading}
-          emptyMessage="No upcoming shows from artists you follow yet. Follow an artist on their detail page to see their upcoming tour dates here."
-          watchedIds={watchedIds}
-          onToggleWatch={handleToggleWatch}
-          activeTab={activeTab}
-          onVenueFollowed={handleVenueFollowed}
-          groupBy="artist"
-          allFollowedArtists={followedArtistsList.data}
-          pendingIngestPerformerIds={pendingIngest.performerIds}
-          onSpotifyImported={handleSpotifyImported}
-        />
+        <>
+          <SpotifyFollowRail />
+          <FeedSection
+            items={artistItems}
+            isLoading={followedArtistsFeed.isLoading}
+            emptyMessage="No upcoming shows from artists you follow yet. Follow an artist on their detail page to see their upcoming tour dates here."
+            watchedIds={watchedIds}
+            onToggleWatch={handleToggleWatch}
+            activeTab={activeTab}
+            onVenueFollowed={handleVenueFollowed}
+            groupBy="artist"
+            allFollowedArtists={followedArtistsList.data}
+            pendingIngestPerformerIds={pendingIngest.performerIds}
+            onSpotifyImported={handleSpotifyImported}
+          />
+        </>
       )}
 
       {activeTab === "Near You" && (

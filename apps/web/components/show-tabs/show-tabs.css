@@ -237,6 +237,82 @@
   /* Empty slot. Phase 9 fills it with a real TrackPreview button. */
 }
 
+/* Phase 9 ▶ button. Same outer footprint as the empty slot above so
+   toggling the SetlistIntelPreviews flag never shifts the row grid. */
+.track-preview {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid var(--rule-strong);
+  background: transparent;
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 120ms, color 120ms;
+}
+
+.track-preview:hover:not(:disabled):not(.track-preview--active) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.track-preview--active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.track-preview--unavailable {
+  cursor: not-allowed;
+  color: var(--faint);
+  border-color: var(--rule);
+}
+
+.track-preview:disabled {
+  cursor: progress;
+}
+
+.track-preview__waveform {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 1.5px;
+  height: 9px;
+}
+
+.track-preview__bar {
+  width: 1.5px;
+  background: var(--accent);
+  transform-origin: bottom;
+  animation: track-preview-bar 1s infinite;
+}
+
+.track-preview__bar--1 {
+  height: 6px;
+}
+
+.track-preview__bar--2 {
+  height: 9px;
+  animation-delay: 0.2s;
+}
+
+.track-preview__bar--3 {
+  height: 5px;
+  animation-delay: 0.4s;
+}
+
+@keyframes track-preview-bar {
+  0%,
+  100% {
+    transform: scaleY(0.45);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
 .predicted-row__title {
   font-family: var(--font-geist-sans), sans-serif;
   font-size: 14px;
