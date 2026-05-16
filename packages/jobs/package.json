@@ -6,6 +6,7 @@
   "types": "src/index.ts",
   "scripts": {
     "run-daily-digest": "tsx scripts/run-daily-digest.ts",
+    "backfill-song-index": "tsx scripts/backfill-song-index.ts",
     "email:smoke": "tsx scripts/email-smoke.ts",
     "bootstrap-pgboss": "node scripts/bootstrap-pgboss.mjs",
     "test": "find src/__tests__ -name '*.test.ts' -not -name '*.integration.test.ts' -print0 | xargs -0 node --import tsx --test --experimental-test-module-mocks",

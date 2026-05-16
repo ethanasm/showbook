@@ -682,6 +682,26 @@ export const showsRouter = router({
       });
     }),
 
+  setNotes: protectedProcedure
+    .input(
+      z.object({
+        showId: z.string().uuid(),
+        notes: z.string().max(5000).nullable(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const [updated] = await ctx.db
+        .update(shows)
+        .set({ notes: input.notes, updatedAt: new Date() })
+        .where(and(eq(shows.id, input.showId), eq(shows.userId, userId)))
+        .returning({ id: shows.id, notes: shows.notes });
+      if (!updated) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+      }
+      return updated;
+    }),
+
   setTicketUrl: protectedProcedure
     .input(
       z.object({

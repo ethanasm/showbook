@@ -5,7 +5,7 @@ async function loginAndSeed(page: Page) {
   await loginAndSeedAsWorker(page);
 }
 
-async function gotoRadioheadMSG(page: Page): Promise<string> {
+async function gotoRadioheadMSG(page: Page, tab?: string): Promise<string> {
   // Look up the show id directly so we don't depend on shows-page pagination.
   const id = await workerShowId(page, {
     headliner: 'Radiohead',
@@ -13,8 +13,12 @@ async function gotoRadioheadMSG(page: Page): Promise<string> {
     state: 'past',
   });
   if (!id) throw new Error('Radiohead @ MSG show not seeded');
-  await page.goto(`/shows/${id}`);
+  const url = tab ? `/shows/${id}?tab=${tab}` : `/shows/${id}`;
+  await page.goto(url);
   await page.locator('text=Loading show…').waitFor({ state: 'detached', timeout: 15000 });
+  // Wait for the 4-tab shell to render so subsequent locator calls
+  // aren't racing the initial paint.
+  await expect(page.getByTestId('show-tab-bar')).toBeVisible({ timeout: 15000 });
   return id;
 }
 
@@ -28,7 +32,7 @@ test.describe('Show detail page', () => {
 
     // Hero shows headliner.
     await expect(page.locator('h1')).toContainText('Radiohead');
-    // Venue stat is linked.
+    // Venue stat in the Overview tab links to /venues/<id>.
     const venueLink = page.getByRole('link', { name: /Madison Square Garden/i });
     await expect(venueLink).toBeVisible();
 
@@ -38,21 +42,22 @@ test.describe('Show detail page', () => {
     });
   });
 
-  test('renders setlist when present', async ({ page }) => {
-    await gotoRadioheadMSG(page);
+  test('renders the actual setlist on the Setlist tab when present', async ({ page }) => {
+    await gotoRadioheadMSG(page, 'setlist');
 
-    // The Radiohead seeded concert has a 10-song setlist. Scope to the
-    // setlist section — "Videotape" also appears in the seeded notes
-    // ("Thom dedicated Videotape to the crowd"), which would otherwise
-    // trip strict-mode.
-    const setlist = page.getByTestId('setlist-section');
-    await expect(setlist.getByText(/Setlist · 10 songs/i)).toBeVisible();
+    // Banner shows the song count for the seeded 10-song setlist.
+    const banner = page.getByTestId('setlist-actual-banner');
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText('10');
+
+    // Each seeded song title surfaces inside the actual-setlist grid.
+    const setlist = page.getByTestId('actual-setlist-grid');
     for (const song of ['15 Step', 'Bodysnatchers', 'Videotape']) {
-      await expect(setlist.getByText(song)).toBeVisible();
+      await expect(setlist.getByText(song, { exact: false })).toBeVisible();
     }
   });
 
-  test('hides the setlist section when not present', async ({ page }) => {
+  test('shows the empty Setlist-tab state when no actual setlist is seeded', async ({ page }) => {
     // LCD Soundsystem at Brooklyn Steel does NOT have a seeded setlist.
     const id = await workerShowId(page, {
       headliner: 'LCD Soundsystem',
@@ -60,12 +65,16 @@ test.describe('Show detail page', () => {
       state: 'past',
     });
     if (!id) throw new Error('LCD @ Brooklyn Steel show not seeded');
-    await page.goto(`/shows/${id}`);
+    await page.goto(`/shows/${id}?tab=setlist`);
     await page.locator('text=Loading show…').waitFor({ state: 'detached', timeout: 15000 });
-    await expect(page.getByText(/^Setlist ·/i)).toHaveCount(0);
+    await expect(page.getByTestId('setlist-tab-past-empty')).toBeVisible({
+      timeout: 15000,
+    });
+    // No actual-setlist-grid renders in the empty state.
+    await expect(page.getByTestId('actual-setlist-grid')).toHaveCount(0);
   });
 
-  test('headliner link navigates to /artists/[id]', async ({ page }) => {
+  test('headliner link in the Overview lineup navigates to /artists/[id]', async ({ page }) => {
     await gotoRadioheadMSG(page);
 
     await page.getByRole('link', { name: 'Radiohead' }).first().click();
@@ -84,40 +93,33 @@ test.describe('Show detail page', () => {
   test('Edit button routes to /add?editId=', async ({ page }) => {
     await gotoRadioheadMSG(page);
 
-    // Several "Edit" buttons live on this page now (lineup, setlist,
-    // actions); pick the actions one explicitly.
     await page.getByTestId('action-edit-show').click();
     await page.waitForURL(/\/add\?editId=[0-9a-f-]+/);
   });
 
-  test('marking the last song as encore round-trips through save', async ({ page }) => {
+  test('tab navigation crossfades between Overview / Setlist / Media / Notes', async ({ page }) => {
     await gotoRadioheadMSG(page);
 
-    // Enter edit mode on the setlist section.
-    await page.getByTestId('setlist-edit-toggle').click();
-    const editor = page.getByTestId('setlist-editor-radiohead');
-    await expect(editor).toBeVisible();
+    // Default tab is Overview.
+    await expect(page.getByTestId('show-tab-panel-overview')).toBeVisible();
 
-    // No encore yet.
-    await expect(editor.getByTestId('setlist-encore-divider')).toHaveCount(0);
+    // Click each non-default tab and verify its panel renders.
+    await page.getByTestId('show-tab-setlist').click();
+    await expect(page.getByTestId('show-tab-panel-setlist')).toBeVisible();
+    await expect(page).toHaveURL(/[?&]tab=setlist/);
 
-    // Mark the last seeded song ("Videotape") as the encore.
-    await editor.getByTestId('setlist-mark-last-as-encore').click();
-    await expect(editor.getByTestId('setlist-encore-divider')).toBeVisible();
+    await page.getByTestId('show-tab-media').click();
+    await expect(page.getByTestId('show-tab-panel-media')).toBeVisible();
+    await expect(page).toHaveURL(/[?&]tab=media/);
 
-    // Save and re-render in view mode.
-    await editor.getByTestId('setlist-save').click();
-    await page.getByTestId('setlist-edit-toggle').click(); // exit edit
-    const setlist = page.getByTestId('setlist-section');
-    await expect(setlist.getByTestId('setlist-encore-marker')).toBeVisible();
-    // The encore section now contains the last song.
-    await expect(
-      setlist.getByTestId('setlist-section-encore').getByText('Videotape'),
-    ).toBeVisible();
-    // And the main set keeps the rest.
-    await expect(
-      setlist.getByTestId('setlist-section-main').getByText('15 Step'),
-    ).toBeVisible();
+    await page.getByTestId('show-tab-notes').click();
+    await expect(page.getByTestId('show-tab-panel-notes')).toBeVisible();
+    await expect(page).toHaveURL(/[?&]tab=notes/);
+
+    // Back to Overview drops the `tab` param (Overview is the URL default).
+    await page.getByTestId('show-tab-overview').click();
+    await expect(page.getByTestId('show-tab-panel-overview')).toBeVisible();
+    await expect(page).not.toHaveURL(/[?&]tab=/);
   });
 });
 

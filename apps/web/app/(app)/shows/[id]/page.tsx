@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
+import { ShowDetailTabsView } from "@/components/show-tabs";
 import {
   MapPin,
   MoreHorizontal,
@@ -33,6 +34,7 @@ import {
   normalizePerformerSetlistsMap,
   setlistTotalSongs,
   singleMainSet,
+  isFeatureOn,
   type PerformerSetlist,
   type PerformerSetlistsMap,
 } from "@showbook/shared";
@@ -63,6 +65,10 @@ export default function ShowDetailPage() {
     { showId },
     { enabled: Boolean(showId) },
   );
+  // SetlistIntelShowTabs gate — when ON the page swaps to the new 4-tab
+  // layout. Falls back to the legacy vertical stack when the flag is OFF
+  // so a regression can be rolled back without re-deploying.
+  const useTabsLayout = isFeatureOn("SetlistIntelShowTabs");
 
   const updateState = trpc.shows.updateState.useMutation({
     onSuccess: () => {
@@ -113,6 +119,14 @@ export default function ShowDetailPage() {
   }
 
   const show = detailQuery.data;
+
+  // New 4-tab layout (gated by SetlistIntelShowTabs feature flag).
+  // Renders against the same `shows.detail` payload as the legacy
+  // layout below.
+  if (useTabsLayout) {
+    return <ShowDetailTabsView show={show as Parameters<typeof ShowDetailTabsView>[0]["show"]} />;
+  }
+
   const KindIcon = KIND_ICONS[show.kind as ShowKind];
   const days = daysUntil(show.date);
   const lastDay = show.endDate ?? show.date;

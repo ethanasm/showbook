@@ -14,6 +14,13 @@ import { runBackfillVenuePhotos } from './backfill-venue-photos';
 import { runBackfillShowCoverImages } from './backfill-show-cover-images';
 import { runPruneOrphanCatalog } from './prune-orphan-catalog';
 import { runHealthCheck } from './health-check';
+import {
+  performersWithUpcomingWatchingShows,
+  runSetlistCorpusFill,
+  topFollowedPerformers,
+  type CorpusFillMode,
+} from './setlist-corpus-fill';
+import { runSongIndexRebuild } from './song-index-rebuild';
 // @showbook/scrapers pulls in Playwright, which the Next.js dev server
 // tries to bundle. Import it lazily inside the handler so it stays out of
 // the web app's static dependency graph.
@@ -32,6 +39,9 @@ export const JOBS = {
   BACKFILL_SHOW_COVER_IMAGES: 'backfill/show-cover-images',
   PRUNE_ORPHAN_CATALOG: 'prune/orphan-catalog',
   HEALTH_CHECK: 'health/morning-check',
+  SETLIST_CORPUS_FILL: 'enrichment/setlist-corpus-fill',
+  SETLIST_CORPUS_FILL_REFRESH: 'enrichment/setlist-corpus-fill-refresh',
+  SONG_INDEX_REBUILD: 'enrichment/song-index-rebuild',
 } as const;
 
 // pg-boss v10 ignores constructor-level retry/expiration options when
@@ -82,6 +92,12 @@ const QUEUE_OPTIONS: Record<string, QueueOptions> = {
   'backfill/show-cover-images': LONG_BATCH,
   'prune/orphan-catalog': LONG_BATCH,
   'health/morning-check': LONG_BATCH,
+  // Per-performer corpus fill is user-triggered (follow / show-detail
+  // open) so fast turnaround matters. The daily refresh cron schedules
+  // through a separate queue with the LONG_BATCH profile.
+  'enrichment/setlist-corpus-fill': FAST_INGEST,
+  'enrichment/setlist-corpus-fill-refresh': LONG_BATCH,
+  'enrichment/song-index-rebuild': LONG_BATCH,
 };
 
 const log = child({ component: 'jobs.registry' });
@@ -352,6 +368,96 @@ async function healthCheckHandler(jobs: PgBoss.Job[]) {
   }
 }
 
+async function setlistCorpusFillHandler(
+  jobs: PgBoss.Job<{ performerId: string; mode: CorpusFillMode }>[],
+) {
+  for (const job of jobs) {
+    if (!job.data?.performerId) continue;
+    await runJob(JOBS.SETLIST_CORPUS_FILL, job, async () => {
+      const result = await runSetlistCorpusFill({
+        performerId: job.data.performerId,
+        mode: job.data.mode ?? 'predict',
+      });
+      // Chain a performer-scoped song-index rebuild so the freshly
+      // ingested corpus is queryable for the algorithm. Inline-await
+      // rather than enqueue: the index rebuild for a single performer is
+      // fast and the caller (the show-detail page open / follow flow)
+      // wants the data ready by the next read.
+      if (result.fetched > 0) {
+        await runSongIndexRebuild({ performerId: job.data.performerId });
+      }
+      return result;
+    });
+  }
+}
+
+async function setlistCorpusFillRefreshHandler(jobs: PgBoss.Job[]) {
+  for (const job of jobs) {
+    await runJob(JOBS.SETLIST_CORPUS_FILL_REFRESH, job, async () => {
+      // Two pools: the top-N followed performers (steady-state coverage)
+      // and any performer with a `watching` or `ticketed` show in the
+      // next 30 days (so a show-detail open inside that window finds a
+      // warm corpus). Union and dedupe.
+      const [followed, upcoming] = await Promise.all([
+        topFollowedPerformers(500),
+        performersWithUpcomingWatchingShows(30),
+      ]);
+      const queue = Array.from(new Set([...followed, ...upcoming]));
+      let processed = 0;
+      let failed = 0;
+      for (const performerId of queue) {
+        try {
+          await runSetlistCorpusFill({ performerId, mode: 'refresh' });
+          processed += 1;
+        } catch (err) {
+          // One bad performer shouldn't kill the whole cron; the job
+          // wrapper already records the per-performer failure via
+          // `setlist.corpus_fill.failed`.
+          log.error(
+            { event: 'setlist.corpus_fill.refresh.entry_failed', err, performerId },
+            'corpus-fill refresh entry failed',
+          );
+          failed += 1;
+        }
+      }
+      // Single matview refresh at the end of the cron (each per-performer
+      // rebuild skipped it via skipMatviewRefresh).
+      try {
+        await runSongIndexRebuild({});
+      } catch (err) {
+        log.error(
+          { event: 'setlist.corpus_fill.refresh.indexer_failed', err },
+          'corpus-fill refresh indexer failed',
+        );
+      }
+      log.info(
+        {
+          event: 'setlist.corpus_fill.refresh.summary',
+          processed,
+          failed,
+          total: queue.length,
+        },
+        'corpus-fill daily refresh complete',
+      );
+      return { processed, failed, total: queue.length };
+    });
+  }
+}
+
+async function songIndexRebuildHandler(
+  jobs: PgBoss.Job<{
+    performerId?: string;
+    showIds?: string[];
+    tourSetlistIds?: string[];
+  }>[],
+) {
+  for (const job of jobs) {
+    await runJob(JOBS.SONG_INDEX_REBUILD, job, async () => {
+      return runSongIndexRebuild(job.data ?? {});
+    });
+  }
+}
+
 async function notificationsDailyDigestHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
     await runJob(JOBS.NOTIFICATIONS_DAILY_DIGEST, job, async () => {
@@ -421,6 +527,9 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   await boss.work(JOBS.BACKFILL_SHOW_COVER_IMAGES, backfillShowCoverImagesHandler);
   await boss.work(JOBS.PRUNE_ORPHAN_CATALOG, pruneOrphanCatalogHandler);
   await boss.work(JOBS.HEALTH_CHECK, healthCheckHandler);
+  await boss.work(JOBS.SETLIST_CORPUS_FILL, setlistCorpusFillHandler);
+  await boss.work(JOBS.SETLIST_CORPUS_FILL_REFRESH, setlistCorpusFillRefreshHandler);
+  await boss.work(JOBS.SONG_INDEX_REBUILD, songIndexRebuildHandler);
 
   // Backstop sweep for the orphan-cleanup triggers (0002 / 0014 / 0023 /
   // 0025). Runs before shows-nightly so the nightly transition operates on
@@ -439,6 +548,15 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   // events are reliable signal, and lands one hour ahead of the digest
   // so the operator can intervene before users see the consequences.
   await boss.schedule(JOBS.HEALTH_CHECK, '0 7 * * *', {}, { tz: 'America/New_York' });
+  // Daily corpus refresh at 04:45 ET — late enough that the prior
+  // night's setlists are likely on setlist.fm, early enough to be done
+  // before the 05:30 backfill jobs need stable performer rows.
+  await boss.schedule(
+    JOBS.SETLIST_CORPUS_FILL_REFRESH,
+    '45 4 * * *',
+    {},
+    { tz: 'America/New_York' },
+  );
   await boss.schedule(JOBS.NOTIFICATIONS_DAILY_DIGEST, '0 8 * * *', {}, { tz: 'America/New_York' });
 
   log.info(

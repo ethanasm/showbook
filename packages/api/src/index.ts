@@ -1,7 +1,14 @@
 export { appRouter, type AppRouter } from './root';
 export { createContext, type Session } from './trpc';
-export { searchArtist, searchSetlist, getUserAttended, SetlistFmError } from './setlistfm';
-export type { ArtistSearchResult, SetlistResult, AttendedSetlist, AttendedPage } from './setlistfm';
+export { searchArtist, searchSetlist, getUserAttended, fetchArtistSetlists, SetlistFmError } from './setlistfm';
+export type {
+  ArtistSearchResult,
+  SetlistResult,
+  AttendedSetlist,
+  AttendedPage,
+  ArtistSetlistEntry,
+  FetchArtistSetlistsOptions,
+} from './setlistfm';
 
 // Data-source clients & matchers
 export {
@@ -87,3 +94,25 @@ export {
   type ShowLike,
   type ShowPerformerLike,
 } from '@showbook/shared';
+
+// Setlist intelligence — Phase 1 (predict + corpus types)
+export {
+  predictSetlist,
+  predictedSetlistCached,
+  loadCorpusForPrediction,
+  coldPrediction,
+  bucketTiers,
+  aggregate,
+  pickActiveTour,
+  pickRole,
+  bucketByProbability,
+  computeConfidence,
+  type PredictedSetlistResult,
+  type PredictedSong,
+  type HotPrediction,
+  type ColdPrediction,
+  type ColdReason,
+  type SongRole,
+  type TourCoverage,
+  type CorpusRow,
+} from './setlist-predict';

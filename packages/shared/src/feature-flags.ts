@@ -35,6 +35,16 @@ export const FeatureFlag = {
       'connects; flipped ON via PR if the probe returns 200.',
     state: 'OFF',
   },
+  SetlistIntelShowTabs: {
+    description:
+      'Phase 1 (setlist-intelligence) show-page redesign. Replaces the ' +
+      'legacy vertical-stack /(app)/shows/[id]/ layout with the 4-tab ' +
+      '(Overview / Setlist / Media / Notes) shell from the 2026-05-16 ' +
+      'design handoff. Flip back to OFF if the tab system causes a ' +
+      "regression we can't fix in-place; the legacy page renders " +
+      'against the same `shows.detail` payload.',
+    state: 'ON',
+  },
 } as const satisfies Record<string, { description: string; state: 'ON' | 'OFF' }>;
 
 export type FeatureFlagKey = keyof typeof FeatureFlag;

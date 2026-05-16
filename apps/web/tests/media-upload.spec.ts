@@ -14,7 +14,10 @@ async function gotoRadioheadMSG(page: Page): Promise<string> {
     state: 'past',
   });
   if (!id) throw new Error('Radiohead @ MSG show not seeded');
-  await page.goto(`/shows/${id}`);
+  // Land on the Media tab directly so the existing <MediaSection>
+  // (`data-testid="media-section"`) is mounted. The 4-tab show page
+  // defaults to Overview otherwise.
+  await page.goto(`/shows/${id}?tab=media`);
   await page.locator('text=Loading show…').waitFor({ state: 'detached', timeout: 120000 });
   await expect(page.getByTestId('media-section')).toBeVisible({ timeout: 120000 });
   return id;
