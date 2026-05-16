@@ -38,17 +38,31 @@ export async function exchangeGoogleIdTokenForSession(args: {
   fetchImpl?: typeof fetch;
 }): Promise<SessionData> {
   const { idToken, apiUrl, fetchImpl = fetch } = args;
-  const endpoint = mobileTokenEndpoint(apiUrl);
+  const endpoints = mobileTokenEndpointCandidates(apiUrl);
   let res: Response;
-  try {
-    res = await fetchImpl(endpoint, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ idToken }),
-    });
-  } catch (err) {
-    throw new Error(apiUnreachableErrorMessage(err));
+  let lastNetworkError: unknown;
+  let lastEndpoint = '';
+  const init: RequestInit = {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ idToken }),
+  };
+
+  for (const endpoint of endpoints) {
+    lastEndpoint = endpoint;
+    try {
+      res = await fetchImpl(endpoint, init);
+      return await sessionFromMobileTokenResponse(res);
+    } catch (err) {
+      if (!isNetworkError(err)) throw err;
+      lastNetworkError = err;
+    }
   }
+
+  throw new Error(apiUnreachableErrorMessage(lastNetworkError, lastEndpoint));
+}
+
+async function sessionFromMobileTokenResponse(res: Response): Promise<SessionData> {
   if (res.status === 401) throw new Error('invalid_google_token');
   if (res.status === 403) throw new Error('access_denied');
   if (res.status === 429) throw new Error('rate_limited');
@@ -64,6 +78,46 @@ export async function exchangeGoogleIdTokenForSession(args: {
     throw new Error('invalid_response');
   }
   return data;
+}
+
+function isNetworkError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  return err.message.startsWith('api_unreachable:') || /network|fetch|request|connection|certificate|ssl|tls/i.test(err.message);
+}
+
+export function mobileTokenEndpointCandidates(apiUrl: string): string[] {
+  const primary = mobileTokenEndpoint(apiUrl);
+  const url = new URL(primary);
+  const isLocalhost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+  if (!isLocalhost) return [primary];
+
+  const candidates = [primary];
+  const add = (protocol: 'http:' | 'https:', hostname: string) => {
+    const next = new URL(primary);
+    next.protocol = protocol;
+    next.hostname = hostname;
+    const value = next.toString();
+    if (!candidates.includes(value)) candidates.push(value);
+  };
+
+  add(url.protocol as 'http:' | 'https:', url.hostname === 'localhost' ? '127.0.0.1' : 'localhost');
+  add('http:', 'localhost');
+  add('http:', '127.0.0.1');
+  return candidates;
+}
+
+function apiUnreachableErrorMessage(err: unknown, endpoint?: string): string {
+  const raw =
+    err instanceof Error
+      ? err.message
+      : typeof err === 'string'
+        ? err
+        : 'request failed';
+  const detail = raw.replace(/\s+/g, ' ').slice(0, 140);
+  if (endpoint) {
+    return `api_unreachable:${detail || 'request failed'} (${endpoint})`;
+  }
+  return detail ? `api_unreachable:${detail}` : 'api_unreachable';
 }
 
 /**
@@ -95,7 +149,7 @@ export function describeSignInError(err: unknown): string {
         if (err.message.startsWith('api_unreachable:')) {
           const detail = err.message.slice('api_unreachable:'.length);
           if (/network request failed/i.test(detail)) {
-            return 'Showbook is not reachable. Native fetch failed: Network request failed. If the web app is running, trust the localhost HTTPS cert in the iOS simulator.';
+            return 'Showbook is not reachable. Native fetch failed: Network request failed. If the web app is running, trust the mkcert root CA in the iOS simulator.';
           }
           return `Showbook is not reachable. Native fetch failed: ${detail}`;
         }
@@ -108,17 +162,6 @@ export function describeSignInError(err: unknown): string {
     }
   }
   return "We couldn't sign you in. Please check your connection and try again.";
-}
-
-function apiUnreachableErrorMessage(err: unknown): string {
-  const raw =
-    err instanceof Error
-      ? err.message
-      : typeof err === 'string'
-        ? err
-        : 'request failed';
-  const detail = raw.replace(/\s+/g, ' ').slice(0, 180);
-  return detail ? `api_unreachable:${detail}` : 'api_unreachable';
 }
 
 /**

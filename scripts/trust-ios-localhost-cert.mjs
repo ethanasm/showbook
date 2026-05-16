@@ -8,9 +8,19 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
 
+function mkcertRootCandidate() {
+  const result = spawnSync('mkcert', ['-CAROOT'], { encoding: 'utf8' });
+  if (result.status !== 0) return null;
+  const caroot = result.stdout.trim();
+  return caroot ? path.join(caroot, 'rootCA.pem') : null;
+}
+
 const explicit = process.env.LOCALHOST_CERT_PATH;
 const candidates = [
   explicit,
+  process.env.MKCERT_ROOT_CA,
+  mkcertRootCandidate(),
+  path.join(os.homedir(), 'Library/Application Support/mkcert/rootCA.pem'),
   'certs/localhost-cert.pem',
   'certs/localhost.pem',
   'certs/localhost.crt',
@@ -29,8 +39,8 @@ const certPath = candidates
 
 if (!certPath) {
   console.warn(
-    '[mobile] No localhost cert found to trust in the iOS simulator. ' +
-      'Set LOCALHOST_CERT_PATH=/absolute/path/to/localhost-cert.pem if native fetch fails for https://localhost:3001.',
+    '[mobile] No local HTTPS root cert found to trust in the iOS simulator. ' +
+      'Set MKCERT_ROOT_CA=/absolute/path/to/rootCA.pem or LOCALHOST_CERT_PATH=/absolute/path/to/rootCA.pem if native fetch fails for https://localhost:3001.',
   );
   process.exit(0);
 }

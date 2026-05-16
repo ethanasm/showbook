@@ -81,12 +81,12 @@ server using the trusted local cert. If this native config changes,
 rebuild the development client with `pnpm mobile:ios`; Metro reloads
 alone will not update `Info.plist`.
 
-`pnpm mobile:ios` attempts to install a local HTTPS cert into the
-booted iOS simulator when it finds one under `certs/`, `certificates/`,
-or `.cert/`. If your cert lives elsewhere, run:
+`pnpm mobile:ios` attempts to install the mkcert root CA, or a local
+HTTPS root cert, into the booted iOS simulator. If your cert lives
+outside the common mkcert path, run:
 
 ```bash
-LOCALHOST_CERT_PATH=/absolute/path/to/localhost-cert.pem pnpm mobile:ios
+MKCERT_ROOT_CA=/absolute/path/to/rootCA.pem pnpm mobile:ios
 ```
 
 ## Status

@@ -17,6 +17,7 @@ import {
   describeSignInError,
   isExpoGoAuthUnsupported,
   isE2EMode,
+  mobileTokenEndpointCandidates,
   mobileTokenEndpoint,
   loadE2ETestSession,
   E2E_TOKEN_KEY,
@@ -84,6 +85,49 @@ describe('exchangeGoogleIdTokenForSession', () => {
     });
 
     assert.equal(capturedUrl, 'https://showbook.example.com/api/auth/mobile-token');
+  });
+
+  it('falls back across localhost endpoints after network errors', async () => {
+    const attempted: string[] = [];
+    const fetchImpl = makeFetch(async (url) => {
+      attempted.push(url);
+      if (url !== 'http://127.0.0.1:3001/api/auth/mobile-token') {
+        throw new Error('Network request failed');
+      }
+      return jsonResponse(VALID_BODY, 200);
+    });
+
+    const result = await exchangeGoogleIdTokenForSession({
+      idToken: 'google-id-token',
+      apiUrl: 'https://localhost:3001',
+      fetchImpl,
+    });
+
+    assert.deepEqual(result, VALID_BODY);
+    assert.deepEqual(attempted, [
+      'https://localhost:3001/api/auth/mobile-token',
+      'https://127.0.0.1:3001/api/auth/mobile-token',
+      'http://localhost:3001/api/auth/mobile-token',
+      'http://127.0.0.1:3001/api/auth/mobile-token',
+    ]);
+  });
+
+  it('does not fallback after an HTTP response from the server', async () => {
+    const attempted: string[] = [];
+    const fetchImpl = makeFetch(async (url) => {
+      attempted.push(url);
+      return jsonResponse({ error: 'invalid_token' }, 401);
+    });
+
+    await assert.rejects(
+      exchangeGoogleIdTokenForSession({
+        idToken: 'x',
+        apiUrl: 'https://localhost:3001',
+        fetchImpl,
+      }),
+      /invalid_google_token/,
+    );
+    assert.deepEqual(attempted, ['https://localhost:3001/api/auth/mobile-token']);
   });
 
   it('rejects an invalid API URL before fetch', async () => {
@@ -275,6 +319,23 @@ describe('mobileTokenEndpoint', () => {
   });
 });
 
+describe('mobileTokenEndpointCandidates', () => {
+  it('returns localhost fallback candidates', () => {
+    assert.deepEqual(mobileTokenEndpointCandidates('https://localhost:3001'), [
+      'https://localhost:3001/api/auth/mobile-token',
+      'https://127.0.0.1:3001/api/auth/mobile-token',
+      'http://localhost:3001/api/auth/mobile-token',
+      'http://127.0.0.1:3001/api/auth/mobile-token',
+    ]);
+  });
+
+  it('does not fallback for non-localhost URLs', () => {
+    assert.deepEqual(mobileTokenEndpointCandidates('https://showbook.example.com'), [
+      'https://showbook.example.com/api/auth/mobile-token',
+    ]);
+  });
+});
+
 describe('describeSignInError', () => {
   it('maps invalid API URLs to a configuration message', () => {
     const msg = describeSignInError(new Error('api_url_invalid'));
@@ -293,7 +354,7 @@ describe('describeSignInError', () => {
 
   it('maps generic React Native network failures to a localhost cert hint', () => {
     const msg = describeSignInError(new Error('api_unreachable:Network request failed'));
-    assert.match(msg, /localhost HTTPS cert|iOS simulator/i);
+    assert.match(msg, /mkcert root CA|iOS simulator/i);
   });
 
   it('maps invalid_google_token to a retry message', () => {
