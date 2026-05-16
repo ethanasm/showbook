@@ -34,7 +34,7 @@ concurrency:
 
 jobs:
   android-e2e:
-    name: EAS Android build + Maestro on self-hosted emulator
+    name: Local Android build + Maestro on self-hosted emulator
     # Gate logic mirrors the previous Maestro Cloud workflow:
     #   - vars.MOBILE_E2E_ENABLED must be 'true' so the workflow reports
     #     skipped (not failed) until the prereqs are in place.
@@ -43,10 +43,12 @@ jobs:
     #
     # To enable this workflow:
     #   1. Add secrets under Settings → Secrets and variables → Actions:
-    #        - MAESTRO_E2E_TOKEN, MAESTRO_E2E_USER_JSON (used by the run step)
-    #      (EXPO_TOKEN / MAESTRO_CLOUD_API_KEY are no longer needed —
-    #      the APK is built locally on the runner via Gradle and
-    #      Maestro runs locally too.)
+    #        - MAESTRO_E2E_TOKEN     (Showbook JWT for the test user)
+    #        - MAESTRO_E2E_USER_JSON (JSON-serialized SessionUser)
+    #      Both are inlined into the APK at build time via
+    #      EXPO_PUBLIC_E2E_TEST_TOKEN / EXPO_PUBLIC_E2E_TEST_USER_JSON,
+    #      so `lib/auth.ts` can sign in without any deeplink seeding
+    #      step. No EXPO_TOKEN / MAESTRO_CLOUD_API_KEY needed.
     #   2. Set repo variable `MOBILE_E2E_ENABLED` to `true`.
     #   3. Optional: set repo variable `ANDROID_SDK_ROOT` to the install
     #      path on the runner; defaults to /opt/android-sdk.
@@ -62,12 +64,53 @@ jobs:
     # prod WSL box (label `showbook-prod`). It needs Android SDK + AVD
     # installed via scripts/setup-runner-android.sh (one-time).
     runs-on: [self-hosted, showbook-prod]
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       ANDROID_SDK_ROOT: ${{ vars.ANDROID_SDK_ROOT || '/opt/android-sdk' }}
       ANDROID_AVD_NAME: showbook_e2e
+      ANDROID_AVD_HOME: ${{ github.workspace }}/.android-avd
+      # Gradle in CI: no daemon (single-job runner), but keep the
+      # configuration cache + build cache hot via actions/cache below.
+      GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2 -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g"'
     steps:
       - uses: actions/checkout@v6
+
+      # Diagnose the runner up-front. The previous workflow used to hit
+      # the 45-min timeout because nobody knew where the time was going
+      # — disk, KVM availability, and SDK presence are the three usual
+      # suspects, so we log them here before anything expensive runs.
+      - name: Diagnose runner
+        shell: bash
+        run: |
+          set -u
+          echo "::group::Runner diagnostics"
+          uname -a
+          free -h || true
+          df -h /
+          df -h "$HOME" || true
+          echo "JAVA: $(java -version 2>&1 | head -1)"
+          echo "KVM:"
+          if [ -e /dev/kvm ]; then
+            ls -l /dev/kvm
+            if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+              echo "  KVM accessible"
+            else
+              echo "  KVM exists but not r/w by $USER — emulator falls back to software CPU emulation"
+            fi
+          else
+            echo "  /dev/kvm missing — software CPU emulation (slow)"
+          fi
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          if [ -d "$ANDROID_SDK_ROOT" ]; then
+            ls -la "$ANDROID_SDK_ROOT" 2>/dev/null || true
+          else
+            echo "  ANDROID_SDK_ROOT does not exist — run scripts/setup-runner-android.sh on the runner"
+          fi
+          echo "AVDs:"
+          if [ -x "$ANDROID_SDK_ROOT/emulator/emulator" ]; then
+            "$ANDROID_SDK_ROOT/emulator/emulator" -list-avds || true
+          fi
+          echo "::endgroup::"
 
       - uses: pnpm/action-setup@v6
         with:
@@ -81,29 +124,88 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Build the APK locally on the runner instead of going through EAS
-      # Build. The runner already has Android SDK + build-tools + NDK
-      # from scripts/setup-runner-android.sh, and EAS Build's free tier
-      # is too tight to cover per-PR runs. Mirrors what
-      # `pnpm mobile:android` does locally on a dev machine.
+      # ── Caching ─────────────────────────────────────────────────────
       #
-      # EXPO_PUBLIC_E2E_MODE=1 is set here (matching the `e2e` profile
-      # in eas.json) so apps/mobile/lib/auth.ts takes the SecureStore-
-      # bypass branch and Maestro doesn't need real Google OAuth.
-      - name: Build Android APK locally
-        working-directory: apps/mobile
-        env:
-          EXPO_PUBLIC_E2E_MODE: '1'
+      # The cold Gradle build dominated the previous wall-clock budget
+      # (20–30 min on first run with no cache). Restoring the Gradle
+      # caches keyed on the dependency files brings warm runs to ~5
+      # min. The AVD snapshot cache cuts emulator first-boot from 5–8
+      # min (software-rendered) down to <30 s.
+      - name: Restore Gradle caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.gradle/build-cache
+          key: gradle-${{ runner.os }}-${{ hashFiles('apps/mobile/package.json', 'apps/mobile/app.config.ts', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Restore AVD snapshot
+        id: avd-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.android-avd
+          key: avd-${{ runner.os }}-android-34-google_apis-${{ env.ANDROID_AVD_NAME }}
+          restore-keys: |
+            avd-${{ runner.os }}-android-34-google_apis-
+
+      # Seed the workspace cache dir from the runner's home directory
+      # on first run. Subsequent runs restore from actions/cache; either
+      # way the emulator boots against ANDROID_AVD_HOME so the snapshot
+      # follows the workspace, not the runner (sharing a runner-home
+      # path would race across concurrent workflow_dispatch runs).
+      - name: Materialize AVD into workspace
+        shell: bash
         run: |
-          export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
-          pnpm exec expo prebuild --platform android --non-interactive --no-install
-          cd android
-          ./gradlew :app:assembleDebug --no-daemon --console=plain
-          APK="app/build/outputs/apk/debug/app-debug.apk"
-          ls -lh "$APK"
-          cp "$APK" /tmp/showbook-e2e.apk
+          set -euo pipefail
+          mkdir -p "$ANDROID_AVD_HOME"
+          if [ ! -d "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd" ]; then
+            if [ -d "$HOME/.android/avd/${ANDROID_AVD_NAME}.avd" ]; then
+              echo "Seeding workspace AVD from runner home (one-time)"
+              cp -a "$HOME/.android/avd/${ANDROID_AVD_NAME}.ini"  "$ANDROID_AVD_HOME/" 2>/dev/null || true
+              cp -a "$HOME/.android/avd/${ANDROID_AVD_NAME}.avd"  "$ANDROID_AVD_HOME/"
+              # Rewrite path= in the .ini so the emulator finds the AVD
+              # under the new ANDROID_AVD_HOME instead of the runner's
+              # original $HOME/.android path.
+              if [ -f "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.ini" ]; then
+                sed -i "s#path=.*#path=$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd#" \
+                  "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.ini"
+              fi
+            else
+              echo "::error::AVD '${ANDROID_AVD_NAME}' not found at \$HOME/.android/avd — run scripts/setup-runner-android.sh on the runner"
+              exit 1
+            fi
+          fi
+          ls -la "$ANDROID_AVD_HOME"
+
+      # ── Boot the emulator in the background ─────────────────────────
+      #
+      # Booting in parallel with prebuild + Gradle eliminates the 5–10
+      # min serial cost the previous workflow paid. We poll for boot
+      # completion *after* the Gradle build wraps, so the wait usually
+      # collapses to a no-op.
+      - name: Start Android emulator (background)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
+          adb kill-server || true
+          adb start-server
+          # -no-snapshot-save: don't write back into the cached AVD
+          # -accel auto: use KVM when available, fall through to TCG
+          # -gpu swiftshader_indirect: software GL, only sane option headless
+          nohup env ANDROID_AVD_HOME="$ANDROID_AVD_HOME" \
+            emulator -avd "$ANDROID_AVD_NAME" \
+              -no-window -no-audio -no-boot-anim -no-snapshot-save \
+              -accel auto \
+              -gpu swiftshader_indirect \
+            > /tmp/emulator.log 2>&1 &
+          echo "emulator pid: $!"
 
       - name: Install Maestro CLI
+        shell: bash
         run: |
           if ! command -v maestro >/dev/null 2>&1; then
             curl -fsSL "https://get.maestro.mobile.dev" | bash
@@ -113,57 +215,96 @@ jobs:
       - name: Validate Maestro flow YAML
         run: pnpm --filter mobile e2e:dry
 
-      - name: Boot Android emulator
+      # Build the APK locally on the runner instead of going through EAS
+      # Build. The runner has Android SDK + build-tools + NDK from
+      # scripts/setup-runner-android.sh, and EAS Build's free tier is
+      # too tight to cover per-PR runs.
+      #
+      # The bundled-env auth bypass (lib/auth-helpers.ts) reads
+      # EXPO_PUBLIC_E2E_TEST_TOKEN / EXPO_PUBLIC_E2E_TEST_USER_JSON
+      # inlined at build time, so the Maestro flow YAML doesn't need
+      # a deeplink seeding step.
+      - name: Build Android APK locally
+        working-directory: apps/mobile
+        env:
+          EXPO_PUBLIC_E2E_MODE: '1'
+          EXPO_PUBLIC_E2E_TEST_TOKEN: ${{ secrets.MAESTRO_E2E_TOKEN }}
+          EXPO_PUBLIC_E2E_TEST_USER_JSON: ${{ secrets.MAESTRO_E2E_USER_JSON }}
+        shell: bash
         run: |
-          export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
-          # Kill any stale emulator from a previous run that crashed.
-          adb kill-server || true
-          adb start-server
-          # Boot headless. -no-snapshot-load skips a flaky snapshot
-          # restore path; -gpu swiftshader_indirect is the most reliable
-          # software-renderer option on a headless WSL host.
-          nohup emulator -avd "$ANDROID_AVD_NAME" \
-            -no-window -no-audio -no-boot-anim -no-snapshot-load \
-            -gpu swiftshader_indirect \
-            > /tmp/emulator.log 2>&1 &
-          echo "emulator pid: $!"
-          # Wait up to 5 min for boot completion.
+          set -euo pipefail
+          if [ -z "${EXPO_PUBLIC_E2E_TEST_TOKEN:-}" ] || [ -z "${EXPO_PUBLIC_E2E_TEST_USER_JSON:-}" ]; then
+            echo "::error::MAESTRO_E2E_TOKEN / MAESTRO_E2E_USER_JSON secrets are unset"
+            exit 1
+          fi
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+          pnpm exec expo prebuild --platform android --non-interactive --no-install
+          cd android
+          # --build-cache uses the restored gradle caches; --no-daemon
+          # keeps the runner clean between invocations.
+          ./gradlew :app:assembleDebug \
+            --no-daemon --console=plain \
+            --build-cache
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          ls -lh "$APK"
+          cp "$APK" /tmp/showbook-e2e.apk
+
+      # ── Wait for the emulator that started before Gradle ───────────
+      - name: Wait for emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
           adb wait-for-device
+          # Poll boot completion for up to 10 min, logging progress
+          # every 30 s so a hang is diagnosable from the run UI rather
+          # than appearing as silence followed by a timeout kill.
           for i in $(seq 1 60); do
-            BOOTED=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
-            if [ "$BOOTED" = "1" ]; then
-              echo "emulator booted"
+            BOOTED=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
+            ANIM_DONE=$(adb shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r' || true)
+            if [ "$BOOTED" = "1" ] && [ "$ANIM_DONE" != "running" ]; then
+              echo "emulator booted after $((i * 10))s"
+              # Unlock screen + disable animations so Maestro doesn't
+              # have to wait for transitions or swipe past a lockscreen.
+              adb shell input keyevent 82 || true
+              adb shell settings put global window_animation_scale 0 || true
+              adb shell settings put global transition_animation_scale 0 || true
+              adb shell settings put global animator_duration_scale 0 || true
               exit 0
             fi
-            sleep 5
+            if [ $((i % 3)) -eq 0 ]; then
+              echo "  $((i * 10))s — boot_completed=${BOOTED:-?} bootanim=${ANIM_DONE:-?}"
+            fi
+            sleep 10
           done
-          echo "emulator failed to boot in 5 minutes" >&2
-          tail -50 /tmp/emulator.log >&2
+          echo "::error::emulator failed to boot in 10 minutes"
+          tail -100 /tmp/emulator.log || true
           exit 1
 
       - name: Install APK
+        shell: bash
         run: |
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
           adb install -r /tmp/showbook-e2e.apk
 
       - name: Run Maestro flows
-        env:
-          MAESTRO_E2E_TOKEN: ${{ secrets.MAESTRO_E2E_TOKEN }}
-          MAESTRO_E2E_USER_JSON: ${{ secrets.MAESTRO_E2E_USER_JSON }}
+        shell: bash
         run: |
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$HOME/.maestro/bin:$PATH"
-          maestro test \
-            --env MAESTRO_E2E_TOKEN="$MAESTRO_E2E_TOKEN" \
-            --env MAESTRO_E2E_USER_JSON="$MAESTRO_E2E_USER_JSON" \
+          # --debug-output writes detailed step traces + screenshots to
+          # the named dir. Uploaded as an artifact below regardless of
+          # outcome so reviewers see exactly what Maestro saw.
+          mkdir -p /tmp/maestro-debug
+          maestro --debug-output /tmp/maestro-debug test \
             apps/mobile/e2e/flows/
 
-      - name: Upload Maestro debug artifacts on failure
-        if: failure()
+      - name: Upload Maestro debug artifacts
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: maestro-debug-${{ github.run_id }}
           path: |
-            ~/.maestro/tests/**
+            /tmp/maestro-debug/**
             /tmp/emulator.log
           if-no-files-found: ignore
           retention-days: 7
@@ -191,8 +332,8 @@ jobs:
           ## Mobile e2e (Android)
 
           Workflow run: $RUN_URL
-          (Failed runs upload Maestro screenshots + emulator log as the
-          \`maestro-debug-${{ github.run_id }}\` artifact.)
+          (Maestro screenshots + emulator log are uploaded as the
+          \`maestro-debug-${{ github.run_id }}\` artifact on every run.)
           <!-- mobile-screenshots:end -->
           EOF
           )
@@ -201,6 +342,7 @@ jobs:
 
       - name: Shut down emulator
         if: always()
+        shell: bash
         run: |
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
           adb emu kill || true

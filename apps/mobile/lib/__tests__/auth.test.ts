@@ -456,23 +456,66 @@ describe('loadE2ETestSession', () => {
     };
   }
 
-  it('returns the session when both keys are present and valid', async () => {
-    const user = {
-      id: 'u_e2e',
-      email: 'e2e@showbook.test',
-      name: 'E2E User',
-      image: null,
-    };
-    const store = makeStore({
-      [E2E_TOKEN_KEY]: 'jwt-from-maestro',
-      [E2E_USER_KEY]: JSON.stringify(user),
+  const VALID_USER = {
+    id: 'u_e2e',
+    email: 'e2e@showbook.test',
+    name: 'E2E User',
+    image: null,
+  };
+
+  it('returns the bundled session when EXPO_PUBLIC_E2E_TEST_* are set', async () => {
+    // Empty SecureStore — bundled env vars should win and SecureStore
+    // shouldn't even be touched.
+    const store = makeStore({});
+    const session = await loadE2ETestSession(store, {
+      bundledToken: 'jwt-from-build-env',
+      bundledUserJson: JSON.stringify(VALID_USER),
     });
-    const session = await loadE2ETestSession(store);
-    assert.deepEqual(session, { token: 'jwt-from-maestro', user });
+    assert.deepEqual(session, { token: 'jwt-from-build-env', user: VALID_USER });
+    assert.deepEqual(store.calls, []);
+  });
+
+  it('prefers bundled env over SecureStore when both are present', async () => {
+    const store = makeStore({
+      [E2E_TOKEN_KEY]: 'jwt-from-securestore',
+      [E2E_USER_KEY]: JSON.stringify({ ...VALID_USER, id: 'securestore-user' }),
+    });
+    const session = await loadE2ETestSession(store, {
+      bundledToken: 'jwt-from-build-env',
+      bundledUserJson: JSON.stringify(VALID_USER),
+    });
+    assert.equal(session?.token, 'jwt-from-build-env');
+    assert.equal(session?.user.id, VALID_USER.id);
+    assert.deepEqual(store.calls, []);
+  });
+
+  it('falls back to SecureStore when bundled env vars are empty', async () => {
+    const store = makeStore({
+      [E2E_TOKEN_KEY]: 'jwt-from-securestore',
+      [E2E_USER_KEY]: JSON.stringify(VALID_USER),
+    });
+    const session = await loadE2ETestSession(store, {
+      bundledToken: '',
+      bundledUserJson: '',
+    });
+    assert.deepEqual(session, { token: 'jwt-from-securestore', user: VALID_USER });
     assert.deepEqual(store.calls.sort(), [E2E_TOKEN_KEY, E2E_USER_KEY].sort());
   });
 
-  it('returns null when token is missing', async () => {
+  it('returns the session when both SecureStore keys are present and valid', async () => {
+    const store = makeStore({
+      [E2E_TOKEN_KEY]: 'jwt-from-maestro',
+      [E2E_USER_KEY]: JSON.stringify(VALID_USER),
+    });
+    const session = await loadE2ETestSession(store, {
+      bundledToken: undefined,
+      bundledUserJson: undefined,
+    });
+    assert.deepEqual(session, { token: 'jwt-from-maestro', user: VALID_USER });
+    assert.deepEqual(store.calls.sort(), [E2E_TOKEN_KEY, E2E_USER_KEY].sort());
+  });
+
+  it('returns null when SecureStore token is missing and no bundled env', async () => {
     const store = makeStore({
       [E2E_USER_KEY]: JSON.stringify({
         id: 'u',
@@ -481,20 +524,41 @@ describe('loadE2ETestSession', () => {
         image: null,
       }),
     });
-    assert.equal(await loadE2ETestSession(store), null);
+    assert.equal(
+      await loadE2ETestSession(store, { bundledToken: '', bundledUserJson: '' }),
+      null,
+    );
   });
 
-  it('returns null when user blob is missing', async () => {
+  it('returns null when SecureStore user blob is missing and no bundled env', async () => {
     const store = makeStore({ [E2E_TOKEN_KEY]: 'jwt' });
-    assert.equal(await loadE2ETestSession(store), null);
+    assert.equal(
+      await loadE2ETestSession(store, { bundledToken: '', bundledUserJson: '' }),
+      null,
+    );
   });
 
-  it('returns null when user blob is not valid JSON', async () => {
+  it('returns null when bundled user JSON is malformed', async () => {
+    const store = makeStore({});
+    const session = await loadE2ETestSession(store, {
+      bundledToken: 'jwt',
+      bundledUserJson: '{not json',
+    });
+    // Bundled-env was tried but failed to parse; SecureStore is empty,
+    // so the overall result is null. The fact that bundled took priority
+    // means we did NOT silently fall through to a stale SecureStore copy.
+    assert.equal(session, null);
+  });
+
+  it('returns null when SecureStore user blob is not valid JSON', async () => {
     const store = makeStore({
       [E2E_TOKEN_KEY]: 'jwt',
       [E2E_USER_KEY]: '{not json',
     });
-    assert.equal(await loadE2ETestSession(store), null);
+    assert.equal(
+      await loadE2ETestSession(store, { bundledToken: '', bundledUserJson: '' }),
+      null,
+    );
   });
 
   it('returns null when user blob is missing required fields', async () => {
@@ -502,7 +566,10 @@ describe('loadE2ETestSession', () => {
       [E2E_TOKEN_KEY]: 'jwt',
       [E2E_USER_KEY]: JSON.stringify({ email: 'a@b.co' }),
     });
-    assert.equal(await loadE2ETestSession(store), null);
+    assert.equal(
+      await loadE2ETestSession(store, { bundledToken: '', bundledUserJson: '' }),
+      null,
+    );
   });
 
   it('uses the documented SecureStore keys', () => {

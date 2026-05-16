@@ -1,9 +1,8 @@
-# Add-show flow — Maestro Cloud
+# Add-show flow — Maestro
 #
-# Assumes the e2e build is signed in via the same SecureStore-seeding
-# path as sign-in.yaml. We re-run the seed step here so add-show can
-# run independently of sign-in (Maestro Cloud parallelizes flows by
-# default; flows must be self-contained).
+# Self-contained: each flow runs from a clean keychain, so we re-tap
+# the sign-in button and let the e2e-build bypass restore the bundled
+# session (see sign-in.yaml for the env-var contract).
 #
 # Test data is deterministic: a fixed headliner, venue, and date so
 # repeated runs assert the same row on Home. The Showbook test backend
@@ -19,18 +18,6 @@ tags:
     clearState: true
     clearKeychain: true
 
-- runScript:
-    file: ../scripts/seed-session.js
-    env:
-      MAESTRO_E2E_TOKEN: ${MAESTRO_E2E_TOKEN}
-      MAESTRO_E2E_USER_JSON: ${MAESTRO_E2E_USER_JSON}
-
-- openLink: ${output.seedDeeplink}
-
-- launchApp:
-    clearState: false
-
-# Get past first-run if it's the user's first session in this state.
 - tapOn:
     text: "Sign in with Google"
 - runFlow:

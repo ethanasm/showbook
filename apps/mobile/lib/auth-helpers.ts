@@ -173,13 +173,19 @@ export function describeSignInError(err: unknown): string {
  * inert if the env var is unset.
  *
  * Contract — when active, instead of running real Google OAuth, signIn
- * reads a pre-baked Showbook session from SecureStore:
- *   key `e2e.test-token` — the JWT minted by `/api/auth/mobile-token`
- *   key `e2e.test-user`  — JSON-serialized SessionUser
+ * reads a pre-baked Showbook session from one of two sources, in order:
  *
- * Maestro is responsible for writing those keys before the sign-in tap,
- * via the e2e debug deeplink the mobile app exposes only when E2E mode is
- * on (see `apps/mobile/e2e/flows/sign-in.yaml`).
+ *   1. The bundle-time env vars `EXPO_PUBLIC_E2E_TEST_TOKEN` and
+ *      `EXPO_PUBLIC_E2E_TEST_USER_JSON`. These are inlined at build
+ *      time by the `e2e` CI workflow before `expo prebuild`, so the
+ *      sign-in tap works without any in-app deeplink seeding step.
+ *   2. SecureStore keys `e2e.test-token` and `e2e.test-user` — kept
+ *      as a fallback so the flow YAML's `openLink` step still works
+ *      if a future change reintroduces a debug deeplink handler.
+ *
+ * Source #1 is the path the self-hosted Maestro workflow uses today.
+ * The Maestro flows therefore don't need a `runScript` + `openLink`
+ * seed dance — they just `launchApp` and tap.
  */
 export function isE2EMode(envValue: string | undefined = process.env.EXPO_PUBLIC_E2E_MODE): boolean {
   return envValue === '1';
@@ -212,19 +218,47 @@ export interface SecureStoreLike {
   getItemAsync: (key: string) => Promise<string | null>;
 }
 
+export interface LoadE2ETestSessionOptions {
+  /** Override for `process.env.EXPO_PUBLIC_E2E_TEST_TOKEN` (testing). */
+  bundledToken?: string | undefined;
+  /** Override for `process.env.EXPO_PUBLIC_E2E_TEST_USER_JSON` (testing). */
+  bundledUserJson?: string | undefined;
+}
+
 /**
- * Read the Maestro-injected test session from SecureStore. Returns null
- * if either key is missing or the user blob doesn't parse / validate —
- * callers should treat null as "Maestro hasn't seeded the session yet"
- * and surface a sign-in error rather than silently signing in.
+ * Read the Maestro-targeted test session. Tries the bundle-time env
+ * vars first (the path the CI workflow uses) and falls through to
+ * SecureStore (legacy path, still works if a deeplink handler is added).
+ *
+ * Returns null when neither source yields a token + a valid user blob,
+ * so callers surface a sign-in error rather than silently signing in.
  */
 export async function loadE2ETestSession(
   store: SecureStoreLike,
+  options: LoadE2ETestSessionOptions = {},
 ): Promise<SessionData | null> {
+  const bundledToken =
+    options.bundledToken !== undefined
+      ? options.bundledToken
+      : process.env.EXPO_PUBLIC_E2E_TEST_TOKEN;
+  const bundledUserJson =
+    options.bundledUserJson !== undefined
+      ? options.bundledUserJson
+      : process.env.EXPO_PUBLIC_E2E_TEST_USER_JSON;
+  const bundled = parseSession(bundledToken, bundledUserJson);
+  if (bundled) return bundled;
+
   const [token, userJson] = await Promise.all([
     store.getItemAsync(E2E_TOKEN_KEY),
     store.getItemAsync(E2E_USER_KEY),
   ]);
+  return parseSession(token, userJson);
+}
+
+function parseSession(
+  token: string | null | undefined,
+  userJson: string | null | undefined,
+): SessionData | null {
   if (!token || !userJson) return null;
   let parsed: unknown;
   try {

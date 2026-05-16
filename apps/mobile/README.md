@@ -97,20 +97,29 @@ for the milestone plan, what's shipped, and what's next.
 ## Maestro E2E flows
 
 Three flows live under `e2e/flows/` — sign-in, add-show, sign-out.
-They run on Maestro Cloud nightly + on every push to `main` via
-`.github/workflows/mobile-e2e.yml` (NOT per-PR, by design — see
-`showbook-specs/mobile-testing-strategy.md`). The cloud run
-uses the `e2e` EAS profile (see `eas.json`) which sets
-`EXPO_PUBLIC_E2E_MODE=1`. With that flag on, `lib/auth.ts` skips the
-Google OAuth round-trip and instead reads a pre-baked Showbook JWT
-from SecureStore keys `e2e.test-token` + `e2e.test-user` — Maestro
-seeds those keys via the e2e debug deeplink before tapping the
-sign-in button. Production builds (App Store / TestFlight / Play
-Store) ship with `EXPO_PUBLIC_E2E_MODE` unset, so the bypass branch
-is dead code there. The pure helpers `isE2EMode` and
-`loadE2ETestSession` are unit-tested in `lib/__tests__/auth.test.ts`,
-including an explicit assertion that an unset env var is treated as
-not-E2E so a misconfigured deploy can't accidentally ship the bypass.
+The Android workflow runs them nightly + on push-to-`main` + on PRs
+labeled `mobile-visual` via `.github/workflows/mobile-e2e.yml`; iOS
+is manual (`pnpm mobile:e2e:ios`) on the dev Mac. See
+`showbook-specs/mobile-testing-strategy.md` § Wave F.
+
+The `e2e` EAS profile (see `eas.json`) sets `EXPO_PUBLIC_E2E_MODE=1`,
+which flips `lib/auth.ts` into bypass mode. With that flag on,
+`loadE2ETestSession` reads a pre-baked Showbook JWT from two
+sources, in order:
+
+1. The bundle-time env vars `EXPO_PUBLIC_E2E_TEST_TOKEN` and
+   `EXPO_PUBLIC_E2E_TEST_USER_JSON`. These are inlined into the APK
+   at build time by CI, so the sign-in tap returns a valid session
+   without any in-app deeplink seeding step.
+2. SecureStore keys `e2e.test-token` and `e2e.test-user`, as a
+   fallback if a future change reintroduces a debug deeplink handler.
+
+Production builds (App Store / TestFlight / Play Store) ship with
+`EXPO_PUBLIC_E2E_MODE` unset, so the bypass branch is dead code
+there. The pure helpers `isE2EMode` and `loadE2ETestSession` are
+unit-tested in `lib/__tests__/auth.test.ts`, including an explicit
+assertion that an unset env var is treated as not-E2E so a
+misconfigured deploy can't accidentally ship the bypass.
 
 ### Validating flow YAML locally
 
@@ -118,29 +127,33 @@ Maestro flows are YAML — no device required to syntax-check them.
 From the repo root:
 
 ```bash
-npx maestro test --dry-run apps/mobile/e2e/flows/
+pnpm mobile:e2e:dry
 ```
 
-CI runs the same step before uploading to Maestro Cloud so a typo
-fails fast.
+The Android workflow runs the same step before booting the emulator
+so a typo fails fast.
 
 ### Running flows against a local simulator (optional)
 
-For interactive iteration on a flow you can use Maestro Studio or
-the simulator-targeted CLI:
+For interactive iteration on a flow on a local iOS simulator:
 
 ```bash
-# 1. Build the app once with the e2e profile (writes to ios/build/...)
-cd apps/mobile && eas build --platform ios --profile e2e --local
+# 1. Export the test session so it gets inlined into the dev build
+export EXPO_PUBLIC_E2E_MODE=1
+export EXPO_PUBLIC_E2E_TEST_TOKEN="$DEV_E2E_TOKEN"
+export EXPO_PUBLIC_E2E_TEST_USER_JSON='{"id":"u_dev","email":"dev@showbook.test","name":"Dev User","image":null}'
 
-# 2. Boot the iOS simulator + install the .app, then launch the flow
-maestro test apps/mobile/e2e/flows/sign-in.yaml \
-  --env MAESTRO_E2E_TOKEN="$DEV_E2E_TOKEN" \
-  --env MAESTRO_E2E_USER_JSON='{"id":"u_dev","email":"dev@showbook.test","name":"Dev User","image":null}'
+# 2. Build + install the development client onto the booted simulator
+pnpm mobile:ios
+
+# 3. Once the app is installed, run the flows
+pnpm mobile:e2e:ios
 ```
 
 To mint a `DEV_E2E_TOKEN` against your local web stack, hit the
 `/api/auth/mobile-token` endpoint with a valid Google ID token (or
 adapt the test-only route under `/api/test/*` if it exposes a JWT
 shortcut). In CI those values come from the
-`MAESTRO_E2E_TOKEN` / `MAESTRO_E2E_USER_JSON` repo secrets.
+`MAESTRO_E2E_TOKEN` / `MAESTRO_E2E_USER_JSON` repo secrets and are
+exposed to the build step as `EXPO_PUBLIC_E2E_TEST_TOKEN` /
+`EXPO_PUBLIC_E2E_TEST_USER_JSON`.

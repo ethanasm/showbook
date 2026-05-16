@@ -106,14 +106,29 @@ scope fails CI, and the report identifies which scope fell short.
 ## Maestro E2E flows
 
 Three flows live under `e2e/flows/` — sign-in, add-show, sign-out.
-CI sets `EXPO_PUBLIC_E2E_MODE=1` directly in the workflow step env
-(matching the `e2e` profile in `eas.json` for parity with local EAS
-builds), which makes `lib/auth.ts` skip the Google OAuth round-trip
-and read a pre-baked Showbook JWT from SecureStore keys
-`e2e.test-token` + `e2e.test-user`. The pure helpers `isE2EMode` and
-`loadE2ETestSession` are unit-tested in `lib/__tests__/auth.test.ts`
-with an explicit assertion that an unset env var is treated as
-not-E2E so a misconfigured deploy can't accidentally ship the bypass.
+CI sets `EXPO_PUBLIC_E2E_MODE=1` plus the test-session env vars
+directly in the workflow step env (matching the `e2e` profile in
+`eas.json` for parity with local EAS builds):
+
+- `EXPO_PUBLIC_E2E_MODE=1` flips `lib/auth.ts` into bypass mode.
+- `EXPO_PUBLIC_E2E_TEST_TOKEN` is the Showbook JWT for the test user,
+  minted ahead of time against the e2e backend.
+- `EXPO_PUBLIC_E2E_TEST_USER_JSON` is the JSON-serialised
+  `SessionUser` the JWT identifies.
+
+All three are inlined at build time, so `loadE2ETestSession` returns
+the bundled session as soon as the user taps "Continue with Google"
+— no in-app deeplink seeding step, no `runScript`/`openLink` dance in
+the Maestro YAML. SecureStore (`e2e.test-token` / `e2e.test-user`)
+is still checked as a fallback if a future change reintroduces a
+debug deeplink handler.
+
+The pure helpers `isE2EMode` and `loadE2ETestSession` are
+unit-tested in `lib/__tests__/auth.test.ts` with explicit assertions
+that (a) an unset `EXPO_PUBLIC_E2E_MODE` is treated as not-E2E so a
+misconfigured deploy can't accidentally ship the bypass, and (b) the
+bundled-env path takes priority over SecureStore so a stale device
+keychain can't override the build-time token.
 
 **Automated (Android only):** `.github/workflows/mobile-e2e.yml`
 runs nightly + on push-to-`main` + on PRs labeled `mobile-visual`,
@@ -138,10 +153,11 @@ pnpm mobile:e2e:ios        # runs all 3 flows against the booted sim
 pnpm mobile:e2e:dry        # no device — just YAML validation
 ```
 
-`MAESTRO_E2E_TOKEN` / `MAESTRO_E2E_USER_JSON` need to be exported in
-the shell when you run `e2e:ios`; otherwise the sign-in flow's
-deeplink seeds an empty session and `assertVisible: "Sign in with
-Google"` fails.
+`EXPO_PUBLIC_E2E_TEST_TOKEN` and `EXPO_PUBLIC_E2E_TEST_USER_JSON`
+need to be exported in the shell before `pnpm mobile:ios` so they
+get inlined into the development build; otherwise the bypass falls
+through to an empty SecureStore and the sign-in tap surfaces
+`invalid_response`.
 
 See `showbook-specs/mobile-testing-strategy.md` § Wave F for the
 rationale on the Android-CI / iOS-manual split.
