@@ -1,101 +1,68 @@
 ---
 name: creating-prs
-description: Use after committing changes that need to ship. Pushes the branch, opens the PR via the GitHub MCP tools, subscribes to PR activity so CI failures stream back, and (when the diff touches UI) hands off to the pr-screenshots skill so the PR description gets visual review material inline.
+description: Showbook-flavored creating-prs. The generic push / open / subscribe / hand-off loop lives in ~/.claude/skills/creating-prs/SKILL.md; this override only carries showbook-specific config and the extra mobile hand-off step.
 ---
 
-# Creating PRs
+# creating-prs (showbook overrides)
 
-## Overview
+**Base playbook:** Read `~/.claude/skills/creating-prs/SKILL.md` and
+follow it as the canonical flow. The sections below *replace or
+extend* the corresponding sections of the base — do not duplicate
+the generic content here.
 
-The `bug-fixing`, refactor, and feature loops all end the same way: push,
-open a PR, watch CI. This skill owns that tail so other skills can delegate
-instead of re-implementing it. It also decides whether the PR needs visual
-review material attached (web Playwright screenshots, mobile Maestro Cloud
-screenshots) and triggers the `pr-screenshots` skill if so.
+Also read `~/.claude/skills/commit-hygiene/SKILL.md` for the
+commit/PR-body rules. The repo-root `CLAUDE.md` → "Commit and PR
+hygiene" section pins those same rules.
 
-## When to use
+## Config
 
-- A caller skill (`bug-fixing`, future refactor/feature skills) hands off
-  after `pnpm verify` is green and the change is committed locally.
-- The user asks "open a PR" or "ship this".
+- **owner/repo** — `ethanasm/showbook` (do not parse the remote; the
+  GitHub MCP scope is pinned to this slug).
+- **UI globs** — covers web *and* mobile:
+  - Web: `apps/web/app/**`, `apps/web/components/**`, `apps/web/lib/**/*.tsx`
+  - Mobile: `apps/mobile/app/**`, `apps/mobile/components/**`
+- **Fast verify command** — `pnpm verify` (build + lint + unit, no
+  E2E). See `apps/web/CLAUDE.md` for the per-app gates.
+- **Slow gate (CI-only)** — `pnpm verify:e2e`, `pnpm verify:coverage`,
+  and the Maestro Cloud `mobile-e2e` workflow. Do not run any of
+  these in the sandbox.
 
-## When NOT to use
+## Step 4 override — visual review material
 
-- The change is still WIP and the user hasn't asked to push it.
-- A PR already exists for this branch — re-push and let the existing
-  subscription stream new CI events instead.
+When the diff touches the **web** globs, hand off to `pr-screenshots`
+with scope `web` per the base flow (Playwright + orphan
+`pr-screenshots` branch, with the showbook upload script at
+`scripts/upload-pr-screenshots.mjs`).
 
-## Loop
+When the diff also touches the **mobile** globs, in addition trigger
+the showbook mobile capture path: attach the `mobile-visual` label to
+the PR via `mcp__github__issue_write` (action `add_labels`). The
+`mobile-e2e` workflow's PR trigger is gated on this label and will
+edit a `## Mobile screenshots` section into the PR body itself. See
+the showbook override of `pr-screenshots` for the full mobile rules.
 
-### 1. Push the branch
+If only the mobile globs match, skip the web Playwright capture
+entirely and just add the label.
 
-```
-git push -u origin <branch>
-```
+## Step 6 override — event handling
 
-If the push fails on a network error, retry up to 4× with exponential
-backoff (2s, 4s, 8s, 16s). Don't retry on non-network failures — debug
-those first.
+Reactions still go through `react-to-pr-activity`, but two showbook
+specifics apply:
 
-### 2. Open the PR
+- Coverage failures in CI are *real regressions* by definition
+  (`scripts/coverage-report.mjs` enforces 80% line/branch/function on
+  web and mobile scopes). Don't retry — write tests.
+- A failing `mobile-e2e` workflow run after the `mobile-visual` label
+  was attached usually means the Maestro flow or the EAS build broke,
+  not a regression in the diff. Check the EAS build log before
+  classifying as flake.
 
-Use `mcp__github__create_pull_request`. Constraints:
+## Anti-patterns (showbook-specific, additive)
 
-- Title under 70 chars; details go in the body.
-- Body has `## Summary` (1–3 bullets) and `## Test plan` (markdown
-  checklist). No `https://claude.ai/code/session_…` footer, no
-  `Co-authored-by: Claude` trailer, no "Generated with Claude Code"
-  line — see repo-root `CLAUDE.md` → "Commit and PR hygiene".
-
-Tell the user the PR URL as soon as it's created.
-
-### 3. Attach visual review material if the diff touches UI
-
-Run `git diff --name-only main...HEAD` (or against the PR base) and
-match against:
-
-- **Web UI**: `apps/web/app/**`, `apps/web/components/**`,
-  `apps/web/lib/**/*.tsx`
-- **Mobile UI**: `apps/mobile/app/**`, `apps/mobile/components/**`
-
-If anything matches, invoke the `pr-screenshots` skill and pass it the
-PR number and the matched scope (`web`, `mobile`, or both). It handles
-capture + hosting + PR-body update. If nothing matches, skip.
-
-### 4. Subscribe to CI activity
-
-```
-mcp__github__subscribe_pr_activity { owner: "ethanasm", repo: "showbook", pullNumber: <n> }
-```
-
-Events arrive wrapped in `<github-webhook-activity>` tags. While CI
-runs you can move on to other work.
-
-### 5. React to events
-
-When a failure event arrives:
-
-1. Pull the failing job's logs via the GitHub MCP tools and identify
-   the failing test plus its assertion or stack frame.
-2. Decide if it's a real regression in the diff, a pre-existing flake,
-   or an environment issue. For E2E flakes, check the test for known
-   flaky patterns before retrying.
-3. If it's a real failure, fix it locally, re-run the relevant
-   **non-E2E** gate (per `bug-fixing`'s "Why no local E2E"), and push.
-   CI re-runs automatically.
-4. Repeat until CI is green. Unsubscribe with
-   `mcp__github__unsubscribe_pr_activity` once the PR is merged or
-   the user releases you.
-
-For review-comment events (someone left a code-review comment), use
-your judgement: if the suggestion is clear and not architecturally
-significant, apply it; if it's ambiguous, ask the user before acting.
-
-## Anti-patterns
-
-- Pushing to `main` directly — always go through a PR.
-- Force-pushing to a PR branch without telling the user.
-- Skipping the PR-body screenshots section on UI changes — reviewers
-  shouldn't have to pull the branch to see what changed visually.
-- Using `--no-verify` to bypass a failing pre-commit hook — fix the
-  underlying issue.
+- Running `pnpm verify:e2e` or `RUN_E2E=1` in the sandbox to "be
+  sure" before pushing. CI is the loop.
+- Re-attaching `mobile-visual` on every push to a mobile-touching
+  branch — each label-attach burns an EAS build minute. Once
+  per relevant change is enough; let the workflow re-run on push.
+- Including a `https://claude.ai/code/session_…` footer in the PR
+  body or any commit message. See repo-root `CLAUDE.md`.

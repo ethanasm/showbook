@@ -5,6 +5,14 @@ description: Use when investigating production issues in the showbook stack — 
 
 # Debugging prod
 
+> **Related:** the *producer* side of these logs — event naming
+> (`<component>.<action>.<outcome>`), error serialization with
+> `err.cause` walking, secret-redaction discipline, and the split
+> between app logs (Axiom) and LLM traces (Langfuse) — is owned by
+> `~/.claude/skills/structured-logging-conventions/SKILL.md`. Read
+> that when *adding* new log lines; this skill is for *querying*
+> what's already there.
+
 ## Overview
 
 Prod observability has two read paths:
