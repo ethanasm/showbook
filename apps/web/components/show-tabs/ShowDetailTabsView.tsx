@@ -82,24 +82,17 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
     },
   );
 
-  // Phase 5 — server-side release-gate check. Read once per session
-  // (5 min cache). When the gate fails the SetlistIntelRotatingDisplay
-  // FF is forced OFF on the client side per the spec.
-  const releaseGateQuery = trpc.setlistIntel.releaseGate.useQuery(
-    undefined,
-    {
-      enabled: !isPast,
-      staleTime: 1000 * 60 * 5,
-    },
-  );
+  // Phase 5 — rotating-display flag. Single-user prod: we render the
+  // rotating UI whenever the dev flag is ON, regardless of the
+  // server-side calibration gate verdict. The gate still emits
+  // setlist.release_gate.{passed,failed} from the server when other
+  // callers hit setlistIntel.releaseGate, so the audit trail stays;
+  // the client just doesn't hard-block on it. Re-introduce the
+  // gate-blocked branch (rotatingGateBlocked) once we have a
+  // multi-user audience and want safety-rails.
   const rotatingFlagOn = isFeatureOn("SetlistIntelRotatingDisplay");
-  const releaseGatePasses = releaseGateQuery.data?.passes ?? false;
-  // The display flag is the conjunction: dev flag ON AND release-gate
-  // passes. When the gate blocks, the rotating subtree renders the
-  // "temporarily disabled" placeholder.
-  const rotatingDisplayEnabled = rotatingFlagOn && releaseGatePasses;
-  const rotatingGateBlocked =
-    rotatingFlagOn && !releaseGatePasses && releaseGateQuery.isFetched;
+  const rotatingDisplayEnabled = rotatingFlagOn;
+  const rotatingGateBlocked = false;
 
   // Phase 3 — global flag + admin override decides whether the real
   // Spotify-backed HypePlaylistCard renders in place of the P1

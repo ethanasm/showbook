@@ -102,14 +102,15 @@ export const FeatureFlag = {
     description:
       'Phase 5 (setlist-intelligence) — gates the rotating-style ' +
       'predicted-setlist UI variant (gap chart + position pools + ' +
-      'multi-night context banner). When OFF the Setlist tab falls back ' +
-      'to a labeled placeholder for rotating performers. The Phase 4 ' +
-      'release gate (stable Brier ≤ 0.15, rotating recall@15 ≥ 0.55, ' +
-      'calibration delta ≤ 0.20) MUST pass before the flag can render ' +
-      'the rotating UI; setlistIntel.releaseGate is the wire-level ' +
-      'check. Default OFF until the gate clears. Stable-style display ' +
-      'is not affected by this flag.',
-    state: 'OFF',
+      'multi-night context banner). ON in single-user prod so the ' +
+      'model can be tuned against real shows; the calibration ' +
+      'release-gate (setlistIntel.releaseGate) still computes a ' +
+      'verdict and emits setlist.release_gate.{passed,failed} ' +
+      'observability events, but the client no longer hard-blocks ' +
+      'the rotating UI when the gate fails. Flip OFF if rotating ' +
+      'shows a regression that takes longer than a deploy cycle to ' +
+      'fix; stable display is unaffected.',
+    state: 'ON',
   },
 } as const satisfies Record<string, { description: string; state: 'ON' | 'OFF' }>;
 
