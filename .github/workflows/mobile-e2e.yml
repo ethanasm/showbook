@@ -357,6 +357,32 @@ jobs:
           maestro test --debug-output /tmp/maestro-debug \
             apps/mobile/e2e/flows/
 
+      # Summarise the debug dir into the run log so a failed Maestro
+      # step is diagnosable from the GitHub Actions UI even when the
+      # artifact viewer fails to render the .png screenshots. The
+      # commands.json + Maestro stdout in the debug dir name the
+      # exact flow + step that failed.
+      - name: Summarise Maestro debug output
+        if: failure()
+        shell: bash
+        run: |
+          set -u
+          echo "::group::Maestro debug dir contents"
+          ls -la /tmp/maestro-debug/ 2>/dev/null || echo "no debug dir"
+          echo "::endgroup::"
+          # Look for any plain-text log or json summary Maestro left
+          # behind and dump the last 200 lines into the run log.
+          shopt -s nullglob
+          for f in /tmp/maestro-debug/**/*.txt /tmp/maestro-debug/**/*.json /tmp/maestro-debug/**/*.log /tmp/maestro-debug/*.txt /tmp/maestro-debug/*.json /tmp/maestro-debug/*.log; do
+            echo "::group::$f"
+            tail -200 "$f" 2>/dev/null || true
+            echo "::endgroup::"
+          done
+          # List screenshots so we know which steps ran before the failure.
+          echo "::group::Screenshots captured"
+          find /tmp/maestro-debug -name '*.png' -printf '%p\n' 2>/dev/null | sort || true
+          echo "::endgroup::"
+
       - name: Upload Maestro debug artifacts
         if: always()
         uses: actions/upload-artifact@v7
