@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Show Page · Tabs</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  html, body { margin:0; padding:0; background:#f0eee9; font-family:'Geist','Geist Sans',system-ui,sans-serif; }
+  * { box-sizing:border-box; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="hifi/sb-tokens.jsx"></script>
+<script type="text/babel" src="show-tabs/design-canvas.jsx"></script>
+<script type="text/babel" src="show-tabs/ios-frame.jsx"></script>
+<script type="text/babel" src="show-tabs/data.jsx"></script>
+<script type="text/babel" src="show-tabs/music-layer.jsx"></script>
+<script type="text/babel" src="show-tabs/components.jsx"></script>
+<script type="text/babel" src="show-tabs/full-web.jsx"></script>
+
+<script type="text/babel">
+const { SB, Icon, ShowHero, ShowTitleBlock, TabBar, ShowTabsBody, CrumbBar, IOSDevice, ST_TOKENS } = window;
+const { BG, INK, MUTED, FAINT, RULE } = ST_TOKENS;
+// Polyfill missing icons
+const _mkIcon = (path) => ({ size = 16, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="square" strokeLinejoin="miter" style={{ display:'block' }}>
+    {path}
+  </svg>
+);
+if (!Icon.ChevronLeft) Icon.ChevronLeft = _mkIcon(<path d="m15 6-6 6 6 6"/>);
+if (!Icon.Edit)        Icon.Edit        = _mkIcon(<><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="m13 6 4 4"/></>);
+if (!Icon.Trash)       Icon.Trash       = _mkIcon(<><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></>);
+if (!Icon.Camera)      Icon.Camera      = _mkIcon(<><path d="M3 7h4l2-3h6l2 3h4v13H3V7z"/><circle cx="12" cy="13" r="4"/></>);
+const IOSFrame = ({ children, background }) => (
+  <IOSDevice width={393} height={852} dark={true}>{children}</IOSDevice>
+);
+
+// ─── Half-screen web (760w) ─────────────────────────────────────
+function HalfScreenWeb({ tab, past=false }) {
+  const [active, setActive] = React.useState(tab);
+  React.useEffect(()=>setActive(tab), [tab]);
+  return (
+    <div style={{ width:760, height:900, background:BG, color:INK, display:'flex', overflow:'hidden', fontFamily:SB.sans }}>
+      {/* Collapsed sidebar — icons only */}
+      <div style={{ width:52, background:BG, borderRight:`1px solid ${RULE}`, display:'flex', flexDirection:'column', alignItems:'center', padding:'18px 0', gap:18, flexShrink:0 }}>
+        <div style={{ fontFamily:SB.sans, fontSize:14, fontWeight:600, color:INK }}>s</div>
+        <div style={{ width:32, height:32, background:INK, color:BG, display:'flex', alignItems:'center', justifyContent:'center' }}><Icon.Plus size={14} color={BG}/></div>
+        <Icon.Home size={16} color={MUTED}/>
+        <Icon.Archive size={16} color={INK}/>
+        <Icon.Map size={16} color={MUTED}/>
+        <Icon.Music size={16} color={MUTED}/>
+        <div style={{ flex:1 }}/>
+        <div style={{ width:24, height:24, borderRadius:999, background:'#1C1C1C', color:INK, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:SB.mono, fontSize:10 }}>m</div>
+      </div>
+      <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
+        <CrumbBar padX={28}/>
+        <div style={{ flex:1, overflow:'auto' }}>
+          <ShowHero compact/>
+          <ShowTitleBlock compact past={past}/>
+          <TabBar active={active} onSelect={setActive} compact padX={28} past={past}/>
+          <ShowTabsBody activeTab={active} compact past={past}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Mobile web (390w) ─────────────────────────────────────
+function MobileWeb({ tab, past=false }) {
+  const [active, setActive] = React.useState(tab);
+  React.useEffect(()=>setActive(tab), [tab]);
+  return (
+    <div style={{ width:390, height:844, background:BG, color:INK, display:'flex', flexDirection:'column', overflow:'hidden', fontFamily:SB.sans }}>
+      {/* Browser-ish chrome strip */}
+      <div style={{ padding:'10px 16px', borderBottom:`1px solid ${RULE}`, display:'flex', alignItems:'center', gap:10, background:BG, flexShrink:0 }}>
+        <div style={{ display:'flex', gap:5 }}>
+          <span style={{ width:9, height:9, borderRadius:999, background:'#FF5F57' }}/>
+          <span style={{ width:9, height:9, borderRadius:999, background:'#FEBC2E' }}/>
+          <span style={{ width:9, height:9, borderRadius:999, background:'#28C840' }}/>
+        </div>
+        <div style={{ flex:1, padding:'5px 10px', background:'#1C1C1C', fontFamily:SB.mono, fontSize:10.5, color:MUTED, letterSpacing:'.04em', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+          showbook.app/shows/no-doubt-sphere-2026-05-09
+        </div>
+      </div>
+      <CrumbBar padX={20}/>
+      <div style={{ flex:1, overflow:'auto' }}>
+        <ShowHero compact/>
+        <ShowTitleBlock compact past={past}/>
+        <TabBar active={active} onSelect={setActive} compact padX={20} past={past}/>
+        <ShowTabsBody activeTab={active} compact past={past}/>
+      </div>
+    </div>
+  );
+}
+
+// ─── Mobile app (in iOS frame) ─────────────────────────────────────
+function MobileApp({ tab, past=false }) {
+  const [active, setActive] = React.useState(tab);
+  React.useEffect(()=>setActive(tab), [tab]);
+  // Native top bar: back chevron + title; replaces the web crumb.
+  return (
+    <IOSFrame statusBarStyle="light" hideHomeIndicator={false} background={BG}>
+      <div style={{ background:BG, color:INK, fontFamily:SB.sans, height:'100%', display:'flex', flexDirection:'column' }}>
+        <div style={{ padding:'10px 16px 12px', borderBottom:`1px solid ${RULE}`, display:'flex', alignItems:'center', gap:10, background:BG, flexShrink:0 }}>
+          <Icon.ChevronLeft size={20} color={INK}/>
+          <div style={{ flex:1, fontFamily:SB.mono, fontSize:11, color:MUTED, letterSpacing:'.04em' }}>
+            <span style={{ color:MUTED }}>shows</span> <span style={{ color:FAINT }}>/</span> <span style={{ color:INK }}>no doubt</span>
+          </div>
+          <Icon.More size={18} color={MUTED}/>
+        </div>
+        <div style={{ flex:1, overflow:'auto' }}>
+          <ShowHero compact/>
+          <ShowTitleBlock compact past={past}/>
+          <TabBar active={active} onSelect={setActive} compact padX={20} past={past}/>
+          <ShowTabsBody activeTab={active} compact past={past}/>
+        </div>
+      </div>
+    </IOSFrame>
+  );
+}
+
+// ─── Notes / system docs ─────────────────────────────────────
+function SystemNote({ children }) {
+  return (
+    <div style={{
+      width:260, padding:'14px 16px', background:'#fef4a8', color:'#5a4a2a',
+      fontFamily:'-apple-system, system-ui, sans-serif', fontSize:12, lineHeight:1.5,
+      boxShadow:'0 6px 18px rgba(0,0,0,.08)', borderRadius:2,
+    }}>{children}</div>
+  );
+}
+
+// ─── Canvas root ─────────────────────────────────────
+const { DesignCanvas, DCSection, DCArtboard, DCPostIt } = window;
+
+const TABS = [
+  { key:'overview', label:'Overview' },
+  { key:'setlist',  label:'Setlist'  },
+  { key:'media',    label:'Media'    },
+  { key:'notes',    label:'Notes'    },
+];
+
+function Root() {
+  return (
+    <DesignCanvas>
+      {/* — Section 0: System notes — */}
+      <DCSection id="system" title="Tabbed show page" subtitle="No Doubt @ Sphere — May 9, 2026 · upcoming, has tickets">
+        <DCArtboard id="intent" label="Intent" width={520} height={620}>
+          <div style={{ padding:'28px 28px', fontFamily:SB.sans, fontSize:14, color:'#1A1A1A', lineHeight:1.55, height:'100%', background:'#FAFAF8' }}>
+            <div style={{ fontFamily:SB.mono, fontSize:10.5, color:'#888', letterSpacing:'.14em', textTransform:'uppercase', marginBottom:12 }}>Why tabs</div>
+            <p style={{ marginTop:0 }}>The current page stacks Media → Lineup → Setlist → Actions vertically. For an upcoming show that means the most useful info (ticket facts, hype playlist) sits below an empty media block.</p>
+            <p>Tabs let each surface own its full real estate without scrolling past empty states. They also map cleanly to the show's lifecycle:</p>
+            <div style={{ marginTop:14, fontFamily:SB.mono, fontSize:11.5, lineHeight:2 }}>
+              <div><b>overview</b> &nbsp;— always first, the at-a-glance facts</div>
+              <div><b>setlist</b> &nbsp;— predicted before · actual after</div>
+              <div><b>media</b> &nbsp;&nbsp;— empty before · gallery after</div>
+              <div><b>notes</b> &nbsp;&nbsp;— your private journal</div>
+            </div>
+
+            <div style={{ height:1, background:'#0001', margin:'20px 0' }}/>
+
+            <div style={{ fontFamily:SB.mono, fontSize:10.5, color:'#888', letterSpacing:'.14em', textTransform:'uppercase', marginBottom:10 }}>Notes</div>
+            <ul style={{ margin:0, padding:'0 0 0 18px', fontSize:13 }}>
+              <li>Tab badges show count or confidence — not just labels</li>
+              <li>Setlist tab adapts: predicted before show, actual+Spotify save after</li>
+              <li>Hero shrinks but never disappears — it's the show's identity</li>
+              <li>Stat row collapses 4-col → 2×2 below 480px</li>
+              <li>Sidebar collapses to icons at half-screen</li>
+            </ul>
+          </div>
+        </DCArtboard>
+
+        <DCArtboard id="tab-anatomy" label="Tab bar anatomy" width={520} height={620}>
+          <div style={{ padding:'28px', background:'#FAFAF8', height:'100%' }}>
+            <div style={{ fontFamily:SB.mono, fontSize:10.5, color:'#888', letterSpacing:'.14em', textTransform:'uppercase', marginBottom:12 }}>Tab states</div>
+
+            <div style={{ background:BG, padding:'0 22px', marginBottom:24 }}>
+              <TabBar active="overview" onSelect={()=>{}} compact padX={0}/>
+            </div>
+            <div style={{ background:BG, padding:'0 22px', marginBottom:24 }}>
+              <TabBar active="setlist" onSelect={()=>{}} compact padX={0}/>
+            </div>
+            <div style={{ background:BG, padding:'0 22px', marginBottom:24 }}>
+              <TabBar active="media" onSelect={()=>{}} compact padX={0}/>
+            </div>
+
+            <div style={{ fontFamily:SB.mono, fontSize:11, color:'#1A1A1A', lineHeight:1.7 }}>
+              <div><b>active</b> · ink, gold underline, brighter badge border</div>
+              <div><b>idle</b> · muted, no underline, faint badge</div>
+              <div><b>badge</b> · count <i>or</i> confidence % depending on tab</div>
+              <div><b>spacing</b> · 18px gap mobile / 26px desktop</div>
+              <div><b>position</b> · sticky to top of scroll area, below hero</div>
+            </div>
+          </div>
+        </DCArtboard>
+      </DCSection>
+
+      {/* — Section 1: Half-screen web — */}
+      <DCSection id="half" title="① Half-screen web" subtitle="760×900 · sidebar collapsed to icons · split-view friendly">
+        {TABS.map(t=>(
+          <DCArtboard key={t.key} id={`half-${t.key}`} label={t.label} width={760} height={900}>
+            <HalfScreenWeb tab={t.key}/>
+          </DCArtboard>
+        ))}
+      </DCSection>
+
+      {/* — Section 2: Mobile web — */}
+      <DCSection id="mweb" title="② Mobile web" subtitle="390×844 · browser chrome + breadcrumb · full-bleed body">
+        {TABS.map(t=>(
+          <DCArtboard key={t.key} id={`mweb-${t.key}`} label={t.label} width={390} height={844}>
+            <MobileWeb tab={t.key}/>
+          </DCArtboard>
+        ))}
+      </DCSection>
+
+      {/* — Section 3: Mobile app — */}
+      <DCSection id="mapp" title="③ Mobile app" subtitle="Native iOS frame · UINavigationBar instead of breadcrumb">
+        {TABS.map(t=>(
+          <DCArtboard key={t.key} id={`mapp-${t.key}`} label={t.label} width={393} height={852}>
+            <MobileApp tab={t.key}/>
+          </DCArtboard>
+        ))}
+      </DCSection>
+
+      {/* — Section: Full-size desktop web — */}
+      <DCSection id="full-up" title="② Full-size desktop web · upcoming" subtitle="1440×900 · expanded sidebar + show body + music-layer rail">
+        {TABS.map(t=>(
+          <DCArtboard key={t.key} id={`full-up-${t.key}`} label={t.label} width={1440} height={900}>
+            <window.FullWebShell tab={t.key} past={false}/>
+          </DCArtboard>
+        ))}
+      </DCSection>
+
+      {/* — Section: Full-size desktop web — past show */}
+      <DCSection id="full-past" title="③ Full-size desktop web · past show" subtitle="Same shell, post-show state — vibe radar, energy arc, fan loyalty, discovered-live rail">
+        {TABS.map(t=>(
+          <DCArtboard key={t.key} id={`full-past-${t.key}`} label={t.label} width={1440} height={900}>
+            <window.FullWebShell tab={t.key} past={true}/>
+          </DCArtboard>
+        ))}
+      </DCSection>
+
+      {/* — Section: Past-show mobile + half-screen — */}
+      <DCSection id="past-mob" title="④ Past show · narrow viewports" subtitle="Same music-layer features collapse cleanly on mobile and half-screen">
+        <DCArtboard id="past-half" label="Half-screen · setlist" width={760} height={900}>
+          <HalfScreenWeb tab="setlist" past={true}/>
+        </DCArtboard>
+        <DCArtboard id="past-mweb" label="Mobile web · overview" width={390} height={844}>
+          <MobileWeb tab="overview" past={true}/>
+        </DCArtboard>
+        <DCArtboard id="past-mweb-set" label="Mobile web · setlist" width={390} height={844}>
+          <MobileWeb tab="setlist" past={true}/>
+        </DCArtboard>
+        <DCArtboard id="past-app" label="Mobile app · overview" width={393} height={852}>
+          <MobileApp tab="overview" past={true}/>
+        </DCArtboard>
+        <DCArtboard id="past-app-set" label="Mobile app · setlist" width={393} height={852}>
+          <MobileApp tab="setlist" past={true}/>
+        </DCArtboard>
+        <DCArtboard id="past-app-media" label="Mobile app · media" width={393} height={852}>
+          <MobileApp tab="media" past={true}/>
+        </DCArtboard>
+      </DCSection>
+
+      {/* — Section: Music layer atoms — */}
+      <DCSection id="atoms" title="⑤ Music-layer atoms" subtitle="The Spotify-derived components woven through the show page">
+        <DCArtboard id="vibe" label="Vibe radar" width={320} height={360}>
+          <div style={{ padding:24, background:BG, color:INK, height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <window.VibeRadar size={240} profile={window.PAST_SHOW.musicLayer.vibeActual} label={window.PAST_SHOW.musicLayer.vibeLabel}/>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="energy" label="Energy arc" width={620} height={200}>
+          <div style={{ padding:24, background:BG, height:'100%', display:'flex', alignItems:'center' }}>
+            <window.EnergyArc values={window.PAST_SHOW.musicLayer.energyActual} encoreStart={window.PAST_SHOW.musicLayer.encoreStart} width={560} height={120}/>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="hype" label="Hype playlist card" width={520} height={200}>
+          <div style={{ padding:24, background:BG, height:'100%' }}>
+            <window.HypePlaylistCard artist="No Doubt" count={14} mins={92}/>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="loyalty" label="Fan loyalty + priming" width={420} height={260}>
+          <div style={{ padding:24, background:BG, height:'100%', display:'flex', flexDirection:'column', gap:18, justifyContent:'center' }}>
+            <window.FanLoyaltyRing pct={69} total={16} size={92}/>
+            <div style={{ fontFamily:SB.sans, fontSize:13, color:'#9A8E80', fontStyle:'italic', lineHeight:1.5 }}>“You played 6 No Doubt tracks in the 4 hours before the show.”</div>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="discovered" label="Discovered-live rail" width={520} height={260}>
+          <div style={{ padding:24, background:BG, height:'100%' }}>
+            <window.DiscoveredRail tracks={window.PAST_SHOW.musicLayer.discovered}/>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="follow" label="Spotify-follow rail" width={760} height={240}>
+          <div style={{ padding:24, background:BG, height:'100%' }}>
+            <window.SpotifyFollowRail artists={[
+              { name:'Big Thief',  tag:'12k followers', c1:'#5C7CFA', c2:'#0C2A6B' },
+              { name:'Wet Leg',    tag:'8k followers',  c1:'#E2B14F', c2:'#7A5A1F' },
+              { name:'Mitski',     tag:'42k followers', c1:'#D78E94', c2:'#5C2A30' },
+              { name:'Lucy Dacus', tag:'18k followers', c1:'#9AC07F', c2:'#2E4D24' },
+              { name:'boygenius',  tag:'24k followers', c1:'#C8B8E0', c2:'#3A2C5C' },
+            ]}/>
+          </div>
+        </DCArtboard>
+      </DCSection>
+
+      {/* — Section 4: Detail callouts — */}
+      <DCSection id="detail" title="Detail callouts" subtitle="What changes vs. the current screen">
+        <DCArtboard id="callouts" label="Changes from current" width={520} height={620}>
+          <div style={{ padding:'28px', background:'#FAFAF8', height:'100%', fontFamily:SB.sans, fontSize:13, color:'#1A1A1A', lineHeight:1.55 }}>
+            <div style={{ fontFamily:SB.mono, fontSize:10.5, color:'#888', letterSpacing:'.14em', textTransform:'uppercase', marginBottom:14 }}>What's different</div>
+
+            {[
+              ['Hero shrinks', 'Was 280px static; now compact (160-240px) so the tab bar sits in view above the fold.'],
+              ['Tab bar replaces vertical stack', 'Media / Lineup / Setlist / Actions are no longer stacked sections — each gets its own tab and its own canvas.'],
+              ['Stat row keeps 4 cells', 'Venue / Seat / Paid / Doors. The "Doors" cell replaces the redundant "State" cell since TIX badge already covers state.'],
+              ['Setlist tab gains intelligence', 'Confidence %, archetype, source-of-truth, and a Hype Playlist CTA — folded right into the tab.'],
+              ['Actions live inside Overview', 'Mark attended / Edit / Calendar / Delete now sit at the bottom of the Overview tab. No longer the last block of the page.'],
+              ['Notes is its own tab', 'Promotes journaling from a hidden afterthought to a top-level surface — paired with quick prompts to lower the cost of writing.'],
+            ].map(([t,d])=>(
+              <div key={t} style={{ marginBottom:14 }}>
+                <div style={{ fontFamily:SB.sans, fontSize:13.5, fontWeight:600, color:'#0A0A0A', marginBottom:3 }}>{t}</div>
+                <div style={{ fontSize:12.5, color:'#444', lineHeight:1.55 }}>{d}</div>
+              </div>
+            ))}
+          </div>
+        </DCArtboard>
+
+        <DCArtboard id="lifecycle" label="Tab lifecycle" width={520} height={620}>
+          <div style={{ padding:'28px', background:'#FAFAF8', height:'100%', fontFamily:SB.sans, fontSize:13, color:'#1A1A1A' }}>
+            <div style={{ fontFamily:SB.mono, fontSize:10.5, color:'#888', letterSpacing:'.14em', textTransform:'uppercase', marginBottom:14 }}>How tabs evolve</div>
+
+            <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:SB.mono, fontSize:11.5, color:'#1A1A1A' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign:'left', padding:'8px 10px', borderBottom:'1px solid #0002', color:'#888', fontWeight:500 }}>Tab</th>
+                  <th style={{ textAlign:'left', padding:'8px 10px', borderBottom:'1px solid #0002', color:'#888', fontWeight:500 }}>Before show</th>
+                  <th style={{ textAlign:'left', padding:'8px 10px', borderBottom:'1px solid #0002', color:'#888', fontWeight:500 }}>After show</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  ['Overview','Stats · lineup · actions','Stats · lineup · "you went" badge'],
+                  ['Setlist','Predicted (confidence + Hype CTA)','Actual (setlist.fm + Save to Spotify)'],
+                  ['Media','Empty · auto-pulls listed','Photo grid · ticket stub · live playlist'],
+                  ['Notes','Pre-show prompts','Post-show recap prompts'],
+                ].map(([a,b,c])=>(
+                  <tr key={a}>
+                    <td style={{ padding:'10px', borderBottom:'1px solid #0001', verticalAlign:'top', fontWeight:500 }}>{a}</td>
+                    <td style={{ padding:'10px', borderBottom:'1px solid #0001', verticalAlign:'top', color:'#444' }}>{b}</td>
+                    <td style={{ padding:'10px', borderBottom:'1px solid #0001', verticalAlign:'top', color:'#444' }}>{c}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div style={{ marginTop:22, padding:'12px 14px', background:'#fef4a8', color:'#5a4a2a', fontFamily:'system-ui, sans-serif', fontSize:12, lineHeight:1.5 }}>
+              The setlist + media tabs effectively swap content based on whether the show is in the future or past. Tab labels stay constant so muscle memory survives the transition.
+            </div>
+          </div>
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Root/>);
+</script>
+</body>
+</html>
