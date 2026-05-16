@@ -34,6 +34,7 @@ import {
   normalizePerformerSetlistsMap,
   setlistTotalSongs,
   singleMainSet,
+  isFeatureOn,
   type PerformerSetlist,
   type PerformerSetlistsMap,
 } from "@showbook/shared";
@@ -64,16 +65,10 @@ export default function ShowDetailPage() {
     { showId },
     { enabled: Boolean(showId) },
   );
-  // SetlistIntelShowTabs gate — DEV_ONLY by default, so non-developer
-  // users keep the legacy layout. Loading-pending is treated as the
-  // legacy default to avoid a layout flash during initial render.
-  const featureFlagsQuery = trpc.featureFlags.forCurrentUser.useQuery(
-    undefined,
-    { staleTime: 1000 * 60 * 5 },
-  );
-  const useTabsLayout = Boolean(
-    featureFlagsQuery.data?.SetlistIntelShowTabs,
-  );
+  // SetlistIntelShowTabs gate — when ON the page swaps to the new 4-tab
+  // layout. Falls back to the legacy vertical stack when the flag is OFF
+  // so a regression can be rolled back without re-deploying.
+  const useTabsLayout = isFeatureOn("SetlistIntelShowTabs");
 
   const updateState = trpc.shows.updateState.useMutation({
     onSuccess: () => {
