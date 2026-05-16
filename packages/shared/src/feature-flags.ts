@@ -61,13 +61,15 @@ export const FeatureFlag = {
       'Replaces the P1 HypePlaylistCard placeholder with the real ' +
       'Spotify-backed card on the Setlist tab + desktop right rail, ' +
       'and enables `spotify.createHypePlaylist` / ' +
-      '`spotify.createHeardPlaylist` tRPC mutations. OFF in prod by ' +
-      'default; the developer (ADMIN_EMAILS allowlist) bypasses the ' +
-      'gate so the feature can be validated end-to-end against real ' +
-      'Spotify before opening it to all users. Flip to ON once the ' +
-      'Phase 5 rotating-style hide rule lands so we can stop showing a ' +
-      'low-relevance hype playlist to Phish-style fans.',
-    state: 'OFF',
+      '`spotify.createHeardPlaylist` tRPC mutations. Per SI-05 option ' +
+      'C, ships without the rotating-style hide rule — rotating fans ' +
+      '(Phish, etc.) get a low-relevance card in the Phase 3 → Phase 5 ' +
+      'window, which Phase 5 closes. ADMIN_EMAILS still bypasses the ' +
+      'gate, but is a no-op now that the flag is ON globally. Flip ' +
+      'OFF if the Spotify mutations regress in prod (mis-ordered ' +
+      'tracks, duplicate playlists, scope-probe false positives) — ' +
+      'the placeholder absorbs taps with disabled CTAs.',
+    state: 'ON',
   },
 } as const satisfies Record<string, { description: string; state: 'ON' | 'OFF' }>;
 
