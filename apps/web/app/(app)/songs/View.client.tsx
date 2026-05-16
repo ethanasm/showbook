@@ -117,9 +117,9 @@ export default function SongsView() {
       <div style={{ padding: "16px var(--page-pad-x)", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--rule)" }}>
         <div>
           <div className="eyebrow">Songs you&apos;ve heard live</div>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 700, color: "var(--ink)", letterSpacing: "-0.01em", lineHeight: 1.1, marginTop: 4 }}>
+          <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 700, color: "var(--ink)", letterSpacing: "-0.01em", lineHeight: 1.1, marginTop: 4 }}>
             Songs
-          </div>
+          </h1>
         </div>
       </div>
 
