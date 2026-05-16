@@ -432,9 +432,9 @@ export default function AddPage() {
       if (performers.length > 0) count++;
     }
     if (Object.keys(setlistsByPerformer).length > 0) count++;
-    if (tourName && setlistQuery.data) count++;
+    if (tourName && setlistQuery.data && kind !== "festival") count++;
     return count;
-  }, [tmEnriched, venue, date, headliner, performers, setlistsByPerformer, tourName, setlistQuery.data]);
+  }, [tmEnriched, venue, date, headliner, performers, setlistsByPerformer, tourName, setlistQuery.data, kind]);
 
   // ── Handlers ─────────────────────────────────────────────
 
@@ -870,7 +870,7 @@ export default function AddPage() {
         seat: seat || undefined,
         pricePaid: pricePaid || undefined,
         ticketCount: parseInt(ticketCount) || 1,
-        tourName: tourName || undefined,
+        tourName: kind === "festival" ? undefined : (tourName || undefined),
         productionName: productionName || undefined,
         notes: notes || undefined,
         performers: performersWithSetlists.length > 0 ? performersWithSetlists : undefined,
@@ -1820,37 +1820,39 @@ export default function AddPage() {
       {/* ── DETAILS ── */}
       <SectionLabel>Details</SectionLabel>
 
-      {/* Tour name */}
-      <div style={{ marginBottom: 26 }}>
-        <FieldLabel hint={setlistQuery.data?.tourName ? "auto · setlist.fm" : undefined} optional>Tour</FieldLabel>
-        <div style={{
-          padding: "10px 14px",
-          background: "var(--surface)",
-          border: `1px solid var(--rule-strong)`,
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-        }}>
-          <span style={{ color: "var(--muted)", fontSize: 14 }}>♫</span>
-          <input
-            type="text"
-            placeholder="e.g. Romance World Tour"
-            value={tourName}
-            onChange={(e) => setTourName(e.target.value)}
-            style={{
-              flex: 1,
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              fontFamily: sans,
-              fontSize: 14,
-              color: tourName ? "var(--ink)" : "var(--faint)",
-              letterSpacing: -0.1,
-              width: "100%",
-            }}
-          />
+      {/* Tour name — festivals don't have tours */}
+      {kind !== "festival" && (
+        <div style={{ marginBottom: 26 }}>
+          <FieldLabel hint={setlistQuery.data?.tourName ? "auto · setlist.fm" : undefined} optional>Tour</FieldLabel>
+          <div style={{
+            padding: "10px 14px",
+            background: "var(--surface)",
+            border: `1px solid var(--rule-strong)`,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}>
+            <span style={{ color: "var(--muted)", fontSize: 14 }}>♫</span>
+            <input
+              type="text"
+              placeholder="e.g. Romance World Tour"
+              value={tourName}
+              onChange={(e) => setTourName(e.target.value)}
+              style={{
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                fontFamily: sans,
+                fontSize: 14,
+                color: tourName ? "var(--ink)" : "var(--faint)",
+                letterSpacing: -0.1,
+                width: "100%",
+              }}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Notes */}
       <div style={{ marginBottom: 26 }}>
@@ -2510,7 +2512,7 @@ export default function AddPage() {
       const perTicket = (parseFloat(pricePaid) / count).toFixed(2);
       detailRows.push(["Paid", `$${pricePaid}${count > 1 ? ` ($${perTicket}/ea × ${count})` : ""}`]);
     }
-    if (tourName) detailRows.push(["Tour", tourName]);
+    if (tourName && kind !== "festival") detailRows.push(["Tour", tourName]);
     const totalSongs = Object.values(setlistsByPerformer).reduce(
       (sum, sl) => sum + setlistTotalSongs(sl),
       0,
