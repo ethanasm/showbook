@@ -267,6 +267,16 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
     }, 500);
   }, [listFollowed, utils.spotify.connectionStatus]);
 
+  // Direct listFollowed trigger for callers that already know the user is
+  // connected (the preferences page reads `connectionStatus` and uses this
+  // to load the picker without bouncing through OAuth again). The popup
+  // flow lives in `startConnect`; this is the no-popup fast path.
+  const loadArtists = useCallback(() => {
+    setError(null);
+    setImportedCount(null);
+    listFollowed.mutate({});
+  }, [listFollowed]);
+
   const toggle = useCallback((spotifyId: string, importable: boolean) => {
     if (!importable) return;
     setSelected((prev) => {
@@ -316,6 +326,7 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
     importedCount,
     isImporting: importSelected.isPending,
     startConnect,
+    loadArtists,
     toggle,
     submitImport,
     reset,
