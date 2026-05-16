@@ -249,6 +249,16 @@ jobs:
       # scripts/setup-runner-android.sh, and EAS Build's free tier is
       # too tight to cover per-PR runs.
       #
+      # We build the **release** variant, not debug. With `expo-dev-client`
+      # in dependencies, `assembleDebug` produces a dev-client APK that
+      # shows the "Development Build / Start a local development server"
+      # launcher and waits for Metro — there's no Metro in CI, so the
+      # Showbook UI never renders and Maestro times out asserting on
+      # signin text that doesn't exist on screen. `assembleRelease`
+      # bundles the JS into the APK (via Hermes/Metro at build time) and
+      # is signed with the debug keystore by Expo's prebuild template,
+      # so the APK is self-contained and installable.
+      #
       # The bundled-env auth bypass (lib/auth-helpers.ts) reads
       # EXPO_PUBLIC_E2E_TEST_TOKEN / EXPO_PUBLIC_E2E_TEST_USER_JSON
       # inlined at build time, so the Maestro flow YAML doesn't need
@@ -271,10 +281,10 @@ jobs:
           cd android
           # --build-cache uses the restored gradle caches; --no-daemon
           # keeps the runner clean between invocations.
-          ./gradlew :app:assembleDebug \
+          ./gradlew :app:assembleRelease \
             --no-daemon --console=plain \
             --build-cache
-          APK="app/build/outputs/apk/debug/app-debug.apk"
+          APK="app/build/outputs/apk/release/app-release.apk"
           ls -lh "$APK"
           cp "$APK" /tmp/showbook-e2e.apk
           echo "::group::Memory after build"
