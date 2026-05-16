@@ -17,6 +17,7 @@ import {
   isProductionShow,
   type ShowLike,
 } from "@showbook/shared";
+import { isFeatureOn } from "@showbook/shared";
 import { MediaSection } from "@/components/media";
 import { ShowTabs } from "./ShowTabs";
 import { OverviewTab, type OverviewLineupEntry } from "./OverviewTab";
@@ -90,6 +91,17 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
     { staleTime: 5 * 60_000 },
   );
   const hypePlaylistEnabled = Boolean(hypeFeatureQuery.data?.enabled);
+
+  // Phase 2 — inline song badges. Only fetch for past shows where
+  // there's a setlist on record AND the Songs surface is on.
+  const songsFlagOn = isFeatureOn("SetlistIntelSongs");
+  const badgeQuery = trpc.shows.songBadges.useQuery(
+    { showId: show.id },
+    {
+      enabled: isPast && songsFlagOn,
+      staleTime: 1000 * 60 * 5,
+    },
+  );
 
   const setNotes = trpc.shows.setNotes.useMutation({
     onSuccess: () => {
@@ -274,6 +286,7 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
         predictionLoading={predictionQuery.isLoading}
         actualSongs={actualSongs}
         hypePlaylistEnabled={hypePlaylistEnabled}
+        badgePayload={badgeQuery.data ?? null}
       />
     );
 

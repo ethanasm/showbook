@@ -124,6 +124,16 @@ export {
   type ShowPerformerLike,
 } from '@showbook/shared';
 
+// Setlist intelligence — Phase 2 (badges + songs surface)
+export {
+  computeSongBadges,
+  RARE_THRESHOLD,
+  type SongBadge,
+  type SongBadgesMap,
+  type ComputeSongBadgesInput,
+} from './song-badges';
+export { rowIsUserDebut } from './routers/songs';
+
 // Setlist intelligence — Phase 1 (predict + corpus types)
 export {
   predictSetlist,

@@ -9,7 +9,11 @@ import {
   announcements,
   venues,
   performers,
+  setlistSongAppearances,
+  songs,
+  tourSetlists,
 } from '@showbook/db';
+import { computeSongBadges, type SongBadgesMap } from '../song-badges';
 import { matchOrCreateVenue, type VenueInput } from '../venue-matcher';
 import {
   matchOrCreatePerformer,
@@ -1148,5 +1152,141 @@ export const showsRouter = router({
         .returning({ id: shows.id });
 
       return { deleted: deleted.length };
+    }),
+
+  /**
+   * Inline song badges for the Setlist tab on show detail. Returns a
+   * sparse map keyed by songId; the UI iterates over the displayed
+   * setlist titles and looks each one up. Songs with no badge don't
+   * appear in the map so the client can short-circuit when nothing
+   * renders.
+   *
+   * The procedure runs four small queries that all share the same
+   * `(songIds, performerIds)` indexes on `setlist_song_appearances`,
+   * so this is a cheap call even for a 40-song setlist.
+   */
+  songBadges: protectedProcedure
+    .input(z.object({ showId: z.string().uuid() }))
+    .query(async ({ ctx, input }): Promise<{
+      badges: SongBadgesMap;
+      /** Title-lowercase → songId mapping for the songs at this show.
+       *  The Setlist tab's actual-setlist rows are keyed by raw title
+       *  (no songId), so we hand the UI a lookup map it can use to:
+       *    - resolve the badge for a row, and
+       *    - tap the title through to /songs/[songId]. */
+      titleToSongId: Record<string, string>;
+    }> => {
+      const userId = ctx.session.user.id;
+
+      // 1. Pull the (songId, performerId, date) trios for this show
+      //    via the user-scoped appearance index. If nothing's indexed
+      //    yet (corpus-fill / song-index-rebuild hasn't run for this
+      //    performer) we return an empty map and the rows render plain.
+      const [showRow] = await ctx.db
+        .select({ id: shows.id, date: shows.date })
+        .from(shows)
+        .where(and(eq(shows.id, input.showId), eq(shows.userId, userId)))
+        .limit(1);
+      if (!showRow) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+      }
+
+      const appearancesAtShow = await ctx.db
+        .select({
+          songId: setlistSongAppearances.songId,
+          performerId: setlistSongAppearances.performerId,
+        })
+        .from(setlistSongAppearances)
+        .where(eq(setlistSongAppearances.showId, input.showId));
+      if (appearancesAtShow.length === 0) {
+        return { badges: {}, titleToSongId: {} };
+      }
+
+      const songIds = Array.from(
+        new Set(appearancesAtShow.map((r) => r.songId)),
+      );
+      const performerIds = Array.from(
+        new Set(appearancesAtShow.map((r) => r.performerId)),
+      );
+
+      // 2. Earliest attended date per song for this user. We compare
+      //    against the show's date to decide the 🆕 first-time flag.
+      const firstAppearances = await ctx.db
+        .select({
+          songId: setlistSongAppearances.songId,
+          firstDate: sql<string>`MIN(${setlistSongAppearances.performanceDate})`,
+        })
+        .from(setlistSongAppearances)
+        .innerJoin(shows, eq(shows.id, setlistSongAppearances.showId))
+        .where(
+          and(
+            eq(shows.userId, userId),
+            inArray(setlistSongAppearances.songId, songIds),
+          ),
+        )
+        .groupBy(setlistSongAppearances.songId);
+
+      // 3. Corpus hits per song in the last 12 months. Multiple
+      //    performers on one show (festival lineup) → one OR-joined
+      //    query keyed on songIds. Hits is tour-setlist-scoped (only
+      //    rows where tour_setlist_id is set).
+      const corpusFrequencies = await ctx.db
+        .select({
+          songId: setlistSongAppearances.songId,
+          corpusHits: sql<number>`COUNT(DISTINCT ${setlistSongAppearances.tourSetlistId})::int`,
+        })
+        .from(setlistSongAppearances)
+        .where(
+          and(
+            inArray(setlistSongAppearances.songId, songIds),
+            sql`${setlistSongAppearances.tourSetlistId} IS NOT NULL`,
+            sql`${setlistSongAppearances.performanceDate} > (CURRENT_DATE - INTERVAL '12 months')`,
+          ),
+        )
+        .groupBy(setlistSongAppearances.songId);
+
+      // 4. Performer corpus totals — the denominator for rarity. We
+      //    use the *max* across the show's performers so a festival
+      //    with one well-corpus'd headliner doesn't get false rarity
+      //    just because an obscure support act has zero corpus rows.
+      const perfTotals = await ctx.db
+        .select({
+          performerId: tourSetlists.performerId,
+          total: sql<number>`COUNT(DISTINCT ${tourSetlists.id})::int`,
+        })
+        .from(tourSetlists)
+        .where(
+          and(
+            inArray(tourSetlists.performerId, performerIds),
+            sql`${tourSetlists.performanceDate} > (CURRENT_DATE - INTERVAL '12 months')`,
+          ),
+        )
+        .groupBy(tourSetlists.performerId);
+      const corpusTotal = perfTotals.reduce(
+        (acc, row) => Math.max(acc, row.total),
+        0,
+      );
+
+      const badges = computeSongBadges({
+        songIds,
+        showDate: showRow.date,
+        firstAppearances,
+        corpusFrequencies,
+        corpusTotalForPerformer: corpusTotal,
+      });
+
+      // Title → songId map for the UI. We always populate this even
+      // when the badge map is sparse, so the row title can still tap
+      // through to the song detail page.
+      const titleRows = await ctx.db
+        .select({ id: songs.id, title: songs.title })
+        .from(songs)
+        .where(inArray(songs.id, songIds));
+      const titleToSongId: Record<string, string> = {};
+      for (const row of titleRows) {
+        titleToSongId[row.title.toLowerCase()] = row.id;
+      }
+
+      return { badges, titleToSongId };
     }),
 });
