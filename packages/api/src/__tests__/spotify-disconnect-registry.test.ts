@@ -90,11 +90,19 @@ describe('spotify-disconnect-registry: schema scan', () => {
     const tables = getAllTables();
     const unknown: string[] = [];
 
+    const wholeTablePurges = new Set(
+      USER_SCOPED_PURGE_TABLES.map((p) => p.table),
+    );
+
     for (const t of tables) {
       // Whole tables that are already audit-flagged at the table
       // level cover all their columns (e.g. `user_spotify_tokens`'s
       // `spotify_user_id` doesn't need its own entry).
       if (USER_SCOPED_AUDIT.includes(t.name)) continue;
+      // Tables whose rows are DELETEd wholesale on disconnect don't
+      // need column-level categorization either — every column goes
+      // when the row goes (e.g. `show_spotify_playlists.spotify_url`).
+      if (wholeTablePurges.has(t.name)) continue;
 
       for (const col of t.columns) {
         if (!hasSpotifyShapedName(col)) continue;

@@ -15,6 +15,7 @@ export { StatRow, type StatCell } from "./StatRow";
 export { SectionFrame } from "./SectionFrame";
 export { SpoilerCurtain } from "./SpoilerCurtain";
 export { HypePlaylistCardPlaceholder } from "./HypePlaylistCardPlaceholder";
+export { HypePlaylistCard } from "./HypePlaylistCard";
 export { PredictedSetlistRow } from "./PredictedSetlistRow";
 export { EncoreDivider } from "./EncoreDivider";
 export { MusicLayerEmpty } from "./MusicLayerEmpty";
