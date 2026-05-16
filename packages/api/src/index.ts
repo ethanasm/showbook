@@ -1,7 +1,14 @@
 export { appRouter, type AppRouter } from './root';
 export { createContext, type Session } from './trpc';
-export { searchArtist, searchSetlist, getUserAttended, SetlistFmError } from './setlistfm';
-export type { ArtistSearchResult, SetlistResult, AttendedSetlist, AttendedPage } from './setlistfm';
+export { searchArtist, searchSetlist, getUserAttended, fetchArtistSetlists, SetlistFmError } from './setlistfm';
+export type {
+  ArtistSearchResult,
+  SetlistResult,
+  AttendedSetlist,
+  AttendedPage,
+  ArtistSetlistEntry,
+  FetchArtistSetlistsOptions,
+} from './setlistfm';
 
 // Data-source clients & matchers
 export {

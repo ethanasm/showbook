@@ -12,6 +12,7 @@ import { spotifyImportRouter } from './routers/spotify-import';
 import { appleMusicImportRouter } from './routers/apple-music-import';
 import { adminRouter } from './routers/admin';
 import { importsRouter } from './routers/imports';
+import { setlistIntelRouter } from './routers/setlist-intel';
 export const appRouter = router({
   shows: showsRouter,
   venues: venuesRouter,
@@ -26,6 +27,7 @@ export const appRouter = router({
   appleMusicImport: appleMusicImportRouter,
   imports: importsRouter,
   admin: adminRouter,
+  setlistIntel: setlistIntelRouter,
 });
 
 export type AppRouter = typeof appRouter;
