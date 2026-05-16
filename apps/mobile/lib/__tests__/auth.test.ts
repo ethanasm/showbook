@@ -328,16 +328,12 @@ describe('describeSignInError', () => {
 });
 
 describe('isExpoGoAuthUnsupported', () => {
-  it('returns true for Expo Go ownership or config', () => {
-    assert.equal(isExpoGoAuthUnsupported({ appOwnership: 'expo' }), true);
-    assert.equal(
-      isExpoGoAuthUnsupported({ appOwnership: null, expoGoConfig: { sdkVersion: '55.0.0' } }),
-      true,
-    );
-    assert.equal(isExpoGoAuthUnsupported({ appOwnership: 'standalone' }), false);
-    assert.equal(isExpoGoAuthUnsupported({ appOwnership: 'guest' }), false);
-    assert.equal(isExpoGoAuthUnsupported({ appOwnership: null }), false);
-    assert.equal(isExpoGoAuthUnsupported({ appOwnership: undefined }), false);
+  it('returns true only for Expo Go ownership', () => {
+    assert.equal(isExpoGoAuthUnsupported('expo'), true);
+    assert.equal(isExpoGoAuthUnsupported('standalone'), false);
+    assert.equal(isExpoGoAuthUnsupported('guest'), false);
+    assert.equal(isExpoGoAuthUnsupported(null), false);
+    assert.equal(isExpoGoAuthUnsupported(undefined), false);
   });
 });
 

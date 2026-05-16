@@ -140,11 +140,8 @@ export function mobileTokenEndpoint(apiUrl: string): string {
   return url.toString();
 }
 
-export function isExpoGoAuthUnsupported(args: {
-  appOwnership: string | null | undefined;
-  expoGoConfig?: unknown;
-}): boolean {
-  return args.appOwnership === 'expo' || args.expoGoConfig != null;
+export function isExpoGoAuthUnsupported(appOwnership: string | null | undefined): boolean {
+  return appOwnership === 'expo';
 }
 
 export const E2E_TOKEN_KEY = 'e2e.test-token';
