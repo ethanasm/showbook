@@ -63,7 +63,7 @@ Set locally via shell or `.env.local`. Mobile-side vars are prefixed
 
 | Var | Default | Required for |
 |---|---|---|
-| `EXPO_PUBLIC_API_URL` | `https://showbook.example.com` | tRPC target. Override to your LAN IP or `http://localhost:3001` for local dev against the web stack. |
+| `EXPO_PUBLIC_API_URL` | - | tRPC target. Use `https://localhost:3001` for an iOS simulator pointed at the local web stack with the dev cert, or a LAN/tunnel URL for a physical device. |
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS` | - | iOS sign-in |
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID` | - | Android sign-in |
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB` | - | Expo web preview sign-in |

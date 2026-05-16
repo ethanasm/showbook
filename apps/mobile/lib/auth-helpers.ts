@@ -38,13 +38,20 @@ export async function exchangeGoogleIdTokenForSession(args: {
   fetchImpl?: typeof fetch;
 }): Promise<SessionData> {
   const { idToken, apiUrl, fetchImpl = fetch } = args;
-  const res = await fetchImpl(`${apiUrl}/api/auth/mobile-token`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ idToken }),
-  });
+  const endpoint = mobileTokenEndpoint(apiUrl);
+  let res: Response;
+  try {
+    res = await fetchImpl(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ idToken }),
+    });
+  } catch {
+    throw new Error('api_unreachable');
+  }
   if (res.status === 401) throw new Error('invalid_google_token');
   if (res.status === 403) throw new Error('access_denied');
+  if (res.status === 429) throw new Error('rate_limited');
   if (!res.ok) throw new Error(`server_error_${res.status}`);
 
   let data: unknown;
@@ -66,10 +73,14 @@ export async function exchangeGoogleIdTokenForSession(args: {
 export function describeSignInError(err: unknown): string {
   if (err instanceof Error) {
     switch (err.message) {
+      case 'api_url_invalid':
+        return 'Sign-in is not configured: EXPO_PUBLIC_API_URL must be a full http:// or https:// URL.';
+      case 'api_unreachable':
+        return 'Showbook is not reachable. Start the web app and make EXPO_PUBLIC_API_URL point to it.';
       case 'expo_go_oauth_unsupported':
         return 'Google sign-in cannot run in Expo Go. Use a development build so Google receives the app redirect URI.';
       case 'invalid_google_token':
-        return 'Google rejected the sign-in. Please try again.';
+        return 'Google rejected the sign-in token. Check GOOGLE_OAUTH_MOBILE_AUDIENCES on the web app.';
       case 'access_denied':
         return 'Access denied. Contact the admin to be added to the allowlist.';
       case 'invalid_response':
@@ -78,7 +89,12 @@ export function describeSignInError(err: unknown): string {
         return 'Sign-in was cancelled.';
       case 'oauth_error':
         return 'Google sign-in failed. Please try again.';
+      case 'rate_limited':
+        return 'Too many sign-in attempts. Wait a minute and try again.';
       default:
+        if (err.message === 'server_error_500') {
+          return 'Showbook sign-in is misconfigured. Check AUTH_SECRET and GOOGLE_OAUTH_MOBILE_AUDIENCES on the web app.';
+        }
         if (err.message.startsWith('server_error_')) {
           return "We couldn't reach Showbook. Please try again in a moment.";
         }
@@ -108,8 +124,27 @@ export function isE2EMode(envValue: string | undefined = process.env.EXPO_PUBLIC
   return envValue === '1';
 }
 
-export function isExpoGoAuthUnsupported(appOwnership: string | null | undefined): boolean {
-  return appOwnership === 'expo';
+export function mobileTokenEndpoint(apiUrl: string): string {
+  let url: URL;
+  try {
+    url = new URL(apiUrl);
+  } catch {
+    throw new Error('api_url_invalid');
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error('api_url_invalid');
+  }
+  url.pathname = `${url.pathname.replace(/\/+$/, '')}/api/auth/mobile-token`;
+  url.search = '';
+  url.hash = '';
+  return url.toString();
+}
+
+export function isExpoGoAuthUnsupported(args: {
+  appOwnership: string | null | undefined;
+  expoGoConfig?: unknown;
+}): boolean {
+  return args.appOwnership === 'expo' || args.expoGoConfig != null;
 }
 
 export const E2E_TOKEN_KEY = 'e2e.test-token';

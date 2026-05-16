@@ -268,7 +268,12 @@ export function AuthProvider({
     }
     // ---- END E2E TEST MODE BYPASS ----
 
-    if (isExpoGoAuthUnsupported(Constants.appOwnership)) {
+    if (
+      isExpoGoAuthUnsupported({
+        appOwnership: Constants.appOwnership,
+        expoGoConfig: Constants.expoGoConfig,
+      })
+    ) {
       setError(describeSignInError(new Error('expo_go_oauth_unsupported')));
       return;
     }

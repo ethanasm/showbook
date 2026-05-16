@@ -264,17 +264,22 @@ authenticates against the web backend via the
 `@showbook/api` tRPC routers as the web client.
 
 ```bash
-pnpm mobile:start       # Metro bundler
-pnpm mobile:ios         # build + open in iOS Simulator
-pnpm mobile:android     # build + open in Android emulator
+pnpm mobile:start       # Metro bundler for Expo Go
+pnpm mobile:ios         # open iOS Simulator with Expo Go
+pnpm mobile:android     # open Android emulator with Expo Go
+pnpm mobile:ios:dev     # build + install iOS development client
+pnpm mobile:android:dev # build + install Android development client
+pnpm mobile:start:dev-client
 pnpm mobile:typecheck
 pnpm mobile:lint
 pnpm mobile:test
 ```
 
-Defaults to the prod Cloudflare Tunnel hostname for its backend; override
-`EXPO_PUBLIC_API_URL` to your LAN IP or `http://localhost:3001` for
-local dev. Build / submit / push-notification follow-ups live in
+Set `EXPO_PUBLIC_API_URL` to `https://localhost:3001` for an iOS
+simulator pointed at the local web stack with the dev cert, or to a
+LAN/tunnel URL for a physical device. Google sign-in requires the development client or a
+signed native build; Expo Go uses an `exp://...` redirect URI that
+Google rejects. Build / submit / push-notification follow-ups live in
 [`showbook-specs/mobile-deployment.md`](showbook-specs/mobile-deployment.md)
 and [`showbook-specs/planned-improvements.md`](./showbook-specs/planned-improvements.md).
 
