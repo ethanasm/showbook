@@ -21,14 +21,18 @@ Then from this directory:
 
 ```bash
 pnpm start         # start Metro bundler
-pnpm ios           # build + open in iOS Simulator
-pnpm android       # build + open in Android emulator
+pnpm ios           # start Metro and open iOS Simulator with Expo Go
+pnpm android       # start Metro and open Android emulator with Expo Go
+pnpm ios:dev       # build + install the iOS development client
+pnpm android:dev   # build + install the Android development client
+pnpm start:dev-client
 pnpm typecheck
 pnpm lint
 pnpm test
 ```
 
 Or use the repo-root shortcuts (`pnpm mobile:start`, `pnpm mobile:ios`,
+`pnpm mobile:ios:dev`, `pnpm mobile:start:dev-client`,
 `pnpm mobile:typecheck`, etc.) — they forward to this package.
 
 ## Test coverage
@@ -63,6 +67,12 @@ prefixed `EXPO_PUBLIC_` so Expo inlines them at build time.
 The backend (`apps/web`) needs `GOOGLE_OAUTH_MOBILE_AUDIENCES` set
 to the comma-separated list of these client IDs so it accepts the
 mobile-issued ID tokens at `POST /api/auth/mobile-token`.
+
+Google sign-in must run from a development build or signed native
+build. Expo Go uses an `exp://...` redirect URI, which Google rejects
+for this native OAuth flow. For local simulator testing, run
+`pnpm mobile:ios:dev` once after native dependency changes, then use
+`pnpm mobile:start:dev-client` for subsequent JS-only reloads.
 
 ## Status
 

@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import {
   exchangeGoogleIdTokenForSession,
   describeSignInError,
+  isExpoGoAuthUnsupported,
   isE2EMode,
   loadE2ETestSession,
   E2E_TOKEN_KEY,
@@ -237,6 +238,11 @@ describe('describeSignInError', () => {
     assert.match(msg, /cancel/i);
   });
 
+  it('maps Expo Go OAuth attempts to a development build message', () => {
+    const msg = describeSignInError(new Error('expo_go_oauth_unsupported'));
+    assert.match(msg, /Expo Go|development build|redirect URI/i);
+  });
+
   it('falls back to a generic message for unknown errors', () => {
     const msg = describeSignInError(new Error('something_random'));
     assert.match(msg, /couldn'?t sign you in/i);
@@ -245,6 +251,16 @@ describe('describeSignInError', () => {
   it('handles non-Error throwables', () => {
     const msg = describeSignInError('string thrown');
     assert.match(msg, /couldn'?t sign you in/i);
+  });
+});
+
+describe('isExpoGoAuthUnsupported', () => {
+  it('returns true only for Expo Go ownership', () => {
+    assert.equal(isExpoGoAuthUnsupported('expo'), true);
+    assert.equal(isExpoGoAuthUnsupported('standalone'), false);
+    assert.equal(isExpoGoAuthUnsupported('guest'), false);
+    assert.equal(isExpoGoAuthUnsupported(null), false);
+    assert.equal(isExpoGoAuthUnsupported(undefined), false);
   });
 });
 

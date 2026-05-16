@@ -42,6 +42,7 @@
 
 import React from 'react';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
@@ -55,6 +56,7 @@ import {
 import {
   exchangeGoogleIdTokenForSession,
   describeSignInError,
+  isExpoGoAuthUnsupported,
   isE2EMode,
   loadE2ETestSession,
   type SessionUser,
@@ -265,6 +267,11 @@ export function AuthProvider({
       return;
     }
     // ---- END E2E TEST MODE BYPASS ----
+
+    if (isExpoGoAuthUnsupported(Constants.appOwnership)) {
+      setError(describeSignInError(new Error('expo_go_oauth_unsupported')));
+      return;
+    }
 
     const platform: 'ios' | 'android' | 'web' =
       Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';

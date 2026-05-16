@@ -66,6 +66,8 @@ export async function exchangeGoogleIdTokenForSession(args: {
 export function describeSignInError(err: unknown): string {
   if (err instanceof Error) {
     switch (err.message) {
+      case 'expo_go_oauth_unsupported':
+        return 'Google sign-in cannot run in Expo Go. Use a development build so Google receives the app redirect URI.';
       case 'invalid_google_token':
         return 'Google rejected the sign-in. Please try again.';
       case 'access_denied':
@@ -104,6 +106,10 @@ export function describeSignInError(err: unknown): string {
  */
 export function isE2EMode(envValue: string | undefined = process.env.EXPO_PUBLIC_E2E_MODE): boolean {
   return envValue === '1';
+}
+
+export function isExpoGoAuthUnsupported(appOwnership: string | null | undefined): boolean {
+  return appOwnership === 'expo';
 }
 
 export const E2E_TOKEN_KEY = 'e2e.test-token';
