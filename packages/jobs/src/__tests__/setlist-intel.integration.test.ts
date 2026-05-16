@@ -237,12 +237,15 @@ describe('setlist-intel integration', () => {
 });
 
 async function cleanup(): Promise<void> {
-  await db.delete(setlistSongAppearances).where(like(setlistSongAppearances.performerId, `${PREFIX}-%`));
-  await db.delete(songs).where(like(songs.performerId, `${PREFIX}-%`));
-  await db.delete(tourSetlists).where(like(tourSetlists.performerId, `${PREFIX}-%`));
-  await db.delete(showPerformers).where(like(showPerformers.showId, `${PREFIX}-%`));
-  await db.delete(shows).where(like(shows.id, `${PREFIX}-%`));
-  await db.delete(performers).where(like(performers.id, `${PREFIX}-%`));
-  await db.delete(venues).where(like(venues.id, `${PREFIX}-%`));
+  // `like` on a uuid column would fail with `operator does not exist:
+  // uuid ~~ unknown`; cast to text via `::text` before pattern-matching.
+  await db.execute(sql`DELETE FROM setlist_song_appearances WHERE performer_id::text LIKE ${PREFIX + '-%'}`);
+  await db.execute(sql`DELETE FROM songs WHERE performer_id::text LIKE ${PREFIX + '-%'}`);
+  await db.execute(sql`DELETE FROM tour_setlists WHERE performer_id::text LIKE ${PREFIX + '-%'}`);
+  await db.execute(sql`DELETE FROM show_performers WHERE show_id::text LIKE ${PREFIX + '-%'}`);
+  await db.execute(sql`DELETE FROM shows WHERE id::text LIKE ${PREFIX + '-%'}`);
+  await db.execute(sql`DELETE FROM performers WHERE id::text LIKE ${PREFIX + '-%'}`);
+  await db.execute(sql`DELETE FROM venues WHERE id::text LIKE ${PREFIX + '-%'}`);
   await db.delete(users).where(like(users.id, `${PREFIX}-%`));
+  await db.execute(sql`DELETE FROM prediction_cache WHERE performer_id::text LIKE ${PREFIX + '-%'}`);
 }
