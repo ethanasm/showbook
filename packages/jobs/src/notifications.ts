@@ -27,7 +27,30 @@ function getFromAddress(): string {
 const FALLBACK_CUTOFF_DAYS = 7;
 const ANNOUNCEMENT_CAP = 50;
 
-function getResend(): Resend | null {
+/**
+ * Minimal subset of the Resend SDK that `runDailyDigest` calls into.
+ * Defined as an interface so tests can inject a fake without leaning on
+ * Node's experimental `mock.module` for the `resend` specifier — that
+ * mock doesn't intercept reliably once another test file has already
+ * imported the real SDK in the same `node --test` invocation (the module
+ * cache wins).
+ */
+export interface ResendDigestClient {
+  emails: {
+    send(payload: {
+      from: string;
+      to: string;
+      subject: string;
+      html: string;
+      headers?: Record<string, string>;
+    }): Promise<{
+      data: { id: string } | null;
+      error: { name?: string; message: string } | null;
+    }>;
+  };
+}
+
+function getResend(): ResendDigestClient | null {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     log.warn(
@@ -36,7 +59,7 @@ function getResend(): Resend | null {
     );
     return null;
   }
-  return new Resend(key);
+  return new Resend(key) as unknown as ResendDigestClient;
 }
 
 function getAppUrl(): string {
@@ -208,11 +231,20 @@ export function bucketAnnouncementsForUser(
 
 // ── Main runner ────────────────────────────────────────────────────────
 
-export async function runDailyDigest(): Promise<{
+export interface RunDailyDigestOptions {
+  /** Override the Resend client for tests. When unset the runner
+   *  constructs one from `RESEND_API_KEY`; when null is supplied, email
+   *  sending falls back to the dry-run branch. */
+  resend?: ResendDigestClient | null;
+}
+
+export async function runDailyDigest(
+  opts: RunDailyDigestOptions = {},
+): Promise<{
   sent: number;
   skipped: number;
 }> {
-  const resend = getResend();
+  const resend = opts.resend !== undefined ? opts.resend : getResend();
   const appUrl = getAppUrl();
   let sent = 0;
   let skipped = 0;
@@ -449,13 +481,32 @@ export async function runDailyDigest(): Promise<{
         continue;
       }
 
-      await resend.emails.send({
+      // Resend's SDK resolves successfully even when the API rejects the
+      // send (bounce, unverified domain, rate limit, …) — failure is signalled
+      // via `result.error`, not by throwing. Without this guard we'd count
+      // rejects as sent, update lastDigestSentAt, and the per-user
+      // idempotency check above would then block tomorrow's send too.
+      const sendResult = await resend.emails.send({
         from: getFromAddress(),
         to: user.email,
         subject,
         html,
         headers: { 'X-Entity-Ref-ID': idempotencyKey },
       });
+
+      if (sendResult.error) {
+        log.error(
+          {
+            event: 'notifications.digest.send_failed',
+            userId: user.userId,
+            resendErrorName: sendResult.error.name,
+            resendErrorMessage: sendResult.error.message,
+          },
+          'Resend rejected the digest send',
+        );
+        skipped++;
+        continue;
+      }
 
       await db
         .update(userPreferences)
@@ -470,6 +521,7 @@ export async function runDailyDigest(): Promise<{
           todayShows: todayShows.length,
           upcomingShows: upcomingShows.length,
           newAnnouncements: newAnnouncements.length,
+          resendId: sendResult.data?.id ?? null,
         },
         'Digest sent',
       );
