@@ -94,3 +94,25 @@ export {
   type ShowLike,
   type ShowPerformerLike,
 } from '@showbook/shared';
+
+// Setlist intelligence — Phase 1 (predict + corpus types)
+export {
+  predictSetlist,
+  predictedSetlistCached,
+  loadCorpusForPrediction,
+  coldPrediction,
+  bucketTiers,
+  aggregate,
+  pickActiveTour,
+  pickRole,
+  bucketByProbability,
+  computeConfidence,
+  type PredictedSetlistResult,
+  type PredictedSong,
+  type HotPrediction,
+  type ColdPrediction,
+  type ColdReason,
+  type SongRole,
+  type TourCoverage,
+  type CorpusRow,
+} from './setlist-predict';

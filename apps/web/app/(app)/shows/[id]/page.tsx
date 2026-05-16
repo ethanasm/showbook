@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
+import { ShowDetailTabsView } from "@/components/show-tabs";
 import {
   MapPin,
   MoreHorizontal,
@@ -63,6 +64,16 @@ export default function ShowDetailPage() {
     { showId },
     { enabled: Boolean(showId) },
   );
+  // SetlistIntelShowTabs gate — DEV_ONLY by default, so non-developer
+  // users keep the legacy layout. Loading-pending is treated as the
+  // legacy default to avoid a layout flash during initial render.
+  const featureFlagsQuery = trpc.featureFlags.forCurrentUser.useQuery(
+    undefined,
+    { staleTime: 1000 * 60 * 5 },
+  );
+  const useTabsLayout = Boolean(
+    featureFlagsQuery.data?.SetlistIntelShowTabs,
+  );
 
   const updateState = trpc.shows.updateState.useMutation({
     onSuccess: () => {
@@ -113,6 +124,14 @@ export default function ShowDetailPage() {
   }
 
   const show = detailQuery.data;
+
+  // New 4-tab layout (gated by SetlistIntelShowTabs feature flag).
+  // Renders against the same `shows.detail` payload as the legacy
+  // layout below.
+  if (useTabsLayout) {
+    return <ShowDetailTabsView show={show as Parameters<typeof ShowDetailTabsView>[0]["show"]} />;
+  }
+
   const KindIcon = KIND_ICONS[show.kind as ShowKind];
   const days = daysUntil(show.date);
   const lastDay = show.endDate ?? show.date;

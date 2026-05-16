@@ -6,7 +6,18 @@
  * Lifecycle: land as 'OFF' with the no-op branch matching current
  * behaviour; flip to 'ON' after dev/E2E validation; delete the flag and
  * its OFF branch in a cleanup PR after a clean week in Axiom.
+ *
+ * State values:
+ *   - `'ON'`       — feature enabled for every caller.
+ *   - `'OFF'`      — feature disabled for every caller.
+ *   - `'DEV_ONLY'` — enabled only when the caller's email matches the
+ *                    operator allowlist (`ADMIN_EMAILS` env, parsed by
+ *                    `@showbook/api`'s `isAdminEmail`). Used while a
+ *                    feature is mid-rollout and the developer wants to
+ *                    dogfood without exposing to other users.
  */
+export type FeatureFlagState = 'ON' | 'OFF' | 'DEV_ONLY';
+
 export const FeatureFlag = {
   GmailScanPdfAttachments: {
     description:
@@ -35,10 +46,41 @@ export const FeatureFlag = {
       'connects; flipped ON via PR if the probe returns 200.',
     state: 'OFF',
   },
-} as const satisfies Record<string, { description: string; state: 'ON' | 'OFF' }>;
+  SetlistIntelShowTabs: {
+    description:
+      'Phase 1 (setlist-intelligence) show-page redesign. Replaces the ' +
+      'legacy vertical-stack /(app)/shows/[id]/ layout with the 4-tab ' +
+      '(Overview / Setlist / Media / Notes) shell from the 2026-05-16 ' +
+      'design handoff. While DEV_ONLY, only operators in ADMIN_EMAILS ' +
+      'see the new layout; everyone else keeps the legacy page. Flip ' +
+      'to ON once the algorithm + jobs have run cleanly for 7 days.',
+    state: 'DEV_ONLY',
+  },
+} as const satisfies Record<string, { description: string; state: FeatureFlagState }>;
 
 export type FeatureFlagKey = keyof typeof FeatureFlag;
 
+/**
+ * Static `ON`/`OFF` check. For per-user `DEV_ONLY` gating use
+ * `isFeatureOnFor` and pass the caller's email.
+ */
 export function isFeatureOn(key: FeatureFlagKey): boolean {
   return FeatureFlag[key].state === 'ON';
+}
+
+/**
+ * Per-caller resolution. Returns true when the flag is `ON`, or when
+ * the flag is `DEV_ONLY` and `isDev` resolves to true for this user.
+ * Callers pass `isDev` because the consumer-side knows how to evaluate
+ * "is this caller a developer" (web: check the NextAuth session email
+ * against `ADMIN_EMAILS`; jobs: pass a hard-coded developer user id).
+ */
+export function isFeatureOnFor(
+  key: FeatureFlagKey,
+  isDev: boolean,
+): boolean {
+  const state = FeatureFlag[key].state;
+  if (state === 'ON') return true;
+  if (state === 'OFF') return false;
+  return isDev;
 }

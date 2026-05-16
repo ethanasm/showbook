@@ -46,9 +46,7 @@ export interface PredictedSong {
   evidence: string;
 }
 
-export type PredictedSetlistResult =
-  | (HotPrediction & { state: 'hot' })
-  | (ColdPrediction & { state: 'cold' });
+export type PredictedSetlistResult = HotPrediction | ColdPrediction;
 
 export interface HotPrediction {
   style: 'stable';
@@ -560,7 +558,11 @@ export function computeConfidence(opts: {
     const latest = new Date(opts.tierA[0]!.performanceDate).getTime();
     const target = new Date(opts.targetDate).getTime();
     const days = Math.abs(target - latest) / MS_PER_DAY;
-    recency = Math.max(0, Math.min(1, 1 - days / 7));
+    // Per feature-plan §4c: 1.0 if the latest Tier-A setlist is ≤7d
+    // old; scaled below that point. Past 30 extra days the recency
+    // signal goes to 0.
+    if (days <= 7) recency = 1;
+    else recency = Math.max(0, 1 - (days - 7) / 30);
   }
   return 0.5 * density + 0.3 * consistency + 0.2 * recency;
 }
