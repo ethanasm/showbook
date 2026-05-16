@@ -1,9 +1,29 @@
-import { and, eq, lte } from 'drizzle-orm';
+import { and, eq, isNull, lte } from 'drizzle-orm';
 import { db, enrichmentQueue, shows, showPerformers, performers } from '@showbook/db';
-import { searchArtist, searchSetlist } from '@showbook/api';
+import { fetchSetlistForPerformer } from '@showbook/api';
 import type { PerformerSetlistsMap } from '@showbook/shared';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Give up on a show: drop the queue entry, and mark `shows.setlists = {}` so
+ * the shows-nightly catch-up pass treats it as "checked, no setlist"
+ * (instead of `null` = "never been processed"). Without this marker, the
+ * catch-up would re-queue every exhausted show on its next run.
+ *
+ * The setlists update is conditional on `setlists IS NULL` so a setlist
+ * written by another path (manual edit, setlist.fm import) between the
+ * queue entry's creation and this give-up isn't clobbered.
+ */
+async function giveUp(queueId: string, showId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .update(shows)
+      .set({ setlists: {} as PerformerSetlistsMap })
+      .where(and(eq(shows.id, showId), isNull(shows.setlists)));
+    await tx.delete(enrichmentQueue).where(eq(enrichmentQueue.id, queueId));
+  });
+}
 
 export async function runSetlistRetry(): Promise<{
   processed: number;
@@ -28,7 +48,7 @@ export async function runSetlistRetry(): Promise<{
   for (const item of queueItems) {
     // Skip items that have exhausted attempts (shouldn't be in the query, but safety check)
     if (item.attempts >= item.maxAttempts) {
-      await db.delete(enrichmentQueue).where(eq(enrichmentQueue.id, item.id));
+      await giveUp(item.id, item.showId);
       counts.givenUp++;
       continue;
     }
@@ -81,35 +101,13 @@ export async function runSetlistRetry(): Promise<{
         continue;
       }
 
-      // 2c/2d. Resolve MBID
-      let mbid = headlinerRow.musicbrainzId;
-
-      if (!mbid) {
-        // Try to find the artist on setlist.fm
-        const artists = await searchArtist(headlinerRow.name);
-        if (artists.length > 0) {
-          mbid = artists[0]!.mbid;
-          // Persist the MBID for future lookups
-          await db
-            .update(performers)
-            .set({ musicbrainzId: mbid })
-            .where(eq(performers.id, headlinerRow.performerId));
-        }
-      }
-
-      // 2e. Still no MBID
-      if (!mbid) {
-        await incrementAttempts(
-          item.id,
-          item.attempts,
-          `Could not find setlist.fm MBID for "${headlinerRow.name}"`,
-        );
-        counts.failed++;
-        continue;
-      }
-
-      // 2f. Search for the setlist
-      const result = await searchSetlist(mbid, show.date);
+      // 2c-f. Resolve MBID (persisting on first hit) and look up the setlist.
+      const result = await fetchSetlistForPerformer({
+        performerId: headlinerRow.performerId,
+        performerName: headlinerRow.name,
+        performerMbid: headlinerRow.musicbrainzId,
+        date: show.date,
+      });
 
       if (result) {
         // 2g. Found — update the show and delete the queue entry atomically.
@@ -136,7 +134,7 @@ export async function runSetlistRetry(): Promise<{
 
         if (newAttempts >= item.maxAttempts) {
           // Give up
-          await db.delete(enrichmentQueue).where(eq(enrichmentQueue.id, item.id));
+          await giveUp(item.id, item.showId);
           counts.givenUp++;
         } else {
           await incrementAttempts(item.id, item.attempts, 'Setlist not found on setlist.fm');
