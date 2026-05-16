@@ -264,6 +264,36 @@
   font-weight: 500;
 }
 
+/* Phase 2 — inline song badges. Sit alongside the evidence string so
+   the row height doesn't grow when they appear. */
+.predicted-row__title-link {
+  color: inherit;
+  text-decoration: none;
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+}
+.predicted-row__title-link:hover .predicted-row__title {
+  color: var(--accent);
+}
+
+.predicted-row__badge {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px solid var(--rule-strong);
+  white-space: nowrap;
+}
+.predicted-row__badge--first-time {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.predicted-row__badge--rare {
+  color: var(--ink);
+}
+
 .predicted-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
