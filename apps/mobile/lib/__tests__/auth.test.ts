@@ -254,7 +254,7 @@ describe('exchangeGoogleIdTokenForSession', () => {
         apiUrl: 'https://e.co',
         fetchImpl,
       }),
-      /api_unreachable/,
+      /api_unreachable:network down/,
     );
   });
 });
@@ -284,6 +284,11 @@ describe('describeSignInError', () => {
   it('maps unreachable API URLs to a backend reachability message', () => {
     const msg = describeSignInError(new Error('api_unreachable'));
     assert.match(msg, /Showbook is not reachable|web app/i);
+  });
+
+  it('preserves native fetch details for unreachable API URLs', () => {
+    const msg = describeSignInError(new Error('api_unreachable:certificate rejected'));
+    assert.match(msg, /certificate rejected/i);
   });
 
   it('maps invalid_google_token to a retry message', () => {

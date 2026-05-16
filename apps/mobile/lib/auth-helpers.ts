@@ -46,8 +46,8 @@ export async function exchangeGoogleIdTokenForSession(args: {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ idToken }),
     });
-  } catch {
-    throw new Error('api_unreachable');
+  } catch (err) {
+    throw new Error(apiUnreachableErrorMessage(err));
   }
   if (res.status === 401) throw new Error('invalid_google_token');
   if (res.status === 403) throw new Error('access_denied');
@@ -92,6 +92,9 @@ export function describeSignInError(err: unknown): string {
       case 'rate_limited':
         return 'Too many sign-in attempts. Wait a minute and try again.';
       default:
+        if (err.message.startsWith('api_unreachable:')) {
+          return `Showbook is not reachable. Native fetch failed: ${err.message.slice('api_unreachable:'.length)}`;
+        }
         if (err.message === 'server_error_500') {
           return 'Showbook sign-in is misconfigured. Check AUTH_SECRET and GOOGLE_OAUTH_MOBILE_AUDIENCES on the web app.';
         }
@@ -101,6 +104,17 @@ export function describeSignInError(err: unknown): string {
     }
   }
   return "We couldn't sign you in. Please check your connection and try again.";
+}
+
+function apiUnreachableErrorMessage(err: unknown): string {
+  const raw =
+    err instanceof Error
+      ? err.message
+      : typeof err === 'string'
+        ? err
+        : 'request failed';
+  const detail = raw.replace(/\s+/g, ' ').slice(0, 180);
+  return detail ? `api_unreachable:${detail}` : 'api_unreachable';
 }
 
 /**

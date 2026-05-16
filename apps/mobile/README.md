@@ -77,7 +77,9 @@ then use `pnpm mobile:start` for subsequent JS-only reloads.
 
 For the local web stack, set `EXPO_PUBLIC_API_URL=https://localhost:3001`
 before starting Metro so the OAuth token exchange posts to the dev
-server using the trusted local cert.
+server using the trusted local cert. If this native config changes,
+rebuild the development client with `pnpm mobile:ios`; Metro reloads
+alone will not update `Info.plist`.
 
 ## Status
 

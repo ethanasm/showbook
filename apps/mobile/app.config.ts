@@ -60,6 +60,18 @@ const config: ExpoConfig = {
       // this here keeps App Store Connect from blocking TestFlight builds
       // on the manual "Export Compliance" question per submission.
       ITSAppUsesNonExemptEncryption: false,
+      // Local dev hits the Next.js dev server on localhost from the iOS
+      // simulator. Keep this scoped to localhost so production network policy
+      // stays strict.
+      NSAppTransportSecurity: {
+        NSAllowsLocalNetworking: true,
+        NSExceptionDomains: {
+          localhost: {
+            NSIncludesSubdomains: true,
+            NSExceptionAllowsInsecureHTTPLoads: true,
+          },
+        },
+      },
     },
   },
   android: {
