@@ -20,16 +20,19 @@ pnpm install
 Then from this directory:
 
 ```bash
-pnpm start         # start Metro bundler
-pnpm ios           # build + open in iOS Simulator
-pnpm android       # build + open in Android emulator
+pnpm start         # Metro bundler for the development client
+pnpm ios           # build + install the iOS development client
+pnpm android       # build + install the Android development client
+pnpm ios:go        # Expo Go only; Google sign-in will not work there
+pnpm android:go    # Expo Go only; Google sign-in will not work there
 pnpm typecheck
 pnpm lint
 pnpm test
 ```
 
 Or use the repo-root shortcuts (`pnpm mobile:start`, `pnpm mobile:ios`,
-`pnpm mobile:typecheck`, etc.) — they forward to this package.
+`pnpm mobile:ios:go`, `pnpm mobile:typecheck`, etc.) — they forward
+to this package.
 
 ## Test coverage
 
@@ -50,12 +53,13 @@ scope fails CI, and the report identifies which scope fell short.
 
 ## Environment variables
 
-Set these locally via shell or `.env.local`. Mobile-side vars are
+Set these locally via shell or `.env.local` (copy `.env.example` to
+start). Mobile-side vars are
 prefixed `EXPO_PUBLIC_` so Expo inlines them at build time.
 
 | Var | Default | Required for |
 |---|---|---|
-| `EXPO_PUBLIC_API_URL` | `https://showbook.example.com` | tRPC client target. Override to your LAN IP or `http://localhost:3001` for local dev against the web stack. |
+| `EXPO_PUBLIC_API_URL` | - | tRPC client target. Use `https://localhost:3001` for an iOS simulator pointed at the local web stack with the dev cert, or a LAN/tunnel URL for a physical device. |
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS` | - | Sign in with Google on iOS |
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID` | - | Sign in with Google on Android |
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB` | - | Sign in with Google on Expo web preview |
@@ -63,6 +67,27 @@ prefixed `EXPO_PUBLIC_` so Expo inlines them at build time.
 The backend (`apps/web`) needs `GOOGLE_OAUTH_MOBILE_AUDIENCES` set
 to the comma-separated list of these client IDs so it accepts the
 mobile-issued ID tokens at `POST /api/auth/mobile-token`.
+
+Google sign-in must run from a development build or signed native
+build. Expo Go uses an `exp://...` redirect URI, which Google rejects
+for this native OAuth flow. If the iOS status bar back label says
+`Expo Go`, you are still in the wrong runtime. For local simulator
+testing, run `pnpm mobile:ios` once after native dependency changes,
+then use `pnpm mobile:start` for subsequent JS-only reloads.
+
+For the local web stack, set `EXPO_PUBLIC_API_URL=https://localhost:3001`
+before starting Metro so the OAuth token exchange posts to the dev
+server using the trusted local cert. If this native config changes,
+rebuild the development client with `pnpm mobile:ios`; Metro reloads
+alone will not update `Info.plist`.
+
+`pnpm mobile:ios` attempts to install the mkcert root CA, or a local
+HTTPS root cert, into the booted iOS simulator. If your cert lives
+outside the common mkcert path, run:
+
+```bash
+MKCERT_ROOT_CA=/absolute/path/to/rootCA.pem pnpm mobile:ios
+```
 
 ## Status
 
