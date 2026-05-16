@@ -432,9 +432,9 @@ export default function AddPage() {
       if (performers.length > 0) count++;
     }
     if (Object.keys(setlistsByPerformer).length > 0) count++;
-    if (tourName && setlistQuery.data) count++;
+    if (tourName && setlistQuery.data && kind !== "festival") count++;
     return count;
-  }, [tmEnriched, venue, date, headliner, performers, setlistsByPerformer, tourName, setlistQuery.data]);
+  }, [tmEnriched, venue, date, headliner, performers, setlistsByPerformer, tourName, setlistQuery.data, kind]);
 
   // ── Handlers ─────────────────────────────────────────────
 
@@ -867,10 +867,10 @@ export default function AddPage() {
         venue: venueToSave,
         date,
         endDate: endDate || undefined,
-        seat: seat || undefined,
+        seat: kind === "festival" ? undefined : (seat || undefined),
         pricePaid: pricePaid || undefined,
         ticketCount: parseInt(ticketCount) || 1,
-        tourName: tourName || undefined,
+        tourName: kind === "festival" ? undefined : (tourName || undefined),
         productionName: productionName || undefined,
         notes: notes || undefined,
         performers: performersWithSetlists.length > 0 ? performersWithSetlists : undefined,
@@ -1785,34 +1785,38 @@ export default function AddPage() {
         </div>
       </div>
 
-      {/* Festival: End Date */}
+      {/* Festival: End Date — sized to match the Date field above */}
       {kind === "festival" && (
         <div style={{ marginBottom: 26 }}>
-          <FieldLabel>End Date</FieldLabel>
-          <div style={{
-            padding: "10px 14px",
-            background: "var(--surface)",
-            border: `1px solid var(--rule-strong)`,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            maxWidth: 300,
-          }}>
-            <span style={{ color: "var(--muted)", fontSize: 14 }}>📅</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              style={{
-                flex: 1,
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                fontFamily: mono,
-                fontSize: 13,
-                color: endDate ? "var(--ink)" : "var(--faint)",
-              }}
-            />
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(160px, 200px) 1fr", gap: 14, alignItems: "start" }}>
+            <div>
+              <FieldLabel>End Date</FieldLabel>
+              <div style={{
+                padding: "10px 14px",
+                background: "var(--surface)",
+                border: `1px solid var(--rule-strong)`,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+              }}>
+                <span style={{ color: "var(--muted)", fontSize: 14 }}>📅</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  style={{
+                    flex: 1,
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    fontFamily: mono,
+                    fontSize: 13,
+                    color: endDate ? "var(--ink)" : "var(--faint)",
+                    minWidth: 0,
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1820,37 +1824,39 @@ export default function AddPage() {
       {/* ── DETAILS ── */}
       <SectionLabel>Details</SectionLabel>
 
-      {/* Tour name */}
-      <div style={{ marginBottom: 26 }}>
-        <FieldLabel hint={setlistQuery.data?.tourName ? "auto · setlist.fm" : undefined} optional>Tour</FieldLabel>
-        <div style={{
-          padding: "10px 14px",
-          background: "var(--surface)",
-          border: `1px solid var(--rule-strong)`,
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-        }}>
-          <span style={{ color: "var(--muted)", fontSize: 14 }}>♫</span>
-          <input
-            type="text"
-            placeholder="e.g. Romance World Tour"
-            value={tourName}
-            onChange={(e) => setTourName(e.target.value)}
-            style={{
-              flex: 1,
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              fontFamily: sans,
-              fontSize: 14,
-              color: tourName ? "var(--ink)" : "var(--faint)",
-              letterSpacing: -0.1,
-              width: "100%",
-            }}
-          />
+      {/* Tour name — festivals don't have tours */}
+      {kind !== "festival" && (
+        <div style={{ marginBottom: 26 }}>
+          <FieldLabel hint={setlistQuery.data?.tourName ? "auto · setlist.fm" : undefined} optional>Tour</FieldLabel>
+          <div style={{
+            padding: "10px 14px",
+            background: "var(--surface)",
+            border: `1px solid var(--rule-strong)`,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}>
+            <span style={{ color: "var(--muted)", fontSize: 14 }}>♫</span>
+            <input
+              type="text"
+              placeholder="e.g. Romance World Tour"
+              value={tourName}
+              onChange={(e) => setTourName(e.target.value)}
+              style={{
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                fontFamily: sans,
+                fontSize: 14,
+                color: tourName ? "var(--ink)" : "var(--faint)",
+                letterSpacing: -0.1,
+                width: "100%",
+              }}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Notes */}
       <div style={{ marginBottom: 26 }}>
@@ -2124,44 +2130,46 @@ export default function AddPage() {
             fontSize: 8,
           }}>▶</span>
           More details
-          {(seat || pricePaid) && !showMoreDetails && (
+          {((seat && kind !== "festival") || pricePaid) && !showMoreDetails && (
             <span style={{ color: "var(--faint)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
-              · {[seat && "seat", pricePaid && "price"].filter(Boolean).join(", ")}
+              · {[seat && kind !== "festival" && "seat", pricePaid && "price"].filter(Boolean).join(", ")}
             </span>
           )}
         </button>
         {showMoreDetails && (
           <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>
-            <div>
-              <FieldLabel optional>Seat</FieldLabel>
-              <div style={{
-                padding: "10px 14px",
-                background: "var(--surface)",
-                border: `1px solid var(--rule-strong)`,
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-              }}>
-                <span style={{ color: "var(--muted)", fontSize: 14 }}>🎫</span>
-                <input
-                  type="text"
-                  placeholder="e.g. ORCH L · 14"
-                  value={seat}
-                  onChange={(e) => setSeat(e.target.value)}
-                  style={{
-                    flex: 1,
-                    background: "transparent",
-                    border: "none",
-                    outline: "none",
-                    fontFamily: mono,
-                    fontSize: 13,
-                    color: seat ? "var(--ink)" : "var(--faint)",
-                    letterSpacing: -0.1,
-                    width: "100%",
-                  }}
-                />
+            {kind !== "festival" && (
+              <div>
+                <FieldLabel optional>Seat</FieldLabel>
+                <div style={{
+                  padding: "10px 14px",
+                  background: "var(--surface)",
+                  border: `1px solid var(--rule-strong)`,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                }}>
+                  <span style={{ color: "var(--muted)", fontSize: 14 }}>🎫</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. ORCH L · 14"
+                    value={seat}
+                    onChange={(e) => setSeat(e.target.value)}
+                    style={{
+                      flex: 1,
+                      background: "transparent",
+                      border: "none",
+                      outline: "none",
+                      fontFamily: mono,
+                      fontSize: 13,
+                      color: seat ? "var(--ink)" : "var(--faint)",
+                      letterSpacing: -0.1,
+                      width: "100%",
+                    }}
+                  />
+                </div>
               </div>
-            </div>
+            )}
             <div>
               <FieldLabel optional>Tickets</FieldLabel>
               <div style={{
@@ -2504,13 +2512,13 @@ export default function AddPage() {
     const detailRows: [string, string][] = [];
     if (venue.name) detailRows.push(["Venue", venue.name]);
     if (venue.city) detailRows.push(["City", venue.city]);
-    if (seat) detailRows.push(["Seat", seat]);
+    if (seat && kind !== "festival") detailRows.push(["Seat", seat]);
     if (pricePaid) {
       const count = parseInt(ticketCount) || 1;
       const perTicket = (parseFloat(pricePaid) / count).toFixed(2);
       detailRows.push(["Paid", `$${pricePaid}${count > 1 ? ` ($${perTicket}/ea × ${count})` : ""}`]);
     }
-    if (tourName) detailRows.push(["Tour", tourName]);
+    if (tourName && kind !== "festival") detailRows.push(["Tour", tourName]);
     const totalSongs = Object.values(setlistsByPerformer).reduce(
       (sum, sl) => sum + setlistTotalSongs(sl),
       0,
