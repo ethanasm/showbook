@@ -182,8 +182,12 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
     () =>
       computeShowTabBadges({
         isPast,
+        // Only show a confidence badge for hot predictions. Cold state
+        // carries `confidence: 0`, which the badge formula would
+        // otherwise render as "0%" — a misleading value when we
+        // really mean "no prediction available yet".
         predictionConfidence:
-          predictionQuery.data && "confidence" in predictionQuery.data
+          predictionQuery.data && predictionQuery.data.style === "stable"
             ? predictionQuery.data.confidence
             : null,
         actualSongCount,
