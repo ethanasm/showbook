@@ -345,6 +345,44 @@ jobs:
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
           adb install -r /tmp/showbook-e2e.apk
 
+      # Launch the app + capture a screenshot + UI hierarchy dump
+      # before Maestro runs. The hierarchy XML names every visible
+      # text element, so "is the Sign in with Google button actually
+      # on screen?" stops being a guess. Both artefacts also help
+      # diagnose post-Maestro state (the dump is taken before flows
+      # so `clearState: true` in the flow wipes it after this, but
+      # the screenshot captures the cold-launch landing screen).
+      - name: Capture cold-launch state
+        shell: bash
+        run: |
+          set -uo pipefail
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          mkdir -p /tmp/maestro-debug
+          # Cold-launch the app the same way Maestro will (clear data
+          # + start MainActivity). `pm clear` is a no-op if the package
+          # wasn't installed; the install step above guarantees it is.
+          adb shell pm clear com.showbook.app || true
+          adb shell am start -W -n com.showbook.app/.MainActivity || true
+          sleep 8
+          adb exec-out screencap -p > /tmp/maestro-debug/cold-launch.png || true
+          adb shell uiautomator dump /sdcard/cold-launch.xml >/dev/null 2>&1 || true
+          adb pull /sdcard/cold-launch.xml /tmp/maestro-debug/cold-launch.xml || true
+          echo "::group::Cold-launch UI hierarchy (text nodes only)"
+          if [ -f /tmp/maestro-debug/cold-launch.xml ]; then
+            # Print every node with non-empty text= attr. Tells us
+            # whether 'Sign in with Google' is actually rendered.
+            grep -oE 'text="[^"]*"' /tmp/maestro-debug/cold-launch.xml \
+              | grep -v 'text=""' | sort -u | head -50 || true
+          else
+            echo "no UI dump captured"
+          fi
+          echo "::endgroup::"
+          echo "::group::Cold-launch screenshot size"
+          ls -lh /tmp/maestro-debug/cold-launch.png 2>/dev/null || echo "no screenshot"
+          echo "::endgroup::"
+          # Kill the app again so Maestro's first launchApp starts cleanly.
+          adb shell am force-stop com.showbook.app || true
+
       - name: Run Maestro flows
         shell: bash
         run: |
