@@ -287,7 +287,6 @@ export default function AddPage() {
     onSuccess: () => {
       utils.shows.invalidate();
       invalidateSidebarCounts();
-      router.push("/shows");
     },
   });
   const createUploadIntent = trpc.media.createUploadIntent.useMutation();
@@ -795,7 +794,7 @@ export default function AddPage() {
         date: showDate,
         seat: chatParsed.seat_hint ?? undefined,
       });
-      router.push(created ? `/shows/${created.id}` : "/shows");
+      router.push(created ? `/shows/${created.id}` : "/home");
     } catch {
       setChatMessages((prev) => [
         ...prev,
@@ -885,7 +884,7 @@ export default function AddPage() {
       } else {
         const created = await createShow.mutateAsync(payload);
         if (!created) {
-          router.push("/shows");
+          router.push("/home");
           return;
         }
         targetShowId = created.id;
@@ -1922,7 +1921,7 @@ export default function AddPage() {
               </ul>
               <button
                 type="button"
-                onClick={() => router.push(`/shows`)}
+                onClick={() => router.push(`/home`)}
                 style={{
                   marginTop: 6,
                   background: "transparent",
@@ -1934,7 +1933,7 @@ export default function AddPage() {
                   color: "var(--ink)",
                 }}
               >
-                Go to shows
+                Go home
               </button>
             </div>
           )}
@@ -2270,7 +2269,7 @@ export default function AddPage() {
         </div>
         <button
           type="button"
-          onClick={() => router.push("/shows")}
+          onClick={() => router.back()}
           style={{
             padding: "9px 14px",
             border: `1px solid var(--rule-strong)`,
@@ -2815,8 +2814,6 @@ export default function AddPage() {
           letterSpacing: ".04em",
         }}>
           <span style={{ cursor: "pointer" }} onClick={() => router.push("/home")}>home</span>
-          <span style={{ color: "var(--faint)" }}>&gt;</span>
-          <span style={{ cursor: "pointer" }} onClick={() => router.push("/shows")}>shows</span>
           <span style={{ color: "var(--faint)" }}>&gt;</span>
           <span style={{ color: "var(--ink)", fontWeight: 500 }}>{isEditMode ? "edit" : "add a show"}</span>
           {!isEditMode && (
