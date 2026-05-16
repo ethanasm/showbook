@@ -298,23 +298,23 @@ Add to the curated list in repo-root `CLAUDE.md`:
    and it passes.
 4. The Phase 0 migration runs cleanly on a freshly-created DB and
    on a copy of prod data.
-5. **Mobile connect flow manually smoke-tested on iOS Simulator AND
-   Android emulator (SI-08).** `WebBrowser.openAuthSessionAsync`
-   resolves only when the in-app browser intercepts a redirect to
-   the registered URL — for the HTTPS callback URL we use, that
-   depends on whether the app supports universal links for the
-   Showbook domain. If the auth session never resolves (the
-   in-app browser stays open after the callback's HTML loads),
-   the fallback is to register a `showbook://spotify-connected`
-   deep-link scheme + redirect to it from the callback. Tracked
-   for follow-up; do NOT mark Phase 0 mobile parity done until
-   this test passes on both platforms.
 
-(The earlier draft of this list included a scaffolding "echo my
-Spotify name" admin tRPC procedure as exit #2. Dropped — the
-audio-features probe script already exercises the same chain
-end-to-end (decrypt persisted token → live Spotify API call →
-print result), so a separate echo procedure was redundant.)
+(Earlier drafts of this list included two items now dropped:
+(a) a scaffolding "echo my Spotify name" admin tRPC procedure —
+the audio-features probe script in #2 already exercises the
+same chain end-to-end (decrypt token → live Spotify call → print
+result), so a separate procedure was redundant; and (b) a manual
+mobile smoke test (SI-08) on iOS Simulator + Android emulator —
+**dropped** because Phase 0's mobile work is infrastructure only:
+the `SpotifyConnectSheet` primitive + `useSpotifyConnection` hook
+ship in this PR, but no mobile UX in this phase actually mounts
+them. The Me-tab integrations list (Gmail / Ticketmaster /
+Google Places) doesn't include Spotify, and there's no
+Phase 0 mobile entry point that calls `requireConnection`. The
+first mobile UX that exercises this infrastructure is the Hype
+playlist button on Show detail, which lands in Phase 10. SI-08
+gets validated there instead — see
+[`../plan-review.md`](../plan-review.md) SI-08.)
 
 ### Audio-features probe (runbook)
 

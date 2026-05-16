@@ -205,7 +205,7 @@ clearly-distinct eras with the same name. The §15r option C
 sliding-window with ≤90-day gaps deferred — 365 days is the right
 v1 tradeoff.
 
-### SI-08 · Mobile connect flow is plausibly broken in practice ✅ RESOLVED (pending manual smoke test)
+### SI-08 · Mobile connect flow is plausibly broken in practice ✅ RESOLVED (deferred to Phase 10)
 
 `WebBrowser.openAuthSessionAsync(authUrl, redirectUri)` resolves on
 redirect-to-redirectUri *with the URL*, but the iOS
@@ -215,20 +215,32 @@ if the app supports universal links for that domain — Showbook today
 uses `showbook://` for deep links and we didn't verify universal-link
 config.
 
-**Resolved with option B (manual smoke test required):** Phase 0
-exit criteria #5 added — mobile connect flow must be manually
-smoke-tested on both iOS Simulator AND Android emulator before
-claiming Phase 0 mobile parity done. If the auth session never
-resolves on iOS, the fallback path is to register a
-`showbook://spotify-connected` deep-link scheme + redirect to it
-from the callback for in-app browser User-Agents. Tracked as a
-ship-blocker on Phase 0 — code stays as-is until smoke test
-either confirms it works or reveals the fix is needed.
+**Deferred to Phase 10.** Phase 0 ships the `SpotifyConnectSheet`
+primitive + `useSpotifyConnection` hook but **nothing in the
+mobile app mounts them yet** — the Me-tab integrations list
+(Gmail / Ticketmaster / Google Places) doesn't include Spotify,
+and there's no Phase 0 mobile UX that calls `requireConnection`.
+So there's nothing to smoke-test on mobile at this point.
 
-**Owner action item:** run `pnpm mobile:ios`, click Connect Spotify,
-walk through OAuth, confirm the sheet closes + connection state
-updates. Same on Android emulator. Report back; if either fails,
-file follow-up to wire the deep-link fallback.
+The first mobile UX that actually exercises the Phase 0
+infrastructure is the **Hype playlist button on Show detail**,
+which ships in **Phase 10** (mobile parity for Phases 3/5/6/7/8/9).
+That's the natural point to validate SI-08:
+
+> Before Phase 10 ships the Hype button to TestFlight / production
+> mobile, manually walk through the Connect Spotify flow on both
+> iOS and Android. If `WebBrowser.openAuthSessionAsync` doesn't
+> auto-dismiss after the HTTPS callback, register a
+> `showbook://spotify-connected` deep-link scheme + redirect to
+> it from the callback for in-app-browser User-Agents, then
+> re-test.
+
+Tracking issue opened to Phase 10's worklist.
+
+The original "Phase 0 exit criteria #5 — mobile smoke test"
+requirement is **dropped** from the Phase 0 spec. The mobile
+infra ships untested in this PR; first real test happens with
+Phase 10.
 
 ### SI-09 · Disconnect doesn't actually clean up the user's Spotify-derived stats ✅ RESOLVED
 
