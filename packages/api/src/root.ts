@@ -14,6 +14,7 @@ import { adminRouter } from './routers/admin';
 import { importsRouter } from './routers/imports';
 import { setlistIntelRouter } from './routers/setlist-intel';
 import { evalRouter } from './routers/eval';
+import { songsRouter } from './routers/songs';
 export const appRouter = router({
   shows: showsRouter,
   venues: venuesRouter,
@@ -30,6 +31,7 @@ export const appRouter = router({
   admin: adminRouter,
   setlistIntel: setlistIntelRouter,
   eval: evalRouter,
+  songs: songsRouter,
 });
 
 export type AppRouter = typeof appRouter;

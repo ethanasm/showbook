@@ -4,12 +4,23 @@ import { useCallback, useEffect, useState } from "react";
 import { SectionFrame } from "./SectionFrame";
 import { SpoilerCurtain } from "./SpoilerCurtain";
 import { HypePlaylistCardPlaceholder } from "./HypePlaylistCardPlaceholder";
+import { HypePlaylistCard } from "./HypePlaylistCard";
 import { PredictedSetlistRow } from "./PredictedSetlistRow";
 import { EncoreDivider } from "./EncoreDivider";
-import type { PredictedSetlistResult } from "@showbook/api";
+import type {
+  PredictedSetlistResult,
+  SongBadge,
+  SongBadgesMap,
+} from "@showbook/api";
 import "./show-tabs.css";
 
 const SPOILER_KEY_PREFIX = "showbook:setlist-tab:spoiler-shown:";
+
+export interface SetlistTabBadgePayload {
+  badges: SongBadgesMap;
+  /** Lowercase-title → songId map for resolving badges to titles. */
+  titleToSongId: Record<string, string>;
+}
 
 interface SetlistTabProps {
   showId: string;
@@ -21,7 +32,29 @@ interface SetlistTabProps {
   predictionLoading: boolean;
   /** Actual setlist (post-show). Each entry is `{ title, isEncore }`. */
   actualSongs?: ActualSong[];
+  /** Phase 2 — song-badge data for the actual setlist's rows. The
+   *  Predicted tab (pre-show) doesn't render badges, since the songs
+   *  haven't been played yet. */
+  badgePayload?: SetlistTabBadgePayload | null;
   onOpenSpoilerSettings?: () => void;
+  /**
+   * Phase 3 — when true, render the real Spotify-backed `HypePlaylistCard`
+   * in the top slot; otherwise fall back to the P1 placeholder. The
+   * `SetlistIntelHypePlaylist` flag gates this; the page level resolves
+   * the flag and passes it down.
+   */
+  hypePlaylistEnabled?: boolean;
+}
+
+/** Resolve a row's title to (songId, badge) for the past variant. */
+function resolveBadge(
+  title: string,
+  payload: SetlistTabBadgePayload | null | undefined,
+): { songId: string | null; badge: SongBadge | undefined } {
+  if (!payload) return { songId: null, badge: undefined };
+  const songId = payload.titleToSongId[title.toLowerCase()] ?? null;
+  const badge = songId ? payload.badges[songId] : undefined;
+  return { songId, badge };
 }
 
 export interface ActualSong {
@@ -45,7 +78,7 @@ export function SetlistTab(props: SetlistTabProps) {
 // ─────────────────────────────────────────────────────────────────────
 
 function SetlistTabUpcoming(props: SetlistTabProps) {
-  const { prediction, predictionLoading, artistName } = props;
+  const { prediction, predictionLoading, artistName, hypePlaylistEnabled } = props;
   const [spoilerShown, setSpoilerShown] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -98,11 +131,21 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
       />
 
       <SectionFrame title="Hype playlist">
-        <HypePlaylistCardPlaceholder
-          artist={prediction.tourName ?? artistName}
-          trackCount={totalCount}
-          approxMinutes={approxMinutes}
-        />
+        {hypePlaylistEnabled ? (
+          <HypePlaylistCard
+            showId={props.showId}
+            kind="hype"
+            artist={artistName}
+            trackCount={totalCount}
+            approxMinutes={approxMinutes}
+          />
+        ) : (
+          <HypePlaylistCardPlaceholder
+            artist={prediction.tourName ?? artistName}
+            trackCount={totalCount}
+            approxMinutes={approxMinutes}
+          />
+        )}
       </SectionFrame>
 
       {!spoilerShown && prediction.spoilerBlurDefault ? (
@@ -344,10 +387,14 @@ function coldReasonCopy(
 function SetlistTabPast({
   artistName,
   actualSongs = [],
+  hypePlaylistEnabled,
+  showId,
+  badgePayload,
 }: SetlistTabProps) {
   const mainSet = actualSongs.filter((s) => !s.isEncore);
   const encore = actualSongs.filter((s) => s.isEncore);
   const total = actualSongs.length;
+  const approxMinutes = total > 0 ? Math.round(total * 4) : null;
   if (total === 0) {
     return (
       <div
@@ -391,41 +438,62 @@ function SetlistTabPast({
   return (
     <div>
       <ActualBanner total={total} />
+      {hypePlaylistEnabled && (
+        <SectionFrame title={`I Heard ${artistName}`}>
+          <HypePlaylistCard
+            showId={showId}
+            kind="heard"
+            artist={artistName}
+            trackCount={total}
+            approxMinutes={approxMinutes}
+          />
+        </SectionFrame>
+      )}
       <SectionFrame title="Setlist" count={total}>
         <div className="predicted-grid" data-testid="actual-setlist-grid">
-          {mainSet.map((song, idx) => (
-            <PredictedSetlistRow
-              key={`main-${idx}-${song.title}`}
-              position={idx + 1}
-              title={song.title}
-              evidence={song.note ?? "actual · setlist.fm"}
-              role={
-                song.isOpenerOrCloser
-                  ? idx === 0
-                    ? "opener"
-                    : "closer"
-                  : "core"
-              }
-            />
-          ))}
+          {mainSet.map((song, idx) => {
+            const resolved = resolveBadge(song.title, badgePayload);
+            return (
+              <PredictedSetlistRow
+                key={`main-${idx}-${song.title}`}
+                position={idx + 1}
+                title={song.title}
+                evidence={song.note ?? "actual · setlist.fm"}
+                role={
+                  song.isOpenerOrCloser
+                    ? idx === 0
+                      ? "opener"
+                      : "closer"
+                    : "core"
+                }
+                badge={resolved.badge}
+                songId={resolved.songId}
+              />
+            );
+          })}
           {encore.length > 0 && (
             <>
               <EncoreDivider />
-              {encore.map((song, idx) => (
-                <PredictedSetlistRow
-                  key={`encore-${idx}-${song.title}`}
-                  position={idx + 1}
-                  title={song.title}
-                  evidence={song.note ?? "actual · encore"}
-                  role={
-                    idx === 0
-                      ? "encore_open"
-                      : idx === encore.length - 1
-                        ? "encore_close"
-                        : "core"
-                  }
-                />
-              ))}
+              {encore.map((song, idx) => {
+                const resolved = resolveBadge(song.title, badgePayload);
+                return (
+                  <PredictedSetlistRow
+                    key={`encore-${idx}-${song.title}`}
+                    position={idx + 1}
+                    title={song.title}
+                    evidence={song.note ?? "actual · encore"}
+                    role={
+                      idx === 0
+                        ? "encore_open"
+                        : idx === encore.length - 1
+                          ? "encore_close"
+                          : "core"
+                    }
+                    badge={resolved.badge}
+                    songId={resolved.songId}
+                  />
+                );
+              })}
             </>
           )}
         </div>

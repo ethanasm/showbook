@@ -45,6 +45,32 @@ export const FeatureFlag = {
       'against the same `shows.detail` payload.',
     state: 'ON',
   },
+  SetlistIntelSongs: {
+    description:
+      'Phase 2 (setlist-intelligence) songs surface. Gates the /(app)/songs ' +
+      'index + per-song detail pages, the Songs section on artist detail, ' +
+      'and the inline 🆕 / 🎯 badges on the Setlist tab. Showbook is a ' +
+      "single-user app so 'ON' for the developer's user id is equivalent " +
+      'to ON globally; flip OFF before broader rollout if the song-index ' +
+      'matview falls behind and badges go stale.',
+    state: 'ON',
+  },
+  SetlistIntelHypePlaylist: {
+    description:
+      'Phase 3 (setlist-intelligence) hype/heard playlist export. ' +
+      'Replaces the P1 HypePlaylistCard placeholder with the real ' +
+      'Spotify-backed card on the Setlist tab + desktop right rail, ' +
+      'and enables `spotify.createHypePlaylist` / ' +
+      '`spotify.createHeardPlaylist` tRPC mutations. Per SI-05 option ' +
+      'C, ships without the rotating-style hide rule — rotating fans ' +
+      '(Phish, etc.) get a low-relevance card in the Phase 3 → Phase 5 ' +
+      'window, which Phase 5 closes. ADMIN_EMAILS still bypasses the ' +
+      'gate, but is a no-op now that the flag is ON globally. Flip ' +
+      'OFF if the Spotify mutations regress in prod (mis-ordered ' +
+      'tracks, duplicate playlists, scope-probe false positives) — ' +
+      'the placeholder absorbs taps with disabled CTAs.',
+    state: 'ON',
+  },
   SetlistIntelEvalHarness: {
     description:
       'Phase 4 (setlist-intelligence) eval-harness admin surface. ' +
@@ -52,10 +78,11 @@ export const FeatureFlag = {
       'chart, calibration curve, and per-show breakdown. The pg-boss ' +
       'eval back-test job runs in all envs regardless of this flag — ' +
       'we need the data on disk before flipping the release gate in ' +
-      'Phase 5. ON only behind admin auth; default OFF so a stray ' +
-      'admin login outside the operator account does not see the ' +
-      'harness UI.',
-    state: 'OFF',
+      "Phase 5. Single-user app, so 'ON' is equivalent to ON for the " +
+      'developer; admin allowlist is the actual gate. Flip OFF if the ' +
+      'page regresses (DB calls fall over, chart math wrong) — the ' +
+      'backtest cron keeps writing rows in the background.',
+    state: 'ON',
   },
 } as const satisfies Record<string, { description: string; state: 'ON' | 'OFF' }>;
 

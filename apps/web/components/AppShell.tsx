@@ -7,6 +7,7 @@ import { PrefsServerSync } from "@/components/PrefsServerSync";
 import { GlobalSearch, openGlobalSearch } from "@/components/GlobalSearch";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "next-auth/react";
+import { isFeatureOn } from "@showbook/shared";
 import type { ReactNode } from "react";
 
 function pathnameToNavId(pathname: string): string {
@@ -75,6 +76,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             userName={userName}
             userInitials={userInitials}
             isAdmin={isAdmin}
+            flags={{ SetlistIntelSongs: isFeatureOn("SetlistIntelSongs") }}
           />
         </div>
         <main className="app-shell__content">

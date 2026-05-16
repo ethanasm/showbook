@@ -57,11 +57,40 @@ export {
   SpotifyError,
   SPOTIFY_SCOPES,
   SPOTIFY_SCOPE_STRING,
+  HYPE_PLAYLIST_SCOPES,
   exchangeAuthorizationCode,
   refreshSpotifyToken,
   getCurrentUser,
+  searchTrack,
+  createPlaylist,
+  addTracksToPlaylist,
+  diffScopes,
 } from './spotify';
-export type { SpotifyArtist, SpotifyTokenSet, SpotifyMe } from './spotify';
+export type {
+  SpotifyArtist,
+  SpotifyTokenSet,
+  SpotifyMe,
+  SpotifyTrack,
+  SpotifyPlaylist,
+  MissingScopesResult,
+} from './spotify';
+export {
+  buildPlaylistName,
+  buildPlaylistDescription,
+  resolveTrackUris,
+  getExistingPlaylist,
+  probePlaylistScopes,
+  createHypePlaylist,
+  createHeardPlaylist,
+  __resetTrackResolveCacheForTests,
+} from './spotify-playlist';
+export type {
+  PlaylistKind,
+  SetlistTrack,
+  PlaylistMetadata,
+  PlaylistResolution,
+  CreatePlaylistResult,
+} from './spotify-playlist';
 export {
   ensureFreshUserToken,
   isSpotifyConnected,
@@ -94,6 +123,16 @@ export {
   type ShowLike,
   type ShowPerformerLike,
 } from '@showbook/shared';
+
+// Setlist intelligence — Phase 2 (badges + songs surface)
+export {
+  computeSongBadges,
+  RARE_THRESHOLD,
+  type SongBadge,
+  type SongBadgesMap,
+  type ComputeSongBadgesInput,
+} from './song-badges';
+export { rowIsUserDebut } from './routers/songs';
 
 // Setlist intelligence — Phase 1 (predict + corpus types)
 export {

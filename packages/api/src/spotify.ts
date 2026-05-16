@@ -12,6 +12,9 @@ const TOKEN_URL = 'https://accounts.spotify.com/api/token';
  *
  *   user-follow-read           — Spotify-follow rail · Spotify artist import
  *   playlist-modify-private    — Hype + post-show + year-end playlists
+ *   playlist-modify-public     — Public-variant of the above (kept for
+ *                                 future "share my hype" toggle; the
+ *                                 default Phase 3 hype playlist is private)
  *   ugc-image-upload           — Branded covers on those playlists
  *   user-library-read          — Fan-loyalty ring · discovered-live rail
  *   user-library-modify        — "Save this song" button
@@ -27,6 +30,7 @@ const TOKEN_URL = 'https://accounts.spotify.com/api/token';
 export const SPOTIFY_SCOPES = [
   'user-follow-read',
   'playlist-modify-private',
+  'playlist-modify-public',
   'ugc-image-upload',
   'user-library-read',
   'user-library-modify',
@@ -300,4 +304,203 @@ export async function getFollowedArtists(
   }
 
   return all;
+}
+
+// ---------------------------------------------------------------------------
+// Track search — for hype / heard playlist resolution
+// ---------------------------------------------------------------------------
+
+export interface SpotifyTrack {
+  id: string;
+  uri: string;
+  name: string;
+  artists: string[];
+  durationMs: number;
+}
+
+interface SpotifyTrackRaw {
+  id: string;
+  uri: string;
+  name: string;
+  artists: Array<{ name: string }>;
+  duration_ms: number;
+}
+
+interface SpotifyTrackSearchResponse {
+  tracks?: {
+    items: SpotifyTrackRaw[];
+  };
+}
+
+/**
+ * Search Spotify's catalog for a single song. Returns the top track-search
+ * hit when one exists, else `null`. Used by the hype/heard playlist
+ * orchestrator to turn predicted/actual setlist titles into Spotify URIs.
+ *
+ * The query intentionally pins both `artist:` and `track:` so we don't
+ * accidentally match a cover of the same song by a different performer
+ * — the playlist title says "{artist} @ {venue}" so the wrong-artist
+ * version would be a visible error.
+ */
+export async function searchTrack(
+  accessToken: string,
+  artist: string,
+  title: string,
+): Promise<SpotifyTrack | null> {
+  const q = `artist:${artist} track:${title}`;
+  const url = `${API_BASE}/search?type=track&limit=1&q=${encodeURIComponent(q)}`;
+  const res = await spotifyFetch(url, accessToken);
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new SpotifyError(
+      `Spotify search ${res.status}`,
+      res.status,
+      detail.slice(0, 500),
+    );
+  }
+  const data = (await res.json()) as SpotifyTrackSearchResponse;
+  const top = data.tracks?.items?.[0];
+  if (!top) return null;
+  return {
+    id: top.id,
+    uri: top.uri,
+    name: top.name,
+    artists: top.artists.map((a) => a.name),
+    durationMs: top.duration_ms,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Playlist mutations — create + add tracks
+// ---------------------------------------------------------------------------
+
+export interface SpotifyPlaylist {
+  id: string;
+  spotifyUrl: string;
+  name: string;
+}
+
+interface SpotifyPlaylistRaw {
+  id: string;
+  name: string;
+  external_urls?: { spotify?: string };
+}
+
+/**
+ * Create an empty private playlist on the current user's account. Returns
+ * the new playlist's id + public `external_urls.spotify` URL. Spotify's
+ * `description` field is plaintext and capped at 300 chars.
+ */
+export async function createPlaylist(
+  accessToken: string,
+  spotifyUserId: string,
+  opts: { name: string; description: string; isPublic?: boolean },
+): Promise<SpotifyPlaylist> {
+  const url = `${API_BASE}/users/${encodeURIComponent(spotifyUserId)}/playlists`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      name: opts.name,
+      description: opts.description.slice(0, 300),
+      public: opts.isPublic === true,
+    }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new SpotifyError(
+      `Spotify create-playlist ${res.status}`,
+      res.status,
+      detail.slice(0, 500),
+    );
+  }
+  const data = (await res.json()) as SpotifyPlaylistRaw;
+  return {
+    id: data.id,
+    name: data.name,
+    spotifyUrl: data.external_urls?.spotify ?? `https://open.spotify.com/playlist/${data.id}`,
+  };
+}
+
+/**
+ * Add a batch of track URIs to a playlist. Spotify caps each request at
+ * 100 URIs; callers above this helper batch larger sets and call this
+ * repeatedly with the appropriate `position`.
+ */
+export async function addTracksToPlaylist(
+  accessToken: string,
+  playlistId: string,
+  uris: string[],
+  position?: number,
+): Promise<void> {
+  if (uris.length === 0) return;
+  if (uris.length > 100) {
+    throw new SpotifyError(
+      `addTracksToPlaylist accepts ≤100 URIs per call (got ${uris.length})`,
+      0,
+    );
+  }
+  const url = `${API_BASE}/playlists/${encodeURIComponent(playlistId)}/tracks`;
+  const body: Record<string, unknown> = { uris };
+  if (typeof position === 'number') body.position = position;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new SpotifyError(
+      `Spotify add-tracks ${res.status}`,
+      res.status,
+      detail.slice(0, 500),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Scope inspection
+// ---------------------------------------------------------------------------
+
+/**
+ * Required Spotify scopes for hype/heard playlist creation. Both are
+ * batched in the initial OAuth dialog (see SPOTIFY_SCOPES); this helper
+ * lets the playlist mutation surface a "re-connect Spotify" prompt if the
+ * persisted row predates the scope addition (or the user revoked one of
+ * them in their Spotify account settings).
+ */
+export const HYPE_PLAYLIST_SCOPES = [
+  'playlist-modify-private',
+  'playlist-modify-public',
+] as const;
+
+export interface MissingScopesResult {
+  granted: string[];
+  missing: string[];
+}
+
+/**
+ * Inspect a stored Spotify scope string and return the subset of
+ * `required` that's missing. Empty `missing` means the user is fully
+ * authorized for the playlist mutations.
+ */
+export function diffScopes(
+  scopeString: string | null | undefined,
+  required: readonly string[],
+): MissingScopesResult {
+  const granted = (scopeString ?? '')
+    .split(/\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const grantedSet = new Set(granted);
+  const missing = required.filter((s) => !grantedSet.has(s));
+  return { granted, missing };
 }

@@ -48,7 +48,11 @@ export interface UserScopedPurgeTable {
  * Grows as Phases 3, 7+ ship columns. Phase 0 is empty.
  */
 export const USER_SCOPED_PURGE_COLUMNS: readonly UserScopedPurgeColumn[] = [
-  // Phase 3 will add:
+  // Phase 3: the playlist-url columns originally proposed in the spec
+  // were replaced by a dedicated `show_spotify_playlists` table (see
+  // USER_SCOPED_PURGE_TABLES below), which lets a single show carry
+  // multiple kinds (hype + heard) without proliferating columns. The
+  // legacy stubs are kept here for plan-fidelity:
   //   { table: 'shows', column: 'spotify_playlist_url', filter: 'user_id' },
   //   { table: 'shows', column: 'spotify_attended_playlist_url', filter: 'user_id' },
   // Phase 7 will add:
@@ -62,6 +66,12 @@ export const USER_SCOPED_PURGE_COLUMNS: readonly UserScopedPurgeColumn[] = [
  * Grows in Phase 9. Phase 0 is empty.
  */
 export const USER_SCOPED_PURGE_TABLES: readonly UserScopedPurgeTable[] = [
+  // Phase 3 — the (showId, userId, kind) row referencing a Showbook-
+  // created Spotify playlist. Wiping these on disconnect means
+  // re-connecting and re-creating the playlist starts a clean
+  // idempotency record; the playlists themselves stay on Spotify
+  // (we never delete from Spotify on disconnect).
+  { table: 'show_spotify_playlists', filter: 'user_id' },
   // Phase 9 will add:
   //   { table: 'user_spotify_skipped_artists', filter: 'user_id' },
 ];
