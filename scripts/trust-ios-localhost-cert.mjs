@@ -15,6 +15,70 @@ function mkcertRootCandidate() {
   return caroot ? path.join(caroot, 'rootCA.pem') : null;
 }
 
+function runSimctl(args) {
+  return spawnSync('xcrun', ['simctl', ...args], { encoding: 'utf8' });
+}
+
+function hasBootedSimulator() {
+  const result = runSimctl(['list', 'devices', 'booted', '--json']);
+  if (result.status !== 0) return false;
+  try {
+    const parsed = JSON.parse(result.stdout);
+    return Object.values(parsed.devices ?? {})
+      .flat()
+      .some((device) => device?.state === 'Booted');
+  } catch {
+    return false;
+  }
+}
+
+function pickAvailableIphone() {
+  if (process.env.IOS_SIMULATOR_UDID) return process.env.IOS_SIMULATOR_UDID;
+
+  const result = runSimctl(['list', 'devices', 'available', '--json']);
+  if (result.status !== 0) return null;
+  try {
+    const parsed = JSON.parse(result.stdout);
+    const devices = Object.values(parsed.devices ?? {})
+      .flat()
+      .filter(
+        (device) =>
+          device?.udid &&
+          device?.name?.startsWith('iPhone') &&
+          device?.isAvailable !== false,
+      );
+    return devices[0]?.udid ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function ensureBootedSimulator() {
+  if (hasBootedSimulator()) return true;
+
+  const udid = pickAvailableIphone();
+  if (!udid) {
+    console.warn('[mobile] No available iPhone simulator found for trusting the local cert.');
+    return false;
+  }
+
+  const boot = runSimctl(['boot', udid]);
+  if (
+    boot.status !== 0 &&
+    !/current state: Booted|already booted/i.test(`${boot.stderr}\n${boot.stdout}`)
+  ) {
+    console.warn(`[mobile] Could not boot iOS simulator ${udid}: ${boot.stderr.trim()}`);
+    return false;
+  }
+
+  const bootstatus = runSimctl(['bootstatus', udid, '-b']);
+  if (bootstatus.status !== 0) {
+    console.warn(`[mobile] Simulator ${udid} did not finish booting: ${bootstatus.stderr.trim()}`);
+    return false;
+  }
+  return true;
+}
+
 const explicit = process.env.LOCALHOST_CERT_PATH;
 const candidates = [
   explicit,
@@ -45,11 +109,11 @@ if (!certPath) {
   process.exit(0);
 }
 
-const result = spawnSync(
-  'xcrun',
-  ['simctl', 'keychain', 'booted', 'add-root-cert', certPath],
-  { encoding: 'utf8' },
-);
+if (!ensureBootedSimulator()) {
+  process.exit(0);
+}
+
+const result = runSimctl(['keychain', 'booted', 'add-root-cert', certPath]);
 
 if (result.error) {
   console.warn(`[mobile] Could not run xcrun to trust localhost cert: ${result.error.message}`);
