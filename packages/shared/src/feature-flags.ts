@@ -84,6 +84,18 @@ export const FeatureFlag = {
       'backtest cron keeps writing rows in the background.',
     state: 'ON',
   },
+  SetlistIntelMusicLayerV2: {
+    description:
+      'Phase 7 (setlist-intelligence) music layer v2. Gates the ' +
+      'fan-loyalty ring on the Overview tab + desktop right rail, the ' +
+      "discovered-live rail on the Setlist tab, and the show-title " +
+      'priming-stat italic. Default OFF in prod; the `ADMIN_EMAILS` ' +
+      "allowlist bypasses the gate so the developer's user id can " +
+      'validate the surface against a real Spotify connection before ' +
+      'wider rollout. Flip ON globally after the recently-played + ' +
+      'year-end-soundtrack jobs land clean for a week.',
+    state: 'OFF',
+  },
 } as const satisfies Record<string, { description: string; state: 'ON' | 'OFF' }>;
 
 export type FeatureFlagKey = keyof typeof FeatureFlag;

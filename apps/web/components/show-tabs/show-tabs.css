@@ -519,3 +519,196 @@
   text-transform: uppercase;
   margin-bottom: 6px;
 }
+
+/* Phase 7 — Fan loyalty donut */
+.fan-loyalty-ring {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+}
+
+.fan-loyalty-ring--compact {
+  padding: 14px;
+  gap: 12px;
+}
+
+.fan-loyalty-ring--loading {
+  height: 124px;
+  background: var(--surface);
+  border: 1px dashed var(--rule-strong);
+  opacity: 0.5;
+}
+
+.fan-loyalty-ring__label {
+  min-width: 0;
+}
+
+.fan-loyalty-ring__kicker {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  color: var(--faint);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.fan-loyalty-ring__count {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 14px;
+  color: var(--ink);
+  margin-top: 4px;
+  letter-spacing: -0.2px;
+  font-weight: 500;
+}
+
+.fan-loyalty-ring__sub {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 3px;
+  letter-spacing: 0.02em;
+}
+
+.fan-loyalty-ring__empty {
+  padding: 16px;
+  background: var(--surface);
+  border: 1px dashed var(--rule-strong);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  line-height: 1.6;
+}
+
+.fan-loyalty-ring__empty-title {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  color: var(--faint);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.fan-loyalty-ring__empty-body {
+  font-family: var(--font-geist-mono), monospace;
+}
+
+/* Phase 7 — Discovered-live rail (list rows) */
+.discovered-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.discovered-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  column-gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+}
+
+.discovered-row:first-child {
+  border-top: 1px solid var(--rule);
+}
+
+.discovered-row__preview {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid var(--rule-strong);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.discovered-row__title-block {
+  min-width: 0;
+}
+
+.discovered-row__title {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 14.5px;
+  color: var(--ink);
+  font-weight: 500;
+  letter-spacing: -0.1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.discovered-row__meta {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+  letter-spacing: 0.02em;
+}
+
+.discovered-row__error {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  color: #e63946;
+  margin-top: 4px;
+  letter-spacing: 0.02em;
+}
+
+.discovered-row__save {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+  color: var(--ink);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.discovered-row__save:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.discovered-row__save:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.discovered-rail__empty {
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px dashed var(--rule-strong);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  line-height: 1.6;
+}
+
+.discovered-rail__empty-sub {
+  color: var(--faint);
+}
+
+.discovered-rail__footer {
+  padding: 10px 16px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  color: var(--faint);
+  letter-spacing: 0.04em;
+}
+
+/* Phase 7 — priming stat (title block italic) */
+.priming-stat {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--muted);
+  letter-spacing: -0.05px;
+}
+
+.priming-stat--compact {
+  font-size: 11.5px;
+}

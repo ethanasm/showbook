@@ -1,6 +1,7 @@
 /**
- * Setlist intelligence — read-only tRPC procedures for Phase 1.
+ * Setlist intelligence — read-only tRPC procedures for Phases 1 + 7.
  *
+ * Phase 1:
  * - `predictedSetlist({ showId })` — Bayesian prediction (cached). Resolves
  *   the headliner server-side; gates by show kind + date + headliner
  *   presence. Returns the `cold` empty state with a typed `reason` for
@@ -12,8 +13,12 @@
  * - `firstTimes({ limit })` — user-scoped only (SI-17). "First time YOU
  *   heard this song live."
  *
- * The corresponding mutations (cache invalidation, manual edits) live
- * elsewhere; this router is read-only.
+ * Phase 7 (music layer v2):
+ * - `musicLayerV2Feature()` — flag gate query (admin-bypass).
+ * - `fanLoyalty({ showId })` — donut ring source data (past shows).
+ * - `discoveredLive({ showId })` — list-row rail data (past shows).
+ * - `saveDiscoveredSong({ songId })` — PUT /me/tracks mutation.
+ * - `primingStat({ showId })` — italic title-block line.
  */
 
 import { z } from 'zod';
@@ -27,7 +32,13 @@ import {
   songs,
   users,
 } from '@showbook/db';
-import { getHeadlinerId, isProductionShow, type ShowLike } from '@showbook/shared';
+import {
+  getHeadlinerId,
+  isProductionShow,
+  isFeatureOn,
+  type FeatureFlagKey,
+  type ShowLike,
+} from '@showbook/shared';
 import { child } from '@showbook/observability';
 import { protectedProcedure, router } from '../trpc';
 import {
@@ -36,6 +47,13 @@ import {
   type ColdPrediction,
   type HotPrediction,
 } from '../setlist-predict';
+import {
+  fanLoyaltyForShow,
+  discoveredLiveForShow,
+  saveDiscoveredSong,
+  primingStatForShow,
+} from '../spotify-music-layer';
+import { isAdminEmail } from '../admin';
 
 const log = child({ component: 'api.setlist-intel' });
 
@@ -58,6 +76,29 @@ const setlistDiffInput = z.object({
 const firstTimesInput = z
   .object({ limit: z.number().int().min(1).max(200).default(50) })
   .default({ limit: 50 });
+
+const showIdOnly = z.object({ showId: z.string().uuid() });
+const saveDiscoveredInput = z.object({ songId: z.string().uuid() });
+
+const MUSIC_LAYER_V2_FLAG: FeatureFlagKey = 'SetlistIntelMusicLayerV2';
+
+/**
+ * Resolves the Phase 7 music-layer-v2 gate for a user. The flag is OFF
+ * globally; the `ADMIN_EMAILS` allowlist bypasses so the developer can
+ * validate against a real Spotify connection before rollout.
+ */
+async function isMusicLayerV2EnabledForUser(
+  dbi: typeof import('@showbook/db').db,
+  userId: string,
+): Promise<boolean> {
+  if (isFeatureOn(MUSIC_LAYER_V2_FLAG)) return true;
+  const [user] = await dbi
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return isAdminEmail(user?.email);
+}
 
 export const setlistIntelRouter = router({
   /**
@@ -292,6 +333,163 @@ export const setlistIntelRouter = router({
           title: row.title,
           performerName: row.performer_name,
         };
+      });
+    }),
+
+  // ───────────────────────────────────────────────────────────────────
+  // Phase 7 — music layer v2
+  // ───────────────────────────────────────────────────────────────────
+
+  /**
+   * Gate query for the Phase 7 music-layer-v2 UI (fan loyalty ring,
+   * discovered-live rail, priming stat). Returns `{ enabled }` based
+   * on the global flag and the admin-email allowlist.
+   */
+  musicLayerV2Feature: protectedProcedure.query(async ({ ctx }) => {
+    const enabled = await isMusicLayerV2EnabledForUser(
+      ctx.db,
+      ctx.session.user.id,
+    );
+    return { enabled };
+  }),
+
+  /**
+   * Fan-loyalty ring source data — past shows only. Walks the actual
+   * setlist, asks Spotify which of those tracks the user has saved,
+   * and returns the rolled-up count/percentage. Computed on demand;
+   * never persisted (SI-12).
+   */
+  fanLoyalty: protectedProcedure
+    .input(showIdOnly)
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      if (!(await isMusicLayerV2EnabledForUser(ctx.db, userId))) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'feature_disabled:SetlistIntelMusicLayerV2',
+        });
+      }
+      try {
+        return await fanLoyaltyForShow({
+          db: ctx.db,
+          userId,
+          showId: input.showId,
+        });
+      } catch (err) {
+        log.error(
+          {
+            event: 'setlistIntel.fan_loyalty.failed',
+            err,
+            userId,
+            showId: input.showId,
+          },
+          'Fan loyalty computation failed',
+        );
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'fan_loyalty_failed',
+        });
+      }
+    }),
+
+  /**
+   * Discovered-live rail — songs played at this show that the user
+   * does NOT have saved on Spotify. List-row layout per the design
+   * handoff. The companion `saveDiscoveredSong` mutation flips
+   * individual rows.
+   */
+  discoveredLive: protectedProcedure
+    .input(showIdOnly)
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      if (!(await isMusicLayerV2EnabledForUser(ctx.db, userId))) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'feature_disabled:SetlistIntelMusicLayerV2',
+        });
+      }
+      try {
+        return await discoveredLiveForShow({
+          db: ctx.db,
+          userId,
+          showId: input.showId,
+        });
+      } catch (err) {
+        log.error(
+          {
+            event: 'setlistIntel.discovered_live.failed',
+            err,
+            userId,
+            showId: input.showId,
+          },
+          'Discovered-live computation failed',
+        );
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'discovered_live_failed',
+        });
+      }
+    }),
+
+  /**
+   * Save a single track to the user's Spotify library. The mutation
+   * patches the in-process saved-cache so the next ring/rail render
+   * reflects the new state without waiting for the 60s TTL.
+   */
+  saveDiscoveredSong: protectedProcedure
+    .input(saveDiscoveredInput)
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      if (!(await isMusicLayerV2EnabledForUser(ctx.db, userId))) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'feature_disabled:SetlistIntelMusicLayerV2',
+        });
+      }
+      const result = await saveDiscoveredSong({
+        db: ctx.db,
+        userId,
+        songId: input.songId,
+      });
+      if (!result.ok) {
+        if (result.reason === 'not_connected') {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'spotify_not_connected',
+          });
+        }
+        if (result.reason === 'no_spotify_id') {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'no_spotify_id',
+          });
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'save_discovered_failed',
+        });
+      }
+      return { ok: true as const };
+    }),
+
+  /**
+   * Priming stat — italic line on the show title block. Reads the
+   * pre/post counts populated by the nightly recently-played job.
+   * Returns nulls when the job hasn't yet filled the show.
+   */
+  primingStat: protectedProcedure
+    .input(showIdOnly)
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      if (!(await isMusicLayerV2EnabledForUser(ctx.db, userId))) {
+        // Quiet failure path — the UI hides the line entirely when the
+        // flag is off, no need to bubble an error.
+        return { prepCount: null, postCount: null };
+      }
+      return primingStatForShow({
+        db: ctx.db,
+        userId,
+        showId: input.showId,
       });
     }),
 });

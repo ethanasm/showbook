@@ -26,6 +26,9 @@ import { MediaTab } from "./MediaTab";
 import { NotesTab } from "./NotesTab";
 import { MusicLayerEmpty } from "./MusicLayerEmpty";
 import { HypePlaylistCard } from "./HypePlaylistCard";
+import { FanLoyaltyRing } from "./FanLoyaltyRing";
+import { DiscoveredRail } from "./DiscoveredRail";
+import { PrimingStat } from "./PrimingStat";
 import { useTrackTabView } from "./use-track-tab-view";
 import { computeShowTabBadges } from "./types";
 import type { StatCell } from "./StatRow";
@@ -91,6 +94,15 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
     { staleTime: 5 * 60_000 },
   );
   const hypePlaylistEnabled = Boolean(hypeFeatureQuery.data?.enabled);
+
+  // Phase 7 — flag gate for the music-layer-v2 surfaces (fan loyalty
+  // ring, discovered-live rail, priming stat). When OFF, we keep the
+  // P1 empty placeholders rendering instead of the data-backed atoms.
+  const musicLayerV2Query = trpc.setlistIntel.musicLayerV2Feature.useQuery(
+    undefined,
+    { staleTime: 5 * 60_000 },
+  );
+  const musicLayerV2Enabled = Boolean(musicLayerV2Query.data?.enabled);
 
   // Phase 2 — inline song badges. Only fetch for past shows where
   // there's a setlist on record AND the Songs surface is on.
@@ -245,9 +257,10 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
     name: entry.name,
   }));
 
-  // Music-layer slot for the Overview tab — pre-show shows vibe radar
-  // empty state; post-show shows fan loyalty empty state. Phases 7+8
-  // replace these placeholders with real atoms.
+  // Music-layer slot for the Overview tab — pre-show always shows the
+  // vibe-radar empty state (Phase 8). Post-show, the fan-loyalty ring
+  // replaces its placeholder once the music-layer-v2 flag is on
+  // (Phase 7); without the flag, the empty placeholder stays.
   const musicLayerPlaceholder = (
     <div
       style={{
@@ -257,9 +270,12 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
       }}
     >
       <MusicLayerEmpty variant="vibe-radar" spotifyConnected={false} />
-      {isPast && (
-        <MusicLayerEmpty variant="fan-loyalty" spotifyConnected={false} />
-      )}
+      {isPast &&
+        (musicLayerV2Enabled ? (
+          <FanLoyaltyRing showId={show.id} />
+        ) : (
+          <MusicLayerEmpty variant="fan-loyalty" spotifyConnected={false} />
+        ))}
     </div>
   );
 
@@ -286,6 +302,7 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
         predictionLoading={predictionQuery.isLoading}
         actualSongs={actualSongs}
         hypePlaylistEnabled={hypePlaylistEnabled}
+        musicLayerV2Enabled={musicLayerV2Enabled}
         badgePayload={badgeQuery.data ?? null}
       />
     );
@@ -355,6 +372,10 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
         compact
       />
     ) : null,
+    fanLoyaltyRing:
+      isPast && musicLayerV2Enabled ? (
+        <FanLoyaltyRing showId={show.id} compact />
+      ) : null,
   };
 
   // Header — collapsed hero strip. Tab bar is sticky below.
@@ -368,7 +389,10 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
         background: "var(--bg)",
       }}
     >
-      <ShowHeaderStrip show={show} />
+      <ShowHeaderStrip
+        show={show}
+        showPrimingStat={isPast && musicLayerV2Enabled}
+      />
       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         <ShowTabs
           showId={show.id}
@@ -390,8 +414,10 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
 
 function ShowHeaderStrip({
   show,
+  showPrimingStat = false,
 }: {
   show: ShowDetailTabsViewProps["show"];
+  showPrimingStat?: boolean;
 }) {
   const isPast = show.state === "past";
   const headlinerName = getHeadliner(show);
@@ -536,6 +562,7 @@ function ShowHeaderStrip({
           </span>
         )}
       </div>
+      {showPrimingStat && <PrimingStat showId={show.id} />}
     </header>
   );
 }

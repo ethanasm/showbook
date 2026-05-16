@@ -64,6 +64,11 @@ export {
   searchTrack,
   createPlaylist,
   addTracksToPlaylist,
+  tracksContains,
+  saveTracksToLibrary,
+  getRecentlyPlayed,
+  getTopTracks,
+  replacePlaylistItems,
   diffScopes,
 } from './spotify';
 export type {
@@ -72,8 +77,24 @@ export type {
   SpotifyMe,
   SpotifyTrack,
   SpotifyPlaylist,
+  SpotifyRecentlyPlayedTrack,
+  SpotifyTopTrack,
   MissingScopesResult,
 } from './spotify';
+export {
+  __resetSavedCacheForTests as __resetMusicLayerCacheForTests,
+  fanLoyaltyForShow,
+  discoveredLiveForShow,
+  saveDiscoveredSong,
+  primingStatForShow,
+  checkTracksSavedForUser,
+} from './spotify-music-layer';
+export type {
+  FanLoyaltyResult,
+  DiscoveredLiveResult,
+  DiscoveredTrack,
+  PrimingStatResult,
+} from './spotify-music-layer';
 export {
   buildPlaylistName,
   buildPlaylistDescription,

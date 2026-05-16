@@ -7,6 +7,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  smallint,
   text,
   timestamp,
   uuid,
@@ -65,6 +66,11 @@ export const shows = pgTable(
     sourceRefs: jsonb('source_refs'),
     ticketUrl: text('ticket_url'),
     notes: text('notes'),
+    // Phase 7 of setlist-intelligence — per-show pre/post Spotify
+    // "priming" track counts derived from /me/player/recently-played.
+    // Set once the show flips past + 6h; frozen thereafter.
+    spotifyPrepTrackCount: smallint('spotify_prep_track_count'),
+    spotifyPostTrackCount: smallint('spotify_post_track_count'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
