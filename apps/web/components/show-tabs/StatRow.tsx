@@ -1,11 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import "./show-tabs.css";
 
 export interface StatCell {
   label: string;
   value: string;
   sub?: string;
+  /**
+   * Optional href — when present the cell's `value` renders as a Next.js
+   * `<Link>` so screen readers + Playwright `getByRole('link')` selectors
+   * still find it. Used for the venue cell so the legacy navigation
+   * contract (click venue → /venues/<id>) is preserved.
+   */
+  href?: string;
 }
 
 interface StatRowProps {
@@ -22,7 +30,15 @@ export function StatRow({ cells }: StatRowProps) {
       {cells.map((cell) => (
         <div key={cell.label} className="show-stat-cell">
           <div className="show-stat-cell__label">{cell.label}</div>
-          <div className="show-stat-cell__value">{cell.value}</div>
+          <div className="show-stat-cell__value">
+            {cell.href ? (
+              <Link href={cell.href} style={{ color: "inherit", textDecoration: "none" }}>
+                {cell.value}
+              </Link>
+            ) : (
+              cell.value
+            )}
+          </div>
           {cell.sub && <div className="show-stat-cell__sub">{cell.sub}</div>}
         </div>
       ))}

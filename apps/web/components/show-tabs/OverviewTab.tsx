@@ -55,7 +55,7 @@ export function OverviewTab({
   onDelete,
   musicLayerPlaceholder,
 }: OverviewTabProps) {
-  const showActions: { label: string; icon: React.ReactNode; onClick?: () => void; href?: string; danger?: boolean; primary?: boolean }[] = [];
+  const showActions: { label: string; icon: React.ReactNode; onClick?: () => void; href?: string; danger?: boolean; primary?: boolean; testId?: string }[] = [];
   if (state === "ticketed" && onMarkAttended) {
     showActions.push({
       label: "Mark as attended",
@@ -68,11 +68,15 @@ export function OverviewTab({
     label: "Edit show",
     icon: <MoreHorizontal size={13} />,
     onClick: onEdit,
+    // Legacy test contract — the e2e `show-detail.spec.ts` clicks this
+    // testid; keep the name stable across the layout swap.
+    testId: "action-edit-show",
   });
   showActions.push({
     label: "Add to calendar",
     icon: <CalendarPlus size={13} />,
     href: onAddToCalendarHref,
+    testId: "add-to-calendar",
   });
   showActions.push({
     label: "Delete",
@@ -232,7 +236,12 @@ export function OverviewTab({
             };
             if (action.href) {
               return (
-                <a key={action.label} href={action.href} style={style}>
+                <a
+                  key={action.label}
+                  href={action.href}
+                  style={style}
+                  data-testid={action.testId}
+                >
                   {action.icon} {action.label}
                 </a>
               );
@@ -243,6 +252,7 @@ export function OverviewTab({
                 type="button"
                 style={style}
                 onClick={action.onClick}
+                data-testid={action.testId}
               >
                 {action.icon} {action.label}
               </button>

@@ -159,7 +159,7 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
         ? "Have tickets"
         : "Watching";
     return [
-      { label: "VENUE", value: venueLabel, sub: venueSub },
+      { label: "VENUE", value: venueLabel, sub: venueSub, href: `/venues/${show.venue.id}` },
       { label: "SEAT", value: seatLabel, sub: seatSub },
       { label: "PAID", value: priceLabel, sub: priceSub || undefined },
       { label: "STATE", value: stateLabel },
