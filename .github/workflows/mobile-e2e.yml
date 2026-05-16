@@ -442,6 +442,95 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # Push the Maestro debug PNGs to the `mobile-e2e-debug` orphan
+      # branch and post the raw URLs (plus inlined UI hierarchy text)
+      # as a PR comment. The repo is public so
+      # raw.githubusercontent.com URLs are fetchable without auth —
+      # that lets Claude pull the cold-launch screenshot directly via
+      # WebFetch on the next failure instead of asking the operator
+      # to download the artefact ZIP. Mirrors the existing
+      # upload-pr-screenshots pattern used by the web PR screenshots
+      # flow.
+      - name: Publish maestro debug to orphan branch
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          if [ ! -d /tmp/maestro-debug ]; then
+            echo "no /tmp/maestro-debug — nothing to publish"
+            exit 0
+          fi
+
+          # Flatten Maestro's nested per-run dirs into one flat dir
+          # with sanitised filenames. Each per-flow screenshot is named
+          # `screenshot-<emoji>-<ts>-(flow).png`; collapse to
+          # `maestro-<flow>-<n>.png` so the orphan-branch URL stays
+          # clean.
+          FLAT=/tmp/maestro-debug-flat
+          rm -rf "$FLAT"
+          mkdir -p "$FLAT"
+          [ -f /tmp/maestro-debug/cold-launch.png ] && cp /tmp/maestro-debug/cold-launch.png "$FLAT/cold-launch.png"
+          n=1
+          while IFS= read -r -d '' f; do
+            base="$(basename "$f")"
+            flow="$(echo "$base" | sed -E 's/.*\(([^)]+)\)\.png$/\1/' | tr -c '[:alnum:]-' '-')"
+            [ -z "$flow" ] && flow="unknown"
+            cp "$f" "$FLAT/maestro-${flow}-${n}.png"
+            n=$((n + 1))
+          done < <(find /tmp/maestro-debug -name '*.png' -path '*tests*' -print0)
+
+          echo "Files staged for upload:"
+          ls -la "$FLAT"
+
+          # Reuse the existing orphan-branch uploader. Each run gets
+          # its own subdirectory keyed on the run id so re-runs don't
+          # clobber each other.
+          RUN_DIR="run-${{ github.run_id }}"
+          OUTPUT=$(node scripts/upload-pr-screenshots.mjs \
+            --branch "$RUN_DIR" \
+            --pr "$PR_NUMBER" \
+            --dir "$FLAT" \
+            --target-branch mobile-e2e-debug 2>&1) || {
+              echo "upload-pr-screenshots failed:"
+              echo "$OUTPUT"
+              exit 0
+            }
+          echo "$OUTPUT"
+
+          # The script logs its progress to stderr / stdout above the
+          # JSON; isolate the JSON array using its `[`/`]` lines.
+          URLS_JSON=$(echo "$OUTPUT" | sed -n '/^\[$/,/^\]$/p')
+          IMAGES_MD=$(echo "$URLS_JSON" | jq -r '.[] | "![\(.name)](\(.url))"')
+
+          # Inline the text= nodes from the cold-launch UI dump
+          # directly in the PR comment — small enough to fit, and
+          # readable without opening an external file. Truncated to
+          # 100 entries to stay under the 64 KB comment limit.
+          UI_TEXT=""
+          if [ -f /tmp/maestro-debug/cold-launch.xml ]; then
+            UI_TEXT=$(grep -oE 'text="[^"]*"' /tmp/maestro-debug/cold-launch.xml \
+              | grep -v 'text=""' | sort -u | head -100 || true)
+          fi
+
+          BODY_FILE=$(mktemp)
+          {
+            printf '## Mobile e2e debug — `%s`\n\n' "$RUN_DIR"
+            printf '[Workflow run](%s) failed. Cold-launch screenshot first, then Maestro per-flow screenshots.\n\n' "$RUN_URL"
+            printf '%s\n\n' "$IMAGES_MD"
+            if [ -n "$UI_TEXT" ]; then
+              printf '<details><summary>Cold-launch UI hierarchy (text nodes)</summary>\n\n'
+              printf '```\n%s\n```\n\n' "$UI_TEXT"
+              printf '</details>\n'
+            fi
+            printf '\n_Orphan branch `mobile-e2e-debug` retains these for 7 days alongside the run artefact._\n'
+          } > "$BODY_FILE"
+
+          gh pr comment "$PR_NUMBER" --body-file "$BODY_FILE"
+
       # Only on PR runs: append/replace a `## Mobile screenshots` section
       # in the PR body, bracketed by sentinel comments so re-runs replace
       # cleanly. Runs on success and failure so reviewers see the
