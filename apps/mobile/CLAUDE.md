@@ -162,6 +162,50 @@ rationale on the Android-CI / iOS-manual split.
 - Changing auth? Mirror `lib/__tests__/auth.test.ts` so the
   E2E-bypass guard stays watertight.
 
+## Headless web verification (Claude on the web)
+
+The sandbox doesn't have iOS Simulator or a usable Android emulator, so
+the inner-loop verification target is the Expo **web** bundle driven by
+Playwright. Native-only modules are swapped at Metro resolve time via
+`apps/mobile/web-shims/` (see `web-shims/README.md`) — they exist
+**only** for the web bundle and never ship to iOS/Android.
+
+```bash
+pnpm mobile:web:build          # expo export --platform web (writes dist-web/)
+pnpm mobile:web:test           # playwright test --config=playwright.config.ts
+pnpm mobile:web:verify         # build + test
+```
+
+The Playwright config (`apps/mobile/playwright.config.ts`) launches a
+dependency-free static server (`web-tests/serve.mjs`) against
+`dist-web/`, then drives the bundle in a 390×844 Chromium viewport.
+The smoke spec (`web-tests/smoke.spec.ts`) covers:
+- App boots to the sign-in screen with no `pageerror` events.
+- A pre-seeded session (written to `localStorage` via the
+  `expo-secure-store` shim) routes past the auth gate into the tab
+  shell.
+
+When adding a new test, seed sessions via `page.addInitScript` writing
+to `localStorage` keys prefixed with `secureStore::` — that namespace
+is what `web-shims/expo-secure-store.js` reads from. The seed format
+mirrors the Maestro flow: `showbook.auth.token`,
+`showbook.auth.user` (JSON), and `showbook.auth.firstRunComplete`.
+
+**What this loop is good for:** layout, navigation, signed-in/out
+state, screen renders without throwing, tRPC hook wiring, optimistic
+mutation visuals on the UI side. **What it isn't:** anything backed by
+expo-sqlite (cache layer behaves as if empty), native maps,
+camera/photo/library/location/notifications (all no-op'd), or the
+Google OAuth round-trip (the `EXPO_PUBLIC_E2E_MODE=1` bypass is baked
+into the web build).
+
+The web loop is below the existing Maestro gate, not a replacement:
+real e2e still runs on the Android emulator via
+`.github/workflows/mobile-e2e.yml` whenever the PR carries the
+`mobile-visual` label, and iOS coverage is still the manual
+`pnpm mobile:e2e:ios` step on the dev Mac. Use the web loop to iterate
+fast; let Maestro be the gate.
+
 ## Known limitations
 
 - **Geist font is a no-op loader.** `lib/fonts.ts` resolves
