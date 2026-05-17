@@ -116,23 +116,24 @@ export const FeatureFlag = {
     description:
       'Phase 6 (setlist-intelligence) — gates the theatrical-style ' +
       'predicted-setlist UI variant (ActDivider + RotatingSlotCard, ' +
-      'served when prediction.style === "theatrical"). Default OFF; ' +
-      'flip ON only after the theatrical release-gate (Brier ≤ 0.15) ' +
-      'has cleared on prediction_eval_runs. When OFF, theatrical-' +
-      'classified performers fall through to the SetlistTabComingSoon ' +
-      'fallback rather than serving an uncalibrated experience.',
-    state: 'OFF',
+      'served when prediction.style === "theatrical"). Default ON in ' +
+      'single-user prod so the model can be tuned against real shows; ' +
+      'the calibration release-gate still computes a verdict and ' +
+      'emits setlist.release_gate.{passed,failed}, but the client no ' +
+      'longer hard-blocks on it. When OFF, theatrical-classified ' +
+      'performers fall through to SetlistTabComingSoon.',
+    state: 'ON',
   },
   SetlistIntelImprovisedDisplay: {
     description:
       'Phase 6 (setlist-intelligence) — gates the improvised-style ' +
       'predicted-setlist UI variant (VibeSketchCard + ShowModeOddsCard, ' +
-      'served when prediction.style === "improvised"). Default OFF; ' +
-      'flip ON only when the improvised vibe-sketch is calibrated — ' +
-      "the gate's improvised_show_mode_calibration breach must be " +
-      'clear on the latest eval run. When OFF, improvised-classified ' +
-      'performers fall through to SetlistTabComingSoon.',
-    state: 'OFF',
+      'served when prediction.style === "improvised"). Default ON in ' +
+      'single-user prod for the same reason as the theatrical flag. ' +
+      "The release-gate's improvised_show_mode_calibration breach is " +
+      'still emitted to Axiom for tuning. When OFF, improvised-' +
+      'classified performers fall through to SetlistTabComingSoon.',
+    state: 'ON',
   },
 } as const satisfies Record<string, { description: string; state: 'ON' | 'OFF' }>;
 
