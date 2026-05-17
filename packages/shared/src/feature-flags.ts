@@ -170,7 +170,7 @@ export const FeatureFlag = {
       'the 4-tab shell and routes the four prediction styles into the ' +
       'Setlist tab. Default OFF until the C3 physical-iPhone Spotify ' +
       'smoke test in the Phase 10 PR is signed off.',
-    state: 'OFF',
+    state: 'ON',
   },
 } as const satisfies Record<string, { description: string; state: 'ON' | 'OFF' }>;
 
