@@ -223,6 +223,10 @@ const KNOWN_TICKET_SENDERS = [
   'orders@eventbrite.com',
   'service@telecharge.com',
   'noreply@email.stubhub.com',
+  'tickets@broadwaysf.com',
+  'boxoffice@ussecure.atgtickets.com',
+  'info@sfplayhouse.org',
+  'ticketing@broadway.com',
 ];
 
 // Domains that send confirmation mail with subject lines we can't reliably
