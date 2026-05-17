@@ -38,8 +38,11 @@ export interface ITunesTrackPreview {
  * fallback when Spotify's Search API returns a track without
  * `preview_url` — Spotify thinned previews from new-app API responses
  * starting Nov 2024; iTunes still serves 30s preview clips for the
- * overwhelming majority of mainstream catalogue with CORS headers that
- * load through the page's <audio crossOrigin="anonymous"> element.
+ * overwhelming majority of mainstream catalogue. Note: the
+ * `audio-ssl.itunes.apple.com` host does *not* return
+ * `Access-Control-Allow-Origin`, so the page-side <audio> element
+ * must NOT set `crossOrigin = "anonymous"` (see preview-player.tsx)
+ * or the playback `.play()` promise will reject.
  *
  * Returns `null` when the search has no song-kind result, or when
  * iTunes returns a non-OK / non-JSON response. Rate-limit (HTTP 403)
