@@ -169,8 +169,10 @@ describe('checkTracksSavedForUser', () => {
   it('mixes cached and to-fetch ids without losing order', async () => {
     let captured: string[] = [];
     globalThis.fetch = (async (url: string) => {
-      const m = url.match(/ids=([^&]+)/);
-      captured = m ? decodeURIComponent(m[1]!).split(',') : [];
+      // Post-Feb-2026 the endpoint is /me/library/contains?uris=spotify:track:...
+      const m = url.match(/uris=([^&]+)/);
+      const uris = m ? decodeURIComponent(m[1]!).split(',') : [];
+      captured = uris.map((uri) => uri.replace(/^spotify:track:/, ''));
       return jsonResponse(captured.map(() => true));
     }) as typeof globalThis.fetch;
     await musicLayer.checkTracksSavedForUser('user-1', 'token', ['t1']);

@@ -5,8 +5,10 @@
  *   - `accounts.spotify.com/api/token` (token refresh on near-expiry)
  *   - `api.spotify.com/v1/me` (profile lookup at connect)
  *   - `api.spotify.com/v1/search?type=track` (per-song resolution)
- *   - `api.spotify.com/v1/users/{id}/playlists` (POST playlist)
- *   - `api.spotify.com/v1/playlists/{id}/tracks` (POST batch add)
+ *   - `api.spotify.com/v1/me/playlists` (POST playlist, post-Feb-2026
+ *     migration — replaces the deprecated `/users/{id}/playlists`)
+ *   - `api.spotify.com/v1/playlists/{id}/items` (POST batch add,
+ *     post-Feb-2026 — replaces the deprecated `/tracks`)
  *
  * The point is the DB write — the show_spotify_playlists idempotency
  * row, the (showId, userId, kind) uniqueness, and the cascade behavior
@@ -279,8 +281,7 @@ function mockSpotify(opts: {
     }
     if (
       u.host === 'api.spotify.com' &&
-      u.pathname.startsWith('/v1/users/') &&
-      u.pathname.endsWith('/playlists') &&
+      u.pathname === '/v1/me/playlists' &&
       (init?.method ?? 'GET') === 'POST'
     ) {
       if (opts.playlistCreateStatus && opts.playlistCreateStatus !== 200) {
@@ -302,14 +303,14 @@ function mockSpotify(opts: {
     if (
       u.host === 'api.spotify.com' &&
       u.pathname.includes('/playlists/') &&
-      u.pathname.endsWith('/tracks') &&
+      u.pathname.endsWith('/items') &&
       (init?.method ?? 'GET') === 'POST'
     ) {
       if (opts.addTracksStatus && opts.addTracksStatus !== 200) {
         return new Response('err', { status: opts.addTracksStatus });
       }
       const body = init?.body ? JSON.parse(init.body as string) : {};
-      const playlistMatch = u.pathname.match(/playlists\/([^/]+)\/tracks/);
+      const playlistMatch = u.pathname.match(/playlists\/([^/]+)\/items/);
       FETCH_LOG.tracksAdds.push({
         playlistId: playlistMatch?.[1] ?? '',
         uris: body.uris,
