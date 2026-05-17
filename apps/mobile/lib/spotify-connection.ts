@@ -56,11 +56,19 @@ export function useSpotifyConnection(opts: UseSpotifyConnectionOptions = {}) {
     try {
       // The web app's `/api/spotify` route requires an authed session;
       // the mobile WebView shares the same Showbook session cookie set
-      // via the mobile token bridge, so the popup-style HTML the
-      // callback emits at the end is a benign "you can close this" page.
+      // via the mobile token bridge. The `?mode=mobile` opt-in flips
+      // the callback's response shape: instead of the popup HTML used
+      // by the web flow, the server emits a
+      // `Location: showbook://spotify/connected?status=ok` 302 once
+      // `persistInitialToken` has completed. ASWebAuthenticationSession
+      // (iOS) and Chrome Custom Tabs (Android) both match the
+      // `showbook://` scheme as the return URL, dismiss the sheet, and
+      // hand control back to the app — guaranteeing the token row is
+      // committed before the dismiss fires (vs the https-return-URL
+      // path, where the sheet could dismiss mid-fetch).
       const result = await WebBrowser.openAuthSessionAsync(
-        `${API_URL}/api/spotify`,
-        `${API_URL}/api/spotify/callback`,
+        `${API_URL}/api/spotify?mode=mobile`,
+        'showbook://spotify/connected',
       );
       if (result.type === 'cancel' || result.type === 'dismiss') {
         // Treat dismiss as a soft cancel — the user may have completed

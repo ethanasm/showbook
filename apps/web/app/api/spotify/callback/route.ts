@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, type NextResponse } from 'next/server';
 import { child } from '@showbook/observability';
 import {
   exchangeAuthorizationCode,
@@ -7,7 +7,14 @@ import {
   SpotifyError,
 } from '@showbook/api';
 import { auth } from '@/auth';
-import { popupResponse, coerceReason } from '@/lib/spotify-popup-response';
+import {
+  coerceReason,
+  mobileRedirectResponse,
+  OAUTH_MODE_COOKIE,
+  OAUTH_MODE_MOBILE,
+  popupResponse,
+  type PopupPayload,
+} from '@/lib/spotify-popup-response';
 
 const logger = child({ component: 'web.spotify.callback', provider: 'spotify' });
 const STATE_COOKIE = 'spotify_oauth_state';
@@ -20,6 +27,27 @@ export async function GET(req: NextRequest) {
   const state = req.nextUrl.searchParams.get('state');
   const errorParam = req.nextUrl.searchParams.get('error');
   const expectedState = req.cookies.get(STATE_COOKIE)?.value;
+  const isMobileFlow =
+    req.cookies.get(OAUTH_MODE_COOKIE)?.value === OAUTH_MODE_MOBILE;
+
+  // Shape selector: web flow renders the popup HTML (postMessage +
+  // localStorage), mobile flow emits a `showbook://` 302 the
+  // ASWebAuthenticationSession / Chrome Custom Tabs handoff catches.
+  // Both paths clear the state + mode cookies.
+  const respond = (
+    payload: PopupPayload,
+    options: { message: string; status?: number },
+  ): NextResponse => {
+    if (isMobileFlow) {
+      return mobileRedirectResponse({ payload, isSecure });
+    }
+    return popupResponse({
+      payload,
+      message: options.message,
+      status: options.status,
+      isSecure,
+    });
+  };
 
   // Spotify follows OAuth 2.0: when the user denies consent (or Spotify
   // itself rejects the request), we get back `?error=...&state=...` with no
@@ -34,17 +62,21 @@ export async function GET(req: NextRequest) {
       },
       'Spotify OAuth denied or rejected by Spotify',
     );
-    return popupResponse({
-      // Map Spotify's free-form `error` param through a fixed whitelist
-      // before it reaches the popup HTML — never let URL-derived strings
-      // flow into the inline <script> payload.
-      payload: { type: 'spotify-auth-error', reason: coerceReason(errorParam) },
-      message:
-        errorParam === 'access_denied'
-          ? 'Spotify connection canceled. You can close this window.'
-          : 'Spotify rejected the request. You can close this window.',
-      isSecure,
-    });
+    return respond(
+      {
+        // Map Spotify's free-form `error` param through a fixed
+        // whitelist before it reaches the popup HTML — never let
+        // URL-derived strings flow into the inline <script> payload.
+        type: 'spotify-auth-error',
+        reason: coerceReason(errorParam),
+      },
+      {
+        message:
+          errorParam === 'access_denied'
+            ? 'Spotify connection canceled. You can close this window.'
+            : 'Spotify rejected the request. You can close this window.',
+      },
+    );
   }
 
   if (!code || !state || !expectedState || state !== expectedState) {
@@ -58,11 +90,10 @@ export async function GET(req: NextRequest) {
       },
       'Spotify callback rejected: state mismatch',
     );
-    return popupResponse({
-      payload: { type: 'spotify-auth-error', reason: 'state_mismatch' },
-      message: 'Spotify connection failed (state mismatch). Please try again.',
-      isSecure,
-    });
+    return respond(
+      { type: 'spotify-auth-error', reason: 'state_mismatch' },
+      { message: 'Spotify connection failed (state mismatch). Please try again.' },
+    );
   }
 
   // The state cookie is the security boundary — we only get here if the
@@ -77,12 +108,13 @@ export async function GET(req: NextRequest) {
       { event: 'spotify.connect.failed', reason: 'session_missing' },
       'Spotify callback hit without a Showbook session',
     );
-    return popupResponse({
-      payload: { type: 'spotify-auth-error', reason: 'session_missing' },
-      message:
-        'Your Showbook session was lost during the Spotify hop. Please sign in again and retry.',
-      isSecure,
-    });
+    return respond(
+      { type: 'spotify-auth-error', reason: 'session_missing' },
+      {
+        message:
+          'Your Showbook session was lost during the Spotify hop. Please sign in again and retry.',
+      },
+    );
   }
 
   // Connect-once: exchange code → tokens → /me → persist row, all
@@ -119,14 +151,15 @@ export async function GET(req: NextRequest) {
         },
         'Spotify token exchange failed',
       );
-      return popupResponse({
-        payload: { type: 'spotify-auth-error', reason },
-        message:
-          reason === 'network'
-            ? "Couldn't reach Spotify. Please try again."
-            : 'Spotify token exchange failed. You can close this window.',
-        isSecure,
-      });
+      return respond(
+        { type: 'spotify-auth-error', reason },
+        {
+          message:
+            reason === 'network'
+              ? "Couldn't reach Spotify. Please try again."
+              : 'Spotify token exchange failed. You can close this window.',
+        },
+      );
     }
     logger.error(
       {
@@ -137,18 +170,16 @@ export async function GET(req: NextRequest) {
       },
       'Spotify token exchange / persistence failed',
     );
-    return popupResponse({
-      payload: { type: 'spotify-auth-error', reason: 'unknown' },
-      message: 'Spotify connection failed. You can close this window.',
-      isSecure,
-    });
+    return respond(
+      { type: 'spotify-auth-error', reason: 'unknown' },
+      { message: 'Spotify connection failed. You can close this window.' },
+    );
   }
 
   // Note: `persistInitialToken` emits the `spotify.connect.success`
   // event itself, so we don't double-log here.
-  return popupResponse({
-    payload: { type: 'spotify-connected' },
-    message: 'Connected to Spotify. You can close this window.',
-    isSecure,
-  });
+  return respond(
+    { type: 'spotify-connected' },
+    { message: 'Connected to Spotify. You can close this window.' },
+  );
 }

@@ -836,6 +836,37 @@ export const setlistIntelRouter = router({
         return { previewUrl: null, spotifyTrackId: null };
       }
 
+      // Catalog-pollution guard: Spotify's track search is fuzzy, and
+      // since `songs.spotify_track_id` is a global catalog column, a
+      // mismatched resolution (e.g. a cover by a different artist that
+      // happens to rank first) is visible to every Showbook user who
+      // views this performer's setlist. Require the resolved track's
+      // artist list to include the headliner before we persist anything
+      // — when no artist matches, treat as a miss so we don't poison
+      // the cache, and don't write the negative sentinel either
+      // (a future retry under the correct artist should still succeed).
+      const headlinerLower = headlinerName.trim().toLowerCase();
+      const trackArtistMatch =
+        track !== null &&
+        headlinerLower.length > 0 &&
+        track.artists.some(
+          (a) => a.trim().toLowerCase() === headlinerLower,
+        );
+      if (track !== null && !trackArtistMatch) {
+        log.warn(
+          {
+            event: 'spotify.preview.artist_mismatch',
+            userId,
+            showId: input.showId,
+            title: input.title,
+            headlinerName,
+            resolvedArtists: track.artists,
+          },
+          'Spotify search returned a track whose artist does not match the headliner; refusing to persist',
+        );
+        return { previewUrl: null, spotifyTrackId: null };
+      }
+
       if (!track) {
         // Cache the negative as `__none__` so re-taps don't re-search.
         if (cached) {
@@ -1119,6 +1150,18 @@ export const setlistIntelRouter = router({
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
             message: 'no_spotify_id',
+          });
+        }
+        if (result.reason === 'not_in_user_history') {
+          // The discovered-live rail only surfaces songs the caller has
+          // heard live. A songId that doesn't appear in any of their
+          // attended setlists isn't a configuration error — it's an
+          // attempt to bypass the UI's authorization model. Respond
+          // with NOT_FOUND so the client treats it like "rail item is
+          // stale, refresh" rather than surfacing a connect prompt.
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'song_not_in_history',
           });
         }
         throw new TRPCError({

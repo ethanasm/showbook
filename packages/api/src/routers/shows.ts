@@ -37,6 +37,13 @@ const log = child({ component: 'api.shows' });
 // Input schemas
 // ---------------------------------------------------------------------------
 
+// `photoUrl` is deliberately NOT accepted from tRPC callers. It is
+// resolved server-side from `googlePlaceId` (Google Places) or from
+// the venue's Ticketmaster image during the lazy `/api/venue-photo`
+// resolution. Accepting it as user input let an authenticated user
+// plant an arbitrary URL into the global `venues.photoUrl` column,
+// which the proxy route would then fetch — see the SSRF fix in
+// `apps/web/app/api/venue-photo/[venueId]/route.ts`.
 const venueInputSchema = z.object({
   name: z.string().min(1),
   city: z.string().min(1),
@@ -46,7 +53,6 @@ const venueInputSchema = z.object({
   lat: z.number().optional(),
   lng: z.number().optional(),
   googlePlaceId: z.string().optional(),
-  photoUrl: z.string().optional(),
 });
 
 // Per-performer setlist payload. Sections preserve the encore boundary;

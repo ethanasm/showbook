@@ -2,6 +2,22 @@ import { NextResponse } from 'next/server';
 
 const STATE_COOKIE = 'spotify_oauth_state';
 
+// Mobile OAuth handoff. When the mobile app opens the connect flow via
+// `expo-web-browser`'s `openAuthSessionAsync`, it appends `?mode=mobile`
+// to `/api/spotify`. We echo that fact in a short-lived cookie so the
+// callback knows to emit a `showbook://spotify/connected` redirect
+// (which the OS-level auth session intercepts and dismisses) instead of
+// the postMessage / localStorage popup HTML used by the web flow.
+export const OAUTH_MODE_COOKIE = 'spotify_oauth_mode';
+export const OAUTH_MODE_MOBILE = 'mobile';
+export type OAuthMode = 'web' | 'mobile';
+
+// `showbook://` is declared as the app scheme in `apps/mobile/app.config.ts`.
+// Expo Router catches deep links against this scheme and routes them
+// into the running app session, regardless of which screen the user
+// happened to be on when they started the connect flow.
+export const MOBILE_REDIRECT_OK = 'showbook://spotify/connected';
+
 // Closed set of error reasons broadcast to the parent tab. Anything coming
 // from a URL param (notably Spotify's `?error=...` callback param) MUST be
 // mapped through `coerceReason` before reaching the popup HTML so that user
@@ -107,7 +123,61 @@ export function popupResponse({
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
   });
   if (clearState) {
-    response.cookies.set(STATE_COOKIE, '', {
+    clearAuthCookies(response, isSecure);
+  }
+  return response;
+}
+
+interface MobileRedirectOptions {
+  payload: PopupPayload;
+  isSecure: boolean;
+  /** Whether to clear the OAuth state + mode cookies. Defaults to true. */
+  clearState?: boolean;
+}
+
+/**
+ * Mobile counterpart to `popupResponse`. Emits a 302 with a
+ * `Location: showbook://spotify/connected` URL the running app session
+ * intercepts as the OAuth completion. The `payload` is encoded into
+ * query params so the mobile side can distinguish success from error
+ * reasons (it doesn't have access to the cookie or to the popup HTML).
+ *
+ * Custom-scheme URLs aren't valid input to `NextResponse.redirect` /
+ * `new URL(...)` in some runtimes, so we construct the response by
+ * hand to ensure the `Location` header lands verbatim.
+ */
+export function mobileRedirectResponse({
+  payload,
+  isSecure,
+  clearState = true,
+}: MobileRedirectOptions): NextResponse {
+  const params = new URLSearchParams();
+  if (payload.type === 'spotify-connected') {
+    params.set('status', 'ok');
+  } else if (payload.type === 'spotify-auth-error') {
+    params.set('status', 'error');
+    params.set('reason', payload.reason);
+  } else {
+    // The legacy `spotify-auth` (raw token) variant never travels the
+    // mobile path — but if a future caller does, surface as 'unknown'
+    // rather than leaking the token into the URL.
+    params.set('status', 'error');
+    params.set('reason', 'unknown');
+  }
+  const location = `${MOBILE_REDIRECT_OK}?${params.toString()}`;
+  const response = new NextResponse(null, {
+    status: 302,
+    headers: { Location: location },
+  });
+  if (clearState) {
+    clearAuthCookies(response, isSecure);
+  }
+  return response;
+}
+
+function clearAuthCookies(response: NextResponse, isSecure: boolean): void {
+  for (const name of [STATE_COOKIE, OAUTH_MODE_COOKIE]) {
+    response.cookies.set(name, '', {
       httpOnly: true,
       sameSite: 'lax',
       secure: isSecure,
@@ -115,5 +185,4 @@ export function popupResponse({
       maxAge: 0,
     });
   }
-  return response;
 }

@@ -23,6 +23,7 @@
 
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
+  setlistSongAppearances,
   shows,
   songs,
   type Database,
@@ -407,19 +408,56 @@ export async function discoveredLiveForShow(opts: {
 export interface SaveDiscoveredResult {
   ok: boolean;
   /** Why the save failed when `ok` is false. */
-  reason?: 'not_connected' | 'no_spotify_id' | 'spotify_error';
+  reason?:
+    | 'not_connected'
+    | 'no_spotify_id'
+    | 'spotify_error'
+    | 'not_in_user_history';
 }
 
 /**
  * Save a single song (by Showbook songs.id) to the user's Spotify
  * library. The mutation invalidates the per-(user, trackId) cache so
  * the next fan-loyalty/discovered-live render reflects the new state.
+ *
+ * Ownership gate: the songId must appear in `setlist_song_appearances`
+ * for at least one show the caller owns. The discovered-live rail only
+ * surfaces songs the user has heard live; without this gate the
+ * mutation accepts any global catalog `songs.id` and writes it to the
+ * caller's Spotify library — bypassing the rail's authorization model
+ * and turning the endpoint into a catalog-enumeration oracle for rows
+ * with a non-sentinel `spotify_track_id`.
  */
 export async function saveDiscoveredSong(opts: {
   db: Database;
   userId: string;
   songId: string;
 }): Promise<SaveDiscoveredResult> {
+  // Verify the user has actually heard this song live in one of their
+  // shows. Cheap indexed lookup on `appearances_song_date_idx` →
+  // `shows.user_id`.
+  const [appearance] = await opts.db
+    .select({ id: setlistSongAppearances.id })
+    .from(setlistSongAppearances)
+    .innerJoin(shows, eq(shows.id, setlistSongAppearances.showId))
+    .where(
+      and(
+        eq(setlistSongAppearances.songId, opts.songId),
+        eq(shows.userId, opts.userId),
+      ),
+    )
+    .limit(1);
+  if (!appearance) {
+    log.warn(
+      {
+        event: 'setlistIntel.save_discovered.not_in_user_history',
+        userId: opts.userId,
+        songId: opts.songId,
+      },
+      'save_discovered rejected — song does not appear in any of the caller\'s attended setlists',
+    );
+    return { ok: false, reason: 'not_in_user_history' };
+  }
   const [row] = await opts.db
     .select({
       spotifyTrackId: songs.spotifyTrackId,
