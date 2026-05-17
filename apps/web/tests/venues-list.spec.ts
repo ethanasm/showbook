@@ -93,6 +93,41 @@ test.describe('Venues list page', () => {
     ).toHaveAttribute('data-linked', 'false');
   });
 
+  test('renders venue photo via the /api/venue-photo proxy', async ({ page }, testInfo) => {
+    // The avatar column is desktop-only — on mobile the row collapses
+    // the photo to free up width.
+    test.skip(testInfo.project.name === 'mobile', 'Avatar column is desktop-only');
+
+    // Intercept the proxy so we don't depend on Google Places being
+    // reachable from the CI runner and don't burn API quota. The test
+    // is specifically asserting that the client *requests* the proxy
+    // URL (i.e. the `<RemoteImage src>` conditional in View.client.tsx
+    // didn't short-circuit to null) — which is the failure mode of
+    // prior venue-image regressions. The proxy itself is covered by
+    // `lib/__tests__/venue-photo-proxy.test.ts`.
+    const PIXEL_PNG = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      'base64',
+    );
+    await page.route('**/api/venue-photo/*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'image/png',
+        body: PIXEL_PNG,
+      }),
+    );
+
+    await gotoVenues(page);
+
+    // MSG seeds with a googlePlaceId, so the `src` should be truthy and
+    // resolve to the proxy URL — not the monogram fallback.
+    const msgRow = page.locator('a[href^="/venues/"]').filter({
+      hasText: 'Madison Square Garden',
+    });
+    const img = msgRow.locator('img').first();
+    await expect(img).toHaveAttribute('src', /\/api\/venue-photo\/[0-9a-f-]+/);
+  });
+
   test('row click navigates to venue detail page', async ({ page }) => {
     await gotoVenues(page);
 

@@ -177,6 +177,7 @@ The stdout copy in the prod web container (`docker logs showbook-prod-web`) is a
 - `performer.match.created`, `performer.match.race_recovered` — `matchOrCreatePerformer` writes (added 2026-04-30 to track external-ID coverage).
 - `performer.image.{updated,no_match,failed,updated_image_only,done,fatal}` — `backfill-performer-images` job.
 - `venue.photo.{updated,missing,failed,done,fatal}` — `backfill-venue-photos` job.
+- `venue.photo.proxy.{upstream_error,host_not_allowed,redirect_not_allowed}` — `/api/venue-photo/[venueId]` SSRF-guard and upstream-failure boundaries. `upstream_error` fires on a non-2xx / wrong-content-type final response; `host_not_allowed` fires when a persisted absolute `photoUrl` falls outside `ALLOWED_PROXY_HOSTS`; `redirect_not_allowed` fires when an upstream 3xx points to a host outside `ALLOWED_REDIRECT_HOSTS` (added 2026-05-17 alongside the one-hop redirect follow that restored Google-Places-backed venue photos broken by `redirect: 'manual'` in #192).
 - `venue.follow`, `venue.follow.place_backfill_failed` — `venues.follow` lazy backfill.
 - `discover.ingest.{performer,venue,region,targeted,*}.complete` — pg-boss discover-ingest jobs.
 - `shows.nightly.summary`, `setlist.retry.summary` — nightly transition + setlist-retry jobs.
