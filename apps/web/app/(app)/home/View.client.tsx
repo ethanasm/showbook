@@ -609,8 +609,6 @@ export default function HomeView() {
               <div>Kind</div>
               <div>Headline</div>
               <div>Venue</div>
-              <div>Seat</div>
-              <div style={{ textAlign: "right" }}>Paid</div>
               <div />
             </div>
 
@@ -625,9 +623,6 @@ export default function HomeView() {
                 const headlinerId = getHeadlinerId(s);
                 const support = getSupport(s);
                 const supportPerformers = getSupportPerformers(s);
-                const paidDisplay = s.pricePaid
-                  ? `$${parseFloat(s.pricePaid)}`
-                  : "—";
                 const neighborhood = [
                   s.venue.city,
                   s.venue.stateRegion,
@@ -823,33 +818,6 @@ export default function HomeView() {
                           {neighborhood.toLowerCase()}
                         </div>
                       )}
-                    </div>
-
-                    {/* Seat — desktop only */}
-                    <div
-                      className="desktop-only"
-                      style={{
-                        fontFamily: MONO,
-                        fontSize: 11,
-                        color: "var(--muted)",
-                      }}
-                    >
-                      {s.seat ?? "—"}
-                    </div>
-
-                    {/* Paid — desktop only */}
-                    <div
-                      className="desktop-only"
-                      style={{
-                        textAlign: "right",
-                        fontFamily: MONO,
-                        fontSize: 12,
-                        color: "var(--ink)",
-                        fontWeight: 500,
-                        fontFeatureSettings: '"tnum"',
-                      }}
-                    >
-                      {paidDisplay}
                     </div>
 
                     {/* Chevron */}

@@ -8,50 +8,9 @@ import {
   getVenue,
   selectBestImage,
 } from '@showbook/api';
+import { fetchUpstream, isProxyableUrl } from '@/lib/venue-photo-proxy';
 
 const log = child({ component: 'web.api.venue-photo' });
-
-// Tight allowlist for absolute-URL `venues.photoUrl` values. The only
-// legitimate http(s)-prefixed value persisted to this column is
-// Ticketmaster's CDN (returned by `getVenue(...).images[].url`); Google
-// Places resolves through `getPlacePhotoMediaUrl` and never lands here
-// as a raw URL. Adding a host here without a security review re-opens
-// the SSRF vector previously closed by tightening `venueInputSchema`.
-const ALLOWED_PROXY_HOSTS: ReadonlySet<string> = new Set([
-  's1.ticketm.net',
-]);
-
-// Allowlist of content-types we'll proxy back to the client. SVG is
-// deliberately excluded — `image/svg+xml` would let a planted upstream
-// execute scripts when navigated to directly (the proxy URL is same-
-// origin as the rest of the app), and we don't legitimately serve SVG
-// for venue hero photos.
-const ALLOWED_CONTENT_TYPE = /^image\/(?:png|jpeg|jpg|webp|gif|heic|heif|avif)(?:;.*)?$/i;
-
-function isProxyableUrl(rawUrl: string): boolean {
-  let parsed: URL;
-  try {
-    parsed = new URL(rawUrl);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
-  return ALLOWED_PROXY_HOSTS.has(parsed.hostname.toLowerCase());
-}
-
-async function fetchUpstream(mediaUrl: string) {
-  const upstream = await fetch(mediaUrl, {
-    cache: 'no-store',
-    signal: AbortSignal.timeout(15_000),
-    redirect: 'manual',
-  });
-  const contentType = upstream.headers.get('content-type') ?? '';
-  const ok =
-    upstream.ok &&
-    upstream.body !== null &&
-    ALLOWED_CONTENT_TYPE.test(contentType);
-  return { upstream, contentType, ok } as const;
-}
 
 async function lookupPhotoName(googlePlaceId: string): Promise<string | null> {
   const details = await getPlaceDetails(googlePlaceId);
@@ -186,7 +145,8 @@ export async function GET(
     });
   }
 
-  let { upstream, contentType, ok } = await fetchUpstream(mediaUrl);
+  let { upstream, contentType, ok, refusedRedirectHost } =
+    await fetchUpstream(mediaUrl);
 
   // Stale-name recovery: Google rotates per-photo resource names ~weekly.
   // If upstream errors and we have a Place ID, refresh the resource name
@@ -205,7 +165,8 @@ export async function GET(
       if (refreshed && refreshed !== photoName) {
         const refreshedMediaUrl = getPlacePhotoMediaUrl(refreshed);
         if (refreshedMediaUrl) {
-          ({ upstream, contentType, ok } = await fetchUpstream(refreshedMediaUrl));
+          ({ upstream, contentType, ok, refusedRedirectHost } =
+            await fetchUpstream(refreshedMediaUrl));
           if (ok) {
             photoName = refreshed;
             photoNameWasFresh = true;
@@ -221,16 +182,28 @@ export async function GET(
   }
 
   if (!ok || !upstream.body) {
-    log.warn(
-      {
-        event: 'venue.photo.proxy.upstream_error',
-        venueId,
-        photoUrl: photoName,
-        upstreamStatus: upstream.status,
-        upstreamContentType: contentType,
-      },
-      'Google Places media fetch failed; serving 502 fallback',
-    );
+    if (refusedRedirectHost !== undefined) {
+      log.warn(
+        {
+          event: 'venue.photo.proxy.redirect_not_allowed',
+          venueId,
+          redirectHost: refusedRedirectHost || null,
+          upstreamStatus: upstream.status,
+        },
+        'Upstream redirected to a host outside ALLOWED_REDIRECT_HOSTS',
+      );
+    } else {
+      log.warn(
+        {
+          event: 'venue.photo.proxy.upstream_error',
+          venueId,
+          photoUrl: photoName,
+          upstreamStatus: upstream.status,
+          upstreamContentType: contentType,
+        },
+        'Google Places media fetch failed; serving 502 fallback',
+      );
+    }
     return new NextResponse('Upstream error', {
       status: 502,
       headers: { 'Cache-Control': 'no-store' },

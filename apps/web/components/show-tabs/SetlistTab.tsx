@@ -337,7 +337,6 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
                   position={idx + 1}
                   title={song.title}
                   evidence={song.evidence}
-                  role={song.role}
                   showId={props.showId}
                   previewUrl={preview.previewUrl}
                   spotifyTrackId={preview.spotifyTrackId}
@@ -355,7 +354,6 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
                       position={idx + 1}
                       title={song.title}
                       evidence={song.evidence}
-                      role={song.role}
                       showId={props.showId}
                       previewUrl={preview.previewUrl}
                       spotifyTrackId={preview.spotifyTrackId}
@@ -643,14 +641,7 @@ function SetlistTabPast({
                 key={`main-${idx}-${song.title}`}
                 position={idx + 1}
                 title={song.title}
-                evidence={song.note ?? "actual · setlist.fm"}
-                role={
-                  song.isOpenerOrCloser
-                    ? idx === 0
-                      ? "opener"
-                      : "closer"
-                    : "core"
-                }
+                evidence={song.note ?? ""}
                 badge={resolved.badge}
                 songId={resolved.songId}
                 showId={showId}
@@ -670,14 +661,7 @@ function SetlistTabPast({
                     key={`encore-${idx}-${song.title}`}
                     position={idx + 1}
                     title={song.title}
-                    evidence={song.note ?? "actual · encore"}
-                    role={
-                      idx === 0
-                        ? "encore_open"
-                        : idx === encore.length - 1
-                          ? "encore_close"
-                          : "core"
-                    }
+                    evidence={song.note ?? ""}
                     badge={resolved.badge}
                     songId={resolved.songId}
                     showId={showId}

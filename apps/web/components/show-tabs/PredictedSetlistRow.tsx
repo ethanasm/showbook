@@ -9,7 +9,6 @@ interface PredictedSetlistRowProps {
   position: number;
   title: string;
   evidence: string;
-  role: "opener" | "closer" | "encore_open" | "encore_close" | "core";
   /** Place a 24px disabled slot for the Phase-9 TrackPreview button. */
   showPreviewSlot?: boolean;
   /** Phase 2: optional inline badges. When present, render the 🆕 / 🎯
@@ -43,13 +42,6 @@ interface PredictedSetlistRowProps {
   spotifyTrackId?: string | null;
 }
 
-const STAR_ROLES = new Set<PredictedSetlistRowProps["role"]>([
-  "opener",
-  "closer",
-  "encore_open",
-  "encore_close",
-]);
-
 /**
  * Single row in the predicted (or actual) setlist body. Designed to
  * collapse cleanly when the preview slot is hidden — Phase 1 reserves
@@ -60,7 +52,6 @@ export function PredictedSetlistRow({
   position,
   title,
   evidence,
-  role,
   showPreviewSlot = true,
   badge,
   songId,
@@ -69,6 +60,16 @@ export function PredictedSetlistRow({
   spotifyTrackId,
 }: PredictedSetlistRowProps) {
   const previewsOn = isFeatureOn("SetlistIntelPreviews") && !!showId;
+  const firstTimeLabel = "First time you heard this song live";
+  const rareLabel = badge?.rareCatch
+    ? `Played in ${badge.rareCatch.fractionPct}% of recent setlists`
+    : null;
+  // Phase 11 §15j — personal-weight chip aria-labels. Same precompute
+  // pattern as firstTimeLabel / rareLabel so the chip rendering stays
+  // declarative.
+  const savedLabel = "Saved in your Spotify library";
+  const personalFirstTimeLabel = "You've never heard this song live";
+  const topTrackLabel = "In your Spotify long-term top 50";
   const titleNode = (
     <div className="predicted-row__title" data-testid="predicted-row-title">
       {title}
@@ -109,62 +110,62 @@ export function PredictedSetlistRow({
         ) : (
           titleNode
         )}
-        <div className="predicted-row__evidence">
-          {evidence}
-          {badge?.firstTime && (
-            <span
-              className="predicted-row__badge predicted-row__badge--first-time"
-              data-testid="predicted-row-badge-first-time"
-              title="First time you heard this song live"
-            >
-              🆕 First time
-            </span>
-          )}
-          {badge?.rareCatch && (
-            <span
-              className="predicted-row__badge predicted-row__badge--rare"
-              data-testid="predicted-row-badge-rare"
-              title={`Played in ${badge.rareCatch.fractionPct}% of recent setlists`}
-            >
-              🎯 Rare ({badge.rareCatch.fractionPct}%)
-            </span>
-          )}
-          {badge?.saved && (
-            <span
-              className="predicted-row__badge predicted-row__badge--saved"
-              data-testid="predicted-row-badge-saved"
-              title="Saved in your Spotify library"
-            >
-              💛 Saved
-            </span>
-          )}
-          {badge?.personalFirstTime && (
-            <span
-              className="predicted-row__badge predicted-row__badge--personal-first-time"
-              data-testid="predicted-row-badge-personal-first-time"
-              title="You've never heard this song live"
-            >
-              🎯 First time
-            </span>
-          )}
-          {badge?.topTrack && (
-            <span
-              className="predicted-row__badge predicted-row__badge--top-track"
-              data-testid="predicted-row-badge-top-track"
-              title="In your Spotify long-term top 50"
-            >
-              ⭐ Top track
-            </span>
-          )}
-        </div>
+        {evidence && (
+          <div className="predicted-row__evidence">{evidence}</div>
+        )}
       </div>
-      {STAR_ROLES.has(role) ? (
-        <span className="predicted-row__star" data-testid="predicted-row-star">
-          ★
-        </span>
-      ) : (
-        <span />
-      )}
+      <div className="predicted-row__badges">
+        {badge?.firstTime && (
+          <span
+            className="predicted-row__badge predicted-row__badge--first-time"
+            data-testid="predicted-row-badge-first-time"
+            title={firstTimeLabel}
+            aria-label={firstTimeLabel}
+          >
+            🆕 First time
+          </span>
+        )}
+        {badge?.rareCatch && rareLabel && (
+          <span
+            className="predicted-row__badge predicted-row__badge--rare"
+            data-testid="predicted-row-badge-rare"
+            title={rareLabel}
+            aria-label={rareLabel}
+          >
+            🎯 Rare ({badge.rareCatch.fractionPct}%)
+          </span>
+        )}
+        {badge?.saved && (
+          <span
+            className="predicted-row__badge predicted-row__badge--saved"
+            data-testid="predicted-row-badge-saved"
+            title={savedLabel}
+            aria-label={savedLabel}
+          >
+            💛 Saved
+          </span>
+        )}
+        {badge?.personalFirstTime && (
+          <span
+            className="predicted-row__badge predicted-row__badge--personal-first-time"
+            data-testid="predicted-row-badge-personal-first-time"
+            title={personalFirstTimeLabel}
+            aria-label={personalFirstTimeLabel}
+          >
+            🎯 First time
+          </span>
+        )}
+        {badge?.topTrack && (
+          <span
+            className="predicted-row__badge predicted-row__badge--top-track"
+            data-testid="predicted-row-badge-top-track"
+            title={topTrackLabel}
+            aria-label={topTrackLabel}
+          >
+            ⭐ Top track
+          </span>
+        )}
+      </div>
     </div>
   );
 }

@@ -534,25 +534,32 @@ export const showsRouter = router({
         }
       }
 
-      // Past concerts created directly in `past` state (Gmail import,
+      // Past shows created directly in `past` state (Gmail import,
       // manual entry of a show I just attended, setlist.fm import without
       // an inline setlist) skip the nightly ticketed→past transition, so
       // shows-nightly never enqueues them for setlist enrichment. Try an
-      // inline setlist.fm lookup BEFORE the transaction so we can either
-      // (a) include the fetched setlist in the show insert or (b) include
-      // the enrichmentQueue row in the same transaction. Either way the
-      // show is created together with its enrichment plan — no possibility
-      // of a show landing without a path to setlist coverage. Best-effort
-      // and never fails the create.
-      const needsSetlistLookup =
+      // inline setlist.fm lookup for the headliner BEFORE the transaction
+      // so we can include the fetched setlist in the show insert. Any
+      // remaining lineup artist gets enqueued for the retry job inside
+      // the same transaction. Best-effort and never fails the create.
+      //
+      // Festivals participate in the same flow: the headliner gets the
+      // inline-lookup latency budget; every other lineup performer goes
+      // through the queue so a 30-artist lineup doesn't make shows.create
+      // wait on 30 sequential setlist.fm calls.
+      const lookupHasInlineSetlist = (performerId: string): boolean =>
+        Object.prototype.hasOwnProperty.call(setlistsMap, performerId);
+
+      const isSetlistKind = input.kind === 'concert' || input.kind === 'festival';
+      const wantsHeadlinerInlineLookup =
         state === 'past' &&
-        input.kind === 'concert' &&
+        isSetlistKind &&
         !!headlinerId &&
-        Object.keys(setlistsMap).length === 0;
+        !lookupHasInlineSetlist(headlinerId!);
 
       let inlineSetlistsForInsert: PerformerSetlistsMap | null = null;
       let inlineTourName: string | null = null;
-      if (needsSetlistLookup && headlinerId) {
+      if (wantsHeadlinerInlineLookup && headlinerId) {
         try {
           const result = await fetchSetlistForPerformer({
             performerId: headlinerId,
@@ -572,11 +579,27 @@ export const showsRouter = router({
         }
       }
 
+      const mergedSetlists: PerformerSetlistsMap = {
+        ...setlistsMap,
+        ...(inlineSetlistsForInsert ?? {}),
+      };
       const initialSetlists =
-        inlineSetlistsForInsert ??
-        (Object.keys(setlistsMap).length > 0 ? setlistsMap : null);
+        Object.keys(mergedSetlists).length > 0 ? mergedSetlists : null;
       const initialTourName = inlineTourName ?? input.tourName ?? null;
-      const queueSetlistEnrichment = needsSetlistLookup && !inlineSetlistsForInsert;
+
+      // Every lineup performer (headliner + every non-theatre support act)
+      // that doesn't already have a setlist needs a queue row so the
+      // retry job can fetch it later. Theatre productions don't ship
+      // setlists, so we exclude them entirely.
+      const queueablePerformerIds: string[] =
+        state === 'past' && isSetlistKind
+          ? [
+              ...(headlinerId && !mergedSetlists[headlinerId] ? [headlinerId] : []),
+              ...resolvedPerformers
+                .filter(({ id }) => !mergedSetlists[id])
+                .map(({ id }) => id),
+            ]
+          : [];
 
       // Atomic: show + headliner + support performers + setlist enrichment
       // queue row all-or-nothing. Previously the enrichmentQueue insert
@@ -630,14 +653,20 @@ export const showsRouter = router({
           await tx.insert(showPerformers).values(showPerformerRows);
         }
 
-        if (queueSetlistEnrichment) {
-          await tx.insert(enrichmentQueue).values({
-            showId: created.id,
-            type: 'setlist' as const,
-            attempts: 0,
-            maxAttempts: 14,
-            nextRetry: new Date(),
-          });
+        if (queueablePerformerIds.length > 0) {
+          await tx
+            .insert(enrichmentQueue)
+            .values(
+              queueablePerformerIds.map((performerId) => ({
+                showId: created.id,
+                performerId,
+                type: 'setlist' as const,
+                attempts: 0,
+                maxAttempts: 14,
+                nextRetry: new Date(),
+              })),
+            )
+            .onConflictDoNothing();
         }
 
         return created;

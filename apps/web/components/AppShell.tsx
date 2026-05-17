@@ -38,9 +38,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Use lightweight count procedures rather than `*.list().length` —
   // otherwise every page render fetches the full show/performer/venue list
   // (potentially thousands of rows with relations) just to read its length.
+  const songsEnabled = isFeatureOn("SetlistIntelSongs");
   const showsCountsQuery = trpc.shows.countsByMode.useQuery(undefined, { staleTime: 60_000 });
   const performersCountQuery = trpc.performers.count.useQuery(undefined, { staleTime: 60_000 });
   const venuesCountQuery = trpc.venues.count.useQuery(undefined, { staleTime: 60_000 });
+  const songsCountQuery = trpc.songs.count.useQuery(undefined, {
+    staleTime: 60_000,
+    enabled: songsEnabled,
+  });
   // `amIAdmin` is server-derived from the user's email + ADMIN_EMAILS allowlist.
   // Stale-time of 5 min keeps the sidebar quiet; the `/admin` page still does
   // its own server-side check on every navigation, so this is UX, not auth.
@@ -54,6 +59,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
   if (performersCountQuery.data !== undefined) counts.artists = performersCountQuery.data;
   if (venuesCountQuery.data !== undefined) counts.venues = venuesCountQuery.data;
+  if (songsCountQuery.data !== undefined) counts.songs = songsCountQuery.data;
 
   const sessionUser = session?.user;
   const userName = sessionUser?.name ?? sessionUser?.email ?? undefined;
@@ -76,7 +82,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             userName={userName}
             userInitials={userInitials}
             isAdmin={isAdmin}
-            flags={{ SetlistIntelSongs: isFeatureOn("SetlistIntelSongs") }}
+            flags={{ SetlistIntelSongs: songsEnabled }}
           />
         </div>
         <main className="app-shell__content">

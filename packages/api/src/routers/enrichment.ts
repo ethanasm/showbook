@@ -23,7 +23,10 @@ import {
   extractCast as groqExtractCast,
   extractShowFromEmail,
   extractShowFromPdfText,
+  extractFestivalLineupFromImage,
+  extractFestivalLineupFromPdfText,
 } from '../groq';
+import { searchAttractions, extractMusicbrainzId } from '../ticketmaster';
 import {
   autocomplete as placesAutocomplete,
   getPlaceDetails,
@@ -291,6 +294,133 @@ export const enrichmentRouter = router({
         },
         { userId: ctx.session.user.id, tags: ['enrichment', 'llm', 'pdf'] },
       );
+    }),
+
+  // ---------------------------------------------------------------------------
+  // extractFestivalLineup — festival poster image OR schedule PDF → lineup
+  // with per-artist headliner/support tiers + festival metadata
+  // ---------------------------------------------------------------------------
+  extractFestivalLineup: protectedProcedure
+    .input(
+      z
+        .object({
+          imageBase64: z.string().min(1).optional(),
+          pdfBase64: z.string().min(1).optional(),
+        })
+        .refine((v) => Boolean(v.imageBase64) || Boolean(v.pdfBase64), {
+          message: 'imageBase64 or pdfBase64 required',
+        }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      enforceLLMQuota(ctx.session.user.id);
+      return withTrace(
+        'trpc.enrichment.extractFestivalLineup',
+        async () => {
+          log.info(
+            {
+              event: 'festival.lineup.extract.started',
+              source: input.imageBase64 ? 'image' : 'pdf',
+            },
+            'Festival lineup extraction started',
+          );
+          try {
+            let lineup;
+            if (input.imageBase64) {
+              lineup = await extractFestivalLineupFromImage(input.imageBase64);
+            } else {
+              const { PDFParse } = await import(
+                /* webpackIgnore: true */ 'pdf-parse'
+              );
+              const buffer = Buffer.from(input.pdfBase64!, 'base64');
+              const parser = new PDFParse({ data: new Uint8Array(buffer) });
+              const result = await parser.getText();
+              if (!result.text.trim()) {
+                throw new TRPCError({
+                  code: 'BAD_REQUEST',
+                  message: 'Could not extract text from PDF',
+                });
+              }
+              lineup = await extractFestivalLineupFromPdfText(result.text);
+            }
+            log.info(
+              {
+                event: 'festival.lineup.extract.parsed',
+                artistCount: lineup.artists.length,
+                hasFestivalName: Boolean(lineup.festivalName),
+                hasDates: Boolean(lineup.startDate),
+              },
+              'Festival lineup extracted',
+            );
+            return lineup;
+          } catch (err) {
+            log.error(
+              { err, event: 'festival.lineup.extract.failed' },
+              'Festival lineup extraction failed',
+            );
+            throw err;
+          }
+        },
+        { userId: ctx.session.user.id, tags: ['enrichment', 'llm', 'festival'] },
+      );
+    }),
+
+  // ---------------------------------------------------------------------------
+  // matchFestivalArtists — batch-match extracted artist names to TM attractions
+  // so the lineup picker can show artist images + capture tmAttractionId for
+  // downstream follow/ingest. One TM search per name, capped at 50.
+  // ---------------------------------------------------------------------------
+  matchFestivalArtists: protectedProcedure
+    .input(z.object({ names: z.array(z.string().min(1).max(120)).min(1).max(50) }))
+    .mutation(async ({ input, ctx }) => {
+      enforceRateLimit(`matchFestivalArtists:${ctx.session.user.id}`, {
+        max: 10,
+        windowMs: 60_000,
+      });
+      const results = await Promise.all(
+        input.names.map(async (name) => {
+          try {
+            const attractions = await searchAttractions(name);
+            const top = attractions[0];
+            if (!top) {
+              log.info(
+                { event: 'festival.lineup.tm_match.miss', name },
+                'TM artist match miss',
+              );
+              return {
+                name,
+                tmAttractionId: null as string | null,
+                tmName: null as string | null,
+                imageUrl: null as string | null,
+                musicbrainzId: null as string | null,
+              };
+            }
+            log.info(
+              { event: 'festival.lineup.tm_match.hit', name, tmAttractionId: top.id },
+              'TM artist match hit',
+            );
+            return {
+              name,
+              tmAttractionId: top.id,
+              tmName: top.name,
+              imageUrl: selectBestImage(top.images),
+              musicbrainzId: extractMusicbrainzId(top) ?? null,
+            };
+          } catch (err) {
+            log.warn(
+              { err, event: 'festival.lineup.tm_match.failed', name },
+              'TM artist match call failed',
+            );
+            return {
+              name,
+              tmAttractionId: null,
+              tmName: null,
+              imageUrl: null,
+              musicbrainzId: null,
+            };
+          }
+        }),
+      );
+      return { matches: results };
     }),
 
   // ---------------------------------------------------------------------------

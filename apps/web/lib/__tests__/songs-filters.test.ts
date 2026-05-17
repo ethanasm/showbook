@@ -9,7 +9,6 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   matchesSearch,
-  collectYears,
   sortRows,
   DEFAULT_SORT,
   type SongRow,
@@ -46,21 +45,6 @@ describe('matchesSearch', () => {
 
   test('does NOT match on dates (firstHeard/lastHeard are out of scope)', () => {
     assert.equal(matchesSearch(row({ firstHeard: '2024-03-22' }), '2024'), false);
-  });
-});
-
-describe('collectYears', () => {
-  test('returns distinct years from both firstHeard and lastHeard, descending', () => {
-    const years = collectYears([
-      row({ firstHeard: '2020-01-01', lastHeard: '2022-06-15' }),
-      row({ firstHeard: '2024-03-22', lastHeard: '2024-03-22' }),
-      row({ firstHeard: '2019-12-31', lastHeard: '2025-09-15' }),
-    ]);
-    assert.deepEqual(years, [2025, 2024, 2022, 2020, 2019]);
-  });
-
-  test('returns an empty list when the input is empty', () => {
-    assert.deepEqual(collectYears([]), []);
   });
 });
 

@@ -1,5 +1,37 @@
 # Setlist intelligence — UI specification
 
+> ## ⚠️ Partially superseded by the 2026-05-16 redesign
+>
+> Most of the show-detail surface described below is **superseded**
+> by [`show-page-redesign-2026-05-16.md`](show-page-redesign-2026-05-16.md),
+> which captures the 4-tab Overview / Setlist / Media / Notes layout
+> + Marquee Gold tokens + Space Grotesk typography that actually
+> shipped in v1.
+>
+> What's still authoritative in this doc:
+>
+> - §3 — Tate McRae stable-style screen → content **inside** the
+>   Setlist tab (the visual treatment of probability bars, evidence
+>   chips, openers/closers, spoiler curtain is unchanged).
+> - §4 — Rotating / theatrical / improvised variants → same rule:
+>   content inside the Setlist tab.
+> - §5 — Loading / error / empty states → applies inside each tab.
+> - §7 — Interaction microcopy → unchanged.
+>
+> What's superseded:
+>
+> - §1 — Design system grounding → the new Marquee Gold +
+>   Space Grotesk + IBM Plex Mono token set replaces the
+>   Geist / Georgia / cream-on-near-black palette here. See
+>   [`/design/show-page-tabs/hifi/sb-tokens.jsx`](../../design/show-page-tabs/hifi/sb-tokens.jsx).
+> - §2 — Component table → additive; the listed components still
+>   ship but inside the new 4-tab system, not a `SegmentedControl`.
+> - §6 — Mobile/iPad/web variants → the responsive strategy in the
+>   2026-05-16 handoff supersedes the per-viewport rules here.
+>
+> Read the redesign doc first; treat this doc as the visual
+> reference for what goes inside each tab.
+
 Companion to `feature-plan.md` (algorithm) and
 `worked-examples.md` (per-style
 example outputs).

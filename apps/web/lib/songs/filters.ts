@@ -1,10 +1,11 @@
 /**
  * Pure helpers for the /songs page's sidebar filters + sortable
  * columns. The router applies the DB-side filters; this module
- * handles the UI-side passes: free-text search across title + artist,
- * derived "year heard" set for the year dropdown, and the column
- * sorts. Pure so the unit tests can drive each branch without
- * spinning up React.
+ * handles the UI-side passes: free-text search across title + artist
+ * and the column sorts. The year dropdown is populated by the
+ * `songs.years` tRPC procedure so it stays stable when the user
+ * picks a single year. Pure so the unit tests can drive each branch
+ * without spinning up React.
  */
 
 export interface SongRow {
@@ -42,18 +43,6 @@ export function matchesSearch(row: SongRow, q: string): boolean {
     row.title.toLowerCase().includes(lower) ||
     row.performerName.toLowerCase().includes(lower)
   );
-}
-
-/** Distinct years drawn from `firstHeard` / `lastHeard`, descending. */
-export function collectYears(rows: SongRow[]): number[] {
-  const years = new Set<number>();
-  for (const row of rows) {
-    const first = parseInt(row.firstHeard.slice(0, 4), 10);
-    const last = parseInt(row.lastHeard.slice(0, 4), 10);
-    if (!Number.isNaN(first)) years.add(first);
-    if (!Number.isNaN(last)) years.add(last);
-  }
-  return Array.from(years).sort((a, b) => b - a);
 }
 
 export function sortRows(rows: SongRow[], sort: SortConfig): SongRow[] {

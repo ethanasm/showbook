@@ -13,6 +13,8 @@ import {
   validateAndDedupTickets,
   extractShowFromPdfText,
   extractCast,
+  extractFestivalLineupFromImage,
+  extractFestivalLineupFromPdfText,
   __test,
   type ExtractedTicketInfo,
 } from '../groq';
@@ -388,6 +390,111 @@ describe('extractCast', () => {
       'data:image/png;base64,iVBORw0KGgo',
     );
     assert.deepEqual(cast, []);
+  });
+});
+
+describe('extractFestivalLineupFromImage', () => {
+  it('returns parsed lineup with tiers and meta', async () => {
+    const json = JSON.stringify({
+      festival_name: 'Governors Ball 2026',
+      start_date: '2026-06-06',
+      end_date: '2026-06-08',
+      venue_hint: 'Citi Field, NYC',
+      artists: [
+        { name: 'Olivia Rodrigo', tier: 'headliner' },
+        { name: 'Hozier', tier: 'support' },
+        { name: 'Mannequin Pussy', tier: 'support' },
+      ],
+    });
+    __test.setClient(
+      makeClient(async () => ({ choices: [{ message: { content: json } }] })),
+    );
+    const result = await extractFestivalLineupFromImage('iVBORw0KGgo');
+    assert.equal(result.festivalName, 'Governors Ball 2026');
+    assert.equal(result.startDate, '2026-06-06');
+    assert.equal(result.endDate, '2026-06-08');
+    assert.equal(result.venueHint, 'Citi Field, NYC');
+    assert.equal(result.artists.length, 3);
+    assert.equal(result.artists[0]!.tier, 'headliner');
+    assert.equal(result.artists[1]!.tier, 'support');
+  });
+
+  it('returns empty lineup on null content', async () => {
+    __test.setClient(
+      makeClient(async () => ({ choices: [{ message: { content: null } }] })),
+    );
+    const result = await extractFestivalLineupFromImage('iVBORw0KGgo');
+    assert.deepEqual(result.artists, []);
+    assert.equal(result.festivalName, null);
+  });
+
+  it('returns empty lineup on JSON parse error', async () => {
+    __test.setClient(
+      makeClient(async () => ({
+        choices: [{ message: { content: '<not json>' } }],
+      })),
+    );
+    const result = await extractFestivalLineupFromImage('iVBORw0KGgo');
+    assert.deepEqual(result.artists, []);
+  });
+
+  it('returns empty lineup on schema validation failure', async () => {
+    __test.setClient(
+      makeClient(async () => ({
+        choices: [{ message: { content: '{"wrong_field": true}' } }],
+      })),
+    );
+    const result = await extractFestivalLineupFromImage('iVBORw0KGgo');
+    assert.deepEqual(result.artists, []);
+  });
+
+  it('accepts a data: URL directly', async () => {
+    __test.setClient(
+      makeClient(async () => ({
+        choices: [
+          {
+            message: {
+              content:
+                '{"festival_name":null,"start_date":null,"end_date":null,"venue_hint":null,"artists":[]}',
+            },
+          },
+        ],
+      })),
+    );
+    const result = await extractFestivalLineupFromImage(
+      'data:image/png;base64,iVBORw0KGgo',
+    );
+    assert.deepEqual(result.artists, []);
+  });
+});
+
+describe('extractFestivalLineupFromPdfText', () => {
+  it('returns parsed lineup from text input', async () => {
+    const json = JSON.stringify({
+      festival_name: 'Bonnaroo',
+      start_date: '2026-06-11',
+      end_date: '2026-06-14',
+      venue_hint: 'Manchester, TN',
+      artists: [{ name: 'Phish', tier: 'headliner' }],
+    });
+    __test.setClient(
+      makeClient(async () => ({ choices: [{ message: { content: json } }] })),
+    );
+    const result = await extractFestivalLineupFromPdfText(
+      'BONNAROO 2026\nPhish ...',
+    );
+    assert.equal(result.festivalName, 'Bonnaroo');
+    assert.equal(result.artists[0]!.tier, 'headliner');
+  });
+
+  it('handles unknown-shape JSON without throwing', async () => {
+    __test.setClient(
+      makeClient(async () => ({
+        choices: [{ message: { content: '{"oops":true}' } }],
+      })),
+    );
+    const result = await extractFestivalLineupFromPdfText('text');
+    assert.deepEqual(result.artists, []);
   });
 });
 

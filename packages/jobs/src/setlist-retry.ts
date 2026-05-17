@@ -1,26 +1,34 @@
-import { and, eq, isNull, lte } from 'drizzle-orm';
-import { db, enrichmentQueue, shows, showPerformers, performers } from '@showbook/db';
+import { and, eq, lte, sql } from 'drizzle-orm';
+import { db, enrichmentQueue, shows, performers } from '@showbook/db';
 import { fetchSetlistForPerformer } from '@showbook/api';
-import type { PerformerSetlistsMap } from '@showbook/shared';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Give up on a show: drop the queue entry, and mark `shows.setlists = {}` so
- * the shows-nightly catch-up pass treats it as "checked, no setlist"
- * (instead of `null` = "never been processed"). Without this marker, the
- * catch-up would re-queue every exhausted show on its next run.
+ * Give up on this (show, performer) entry. Drop the queue row and write
+ * an empty per-performer marker into `shows.setlists` so the
+ * shows-nightly catch-up pass treats this performer as "checked, no
+ * setlist found" instead of re-queueing forever.
  *
- * The setlists update is conditional on `setlists IS NULL` so a setlist
- * written by another path (manual edit, setlist.fm import) between the
- * queue entry's creation and this give-up isn't clobbered.
+ * The marker is `{ sections: [] }` keyed by performerId — the frontend's
+ * `hasSetlist` helper already treats an empty section list as "no
+ * setlist", so the UI is unchanged. The catch-up query uses the JSONB
+ * `?` operator to test for key presence, so any value (empty or full)
+ * for the performer key blocks re-queueing.
+ *
+ * jsonb_set with `create_missing=true` and `coalesce` on the existing
+ * map handles the first-marker-on-a-fresh-show case atomically, and
+ * preserves sibling performers' setlists (a festival mid-run with
+ * another artist already populated).
  */
-async function giveUp(queueId: string, showId: string): Promise<void> {
+async function giveUp(queueId: string, showId: string, performerId: string): Promise<void> {
   await db.transaction(async (tx) => {
     await tx
       .update(shows)
-      .set({ setlists: {} as PerformerSetlistsMap })
-      .where(and(eq(shows.id, showId), isNull(shows.setlists)));
+      .set({
+        setlists: sql`jsonb_set(coalesce(${shows.setlists}, '{}'::jsonb), ARRAY[${performerId}], '{"sections":[]}'::jsonb, true)`,
+      })
+      .where(eq(shows.id, showId));
     await tx.delete(enrichmentQueue).where(eq(enrichmentQueue.id, queueId));
   });
 }
@@ -35,7 +43,13 @@ export async function runSetlistRetry(): Promise<{
 
   // 1. Get all queue items ready for retry
   const queueItems = await db
-    .select()
+    .select({
+      id: enrichmentQueue.id,
+      showId: enrichmentQueue.showId,
+      performerId: enrichmentQueue.performerId,
+      attempts: enrichmentQueue.attempts,
+      maxAttempts: enrichmentQueue.maxAttempts,
+    })
     .from(enrichmentQueue)
     .where(
       and(
@@ -48,7 +62,7 @@ export async function runSetlistRetry(): Promise<{
   for (const item of queueItems) {
     // Skip items that have exhausted attempts (shouldn't be in the query, but safety check)
     if (item.attempts >= item.maxAttempts) {
-      await giveUp(item.id, item.showId);
+      await giveUp(item.id, item.showId, item.performerId);
       counts.givenUp++;
       continue;
     }
@@ -58,7 +72,7 @@ export async function runSetlistRetry(): Promise<{
     try {
       // 2a. Look up the show
       const [show] = await db
-        .select({ date: shows.date })
+        .select({ date: shows.date, tourName: shows.tourName })
         .from(shows)
         .where(eq(shows.id, item.showId));
 
@@ -77,52 +91,52 @@ export async function runSetlistRetry(): Promise<{
         continue;
       }
 
-      // 2b. Look up the headliner performer
-      const [headlinerRow] = await db
+      // 2b. Look up the specific performer this queue row targets.
+      const [performerRow] = await db
         .select({
-          performerId: showPerformers.performerId,
+          id: performers.id,
           name: performers.name,
           musicbrainzId: performers.musicbrainzId,
         })
-        .from(showPerformers)
-        .innerJoin(performers, eq(showPerformers.performerId, performers.id))
-        .where(
-          and(
-            eq(showPerformers.showId, item.showId),
-            eq(showPerformers.role, 'headliner'),
-          ),
-        )
-        .orderBy(showPerformers.sortOrder)
+        .from(performers)
+        .where(eq(performers.id, item.performerId))
         .limit(1);
 
-      if (!headlinerRow) {
-        await incrementAttempts(item.id, item.attempts, 'No headliner performer found for show');
+      if (!performerRow) {
+        // Performer was deleted — queue row is unprocessable.
+        await db.delete(enrichmentQueue).where(eq(enrichmentQueue.id, item.id));
         counts.failed++;
         continue;
       }
 
       // 2c-f. Resolve MBID (persisting on first hit) and look up the setlist.
       const result = await fetchSetlistForPerformer({
-        performerId: headlinerRow.performerId,
-        performerName: headlinerRow.name,
-        performerMbid: headlinerRow.musicbrainzId,
+        performerId: performerRow.id,
+        performerName: performerRow.name,
+        performerMbid: performerRow.musicbrainzId,
         date: show.date,
       });
 
       if (result) {
-        // 2g. Found — update the show and delete the queue entry atomically.
-        // Without a transaction, a crash between the two writes leaves the
-        // queue entry orphaned (queued forever) or the setlist saved while
-        // the queue still re-tries it.
-        const setlistsUpdate: PerformerSetlistsMap = {
-          [headlinerRow.performerId]: result.setlist,
-        };
+        // 2g. Found — merge this performer's setlist into the show's
+        // `setlists` map and delete the queue entry atomically. jsonb_set
+        // with coalesce keeps any sibling performer's setlist (a
+        // festival mid-run with another artist already populated) and
+        // initializes the map for a first-time write.
+        //
+        // tourName only gets written if the show doesn't already have one
+        // — a festival's "tour" is meaningless, and overwriting the
+        // headliner's tour with a support act's tour name would be wrong.
+        const performerIdKey = performerRow.id;
+        const setlistJson = JSON.stringify(result.setlist);
         await db.transaction(async (tx) => {
           await tx
             .update(shows)
             .set({
-              setlists: setlistsUpdate,
-              tourName: result.tourName ?? undefined,
+              setlists: sql`jsonb_set(coalesce(${shows.setlists}, '{}'::jsonb), ARRAY[${performerIdKey}], ${setlistJson}::jsonb, true)`,
+              ...(result.tourName && !show.tourName
+                ? { tourName: result.tourName }
+                : {}),
             })
             .where(eq(shows.id, item.showId));
           await tx.delete(enrichmentQueue).where(eq(enrichmentQueue.id, item.id));
@@ -134,7 +148,7 @@ export async function runSetlistRetry(): Promise<{
 
         if (newAttempts >= item.maxAttempts) {
           // Give up
-          await giveUp(item.id, item.showId);
+          await giveUp(item.id, item.showId, item.performerId);
           counts.givenUp++;
         } else {
           await incrementAttempts(item.id, item.attempts, 'Setlist not found on setlist.fm');

@@ -61,6 +61,54 @@ After that, every push to `main` that turns CI green will redeploy. To
 deploy a specific SHA on demand, use *Actions → Deploy (prod) → Run
 workflow* and pass the SHA.
 
+## Scheduled jobs (pg-boss crons)
+
+All cron jobs run from `packages/jobs/src/registry.ts` inside the
+Next.js process. Schedules are in `America/New_York`. Outcome
+events land in Axiom — query by `event` to confirm a run completed.
+
+| Time (ET) | Job | Source | Axiom completion event |
+|-----------|-----|--------|------------------------|
+| 02:30 | `system/prune-orphan-catalog` | `packages/jobs/src/prune-orphan-catalog.ts` | `job.complete` (job=`system/prune-orphan-catalog`) |
+| 03:00 | `eval/run-daily-backtest` | `packages/jobs/src/prediction-eval.ts` (Phase 4) | `eval.run.complete` + `eval.run.summary` |
+| 03:00 | `shows/nightly` | `packages/jobs/src/shows-nightly.ts` | `shows.nightly.summary` |
+| 03:30 | `enrichment/setlist-style-refresh` | `packages/jobs/src/setlist-style-refresh.ts` (Phase 5) | `setlist.style.refresh.summary` |
+| 04:00 | `setlist/retry` | `packages/jobs/src/setlist-retry.ts` | `setlist.retry.summary` |
+| 04:45 | `enrichment/setlist-corpus-fill-refresh` | `packages/jobs/src/setlist-corpus-fill.ts` (Phase 0) | `setlistfm.artist_setlists.fetched` per performer; `job.complete` for the batch |
+| 05:30 | `backfill/performer-images` | `packages/jobs/src/backfill-performer-images.ts` | `backfill.performer_images.summary` |
+| 05:45 | `backfill/venue-photos` | `packages/jobs/src/backfill-venue-photos.ts` | `backfill.venue_photos.summary` |
+| 06:15 | `backfill/show-cover-images` | `packages/jobs/src/backfill-show-cover-images.ts` | `job.complete` |
+| 07:00 | `health/morning-check` | `packages/jobs/src/health-check.ts` | `health.check.summary` |
+| 08:00 | `notifications/daily-digest` | `packages/jobs/src/notifications.ts` | `notifications.digest.summary` |
+| Mon 06:00 | `discover/ingest` | `packages/jobs/src/discover-ingest.ts` | `discover.ingest.*.complete` |
+
+User-triggered jobs (no schedule):
+
+| Job | When it fires | Source |
+|-----|---------------|--------|
+| `enrichment/setlist-corpus-fill` | Phase 1 `setlistIntel.predictedSetlist` on a cold-corpus performer | `packages/jobs/src/setlist-corpus-fill.ts` |
+| `enrichment/song-index-rebuild` | Chained from corpus-fill when new setlists land; not separately scheduled | `packages/jobs/src/song-index-rebuild.ts` |
+| `discover/ingest-{venue,performer,region}` | tRPC `venues.follow` / `performers.follow` / `discover.ingestRegion` | `packages/jobs/src/discover-ingest.ts` |
+
+### Quick health checks
+
+The simplest "did everything run last night" query:
+
+```bash
+pnpm prod:query "SELECT name, state, MAX(completed_on) AS last_completed FROM pgboss.job WHERE created_on > now() - interval '24 hours' GROUP BY name, state ORDER BY name, state"
+```
+
+In Axiom, the equivalent log-side check (last 24h, sorted by most recent):
+
+```
+['showbook-prod'] | where _time > ago(24h) and event in ('eval.run.complete', 'setlist.style.refresh.summary', 'health.check.summary', 'notifications.digest.summary') | project _time, event, msg | order by _time desc
+```
+
+Missing rows / events in either query means a job was skipped or
+the registry failed to register the schedule — start with
+`docker logs showbook-prod-web 2>&1 | grep pgboss.boot` to see if
+the boot completed cleanly.
+
 ## Querying the prod database from another machine
 
 Postgres is bound to `127.0.0.1:5434` on the prod host, so direct

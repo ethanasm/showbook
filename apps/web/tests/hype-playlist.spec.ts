@@ -159,9 +159,10 @@ async function gotoTicketedConcertSetlistTab(page: Page): Promise<string> {
   return showId!;
 }
 
-// The card renders inline AND on the desktop right rail (≥1200px), so
-// the testid matches two elements. Scope locators to the inline
-// section to keep strict-mode happy.
+// The card renders inline only — section-scope locators kept from
+// when a compact right-rail copy also mounted on ≥1200px viewports,
+// so they're robust against any future reintroduction of a sibling
+// render in the same SectionFrame.
 function inlineCard(page: Page) {
   return page
     .getByTestId('show-section-hype-playlist')

@@ -6,7 +6,6 @@ import "./show-tabs.css";
 interface RailSong {
   title: string;
   evidence: string;
-  role: "opener" | "closer" | "encore_open" | "encore_close" | "core";
   badge: {
     firstTime: boolean;
     rareCatch: { fractionPct: number } | null;
@@ -49,7 +48,6 @@ export function SongsYoudWantToHearRail({
           position={i + 1}
           title={s.title}
           evidence={s.evidence}
-          role={s.role}
           badge={s.badge}
           showPreviewSlot={false}
         />

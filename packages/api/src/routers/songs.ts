@@ -82,6 +82,47 @@ function rowIsUserDebut(row: { timesHeard: number; firstHeard: string; lastHeard
 
 export const songsRouter = router({
   /**
+   * Distinct count of songs the user has heard live. Powers the
+   * sidebar badge so it matches the row count in `list` without
+   * forcing a full hydrate.
+   */
+  count: protectedProcedure.query(async ({ ctx }): Promise<number> => {
+    const userId = ctx.session.user.id;
+    const [row] = await ctx.db
+      .select({
+        count: sql<number>`count(distinct ${setlistSongAppearances.songId})::int`,
+      })
+      .from(setlistSongAppearances)
+      .innerJoin(shows, eq(shows.id, setlistSongAppearances.showId))
+      .where(eq(shows.userId, userId));
+    return row?.count ?? 0;
+  }),
+
+  /**
+   * Distinct years the user has heard a song in, descending. The
+   * Songs page year-filter dropdown reads this so the option set
+   * stays stable when the user picks a single year (the row-list
+   * query applies the year filter server-side, which would
+   * otherwise collapse the available-years set to just the active
+   * year).
+   */
+  years: protectedProcedure.query(async ({ ctx }): Promise<number[]> => {
+    const userId = ctx.session.user.id;
+    const rows = await ctx.db
+      .select({
+        year: sql<number>`EXTRACT(YEAR FROM ${setlistSongAppearances.performanceDate})::int`,
+      })
+      .from(setlistSongAppearances)
+      .innerJoin(shows, eq(shows.id, setlistSongAppearances.showId))
+      .where(eq(shows.userId, userId))
+      .groupBy(sql`EXTRACT(YEAR FROM ${setlistSongAppearances.performanceDate})`);
+    return rows
+      .map((r) => Number(r.year))
+      .filter((y) => Number.isFinite(y))
+      .sort((a, b) => b - a);
+  }),
+
+  /**
    * List the songs the user has heard live. Default sort is times
    * heard descending; ties break on title ascending so the list is
    * stable across page transitions.
