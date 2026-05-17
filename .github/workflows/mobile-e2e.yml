@@ -403,6 +403,10 @@ jobs:
           # global flag — it writes detailed step traces + screenshots
           # to the named dir. Uploaded as an artifact below regardless
           # of outcome so reviewers see exactly what Maestro saw.
+          # Wipe the debug dir first so /tmp doesn't accumulate
+          # screenshots from previous runs on the persistent
+          # self-hosted runner.
+          rm -rf /tmp/maestro-debug
           mkdir -p /tmp/maestro-debug
           maestro test --debug-output /tmp/maestro-debug \
             apps/mobile/e2e/flows/

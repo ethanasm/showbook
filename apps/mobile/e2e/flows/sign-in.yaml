@@ -36,18 +36,20 @@ tags:
     text: "Sign in with Google"
 
 # After the bypass writes the cached session and re-renders, the auth
-# gate routes either to first-run welcome or directly to the tabs.
-# Either landing screen is acceptable — we just need to confirm we're
-# out of the sign-in screen and into the authenticated app shell.
+# gate routes either to the first-run welcome flow (fresh install,
+# `e2e.firstRunComplete` unset) or directly to the tabs (already-
+# completed first-run, e.g. from a prior test run on a warm AVD).
+# clearState:true at the top of this flow guarantees the welcome path
+# on each run.
 - runFlow:
     when:
       visible: "Welcome"
     commands:
-      - tapOn: "Continue"
-      - tapOn: "Skip for now"
-      - tapOn: "Skip for now"
-      - tapOn: "Skip for now"
-      - tapOn: "Skip for now"
+      - tapOn: "Set up showbook"
+      - tapOn: "Skip"   # notifications
+      - tapOn: "Skip"   # photos
+      - tapOn: "Skip"   # location
+      - tapOn: "Skip"   # gmail
 
 # expo-router renders the tab bar with the title as visible text and the
 # Add tab via accessibilityLabel="Add" (no label). Match on those.
