@@ -426,15 +426,12 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
         compact
       />
     ) : null,
-    // Phase 8 deferred → the post-show rail no longer stacks
-    // FanLoyaltyRing above VibeRadar; it's the single atom. The
-    // Overview-body music-layer slot is hidden at ≥1200px (via the
-    // .overview-music-layer-slot--past CSS rule) so the rail copy is
-    // the only one visible at desktop width.
-    fanLoyaltyRing:
-      isPast && musicLayerV2Enabled ? (
-        <FanLoyaltyRing showId={show.id} compact />
-      ) : null,
+    // FanLoyaltyRing stays inline in the Overview body at every
+    // viewport. The handoff originally slotted it into the right rail
+    // too, but seeing it off to the right of the venue stat row felt
+    // wrong — the inline placement under the stats reads as the
+    // canonical home for the data, and the rail copy was duplicative.
+    fanLoyaltyRing: null,
   };
 
   // Header — collapsed hero strip. Tab bar is sticky below.

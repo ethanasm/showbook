@@ -596,16 +596,6 @@
   margin-bottom: 6px;
 }
 
-/* Phase 7 — past Overview music-layer slot hides at ≥1200px because the
-   right rail picks up FanLoyaltyRing at that breakpoint; rendering both
-   would duplicate the ring. Pre-show stays visible (right-rail
-   pre-show atom is HypePlaylistCard, no duplication). */
-@media (min-width: 1200px) {
-  .overview-music-layer-slot--past {
-    display: none;
-  }
-}
-
 /* Phase 7 — Fan loyalty donut */
 .fan-loyalty-ring {
   display: flex;
