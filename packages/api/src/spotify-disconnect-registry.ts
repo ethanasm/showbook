@@ -1,7 +1,7 @@
 /**
  * Registry of Spotify-shaped data on the schema, categorized by what
  * `disconnectSpotify` should do with it on user disconnect. See SI-09
- * in showbook-specs/setlist-intelligence/plan-review.md.
+ * in specs/setlist-intelligence/plan-review.md.
  *
  * Why this exists: Spotify-derived columns + tables land across
  * multiple phases of the setlist-intelligence rollout (Phase 0 token

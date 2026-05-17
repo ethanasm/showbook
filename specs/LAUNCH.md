@@ -5,7 +5,7 @@
 ## Pre-flight
 
 1. **Docker** is running
-2. **Git repo** initialized with `showbook-specs/` and `design/` committed
+2. **Git repo** initialized with `specs/` and `design/` committed
 3. **CLAUDE.md** exists in repo root (see below)
 4. **tmux** installed (`brew install tmux`)
 5. **iTerm2 Python API** enabled (Settings → General → Magic → Enable Python API)
@@ -34,9 +34,9 @@ Personal entertainment tracker for live shows — concerts, theatre, comedy, fes
 ## For agents
 
 Read these files in order:
-1. `showbook-specs/README.md` — index of all specs
-2. `showbook-specs/phases/TASKS.md` — 32 tasks, 5 waves, dependency DAG
-3. `showbook-specs/phases/VERIFICATION.md` — Playwright testing strategy
+1. `specs/README.md` — index of all specs
+2. `specs/phases/TASKS.md` — 32 tasks, 5 waves, dependency DAG
+3. `specs/phases/VERIFICATION.md` — Playwright testing strategy
 
 ## Stack
 - TypeScript everywhere (Next.js 15 + Expo + Drizzle + tRPC)
@@ -103,8 +103,8 @@ claude
 ```
 /model opus-4-6
 
-Read showbook-specs/README.md, then showbook-specs/phases/TASKS.md, then
-showbook-specs/phases/VERIFICATION.md.
+Read specs/README.md, then specs/phases/TASKS.md, then
+specs/phases/VERIFICATION.md.
 
 This is a greenfield build of Showbook. The specs directory has complete schemas,
 data source mappings, enrichment pipelines, infrastructure decisions, and a task graph.

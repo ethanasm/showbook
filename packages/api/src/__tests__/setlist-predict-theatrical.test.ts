@@ -2,7 +2,7 @@
  * Phase 6 unit suite — theatrical-style prediction model.
  *
  * Mirrors the Beyoncé Cowboy Carter worked example
- * (`showbook-specs/setlist-intelligence/worked-examples.md` §3): a
+ * (`specs/setlist-intelligence/worked-examples.md` §3): a
  * 32-setlist corpus that produces a deterministic setlist plus two
  * rotating "surprise" slots. The fixture is a stripped-down 8-night
  * corpus that still reproduces the dual-rotating-slot output, since

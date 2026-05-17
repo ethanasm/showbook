@@ -117,7 +117,7 @@ OUT OF SCOPE
 REFERENCES
 - Existing tRPC: `packages/api/src/routers/{shows,venues}.ts` for
   the procedures and their return shapes
-- Plan: `showbook-specs/mobile-m2-m6-plan.md` § M2
+- Plan: `specs/mobile-m2-m6-plan.md` § M2
 
 VERIFY: as conventions block.
 ````
@@ -550,7 +550,7 @@ OUT OF SCOPE GUARD
 
 YOUR TASK: M3 — full Add + Edit milestone (5 sub-screens).
 
-Read `showbook-specs/mobile-m2-m6-plan.md § M3` for the sub-task graph.
+Read `specs/mobile-m2-m6-plan.md § M3` for the sub-task graph.
 
 DELIVERABLES (one PR, multiple commits)
 - VenueTypeahead component (debounced via useDebouncedValue from
@@ -630,7 +630,7 @@ OUT OF SCOPE GUARD
 
 YOUR TASK: M4 — Media milestone (5 sub-screens).
 
-Read `showbook-specs/mobile-m2-m6-plan.md § M4`.
+Read `specs/mobile-m2-m6-plan.md § M4`.
 
 DELIVERABLES
 - Upload pipeline `lib/media/upload.ts`:
@@ -713,7 +713,7 @@ OUT OF SCOPE GUARD
 
 YOUR TASK: M5 — Discovery + secondary lists (6 screens).
 
-Read `showbook-specs/mobile-m2-m6-plan.md § M5`.
+Read `specs/mobile-m2-m6-plan.md § M5`.
 
 DELIVERABLES
 - `app/(tabs)/discover.tsx` — Discover is a separate screen.

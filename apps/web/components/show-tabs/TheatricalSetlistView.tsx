@@ -7,7 +7,7 @@
  * AND the `SetlistIntelTheatricalDisplay` feature flag is ON.
  *
  * Top to bottom (matches the worked example in
- * `showbook-specs/setlist-intelligence/worked-examples.md` §3 +
+ * `specs/setlist-intelligence/worked-examples.md` §3 +
  * `phase-06-theatrical-improvised.md`):
  *
  *   - Confidence banner (THEATRICAL archetype label)

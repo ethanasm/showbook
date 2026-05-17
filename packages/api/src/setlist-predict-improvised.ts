@@ -28,9 +28,9 @@
  *     copy block explaining why ("no song-by-song prediction tonight
  *     — here's the shape").
  *
- * Spec: showbook-specs/setlist-intelligence/phases/phase-06-theatrical-improvised.md,
- *       showbook-specs/setlist-intelligence/feature-plan.md §15d (improvised),
- *       showbook-specs/setlist-intelligence/worked-examples.md §4 (King Gizzard).
+ * Spec: specs/setlist-intelligence/phases/phase-06-theatrical-improvised.md,
+ *       specs/setlist-intelligence/feature-plan.md §15d (improvised),
+ *       specs/setlist-intelligence/worked-examples.md §4 (King Gizzard).
  */
 
 import type { PerformerSetlist } from '@showbook/shared';

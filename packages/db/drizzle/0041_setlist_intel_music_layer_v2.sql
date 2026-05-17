@@ -1,5 +1,5 @@
 -- Phase 7 of setlist-intelligence — music layer v2.
--- See showbook-specs/setlist-intelligence/phases/phase-07-music-layer-v2.md.
+-- See specs/setlist-intelligence/phases/phase-07-music-layer-v2.md.
 --
 -- Adds:
 --   shows.spotify_prep_track_count / spotify_post_track_count —

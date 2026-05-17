@@ -5,7 +5,7 @@
 -- idempotency contract: re-tapping the playlist button returns the
 -- existing row instead of creating a duplicate playlist.
 --
--- See showbook-specs/setlist-intelligence/phases/phase-03-spotify-export.md.
+-- See specs/setlist-intelligence/phases/phase-03-spotify-export.md.
 
 CREATE TABLE "show_spotify_playlists" (
 	"show_id" uuid NOT NULL,

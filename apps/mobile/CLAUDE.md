@@ -7,9 +7,9 @@ conventions; this file covers what's specific to the mobile app.
 ## Status
 
 The app is feature-complete against the design handoff. See
-[`showbook-specs/mobile-roadmap.md`](../../showbook-specs/mobile-roadmap.md)
+[`specs/mobile-roadmap.md`](../../specs/mobile-roadmap.md)
 for the build plan and
-[`showbook-specs/planned-improvements.md`](../../showbook-specs/planned-improvements.md)
+[`specs/planned-improvements.md`](../../specs/planned-improvements.md)
 for outstanding follow-ups (push notifications wiring + the smaller
 remaining items called out in the post-M5 audit, which has otherwise
 been fully addressed).
@@ -91,7 +91,7 @@ Or from `apps/mobile/`: `pnpm start` / `pnpm ios` / `pnpm android` /
 The mobile app runs an 80% line / branch / function coverage gate
 **scoped to `apps/mobile/lib/**` only**. Layout-heavy code under
 `app/` and `components/` is intentionally excluded — see
-[`showbook-specs/mobile-testing-strategy.md`](../../showbook-specs/mobile-testing-strategy.md)
+[`specs/mobile-testing-strategy.md`](../../specs/mobile-testing-strategy.md)
 for the rationale and the test plan. The gate is
 enforced by `pnpm verify:coverage` (run on every PR by CI), which
 merges per-package LCOV via `scripts/coverage-report.mjs`. Locally:
@@ -169,7 +169,7 @@ get inlined into the development build; otherwise the bypass falls
 through to an empty SecureStore and the sign-in tap surfaces
 `invalid_response`.
 
-See `showbook-specs/mobile-testing-strategy.md` § Wave F for the
+See `specs/mobile-testing-strategy.md` § Wave F for the
 rationale on the Android-CI / iOS-manual split.
 
 ## When changing the app
@@ -244,4 +244,4 @@ fast; let Maestro be the gate.
   Preferences and the client-side permission prompt exist; the
   server side (Expo push token persistence + digest emission +
   deep-link routing) is the open follow-up tracked in
-  `showbook-specs/planned-improvements.md`.
+  `specs/planned-improvements.md`.

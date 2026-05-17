@@ -3,7 +3,7 @@
  * Phase 1 setlist-intelligence ship — every product surface that asks
  * "what will artist X play tonight?" comes through `predictSetlist`.
  *
- * Spec: showbook-specs/setlist-intelligence/feature-plan.md §4c.
+ * Spec: specs/setlist-intelligence/feature-plan.md §4c.
  * Phase brief: phases/phase-01-predicted-setlist-stable.md.
  *
  * Pure helpers (`bucketTiers`, `aggregate`, `pickRole`,

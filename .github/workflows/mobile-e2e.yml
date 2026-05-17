@@ -4,7 +4,7 @@ name: Mobile E2E (Maestro, Android)
 # only (free trial only, no free tier), so the automated path is now
 # Android-only on a self-hosted runner inside the prod WSL box. iOS
 # coverage is manual via `pnpm mobile:e2e:ios` on the dev Mac — see
-# showbook-specs/mobile-testing-strategy.md § Wave F for the rationale.
+# specs/mobile-testing-strategy.md § Wave F for the rationale.
 #
 # The e2e tier is a smoke layer above the unit / component / integration
 # tiers; Android catches ~90% of regressions because the surface

@@ -93,7 +93,7 @@ export async function GET(req: NextRequest) {
   // Connect-once: every Spotify-using feature in setlist intelligence is
   // batched into a single OAuth dialog upfront, so the user grants every
   // scope they'll ever need on first connect. See
-  // showbook-specs/setlist-intelligence/implementation.md §2.
+  // specs/setlist-intelligence/implementation.md §2.
   const params = new URLSearchParams({
     client_id: process.env.SPOTIFY_CLIENT_ID,
     redirect_uri: `${baseUrl}/api/spotify/callback`,

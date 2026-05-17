@@ -4,7 +4,7 @@
  * Dev-only preview for the Phase-5 rotating-style predicted-setlist
  * subtree. Renders RotatingSetlistView against the Phish worked-
  * example payload from
- * `showbook-specs/setlist-intelligence/worked-examples.md` §2 so a
+ * `specs/setlist-intelligence/worked-examples.md` §2 so a
  * reviewer can see the gap chart + position pools + multi-night
  * banner without seeding a rotating-classified performer + a passing
  * release-gate row.
