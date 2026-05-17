@@ -43,7 +43,7 @@ tags:
 # on each run.
 - runFlow:
     when:
-      visible: "Welcome"
+      visible: "Set up showbook"
     commands:
       - tapOn: "Set up showbook"
       - tapOn: "Skip"   # notifications

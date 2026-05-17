@@ -25,7 +25,7 @@ tags:
     text: "Sign in with Google"
 - runFlow:
     when:
-      visible: "Welcome"
+      visible: "Set up showbook"
     commands:
       - tapOn: "Set up showbook"
       - tapOn: "Skip"   # notifications

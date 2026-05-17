@@ -398,18 +398,39 @@ jobs:
       - name: Run Maestro flows
         shell: bash
         run: |
+          set -uo pipefail
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$HOME/.maestro/bin:$PATH"
           # `--debug-output` is a flag on the `test` subcommand, not a
           # global flag — it writes detailed step traces + screenshots
           # to the named dir. Uploaded as an artifact below regardless
           # of outcome so reviewers see exactly what Maestro saw.
-          # Wipe the debug dir first so /tmp doesn't accumulate
-          # screenshots from previous runs on the persistent
-          # self-hosted runner.
-          rm -rf /tmp/maestro-debug
+          # Wipe only Maestro's own subdirectory so /tmp doesn't
+          # accumulate screenshots across runs, but preserve the
+          # cold-launch.png + cold-launch.xml that the previous step
+          # wrote into /tmp/maestro-debug/.
+          rm -rf /tmp/maestro-debug/.maestro
           mkdir -p /tmp/maestro-debug
-          maestro test --debug-output /tmp/maestro-debug \
-            apps/mobile/e2e/flows/
+          # Maestro's `launchApp: clearState: true` in flow YAML
+          # translates to `pm clear`, but on this AOSP system-image
+          # SecureStore values appear to survive that across flows in
+          # the same `maestro test <dir>` invocation — run
+          # 25977641842's three flows all landed on the same signed-in
+          # Welcome screen even though each flow declares clearState.
+          # Work around it by invoking maestro once per flow file with
+          # an explicit pm clear in between.
+          RC=0
+          for flow in apps/mobile/e2e/flows/*.yaml; do
+            echo "::group::pm clear before $(basename "$flow")"
+            adb shell pm clear com.showbook.app || true
+            sleep 2
+            echo "::endgroup::"
+            maestro test --debug-output /tmp/maestro-debug "$flow" || {
+              status=$?
+              echo "::warning::$(basename "$flow") failed with status $status"
+              RC=$status
+            }
+          done
+          exit $RC
 
       # Summarise the debug dir into the run log so a failed Maestro
       # step is diagnosable from the GitHub Actions UI even when the
