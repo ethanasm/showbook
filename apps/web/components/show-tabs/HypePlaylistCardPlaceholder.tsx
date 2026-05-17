@@ -35,7 +35,6 @@ export function HypePlaylistCardPlaceholder({
       </div>
       <div className="hype-card__body">
         <div>
-          <div className="hype-card__kicker">Hype playlist</div>
           <div className="hype-card__headline">
             Spin up {trackCount} songs you&rsquo;ll hear
           </div>

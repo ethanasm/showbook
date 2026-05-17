@@ -30,8 +30,8 @@ interface PlaylistRow {
 
 /**
  * Phase 3 hype/heard playlist hero. Replaces the P1 placeholder. The
- * shape is identical for both `kind`s — only the kicker text and the
- * mutation called on click differ.
+ * shape is identical for both `kind`s — only the headline text and
+ * the mutation called on click differ.
  *
  * UX:
  *   - First tap on a fresh account → connect modal → OAuth (popup) →
@@ -74,7 +74,6 @@ export function HypePlaylistCard({
   const existing: PlaylistRow | null = existingQuery.data ?? null;
   const isCreating = createHype.isPending || createHeard.isPending;
   const createKindLabel = kind === "hype" ? "Hype playlist" : "I Heard";
-  const kicker = kind === "hype" ? "Hype playlist" : `I Heard ${artist}`;
 
   const headline =
     kind === "hype"
@@ -180,7 +179,6 @@ export function HypePlaylistCard({
         </div>
         <div className="hype-card__body">
           <div>
-            <div className="hype-card__kicker">{kicker}</div>
             <div className="hype-card__headline">{headline}</div>
             <div className="hype-card__sub">{sub}</div>
           </div>
