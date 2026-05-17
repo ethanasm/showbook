@@ -13,6 +13,14 @@ import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { EmptyState, RemoteImage } from "@/components/design-system";
 
 type SortField = "name" | "shows" | "past" | "future" | "firstSeen" | "lastSeen";
+type Scope = "all" | "inShows" | "seenLive" | "following";
+
+const SCOPE_LABELS: Record<Scope, string> = {
+  all: "All artists",
+  inShows: "In my shows",
+  seenLive: "Seen live",
+  following: "Following",
+};
 
 const DEFAULT_DIR: Record<SortField, "asc" | "desc"> = {
   name: "asc",
@@ -43,7 +51,7 @@ export default function ArtistsView() {
     dir: "desc",
   });
   const [search, setSearch] = useState("");
-  const [followedOnly, setFollowedOnly] = useState(false);
+  const [scope, setScope] = useState<Scope>("all");
   const [currentPage, setCurrentPage] = useState(0);
   const compact = useCompactMode();
   const windowWidth = useWindowWidth();
@@ -112,8 +120,18 @@ export default function ArtistsView() {
       result = result.filter((a) => a.name.toLowerCase().includes(q));
     }
 
-    if (followedOnly) {
-      result = result.filter((a) => a.isFollowed);
+    switch (scope) {
+      case "inShows":
+        result = result.filter((a) => a.showCount > 0);
+        break;
+      case "seenLive":
+        result = result.filter((a) => a.pastShowsCount > 0);
+        break;
+      case "following":
+        result = result.filter((a) => a.isFollowed);
+        break;
+      case "all":
+        break;
     }
 
     const flip = sort.dir === "asc" ? 1 : -1;
@@ -142,11 +160,11 @@ export default function ArtistsView() {
     });
 
     return result;
-  }, [artists, search, sort, followedOnly]);
+  }, [artists, search, sort, scope]);
 
   useEffect(() => {
     setCurrentPage(0);
-  }, [search, sort.field, sort.dir, followedOnly]);
+  }, [search, sort.field, sort.dir, scope]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paged = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
@@ -296,28 +314,50 @@ export default function ArtistsView() {
           />
         </div>
 
-        <button
-          type="button"
-          data-testid="artists-followed-only-toggle"
-          aria-pressed={followedOnly}
-          onClick={() => setFollowedOnly((v) => !v)}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "5px 10px",
-            background: followedOnly ? "var(--accent)" : "transparent",
-            color: followedOnly ? "var(--accent-text)" : "var(--ink)",
-            border: `1px solid ${followedOnly ? "var(--accent)" : "var(--rule-strong)"}`,
-            cursor: "pointer",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
-            letterSpacing: ".02em",
-          }}
+        <div
+          aria-label="Filter artists by scope"
+          style={{ display: "inline-flex", alignItems: "center", border: "1px solid var(--rule-strong)" }}
         >
-          <Eye size={11} />
-          Followed only
-        </button>
+          {(["all", "inShows", "seenLive", "following"] as const).map((value, i) => {
+            const active = scope === value;
+            const label =
+              value === "all" ? "All"
+              : value === "inShows" ? "In my shows"
+              : value === "seenLive" ? "Seen live"
+              : "Following";
+            const isFollowingSegment = value === "following";
+            return (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={active}
+                data-testid={
+                  isFollowingSegment
+                    ? "artists-followed-only-toggle"
+                    : `artists-scope-${value}`
+                }
+                onClick={() => setScope(value)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "5px 10px",
+                  background: active ? "var(--accent)" : "transparent",
+                  color: active ? "var(--accent-text)" : "var(--ink)",
+                  border: "none",
+                  borderLeft: i === 0 ? "none" : "1px solid var(--rule-strong)",
+                  cursor: "pointer",
+                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontSize: 11,
+                  letterSpacing: ".02em",
+                }}
+              >
+                {isFollowingSegment && <Eye size={11} />}
+                {label}
+              </button>
+            );
+          })}
+        </div>
 
         <div style={{ flex: 1 }} />
 
@@ -330,7 +370,7 @@ export default function ArtistsView() {
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "18px var(--page-pad-x) 8px", display: "flex", alignItems: "baseline", gap: 14 }}>
           <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--ink)", letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 500 }}>
-            {search ? "Matching" : "All artists"} &middot; {filtered.length}
+            {search ? "Matching" : SCOPE_LABELS[scope]} &middot; {filtered.length}
           </div>
         </div>
 
@@ -338,17 +378,29 @@ export default function ArtistsView() {
           <div style={{ padding: "28px var(--page-pad-x)" }}>
             <EmptyState
               kind="artists"
-              title={search ? "No artist matches" : "No artists yet"}
+              title={
+                search
+                  ? "No artist matches"
+                  : scope === "inShows"
+                  ? "No artists from your shows yet"
+                  : scope === "seenLive"
+                  ? "You haven't seen any artists live yet"
+                  : scope === "following"
+                  ? "Not following any artists yet"
+                  : "No artists yet"
+              }
               body={
                 search
                   ? "Try another spelling or clear the filter."
+                  : scope === "inShows"
+                  ? "Add a show to start tracking the artists you've booked or attended."
+                  : scope === "seenLive"
+                  ? "Once you mark a show as attended, the artists you saw will appear here."
+                  : scope === "following"
+                  ? "Follow artists from Discover or Spotify to see them here."
                   : "Artists show up here from the shows you log. Followed artists from Spotify and search live in Discover."
               }
-              action={
-                search ? undefined : (
-                  <ArtistsEmptyActions />
-                )
-              }
+              action={search ? undefined : <ArtistsEmptyActions />}
             />
           </div>
         ) : (
