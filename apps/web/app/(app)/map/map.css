@@ -228,7 +228,7 @@
 }
 
 .map-filterbar__kind-btn {
-  padding: 6px 11px;
+  padding: 11px 11px;
   border: none;
   border-right: 1px solid var(--rule-strong);
   background: transparent;
