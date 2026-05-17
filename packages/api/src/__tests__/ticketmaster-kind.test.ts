@@ -174,6 +174,45 @@ test('inferKind: empty / missing classifications surface as unknown', () => {
   assert.equal(inferKind([]), 'unknown');
 });
 
+// Outside Lands 2026 regression: TM returns the per-day events with NO music
+// classification (they fall into the miscellaneous "unknown" bucket), so the
+// pre-fix knownFestivalNames check — which lived inside the music segment
+// branch — never fired. Festival detection must work regardless of segment.
+test('inferKind: known festival name overrides missing classification', () => {
+  assert.equal(
+    inferKind(undefined, { eventName: 'Outside Lands 2026 - Friday Single Day' }),
+    'festival',
+  );
+  assert.equal(
+    inferKind([], { eventName: 'Outside Lands' }),
+    'festival',
+  );
+});
+
+test('inferKind: known festival name overrides miscellaneous segment', () => {
+  assert.equal(
+    inferKind(
+      [classification({ segment: { ...SEGMENT.miscellaneous }, genre: undefined })],
+      { eventName: 'Outside Lands 2026 - Saturday' },
+    ),
+    'festival',
+  );
+});
+
+test('inferKind: festival genre/subGenre wins outside the music segment too', () => {
+  // Some festivals come back with genre "Festival" on a non-music segment
+  // (TM's "Multi-Event" / promoter listings). Trust the label.
+  assert.equal(
+    inferKind([
+      classification({
+        segment: { ...SEGMENT.miscellaneous },
+        genre: { id: 'g1', name: 'Festival' },
+      }),
+    ]),
+    'festival',
+  );
+});
+
 test('extractFestivalName strips year + day suffix from real TM names', () => {
   // TM lists multi-day festivals with one event per day-pass variant,
   // each named with a year and day-of-week suffix. extractFestivalName

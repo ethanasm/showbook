@@ -330,6 +330,13 @@
       "when": 1795968000000,
       "tag": "0046_setlist_intel_phase11",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1795968060000,
+      "tag": "0047_collapse_misclassified_festivals",
+      "breakpoints": true
     }
   ]
 }
