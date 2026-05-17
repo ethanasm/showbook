@@ -592,13 +592,16 @@ These three need a persistent connection to your Spotify so background
 jobs can act on their own. That's the new infrastructure §13k
 introduces.
 
-**v2.1 (gated on Spotify API status):**
+**v2 (deferred from v1 — Spotify API denied):**
 
-- ✅ #3 Vibe radar
-- ✅ #4 Energy arc
+- ❌ #3 Vibe radar — deferred
+- ❌ #4 Energy arc — deferred
 
-These two are the audio-features features. Status TBD until we
-probe the Spotify API.
+These two are the audio-features features. The probe ran on
+2026-05-17 and Spotify returned HTTP 403 on `/audio-features` for
+our app registration. Per SI-16, AcousticBrainz was rejected as a
+fallback (frozen at 2022). Re-probe in v2 if Spotify changes their
+policy or a third-party data source emerges.
 
 ---
 

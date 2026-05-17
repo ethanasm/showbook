@@ -138,7 +138,7 @@ without re-plumbing layout.
 **New Phase 1 scope:**
 - Token swap: Geist → Space Grotesk + Marquee Gold (separate PR ahead of the tab work).
 - Ship the **4-tab shell** for `/(app)/shows/[id]/` — `<ShowTabs>` with Overview / Setlist / Media / Notes; sticky tab bar; URL param `?tab=…` for routing; ~120ms crossfade on tab change.
-- Wire **Overview tab content** (stat row + lineup + history + actions). The "went" badge for past shows. Pre-show shows the music-layer slot for `VibeRadar` + `FanLoyaltyRing` as empty placeholders ("we'll fill this in once your Spotify is connected").
+- Wire **Overview tab content** (stat row + lineup + history + actions). The "went" badge for past shows. Pre-show shows the music-layer slot for `FanLoyaltyRing` as an empty placeholder ("we'll fill this in once your Spotify is connected"). (The VibeRadar slot from the original design is dropped — Phase 8 deferred to v2.)
 - Ship **Setlist tab content for stable-style artists** (the bulk of the original Phase 1 work, but slotted into the Setlist tab instead of a SegmentedControl):
   - Pre-show: confidence banner + `<HypePlaylistCard placeholder />` (real card lands in Phase 3) + predicted setlist (2-col on wide, 1-col on compact) + `EncoreDivider` + ★ openers/closers + per-row evidence ("12/12").
   - Post-show: count banner + actual setlist + `EncoreDivider` + ★ markers.

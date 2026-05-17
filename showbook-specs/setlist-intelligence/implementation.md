@@ -842,9 +842,9 @@ Release gate (additive to existing CI):
 |-----------------------------------|----------|
 | #1 Hype playlist | Phase 3 |
 | #2 What-I-heard playlist | Phase 3 |
-| #3 Vibe radar | Phase 8 (gated) |
-| #4 Energy arc | Phase 8 (gated) |
-| #5 Set length | Phase 8 |
+| ~~#3 Vibe radar~~ | ~~Phase 8~~ — **DEFERRED v2** (probe 403, 2026-05-17) |
+| ~~#4 Energy arc~~ | ~~Phase 8~~ — **DEFERRED v2** (probe 403, 2026-05-17) |
+| ~~#5 Set length~~ | ~~Phase 8~~ — **DEFERRED v2** (probe 403, 2026-05-17) |
 | #6 Discovered-live + fan-loyalty ring | Phase 7 |
 | #7 Pre-show priming stat | Phase 7 |
 | #8 Year-end soundtrack | Phase 7 |
@@ -1001,9 +1001,11 @@ When all 11 phases are merged, a user opens Showbook and:
 2. Sees the connect modal once. Taps connect. OAuth. Done.
 3. Spotify gets a new playlist with a branded cover.
 4. They never see the connect modal again.
-5. The next show they go to has a vibe radar, an energy arc, a fan-
-   loyalty ring, a priming stat, and a "songs you discovered live"
-   rail without any further interaction.
+5. The next show they go to has a fan-loyalty ring, a priming stat,
+   and a "songs you discovered live" rail without any further
+   interaction. (Vibe radar + energy arc were planned alongside but
+   are deferred to v2 after Spotify denied audio-features access on
+   2026-05-17.)
 6. On Dec 31, an email arrives with their year as a Spotify
    playlist.
 7. On the Discover page, a rail shows artists they follow on
