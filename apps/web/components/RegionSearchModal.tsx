@@ -25,7 +25,9 @@ export function RegionSearchModal({
 
   const citySearch = usePlaceSearch(cityQuery, {
     types: "city",
-    enabled: !manualMode,
+    // Pause the query once a place is selected so the resolved
+    // city name doesn't trigger a redundant searchPlaces request.
+    enabled: !manualMode && cityName === "",
   });
 
   const addRegion = trpc.preferences.addRegion.useMutation({
@@ -122,7 +124,10 @@ export function RegionSearchModal({
             </label>
           </div>
 
-          {!manualMode && cityName === "" && citySearch.debouncedQuery.length >= 2 && (
+          {!manualMode &&
+            cityName === "" &&
+            citySearch.debouncedQuery.length >= 2 &&
+            citySearch.debouncedQuery === cityQuery && (
             <div className="discover-region-form__places">
               {citySearch.isSearching && (
                 <div className="discover-modal__hint">Searching...</div>

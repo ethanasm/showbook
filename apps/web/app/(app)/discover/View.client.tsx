@@ -21,7 +21,6 @@ import { FollowArtistSearch } from "@/components/discover/FollowArtistSearch";
 import { SpotifyFollowRail } from "@/components/discover/SpotifyFollowRail";
 import {
   type Announcement,
-  type DiscoverKind,
   type DiscoverSortConfig,
   type DiscoverSortField,
   type PendingIngestSnapshot,
@@ -640,15 +639,6 @@ function FeedSection({
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Ingest Status Poller — invisible component that watches the user's pg-boss
-// ingest jobs (venues, performers, regions) and notifies the parent of which
-// ones are still queued/in-flight. Polls every 2s while anything is pending
-// and stops polling otherwise. On the pending→done transition for any item,
-// invalidates the corresponding feed so freshly-ingested shows + counts
-// appear without a manual refresh.
-// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Main Page

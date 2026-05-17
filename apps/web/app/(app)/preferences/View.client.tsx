@@ -126,7 +126,9 @@ function AddRegionForm({ onAdd }: { onAdd: () => void }) {
 
   const citySearch = usePlaceSearch(cityQuery, {
     types: "city",
-    enabled: !manualMode,
+    // Pause the query once a place is selected so the resolved
+    // city name doesn't trigger a redundant searchPlaces request.
+    enabled: !manualMode && cityName === "",
   });
 
   const addRegion = trpc.preferences.addRegion.useMutation({
@@ -216,7 +218,10 @@ function AddRegionForm({ onAdd }: { onAdd: () => void }) {
             placeholder="e.g. Nashville"
             style={formStyles.input}
           />
-          {!manualMode && cityName === "" && citySearch.debouncedQuery.length >= 2 && (
+          {!manualMode &&
+            cityName === "" &&
+            citySearch.debouncedQuery.length >= 2 &&
+            citySearch.debouncedQuery === cityQuery && (
             <div style={{
               position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20,
               background: "var(--surface)", border: "1px solid var(--rule-strong)",

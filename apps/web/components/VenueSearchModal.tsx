@@ -139,6 +139,7 @@ export function VenueSearchModal({
           ))}
           {query.length >= 2 &&
             !searchResults.isLoading &&
+            !placesSearch.isSearching &&
             localVenues.length === 0 &&
             filteredPlaces.length === 0 && (
               <div className="discover-modal__hint">No venues found</div>

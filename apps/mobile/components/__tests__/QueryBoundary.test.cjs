@@ -142,4 +142,34 @@ describe('QueryBoundary', () => {
     );
     assert.ok(findText(r, 'Hello Hadestown'));
   });
+
+  it('keeps showing cached data when a refetch errors (no error UI flash)', () => {
+    // Matches the legacy `isError && !data` guard the migrated detail
+    // screens used inline. Pull-to-refresh on a flaky network must not
+    // blank the page if SQLite already hydrated `data`.
+    const r = render(
+      React.createElement(
+        QueryBoundary,
+        {
+          query: {
+            isLoading: false,
+            isError: true,
+            error: { message: 'network blip' },
+            data: { name: 'Hamilton' },
+          },
+        },
+        (data) => React.createElement('rn-text', null, `Stale ${data.name}`),
+      ),
+    );
+    assert.ok(findText(r, 'Stale Hamilton'));
+    // The default error UI must NOT have rendered.
+    const errorTexts = r.root.findAllByType('rn-text').map((n) =>
+      Array.isArray(n.props.children) ? n.props.children.join('') : String(n.props.children ?? ''),
+    );
+    assert.equal(
+      errorTexts.includes("Couldn't load"),
+      false,
+      'error UI should not render while cached data is available',
+    );
+  });
 });

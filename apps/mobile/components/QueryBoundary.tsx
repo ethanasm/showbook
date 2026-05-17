@@ -40,6 +40,7 @@ export function QueryBoundary<TData>({
 }: QueryBoundaryProps<TData>): React.JSX.Element {
   const { tokens } = useTheme();
 
+  // Initial load: nothing is in the cache yet.
   if (query.isLoading) {
     return (
       <>
@@ -52,8 +53,11 @@ export function QueryBoundary<TData>({
     );
   }
 
-  const hasError = query.isError === true || (query.error != null && query.error !== undefined);
-  if (hasError || query.data === undefined) {
+  // Show the error UI ONLY when there's no cached data to fall back on.
+  // A transient refetch failure on a screen that already has data should
+  // keep the cached UI visible (matching the legacy `isError && !data`
+  // guard the migrated screens used to write inline).
+  if (query.data === undefined) {
     const retry = () => {
       if (query.refetch) void query.refetch();
     };
