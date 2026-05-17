@@ -79,6 +79,21 @@ afterEach(() => {
 });
 
 describe('PreviewPlayerProvider — single-stream contract', () => {
+  it('does not set crossOrigin on the audio element (iTunes previews lack CORS headers)', async () => {
+    const { result } = renderHook(() => usePreviewPlayer(), { wrapper });
+    await act(async () => {
+      await result.current.play({
+        key: 'show:row-a',
+        previewUrl: 'https://audio-ssl.itunes.apple.com/preview.m4a',
+        spotifyTrackId: null,
+      });
+    });
+    // Setting crossOrigin = 'anonymous' makes browsers reject playback
+    // when the upstream host (iTunes) doesn't return
+    // Access-Control-Allow-Origin. Locking the empty default in.
+    assert.equal(lastInstance?.crossOrigin, null);
+  });
+
   it('tapping row B stops row A (single audio element reused)', async () => {
     const { result } = renderHook(() => usePreviewPlayer(), { wrapper });
 
@@ -203,6 +218,82 @@ describe('PreviewPlayerProvider — single-stream contract', () => {
     // We never touched the audio element when the driver succeeded.
     assert.equal(audioCalls.length, 0);
     assert.equal(result.current.currentTrackKey, 'show:row-a');
+  });
+
+  it('prime() loads a silent source and plays it synchronously (iOS unlock)', async () => {
+    const { result } = renderHook(() => usePreviewPlayer(), { wrapper });
+
+    await act(async () => {
+      result.current.prime();
+      // Drain the unlock chain (`.then(() => el.pause())`) so any state
+      // updates it triggers settle inside act().
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    // Audio element was created and play() was called on it synchronously
+    // (the bare minimum iOS Safari needs to user-activate the element).
+    assert.ok(lastInstance, 'expected prime() to construct the Audio element');
+    assert.equal(audioCalls.length, 1);
+    assert.ok(
+      audioCalls[0]?.src?.startsWith('data:audio/wav;base64,'),
+      'expected prime() to play a silent data URL',
+    );
+
+    // Subsequent prime() calls are no-ops once the element is unlocked.
+    await act(async () => {
+      result.current.prime();
+      await Promise.resolve();
+    });
+    assert.equal(audioCalls.length, 1);
+
+    // A real play() after prime() reuses the same audio element — proving
+    // that on iOS the unlock persists across an awaited resolve.
+    await act(async () => {
+      await result.current.play({
+        key: 'show:row-a',
+        previewUrl: 'https://p/a.mp3',
+        spotifyTrackId: null,
+      });
+    });
+    assert.equal(audioCalls.length, 2);
+    assert.equal(audioCalls[1]?.src, 'https://p/a.mp3');
+  });
+
+  it('prime() re-arms when the unlock attempt rejects (desktop strict mode)', async () => {
+    const origPlay = FakeAudio.prototype.play;
+    // Force the first play() to reject so we exercise the catch branch.
+    let rejectOnce = true;
+    FakeAudio.prototype.play = async function patched(this: FakeAudio) {
+      if (rejectOnce) {
+        rejectOnce = false;
+        throw new Error('NotAllowedError');
+      }
+      return origPlay.call(this);
+    };
+    try {
+      const { result } = renderHook(() => usePreviewPlayer(), { wrapper });
+
+      await act(async () => {
+        result.current.prime();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // After a rejected unlock, prime() should re-arm so the *next* user
+      // gesture gets another shot — call it again and confirm a second
+      // silent play() is attempted.
+      await act(async () => {
+        result.current.prime();
+        await Promise.resolve();
+      });
+      assert.equal(audioCalls.length, 1);
+      assert.ok(
+        audioCalls[0]?.src?.startsWith('data:audio/wav;base64,'),
+        'expected the re-armed prime to play a silent data URL',
+      );
+    } finally {
+      FakeAudio.prototype.play = origPlay;
+    }
   });
 
   it('falls back to the preview when the FullTrackDriver throws', async () => {

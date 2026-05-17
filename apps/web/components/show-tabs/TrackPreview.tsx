@@ -80,7 +80,13 @@ export function TrackPreview(props: TrackPreviewProps) {
       await player.play(handle, () => setUnavailable(true));
       return;
     }
-    // Lazy-resolve via tRPC, then attempt to play.
+    // Lazy-resolve via tRPC, then attempt to play. iOS Safari needs
+    // `audio.play()` to be called synchronously within a user gesture;
+    // the tRPC `await` below consumes that gesture, which is why the
+    // post-resolve `player.play()` was being rejected as "unavailable"
+    // on mobile web. Prime the audio element with a silent source now
+    // so the real play() afterwards can ride the same activation.
+    player.prime();
     setResolving(true);
     try {
       const next = await resolveMutation.mutateAsync({

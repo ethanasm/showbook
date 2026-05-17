@@ -77,6 +77,16 @@ interface PreviewPlayerContextValue {
   ) => Promise<void>;
   /** Stop the current row, if any. Idempotent. */
   stop: () => void;
+  /**
+   * iOS Safari requires `audio.play()` to be called synchronously
+   * during a user gesture; once that succeeds, the element is
+   * "user-activated" and later `play()` calls (e.g. after an async
+   * resolve) are allowed without a fresh gesture. Call this from a
+   * tap handler before any `await` when the play URL isn't known yet
+   * — it loads a tiny silent source and plays/pauses it to unlock the
+   * element. Idempotent; no-op after the first successful unlock.
+   */
+  prime: () => void;
   /** Currently-playing row's `key`, or null when idle. */
   currentTrackKey: string | null;
   /** True while the active row is loading or playing. */
@@ -90,6 +100,14 @@ interface PreviewPlayerContextValue {
   hasFullTrackDriver: boolean;
 }
 
+/**
+ * 44-byte zero-length PCM WAV. Decodes successfully on iOS Safari but
+ * produces no audible output, so we can call `audio.play()` against it
+ * during a user gesture purely to user-activate the element.
+ */
+const SILENT_WAV_DATA_URL =
+  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
+
 const PreviewPlayerContext = createContext<PreviewPlayerContextValue | null>(
   null,
 );
@@ -102,6 +120,7 @@ const PreviewPlayerContext = createContext<PreviewPlayerContextValue | null>(
 export function PreviewPlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const driverRef = useRef<FullTrackDriver | null>(null);
+  const primedRef = useRef(false);
   const [currentTrackKey, setCurrentTrackKey] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasFullTrackDriver, setHasFullTrackDriver] = useState(false);
@@ -112,7 +131,13 @@ export function PreviewPlayerProvider({ children }: { children: ReactNode }) {
     if (audioRef.current) return audioRef.current;
     const el = new Audio();
     el.preload = "auto";
-    el.crossOrigin = "anonymous";
+    // Intentionally NO crossOrigin attribute: iTunes preview URLs
+    // (`https://audio-ssl.itunes.apple.com/...`) don't return
+    // `Access-Control-Allow-Origin`, and a strict `crossOrigin =
+    // "anonymous"` makes the browser treat them as tainted and reject
+    // `.play()`. We only need to *hear* the audio — not feed it through
+    // Web Audio / canvas / captureStream — so the same-origin-only
+    // request the audio element makes by default is what we want.
     el.addEventListener("ended", () => {
       setCurrentTrackKey(null);
       setIsPlaying(false);
@@ -129,6 +154,21 @@ export function PreviewPlayerProvider({ children }: { children: ReactNode }) {
     audioRef.current = el;
     return el;
   }, []);
+
+  const prime = useCallback(() => {
+    if (primedRef.current) return;
+    const el = getAudio();
+    primedRef.current = true;
+    el.src = SILENT_WAV_DATA_URL;
+    el.play()
+      .then(() => el.pause())
+      .catch(() => {
+        // Element didn't unlock (autoplay still rejected, e.g. desktop
+        // running with strict policy). Re-arm so the next user gesture
+        // gets another shot.
+        primedRef.current = false;
+      });
+  }, [getAudio]);
 
   const stop = useCallback(() => {
     const el = audioRef.current;
@@ -220,12 +260,21 @@ export function PreviewPlayerProvider({ children }: { children: ReactNode }) {
     () => ({
       play,
       stop,
+      prime,
       currentTrackKey,
       isPlaying,
       setFullTrackDriver,
       hasFullTrackDriver,
     }),
-    [play, stop, currentTrackKey, isPlaying, setFullTrackDriver, hasFullTrackDriver],
+    [
+      play,
+      stop,
+      prime,
+      currentTrackKey,
+      isPlaying,
+      setFullTrackDriver,
+      hasFullTrackDriver,
+    ],
   );
 
   return (
