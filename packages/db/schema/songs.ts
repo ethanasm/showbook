@@ -32,11 +32,20 @@ export const songs = pgTable(
     isCover: boolean('is_cover').notNull().default(false),
     coverOf: text('cover_of'),
     spotifyTrackId: text('spotify_track_id'),
-    // Cached 30-second preview clip URL from Spotify's track lookup.
-    // Populated lazily when the Phase-9 row-play button is tapped on
-    // a non-premium client; null when Spotify never had a preview for
-    // the track (true for ~30% of catalog post-2024 thinning).
+    // Cached 30-second preview clip URL. Originally populated from
+    // Spotify's track lookup; falls back to Apple's iTunes Search API
+    // when Spotify returns the track without a `preview_url` (post-2024
+    // deprecation). Column name predates the fallback — the storage is
+    // opaque, the row-play <audio> element doesn't care which provider
+    // served the URL.
     spotifyPreviewUrl: text('spotify_preview_url'),
+    // When non-null, the lazy-preview resolver has completed at least
+    // one full pass (Spotify + iTunes fallback) for this row. Used by
+    // the cache check in setlistIntel.resolveTrackPreview to avoid
+    // re-fetching when Spotify returns a track id but no preview and
+    // iTunes also has no match — without this we'd hit both APIs on
+    // every tap forever.
+    previewResolvedAt: timestamp('preview_resolved_at'),
     durationMs: integer('duration_ms'),
     firstKnownPerformance: date('first_known_performance'),
     historicalPlayCount: integer('historical_play_count').notNull().default(0),
