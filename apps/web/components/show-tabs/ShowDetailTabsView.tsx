@@ -82,6 +82,18 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
     },
   );
 
+  // Phase 5 — rotating-display flag. Single-user prod: we render the
+  // rotating UI whenever the dev flag is ON, regardless of the
+  // server-side calibration gate verdict. The gate still emits
+  // setlist.release_gate.{passed,failed} from the server when other
+  // callers hit setlistIntel.releaseGate, so the audit trail stays;
+  // the client just doesn't hard-block on it. Re-introduce the
+  // gate-blocked branch (rotatingGateBlocked) once we have a
+  // multi-user audience and want safety-rails.
+  const rotatingFlagOn = isFeatureOn("SetlistIntelRotatingDisplay");
+  const rotatingDisplayEnabled = rotatingFlagOn;
+  const rotatingGateBlocked = false;
+
   // Phase 3 — global flag + admin override decides whether the real
   // Spotify-backed HypePlaylistCard renders in place of the P1
   // placeholder. Query is cheap (a single users select) and cached
@@ -210,7 +222,9 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
         // otherwise render as "0%" — a misleading value when we
         // really mean "no prediction available yet".
         predictionConfidence:
-          predictionQuery.data && predictionQuery.data.style === "stable"
+          predictionQuery.data &&
+          (predictionQuery.data.style === "stable" ||
+            predictionQuery.data.style === "rotating")
             ? predictionQuery.data.confidence
             : null,
         actualSongCount,
@@ -272,10 +286,22 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
       ? predictionQuery.data.style
       : "stable";
 
+  // Phase 5 — rotating predictions render their own subtree. The
+  // SetlistTabComingSoon fallback is only for theatrical/improvised
+  // (P6+). Stable + cold + rotating all pass through SetlistTab.
+  const showSetlistTab =
+    !isPast && (isUnsupportedKind || isProduction)
+      ? false
+      : !isPast &&
+          setlistStyle !== "stable" &&
+          setlistStyle !== "cold" &&
+          setlistStyle !== "rotating"
+        ? false
+        : true;
   const setlistPanel =
     !isPast && (isUnsupportedKind || isProduction) ? (
       <SetlistTabComingSoon style={show.kind} />
-    ) : !isPast && setlistStyle !== "stable" && setlistStyle !== "cold" ? (
+    ) : !showSetlistTab ? (
       <SetlistTabComingSoon style={setlistStyle} />
     ) : (
       <SetlistTab
@@ -287,6 +313,8 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
         actualSongs={actualSongs}
         hypePlaylistEnabled={hypePlaylistEnabled}
         badgePayload={badgeQuery.data ?? null}
+        rotatingDisplayEnabled={rotatingDisplayEnabled}
+        rotatingGateBlocked={rotatingGateBlocked}
       />
     );
 
