@@ -1,6 +1,6 @@
 # Showbook
 
-Personal entertainment tracker for live shows — concerts, theatre, comedy, festivals.
+Personal tracker for live shows — concerts, theatre, comedy, and festivals. Predicts setlists for upcoming concerts, scans Gmail for tickets, turns setlists you've heard into Spotify playlists, and surfaces announcements at venues you follow. Self-hosted, with a feature-complete native mobile app.
 
 ## Tech Stack
 
