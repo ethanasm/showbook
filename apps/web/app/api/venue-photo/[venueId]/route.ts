@@ -11,14 +11,45 @@ import {
 
 const log = child({ component: 'web.api.venue-photo' });
 
+// Tight allowlist for absolute-URL `venues.photoUrl` values. The only
+// legitimate http(s)-prefixed value persisted to this column is
+// Ticketmaster's CDN (returned by `getVenue(...).images[].url`); Google
+// Places resolves through `getPlacePhotoMediaUrl` and never lands here
+// as a raw URL. Adding a host here without a security review re-opens
+// the SSRF vector previously closed by tightening `venueInputSchema`.
+const ALLOWED_PROXY_HOSTS: ReadonlySet<string> = new Set([
+  's1.ticketm.net',
+]);
+
+// Allowlist of content-types we'll proxy back to the client. SVG is
+// deliberately excluded — `image/svg+xml` would let a planted upstream
+// execute scripts when navigated to directly (the proxy URL is same-
+// origin as the rest of the app), and we don't legitimately serve SVG
+// for venue hero photos.
+const ALLOWED_CONTENT_TYPE = /^image\/(?:png|jpeg|jpg|webp|gif|heic|heif|avif)(?:;.*)?$/i;
+
+function isProxyableUrl(rawUrl: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
+  return ALLOWED_PROXY_HOSTS.has(parsed.hostname.toLowerCase());
+}
+
 async function fetchUpstream(mediaUrl: string) {
   const upstream = await fetch(mediaUrl, {
     cache: 'no-store',
     signal: AbortSignal.timeout(15_000),
+    redirect: 'manual',
   });
   const contentType = upstream.headers.get('content-type') ?? '';
   const ok =
-    upstream.ok && upstream.body && contentType.toLowerCase().startsWith('image/');
+    upstream.ok &&
+    upstream.body !== null &&
+    ALLOWED_CONTENT_TYPE.test(contentType);
   return { upstream, contentType, ok } as const;
 }
 
@@ -117,7 +148,34 @@ export async function GET(
     });
   }
 
-  const mediaUrl = photoName.startsWith('http')
+  const isAbsoluteUrl = photoName.startsWith('http');
+  // Belt-and-suspenders against SSRF: even though `venueInputSchema`
+  // no longer accepts `photoUrl` from tRPC callers, any persisted
+  // absolute URL must come from a trusted host. Unknown hosts are
+  // rejected before we make the upstream fetch so an attacker can't
+  // probe internal services via this proxy.
+  if (isAbsoluteUrl && !isProxyableUrl(photoName)) {
+    log.warn(
+      {
+        event: 'venue.photo.proxy.host_not_allowed',
+        venueId,
+        photoHost: (() => {
+          try {
+            return new URL(photoName).hostname;
+          } catch {
+            return null;
+          }
+        })(),
+      },
+      'Refusing to proxy a photoUrl whose host is not in the allowlist',
+    );
+    return new NextResponse('Photo unavailable', {
+      status: 502,
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  }
+
+  const mediaUrl = isAbsoluteUrl
     ? photoName
     : getPlacePhotoMediaUrl(photoName);
 
@@ -201,6 +259,11 @@ export async function GET(
     headers: {
       'Content-Type': contentType,
       'X-Content-Type-Options': 'nosniff',
+      // Defense in depth — even though the content-type allowlist already
+      // rejects `image/svg+xml`, this CSP ensures the response can't
+      // execute scripts, load remote subresources, or run plugins if it
+      // were ever opened as a top-level document.
+      'Content-Security-Policy': "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'",
       'Cache-Control': 'public, max-age=86400, s-maxage=86400',
     },
   });
