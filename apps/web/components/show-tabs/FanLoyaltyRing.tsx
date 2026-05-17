@@ -11,14 +11,10 @@ interface FanLoyaltyRingProps {
 
 /**
  * Phase 7 — fan-loyalty donut. "You knew X of N played." Renders on
- * the Overview tab (past shows) and the desktop right rail.
- *
- * Slot vs data:
- *   - Phase 1 reserved the slot via `MusicLayerEmpty variant="fan-loyalty"`.
- *   - This component replaces the placeholder when the feature flag is
- *     on AND the show has resolved-to-Spotify songs to count against.
- *     Falls back to a tight empty state for unconnected users or
- *     unresolved setlists.
+ * the Overview tab (past shows) and the desktop right rail when the
+ * music-layer-v2 flag is on for the user; otherwise the slot is
+ * hidden entirely. Handles its own loading, disconnected, and
+ * unresolved-setlist empty states.
  */
 export function FanLoyaltyRing({ showId, compact = false }: FanLoyaltyRingProps) {
   const query = trpc.setlistIntel.fanLoyalty.useQuery(
