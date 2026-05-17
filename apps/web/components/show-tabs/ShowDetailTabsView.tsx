@@ -35,7 +35,7 @@ import { FanLoyaltyRing } from "./FanLoyaltyRing";
 import { DiscoveredRail } from "./DiscoveredRail";
 import { PrimingStat } from "./PrimingStat";
 import { useTrackTabView } from "./use-track-tab-view";
-import { computeShowTabBadges } from "./types";
+import { computeShowTabBadges, isHypePlaylistVisible } from "./types";
 import type { StatCell } from "./StatRow";
 
 interface ShowDetailTabsViewProps {
@@ -132,7 +132,6 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
     undefined,
     { staleTime: 5 * 60_000 },
   );
-  const hypePlaylistEnabled = Boolean(hypeFeatureQuery.data?.enabled);
 
   // Phase 7 — flag gate for the music-layer-v2 surfaces (fan loyalty
   // ring, discovered-live rail, priming stat). When OFF, we keep the
@@ -342,6 +341,16 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
     predictionQuery.data && "style" in predictionQuery.data
       ? predictionQuery.data.style
       : "stable";
+
+  // SI-05 — the pre-show hype playlist is hidden when the model can't
+  // pick 25 high-confidence songs (rotating + improvised). Post-show
+  // "I Heard" card is unaffected: it's deterministic from the actual
+  // setlist. Stable + theatrical keep the card pre-show.
+  const hypePlaylistEnabled = isHypePlaylistVisible({
+    featureEnabled: Boolean(hypeFeatureQuery.data?.enabled),
+    isPast,
+    setlistStyle,
+  });
 
   // Phase 6 — theatrical + improvised join rotating as styles that
   // can pass through SetlistTab. We still hide the tab for unsupported

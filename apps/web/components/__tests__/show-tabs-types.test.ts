@@ -8,6 +8,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   computeShowTabBadges,
+  isHypePlaylistVisible,
   parseShowTab,
   SHOW_TAB_KEYS,
 } from '../show-tabs/types';
@@ -160,5 +161,67 @@ describe('computeShowTabBadges', () => {
 describe('SHOW_TAB_KEYS', () => {
   test('order is fixed: overview / setlist / media / notes', () => {
     assert.deepEqual([...SHOW_TAB_KEYS], ['overview', 'setlist', 'media', 'notes']);
+  });
+});
+
+describe('isHypePlaylistVisible — SI-05', () => {
+  test('feature OFF always hides the card', () => {
+    for (const style of ['stable', 'rotating', 'theatrical', 'improvised', 'cold']) {
+      assert.equal(
+        isHypePlaylistVisible({
+          featureEnabled: false,
+          isPast: false,
+          setlistStyle: style,
+        }),
+        false,
+        `style ${style} should hide when feature OFF`,
+      );
+    }
+  });
+  test('pre-show: stable + theatrical render the hype card', () => {
+    for (const style of ['stable', 'theatrical']) {
+      assert.equal(
+        isHypePlaylistVisible({
+          featureEnabled: true,
+          isPast: false,
+          setlistStyle: style,
+        }),
+        true,
+        `${style} should render the hype card pre-show`,
+      );
+    }
+  });
+  test('pre-show: rotating is hidden (model cannot pick 25 confident songs)', () => {
+    assert.equal(
+      isHypePlaylistVisible({
+        featureEnabled: true,
+        isPast: false,
+        setlistStyle: 'rotating',
+      }),
+      false,
+    );
+  });
+  test('pre-show: improvised is hidden (same SI-05 reasoning as rotating)', () => {
+    assert.equal(
+      isHypePlaylistVisible({
+        featureEnabled: true,
+        isPast: false,
+        setlistStyle: 'improvised',
+      }),
+      false,
+    );
+  });
+  test('post-show: every style renders the heard card (deterministic from actual setlist)', () => {
+    for (const style of ['stable', 'rotating', 'theatrical', 'improvised', 'cold']) {
+      assert.equal(
+        isHypePlaylistVisible({
+          featureEnabled: true,
+          isPast: true,
+          setlistStyle: style,
+        }),
+        true,
+        `${style} should render the heard card post-show`,
+      );
+    }
   });
 });
