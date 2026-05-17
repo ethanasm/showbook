@@ -2,7 +2,7 @@
  * Unit tests for the Eventbrite client. Mocks globalThis.fetch.
  */
 
-import { describe, it, beforeEach, afterEach } from 'node:test';
+import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { getMyPastOrders, EventbriteError } from '../eventbrite';
 

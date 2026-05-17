@@ -1,11 +1,8 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { TRPCError, initTRPC } from '@trpc/server';
-import superjson from 'superjson';
+import { TRPCError } from '@trpc/server';
 import { adminProcedure, protectedProcedure, router } from '../trpc';
 import { makeFakeDb, fakeCtx } from './_fake-db';
-
-const t = initTRPC.create({ transformer: superjson });
 
 const testRouter = router({
   ping: protectedProcedure.query(({ ctx }) => ctx.session.user.id),

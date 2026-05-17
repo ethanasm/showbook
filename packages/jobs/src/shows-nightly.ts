@@ -1,6 +1,6 @@
 import { db } from '@showbook/db';
 import { shows, showPerformers, enrichmentQueue } from '@showbook/db';
-import { and, eq, isNull, lt, sql, inArray } from 'drizzle-orm';
+import { and, eq, lt, sql, inArray } from 'drizzle-orm';
 import {
   type PerformerSetlistsMap,
   normalizePerformerSetlist,

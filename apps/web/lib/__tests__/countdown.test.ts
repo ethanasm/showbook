@@ -8,20 +8,20 @@ import { countdownText } from "../countdown";
 const RealDate = Date;
 function freezeNow(localYear: number, localMonth: number, localDay: number, hour = 12) {
   class FrozenDate extends RealDate {
-    constructor(...args: ConstructorParameters<typeof RealDate>) {
+    constructor(...args: unknown[]) {
       if (args.length === 0) {
         super(localYear, localMonth - 1, localDay, hour, 0, 0, 0);
         return;
       }
-      // @ts-expect-error spread into Date constructor
-      super(...args);
+      // Date's constructor overloads can't be represented as a single tuple,
+      // so cast through `any` to forward the variadic args verbatim.
+      super(...(args as ConstructorParameters<typeof Date>));
     }
-    static now() {
+    static override now() {
       return new FrozenDate().getTime();
     }
   }
-  // @ts-expect-error global override for tests
-  globalThis.Date = FrozenDate;
+  globalThis.Date = FrozenDate as unknown as DateConstructor;
 }
 function restoreNow() {
   globalThis.Date = RealDate;

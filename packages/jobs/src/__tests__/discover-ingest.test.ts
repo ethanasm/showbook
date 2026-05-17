@@ -39,7 +39,7 @@ function makeEvent(id: string): TMEvent {
 
 function makeSearchFn(
   totalElements: number,
-  pageSize = 200,
+  _pageSize = 200,
 ): { fn: typeof import('@showbook/api').searchEvents; calls: number[] } {
   const calls: number[] = [];
   const fn = async (params: { page?: number; size?: number }) => {

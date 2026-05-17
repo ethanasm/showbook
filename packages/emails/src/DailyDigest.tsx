@@ -1,4 +1,12 @@
+// `React` must stay in scope: tsx's runtime transpiler still emits the
+// classic JSX transform for this file (it ignores `jsx: "react-jsx"` in
+// the package tsconfig), so JSX expressions compile to `React.createElement`
+// calls that would throw `React is not defined` at render time without
+// this import. The synthetic export below anchors the symbol so
+// `noUnusedLocals` doesn't strip it — exports are exempt from the check
+// and this alias is not re-exported from `src/index.ts`.
 import * as React from 'react';
+export type _JsxAnchor = React.CSSProperties;
 import {
   Body,
   Container,

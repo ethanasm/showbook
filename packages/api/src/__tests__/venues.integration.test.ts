@@ -34,7 +34,6 @@ globalThis.fetch = (async () => {
 
 import {
   db,
-  venues,
   userVenueFollows,
   announcements,
 } from '@showbook/db';

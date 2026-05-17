@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Runs `*.integration.test.ts` files under `node --test` with:
-//   - per-test 45 s timeout (--test-timeout=45000)
+//   - per-test 60 s timeout (--test-timeout=60000, override via
+//     INTEGRATION_PER_TEST_TIMEOUT_MS)
 //   - batch wall-clock kill at BATCH_TIMEOUT_MS (default 5 min)
 //   - optional coverage via NODE_V8_COVERAGE / --experimental-test-coverage
 //

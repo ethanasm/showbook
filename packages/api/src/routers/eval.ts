@@ -135,7 +135,7 @@ export const evalRouter = router({
    */
   rerunShow: adminProcedure
     .input(rerunShowInput)
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ input }) => {
       log.info(
         { event: 'eval.show.rerun.requested', tourSetlistId: input.tourSetlistId },
         'Admin requested per-show re-evaluation',

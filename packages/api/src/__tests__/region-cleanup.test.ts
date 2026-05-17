@@ -8,8 +8,8 @@ import {
 
 // San Francisco area: ~37.77, -122.42
 const sfRegion: RegionBbox = { latitude: 37.7749, longitude: -122.4194, radiusMiles: 25 };
-// Los Angeles area: ~34.05, -118.24
-const laRegion: RegionBbox = { latitude: 34.0522, longitude: -118.2437, radiusMiles: 25 };
+// Los Angeles area: ~34.05, -118.24 — bbox not currently exercised but
+// the LA venue fixtures below assume it.
 
 // Venue clearly inside SF bbox
 const sfVenueId = 'venue-sf';

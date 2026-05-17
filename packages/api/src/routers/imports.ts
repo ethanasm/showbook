@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc';
 import { shows, venues } from '@showbook/db';
 import {

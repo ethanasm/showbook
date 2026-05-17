@@ -7,7 +7,7 @@ import {
   venues,
   performers,
 } from '@showbook/db';
-import { eq, lt, isNotNull, and, inArray, sql } from 'drizzle-orm';
+import { eq, isNotNull, and, inArray, sql } from 'drizzle-orm';
 import {
   searchEvents,
   inferKind,

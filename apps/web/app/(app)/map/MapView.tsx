@@ -114,10 +114,6 @@ function formatDateParts(dateStr: string) {
   return { month, day, year };
 }
 
-function pluralize(count: number, singular: string): string {
-  return count === 1 ? `${count} ${singular}` : `${count} ${singular}s`;
-}
-
 function gradientLastWord(name: string) {
   const words = name.trim().split(/\s+/);
   if (words.length <= 1) return <span className="gradient-emphasis">{name}</span>;

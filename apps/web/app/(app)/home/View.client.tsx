@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
-import { useCompactMode } from "@/lib/useCompactMode";
 import { EmptyState, HeroCard } from "@/components/design-system";
 import { GetStartedHub, useGetStartedDismissed } from "@/components/home/GetStartedHub";
 import "@/components/design-system/design-system.css";
@@ -33,26 +32,6 @@ import {
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  return "Good evening";
-}
-
-function formatTopBarDate(): string {
-  const d = new Date();
-  const dow = d
-    .toLocaleDateString("en-US", { weekday: "short" })
-    .toLowerCase();
-  const day = d.getDate();
-  const month = d
-    .toLocaleDateString("en-US", { month: "short" })
-    .toLowerCase();
-  const year = d.getFullYear();
-  return `${dow} · ${day} ${month} · ${year}`;
-}
-
 function formatMiniDate(dateStr: string | null): string {
   if (!dateStr) return "TBD";
   const parts = toDateParts(dateStr);
@@ -68,7 +47,6 @@ const SANS = "var(--font-geist-sans), sans-serif";
 
 export default function HomeView() {
   const router = useRouter();
-  const compact = useCompactMode();
   const { data: shows, isLoading } = trpc.shows.list.useQuery({});
   const { data: followedArtists } = trpc.performers.followed.useQuery();
   const { data: followedVenues } = trpc.venues.followed.useQuery();
@@ -89,7 +67,7 @@ export default function HomeView() {
   }, []);
 
   // Split shows into upcoming and past
-  const { upcoming, dateTbd, past, stats } = useMemo(() => {
+  const { upcoming, past, stats } = useMemo(() => {
     if (!shows || !mounted)
       return { upcoming: [], dateTbd: [], past: [], stats: null };
 

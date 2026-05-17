@@ -5,7 +5,7 @@
 import './load-env-local';
 
 import { db, venues } from '@showbook/db';
-import { and, eq, isNotNull, isNull } from 'drizzle-orm';
+import { eq, isNotNull, isNull } from 'drizzle-orm';
 import {
   geocodeVenue,
   getPlaceDetails,

@@ -114,7 +114,6 @@ test.describe('Preferences fixes', () => {
     await page.waitForLoadState('networkidle');
     await expect(page.locator('.show-row').first()).toBeVisible({ timeout: 10_000 });
     const looseHeight = (await page.locator('.show-row').first().boundingBox())!.height;
-    const looseAttr = await page.locator('html').getAttribute('data-compact');
 
     // Turn compact mode ON.
     await gotoPrefs(page);
