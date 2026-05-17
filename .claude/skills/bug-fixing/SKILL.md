@@ -1,77 +1,66 @@
 ---
 name: bug-fixing
-description: Use when fixing a bug in the showbook codebase. Verifies locally without running E2E (which is slow/flaky in the sandbox), then opens a PR and subscribes to CI activity so E2E failures from GitHub Actions can be triaged and patched in-loop.
+description: Use when fixing a bug in the showbook codebase. Showbook-flavored thin wrapper around the generic verify-then-ship loop — pins the fast gate to `pnpm verify`, defers E2E / coverage / Maestro to CI, and hands off to the showbook creating-prs override.
 ---
 
-# Bug fixing
+# bug-fixing (showbook)
 
-## Overview
+**Base playbook:** Read `~/.claude/skills/verify-then-ship/SKILL.md`
+for the reproduce → fast-gate → push → react loop. This file only
+carries the showbook-specific commands and rationale.
 
-E2E (Playwright) is expensive to run in the local/web sandbox and frequently flakes on
-environment differences (browser binaries, ports, fixtures). The faster, more reliable
-loop is:
+Also read `~/.claude/skills/commit-hygiene/SKILL.md` for the
+commit-message rules (no session-link footer, no Claude attribution
+trailers, HEREDOC for multi-line messages).
 
-1. Reproduce + fix locally.
-2. Verify with the **non-E2E** gates (`pnpm verify`, targeted unit/integration tests).
-3. Push the branch, open a PR, and let GitHub Actions run the full E2E suite.
-4. Subscribe to PR activity and react to CI failures as they come in.
+## Config
 
-Do **not** run `pnpm verify:e2e` or `RUN_E2E=1` in the sandbox unless the user explicitly
-asks for it.
+- **Unit gate** — `pnpm test:unit` (always, fast)
+- **Integration gate** — `pnpm test:integration` (only if you touched
+  DB / jobs / tRPC; 45 s per-test timeout, 5 min batch cap enforced
+  by `scripts/run-integration.mjs`)
+- **Fast verify gate** — `pnpm verify` (build + lint + unit, no E2E)
+- **Slow gates (CI-only)** — `pnpm verify:e2e`, `pnpm verify:coverage`,
+  the Maestro Cloud `mobile-e2e` workflow
 
-## When to use
+CI's `.github/workflows/ci.yml` enforces 80% line/branch/function
+coverage on the web and mobile scopes via
+`scripts/coverage-report.mjs`. Trust that gate.
 
-- The user reports a bug or regression and wants it fixed.
-- A failing test (unit, integration, or E2E) needs investigation and repair.
-- A PR has CI failures that need to be patched.
+## Why no local E2E / coverage in the sandbox
+
+- Playwright in the web sandbox uses a CFT-fallback Chromium and
+  the dev server on port 3003. Failures here are usually
+  environmental, not real bugs, and they burn minutes.
+- The Maestro mobile flow requires Maestro Cloud + EAS build — can't
+  run locally at all.
+- CI runs the slow gates in a clean Linux environment with the
+  proper browser bundle and isolated Postgres — its signal is the
+  one that gates merge.
+- Coverage is enforced by CI on every push and PR to `main`. Run
+  `verify:coverage` locally only when specifically debugging a
+  coverage drop.
+
+## Hand-off
+
+After the fast gate passes, commit on the assigned development
+branch and invoke `creating-prs` (the showbook override). It owns
+push, PR creation, the `pr-screenshots` hand-off (web + mobile),
+PR-activity subscription, and the CI-failure → `fix-ci-failure`
+hand-off.
 
 ## When NOT to use
 
-- Pure refactors with no bug attached (no PR-on-CI loop needed).
-- Production-only investigations with no code change yet — start with `debugging-prod`.
+- Pure refactors with no bug attached — go straight to the
+  `verify-then-ship` / `creating-prs` chain.
+- Production-only investigations with no code change yet — start
+  with `debugging-prod`.
 
-## Loop
+## Anti-patterns (showbook-specific, additive to verify-then-ship)
 
-### 1. Reproduce and fix
-
-- Read `CLAUDE.md` and the per-app CLAUDE for the affected scope before editing.
-- Write or extend a unit/integration test that fails because of the bug, then make it pass.
-- Keep the fix minimal — no surrounding cleanup, no speculative refactors.
-
-### 2. Verify locally (no E2E)
-
-Run, in order, only what's relevant to the change:
-
-```bash
-pnpm test:unit                 # fast, always run
-pnpm test:integration          # if you touched DB / jobs / tRPC
-pnpm verify                    # build + lint + unit (full local gate, no E2E)
-```
-
-Skip `pnpm verify:e2e`, `pnpm verify:coverage`, and any Playwright/Maestro invocation in
-the sandbox. CI will run the full suite — that's the point of step 3.
-
-If `pnpm verify` passes, the local gate is green. Move on.
-
-### 3. Hand off to creating-prs
-
-Commit on the assigned development branch, then invoke the `creating-prs` skill — it
-owns push, PR creation, PR-activity subscription, the CI-failure → fix → re-push loop,
-and the `pr-screenshots` hand-off when the diff touches UI.
-
-## Why no local E2E
-
-- Playwright in the web sandbox uses a CFT-fallback Chromium and the dev server on port
-  3003; failures here are usually environmental, not real bugs, and they burn minutes.
-- CI runs Playwright in a clean Linux environment with the proper browser bundle and
-  isolated Postgres — its signal is the one that gates merge.
-- Coverage thresholds (80% line/branch/function on web and mobile scopes) are also
-  enforced by CI; trust that gate rather than running `verify:coverage` locally unless
-  you're specifically debugging a coverage drop.
-
-## Anti-patterns
-
-- Running `pnpm verify:e2e` "just to be sure" before pushing — don't.
-- Skipping the PR and asking the user to run E2E themselves — open the PR; CI is the loop.
-- Pushing speculative fixes without first reading the CI failure log.
-- Using `--no-verify` to bypass a failing pre-commit hook — fix the underlying issue.
+- Running `pnpm verify:e2e` or `RUN_E2E=1` in the sandbox "just to
+  be sure".
+- Running the test suite against `showbook_prod*` — `scripts/guard-not-prod-db.mjs`
+  rejects this, but don't rely on the guard.
+- Pushing a coverage-dropping fix and waiting for CI to tell you —
+  write the test in the same commit.
