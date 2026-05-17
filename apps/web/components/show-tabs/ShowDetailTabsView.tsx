@@ -400,10 +400,13 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
         compact
       />
     ) : null,
-    fanLoyaltyRing:
-      isPast && musicLayerV2Enabled ? (
-        <FanLoyaltyRing showId={show.id} compact />
-      ) : null,
+    // Fan-loyalty was originally slotted into the desktop right rail
+    // per the 2026-05-16 handoff, but the in-Overview-body placement
+    // already covers the same information and the right-rail copy
+    // squeezes the stat row at common laptop widths (~960–1100px) on
+    // the way to its 1200px breakpoint. Keep the ring in the Overview
+    // tab only.
+    fanLoyaltyRing: null,
   };
 
   // Header — collapsed hero strip. Tab bar is sticky below.
