@@ -10,6 +10,7 @@
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { upsertStickyComment } from './lib/sticky-pr-comment.mjs';
 
 const repo = process.env.GITHUB_REPOSITORY;
 const prNumber = process.env.PR_NUMBER;
@@ -69,45 +70,15 @@ function renderBody() {
   return body;
 }
 
-async function gh(method, urlPath, body) {
-  const res = await fetch(`https://api.github.com${urlPath}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'User-Agent': 'showbook-ci',
-      ...(body ? { 'Content-Type': 'application/json' } : {}),
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
-  if (!res.ok) {
-    throw new Error(`GitHub API ${method} ${urlPath} → ${res.status}: ${await res.text()}`);
-  }
-  return res.json();
-}
-
-async function findStickyComment() {
-  let page = 1;
-  while (page < 10) {
-    const comments = await gh(
-      'GET',
-      `/repos/${repo}/issues/${prNumber}/comments?per_page=100&page=${page}`,
-    );
-    if (!Array.isArray(comments) || comments.length === 0) return null;
-    const hit = comments.find((c) => typeof c.body === 'string' && c.body.includes(marker));
-    if (hit) return hit;
-    if (comments.length < 100) return null;
-    page += 1;
-  }
-  return null;
-}
-
-const body = renderBody();
-const existing = await findStickyComment();
-if (existing) {
-  await gh('PATCH', `/repos/${repo}/issues/comments/${existing.id}`, { body });
-  console.log(`Updated sticky comment ${existing.id} for shard ${shard}.`);
+const result = await upsertStickyComment({
+  repo,
+  prNumber,
+  token,
+  marker,
+  body: renderBody(),
+});
+if (result.action === 'updated') {
+  console.log(`Updated sticky comment ${result.id} for shard ${shard}.`);
 } else {
-  await gh('POST', `/repos/${repo}/issues/${prNumber}/comments`, { body });
-  console.log(`Posted sticky comment for shard ${shard}.`);
+  console.log(`Posted sticky comment ${result.id} for shard ${shard}.`);
 }

@@ -3,6 +3,12 @@
 # merged Node native code coverage, enforced 80% threshold across lines,
 # branches, functions. Uses Nx for cached test runs.
 #
+# Each step's combined stdout/stderr is teed to .verify-logs/<slug>.log
+# with a sidecar .verify-logs/<slug>.status (pass|fail|skip). Coverage
+# results are also dumped to .verify-logs/coverage.json. Those files back
+# scripts/post-verify-failure-comment.mjs, which posts a sticky PR comment
+# in CI so failure detail reaches the PR webhook stream.
+#
 # Usage:
 #   pnpm verify:coverage
 #   SKIP_INTEGRATION=1 pnpm verify:coverage   # unit only
@@ -13,6 +19,8 @@ set -o pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
+
+LOG_DIR="$REPO_ROOT/.verify-logs"
 
 THRESHOLD="${THRESHOLD:-80}"
 SKIP_INTEGRATION="${SKIP_INTEGRATION:-0}"
@@ -34,29 +42,43 @@ declare -a STEP_NAMES
 declare -a STEP_RESULTS
 FAILED=0
 
+rm -rf "$LOG_DIR"
+mkdir -p "$LOG_DIR"
+
 run_step() {
   local name="$1"; shift
+  local slug="$1"; shift
+  local log="$LOG_DIR/${slug}.log"
+  local status_file="$LOG_DIR/${slug}.status"
   echo ""
   echo "${PURPLE}${BOLD}━━━ ${name} ━━━${NC}"
   echo "${DIM}\$ $*${NC}"
-  if "$@"; then
+  "$@" 2>&1 | tee "$log"
+  local rc=${PIPESTATUS[0]}
+  if [ "$rc" -eq 0 ]; then
     STEP_NAMES+=("$name")
     STEP_RESULTS+=("pass")
+    echo "pass" > "$status_file"
     echo "${GREEN}${CHECK} ${name} passed${NC}"
   else
     STEP_NAMES+=("$name")
     STEP_RESULTS+=("fail")
+    echo "fail" > "$status_file"
     echo "${RED}${CROSS} ${name} failed${NC}"
     FAILED=1
   fi
 }
 
 skip_step() {
-  STEP_NAMES+=("$1")
+  local name="$1"
+  local slug="$2"
+  local reason="$3"
+  STEP_NAMES+=("$name")
   STEP_RESULTS+=("skip")
+  echo "skip" > "$LOG_DIR/${slug}.status"
   echo ""
-  echo "${PURPLE}${BOLD}━━━ $1 ━━━${NC}"
-  echo "${YELLOW}${SKIP} skipped: $2${NC}"
+  echo "${PURPLE}${BOLD}━━━ ${name} ━━━${NC}"
+  echo "${YELLOW}${SKIP} skipped: ${reason}${NC}"
 }
 
 # Reset per-package coverage outputs (Nx will replay from cache when source unchanged).
@@ -65,18 +87,18 @@ mkdir -p "$REPO_ROOT/coverage"
 
 # ── Build & lint ────────────────────────────────────────────────────────
 if [ "$SKIP_BUILD" = "1" ]; then
-  skip_step "Build" "SKIP_BUILD=1"
+  skip_step "Build" build "SKIP_BUILD=1"
 else
-  run_step "Build" pnpm build
+  run_step "Build" build pnpm build
 fi
 if [ "$SKIP_LINT" = "1" ]; then
-  skip_step "Lint" "SKIP_LINT=1"
+  skip_step "Lint" lint "SKIP_LINT=1"
 else
-  run_step "Lint" pnpm lint
+  run_step "Lint" lint pnpm lint
 fi
 
 # ── Unit tests with coverage (Nx caches per-project) ────────────────────
-run_step "Unit tests + coverage" pnpm exec nx run-many -t test:coverage
+run_step "Unit tests + coverage" unit-tests pnpm exec nx run-many -t test:coverage
 
 # ── Integration tests with coverage ─────────────────────────────────────
 postgres_available() {
@@ -105,28 +127,37 @@ prepare_e2e_db() {
 }
 
 if [ "$SKIP_INTEGRATION" = "1" ]; then
-  skip_step "Integration tests" "SKIP_INTEGRATION=1"
+  skip_step "Integration tests" integration-tests "SKIP_INTEGRATION=1"
 else
   if ! postgres_available; then
-    skip_step "Integration tests" "postgres not reachable on localhost:5433"
+    skip_step "Integration tests" integration-tests "postgres not reachable on localhost:5433"
     FAILED=1
   else
-    run_step "DB prepare (e2e)" prepare_e2e_db
+    run_step "DB prepare (e2e)" db-prepare prepare_e2e_db
     export DATABASE_URL="${E2E_DATABASE_URL:-postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e}"
-    run_step "Integration tests + coverage" pnpm exec nx run-many -t test:integration:coverage --parallel=1
+    run_step "Integration tests + coverage" integration-tests pnpm exec nx run-many -t test:integration:coverage --parallel=1
   fi
 fi
 
 # ── Coverage report + threshold gate ────────────────────────────────────
 echo ""
 echo "${PURPLE}${BOLD}━━━ Coverage report (threshold ${THRESHOLD}%) ━━━${NC}"
-if node "$REPO_ROOT/scripts/coverage-report.mjs" --threshold="$THRESHOLD" --write=coverage/lcov.info; then
+COVERAGE_LOG="$LOG_DIR/coverage-threshold.log"
+COVERAGE_STATUS="$LOG_DIR/coverage-threshold.status"
+node "$REPO_ROOT/scripts/coverage-report.mjs" \
+  --threshold="$THRESHOLD" \
+  --write=coverage/lcov.info \
+  --json-out="$LOG_DIR/coverage.json" 2>&1 | tee "$COVERAGE_LOG"
+COVERAGE_RC=${PIPESTATUS[0]}
+if [ "$COVERAGE_RC" -eq 0 ]; then
   STEP_NAMES+=("Coverage threshold")
   STEP_RESULTS+=("pass")
+  echo "pass" > "$COVERAGE_STATUS"
   echo "${GREEN}${CHECK} Coverage at or above ${THRESHOLD}%${NC}"
 else
   STEP_NAMES+=("Coverage threshold")
   STEP_RESULTS+=("fail")
+  echo "fail" > "$COVERAGE_STATUS"
   echo "${RED}${CROSS} Coverage below ${THRESHOLD}%${NC}"
   FAILED=1
 fi
