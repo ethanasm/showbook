@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { MapPin, Check, Plus, Search, X, LogOut, Music, ShieldCheck } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { usePlaceSearch } from "@/lib/usePlaceSearch";
 import { useTheme } from "@/components/design-system/ThemeProvider";
 import { SegmentedControl } from "@/components/design-system/SegmentedControl";
 import { Toggle } from "@/components/design-system";
@@ -122,14 +123,11 @@ function AddRegionForm({ onAdd }: { onAdd: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const [manualMode, setManualMode] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
-  const [debouncedCity, setDebouncedCity] = useState("");
-  const cityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const utils = trpc.useUtils();
 
-  const citySearch = trpc.enrichment.searchPlaces.useQuery(
-    { query: debouncedCity, types: "city" },
-    { enabled: debouncedCity.length >= 2 && !manualMode, retry: false },
-  );
+  const citySearch = usePlaceSearch(cityQuery, {
+    types: "city",
+    enabled: !manualMode,
+  });
 
   const addRegion = trpc.preferences.addRegion.useMutation({
     onSuccess: () => {
@@ -155,33 +153,26 @@ function AddRegionForm({ onAdd }: { onAdd: () => void }) {
       setCityName(value);
     }
     setDetailsError(null);
-    if (cityTimerRef.current) clearTimeout(cityTimerRef.current);
-    if (value.length >= 2 && !manualMode) {
-      cityTimerRef.current = setTimeout(() => setDebouncedCity(value), 400);
-    } else {
-      setDebouncedCity("");
-    }
   };
 
   const handleSelectCity = async (placeId: string) => {
     try {
-      const details = await utils.enrichment.placeDetails.fetch({ placeId });
+      const details = await citySearch.fetchPlaceDetails(placeId);
       if (details) {
         setCityName(details.city || details.name);
         setCityQuery(details.city || details.name);
         setLatitude(String(details.latitude));
         setLongitude(String(details.longitude));
-        setDebouncedCity("");
         setDetailsError(null);
       }
-    } catch (e) {
+    } catch {
       setDetailsError(
         "Couldn't load location details. Try again, or enter coordinates manually below.",
       );
     }
   };
 
-  const searchFailed = !manualMode && citySearch.isError;
+  const searchFailed = !manualMode && citySearch.isSearchError;
 
   const canSubmit =
     cityName.trim() !== "" &&
@@ -225,24 +216,24 @@ function AddRegionForm({ onAdd }: { onAdd: () => void }) {
             placeholder="e.g. Nashville"
             style={formStyles.input}
           />
-          {!manualMode && debouncedCity.length >= 2 && (
+          {!manualMode && cityName === "" && citySearch.debouncedQuery.length >= 2 && (
             <div style={{
               position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20,
               background: "var(--surface)", border: "1px solid var(--rule-strong)",
               maxHeight: 200, overflow: "auto",
             }}>
-              {citySearch.isLoading && (
+              {citySearch.isSearching && (
                 <div style={{ padding: "8px 12px", fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--muted)" }}>Searching...</div>
               )}
-              {citySearch.isError && (
+              {citySearch.isSearchError && (
                 <div style={{ padding: "8px 12px", fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "#E63946" }}>
                   Search unavailable. Use manual entry below.
                 </div>
               )}
-              {citySearch.data?.length === 0 && !citySearch.isLoading && (
+              {citySearch.results.length === 0 && !citySearch.isSearching && (
                 <div style={{ padding: "8px 12px", fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)" }}>No matches</div>
               )}
-              {citySearch.data?.map((p) => (
+              {citySearch.results.map((p) => (
                 <button key={p.placeId} type="button" onClick={() => handleSelectCity(p.placeId)} style={{
                   display: "block", width: "100%", padding: "8px 12px", background: "none", border: "none",
                   borderBottom: "1px solid var(--rule)", textAlign: "left", cursor: "pointer",
@@ -313,7 +304,6 @@ function AddRegionForm({ onAdd }: { onAdd: () => void }) {
               const next = !prev;
               if (next) {
                 setCityName(cityQuery);
-                setDebouncedCity("");
               }
               return next;
             });
