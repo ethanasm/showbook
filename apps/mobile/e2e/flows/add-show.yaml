@@ -68,6 +68,12 @@ tags:
     text: "YYYY-MM-DD"
 - inputText: "2026-12-31"
 
+# Dismiss the IME before tapping Save. With the keyboard open the
+# Gboard's own content-description elements compete with the
+# TopBar's `accessibilityLabel="Save"` checkmark and Maestro fails
+# to land on the right one.
+- hideKeyboard
+
 # The Save button is an icon-only Check button in the TopBar.
 - tapOn:
     text: "Save"
