@@ -122,145 +122,151 @@ export default function AdminView() {
             sub="Fill in missing data on every venue row"
           />
 
-          <BackfillCard
-            title="Backfill venue coordinates"
-            description="Geocode every venue with a known city but missing lat/lng or stateRegion. Calls Google Geocoding once per row."
-            buttonLabel="Run coordinate backfill"
-            confirmText="Run coordinate backfill across all venues? This will call Google Geocoding for every incomplete row."
-            isPending={coordsMutation.isPending}
-            errorMessage={coordsMutation.error?.message ?? null}
-            resultLine={coordsResult}
-            onRun={() => coordsMutation.mutate()}
-          />
+          <div style={styles.grid}>
+            <BackfillCard
+              title="Backfill venue coordinates"
+              description="Geocode every venue with a known city but missing lat/lng or stateRegion. Calls Google Geocoding once per row."
+              buttonLabel="Run coordinate backfill"
+              confirmText="Run coordinate backfill across all venues? This will call Google Geocoding for every incomplete row."
+              isPending={coordsMutation.isPending}
+              errorMessage={coordsMutation.error?.message ?? null}
+              resultLine={coordsResult}
+              onRun={() => coordsMutation.mutate()}
+            />
 
-          <BackfillCard
-            title="Prune orphaned announcements & venues"
-            description="Enqueue the prune-orphan-catalog pg-boss job. Deletes announcements, venues, and performers with no remaining shows, follows, or references. Already runs nightly at 02:30 ET — use this for an on-demand sweep."
-            buttonLabel="Enqueue prune job"
-            confirmText="Enqueue the prune-orphan-catalog job? It will delete unreferenced announcements, venues, and performers."
-            isPending={pruneMutation.isPending}
-            errorMessage={pruneMutation.error?.message ?? null}
-            resultLine={pruneResult}
-            onRun={() => pruneMutation.mutate()}
-          />
+            <BackfillCard
+              title="Prune orphaned announcements & venues"
+              description="Enqueue the prune-orphan-catalog pg-boss job. Deletes announcements, venues, and performers with no remaining shows, follows, or references. Already runs nightly at 02:30 ET — use this for an on-demand sweep."
+              buttonLabel="Enqueue prune job"
+              confirmText="Enqueue the prune-orphan-catalog job? It will delete unreferenced announcements, venues, and performers."
+              isPending={pruneMutation.isPending}
+              errorMessage={pruneMutation.error?.message ?? null}
+              resultLine={pruneResult}
+              onRun={() => pruneMutation.mutate()}
+            />
 
-          <BackfillCard
-            title="Backfill Ticketmaster venue IDs"
-            description="Look up a Ticketmaster venueId for every venue that doesn't have one. Calls the Ticketmaster Discovery API once per row."
-            buttonLabel="Run Ticketmaster backfill"
-            confirmText="Run Ticketmaster backfill across all venues? This will call the Ticketmaster Discovery API for every venue without an id."
-            isPending={tmMutation.isPending}
-            errorMessage={tmMutation.error?.message ?? null}
-            resultLine={tmResult}
-            onRun={() => tmMutation.mutate()}
-          />
+            <BackfillCard
+              title="Backfill Ticketmaster venue IDs"
+              description="Look up a Ticketmaster venueId for every venue that doesn't have one. Calls the Ticketmaster Discovery API once per row."
+              buttonLabel="Run Ticketmaster backfill"
+              confirmText="Run Ticketmaster backfill across all venues? This will call the Ticketmaster Discovery API for every venue without an id."
+              isPending={tmMutation.isPending}
+              errorMessage={tmMutation.error?.message ?? null}
+              resultLine={tmResult}
+              onRun={() => tmMutation.mutate()}
+            />
 
-          <BackfillCard
-            title="Run setlist enrichment"
-            description="Queue every past concert that's missing a setlist (skipping ones already queued) and trigger setlist-retry now. Covers Gmail imports and other past shows that bypassed the nightly ticketed→past transition. Calls setlist.fm once per show; respects the 14-attempt give-up marker."
-            buttonLabel="Run setlist enrichment"
-            confirmText="Queue all past concerts without a setlist and trigger setlist-retry? This will call setlist.fm for each one."
-            isPending={setlistMutation.isPending}
-            errorMessage={setlistMutation.error?.message ?? null}
-            resultLine={setlistResult}
-            onRun={() => setlistMutation.mutate()}
-          />
+            <BackfillCard
+              title="Run setlist enrichment"
+              description="Queue every past concert that's missing a setlist (skipping ones already queued) and trigger setlist-retry now. Covers Gmail imports and other past shows that bypassed the nightly ticketed→past transition. Calls setlist.fm once per show; respects the 14-attempt give-up marker."
+              buttonLabel="Run setlist enrichment"
+              confirmText="Queue all past concerts without a setlist and trigger setlist-retry? This will call setlist.fm for each one."
+              isPending={setlistMutation.isPending}
+              errorMessage={setlistMutation.error?.message ?? null}
+              resultLine={setlistResult}
+              onRun={() => setlistMutation.mutate()}
+            />
+          </div>
 
           <SectionHead
             label="Performer enrichment"
             sub="Backfill external IDs on performers that are missing them"
           />
 
-          <BackfillCard
-            title="Backfill performer MBIDs"
-            description="Enqueue the backfill-performer-mbids job. Looks up MusicBrainz IDs via setlist.fm artist search for every performer without one — never overwrites an existing MBID. Already runs daily at 04:30 ET; use this after a bulk import to fill the gap before the next cron. Results land in Axiom (event backfill.performer_mbids.summary)."
-            buttonLabel="Enqueue MBID backfill"
-            confirmText="Enqueue the performer-MBID backfill? It calls setlist.fm once per performer with no MBID."
-            isPending={performerMbidMutation.isPending}
-            errorMessage={performerMbidMutation.error?.message ?? null}
-            resultLine={performerMbidResult}
-            onRun={() => performerMbidMutation.mutate()}
-          />
+          <div style={styles.grid}>
+            <BackfillCard
+              title="Backfill performer MBIDs"
+              description="Enqueue the backfill-performer-mbids job. Looks up MusicBrainz IDs via setlist.fm artist search for every performer without one — never overwrites an existing MBID. Already runs daily at 04:30 ET; use this after a bulk import to fill the gap before the next cron. Results land in Axiom (event backfill.performer_mbids.summary)."
+              buttonLabel="Enqueue MBID backfill"
+              confirmText="Enqueue the performer-MBID backfill? It calls setlist.fm once per performer with no MBID."
+              isPending={performerMbidMutation.isPending}
+              errorMessage={performerMbidMutation.error?.message ?? null}
+              resultLine={performerMbidResult}
+              onRun={() => performerMbidMutation.mutate()}
+            />
 
-          <BackfillCard
-            title="Backfill performer Ticketmaster IDs"
-            description="Enqueue the backfill-performer-ticketmaster-ids job. Looks up TM attraction IDs for every performer without one, and fills any missing MBID exposed by TM's external links as a side effect — never overwrites existing IDs. Already runs daily at 06:00 ET. Results land in Axiom (event backfill.performer_ticketmaster_ids.summary)."
-            buttonLabel="Enqueue TM-id backfill"
-            confirmText="Enqueue the performer-Ticketmaster-id backfill? It calls TM Discovery once per performer with no attraction id."
-            isPending={performerTmMutation.isPending}
-            errorMessage={performerTmMutation.error?.message ?? null}
-            resultLine={performerTmResult}
-            onRun={() => performerTmMutation.mutate()}
-          />
+            <BackfillCard
+              title="Backfill performer Ticketmaster IDs"
+              description="Enqueue the backfill-performer-ticketmaster-ids job. Looks up TM attraction IDs for every performer without one, and fills any missing MBID exposed by TM's external links as a side effect — never overwrites existing IDs. Already runs daily at 06:00 ET. Results land in Axiom (event backfill.performer_ticketmaster_ids.summary)."
+              buttonLabel="Enqueue TM-id backfill"
+              confirmText="Enqueue the performer-Ticketmaster-id backfill? It calls TM Discovery once per performer with no attraction id."
+              isPending={performerTmMutation.isPending}
+              errorMessage={performerTmMutation.error?.message ?? null}
+              resultLine={performerTmResult}
+              onRun={() => performerTmMutation.mutate()}
+            />
+          </div>
 
           <SectionHead
             label="Setlist corpus"
             sub="Pre-show setlist.fm fetches that warm up the predicted-setlist tab"
           />
 
-          <div style={styles.card}>
-            <div style={styles.cardTitle}>Refresh setlist corpus for performer</div>
-            <div style={styles.cardDescription}>
-              Enqueue an enrichment/setlist-corpus-fill job (mode: predict, ~3
-              pages / 60 setlists) for a specific performer. Use this when a
-              show is approaching and the Setlist tab is stuck on
-              &ldquo;We&rsquo;re pulling recent setlists&rdquo;. Accepts a
-              performer UUID or a name substring; ambiguous matches return the
-              candidate list.
+          <div style={styles.grid}>
+            <div style={styles.card}>
+              <div style={styles.cardTitle}>Refresh setlist corpus for performer</div>
+              <div style={styles.cardDescription}>
+                Enqueue an enrichment/setlist-corpus-fill job (mode: predict, ~3
+                pages / 60 setlists) for a specific performer. Use this when a
+                show is approaching and the Setlist tab is stuck on
+                &ldquo;We&rsquo;re pulling recent setlists&rdquo;. Accepts a
+                performer UUID or a name substring; ambiguous matches return the
+                candidate list.
+              </div>
+              <div style={styles.cardActions}>
+                <input
+                  type="text"
+                  value={performerQuery}
+                  onChange={(e) => setPerformerQuery(e.target.value)}
+                  placeholder="Performer name or UUID"
+                  disabled={corpusFillMutation.isPending}
+                  style={styles.input}
+                  aria-label="Performer name or UUID"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (corpusFillMutation.isPending) return;
+                    const q = performerQuery.trim();
+                    if (q.length === 0) return;
+                    corpusFillMutation.mutate({ performerQuery: q });
+                  }}
+                  disabled={
+                    corpusFillMutation.isPending ||
+                    performerQuery.trim().length === 0
+                  }
+                  style={
+                    corpusFillMutation.isPending ||
+                    performerQuery.trim().length === 0
+                      ? styles.runButtonDisabled
+                      : styles.runButton
+                  }
+                  aria-label="Enqueue corpus fill"
+                >
+                  {corpusFillMutation.isPending ? 'Enqueuing…' : 'Enqueue'}
+                </button>
+                {corpusFillResult && (
+                  <span style={styles.resultLine}>{corpusFillResult}</span>
+                )}
+                {corpusFillMutation.error && (
+                  <span style={styles.errorLine}>
+                    {corpusFillMutation.error.message}
+                  </span>
+                )}
+              </div>
             </div>
-            <div style={styles.cardActions}>
-              <input
-                type="text"
-                value={performerQuery}
-                onChange={(e) => setPerformerQuery(e.target.value)}
-                placeholder="Performer name or UUID"
-                disabled={corpusFillMutation.isPending}
-                style={styles.input}
-                aria-label="Performer name or UUID"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (corpusFillMutation.isPending) return;
-                  const q = performerQuery.trim();
-                  if (q.length === 0) return;
-                  corpusFillMutation.mutate({ performerQuery: q });
-                }}
-                disabled={
-                  corpusFillMutation.isPending ||
-                  performerQuery.trim().length === 0
-                }
-                style={
-                  corpusFillMutation.isPending ||
-                  performerQuery.trim().length === 0
-                    ? styles.runButtonDisabled
-                    : styles.runButton
-                }
-                aria-label="Enqueue corpus fill"
-              >
-                {corpusFillMutation.isPending ? 'Enqueuing…' : 'Enqueue'}
-              </button>
-              {corpusFillResult && (
-                <span style={styles.resultLine}>{corpusFillResult}</span>
-              )}
-              {corpusFillMutation.error && (
-                <span style={styles.errorLine}>
-                  {corpusFillMutation.error.message}
-                </span>
-              )}
-            </div>
-          </div>
 
-          <BackfillCard
-            title="Refresh setlist corpus (all upcoming)"
-            description="Trigger the enrichment/setlist-corpus-fill-refresh job — the same one that runs daily at 04:45 ET. Refreshes corpus for the top-500 followed performers plus everyone with a watching / ticketed show in the next 30 days. Use this if the cron missed or you can't wait until tomorrow morning."
-            buttonLabel="Enqueue corpus refresh"
-            confirmText="Enqueue the setlist-corpus-fill-refresh sweep? It calls setlist.fm once per qualifying performer (~500+ calls)."
-            isPending={corpusRefreshMutation.isPending}
-            errorMessage={corpusRefreshMutation.error?.message ?? null}
-            resultLine={corpusRefreshResult}
-            onRun={() => corpusRefreshMutation.mutate()}
-          />
+            <BackfillCard
+              title="Refresh setlist corpus (all upcoming)"
+              description="Trigger the enrichment/setlist-corpus-fill-refresh job — the same one that runs daily at 04:45 ET. Refreshes corpus for the top-500 followed performers plus everyone with a watching / ticketed show in the next 30 days. Use this if the cron missed or you can't wait until tomorrow morning."
+              buttonLabel="Enqueue corpus refresh"
+              confirmText="Enqueue the setlist-corpus-fill-refresh sweep? It calls setlist.fm once per qualifying performer (~500+ calls)."
+              isPending={corpusRefreshMutation.isPending}
+              errorMessage={corpusRefreshMutation.error?.message ?? null}
+              resultLine={corpusRefreshResult}
+              onRun={() => corpusRefreshMutation.mutate()}
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -314,13 +320,25 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "28px var(--page-pad-x) 60px",
   },
   contentInner: {
-    maxWidth: 720,
+    maxWidth: 1080,
+  },
+  // Two-column grid that collapses to a single column on narrow screens.
+  // `auto-fit` + `minmax(340px, 1fr)` means cards reflow without a
+  // media query: ≥720px → 2 columns, narrower → 1 column. Each section
+  // gets its own grid wrapper so SectionHead spans full width.
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
+    gap: 16,
+    marginBottom: 28,
   },
   card: {
     background: "var(--surface)",
     border: "1px solid var(--rule)",
     padding: "18px 20px",
-    marginBottom: 20,
+    // Spacing between cards comes from `styles.grid`'s `gap` so cards in
+    // the same row stay flush.
+    marginBottom: 0,
   },
   cardTitle: {
     fontFamily: "var(--font-geist-sans)",
