@@ -281,6 +281,13 @@
       "when": 1790200000000,
       "tag": "0039_setlist_style_phase5",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790286400000,
+      "tag": "0040_spotify_previews_follow_rail",
+      "breakpoints": true
     }
   ]
 }

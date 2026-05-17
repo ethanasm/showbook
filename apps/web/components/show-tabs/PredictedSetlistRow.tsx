@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { isFeatureOn } from "@showbook/shared";
+import { TrackPreview } from "./TrackPreview";
 import "./show-tabs.css";
 
 interface PredictedSetlistRowProps {
@@ -19,6 +21,17 @@ interface PredictedSetlistRowProps {
   };
   /** Phase 2: when set, the title becomes a link to /songs/[songId]. */
   songId?: string | null;
+  /**
+   * Phase 9 — when set, render the real `<TrackPreview>` button in the
+   * 24px slot. Requires `showId` so the button can call
+   * `setlistIntel.resolveTrackPreview` on lazy resolve. When the
+   * `SetlistIntelPreviews` flag is OFF, the slot stays empty.
+   */
+  showId?: string;
+  /** Phase 9 — cached preview URL from `trackPreviewsForShow`. */
+  previewUrl?: string | null;
+  /** Phase 9 — cached Spotify track id from `trackPreviewsForShow`. */
+  spotifyTrackId?: string | null;
 }
 
 const STAR_ROLES = new Set<PredictedSetlistRowProps["role"]>([
@@ -42,7 +55,11 @@ export function PredictedSetlistRow({
   showPreviewSlot = true,
   badge,
   songId,
+  showId,
+  previewUrl,
+  spotifyTrackId,
 }: PredictedSetlistRowProps) {
+  const previewsOn = isFeatureOn("SetlistIntelPreviews") && !!showId;
   const titleNode = (
     <div className="predicted-row__title" data-testid="predicted-row-title">
       {title}
@@ -54,11 +71,20 @@ export function PredictedSetlistRow({
         {String(position).padStart(2, "0")}
       </span>
       {showPreviewSlot ? (
-        <div
-          className="predicted-row__preview-slot"
-          aria-hidden="true"
-          data-testid="predicted-row-preview-slot"
-        />
+        previewsOn ? (
+          <TrackPreview
+            showId={showId as string}
+            title={title}
+            previewUrl={previewUrl ?? null}
+            spotifyTrackId={spotifyTrackId ?? null}
+          />
+        ) : (
+          <div
+            className="predicted-row__preview-slot"
+            aria-hidden="true"
+            data-testid="predicted-row-preview-slot"
+          />
+        )
       ) : (
         <span />
       )}

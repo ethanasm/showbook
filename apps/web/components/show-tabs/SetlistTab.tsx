@@ -27,6 +27,17 @@ export interface SetlistTabBadgePayload {
   titleToSongId: Record<string, string>;
 }
 
+/**
+ * Phase 9 — cached preview/URI map for the rows. Keyed by
+ * lower(title) so each row's TrackPreview can flip to "ready" with
+ * a single lookup. Values may carry null fields (no preview /
+ * no Spotify match); the row's button degrades to disabled state.
+ */
+export type SetlistTrackPreviewMap = Record<
+  string,
+  { previewUrl: string | null; spotifyTrackId: string | null }
+>;
+
 interface SetlistTabProps {
   showId: string;
   isPast: boolean;
@@ -49,6 +60,8 @@ interface SetlistTabProps {
    * the flag and passes it down.
    */
   hypePlaylistEnabled?: boolean;
+  /** Phase 9 — cached preview/URI map for the row play buttons. */
+  trackPreviews?: SetlistTrackPreviewMap | null;
   /**
    * Phase 5 — when true, the rotating-style display variant renders for
    * `prediction.style === 'rotating'` payloads. Resolved at the page
@@ -72,6 +85,18 @@ function resolveBadge(
   const songId = payload.titleToSongId[title.toLowerCase()] ?? null;
   const badge = songId ? payload.badges[songId] : undefined;
   return { songId, badge };
+}
+
+/** Phase 9 — resolve a row's title to its cached preview/URI pair. */
+function resolvePreview(
+  title: string,
+  previews: SetlistTrackPreviewMap | null | undefined,
+): { previewUrl: string | null; spotifyTrackId: string | null } {
+  const hit = previews?.[title.toLowerCase()];
+  return {
+    previewUrl: hit?.previewUrl ?? null,
+    spotifyTrackId: hit?.spotifyTrackId ?? null,
+  };
 }
 
 export interface ActualSong {
@@ -100,6 +125,7 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
     predictionLoading,
     artistName,
     hypePlaylistEnabled,
+    trackPreviews,
     rotatingDisplayEnabled,
     rotatingGateBlocked,
   } = props;
@@ -193,27 +219,39 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
           count={totalCount}
         >
           <div className="predicted-grid" data-testid="predicted-setlist-grid">
-            {mainSet.map((song, idx) => (
-              <PredictedSetlistRow
-                key={`main-${idx}-${song.title}`}
-                position={idx + 1}
-                title={song.title}
-                evidence={song.evidence}
-                role={song.role}
-              />
-            ))}
+            {mainSet.map((song, idx) => {
+              const preview = resolvePreview(song.title, trackPreviews);
+              return (
+                <PredictedSetlistRow
+                  key={`main-${idx}-${song.title}`}
+                  position={idx + 1}
+                  title={song.title}
+                  evidence={song.evidence}
+                  role={song.role}
+                  showId={props.showId}
+                  previewUrl={preview.previewUrl}
+                  spotifyTrackId={preview.spotifyTrackId}
+                />
+              );
+            })}
             {encore.length > 0 && (
               <>
                 <EncoreDivider />
-                {encore.map((song, idx) => (
-                  <PredictedSetlistRow
-                    key={`encore-${idx}-${song.title}`}
-                    position={idx + 1}
-                    title={song.title}
-                    evidence={song.evidence}
-                    role={song.role}
-                  />
-                ))}
+                {encore.map((song, idx) => {
+                  const preview = resolvePreview(song.title, trackPreviews);
+                  return (
+                    <PredictedSetlistRow
+                      key={`encore-${idx}-${song.title}`}
+                      position={idx + 1}
+                      title={song.title}
+                      evidence={song.evidence}
+                      role={song.role}
+                      showId={props.showId}
+                      previewUrl={preview.previewUrl}
+                      spotifyTrackId={preview.spotifyTrackId}
+                    />
+                  );
+                })}
               </>
             )}
           </div>
@@ -423,6 +461,7 @@ function SetlistTabPast({
   hypePlaylistEnabled,
   showId,
   badgePayload,
+  trackPreviews,
 }: SetlistTabProps) {
   const mainSet = actualSongs.filter((s) => !s.isEncore);
   const encore = actualSongs.filter((s) => s.isEncore);
@@ -486,6 +525,7 @@ function SetlistTabPast({
         <div className="predicted-grid" data-testid="actual-setlist-grid">
           {mainSet.map((song, idx) => {
             const resolved = resolveBadge(song.title, badgePayload);
+            const preview = resolvePreview(song.title, trackPreviews);
             return (
               <PredictedSetlistRow
                 key={`main-${idx}-${song.title}`}
@@ -501,6 +541,9 @@ function SetlistTabPast({
                 }
                 badge={resolved.badge}
                 songId={resolved.songId}
+                showId={showId}
+                previewUrl={preview.previewUrl}
+                spotifyTrackId={preview.spotifyTrackId}
               />
             );
           })}
@@ -509,6 +552,7 @@ function SetlistTabPast({
               <EncoreDivider />
               {encore.map((song, idx) => {
                 const resolved = resolveBadge(song.title, badgePayload);
+                const preview = resolvePreview(song.title, trackPreviews);
                 return (
                   <PredictedSetlistRow
                     key={`encore-${idx}-${song.title}`}
@@ -524,6 +568,9 @@ function SetlistTabPast({
                     }
                     badge={resolved.badge}
                     songId={resolved.songId}
+                    showId={showId}
+                    previewUrl={preview.previewUrl}
+                    spotifyTrackId={preview.spotifyTrackId}
                   />
                 );
               })}
