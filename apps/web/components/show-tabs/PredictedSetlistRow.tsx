@@ -95,29 +95,31 @@ export function PredictedSetlistRow({
         ) : (
           titleNode
         )}
-        <div className="predicted-row__evidence">
-          {evidence}
-          {badge?.firstTime && (
-            <span
-              className="predicted-row__badge predicted-row__badge--first-time"
-              data-testid="predicted-row-badge-first-time"
-              title={firstTimeLabel}
-              aria-label={firstTimeLabel}
-            >
-              🆕 First time
-            </span>
-          )}
-          {badge?.rareCatch && rareLabel && (
-            <span
-              className="predicted-row__badge predicted-row__badge--rare"
-              data-testid="predicted-row-badge-rare"
-              title={rareLabel}
-              aria-label={rareLabel}
-            >
-              🎯 Rare ({badge.rareCatch.fractionPct}%)
-            </span>
-          )}
-        </div>
+        {evidence && (
+          <div className="predicted-row__evidence">{evidence}</div>
+        )}
+      </div>
+      <div className="predicted-row__badges">
+        {badge?.firstTime && (
+          <span
+            className="predicted-row__badge predicted-row__badge--first-time"
+            data-testid="predicted-row-badge-first-time"
+            title={firstTimeLabel}
+            aria-label={firstTimeLabel}
+          >
+            🆕 First time
+          </span>
+        )}
+        {badge?.rareCatch && rareLabel && (
+          <span
+            className="predicted-row__badge predicted-row__badge--rare"
+            data-testid="predicted-row-badge-rare"
+            title={rareLabel}
+            aria-label={rareLabel}
+          >
+            🎯 Rare ({badge.rareCatch.fractionPct}%)
+          </span>
+        )}
       </div>
     </div>
   );

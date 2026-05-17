@@ -617,7 +617,7 @@ function SetlistTabPast({
                 key={`main-${idx}-${song.title}`}
                 position={idx + 1}
                 title={song.title}
-                evidence={song.note ?? "actual · setlist.fm"}
+                evidence={song.note ?? ""}
                 badge={resolved.badge}
                 songId={resolved.songId}
                 showId={showId}
@@ -637,7 +637,7 @@ function SetlistTabPast({
                     key={`encore-${idx}-${song.title}`}
                     position={idx + 1}
                     title={song.title}
-                    evidence={song.note ?? "actual · encore"}
+                    evidence={song.note ?? ""}
                     badge={resolved.badge}
                     songId={resolved.songId}
                     showId={showId}
