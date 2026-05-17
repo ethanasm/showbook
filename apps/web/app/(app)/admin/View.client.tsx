@@ -61,6 +61,10 @@ export default function AdminView() {
   const corpusFillMutation = trpc.admin.enqueueSetlistCorpusFill.useMutation();
   const corpusRefreshMutation =
     trpc.admin.enqueueSetlistCorpusFillRefresh.useMutation();
+  const performerMbidMutation =
+    trpc.admin.enqueueBackfillPerformerMbids.useMutation();
+  const performerTmMutation =
+    trpc.admin.enqueueBackfillPerformerTicketmasterIds.useMutation();
 
   const [performerQuery, setPerformerQuery] = useState("");
 
@@ -84,6 +88,16 @@ export default function AdminView() {
   const corpusRefreshResult = corpusRefreshMutation.data
     ? corpusRefreshMutation.data.jobId
       ? `Enqueued job ${corpusRefreshMutation.data.jobId}`
+      : 'Enqueue returned no job id (likely a duplicate already queued)'
+    : null;
+  const performerMbidResult = performerMbidMutation.data
+    ? performerMbidMutation.data.jobId
+      ? `Enqueued job ${performerMbidMutation.data.jobId}`
+      : 'Enqueue returned no job id (likely a duplicate already queued)'
+    : null;
+  const performerTmResult = performerTmMutation.data
+    ? performerTmMutation.data.jobId
+      ? `Enqueued job ${performerTmMutation.data.jobId}`
       : 'Enqueue returned no job id (likely a duplicate already queued)'
     : null;
 
@@ -150,6 +164,33 @@ export default function AdminView() {
             errorMessage={setlistMutation.error?.message ?? null}
             resultLine={setlistResult}
             onRun={() => setlistMutation.mutate()}
+          />
+
+          <SectionHead
+            label="Performer enrichment"
+            sub="Backfill external IDs on performers that are missing them"
+          />
+
+          <BackfillCard
+            title="Backfill performer MBIDs"
+            description="Enqueue the backfill-performer-mbids job. Looks up MusicBrainz IDs via setlist.fm artist search for every performer without one — never overwrites an existing MBID. Already runs daily at 04:30 ET; use this after a bulk import to fill the gap before the next cron. Results land in Axiom (event backfill.performer_mbids.summary)."
+            buttonLabel="Enqueue MBID backfill"
+            confirmText="Enqueue the performer-MBID backfill? It calls setlist.fm once per performer with no MBID."
+            isPending={performerMbidMutation.isPending}
+            errorMessage={performerMbidMutation.error?.message ?? null}
+            resultLine={performerMbidResult}
+            onRun={() => performerMbidMutation.mutate()}
+          />
+
+          <BackfillCard
+            title="Backfill performer Ticketmaster IDs"
+            description="Enqueue the backfill-performer-ticketmaster-ids job. Looks up TM attraction IDs for every performer without one, and fills any missing MBID exposed by TM's external links as a side effect — never overwrites existing IDs. Already runs daily at 06:00 ET. Results land in Axiom (event backfill.performer_ticketmaster_ids.summary)."
+            buttonLabel="Enqueue TM-id backfill"
+            confirmText="Enqueue the performer-Ticketmaster-id backfill? It calls TM Discovery once per performer with no attraction id."
+            isPending={performerTmMutation.isPending}
+            errorMessage={performerTmMutation.error?.message ?? null}
+            resultLine={performerTmResult}
+            onRun={() => performerTmMutation.mutate()}
           />
 
           <SectionHead
