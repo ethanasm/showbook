@@ -1,0 +1,65 @@
+# Spotify Hype-playlist tap flow — Maestro Cloud (Phase 10 Part C1)
+#
+# Asserts that tapping the Hype playlist button on a stable pre-show
+# without a connected Spotify account presents the SpotifyConnectSheet.
+# Maestro can't walk the OAuth round-trip in CI (Spotify approval lives
+# off-device); the manual smoke test on a physical iPhone covers that
+# leg and is documented in the PR body.
+#
+# Requires:
+#   - `SetlistIntelMobileV2` ON
+#   - `SetlistIntelHypePlaylist` ON (the global hype-card gate)
+#   - A pre-show stable-archetype fixture in the seeded test DB
+appId: com.showbook.app
+name: spotify-hype
+tags:
+  - phase-10
+  - setlist-intel
+  - spotify
+  - mobile-v2
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+
+- runScript:
+    file: ../scripts/seed-session.js
+    env:
+      MAESTRO_E2E_TOKEN: ${MAESTRO_E2E_TOKEN}
+      MAESTRO_E2E_USER_JSON: ${MAESTRO_E2E_USER_JSON}
+
+- openLink: ${output.seedDeeplink}
+
+- launchApp:
+    clearState: false
+
+- tapOn:
+    text: "Sign in with Google"
+- runFlow:
+    when:
+      visible: "Welcome"
+    commands:
+      - tapOn: "Continue"
+      - tapOn: "Skip for now"
+      - tapOn: "Skip for now"
+      - tapOn: "Skip for now"
+      - tapOn: "Skip for now"
+
+- tapOn:
+    text: "Shows"
+- tapOn:
+    id: "show-card-row-0"
+- tapOn:
+    id: "show-tab-setlist"
+
+# Tap the primary Hype-playlist button. testID is `hype-card-hype-primary`.
+- tapOn:
+    id: "hype-card-hype-primary"
+
+# The Spotify connect sheet slides up.
+- assertVisible:
+    id: "spotify-connect-button"
+
+# Close out to keep state clean for the next flow.
+- tapOn:
+    id: "spotify-connect-cancel"

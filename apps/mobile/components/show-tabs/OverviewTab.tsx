@@ -1,0 +1,315 @@
+/**
+ * OverviewTab (mobile) — stat row · lineup · history · actions, plus
+ * an optional music-layer slot for the FanLoyaltyRing (Phase 7) when
+ * SetlistIntelMusicLayerV2 lands. Mirror of the web `OverviewTab`.
+ */
+
+import React from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { useTheme } from '../../lib/theme';
+import { SectionFrame } from './SectionFrame';
+
+export interface OverviewStatCell {
+  label: string;
+  value: string;
+  sub?: string;
+  onPress?: () => void;
+}
+
+export interface OverviewLineupEntry {
+  performerId: string;
+  name: string;
+  role: string;
+  characterName?: string | null;
+}
+
+export interface OverviewAction {
+  label: string;
+  testID?: string;
+  onPress?: () => void;
+  href?: string;
+  primary?: boolean;
+  danger?: boolean;
+}
+
+export interface OverviewTabProps {
+  cells: OverviewStatCell[];
+  lineup: OverviewLineupEntry[];
+  actions: OverviewAction[];
+  musicLayerSlot?: React.ReactNode;
+  isPast: boolean;
+  onOpenPerformer?: (performerId: string) => void;
+  artistHistorySummary?: string | null;
+  venueHistorySummary?: string | null;
+}
+
+export function OverviewTab({
+  cells,
+  lineup,
+  actions,
+  musicLayerSlot,
+  isPast,
+  onOpenPerformer,
+  artistHistorySummary,
+  venueHistorySummary,
+}: OverviewTabProps): React.JSX.Element {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+  return (
+    <View testID="show-tab-overview">
+      <View style={styles.statRow}>
+        {cells.map((cell, idx) => (
+          <View
+            key={cell.label}
+            style={[
+              styles.statCell,
+              {
+                borderRightWidth:
+                  idx === cells.length - 1 ? 0 : StyleSheet.hairlineWidth,
+                borderRightColor: colors.rule,
+                borderBottomColor: colors.rule,
+              },
+            ]}
+          >
+            <Text style={[styles.statLabel, { color: colors.faint }]}>
+              {cell.label}
+            </Text>
+            <Text
+              style={[styles.statValue, { color: colors.ink }]}
+              numberOfLines={1}
+            >
+              {cell.value}
+            </Text>
+            {cell.sub ? (
+              <Text
+                style={[styles.statSub, { color: colors.muted }]}
+                numberOfLines={1}
+              >
+                {cell.sub}
+              </Text>
+            ) : null}
+          </View>
+        ))}
+      </View>
+
+      {musicLayerSlot ? (
+        <SectionFrame title={isPast ? 'Show shape' : 'Music layer'}>
+          {musicLayerSlot}
+        </SectionFrame>
+      ) : null}
+
+      <SectionFrame title="Lineup" count={lineup.length}>
+        <View style={styles.lineupCol}>
+          {lineup.map((entry) => (
+            <Pressable
+              key={entry.performerId}
+              onPress={() => onOpenPerformer?.(entry.performerId)}
+              accessibilityRole="button"
+              accessibilityLabel={entry.name}
+              style={({ pressed }) => [
+                styles.lineupRow,
+                {
+                  backgroundColor: colors.surface,
+                  borderLeftColor: colors.accent,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <Text style={[styles.lineupRole, { color: colors.faint }]}>
+                {entry.role.toUpperCase()}
+              </Text>
+              <Text style={[styles.lineupName, { color: colors.ink }]} numberOfLines={1}>
+                {entry.name}
+              </Text>
+              {entry.characterName ? (
+                <Text style={[styles.lineupChar, { color: colors.muted }]}>
+                  as {entry.characterName}
+                </Text>
+              ) : null}
+            </Pressable>
+          ))}
+          {lineup.length === 0 ? (
+            <Text style={[styles.lineupEmpty, { color: colors.muted }]}>
+              No performers listed yet.
+            </Text>
+          ) : null}
+        </View>
+      </SectionFrame>
+
+      <SectionFrame title="Your history">
+        <View style={styles.historyRow}>
+          {[
+            {
+              label: 'Artist',
+              value:
+                artistHistorySummary ?? 'First show with this lineup',
+            },
+            {
+              label: 'Venue',
+              value: venueHistorySummary ?? 'First time at this venue',
+            },
+          ].map((row) => (
+            <View
+              key={row.label}
+              style={[
+                styles.historyCell,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.rule,
+                },
+              ]}
+            >
+              <Text style={[styles.historyLabel, { color: colors.faint }]}>
+                {row.label.toUpperCase()}
+              </Text>
+              <Text style={[styles.historyValue, { color: colors.ink }]}>
+                {row.value}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </SectionFrame>
+
+      <SectionFrame title="Actions">
+        <View style={styles.actionRow}>
+          {actions.map((action) => (
+            <Pressable
+              key={action.label}
+              onPress={action.onPress}
+              accessibilityRole="button"
+              accessibilityLabel={action.label}
+              testID={action.testID}
+              style={({ pressed }) => [
+                styles.actionButton,
+                {
+                  backgroundColor: action.primary
+                    ? colors.accent
+                    : 'transparent',
+                  borderColor: action.danger
+                    ? '#E63946'
+                    : colors.ruleStrong,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.actionLabel,
+                  {
+                    color: action.primary
+                      ? colors.accentText
+                      : action.danger
+                        ? '#E63946'
+                        : colors.ink,
+                    fontWeight: action.primary ? '600' : '500',
+                  },
+                ]}
+              >
+                {action.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </SectionFrame>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  statRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  statCell: {
+    flexGrow: 1,
+    flexBasis: '50%',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  statLabel: {
+    fontFamily: 'Geist Mono',
+    fontSize: 9.5,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  statValue: {
+    fontFamily: 'Geist Sans',
+    fontSize: 17,
+    fontWeight: '600',
+    letterSpacing: -0.4,
+  },
+  statSub: {
+    fontFamily: 'Geist Mono',
+    fontSize: 10.5,
+    letterSpacing: 0.3,
+  },
+  lineupCol: {
+    gap: 8,
+  },
+  lineupRow: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderLeftWidth: 2,
+  },
+  lineupRole: {
+    fontFamily: 'Geist Mono',
+    fontSize: 9.5,
+    letterSpacing: 1.2,
+  },
+  lineupName: {
+    fontFamily: 'Geist Sans',
+    fontSize: 18,
+    fontWeight: '600',
+    letterSpacing: -0.4,
+    marginTop: 2,
+  },
+  lineupChar: {
+    fontFamily: 'Geist Mono',
+    fontSize: 10.5,
+    letterSpacing: 0.3,
+    marginTop: 4,
+  },
+  lineupEmpty: {
+    fontFamily: 'Geist Mono',
+    fontSize: 11,
+    letterSpacing: 0.3,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  historyCell: {
+    flex: 1,
+    padding: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  historyLabel: {
+    fontFamily: 'Geist Mono',
+    fontSize: 9.5,
+    letterSpacing: 1.2,
+  },
+  historyValue: {
+    fontFamily: 'Geist Sans',
+    fontSize: 14,
+    fontWeight: '500',
+    marginTop: 4,
+    letterSpacing: -0.2,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  actionButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  actionLabel: {
+    fontFamily: 'Geist Sans',
+    fontSize: 13,
+  },
+});
