@@ -64,6 +64,8 @@ describe('setlistIntel.releaseGate — integration', () => {
       byStyle: [
         { style: 'stable', brier: 0.1, precisionTop10: 0.7, recallActual: 0.6, recallTop15: 0.7, predictions: 150, calibrationError: 0.05 },
         { style: 'rotating', brier: 0.3, precisionTop10: 0.2, recallActual: 0.5, recallTop15: 0.6, predictions: 50, calibrationError: 0.1 },
+        { style: 'theatrical', brier: 0.05, precisionTop10: 0.95, recallActual: 0.98, recallTop15: 0.99, predictions: 30, calibrationError: 0.03 },
+        { style: 'improvised', brier: 0.4, precisionTop10: 0.1, recallActual: 0.1, recallTop15: 0.1, predictions: 12, calibrationError: 0.1, showModeCalibrationDelta: 0.05 },
       ],
       calibrationCurve: [
         { lower: 0, upper: 0.5, predictions: 100, meanProbability: 0.25, empiricalRate: 0.3, delta: 0.05 },

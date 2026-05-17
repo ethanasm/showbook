@@ -48,7 +48,15 @@ const SEEDS: Record<string, SetlistStyleSeed> = {
   'b30c50dd-9956-4063-9a3a-bda50ba74cbf': { name: 'Sabrina Carpenter', style: 'stable' },
   '7f43dccd-f0e8-432a-8da2-99b2bb3d9c8b': { name: 'Olivia Rodrigo', style: 'stable' },
 
-  // Theatrical (residency / scripted show)
+  // Theatrical (residency / scripted show). Phase 6 ships the
+  // theatrical display variant against the Beyoncé worked example as
+  // the seed entry; additional theatrical performers (Hamilton tours,
+  // Cirque du Soleil residencies, Taylor Swift Eras-era) land as
+  // operators verify their canonical MBIDs from musicbrainz.org and
+  // append a row here. The auto-classifier converges to the right
+  // style for any artist with ≥5 setlists in the corpus, so a missing
+  // seed delays the right style by a couple of cron runs rather than
+  // misclassifying permanently.
   '859d0860-d480-4efd-970c-c05d5f1776b8': { name: 'Beyoncé', style: 'theatrical' },
 };
 

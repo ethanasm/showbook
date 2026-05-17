@@ -112,6 +112,18 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
   const rotatingDisplayEnabled = rotatingFlagOn;
   const rotatingGateBlocked = false;
 
+  // Phase 6 — theatrical + improvised display flags. Default OFF.
+  // When OFF, the matching prediction.style routes the panel to the
+  // SetlistTabComingSoon fallback rather than the Phase-6 view.
+  const theatricalDisplayEnabled = isFeatureOn(
+    "SetlistIntelTheatricalDisplay",
+  );
+  const theatricalGateBlocked = false;
+  const improvisedDisplayEnabled = isFeatureOn(
+    "SetlistIntelImprovisedDisplay",
+  );
+  const improvisedGateBlocked = false;
+
   // Phase 3 — global flag + admin override decides whether the real
   // Spotify-backed HypePlaylistCard renders in place of the P1
   // placeholder. Query is cheap (a single users select) and cached
@@ -261,11 +273,15 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
         // Only show a confidence badge for hot predictions. Cold state
         // carries `confidence: 0`, which the badge formula would
         // otherwise render as "0%" — a misleading value when we
-        // really mean "no prediction available yet".
+        // really mean "no prediction available yet". Phase 6 adds
+        // theatrical + improvised — both report confidence as a
+        // calibrated number so we surface them too.
         predictionConfidence:
           predictionQuery.data &&
           (predictionQuery.data.style === "stable" ||
-            predictionQuery.data.style === "rotating")
+            predictionQuery.data.style === "rotating" ||
+            predictionQuery.data.style === "theatrical" ||
+            predictionQuery.data.style === "improvised")
             ? predictionQuery.data.confidence
             : null,
         actualSongCount,
@@ -327,16 +343,22 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
       ? predictionQuery.data.style
       : "stable";
 
-  // Phase 5 — rotating predictions render their own subtree. The
-  // SetlistTabComingSoon fallback is only for theatrical/improvised
-  // (P6+). Stable + cold + rotating all pass through SetlistTab.
+  // Phase 6 — theatrical + improvised join rotating as styles that
+  // can pass through SetlistTab. We still hide the tab for unsupported
+  // kinds + production shows. A theatrical/improvised prediction with
+  // the matching display flag OFF will render the in-tab "gate
+  // blocked" placeholder rather than SetlistTabComingSoon — keeps the
+  // page geometry consistent with Phase 5 rotating.
+  const setlistStylePassesGate =
+    setlistStyle === "stable" ||
+    setlistStyle === "cold" ||
+    setlistStyle === "rotating" ||
+    setlistStyle === "theatrical" ||
+    setlistStyle === "improvised";
   const showSetlistTab =
     !isPast && (isUnsupportedKind || isProduction)
       ? false
-      : !isPast &&
-          setlistStyle !== "stable" &&
-          setlistStyle !== "cold" &&
-          setlistStyle !== "rotating"
+      : !isPast && !setlistStylePassesGate
         ? false
         : true;
   const setlistPanel =
@@ -358,6 +380,10 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
         trackPreviews={previewsQuery.data?.previews ?? null}
         rotatingDisplayEnabled={rotatingDisplayEnabled}
         rotatingGateBlocked={rotatingGateBlocked}
+        theatricalDisplayEnabled={theatricalDisplayEnabled}
+        theatricalGateBlocked={theatricalGateBlocked}
+        improvisedDisplayEnabled={improvisedDisplayEnabled}
+        improvisedGateBlocked={improvisedGateBlocked}
       />
     );
 
@@ -409,11 +435,31 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
   const railHypeMeta = useMemo(() => {
     if (isPast) return null;
     if (!hypePlaylistEnabled) return null;
-    if (!predictionQuery.data || predictionQuery.data.style !== "stable") return null;
-    const core = predictionQuery.data.core;
-    const total = core.length;
-    return { total, approxMinutes: total > 0 ? Math.round(total * 4) : null };
-  }, [hypePlaylistEnabled, isPast, predictionQuery.data]);
+    if (!predictionQuery.data) return null;
+    // Phase 6 — theatrical also gets the hype playlist (deterministic
+    // setlist is ordering-stable + hype-worthy). Rotating + improvised
+    // hide per SI-05: a hype playlist for a 25-song setlist the model
+    // can't pick is low-relevance.
+    if (predictionQuery.data.style === "stable") {
+      const total = predictionQuery.data.core.length;
+      return { total, approxMinutes: total > 0 ? Math.round(total * 4) : null };
+    }
+    if (
+      predictionQuery.data.style === "theatrical" &&
+      theatricalDisplayEnabled
+    ) {
+      const total =
+        predictionQuery.data.deterministicSetlist.length +
+        predictionQuery.data.rotatingSlots.length;
+      return { total, approxMinutes: total > 0 ? Math.round(total * 4) : null };
+    }
+    return null;
+  }, [
+    hypePlaylistEnabled,
+    isPast,
+    predictionQuery.data,
+    theatricalDisplayEnabled,
+  ]);
 
   const rightRailSlots = {
     hypePlaylistCard: railHypeMeta ? (

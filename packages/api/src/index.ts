@@ -244,5 +244,29 @@ export {
   evaluateReleaseGate,
   type ReleaseGateResult,
   type ReleaseGateBreach,
+  type ReleaseGateMetric,
   RELEASE_GATE_THRESHOLDS,
 } from './setlist-release-gate';
+
+// Phase 6 — theatrical + improvised prediction models.
+export {
+  predictTheatrical,
+  computeTheatricalSurpriseSlotHits,
+  type TheatricalPrediction,
+  type TheatricalSongRow,
+  type TheatricalRotatingSlot,
+  type TheatricalSlotHit,
+} from './setlist-predict-theatrical';
+export {
+  predictImprovised,
+  computeShowModes,
+  computeVibeSketch,
+  computeImprovisedShowModeHit,
+  VIBE_AXES,
+  type ImprovisedPrediction,
+  type ShowMode,
+  type VibeSketch,
+  type VibeAxis,
+  type VibeDelta,
+  type ImprovisedShowModeHit,
+} from './setlist-predict-improvised';
