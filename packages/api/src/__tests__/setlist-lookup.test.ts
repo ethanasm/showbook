@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 
 process.env.DATABASE_URL ??= 'postgresql://x:x@127.0.0.1:1/x';
 
-import { fetchSetlistForPerformer } from '../setlist-lookup';
+import { fetchSetlistForPerformer, resolvePerformerMbid } from '../setlist-lookup';
 import { db } from '@showbook/db';
 
 const ORIGINAL_FETCH = globalThis.fetch;
@@ -178,6 +178,102 @@ test('returns null without persisting when searchArtist finds nothing', async ()
 
   assert.equal(result, null);
   assert.equal(calls.length, 0);
+});
+
+test('resolvePerformerMbid: returns existing MBID without calling setlist.fm', async () => {
+  let called = false;
+  stubFetch(async () => {
+    called = true;
+    return new Response('unexpected', { status: 500 });
+  });
+  const { calls } = stubUpdateOnce();
+
+  const result = await resolvePerformerMbid({
+    performerId: 'perf-x',
+    performerName: 'No Doubt',
+    existingMbid: 'mb-already-known',
+  });
+
+  assert.equal(result, 'mb-already-known');
+  assert.equal(called, false);
+  assert.equal(calls.length, 0);
+});
+
+test('resolvePerformerMbid: persists a freshly-resolved MBID and returns it', async () => {
+  stubFetch(async (url) => {
+    if (String(url).includes('/search/artists')) {
+      return jsonResponse({
+        artist: [{ mbid: 'mb-fresh', name: 'Fresh Band', sortName: 'Fresh Band' }],
+        total: 1,
+        page: 1,
+        itemsPerPage: 30,
+      });
+    }
+    return new Response('unexpected', { status: 500 });
+  });
+  const { calls } = stubUpdateOnce();
+
+  const result = await resolvePerformerMbid({
+    performerId: 'perf-y',
+    performerName: 'Fresh Band',
+    existingMbid: null,
+  });
+
+  assert.equal(result, 'mb-fresh');
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].setArg, { musicbrainzId: 'mb-fresh' });
+});
+
+test('resolvePerformerMbid: returns null when no artist is found', async () => {
+  stubFetch(async () =>
+    jsonResponse({ artist: [], total: 0, page: 1, itemsPerPage: 30 }),
+  );
+  const { calls } = stubUpdateOnce();
+
+  const result = await resolvePerformerMbid({
+    performerId: 'perf-z',
+    performerName: 'Nobody',
+    existingMbid: null,
+  });
+
+  assert.equal(result, null);
+  assert.equal(calls.length, 0);
+});
+
+test('resolvePerformerMbid: swallows unique-violation on conflicting MBID and returns null', async () => {
+  stubFetch(async () =>
+    jsonResponse({
+      artist: [{ mbid: 'mb-taken', name: 'Dup', sortName: 'Dup' }],
+      total: 1,
+      page: 1,
+      itemsPerPage: 30,
+    }),
+  );
+  // Stub update to throw a drizzle-wrapped 23505 like our schema would
+  // do if another row already owned this MBID.
+  (db as unknown as { update: unknown }).update = () => ({
+    set() {
+      return {
+        where() {
+          const cause = Object.assign(
+            new Error('duplicate key value violates unique constraint'),
+            { code: '23505' },
+          );
+          return Promise.reject(
+            Object.assign(new Error('drizzle: update failed'), { cause }),
+          );
+        },
+      };
+    },
+  });
+
+  const result = await resolvePerformerMbid({
+    performerId: 'perf-dup',
+    performerName: 'Dup',
+    existingMbid: null,
+  });
+
+  assert.equal(result, null);
 });
 
 test('returns null when the date has no setlist on file', async () => {

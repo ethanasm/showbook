@@ -22,7 +22,7 @@ import {
 } from '../performer-matcher';
 import { searchEvents, selectBestImage } from '../ticketmaster';
 import { geocodeVenue } from '../geocode';
-import { fetchSetlistForPerformer } from '../setlist-lookup';
+import { fetchSetlistForPerformer, resolvePerformerMbid } from '../setlist-lookup';
 import { child } from '@showbook/observability';
 import {
   type PerformerSetlist,
@@ -747,6 +747,35 @@ export const showsRouter = router({
           log.warn(
             { err, event: 'shows.create.tm_enrichment_failed', showId: show.id },
             'TM ticket URL lookup failed (non-blocking)',
+          );
+        }
+      }
+
+      // MBID resolution for future concerts. The inline setlist-lookup above
+      // already persists the MBID as a side effect, but it's gated on
+      // state === 'past'. Without this hop, a Gmail-imported watching/
+      // ticketed concert lands with `musicbrainz_id IS NULL` and the
+      // setlist-intel tab cold-states forever (the corpus-fill job
+      // short-circuits with `corpus.fill.no_mbid`). Nightly
+      // backfill-performer-mbids catches the same gap; doing it inline
+      // here just means the prediction lands ready on the morning after
+      // import instead of a day later. Best-effort and non-blocking.
+      const wantsMbidLookup =
+        input.kind === 'concert' &&
+        state !== 'past' &&
+        !!headlinerId &&
+        !input.headliner.musicbrainzId;
+      if (wantsMbidLookup && headlinerId) {
+        try {
+          await resolvePerformerMbid({
+            performerId: headlinerId,
+            performerName: input.headliner.name,
+            existingMbid: null,
+          });
+        } catch (err) {
+          log.warn(
+            { err, event: 'shows.create.mbid_resolve_failed', showId: show.id },
+            'Inline MBID resolution failed; nightly backfill will retry',
           );
         }
       }

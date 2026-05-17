@@ -501,8 +501,8 @@ function coldReasonCopy(
   switch (reason) {
     case "no_mbid":
       return {
-        title: "We can't pull recent setlists for this performer",
-        body: `${artistName} isn't in the MusicBrainz database we use as the ID source. We'll keep trying to match on the nightly enrichment pass — the prediction will populate automatically once we find them.`,
+        title: "We can't pull recent setlists for this performer yet",
+        body: `We haven't matched ${artistName} to a MusicBrainz artist yet — that's the ID we use to fetch recent setlists. The nightly performer-MBID backfill runs at 04:30 ET against setlist.fm; the prediction will populate the next morning if a match exists. If ${artistName} truly isn't on MusicBrainz, this tab will stay empty.`,
       };
     case "no_corpus":
       return {
