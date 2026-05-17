@@ -127,6 +127,29 @@ export const FeatureFlag = {
       'fix; stable display is unaffected.',
     state: 'ON',
   },
+  SetlistIntelTheatricalDisplay: {
+    description:
+      'Phase 6 (setlist-intelligence) — gates the theatrical-style ' +
+      'predicted-setlist UI variant (ActDivider + RotatingSlotCard, ' +
+      'served when prediction.style === "theatrical"). Default ON in ' +
+      'single-user prod so the model can be tuned against real shows; ' +
+      'the calibration release-gate still computes a verdict and ' +
+      'emits setlist.release_gate.{passed,failed}, but the client no ' +
+      'longer hard-blocks on it. When OFF, theatrical-classified ' +
+      'performers fall through to SetlistTabComingSoon.',
+    state: 'ON',
+  },
+  SetlistIntelImprovisedDisplay: {
+    description:
+      'Phase 6 (setlist-intelligence) — gates the improvised-style ' +
+      'predicted-setlist UI variant (VibeSketchCard + ShowModeOddsCard, ' +
+      'served when prediction.style === "improvised"). Default ON in ' +
+      'single-user prod for the same reason as the theatrical flag. ' +
+      "The release-gate's improvised_show_mode_calibration breach is " +
+      'still emitted to Axiom for tuning. When OFF, improvised-' +
+      'classified performers fall through to SetlistTabComingSoon.',
+    state: 'ON',
+  },
 } as const satisfies Record<string, { description: string; state: 'ON' | 'OFF' }>;
 
 export type FeatureFlagKey = keyof typeof FeatureFlag;

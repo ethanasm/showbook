@@ -71,6 +71,21 @@ describe('summarizeRun', () => {
     assert.equal(stable!.predictions, 2);
   });
 
+  test('Phase 6 — surfaces theatrical bucket separately from stable', () => {
+    const summary = summarizeRun(
+      [
+        row({ style: 'stable', brier: 0.1 }),
+        row({ style: 'theatrical', brier: 0.05, performerId: 'beyonce' }),
+        row({ style: 'theatrical', brier: 0.07, performerId: 'beyonce' }),
+      ],
+      emptyCalibrationCurve(10),
+    );
+    const theatrical = summary.byStyle.find((s) => s.style === 'theatrical');
+    assert.ok(theatrical);
+    assert.equal(theatrical!.predictions, 4); // 2 rows × 2 predicted titles each
+    assert.ok(Math.abs(theatrical!.brier - 0.06) < 1e-9);
+  });
+
   test('counts predicted-song totals not row totals', () => {
     const summary = summarizeRun(
       [

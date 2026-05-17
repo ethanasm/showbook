@@ -38,12 +38,15 @@ import {
   inferStyleForEval,
   loadTruncatedCorpus,
   mergeCalibrationBuckets,
+  predictImprovised,
   predictSetlist,
+  predictTheatrical,
   recallAtK,
   setlistTitles,
   type CalibrationBin,
   type EvalStyle,
   type PerShowEvalRow,
+  type PredictedSongLike,
   type SetlistStyleOrUnknown,
 } from '@showbook/api';
 import type { PerformerSetlist } from '@showbook/shared';
@@ -70,6 +73,14 @@ export interface PerStyleSummary {
   recallActual: number;
   recallTop15: number;
   calibrationError: number;
+  /**
+   * Phase 6 — improvised only. Empirical hit-rate of the predicted
+   * top show-mode minus its predicted probability over the trailing
+   * window. The setlist release-gate consumes this value to decide
+   * whether the improvised display variant is allowed to flip ON.
+   * Null for non-improvised styles.
+   */
+  showModeCalibrationDelta?: number | null;
 }
 
 export interface RunDailyBacktestResult {
@@ -87,6 +98,59 @@ export interface RunDailyBacktestResult {
 
 export type { PerShowEvalRow, EvalStyle } from '@showbook/api';
 export { rerunEvalForShow, evaluateShow, inferStyleForEval } from '@showbook/api';
+
+/**
+ * Phase 6 — flatten a theatrical prediction into the song-list shape
+ * the brier/recall scorers consume. Deterministic songs all carry
+ * p=1.0; rotating-slot candidates each carry their probability. The
+ * combined list is what we score the actual setlist against.
+ */
+function flattenTheatrical(prediction: {
+  deterministicSetlist: Array<{ title: string; probability: number }>;
+  rotatingSlots: Array<{
+    candidates: Array<{ title: string; probability: number }>;
+  }>;
+}): PredictedSongLike[] {
+  const out: PredictedSongLike[] = [];
+  const seen = new Set<string>();
+  for (const song of prediction.deterministicSetlist) {
+    const lower = song.title.trim().toLowerCase();
+    if (seen.has(lower)) continue;
+    seen.add(lower);
+    out.push({ title: song.title, probability: song.probability });
+  }
+  for (const slot of prediction.rotatingSlots) {
+    for (const candidate of slot.candidates) {
+      const lower = candidate.title.trim().toLowerCase();
+      if (seen.has(lower)) continue;
+      seen.add(lower);
+      out.push({ title: candidate.title, probability: candidate.probability });
+    }
+  }
+  return out;
+}
+
+/**
+ * Phase 6 — pick the closest show-mode for an actual setlist length.
+ * Returns the matching mode (smallest |actualLength - expectedCount|)
+ * or null when the modes array is empty.
+ */
+function isClosestMode(opts: {
+  actualLength: number;
+  modes: Array<{ label: string; expectedSongCount: number }>;
+}): { label: string } | null {
+  if (opts.modes.length === 0) return null;
+  let best = opts.modes[0]!;
+  let bestDist = Math.abs(opts.actualLength - best.expectedSongCount);
+  for (const mode of opts.modes.slice(1)) {
+    const d = Math.abs(opts.actualLength - mode.expectedSongCount);
+    if (d < bestDist) {
+      best = mode;
+      bestDist = d;
+    }
+  }
+  return { label: best.label };
+}
 
 /** Pure helper — aggregate per-show rows into a per-run summary. Exported
  * for unit tests. */
@@ -282,50 +346,133 @@ export async function runDailyBacktest(
 
     const rows: PerShowEvalRow[] = [];
     let curve = emptyCalibrationCurve(10);
+    // Phase 6 — track per-show improvised observations so the post-run
+    // summary can compute the show-mode calibration delta. Each entry
+    // captures the top-mode probability the model predicted and
+    // whether the actual show landed in that same mode.
+    const improvisedObs: Array<{ topModeProb: number; hit: boolean }> = [];
 
     for (const tsRow of setlistsInWindow) {
       const corpus = await loadTruncatedCorpus({
         performerId: tsRow.performerId,
         targetDate: tsRow.performanceDate,
       });
-      const prediction = predictSetlist({
-        performerId: tsRow.performerId,
-        targetDate: tsRow.performanceDate,
-        corpus,
-      });
-      if (prediction.style !== 'stable') {
-        continue;
-      }
       const actualTitles = setlistTitles(tsRow.setlist as PerformerSetlist);
       if (actualTitles.length === 0) continue;
-      const flat = flattenPrediction(prediction);
+
       const styleHints = performerStyle.get(tsRow.performerId);
-      const row = evaluateShow({
-        tourSetlistId: tsRow.id,
-        performerId: tsRow.performerId,
-        performerName: performerName.get(tsRow.performerId) ?? 'Unknown',
-        performanceDate: tsRow.performanceDate,
-        predicted: flat,
-        sampleSize: prediction.sampleSize,
-        actualTitles,
-        style: inferStyleForEval({
-          corpus,
-          override: styleHints?.override ?? null,
-          seed: styleHints?.stored ?? null,
-        }),
+      const bucketStyle = inferStyleForEval({
+        corpus,
+        override: styleHints?.override ?? null,
+        seed: styleHints?.stored ?? null,
       });
-      rows.push(row);
-      curve = mergeCalibrationBuckets(
-        curve,
-        calibrationBuckets({
+
+      let flat: PredictedSongLike[] | null = null;
+      let sampleSize = corpus.length;
+      let didScoreSongs = true;
+
+      if (bucketStyle === 'stable') {
+        const prediction = predictSetlist({
+          performerId: tsRow.performerId,
+          targetDate: tsRow.performanceDate,
+          corpus,
+        });
+        if (prediction.style !== 'stable') continue;
+        flat = flattenPrediction(prediction);
+        sampleSize = prediction.sampleSize;
+      } else if (bucketStyle === 'theatrical') {
+        const prediction = predictTheatrical({
+          performerId: tsRow.performerId,
+          targetDate: tsRow.performanceDate,
+          corpus,
+        });
+        flat = flattenTheatrical(prediction);
+        sampleSize = prediction.sampleSize;
+      } else if (bucketStyle === 'improvised') {
+        // Improvised model emits no song-level prediction — track the
+        // show-mode hit so the post-run aggregation can produce a
+        // calibration delta for the release gate. Skip the song-level
+        // brier/recall computation.
+        const prediction = predictImprovised({
+          performerId: tsRow.performerId,
+          targetDate: tsRow.performanceDate,
+          corpus,
+        });
+        if (prediction.showModes.length > 0) {
+          const topMode = prediction.showModes[0]!;
+          // The actual show's mode is derived by re-running the
+          // clusterer with the actual length appended (so we map the
+          // historical truth into the same label space). Cheap because
+          // the clusterer is O(N·iter) over a tiny window.
+          const actualLength = actualTitles.length;
+          const hit = isClosestMode({
+            actualLength,
+            modes: prediction.showModes,
+          })?.label === topMode.label;
+          improvisedObs.push({ topModeProb: topMode.probability, hit });
+        }
+        didScoreSongs = false;
+      } else if (bucketStyle === 'rotating') {
+        // Rotating is the Phase 5 path — there's no scored gap-chart
+        // mode yet (recall-at-15 is the primary metric, and the
+        // rotating prediction doesn't emit per-song probabilities the
+        // brier scorer can consume directly). Phase 5 left this branch
+        // skipped; carry that forward.
+        continue;
+      }
+
+      if (didScoreSongs && flat) {
+        const row = evaluateShow({
+          tourSetlistId: tsRow.id,
+          performerId: tsRow.performerId,
+          performerName: performerName.get(tsRow.performerId) ?? 'Unknown',
+          performanceDate: tsRow.performanceDate,
           predicted: flat,
+          sampleSize,
           actualTitles,
-          binCount: 10,
-        }),
-      );
+          style: bucketStyle,
+        });
+        rows.push(row);
+        curve = mergeCalibrationBuckets(
+          curve,
+          calibrationBuckets({
+            predicted: flat,
+            actualTitles,
+            binCount: 10,
+          }),
+        );
+      }
     }
 
     const summary = summarizeRun(rows, curve);
+    // Phase 6 — splice the improvised show-mode delta into the
+    // matching summary entry (or append a fresh one when no improvised
+    // song-level prediction surfaced — the calibration metric stands
+    // on its own).
+    if (improvisedObs.length > 0) {
+      const meanTopProb =
+        improvisedObs.reduce((a, o) => a + o.topModeProb, 0) /
+        improvisedObs.length;
+      const empirical =
+        improvisedObs.reduce((a, o) => a + (o.hit ? 1 : 0), 0) /
+        improvisedObs.length;
+      const delta = Number((empirical - meanTopProb).toFixed(3));
+      const existing = summary.byStyle.find((s) => s.style === 'improvised');
+      if (existing) {
+        existing.showModeCalibrationDelta = delta;
+      } else {
+        summary.byStyle.push({
+          style: 'improvised',
+          predictions: improvisedObs.length,
+          brier: 0,
+          precisionTop10: 0,
+          recallActual: 0,
+          recallTop15: 0,
+          calibrationError: 0,
+          showModeCalibrationDelta: delta,
+        });
+      }
+    }
 
     const [inserted] = await db
       .insert(predictionEvalRuns)
@@ -373,6 +520,8 @@ export async function runDailyBacktest(
           recallTop15: style.recallTop15,
           calibrationError: style.calibrationError,
           sampleSize: style.predictions,
+          showModeCalibrationDelta:
+            style.showModeCalibrationDelta ?? null,
         },
         'Per-style eval summary',
       );

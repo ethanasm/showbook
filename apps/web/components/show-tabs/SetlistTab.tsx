@@ -11,11 +11,21 @@ import {
   RotatingSetlistView,
   RotatingGateBlocked,
 } from "./RotatingSetlistView";
+import {
+  TheatricalSetlistView,
+  TheatricalGateBlocked,
+} from "./TheatricalSetlistView";
+import {
+  ImprovisedSetlistView,
+  ImprovisedGateBlocked,
+} from "./ImprovisedSetlistView";
 import type {
+  ImprovisedPrediction,
   PredictedSetlistResult,
   RotatingPrediction,
   SongBadge,
   SongBadgesMap,
+  TheatricalPrediction,
 } from "@showbook/api";
 import "./show-tabs.css";
 
@@ -43,7 +53,12 @@ interface SetlistTabProps {
   isPast: boolean;
   artistName: string;
   /** Predicted-setlist tRPC response. Null while loading. */
-  prediction: PredictedSetlistResult | RotatingPrediction | null;
+  prediction:
+    | PredictedSetlistResult
+    | RotatingPrediction
+    | TheatricalPrediction
+    | ImprovisedPrediction
+    | null;
   /** When true, the predicted-setlist query is in-flight. */
   predictionLoading: boolean;
   /** Actual setlist (post-show). Each entry is `{ title, isEncore }`. */
@@ -74,6 +89,29 @@ interface SetlistTabProps {
    * is replaced with the labeled placeholder ("model not calibrated").
    */
   rotatingGateBlocked?: boolean;
+  /**
+   * Phase 6 — when true, the theatrical-style display variant renders
+   * for `prediction.style === 'theatrical'` payloads. Resolved at the
+   * page level from `SetlistIntelTheatricalDisplay` && release-gate
+   * verdict.
+   */
+  theatricalDisplayEnabled?: boolean;
+  /**
+   * Phase 6 — when true, the theatrical flag is wired ON but the
+   * release-gate hasn't cleared, so the theatrical subtree is replaced
+   * with the labeled placeholder.
+   */
+  theatricalGateBlocked?: boolean;
+  /**
+   * Phase 6 — when true, the improvised-style display variant renders
+   * for `prediction.style === 'improvised'` payloads.
+   */
+  improvisedDisplayEnabled?: boolean;
+  /**
+   * Phase 6 — when true, the improvised flag is wired ON but the
+   * show-mode calibration check hasn't cleared.
+   */
+  improvisedGateBlocked?: boolean;
 }
 
 /** Resolve a row's title to (songId, badge) for the past variant. */
@@ -128,6 +166,10 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
     trackPreviews,
     rotatingDisplayEnabled,
     rotatingGateBlocked,
+    theatricalDisplayEnabled,
+    theatricalGateBlocked,
+    improvisedDisplayEnabled,
+    improvisedGateBlocked,
   } = props;
   const [spoilerShown, setSpoilerShown] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
@@ -169,6 +211,43 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
       return <RotatingGateBlocked />;
     }
     return <RotatingSetlistView prediction={prediction} />;
+  }
+
+  if (prediction.style === "theatrical") {
+    if (!theatricalDisplayEnabled || theatricalGateBlocked) {
+      return <TheatricalGateBlocked />;
+    }
+    // Theatrical KEEPS the hype playlist — the deterministic setlist
+    // is hype-worthy and ordering-stable per Phase 6 §1.
+    const totalCount =
+      prediction.deterministicSetlist.length +
+      prediction.rotatingSlots.length;
+    const approxMinutes = totalCount > 0 ? Math.round(totalCount * 4) : null;
+    return (
+      <div>
+        {hypePlaylistEnabled && (
+          <SectionFrame title="Hype playlist">
+            <HypePlaylistCard
+              showId={props.showId}
+              kind="hype"
+              artist={artistName}
+              trackCount={totalCount}
+              approxMinutes={approxMinutes}
+            />
+          </SectionFrame>
+        )}
+        <TheatricalSetlistView prediction={prediction} />
+      </div>
+    );
+  }
+
+  if (prediction.style === "improvised") {
+    if (!improvisedDisplayEnabled || improvisedGateBlocked) {
+      return <ImprovisedGateBlocked />;
+    }
+    // Per SI-05: HypePlaylistCard is HIDDEN for improvised — same
+    // reasoning as rotating, the model can't pick the next 25 songs.
+    return <ImprovisedSetlistView prediction={prediction} />;
   }
 
   const core = prediction.core;
