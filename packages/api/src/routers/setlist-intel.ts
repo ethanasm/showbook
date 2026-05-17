@@ -90,8 +90,9 @@ import {
   SpotifyError,
   type SpotifyArtist,
 } from '../spotify';
+import { ITunesError, searchTrackPreview as searchITunesPreview } from '../itunes';
 import { diffSpotifyFollows } from '../spotify-follows-diff';
-import { enforceRateLimit } from '../rate-limit';
+import { enforceRateLimit, isRateLimited } from '../rate-limit';
 
 const log = child({ component: 'api.setlist-intel' });
 
@@ -745,12 +746,29 @@ export const setlistIntelRouter = router({
     }),
 
   /**
-   * Lazy-resolve a single setlist row's Spotify preview + URI on
-   * tap. Persists the result to `songs.spotify_preview_url` /
-   * `songs.spotify_track_id` so future visits skip the search. The
-   * sentinel `__none__` value on `spotify_track_id` is preserved
-   * from the Phase-3 resolver — re-tapping a known-miss returns
-   * `{ previewUrl: null, spotifyTrackId: null }` without re-searching.
+   * Lazy-resolve a single setlist row's preview clip + Spotify URI on
+   * tap. Tries Spotify Search first (so the Spotify track id is cached
+   * for "Open in Spotify" / Web Playback SDK use), then falls back to
+   * Apple's iTunes Search API when Spotify returns the track without a
+   * `preview_url` — a near-universal outcome since Spotify's Nov 2024
+   * deprecation of the field for new apps.
+   *
+   * Persists the final preview URL (Spotify-served OR iTunes-served)
+   * in `songs.spotify_preview_url` plus a `preview_resolved_at`
+   * timestamp so the cache check on the next tap can distinguish
+   * "we tried both sources and got nothing" from "we never tried".
+   *
+   * Returns `{ previewUrl, spotifyTrackId }`. Either can be null:
+   *   - `previewUrl: null` — both providers came up empty
+   *   - `spotifyTrackId: null` — Spotify had no match (iTunes URL may
+   *     still be present for inline playback)
+   *
+   * Rate-limit shape:
+   *   - 60/min per user on the procedure (existing).
+   *   - 20/min per user on the iTunes hop (mirrors Apple's IP limit).
+   *     iTunes 403 or per-user rate-limit hit leaves the row's
+   *     `preview_resolved_at` null so a subsequent tap can retry
+   *     instead of caching the transient miss as permanent.
    */
   resolveTrackPreview: protectedProcedure
     .input(
@@ -793,13 +811,13 @@ export const setlistIntelRouter = router({
         show.showPerformers.find((sp) => sp.performer.id === headlinerId)
           ?.performer.name ?? '';
 
-      // Catalog cache first — re-tapping a row should never hit Spotify.
       const titleLower = input.title.toLowerCase();
       const [cached] = await ctx.db
         .select({
           id: songs.id,
           previewUrl: songs.spotifyPreviewUrl,
           spotifyTrackId: songs.spotifyTrackId,
+          previewResolvedAt: songs.previewResolvedAt,
         })
         .from(songs)
         .where(
@@ -809,7 +827,12 @@ export const setlistIntelRouter = router({
           ),
         )
         .limit(1);
-      if (cached?.previewUrl || cached?.spotifyTrackId === '__none__') {
+
+      // Cache hit: a previous run already settled this row. Either we
+      // have a playable URL OR we've recorded that both providers came
+      // up empty. `__none__` rows from before this change get a second
+      // chance via iTunes — they fall through to the lookup below.
+      if (cached?.previewUrl || cached?.previewResolvedAt) {
         return {
           previewUrl: cached.previewUrl ?? null,
           spotifyTrackId:
@@ -819,53 +842,114 @@ export const setlistIntelRouter = router({
         };
       }
 
-      let track;
-      try {
-        track = await searchTrack(accessToken, headlinerName, input.title);
-      } catch (err) {
-        log.warn(
-          {
-            err,
-            event: 'spotify.preview.unavailable',
-            userId,
-            showId: input.showId,
-            title: input.title,
-          },
-          'Track preview lookup failed',
-        );
-        return { previewUrl: null, spotifyTrackId: null };
-      }
-
-      if (!track) {
-        // Cache the negative as `__none__` so re-taps don't re-search.
-        if (cached) {
-          await ctx.db
-            .update(songs)
-            .set({ spotifyTrackId: '__none__' })
-            .where(eq(songs.id, cached.id));
+      // Step 1 — Spotify. Skip the network hop when we already cached
+      // the track id from a previous tap (the existing-row fallback
+      // path: Spotify ran before iTunes was wired in).
+      let spotifyTrackId: string | null = null;
+      let spotifyPreviewUrl: string | null = null;
+      let spotifyDurationMs: number | null = null;
+      if (cached?.spotifyTrackId === '__none__') {
+        spotifyTrackId = null; // Confirmed Spotify miss in a prior run.
+      } else if (cached?.spotifyTrackId) {
+        spotifyTrackId = cached.spotifyTrackId;
+        spotifyPreviewUrl = cached.previewUrl ?? null;
+      } else {
+        try {
+          const track = await searchTrack(
+            accessToken,
+            headlinerName,
+            input.title,
+          );
+          if (track) {
+            spotifyTrackId = track.id;
+            spotifyPreviewUrl = track.previewUrl;
+            spotifyDurationMs = track.durationMs;
+          }
+        } catch (err) {
+          log.warn(
+            {
+              err,
+              event: 'spotify.preview.unavailable',
+              userId,
+              showId: input.showId,
+              title: input.title,
+              reason: 'spotify_search_error',
+            },
+            'Spotify search threw',
+          );
+          // Surface the failure rather than caching as resolved — the
+          // next tap retries Spotify too.
+          return { previewUrl: null, spotifyTrackId: null };
         }
-        log.info(
-          {
-            event: 'spotify.preview.unavailable',
-            userId,
-            title: input.title,
-            reason: 'not_found',
-          },
-          'No Spotify match for track',
-        );
-        return { previewUrl: null, spotifyTrackId: null };
       }
 
-      // Persist the catalog row. We upsert by (performerId, lower(title))
-      // to interoperate with the song-index-rebuild job, which is the
-      // authoritative writer for everything else on the songs row.
+      // Step 2 — iTunes fallback whenever we don't already have a URL.
+      let finalPreviewUrl: string | null = spotifyPreviewUrl;
+      let previewSource: 'spotify' | 'itunes' | 'none' = finalPreviewUrl
+        ? 'spotify'
+        : 'none';
+      let itunesDurationMs: number | null = null;
+      let itunesRateLimited = false;
+      if (!finalPreviewUrl) {
+        if (
+          isRateLimited(`itunes:${userId}`, { max: 20, windowMs: 60_000 })
+        ) {
+          itunesRateLimited = true;
+          log.warn(
+            {
+              event: 'itunes.preview.user_rate_limited',
+              userId,
+              title: input.title,
+            },
+            'iTunes preview lookup skipped — per-user rate limit',
+          );
+        } else {
+          try {
+            const itunes = await searchITunesPreview(
+              headlinerName,
+              input.title,
+            );
+            if (itunes?.previewUrl) {
+              finalPreviewUrl = itunes.previewUrl;
+              previewSource = 'itunes';
+              itunesDurationMs = itunes.durationMs;
+            }
+          } catch (err) {
+            if (err instanceof ITunesError && err.status === 403) {
+              itunesRateLimited = true;
+            } else {
+              log.warn(
+                {
+                  err,
+                  event: 'itunes.preview.failed',
+                  userId,
+                  title: input.title,
+                },
+                'iTunes preview lookup threw',
+              );
+            }
+          }
+        }
+      }
+
+      // Step 3 — persist. `preview_resolved_at` stays null when iTunes
+      // was rate-limited so the next tap retries instead of caching
+      // the transient miss as permanent.
+      const now = new Date();
+      const resolvedAt = itunesRateLimited ? null : now;
+      const trackIdToStore = spotifyTrackId ?? '__none__';
+      const durationMsToStore = spotifyDurationMs ?? itunesDurationMs;
+
       if (cached) {
         await ctx.db
           .update(songs)
           .set({
-            spotifyTrackId: track.id,
-            spotifyPreviewUrl: track.previewUrl,
-            durationMs: track.durationMs,
+            spotifyTrackId: trackIdToStore,
+            spotifyPreviewUrl: finalPreviewUrl,
+            ...(durationMsToStore != null && {
+              durationMs: durationMsToStore,
+            }),
+            previewResolvedAt: resolvedAt,
           })
           .where(eq(songs.id, cached.id));
       } else {
@@ -874,9 +958,10 @@ export const setlistIntelRouter = router({
           .values({
             performerId: headlinerId,
             title: input.title,
-            spotifyTrackId: track.id,
-            spotifyPreviewUrl: track.previewUrl,
-            durationMs: track.durationMs,
+            spotifyTrackId: trackIdToStore,
+            spotifyPreviewUrl: finalPreviewUrl,
+            durationMs: durationMsToStore,
+            previewResolvedAt: resolvedAt,
           })
           .onConflictDoNothing();
       }
@@ -886,14 +971,16 @@ export const setlistIntelRouter = router({
           event: 'spotify.preview.resolved',
           userId,
           title: input.title,
-          hasPreview: !!track.previewUrl,
+          hasPreview: !!finalPreviewUrl,
+          source: previewSource,
+          itunesRateLimited,
         },
         'Track preview resolved',
       );
 
       return {
-        previewUrl: track.previewUrl,
-        spotifyTrackId: track.id,
+        previewUrl: finalPreviewUrl,
+        spotifyTrackId,
       };
     }),
 
