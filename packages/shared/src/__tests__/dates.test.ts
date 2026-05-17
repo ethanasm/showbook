@@ -11,6 +11,7 @@ import {
   formatShowDate,
   formatYear,
   isDatePast,
+  parseLocalDate,
   toSetlistFmDate,
 } from "../utils/dates";
 
@@ -145,6 +146,33 @@ test("formatYear: extracts year", () => {
 test("isDatePast: today is not past", () => {
   const today = new Date().toISOString().slice(0, 10);
   assert.equal(isDatePast(today), false);
+});
+
+// Regression: zone-less YYYY-MM-DD for today's local date was being parsed as
+// UTC midnight, which is "yesterday" in zones west of UTC — `isDatePast`
+// returned true for today's show in PT. Anchor with the local calendar date.
+test("isDatePast: today's local calendar date is not past (TZ-safe)", () => {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  const todayLocal = `${y}-${m}-${d}`;
+  assert.equal(isDatePast(todayLocal), false);
+});
+
+// ── parseLocalDate ──────────────────────────────────────────────────────
+
+test("parseLocalDate: zone-less YYYY-MM-DD anchors to local midnight", () => {
+  const d = parseLocalDate("2024-06-15");
+  assert.equal(d.getFullYear(), 2024);
+  assert.equal(d.getMonth(), 5);
+  assert.equal(d.getDate(), 15);
+  assert.equal(d.getHours(), 0);
+});
+
+test("parseLocalDate: passes through Date instances unchanged", () => {
+  const input = new Date(2024, 5, 15, 12);
+  assert.equal(parseLocalDate(input), input);
 });
 
 // ── countdown ───────────────────────────────────────────────────────────

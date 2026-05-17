@@ -28,7 +28,8 @@ export function formatYear(date: string | Date): number {
 }
 
 export function isDatePast(date: string | Date): boolean {
-  const d = new Date(date);
+  const d = parseLocalDate(date);
+  d.setHours(0, 0, 0, 0);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return d < today;
@@ -56,7 +57,11 @@ export function toSetlistFmDate(date: string | Date): string {
 // `new Date('2024-01-01')` causes (it gets parsed as UTC midnight).
 // ---------------------------------------------------------------------------
 
-function parseLocalDate(date: string | Date): Date {
+// Parse a zone-less calendar date (YYYY-MM-DD) at local midnight. Bare
+// `new Date('2024-01-01')` parses as UTC midnight, which shifts the day in
+// zones west of UTC — exported so callers comparing show dates against
+// `new Date()` (today) don't reintroduce that bug.
+export function parseLocalDate(date: string | Date): Date {
   if (date instanceof Date) return date;
   return new Date(date.includes('T') ? date : `${date}T00:00:00`);
 }
