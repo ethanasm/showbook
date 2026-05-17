@@ -50,6 +50,14 @@ import {
   predictRotating,
   type RotatingPrediction,
 } from '../setlist-predict-rotating';
+import {
+  predictTheatrical,
+  type TheatricalPrediction,
+} from '../setlist-predict-theatrical';
+import {
+  predictImprovised,
+  type ImprovisedPrediction,
+} from '../setlist-predict-improvised';
 import { detectMultiNightRun } from '../multi-night-run-detector';
 
 const log = child({ component: 'api.setlist-intel' });
@@ -82,7 +90,13 @@ export const setlistIntelRouter = router({
    */
   predictedSetlist: protectedProcedure
     .input(predictedSetlistInput)
-    .query(async ({ ctx, input }): Promise<HotPrediction | ColdPrediction | RotatingPrediction> => {
+    .query(async ({ ctx, input }): Promise<
+      | HotPrediction
+      | ColdPrediction
+      | RotatingPrediction
+      | TheatricalPrediction
+      | ImprovisedPrediction
+    > => {
       const userId = ctx.session.user.id;
       const show = await ctx.db.query.shows.findFirst({
         where: and(eq(shows.id, input.showId), eq(shows.userId, userId)),
@@ -213,6 +227,94 @@ export const setlistIntelRouter = router({
               style: 'rotating',
             },
             'rotating predicted-setlist failed',
+          );
+          return coldPrediction('no_corpus', perf.name);
+        }
+      }
+
+      if (effectiveStyle === 'theatrical') {
+        try {
+          const { setlists } = await loadCorpusForPrediction({
+            performerId: headlinerId,
+            targetDate: show.date,
+          });
+          if (setlists.length === 0) {
+            return coldPrediction('no_corpus', perf.name);
+          }
+          const prediction = predictTheatrical({
+            performerId: headlinerId,
+            targetDate: show.date,
+            corpus: setlists,
+          });
+          log.info(
+            {
+              event: 'setlist.predict.served',
+              performerId: headlinerId,
+              targetDate: show.date,
+              style: prediction.style,
+              confidence: prediction.confidence,
+              sampleSize: prediction.sampleSize,
+              rotatingSlotCount: prediction.rotatingSlots.length,
+              deterministicCount: prediction.deterministicSetlist.length,
+              cache: 'bypass',
+            },
+            'predicted-setlist served (theatrical)',
+          );
+          return prediction;
+        } catch (err) {
+          log.error(
+            {
+              event: 'setlist.predict.failed',
+              err,
+              showId: input.showId,
+              performerId: headlinerId,
+              style: 'theatrical',
+            },
+            'theatrical predicted-setlist failed',
+          );
+          return coldPrediction('no_corpus', perf.name);
+        }
+      }
+
+      if (effectiveStyle === 'improvised') {
+        try {
+          const { setlists } = await loadCorpusForPrediction({
+            performerId: headlinerId,
+            targetDate: show.date,
+          });
+          if (setlists.length === 0) {
+            return coldPrediction('no_corpus', perf.name);
+          }
+          const prediction = predictImprovised({
+            performerId: headlinerId,
+            targetDate: show.date,
+            corpus: setlists,
+          });
+          log.info(
+            {
+              event: 'setlist.predict.served',
+              performerId: headlinerId,
+              targetDate: show.date,
+              style: prediction.style,
+              confidence: prediction.confidence,
+              sampleSize: prediction.sampleSize,
+              showModeCount: prediction.showModes.length,
+              topShowMode: prediction.showModes[0]?.label ?? null,
+              cache: 'bypass',
+            },
+            'predicted-setlist served (improvised)',
+          );
+          return prediction;
+        } catch (err) {
+          log.error(
+            {
+              event: 'setlist.predict.failed',
+              err,
+              showId: input.showId,
+              performerId: headlinerId,
+              style: 'improvised',
+            },
+            'improvised predicted-setlist failed',
           );
           return coldPrediction('no_corpus', perf.name);
         }
@@ -446,6 +548,8 @@ export const setlistIntelRouter = router({
         ] satisfies ReleaseGateBreach[],
         rotatingEvaluable: false,
         stableEvaluable: false,
+        theatricalEvaluable: false,
+        improvisedEvaluable: false,
         latestRunId: null,
         latestRunAt: null,
       };
@@ -456,6 +560,7 @@ export const setlistIntelRouter = router({
         brier: number;
         recallTop15: number;
         predictions: number;
+        showModeCalibrationDelta?: number | null;
       }>) ?? [],
       calibrationCurve: (row.calibrationCurve as Array<{
         lower: number;
