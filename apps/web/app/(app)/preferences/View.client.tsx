@@ -454,6 +454,28 @@ function displayToTheme(display: string): "system" | "light" | "dark" {
   return display.toLowerCase() as "system" | "light" | "dark";
 }
 
+// Phase 11 §15o — spoiler-blur preference options + serialization.
+const SETLIST_SPOILERS_OPTIONS = ["Style default", "Always blur", "Never blur"];
+
+function setlistSpoilersToDisplay(value: string | null | undefined): string {
+  switch (value) {
+    case "always_blur":
+      return "Always blur";
+    case "never_blur":
+      return "Never blur";
+    default:
+      return "Style default";
+  }
+}
+
+function displayToSetlistSpoilers(
+  display: string,
+): "always_blur" | "never_blur" | "style_default" {
+  if (display === "Always blur") return "always_blur";
+  if (display === "Never blur") return "never_blur";
+  return "style_default";
+}
+
 function VenueFollowModal({ onClose, onFollowed }: { onClose: () => void; onFollowed: () => void }) {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -755,12 +777,34 @@ export default function PreferencesView() {
             <SettingRow
               label="Compact mode"
               description="denser rows in list views"
-              last
             >
               <Toggle
                 checked={prefs?.compactMode ?? false}
                 onChange={(value) => updatePrefs.mutate({ compactMode: value })}
                 disabled={updatePrefs.isPending}
+              />
+            </SettingRow>
+
+            {/* Phase 11 §15o — spoiler-blur preference. 'Style default'
+                respects the per-prediction blur (stable + theatrical
+                default ON; rotating + improvised default OFF).
+                'Always blur' / 'Never blur' force the behavior across
+                the predicted-setlist tab AND the daily digest tile. */}
+            <SettingRow
+              label="Setlist spoilers"
+              description="blur predicted song titles until you reveal"
+              last
+            >
+              <SegmentedControl
+                options={SETLIST_SPOILERS_OPTIONS}
+                selected={setlistSpoilersToDisplay(
+                  prefs?.setlistSpoilers ?? "style_default",
+                )}
+                onChange={(value) =>
+                  updatePrefs.mutate({
+                    setlistSpoilers: displayToSetlistSpoilers(value),
+                  })
+                }
               />
             </SettingRow>
           </div>

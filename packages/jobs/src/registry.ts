@@ -26,6 +26,9 @@ import { runDailyBacktest } from './prediction-eval';
 import { runSetlistStyleRefresh } from './setlist-style-refresh';
 import { runSpotifyRecentlyPlayed } from './spotify-recently-played';
 import { runYearEndSoundtrack } from './year-end-soundtrack';
+import { runAlbumMetadataFill } from './album-metadata-fill';
+import { runSetlistTourWatch } from './setlist-tour-watch';
+import { runSpotifyPurgeRevokedTokens } from './spotify-purge-revoked-tokens';
 // @showbook/scrapers pulls in Playwright, which the Next.js dev server
 // tries to bundle. Import it lazily inside the handler so it stays out of
 // the web app's static dependency graph.
@@ -52,6 +55,9 @@ export const JOBS = {
   SETLIST_STYLE_REFRESH: 'enrichment/setlist-style-refresh',
   SPOTIFY_RECENTLY_PLAYED: 'spotify/recently-played',
   YEAR_END_SOUNDTRACK: 'spotify/year-end-soundtrack',
+  ALBUM_METADATA_FILL: 'enrichment/album-metadata-fill',
+  SETLIST_TOUR_WATCH: 'enrichment/setlist-tour-watch',
+  SPOTIFY_PURGE_REVOKED_TOKENS: 'spotify/purge-revoked-tokens',
 } as const;
 
 // pg-boss v10 ignores constructor-level retry/expiration options when
@@ -138,6 +144,9 @@ const QUEUE_OPTIONS: Record<string, QueueOptions> = {
   'enrichment/setlist-style-refresh': LONG_BATCH_CRON,
   'spotify/recently-played': LONG_BATCH_CRON,
   'spotify/year-end-soundtrack': LONG_BATCH_CRON,
+  'enrichment/album-metadata-fill': LONG_BATCH_CRON,
+  'enrichment/setlist-tour-watch': LONG_BATCH_CRON,
+  'spotify/purge-revoked-tokens': LONG_BATCH_CRON,
 };
 
 const log = child({ component: 'jobs.registry' });
@@ -604,6 +613,54 @@ async function notificationsDailyDigestHandler(jobs: PgBoss.Job[]) {
   }
 }
 
+async function albumMetadataFillHandler(jobs: PgBoss.Job[]) {
+  for (const job of jobs) {
+    await runJob(JOBS.ALBUM_METADATA_FILL, job, async () => {
+      const result = await runAlbumMetadataFill();
+      log.info(
+        {
+          event: 'album_metadata_fill.summary',
+          attempted: result.attempted,
+          performersUpdated: result.performersUpdated,
+          albumsUpserted: result.albumsUpserted,
+          failed: result.failed,
+        },
+        'album-metadata-fill complete',
+      );
+      return result;
+    });
+  }
+}
+
+async function setlistTourWatchHandler(jobs: PgBoss.Job[]) {
+  for (const job of jobs) {
+    await runJob(JOBS.SETLIST_TOUR_WATCH, job, async () => {
+      const result = await runSetlistTourWatch();
+      log.info(
+        {
+          event: 'setlist.tour_watch.summary',
+          attempted: result.attempted,
+          refreshed: result.refreshed,
+          skippedNoRun: result.skippedNoRun,
+          skippedFresh: result.skippedFresh,
+          failed: result.failed,
+        },
+        'tour-watch sweep complete',
+      );
+      return result;
+    });
+  }
+}
+
+async function spotifyPurgeRevokedTokensHandler(jobs: PgBoss.Job[]) {
+  for (const job of jobs) {
+    await runJob(JOBS.SPOTIFY_PURGE_REVOKED_TOKENS, job, async () => {
+      const result = await runSpotifyPurgeRevokedTokens();
+      return result;
+    });
+  }
+}
+
 // Guard so a second invocation of `registerAllJobs` against the same
 // boss instance is a no-op rather than re-registering every queue's
 // worker on top of the existing one. Empirically (Axiom over
@@ -668,6 +725,9 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   await boss.work(JOBS.SETLIST_STYLE_REFRESH, setlistStyleRefreshHandler);
   await boss.work(JOBS.SPOTIFY_RECENTLY_PLAYED, spotifyRecentlyPlayedHandler);
   await boss.work(JOBS.YEAR_END_SOUNDTRACK, yearEndSoundtrackHandler);
+  await boss.work(JOBS.ALBUM_METADATA_FILL, albumMetadataFillHandler);
+  await boss.work(JOBS.SETLIST_TOUR_WATCH, setlistTourWatchHandler);
+  await boss.work(JOBS.SPOTIFY_PURGE_REVOKED_TOKENS, spotifyPurgeRevokedTokensHandler);
 
   // Backstop sweep for the orphan-cleanup triggers (0002 / 0014 / 0023 /
   // 0025). Runs before shows-nightly so the nightly transition operates on
@@ -720,6 +780,17 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   // against the users.spotify_year_playlists map so re-runs overwrite
   // instead of creating duplicates.
   await boss.schedule(JOBS.YEAR_END_SOUNDTRACK, '0 3 31 12 *', {}, { tz: 'America/New_York' });
+  // Phase 11 §15m — album-metadata-fill at 02:30 ET nightly, before the
+  // 04:45 ET corpus-fill refresh so album-drop synthetic rows reference
+  // fresh `albums.fetched_at` signatures.
+  await boss.schedule(JOBS.ALBUM_METADATA_FILL, '30 2 * * *', {}, { tz: 'America/New_York' });
+  // Phase 11 §15l — every-3h tour-watch sweep. Per-performer dedup via
+  // `last_watch_refresh_at` keeps the same performer from firing twice in
+  // a calendar day even if the cron lands eight times.
+  await boss.schedule(JOBS.SETLIST_TOUR_WATCH, '0 */3 * * *', {}, { tz: 'America/New_York' });
+  // SI-10 — purge revoked Spotify tokens older than 30 days. Weekly on
+  // Sunday 02:00 ET, well clear of the morning digest window.
+  await boss.schedule(JOBS.SPOTIFY_PURGE_REVOKED_TOKENS, '0 2 * * 0', {}, { tz: 'America/New_York' });
 
   log.info(
     { event: 'pgboss.registered', jobs: Object.values(JOBS) },

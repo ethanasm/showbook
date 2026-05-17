@@ -44,6 +44,10 @@
 
 import type { PerformerSetlist } from '@showbook/shared';
 import type { CorpusRow } from './setlist-predict';
+import {
+  setCountFromSingleCount,
+  type SetCountPrediction,
+} from './setlist-predict-shared';
 
 const RECENT_WINDOW = 20;
 const FIXED_TOP_SHARE = 0.95;
@@ -93,6 +97,10 @@ export interface TheatricalPrediction {
   rotatingSlots: TheatricalRotatingSlot[];
   /** Mean songs per show — useful for the UI's "1 set · ~39 songs". */
   expectedSongCount: number;
+  /** Phase 11 §15f — uniform set/song/duration prediction across all
+   *  styles. For theatrical, setCount is always 1 (one scripted act
+   *  sequence) and song count comes from the deterministic-set length. */
+  setCountPrediction: SetCountPrediction | null;
   /** Number of corpus setlists used. */
   sampleSize: number;
   /** Always near-1.0 for theatrical — the deterministic part is
@@ -238,6 +246,8 @@ export function predictTheatrical(input: PredictTheatricalInput): TheatricalPred
     deterministicSetlist,
     rotatingSlots,
     expectedSongCount,
+    setCountPrediction:
+      expectedSongCount > 0 ? setCountFromSingleCount(expectedSongCount) : null,
     sampleSize,
     confidence: Number(confidence.toFixed(2)),
     tourId,

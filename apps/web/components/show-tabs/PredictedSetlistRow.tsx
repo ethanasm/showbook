@@ -14,10 +14,19 @@ interface PredictedSetlistRowProps {
   showPreviewSlot?: boolean;
   /** Phase 2: optional inline badges. When present, render the 🆕 / 🎯
    *  chips on the right of the row and (if `songId` is provided) make
-   *  the title tap through to the song detail page. */
+   *  the title tap through to the song detail page.
+   *  Phase 11 §15j adds 💛 / 🎯 (first-time) / ⭐ personal-weight chips
+   *  to the same row. The 🎯 here is distinct from the existing
+   *  "rare catch" chip — first-time is per-user, rare is per-corpus. */
   badge?: {
     firstTime: boolean;
     rareCatch: { fractionPct: number } | null;
+    /** Phase 11 §15j — 💛 song saved in user's Spotify library. */
+    saved?: boolean;
+    /** Phase 11 §15j — 🎯 user has never heard this song live before. */
+    personalFirstTime?: boolean;
+    /** Phase 11 §15j — ⭐ song is in user's Spotify long-term top 50. */
+    topTrack?: boolean;
   };
   /** Phase 2: when set, the title becomes a link to /songs/[songId]. */
   songId?: string | null;
@@ -118,6 +127,33 @@ export function PredictedSetlistRow({
               title={`Played in ${badge.rareCatch.fractionPct}% of recent setlists`}
             >
               🎯 Rare ({badge.rareCatch.fractionPct}%)
+            </span>
+          )}
+          {badge?.saved && (
+            <span
+              className="predicted-row__badge predicted-row__badge--saved"
+              data-testid="predicted-row-badge-saved"
+              title="Saved in your Spotify library"
+            >
+              💛 Saved
+            </span>
+          )}
+          {badge?.personalFirstTime && (
+            <span
+              className="predicted-row__badge predicted-row__badge--personal-first-time"
+              data-testid="predicted-row-badge-personal-first-time"
+              title="You've never heard this song live"
+            >
+              🎯 First time
+            </span>
+          )}
+          {badge?.topTrack && (
+            <span
+              className="predicted-row__badge predicted-row__badge--top-track"
+              data-testid="predicted-row-badge-top-track"
+              title="In your Spotify long-term top 50"
+            >
+              ⭐ Top track
             </span>
           )}
         </div>

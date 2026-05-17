@@ -22,6 +22,7 @@
 import type { PerformerSetlist } from '@showbook/shared';
 import type { CorpusRow, SongRole } from './setlist-predict';
 import type { RunContext } from './multi-night-run-detector';
+import { computeSetCount, type SetCountPrediction } from './setlist-predict-shared';
 
 const MS_PER_DAY = 86_400_000;
 const RECENT_WINDOW = 10; // "in the last 10 setlists"
@@ -89,6 +90,9 @@ export interface RotatingPrediction {
   sampleSize: number;
   tourName: string | null;
   tourId: string | null;
+  /** Phase 11 §15f — uniform set/song/duration prediction surfaced
+   *  inline as "{setCount} sets · ~{p50} songs · ~{minutes} min". */
+  setCountPrediction: SetCountPrediction | null;
 }
 
 export type RotatingPredictionResult = RotatingPrediction;
@@ -243,6 +247,7 @@ export function predictRotating(input: PredictRotatingInput): RotatingPrediction
     sampleSize: corpus.length,
     tourId,
     tourName,
+    setCountPrediction: computeSetCount(corpus),
   };
 }
 

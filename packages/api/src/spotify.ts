@@ -231,6 +231,128 @@ export async function refreshSpotifyToken(
 }
 
 // ---------------------------------------------------------------------------
+// App-level (client-credentials) token — Phase 11 §15m album-metadata-fill
+// ---------------------------------------------------------------------------
+
+/**
+ * Module-level cache for the app-level access token. Spotify hands out
+ * 1-hour tokens for the `client_credentials` grant; we cache for 50
+ * minutes so the next refresh fires before expiry. The token is
+ * harmless if leaked — it grants only public catalog reads.
+ */
+let cachedAppToken: { token: string; expiresAt: number } | null = null;
+
+/**
+ * Acquire an app-level access token via the `client_credentials` flow.
+ * Used by the `album-metadata-fill` job to call public catalog
+ * endpoints (`/v1/artists/{id}/albums`, `/v1/search`) without needing
+ * any user's refresh token.
+ */
+export async function getAppAccessToken(): Promise<string> {
+  const APP_TOKEN_TTL_MS = 50 * 60 * 1000;
+  if (cachedAppToken && cachedAppToken.expiresAt > Date.now()) {
+    return cachedAppToken.token;
+  }
+  const res = await fetch(TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization: basicAuthHeader(),
+    },
+    body: new URLSearchParams({ grant_type: 'client_credentials' }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new SpotifyError(
+      `Spotify app-token exchange ${res.status}`,
+      res.status,
+      detail.slice(0, 500),
+    );
+  }
+  const data = (await res.json()) as SpotifyTokenResponse;
+  cachedAppToken = {
+    token: data.access_token,
+    expiresAt: Date.now() + APP_TOKEN_TTL_MS,
+  };
+  return data.access_token;
+}
+
+export interface SpotifyAlbum {
+  id: string;
+  name: string;
+  /** YYYY or YYYY-MM or YYYY-MM-DD; we round up to the 1st of the
+   *  month when only YYYY-MM is provided. */
+  releaseDate: string;
+  /** 'album' | 'single' | 'compilation' */
+  albumType: string;
+}
+
+interface SpotifyAlbumRaw {
+  id: string;
+  name: string;
+  release_date: string;
+  release_date_precision?: 'day' | 'month' | 'year';
+  album_type: string;
+}
+
+/**
+ * Public catalog: fetch an artist's latest albums (newest first).
+ * Excludes compilations + features. Used by `album-metadata-fill`.
+ */
+export async function getArtistAlbums(
+  artistId: string,
+  accessToken: string,
+  opts: { limit?: number } = {},
+): Promise<SpotifyAlbum[]> {
+  const limit = Math.max(1, Math.min(50, opts.limit ?? 5));
+  const url = `${API_BASE}/artists/${encodeURIComponent(artistId)}/albums?include_groups=album,single&limit=${limit}&market=US`;
+  const res = await spotifyFetch(url, accessToken);
+  if (!res.ok) {
+    throw new SpotifyError(`Spotify getArtistAlbums ${res.status}`, res.status);
+  }
+  const data = (await res.json()) as { items: SpotifyAlbumRaw[] };
+  return data.items.map((a) => ({
+    id: a.id,
+    name: a.name,
+    releaseDate: normalizeReleaseDate(a.release_date, a.release_date_precision),
+    albumType: a.album_type,
+  }));
+}
+
+function normalizeReleaseDate(
+  raw: string,
+  precision: 'day' | 'month' | 'year' | undefined,
+): string {
+  if (!raw) return raw;
+  if (precision === 'year' || /^\d{4}$/.test(raw)) return `${raw}-01-01`;
+  if (precision === 'month' || /^\d{4}-\d{2}$/.test(raw)) return `${raw}-01`;
+  return raw;
+}
+
+export interface SpotifyAlbumTracks {
+  trackIds: string[];
+}
+
+/**
+ * Fetch an album's track list (just the Spotify track ids — names are
+ * resolved separately against the `songs` table when synthesizing
+ * album-drop rows).
+ */
+export async function getAlbumTracks(
+  albumId: string,
+  accessToken: string,
+): Promise<SpotifyAlbumTracks> {
+  const url = `${API_BASE}/albums/${encodeURIComponent(albumId)}/tracks?limit=50`;
+  const res = await spotifyFetch(url, accessToken);
+  if (!res.ok) {
+    throw new SpotifyError(`Spotify getAlbumTracks ${res.status}`, res.status);
+  }
+  const data = (await res.json()) as { items: Array<{ id: string }> };
+  return { trackIds: data.items.map((t) => t.id).filter(Boolean) };
+}
+
+// ---------------------------------------------------------------------------
 // /me — current user profile
 // ---------------------------------------------------------------------------
 

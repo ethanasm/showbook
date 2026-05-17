@@ -66,6 +66,7 @@ const PHISH_PREDICTION: RotatingPrediction = {
     songsAlreadyPlayed: ['Free', 'First Tube', 'Birds of a Feather'],
     runStartDate: '2026-04-16',
   },
+  setCountPrediction: null,
 };
 
 describe('RotatingSetlistView — Phish worked example', () => {

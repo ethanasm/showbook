@@ -128,6 +128,11 @@ const updatePreferencesSchema = z.object({
   compactMode: z.boolean().optional(),
   emailNotifications: z.boolean().optional(),
   pushNotifications: z.boolean().optional(),
+  // Phase 11 §15o — spoiler-blur preference applied across the
+  // predicted-setlist tab AND the daily digest's PredictedSetlistTile.
+  setlistSpoilers: z
+    .enum(['always_blur', 'never_blur', 'style_default'])
+    .optional(),
 });
 
 const addRegionSchema = z.object({

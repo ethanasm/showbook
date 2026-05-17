@@ -12,12 +12,29 @@ import {
   Text,
 } from '@react-email/components';
 
+/** Phase 11 §15o — predicted-setlist tile data rendered below each
+ *  show row in the "Tonight" section. Built server-side by the
+ *  digest job's `renderPredictedSetlistTile` so the email template
+ *  stays presentation-only. */
+export interface PredictedSetlistTilePayload {
+  /** Always rendered: "{N} song setlist predicted ({P}%)". */
+  summary: string;
+  /** Empty when `blurred` is true. */
+  topTitles: ReadonlyArray<string>;
+  /** When true, render the curtain copy + "tap to reveal" link
+   *  instead of the title list. */
+  blurred: boolean;
+}
+
 export interface DailyDigestProps {
   displayName: string;
   todayShows: ReadonlyArray<{
     headliner: string;
     venueName: string;
     seat: string | null;
+    /** Optional predicted-setlist tile rendered below the row.
+     *  Omitted when no prediction is available. */
+    predictedSetlistTile?: PredictedSetlistTilePayload | null;
   }>;
   upcomingShows: ReadonlyArray<{
     headliner: string;
@@ -265,6 +282,61 @@ function Row({
   );
 }
 
+// Phase 11 §15o — predicted-setlist tile in the "Tonight" section.
+// Summary line is always shown; the title list is conditional on the
+// user's setlistSpoilers preference resolved upstream in the digest job.
+function PredictedSetlistTile({
+  tile,
+  appUrl,
+}: {
+  tile: PredictedSetlistTilePayload;
+  appUrl: string;
+}) {
+  return (
+    <Section style={tileStyles.wrap}>
+      <Text style={tileStyles.summary}>{tile.summary}</Text>
+      {tile.blurred ? (
+        <Text style={tileStyles.muted}>
+          Spoiler-blurred ·{' '}
+          <a href={`${appUrl}/preferences`} style={styles.footerLink}>
+            tap to reveal
+          </a>
+        </Text>
+      ) : tile.topTitles.length > 0 ? (
+        <Text style={tileStyles.titles}>
+          {tile.topTitles.join(' · ')}
+        </Text>
+      ) : null}
+    </Section>
+  );
+}
+
+const tileStyles = {
+  wrap: {
+    padding: '4px 32px 12px 32px',
+    margin: 0,
+  },
+  summary: {
+    fontSize: '13px',
+    color: C.muted,
+    margin: 0,
+    lineHeight: 1.4,
+  },
+  titles: {
+    fontSize: '13px',
+    color: C.ink,
+    margin: '4px 0 0 0',
+    lineHeight: 1.4,
+  },
+  muted: {
+    fontSize: '13px',
+    color: C.faint,
+    margin: '4px 0 0 0',
+    lineHeight: 1.4,
+    fontStyle: 'italic' as const,
+  },
+} as const;
+
 function todayDateLabel(): string {
   return new Date().toLocaleDateString('en-US', {
     weekday: 'long',
@@ -387,12 +459,19 @@ export function DailyDigest({
               <Section style={styles.section}>
                 <Text style={styles.sectionTitle}>Tonight</Text>
                 {todayShows.map((s, i) => (
-                  <Row
-                    key={`today-${i}`}
-                    headliner={s.headliner}
-                    venueName={s.venueName}
-                    accentMeta={s.seat ? `Seat · ${s.seat}` : undefined}
-                  />
+                  <div key={`today-${i}`}>
+                    <Row
+                      headliner={s.headliner}
+                      venueName={s.venueName}
+                      accentMeta={s.seat ? `Seat · ${s.seat}` : undefined}
+                    />
+                    {s.predictedSetlistTile ? (
+                      <PredictedSetlistTile
+                        tile={s.predictedSetlistTile}
+                        appUrl={appUrl}
+                      />
+                    ) : null}
+                  </div>
                 ))}
               </Section>
             </>

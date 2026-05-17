@@ -19,9 +19,14 @@
 
 import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { db } from '@showbook/db';
-import { predictionCache, predictionSnapshots, tourSetlists } from '@showbook/db';
+import { albums, predictionCache, predictionSnapshots, tourSetlists } from '@showbook/db';
 import { child } from '@showbook/observability';
-import type { PerformerSetlist } from '@showbook/shared';
+import { isFeatureOn, type PerformerSetlist } from '@showbook/shared';
+import { synthesizeAlbumDropRows } from './album-drop-synthetic';
+import {
+  computeSetCount,
+  type SetCountPrediction,
+} from './setlist-predict-shared';
 
 const log = child({ component: 'api.setlist-predict' });
 
@@ -60,6 +65,18 @@ export interface HotPrediction {
   tourName: string | null;
   tourCoverage: TourCoverage;
   spoilerBlurDefault: boolean;
+  /** Phase 11 §15f — set count + song count + duration prediction.
+   *  Null when sampleSize < 3 makes the estimate too noisy to show. */
+  setCountPrediction: SetCountPrediction | null;
+  /** Phase 11 §15e — multi-night anti-repeat context. Non-null when
+   *  the target sits inside a same-venue run AND the
+   *  SetlistIntelMultiNightGeneralized flag is ON. */
+  multiNightContext: {
+    venue: string;
+    priorNights: number;
+    songsAlreadyPlayed: string[];
+    runStartDate: string;
+  } | null;
 }
 
 export interface ColdPrediction {
@@ -77,6 +94,8 @@ export interface ColdPrediction {
   tourId: null;
   tourName: null;
   spoilerBlurDefault: false;
+  setCountPrediction: null;
+  multiNightContext: null;
 }
 
 export type ColdReason =
@@ -139,6 +158,15 @@ export interface CorpusRow {
    *  snapshots, tests) may omit this field; consumers must tolerate
    *  null/undefined. */
   venueNameRaw?: string | null;
+  /** Phase 11 §15m — true when this row was synthesized by
+   *  `synthesizeAlbumDropRows` rather than loaded from `tour_setlists`.
+   *  Synthetic rows are excluded from `tourCoverage` /
+   *  `recentLegStart` calculations so they only contribute to per-song
+   *  probability, not the headline confidence. */
+  isSynthetic?: boolean;
+  /** Album name for synthetic rows — used to render the
+   *  "expected from new album {name}" evidence string. */
+  syntheticAlbumName?: string;
 }
 
 export interface CorpusLoadResult {
@@ -163,6 +191,14 @@ export interface CorpusLoadResult {
 export async function loadCorpusForPrediction(opts: {
   performerId: string;
   targetDate: string;
+  /** Phase 11 §15r — when set, the corpus is filtered to rows whose
+   *  song-count heuristic matches the preferred show kind. `festival`
+   *  prefers rows with songCount ≤ 16 (typical festival set length);
+   *  `headline` prefers rows with songCount ≥ 14. Falls through to
+   *  the full corpus when fewer than 3 rows match the preferred kind,
+   *  so a niche-festival prediction with no festival corpus still
+   *  uses the headline corpus rather than empty. */
+  prefer?: 'festival' | 'headline';
 }): Promise<CorpusLoadResult> {
   const earliest = new Date(new Date(opts.targetDate).getTime() - TIER_E_DAYS * MS_PER_DAY)
     .toISOString()
@@ -199,21 +235,68 @@ export async function loadCorpusForPrediction(opts: {
       .from(tourSetlists)
       .where(eq(tourSetlists.performerId, opts.performerId));
 
+    // Phase 11 §15r — extend the cache signature to include the latest
+    // `albums.fetched_at` so a fresh album-metadata-fill invalidates
+    // cached predictions on the next read (album-drop synthetic rows
+    // would otherwise stay invisible until tour_setlists changed).
+    const [albumSigRow] = await tx
+      .select({
+        signature: sql<Date | null>`MAX(${albums.fetchedAt})`,
+      })
+      .from(albums)
+      .where(eq(albums.performerId, opts.performerId));
+
+    const allRows: CorpusRow[] = rows.map((r) => ({
+      id: r.id,
+      performerId: r.performerId,
+      performanceDate: r.performanceDate,
+      tourId: r.tourId,
+      tourName: r.tourName,
+      setlist: r.setlist as PerformerSetlist,
+      songCount: r.songCount,
+      fetchedAt: r.fetchedAt,
+      venueNameRaw: r.venueNameRaw,
+    }));
+
+    // Phase 11 §15r — festival vs headline filter. Heuristic on
+    // songCount; tour_setlists doesn't carry kind so we infer.
+    // Falls through to the full corpus when fewer than 3 rows match
+    // the preferred kind.
+    let realRows = allRows;
+    if (opts.prefer === 'festival') {
+      const festivalRows = allRows.filter((r) => r.songCount <= 16);
+      if (festivalRows.length >= 3) realRows = festivalRows;
+    } else if (opts.prefer === 'headline') {
+      const headlineRows = allRows.filter((r) => r.songCount >= 14);
+      if (headlineRows.length >= 3) realRows = headlineRows;
+    }
+
+    // Phase 11 §15m — when the album-drop flag is ON, append synthetic
+    // CorpusRow entries representing tracks from albums released
+    // within ±60 days of the target. The aggregator below treats
+    // synthetic rows as Tier-A in position but caps their weight via
+    // the `isSynthetic` flag.
+    let setlists = realRows;
+    if (isFeatureOn('SetlistIntelAlbumDrop')) {
+      const synthetic = await synthesizeAlbumDropRows({
+        performerId: opts.performerId,
+        targetDate: opts.targetDate,
+        existingCorpus: realRows,
+        tx,
+      });
+      setlists = realRows.concat(synthetic);
+    }
+
+    const realSig = sigRow?.signature
+      ? new Date(sigRow.signature).toISOString()
+      : 'empty';
+    const albumSig = albumSigRow?.signature
+      ? new Date(albumSigRow.signature).toISOString()
+      : 'empty';
+
     return {
-      setlists: rows.map((r) => ({
-        id: r.id,
-        performerId: r.performerId,
-        performanceDate: r.performanceDate,
-        tourId: r.tourId,
-        tourName: r.tourName,
-        setlist: r.setlist as PerformerSetlist,
-        songCount: r.songCount,
-        fetchedAt: r.fetchedAt,
-        venueNameRaw: r.venueNameRaw,
-      })),
-      signature: sigRow?.signature
-        ? new Date(sigRow.signature).toISOString()
-        : 'empty',
+      setlists,
+      signature: `${realSig}|${albumSig}`,
     };
   });
 }
@@ -229,6 +312,11 @@ export interface TieredSetlist {
   tourName: string | null;
   tier: TierLabel;
   weight: number;
+  /** Phase 11 §15m — synthetic album-drop rows are tiered as 'a' for
+   *  positioning but weighted at 0.3. Aggregate uses this to detect
+   *  album-only songs and override their evidence string. */
+  isSynthetic?: boolean;
+  syntheticAlbumName?: string;
   songs: string[];
   songsLower: Set<string>;
   encoreSongsLower: Set<string>;
@@ -296,7 +384,12 @@ export function bucketTiers(opts: {
     if (distance > TIER_E_DAYS) continue;
 
     let tier: TierLabel;
-    if (opts.activeTourId && s.tourId === opts.activeTourId) {
+    // Phase 11 §15m — synthetic album-drop rows always land at Tier-A
+    // for position (they represent songs the artist is about to start
+    // playing), but their effective weight is capped at 0.3 below.
+    if (s.isSynthetic) {
+      tier = 'a';
+    } else if (opts.activeTourId && s.tourId === opts.activeTourId) {
       if (distance <= TIER_A_DAYS) tier = 'a';
       else if (distance <= TIER_B_DAYS) tier = 'b';
       else tier = 'c';
@@ -329,11 +422,17 @@ export function bucketTiers(opts: {
       tourId: s.tourId,
       tourName: s.tourName,
       tier,
-      weight: TIER_WEIGHTS[tier],
+      // Synthetic album-drop rows are capped at 0.3 instead of
+      // Tier-A's natural 1.0 so a new-album track that hasn't been
+      // played yet caps out around ~0.3 probability rather than
+      // overwhelming the real corpus signal.
+      weight: s.isSynthetic ? 0.3 : TIER_WEIGHTS[tier],
       songs,
       songsLower,
       encoreSongsLower,
       positions,
+      isSynthetic: s.isSynthetic,
+      syntheticAlbumName: s.syntheticAlbumName,
     });
   }
   // Sort Tier-A first by date desc (newest first) so caller can read
@@ -355,6 +454,13 @@ export interface SongAggregate {
   lastPlayedDate: string | null;
   /** Total appearances (encore + non-encore) — used for encore probability. */
   totalAppearances: number;
+  /** Phase 11 §15m — count of appearances that came from real
+   *  (non-synthetic) corpus rows. When this stays 0, the song only
+   *  has album-drop synthetic appearances and the evidence string
+   *  is overridden to "expected from new album {name}". */
+  realAppearances: number;
+  /** Album name attached to a synthetic appearance; first one wins. */
+  syntheticAlbumName: string | null;
 }
 
 /**
@@ -377,6 +483,8 @@ export function aggregate(tier: TieredSetlist[]): Map<string, SongAggregate> {
           encoreCount: 0,
           lastPlayedDate: null,
           totalAppearances: 0,
+          realAppearances: 0,
+          syntheticAlbumName: null,
         };
         out.set(lower, entry);
       }
@@ -401,6 +509,13 @@ export function aggregate(tier: TieredSetlist[]): Map<string, SongAggregate> {
       if (typeof pos === 'number') entry.positions.push(pos);
       if (!entry.lastPlayedDate || setlist.performanceDate > entry.lastPlayedDate) {
         entry.lastPlayedDate = setlist.performanceDate;
+      }
+      if (setlist.isSynthetic) {
+        if (!entry.syntheticAlbumName && setlist.syntheticAlbumName) {
+          entry.syntheticAlbumName = setlist.syntheticAlbumName;
+        }
+      } else {
+        entry.realAppearances += 1;
       }
     }
   }
@@ -590,7 +705,22 @@ export interface PredictSetlistInput {
     userId?: string | null;
     showId?: string | null;
   };
+  /** Phase 11 §15e — when generalized multi-night detection runs on
+   *  stable-style residencies, the run context flows through here so
+   *  the stable predictor can apply the 0.05 anti-repeat penalty to
+   *  songs already played in the run. */
+  runContext?: {
+    venue: string;
+    priorNights: number;
+    songsAlreadyPlayed: string[];
+    runStartDate: string;
+  } | null;
+  /** Phase 11 §15r — festival vs headline corpus filter. Passes
+   *  through to `loadCorpusForPrediction`. */
+  prefer?: 'festival' | 'headline';
 }
+
+const MULTI_NIGHT_ANTI_REPEAT_PENALTY = 0.05;
 
 /**
  * Pure prediction over a loaded corpus — no DB, no cache. Re-runnable
@@ -601,6 +731,7 @@ export function predictSetlist(opts: {
   performerId: string;
   targetDate: string;
   corpus: CorpusRow[];
+  runContext?: PredictSetlistInput['runContext'];
 }): HotPrediction | ColdPrediction {
   if (opts.corpus.length === 0) {
     return coldPrediction('no_corpus');
@@ -628,6 +759,14 @@ export function predictSetlist(opts: {
   const recentLegStart = active?.firstSeen ?? null;
   const targetTs = new Date(opts.targetDate).getTime();
 
+  // Phase 11 §15e — anti-repeat lookup set for multi-night residencies.
+  const alreadyPlayed = new Set<string>();
+  if (opts.runContext && opts.runContext.priorNights >= 1) {
+    for (const title of opts.runContext.songsAlreadyPlayed) {
+      alreadyPlayed.add(title.trim().toLowerCase());
+    }
+  }
+
   const songs: PredictedSong[] = [];
   for (const [lower, agg] of totals) {
     const prior = (PRIOR_ALPHA * W_total) / N_corpus;
@@ -637,12 +776,26 @@ export function predictSetlist(opts: {
       tierA.length > 0 &&
       agg.N_recent / tierA.length >= ANCHOR_TIER_A_THRESHOLD &&
       recentLegStart &&
-      (targetTs - recentLegStart.getTime()) / MS_PER_DAY <= ANCHOR_LEG_START_DAYS
+      (targetTs - recentLegStart.getTime()) / MS_PER_DAY <= ANCHOR_LEG_START_DAYS &&
+      agg.realAppearances > 0  // anchor floor only on songs with real evidence
     ) {
       p = Math.max(p, ANCHOR_FLOOR);
     }
+    // Phase 11 §15e — anti-repeat penalty on songs played earlier in
+    // the run. Tonight's setlist is less likely to repeat them.
+    if (alreadyPlayed.has(lower)) {
+      p = p * MULTI_NIGHT_ANTI_REPEAT_PENALTY;
+    }
     const { role, avgPosition } = pickRole({ tier, titleLower: lower });
     const encoreProbability = agg.totalAppearances > 0 ? agg.encoreCount / agg.totalAppearances : 0;
+    // Phase 11 §15m — when a song has ONLY synthetic appearances
+    // (real album-drop track that hasn't been played live yet), the
+    // evidence string carries the album name instead of the corpus
+    // count. Real evidence supersedes once any real appearance exists.
+    const evidence =
+      agg.realAppearances === 0 && agg.syntheticAlbumName
+        ? `expected from new album ${agg.syntheticAlbumName}`
+        : `${agg.N_song} of last ${N_corpus} ${agg.N_song === 1 ? 'show' : 'shows'}`;
     songs.push({
       title: agg.title,
       songId: null,
@@ -653,29 +806,32 @@ export function predictSetlist(opts: {
       lastPlayedDate: agg.lastPlayedDate,
       appearancesInWindow: agg.N_song,
       windowSize: N_corpus,
-      evidence: `${agg.N_song} of last ${N_corpus} ${agg.N_song === 1 ? 'show' : 'shows'}`,
+      evidence,
     });
   }
 
   const latestTierA = tierA[0]?.performanceDate ?? null;
   const buckets = bucketByProbability({ songs, latestTierADate: latestTierA, aggregates: totals });
 
-  const confidence = computeConfidence({ tierA, targetDate: opts.targetDate });
+  const realTierA = tierA.filter((s) => !s.isSynthetic);
+  const confidence = computeConfidence({ tierA: realTierA, targetDate: opts.targetDate });
   const coverage = resolveCoverage({
     activeTourId,
-    tierACount: tierA.length,
-    tier,
+    tierACount: realTierA.length,
+    tier: tier.filter((s) => !s.isSynthetic),
   });
 
   return {
     style: 'stable',
     ...buckets,
     confidence: Math.max(0, Math.min(1, coverage === 'last_year' ? Math.min(confidence, 0.5) : confidence)),
-    sampleSize: opts.corpus.length,
+    sampleSize: opts.corpus.filter((r) => !r.isSynthetic).length,
     tourId: activeTourId,
     tourName: active?.tourName ?? null,
     tourCoverage: coverage,
     spoilerBlurDefault: coverage === 'active_tour' && confidence >= 0.55,
+    setCountPrediction: computeSetCount(opts.corpus),
+    multiNightContext: opts.runContext ?? null,
   };
 }
 
@@ -705,6 +861,8 @@ export function coldPrediction(reason: ColdReason, performerName: string | null 
     tourId: null,
     tourName: null,
     spoilerBlurDefault: false,
+    setCountPrediction: null,
+    multiNightContext: null,
   };
 }
 
@@ -724,7 +882,11 @@ export function coldPrediction(reason: ColdReason, performerName: string | null 
 export async function predictedSetlistCached(
   input: PredictSetlistInput,
 ): Promise<HotPrediction | ColdPrediction> {
-  const { setlists, signature } = await loadCorpusForPrediction(input);
+  const { setlists, signature } = await loadCorpusForPrediction({
+    performerId: input.performerId,
+    targetDate: input.targetDate,
+    prefer: input.prefer,
+  });
 
   // Cache hit fast path — same signature on the existing row means the
   // corpus underneath the cached prediction is unchanged.
@@ -739,16 +901,39 @@ export async function predictedSetlistCached(
     )
     .limit(1);
 
-  if (cached && cached.corpusSignature === signature) {
+  // Phase 11 §15r — 4-hour TTL fallback even when the signature
+  // doesn't match. Protects against a transient corpus-fill bump that
+  // produces tiny signature drift but doesn't materially change the
+  // prediction. Stale-corpus reads also short-circuit here.
+  const CACHE_FRESH_MS = 4 * 60 * 60 * 1000;
+  const now = Date.now();
+  const cachedFresh =
+    !!cached &&
+    cached.computedAt instanceof Date &&
+    now - cached.computedAt.getTime() < CACHE_FRESH_MS;
+
+  if (cached && (cached.corpusSignature === signature || cachedFresh)) {
     log.info(
       {
         event: 'setlist.predict.cache_hit',
         performerId: input.performerId,
         targetDate: input.targetDate,
+        signatureMatch: cached.corpusSignature === signature,
+        ttlFallback: cached.corpusSignature !== signature && cachedFresh,
       },
       'predicted-setlist cache hit',
     );
-    const payload = cached.predictionJson as HotPrediction | ColdPrediction;
+    const rawPayload = cached.predictionJson as HotPrediction | ColdPrediction;
+    // Phase 11 added `setCountPrediction` + `multiNightContext` to the
+    // union. Cached rows written by older code don't carry the fields;
+    // hydrate to null so the consumer's type assumption holds.
+    const payload: HotPrediction | ColdPrediction = {
+      ...rawPayload,
+      setCountPrediction:
+        'setCountPrediction' in rawPayload ? rawPayload.setCountPrediction : null,
+      multiNightContext:
+        'multiNightContext' in rawPayload ? rawPayload.multiNightContext : null,
+    } as HotPrediction | ColdPrediction;
     log.info(
       {
         event: 'setlist.predict.served',
@@ -777,6 +962,7 @@ export async function predictedSetlistCached(
     performerId: input.performerId,
     targetDate: input.targetDate,
     corpus: setlists,
+    runContext: input.runContext,
   });
 
   await db

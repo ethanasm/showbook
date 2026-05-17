@@ -33,6 +33,8 @@ import {
 import { PlayedCountBanner } from './ConfidenceBanner';
 import { PredictedSetlistRow } from './PredictedSetlistRow';
 import { EncoreDivider } from './EncoreDivider';
+import { SetCountStrip } from './SetCountStrip';
+import { SpecialEventCard } from './SpecialEventCard';
 import {
   pickSetlistView,
   resolveBadge,
@@ -63,10 +65,31 @@ export type AnyPrediction =
         evidence: string;
         role: 'opener' | 'closer' | 'encore_open' | 'encore_close' | 'core';
       }[];
+      setCountPrediction?: SetCountPredictionShape | null;
     }
   | RotatingPredictionLike
   | TheatricalPredictionLike
-  | ImprovisedPredictionLike;
+  | ImprovisedPredictionLike
+  // Phase 11 §15g — special-event empty-state variant. When the
+  // server matches a special_event_rules row, the predicted-setlist
+  // surface replaces every other shape.
+  | {
+      style: 'special_event';
+      copy: string;
+      pastEvents: ReadonlyArray<{
+        date: string;
+        performanceDate: string;
+        venueName: string | null;
+        songCount: number;
+      }>;
+    };
+
+interface SetCountPredictionShape {
+  setCount: number;
+  setCountConfidence: number;
+  expectedSongCount: { p25: number; p50: number; p75: number };
+  expectedDurationMin: number | null;
+}
 
 export interface SetlistTabProps {
   showId: string;
@@ -124,6 +147,16 @@ function SetlistTabUpcoming(props: SetlistTabProps): React.JSX.Element {
     );
   }
 
+  // Phase 11 §15g — special-event short-circuit (mobile parallel).
+  if (prediction.style === 'special_event') {
+    return (
+      <SpecialEventCard
+        copy={prediction.copy}
+        pastEvents={prediction.pastEvents}
+      />
+    );
+  }
+
   const view = pickSetlistView(
     { style: prediction.style },
     {
@@ -157,8 +190,14 @@ function SetlistTabUpcoming(props: SetlistTabProps): React.JSX.Element {
     };
   }
 
+  // Phase 11 §15f — set-count strip rendered above the predicted
+  // setlist on every style that produced one.
+  const setCountPrediction =
+    'setCountPrediction' in prediction ? prediction.setCountPrediction : null;
+
   return (
     <View>
+      <SetCountStrip prediction={setCountPrediction ?? null} />
       {showHype && hypeMeta ? (
         <SectionFrame title="Hype playlist">
           <HypePlaylistCard
