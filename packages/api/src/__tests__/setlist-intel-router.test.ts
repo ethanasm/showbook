@@ -174,3 +174,101 @@ describe('predictedSetlist — eligibility gate', () => {
     }
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────
+// trackPreviewsForShow — the row-play preview map. P10 follow-up fix #1
+// confirms the resolver: every (lowercase) title returns either a hit
+// pair or { null, null } so the row can degrade to "no preview" without
+// the caller needing a second-stage probe.
+// ─────────────────────────────────────────────────────────────────────
+
+function makeTrackPreviewsDb(
+  show: { id: string; userId: string; showPerformers: Array<{ role: string; sortOrder: number; performer: { id: string; name: string } }> },
+  songRows: Array<{ title: string; previewUrl: string | null; spotifyTrackId: string | null }>,
+) {
+  const db = makeFakeDb({
+    selectResults: [
+      // songs table lookup keyed by performerId
+      songRows,
+    ],
+  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (db.query as any).shows = {
+    findFirst: async () => show,
+  };
+  return db;
+}
+
+describe('trackPreviewsForShow — resolver wiring (P10 fix #1)', () => {
+  test('returns a map keyed by lowercase title with cached preview + trackId', async () => {
+    const headlinerId = fakeUuid('p', 'headline');
+    const showId = fakeUuid('s', 'tp1');
+    const db = makeTrackPreviewsDb(
+      {
+        id: showId,
+        userId: USER_ID,
+        showPerformers: [
+          {
+            role: 'headliner',
+            sortOrder: 0,
+            performer: { id: headlinerId, name: 'Greek Theatre Band' },
+          },
+        ],
+      },
+      [
+        {
+          title: 'Big Opener',
+          previewUrl: 'https://p/opener.mp3',
+          spotifyTrackId: 'sp_track_1',
+        },
+        {
+          title: 'CASE Insensitive',
+          previewUrl: 'https://p/case.mp3',
+          spotifyTrackId: null,
+        },
+        // Negative-cache sentinel from the lazy resolver — should
+        // surface as `null` trackId on the way out (the row UI degrades
+        // to disabled, but won't keep re-firing the Spotify search).
+        {
+          title: 'Missing Track',
+          previewUrl: null,
+          spotifyTrackId: '__none__',
+        },
+      ],
+    );
+    const caller = setlistIntelRouter.createCaller(fakeCtx(db, USER_ID) as any);
+    const result = await caller.trackPreviewsForShow({ showId });
+
+    // Three rows of input, three rows of output, lower-cased keys.
+    assert.deepEqual(Object.keys(result.previews).sort(), [
+      'big opener',
+      'case insensitive',
+      'missing track',
+    ]);
+    assert.deepEqual(result.previews['big opener'], {
+      previewUrl: 'https://p/opener.mp3',
+      spotifyTrackId: 'sp_track_1',
+    });
+    // Null trackId stays null — the sentinel never leaks to the client.
+    assert.deepEqual(result.previews['case insensitive'], {
+      previewUrl: 'https://p/case.mp3',
+      spotifyTrackId: null,
+    });
+    // `__none__` sentinel is scrubbed to null.
+    assert.deepEqual(result.previews['missing track'], {
+      previewUrl: null,
+      spotifyTrackId: null,
+    });
+  });
+
+  test('returns an empty map when the show has no headliner (defensive — UI gracefully degrades)', async () => {
+    const showId = fakeUuid('s', 'tp2');
+    const db = makeTrackPreviewsDb(
+      { id: showId, userId: USER_ID, showPerformers: [] },
+      [],
+    );
+    const caller = setlistIntelRouter.createCaller(fakeCtx(db, USER_ID) as any);
+    const result = await caller.trackPreviewsForShow({ showId });
+    assert.deepEqual(result.previews, {});
+  });
+});

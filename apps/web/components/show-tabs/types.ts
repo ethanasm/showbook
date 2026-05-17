@@ -41,6 +41,26 @@ export interface ShowTabBadges {
   notes: string | null;
 }
 
+/**
+ * SI-05 — gate for the pre-show hype playlist. Hidden when the
+ * prediction style can't anchor a 25-song high-confidence playlist
+ * (`rotating`, `improvised`). Stable and theatrical predictions
+ * pass through. Post-show shows always pass (the "I Heard" card is
+ * sourced from the deterministic actual setlist, not the model).
+ */
+export function isHypePlaylistVisible(opts: {
+  /** Feature-flag verdict from `spotify.hypePlaylistFeature`. */
+  featureEnabled: boolean;
+  /** True when the show has already happened (state === 'past'). */
+  isPast: boolean;
+  /** The prediction's style, or `'stable'` when the query is empty. */
+  setlistStyle: string;
+}): boolean {
+  if (!opts.featureEnabled) return false;
+  if (opts.isPast) return true;
+  return opts.setlistStyle !== 'rotating' && opts.setlistStyle !== 'improvised';
+}
+
 export function computeShowTabBadges(opts: {
   isPast: boolean;
   /** Confidence ∈ [0,1] from the predicted-setlist procedure, or null. */

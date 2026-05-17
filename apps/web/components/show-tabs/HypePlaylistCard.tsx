@@ -157,9 +157,10 @@ export function HypePlaylistCard({
 
   const ctaLabel = existing ? "Open in Spotify" : isCreating ? "Working…" : "Open in Spotify";
 
-  // The Preview-here button is a Phase 9 affordance; the card already
-  // reserves the visual slot per the design handoff, but the action is
-  // disabled until previews ship.
+  // The "Preview here" button is a secondary affordance — inline 30s
+  // previews ship on each setlist row via `<TrackPreview>` (Phase 9),
+  // so this card-level button is a no-op placeholder kept for layout
+  // parity with the design handoff.
   return (
     <>
       <div
@@ -202,7 +203,7 @@ export function HypePlaylistCard({
               type="button"
               className="hype-card__cta-secondary"
               disabled
-              title="Inline preview ships in Phase 9"
+              title="Preview each track inline via the ▶ button on the setlist rows below."
             >
               Preview here
             </button>

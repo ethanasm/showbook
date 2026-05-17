@@ -150,8 +150,37 @@ export const spotifyRouter = router({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       await requireHypePlaylistEnabled(ctx.db, userId);
+      const startedAt = Date.now();
       try {
-        return await createHypePlaylist({ userId, showId: input.showId });
+        const result = await createHypePlaylist({ userId, showId: input.showId });
+        const durationMs = Date.now() - startedAt;
+        if (result.reused) {
+          log.info(
+            {
+              event: 'spotify.playlist.hype_reused',
+              userId,
+              showId: input.showId,
+              playlistId: result.playlistId,
+              trackCount: result.trackCount,
+              durationMs,
+            },
+            'Hype playlist reused',
+          );
+        } else {
+          log.info(
+            {
+              event: 'spotify.playlist.hype_created',
+              userId,
+              showId: input.showId,
+              playlistId: result.playlistId,
+              trackCount: result.trackCount,
+              missingCount: result.missing.length,
+              durationMs,
+            },
+            'Hype playlist created',
+          );
+        }
+        return result;
       } catch (err) {
         if (err instanceof TRPCError) throw err;
         log.error(
@@ -174,8 +203,37 @@ export const spotifyRouter = router({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       await requireHypePlaylistEnabled(ctx.db, userId);
+      const startedAt = Date.now();
       try {
-        return await createHeardPlaylist({ userId, showId: input.showId });
+        const result = await createHeardPlaylist({ userId, showId: input.showId });
+        const durationMs = Date.now() - startedAt;
+        if (result.reused) {
+          log.info(
+            {
+              event: 'spotify.playlist.heard_reused',
+              userId,
+              showId: input.showId,
+              playlistId: result.playlistId,
+              trackCount: result.trackCount,
+              durationMs,
+            },
+            'Heard playlist reused',
+          );
+        } else {
+          log.info(
+            {
+              event: 'spotify.playlist.heard_created',
+              userId,
+              showId: input.showId,
+              playlistId: result.playlistId,
+              trackCount: result.trackCount,
+              missingCount: result.missing.length,
+              durationMs,
+            },
+            'Heard playlist created',
+          );
+        }
+        return result;
       } catch (err) {
         if (err instanceof TRPCError) throw err;
         log.error(
