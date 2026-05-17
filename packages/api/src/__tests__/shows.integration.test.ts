@@ -334,6 +334,13 @@ describe('shows router', () => {
     assert.equal(created!.state, 'past');
     assert.ok(created!.showPerformers.length >= 2);
     assert.ok(created!.setlists);
+    // Past concert created WITH an inline setlist should NOT be queued for
+    // enrichment — the create-time queue is for setlistless past concerts.
+    const inlineQueueRows = await db
+      .select()
+      .from(enrichmentQueue)
+      .where(eq(enrichmentQueue.showId, created!.id));
+    assert.equal(inlineQueueRows.length, 0, 'inline-setlist past concerts should not be queued');
   });
 
   it('create falls back to setlist enrichment queue when inline setlist.fm lookup misses', async () => {
@@ -360,59 +367,6 @@ describe('shows router', () => {
     assert.equal(queueRows[0].attempts, 0);
   });
 
-  it('create does NOT enqueue setlist enrichment when an inline setlist was provided', async () => {
-    const created = await callerFor(USER).shows.create({
-      kind: 'concert',
-      headliner: {
-        name: `${PREFIX} Inline Setlist Headliner`,
-        setlist: {
-          sections: [{ kind: 'set', songs: [{ title: 'Already here' }] }],
-        },
-      },
-      venue: { name: `${PREFIX} Venue`, city: 'NYC' },
-      date: '2022-12-02',
-      ticketCount: 1,
-    });
-    assert.ok(created);
-    const queueRows = await db
-      .select()
-      .from(enrichmentQueue)
-      .where(eq(enrichmentQueue.showId, created!.id));
-    assert.equal(queueRows.length, 0, 'inline-setlist past concerts should not be queued');
-  });
-
-  it('create does NOT enqueue setlist enrichment for non-concerts or future-dated shows', async () => {
-    const pastTheatre = await callerFor(USER).shows.create({
-      kind: 'theatre',
-      headliner: { name: `${PREFIX} A Theatre Production` },
-      venue: { name: `${PREFIX} Venue`, city: 'NYC' },
-      date: '2022-12-03',
-      ticketCount: 1,
-    });
-    assert.ok(pastTheatre);
-    const theatreQueueRows = await db
-      .select()
-      .from(enrichmentQueue)
-      .where(eq(enrichmentQueue.showId, pastTheatre!.id));
-    assert.equal(theatreQueueRows.length, 0, 'theatre shows should not be queued');
-
-    const futureConcert = await callerFor(USER).shows.create({
-      kind: 'concert',
-      headliner: { name: `${PREFIX} Future Headliner` },
-      venue: { name: `${PREFIX} Venue`, city: 'NYC' },
-      date: '2099-12-01',
-      ticketCount: 1,
-      seat: 'GA',
-    });
-    assert.ok(futureConcert);
-    assert.equal(futureConcert!.state, 'ticketed');
-    const futureQueueRows = await db
-      .select()
-      .from(enrichmentQueue)
-      .where(eq(enrichmentQueue.showId, futureConcert!.id));
-    assert.equal(futureQueueRows.length, 0, 'ticketed (future) concerts should not be queued at create time');
-  });
-
   it('create theatre uses production name as title', async () => {
     const created = await callerFor(USER).shows.create({
       kind: 'theatre',
@@ -424,6 +378,13 @@ describe('shows router', () => {
     assert.ok(created);
     assert.equal(created!.kind, 'theatre');
     assert.equal(created!.productionName, 'Some Show');
+    // Theatre shows should NOT enqueue setlist enrichment — the create-time
+    // queue is concert-only.
+    const theatreQueueRows = await db
+      .select()
+      .from(enrichmentQueue)
+      .where(eq(enrichmentQueue.showId, created!.id));
+    assert.equal(theatreQueueRows.length, 0, 'theatre shows should not be queued');
   });
 
   it('update mutates an existing show', async () => {
