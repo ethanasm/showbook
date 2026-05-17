@@ -70,6 +70,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
     services:
       postgres:
         image: postgres:16-alpine
@@ -142,6 +145,24 @@ jobs:
           # packages/api/src/crypto.ts at module-load time happy.
           TOKEN_KEY: 0000000000000000000000000000000000000000000000000000000000000000
         run: pnpm verify:coverage
+
+      - name: Post verify failure summary as sticky PR comment
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          JOB_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/post-verify-failure-comment.mjs
+        continue-on-error: true
+
+      - name: Upload verify logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: verify-logs
+          path: .verify-logs/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload coverage report
         if: always()
