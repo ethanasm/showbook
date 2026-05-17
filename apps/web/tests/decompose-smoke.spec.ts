@@ -92,4 +92,33 @@ test.describe('decompose smoke', () => {
     await page.goto('/add');
     await snap(page, 'add-form');
   });
+
+  // Mobile-overflow audit — captures the WHOLE page at the phone width
+  // for the routes touched by this PR plus a few neighbours, so reviewers
+  // can spot horizontal-scroll regressions. Generous timeout because
+  // `next dev` cold-compiles each route on first visit.
+  test('mobile overflow audit', async ({ page }) => {
+    test.setTimeout(180_000);
+    await loginAndSeedAsWorker(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    for (const [route, label] of [
+      ['/home', 'audit-home'],
+      ['/upcoming', 'audit-upcoming'],
+      ['/logbook', 'audit-logbook'],
+      ['/add', 'audit-add'],
+      ['/discover', 'audit-discover'],
+      ['/preferences', 'audit-preferences'],
+      ['/artists', 'audit-artists'],
+      ['/venues', 'audit-venues'],
+    ] as const) {
+      // `load` is good enough — `networkidle` can hang on long-poll tRPC
+      // queries; the post-load timeout below covers lazy-image paints.
+      await page.goto(route, { waitUntil: 'load', timeout: 60_000 });
+      await page.waitForTimeout(500);
+      await page.screenshot({
+        path: path.join(OUT_DIR, `${label}.png`),
+        fullPage: true,
+      });
+    }
+  });
 });

@@ -1500,7 +1500,18 @@ export default function AddPage() {
       {/* ── Kind ── */}
       <div style={{ marginBottom: 26 }}>
         <FieldLabel hint="drives which data source is used">Kind</FieldLabel>
-        <div style={{ display: "flex", borderLeft: `1px solid var(--rule-strong)` }}>
+        <div
+          style={{
+            // Auto-fit grid so the row collapses to 2x2 on phone widths
+            // (~390px) and runs all four across at desktop widths.
+            // `display: flex` with `flex: 1` here used to overflow on
+            // mobile because flex items default to `min-width: auto`
+            // and won't shrink below their intrinsic text content.
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+            borderLeft: `1px solid var(--rule-strong)`,
+          }}
+        >
           {KIND_CONFIG.map((k) => {
             const active = kind === k.kind;
             const c = kindColor(k.kind);
@@ -1510,7 +1521,6 @@ export default function AddPage() {
                 type="button"
                 onClick={() => setKind(k.kind)}
                 style={{
-                  flex: 1,
                   padding: "14px 14px",
                   background: active ? "var(--surface)" : "transparent",
                   borderLeft: active ? `2px solid ${c}` : "2px solid transparent",
@@ -1522,6 +1532,7 @@ export default function AddPage() {
                   gap: 6,
                   cursor: "pointer",
                   textAlign: "left",
+                  minWidth: 0,
                 }}
               >
                 <div style={{
