@@ -77,6 +77,10 @@ import {
 } from '../setlist-predict-improvised';
 import { detectMultiNightRun } from '../multi-night-run-detector';
 import {
+  lookupSpecialEventRule,
+  type SpecialEventPrediction,
+} from '../setlist-predict-special-event';
+import {
   fanLoyaltyForShow,
   discoveredLiveForShow,
   saveDiscoveredSong,
@@ -93,6 +97,7 @@ import {
 import { ITunesError, searchTrackPreview as searchITunesPreview } from '../itunes';
 import { diffSpotifyFollows } from '../spotify-follows-diff';
 import { enforceRateLimit, isRateLimited } from '../rate-limit';
+import { resolvePersonalChips } from '../personal-chips';
 
 const log = child({ component: 'api.setlist-intel' });
 
@@ -153,6 +158,7 @@ export const setlistIntelRouter = router({
       | RotatingPrediction
       | TheatricalPrediction
       | ImprovisedPrediction
+      | SpecialEventPrediction
     > => {
       const userId = ctx.session.user.id;
       const show = await ctx.db.query.shows.findFirst({
@@ -203,6 +209,31 @@ export const setlistIntelRouter = router({
         return coldPrediction('no_mbid', perf.name);
       }
 
+      const targetVenueName =
+        (show as { venue?: { name?: string } | null }).venue?.name ?? null;
+
+      // Phase 11 §15g — special-event short-circuit. When a rule
+      // matches the (performer, date, venue) tuple, we never predict
+      // and the UI renders a SpecialEventCard with the rule's copy +
+      // prior matching events. The lookup is a single indexed query.
+      if (isFeatureOn('SetlistIntelSpecialEvents')) {
+        try {
+          const specialEvent = await lookupSpecialEventRule({
+            performerId: headlinerId,
+            targetDate: show.date,
+            venueName: targetVenueName,
+          });
+          if (specialEvent) {
+            return specialEvent;
+          }
+        } catch (err) {
+          log.error(
+            { event: 'setlist.special_event.lookup_failed', err, showId: input.showId },
+            'special-event rule lookup failed; falling through',
+          );
+        }
+      }
+
       // Phase 5 — style classifier branch. When the §15b classifier
       // is on AND the performer is rotating-style, we run the gap-
       // based rotating model instead of §4c stable. The
@@ -225,8 +256,8 @@ export const setlistIntelRouter = router({
           // Venue match for multi-night-run detection — the corpus
           // rows carry `venueNameRaw` from setlist.fm; we compare the
           // show's saved venue name against that. Fuzzy matching is
-          // future work; v1 uses exact string match.
-          const targetVenueName = (show as { venue?: { name?: string } | null }).venue?.name ?? null;
+          // future work; v1 uses exact string match. `targetVenueName`
+          // is the shared lookup computed once at the procedure top.
           const runContext = detectMultiNightRun({
             targetDate: show.date,
             targetVenue: targetVenueName,
@@ -378,10 +409,71 @@ export const setlistIntelRouter = router({
       }
 
       try {
+        // Phase 11 §15e — generalize multi-night anti-repeat to
+        // stable-style residencies (Adele Caesars Palace, Bruno Mars
+        // Sphere). When the flag is ON and a venue match exists, run
+        // the detector against a quick corpus load and feed the
+        // resulting runContext through to the stable predictor so it
+        // can apply the 0.05 anti-repeat penalty on already-played
+        // songs. Skips the extra corpus load when there's no venue.
+        let stableRunContext: NonNullable<
+          Parameters<typeof predictedSetlistCached>[0]['runContext']
+        > | null = null;
+        if (
+          isFeatureOn('SetlistIntelMultiNightGeneralized') &&
+          targetVenueName
+        ) {
+          try {
+            const { setlists } = await loadCorpusForPrediction({
+              performerId: headlinerId,
+              targetDate: show.date,
+            });
+            const runContext = detectMultiNightRun({
+              targetDate: show.date,
+              targetVenue: targetVenueName,
+              corpus: setlists,
+            });
+            if (runContext && runContext.priorNights >= 1) {
+              stableRunContext = {
+                venue: runContext.venue,
+                priorNights: runContext.priorNights,
+                songsAlreadyPlayed: runContext.songsAlreadyPlayed,
+                runStartDate: runContext.runStartDate,
+              };
+              log.info(
+                {
+                  event: 'setlist.run_detection.matched',
+                  performerId: headlinerId,
+                  showId: input.showId,
+                  venue: runContext.venue,
+                  runIndex: runContext.runIndex,
+                  priorNights: runContext.priorNights,
+                  style: 'stable',
+                },
+                'multi-night run detected (stable)',
+              );
+            }
+          } catch (err) {
+            log.error(
+              {
+                event: 'setlist.run_detection.failed',
+                err,
+                showId: input.showId,
+                style: 'stable',
+              },
+              'multi-night detection failed; falling through to stable predictor',
+            );
+          }
+        }
         return await predictedSetlistCached({
           performerId: headlinerId,
           targetDate: show.date,
           snapshotContext: { userId, showId: input.showId },
+          runContext: stableRunContext,
+          // Phase 11 §15r — when the target show is a festival
+          // appearance, prefer the artist's festival-corpus (shorter
+          // sets) over their headline-corpus.
+          prefer: show.kind === 'festival' ? 'festival' : undefined,
         });
       } catch (err) {
         log.error(
@@ -390,6 +482,50 @@ export const setlistIntelRouter = router({
         );
         return coldPrediction('no_corpus', perf.name);
       }
+    }),
+
+  /**
+   * Phase 11 §15j — personal-weight chip data for a predicted setlist.
+   * Returns three lower-cased title sets: songs the user has 💛 saved,
+   * 🎯 never heard live before, and ⭐ in their Spotify top 50.
+   *
+   * Top-tracks data is NOT persisted to the DB — it's cached in-memory
+   * server-side (24h TTL) and on the client via React Query. Saved
+   * tracks use the existing Phase 7 `/me/tracks/contains` cache.
+   *
+   * Returns empty sets when the user hasn't connected Spotify (the
+   * 🎯 first-time chip still flows because it's local-DB-only).
+   */
+  personalChips: protectedProcedure
+    .input(
+      z.object({
+        showId: z.string().uuid(),
+        titles: z.array(z.string().min(1).max(200)).max(120),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const show = await ctx.db.query.shows.findFirst({
+        where: and(eq(shows.id, input.showId), eq(shows.userId, userId)),
+        with: { showPerformers: { with: { performer: true } } },
+      });
+      if (!show) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+      }
+      const headlinerId = getHeadlinerId(show as ShowLike);
+      if (!headlinerId) {
+        return { saved: [], firstTime: [], topTrack: [] };
+      }
+      const chips = await resolvePersonalChips({
+        userId,
+        performerId: headlinerId,
+        predictedTitles: input.titles,
+      });
+      return {
+        saved: Array.from(chips.saved),
+        firstTime: Array.from(chips.firstTime),
+        topTrack: Array.from(chips.topTrack),
+      };
     }),
 
   /**

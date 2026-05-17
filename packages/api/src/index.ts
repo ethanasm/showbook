@@ -77,6 +77,9 @@ export {
   getTopTracks,
   replacePlaylistItems,
   diffScopes,
+  getAppAccessToken,
+  getArtistAlbums,
+  getAlbumTracks,
 } from './spotify';
 export type {
   SpotifyArtist,
@@ -86,6 +89,8 @@ export type {
   SpotifyPlaylist,
   SpotifyRecentlyPlayedTrack,
   SpotifyTopTrack,
+  SpotifyAlbum,
+  SpotifyAlbumTracks,
   MissingScopesResult,
 } from './spotify';
 export {
@@ -276,3 +281,23 @@ export {
   type VibeDelta,
   type ImprovisedShowModeHit,
 } from './setlist-predict-improvised';
+
+// Phase 11 — shared set-count prediction shape + special-event union variant.
+export {
+  computeSetCount,
+  setCountFromShowModes,
+  setCountFromSingleCount,
+  type SetCountPrediction,
+} from './setlist-predict-shared';
+export {
+  lookupSpecialEventRule,
+  type SpecialEventPrediction,
+  type SpecialEventPastEvent,
+  type SpecialEventRuleKind,
+} from './setlist-predict-special-event';
+export { synthesizeAlbumDropRows } from './album-drop-synthetic';
+export {
+  resolvePersonalChips,
+  __resetTopTracksCacheForTests,
+  type PersonalChipSet,
+} from './personal-chips';

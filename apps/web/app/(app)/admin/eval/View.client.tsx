@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Activity } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { SectionHead } from "@/components/PreferencesPrimitives";
+import { SpecialEventRulesSection } from "./SpecialEventRulesSection.client";
 
 interface CalibrationBin {
   lower: number;
@@ -437,6 +438,7 @@ export default function EvalView() {
           </div>
         </div>
       </div>
+      <SpecialEventRulesSection />
     </div>
   );
 }

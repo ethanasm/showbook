@@ -20,3 +20,5 @@ export * from './prediction-snapshots';
 export * from './user-spotify-tokens';
 export * from './user-spotify-skipped-artists';
 export * from './show-spotify-playlists';
+export * from './albums';
+export * from './special-event-rules';

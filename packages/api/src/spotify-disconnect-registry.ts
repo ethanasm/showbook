@@ -102,12 +102,15 @@ export const CATALOG_KEEP_COLUMNS: readonly string[] = [
   // Phase 9 — cached 30-second preview clip URL; catalog data shared
   // across users, so disconnect leaves the column intact.
   'songs.spotify_preview_url',
-  // Phase 11+ (Spotify catalog metadata):
-  //   'songs.isrc',
-  //   'songs.spotify_album_id',
-  //   'songs.spotify_album_name',
-  //   'songs.spotify_album_release',
-  //   'songs.spotify_album_type',
+  // Phase 11 §15m — Spotify artist id on `performers` is shared
+  // catalog data (looked up once per artist, reused for everyone) so
+  // disconnect leaves it intact.
+  'performers.spotify_artist_id',
+  // Phase 11 §15m — `albums` is a per-performer catalog (release
+  // dates / track lists) populated by the album-metadata-fill cron
+  // from public Spotify endpoints. Catalog-shared, no user
+  // attribution; disconnect leaves it alone.
+  'albums.spotify_album_id',
 ];
 
 /**

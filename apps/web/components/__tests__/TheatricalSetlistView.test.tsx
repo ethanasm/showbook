@@ -26,6 +26,12 @@ const BEYONCE_PREDICTION: TheatricalPrediction = {
     "Tonight's show is choreographed top to bottom — the same setlist with 2 rotating slots.",
   spoilerBlurDefault: true,
   expectedSongCount: 39,
+  setCountPrediction: {
+    setCount: 1,
+    setCountConfidence: 1,
+    expectedSongCount: { p25: 39, p50: 39, p75: 39 },
+    expectedDurationMin: null,
+  },
   deterministicSetlist: [
     { act: 'Act I', actIndex: 0, title: 'AMERICAN REQUIEM', probability: 1, slotShare: 1 },
     { act: 'Act I', actIndex: 0, title: 'Blackbird', probability: 1, slotShare: 1 },

@@ -35,6 +35,10 @@
 
 import type { PerformerSetlist } from '@showbook/shared';
 import type { CorpusRow } from './setlist-predict';
+import {
+  setCountFromShowModes,
+  type SetCountPrediction,
+} from './setlist-predict-shared';
 
 const RECENT_WINDOW = 10;
 /** Weight applied to the i-th most-recent setlist: w_i = RECENCY_BASE^i.
@@ -114,6 +118,11 @@ export interface ImprovisedPrediction {
   tourId: string | null;
   tourName: string | null;
   spoilerBlurDefault: boolean;
+  /** Phase 11 §15f — uniform set/song/duration prediction. For
+   *  improvised, aggregated across show modes weighted by mode
+   *  probability so the UI strip shows the "most likely tonight"
+   *  length instead of a per-mode breakdown. */
+  setCountPrediction: SetCountPrediction | null;
 }
 
 export interface PredictImprovisedInput {
@@ -170,6 +179,7 @@ export function predictImprovised(input: PredictImprovisedInput): ImprovisedPred
     tourId,
     tourName,
     spoilerBlurDefault: false,
+    setCountPrediction: setCountFromShowModes(showModes),
   };
 }
 

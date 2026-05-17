@@ -9,10 +9,12 @@
  */
 
 import { z } from 'zod';
-import { desc, gte } from 'drizzle-orm';
+import { asc, desc, eq, gte } from 'drizzle-orm';
 import {
+  performers,
   predictionEvalRuns,
   predictionEvalShows,
+  specialEventRules,
   type EvalShowPredictedTitle,
 } from '@showbook/db';
 import { child } from '@showbook/observability';
@@ -144,6 +146,94 @@ export const evalRouter = router({
         attachToRunId: runId,
       });
       return result;
+    }),
+
+  // ─────────────────────────────────────────────────────────────────
+  // Phase 11 §15g — special-event rules CRUD
+  // ─────────────────────────────────────────────────────────────────
+
+  /** List every active special-event rule, joined with the performer
+   *  name so the admin UI doesn't need a second roundtrip. */
+  listSpecialEventRules: adminProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.db
+      .select({
+        id: specialEventRules.id,
+        performerId: specialEventRules.performerId,
+        performerName: performers.name,
+        ruleKind: specialEventRules.ruleKind,
+        pattern: specialEventRules.pattern,
+        effect: specialEventRules.effect,
+        source: specialEventRules.source,
+        active: specialEventRules.active,
+        createdAt: specialEventRules.createdAt,
+      })
+      .from(specialEventRules)
+      .innerJoin(performers, eq(performers.id, specialEventRules.performerId))
+      .orderBy(asc(performers.name), desc(specialEventRules.createdAt));
+    return rows;
+  }),
+
+  upsertSpecialEventRule: adminProcedure
+    .input(
+      z.object({
+        id: z.string().uuid().optional(),
+        performerId: z.string().uuid(),
+        ruleKind: z.enum(['date_match', 'venue_run', 'tour_name_pattern']),
+        pattern: z.record(z.string(), z.unknown()),
+        effect: z.object({
+          copy: z.string().min(1).max(500),
+          sampleCount: z.number().int().min(1).max(20).optional(),
+        }),
+        active: z.boolean().default(true),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.id) {
+        await ctx.db
+          .update(specialEventRules)
+          .set({
+            performerId: input.performerId,
+            ruleKind: input.ruleKind,
+            pattern: input.pattern,
+            effect: input.effect,
+            active: input.active,
+          })
+          .where(eq(specialEventRules.id, input.id));
+        log.info(
+          { event: 'eval.special_event_rule.updated', ruleId: input.id },
+          'Special-event rule updated',
+        );
+        return { id: input.id, updated: true };
+      }
+      const [inserted] = await ctx.db
+        .insert(specialEventRules)
+        .values({
+          performerId: input.performerId,
+          ruleKind: input.ruleKind,
+          pattern: input.pattern,
+          effect: input.effect,
+          source: 'manual',
+          active: input.active,
+        })
+        .returning({ id: specialEventRules.id });
+      log.info(
+        { event: 'eval.special_event_rule.created', ruleId: inserted?.id },
+        'Special-event rule created',
+      );
+      return { id: inserted!.id, updated: false };
+    }),
+
+  deleteSpecialEventRule: adminProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db
+        .delete(specialEventRules)
+        .where(eq(specialEventRules.id, input.id));
+      log.info(
+        { event: 'eval.special_event_rule.deleted', ruleId: input.id },
+        'Special-event rule deleted',
+      );
+      return { id: input.id };
     }),
 });
 

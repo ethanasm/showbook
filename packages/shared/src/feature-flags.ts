@@ -172,6 +172,48 @@ export const FeatureFlag = {
       'smoke test in the Phase 10 PR is signed off.',
     state: 'ON',
   },
+  SetlistIntelAlbumDrop: {
+    description:
+      'Phase 11 (setlist-intelligence) §15m album-drop forward signal. ' +
+      'When ON, predictSetlist injects synthetic Tier-A appearances ' +
+      'at weight 0.3 for tracks on albums released within ±60 days of ' +
+      "the target date, with evidence \"expected from new album {name}\". " +
+      'The album-metadata-fill cron (02:30 ET) hydrates the `albums` ' +
+      "table from Spotify's catalog. Synthetic rows are excluded from " +
+      '`tourCoverage` / `recentLegStart` so they only affect per-song ' +
+      'probability — not headline confidence. Flip OFF if synthetic ' +
+      "appearances over-predict tracks the artist isn't actually " +
+      'playing live (the Sabrina-Carpenter-style worked example is the ' +
+      'replay fixture).',
+    state: 'ON',
+  },
+  SetlistIntelSpecialEvents: {
+    description:
+      'Phase 11 (setlist-intelligence) §15g special-event detection. ' +
+      'When ON, the predicted-setlist procedure consults ' +
+      '`special_event_rules` before the style switch; a date_match / ' +
+      'venue_run / tour_name_pattern hit returns ' +
+      "`style: 'special_event'` with the rule's effect.copy and a list " +
+      'of prior matching events. The 0044 migration seeds the canonical ' +
+      'Phish Halloween rule; additional rules are added via /admin/eval. ' +
+      'Flip OFF if a mis-configured rule predicate mis-routes regular ' +
+      'shows into the empty state.',
+    state: 'ON',
+  },
+  SetlistIntelMultiNightGeneralized: {
+    description:
+      'Phase 11 (setlist-intelligence) §15e — generalizes the Phase 5 ' +
+      'multi-night anti-repeat detector to stable-style residencies ' +
+      '(Adele Caesars Palace, Bruno Mars Sphere). When ON, ' +
+      '`detectMultiNightRun` runs for stable-style performers too; the ' +
+      'stable predictor applies a 0.05 anti-repeat penalty to songs ' +
+      'already played in the run when `runContext.priorNights >= 1`. ' +
+      'Rotating-style multi-night behavior (Phase 5) is unchanged. ' +
+      'Flip OFF if a regular two-night stop at the same venue (Taylor ' +
+      "Swift's two-night Eras stops) surfaces a spurious anti-repeat " +
+      'banner.',
+    state: 'ON',
+  },
 } as const satisfies Record<string, { description: string; state: 'ON' | 'OFF' }>;
 
 export type FeatureFlagKey = keyof typeof FeatureFlag;
