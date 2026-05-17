@@ -38,14 +38,11 @@ export interface NavItem {
 }
 
 // Sidebar nav order encodes the verb flow: find → plan → log.
-// Discover surfaces things to add → Shows owns the unified hub
-// (Calendar/Stats/List) → Upcoming/Logbook stay as pre-filtered
-// shortcuts into the same `/shows` view component for users who
-// already use them as bookmarks.
+// Discover surfaces things to add → Upcoming holds your plans →
+// Logbook holds your history.
 export const NAV_ITEMS: NavItem[] = [
   { id: "home", label: "Home", icon: Home, section: "navigate" },
   { id: "discover", label: "Discover", icon: Eye, section: "navigate" },
-  { id: "shows", label: "Shows", icon: Archive, section: "navigate" },
   { id: "upcoming", label: "Upcoming", icon: CalendarClock, section: "navigate" },
   { id: "logbook", label: "Logbook", icon: BookOpen, section: "navigate" },
   { id: "map", label: "Map", icon: Map, section: "navigate" },
@@ -63,10 +60,10 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 /** Items shown in the web app's mobile-viewport bottom tab bar.
- * The "Shows" tab lands on the unified `/shows` hub (List / Calendar
- * / Stats over the full show set) — Upcoming and Logbook stay as
- * cross-links from the page header and the sidebar for users who
- * bookmark them.
+ * Web diverges from the RN mobile app: web has the Upcoming/Logbook
+ * structural split everywhere (per the IA cleanup plan), so the
+ * bottom-bar "Shows" button lands on /upcoming. Logbook is one
+ * cross-link tap away from the Upcoming page header.
  *
  * The center "+" goes straight to /add — it's a create action, not a
  * navigation hub. Discover gets its own slot since it's the primary
@@ -77,7 +74,7 @@ export const BOTTOM_NAV_ITEMS = [
   { id: "home", label: "Home", icon: Home },
   { id: "discover", label: "Discover", icon: Eye },
   { id: "add", label: "Add", icon: Plus, isAddButton: true },
-  { id: "shows", label: "Shows", icon: Archive },
+  { id: "upcoming", label: "Shows", icon: Archive },
   { id: "preferences", label: "Me", icon: Settings },
 ] as const;
 

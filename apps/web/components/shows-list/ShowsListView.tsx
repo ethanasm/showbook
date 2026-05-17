@@ -96,7 +96,6 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
   const labels = MODE_LABELS[mode];
   const isUpcoming = mode === "upcoming";
   const isLogbook = mode === "logbook";
-  const isAll = mode === "all";
 
   const PAGE_SIZE = compact ? 10 : 12;
 
@@ -227,10 +226,9 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
       if (upcomingFilter !== "all") {
         result = result.filter((s) => s.state === upcomingFilter);
       }
-    } else if (isLogbook) {
+    } else {
       result = result.filter((s) => s.state === "past");
     }
-    // mode === 'all' — no state filter; user sees every show.
 
     if (isLogbook && selectedYear === "older") {
       const currentYear = new Date().getFullYear();
@@ -510,12 +508,12 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     const importParam = searchParams.get("import");
     if (importParam === "gmail" || importParam === "setlistfm" || importParam === "eventbrite") {
       handleOpenImportModal(importParam);
-      router.replace(isAll ? "/shows" : isUpcoming ? "/upcoming" : "/logbook");
+      router.replace(isUpcoming ? "/upcoming" : "/logbook");
       return;
     }
     if (searchParams.get("gmail") === "1") {
       handleOpenImportModal("gmail");
-      router.replace(isAll ? "/shows" : isUpcoming ? "/upcoming" : "/logbook");
+      router.replace(isUpcoming ? "/upcoming" : "/logbook");
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -719,25 +717,21 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
         }}>
           {labels.title}
         </div>
-        {/* Cross-link to the other half so the split doesn't feel siloed.
-            Hidden on the unified /shows hub — both surfaces are already
-            in scope, so there's nowhere narrower to send the user. */}
-        {!isAll && (
-          <Link
-            href={isUpcoming ? "/logbook" : "/upcoming"}
-            style={{
-              display: "inline-block",
-              marginTop: 6,
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
-              color: "var(--accent)",
-              letterSpacing: ".04em",
-              textDecoration: "none",
-            }}
-          >
-            {isUpcoming ? "View past →" : "View upcoming →"}
-          </Link>
-        )}
+        {/* Cross-link to the other half so the split doesn't feel siloed. */}
+        <Link
+          href={isUpcoming ? "/logbook" : "/upcoming"}
+          style={{
+            display: "inline-block",
+            marginTop: 6,
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 10.5,
+            color: "var(--accent)",
+            letterSpacing: ".04em",
+            textDecoration: "none",
+          }}
+        >
+          {isUpcoming ? "View past →" : "View upcoming →"}
+        </Link>
       </div>
     );
 
@@ -1050,7 +1044,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
             textDecoration: "none",
           }}
         >
-          {isUpcoming || isAll ? "Add a show" : "Add a past show"}
+          {isUpcoming ? "Add a show" : "Add a past show"}
         </Link>
       );
       return (

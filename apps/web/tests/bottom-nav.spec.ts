@@ -28,15 +28,11 @@ test.describe('Bottom nav — mobile viewport', () => {
     await page.waitForURL('**/discover', { timeout: 8000 });
   });
 
-  test('Shows tab navigates to /shows', async ({ page }) => {
-    // The bottom-bar Shows tab points at the unified `/shows` hub
-    // (List / Calendar / Stats over the full show set). `/upcoming`
-    // and `/logbook` are still reachable as pre-filtered shortcuts
-    // from the sidebar — see `BOTTOM_NAV_ITEMS` in Sidebar.tsx.
+  test('Shows tab navigates to /upcoming', async ({ page }) => {
     const showsBtn = page.getByRole('button', { name: /^Shows$/i });
     await expect(showsBtn).toBeVisible({ timeout: 8000 });
     await showsBtn.click();
-    await page.waitForURL('**/shows', { timeout: 8000 });
+    await page.waitForURL('**/upcoming', { timeout: 8000 });
   });
 
   test('right-most Me tab navigates to /preferences not /me', async ({ page }) => {

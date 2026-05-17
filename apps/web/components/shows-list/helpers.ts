@@ -29,7 +29,7 @@ export type SortConfig = SortConfigBase<SortField>;
 export type CalView = "month" | "year";
 export type StatsTimeframe = "year" | "5years" | "all";
 
-export type ShowsListMode = "upcoming" | "logbook" | "all";
+export type ShowsListMode = "upcoming" | "logbook";
 
 export interface ShowData {
   id: string;
@@ -135,16 +135,6 @@ export const MODE_LABELS: Record<
     emptyTitle: "Your history starts here",
     emptyBody:
       "Once your first show happens it'll move into your logbook automatically. Or import receipts from Gmail to backfill past shows.",
-  },
-  // `all` is the unified Shows hub — past + future + watching in a
-  // single timeline. /upcoming and /logbook stay as pre-filtered
-  // shortcuts that link into the same View component.
-  all: {
-    eyebrow: "Every show",
-    title: "Shows",
-    emptyTitle: "No shows yet",
-    emptyBody:
-      "Add a show, import receipts from Gmail, or browse Discover for upcoming events from venues and artists you follow.",
   },
 };
 
