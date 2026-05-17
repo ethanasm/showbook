@@ -10,12 +10,69 @@ import { db, performers } from '@showbook/db';
 import type { PerformerSetlist } from '@showbook/shared';
 import { child } from '@showbook/observability';
 import { searchArtist, searchSetlist } from './setlistfm';
+import { isUniqueViolation } from './performer-matcher';
 
 const log = child({ component: 'api.setlist-lookup' });
 
 export interface SetlistLookupResult {
   setlist: PerformerSetlist;
   tourName: string | null;
+}
+
+/**
+ * Resolve and persist the MusicBrainz ID for a performer by name via
+ * setlist.fm's `/search/artists` endpoint. No-op when `existingMbid` is
+ * already set. Returns the MBID we ended up with (or null when search
+ * found nothing).
+ *
+ * Side-effect: when a fresh MBID is resolved, writes it back to the
+ * performers row. Catches the partial-unique-index violation that
+ * happens when another row already owns the MBID (two performer rows
+ * for the same artist, usually e2e-seed leakage or a manual-entry
+ * duplicate) — those need operator merging and we don't want to fail
+ * the caller for one.
+ */
+export async function resolvePerformerMbid(input: {
+  performerId: string;
+  performerName: string;
+  existingMbid: string | null;
+}): Promise<string | null> {
+  if (input.existingMbid) return input.existingMbid;
+
+  const artists = await searchArtist(input.performerName);
+  if (artists.length === 0) return null;
+
+  const mbid = artists[0]!.mbid;
+  try {
+    await db
+      .update(performers)
+      .set({ musicbrainzId: mbid })
+      .where(eq(performers.id, input.performerId));
+    log.info(
+      {
+        event: 'setlist_lookup.mbid_resolved',
+        performerId: input.performerId,
+        performerName: input.performerName,
+        mbid,
+      },
+      'Resolved MBID for performer via setlist.fm search',
+    );
+    return mbid;
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      log.warn(
+        {
+          event: 'setlist_lookup.mbid_conflict',
+          performerId: input.performerId,
+          performerName: input.performerName,
+          mbid,
+        },
+        'Another performer row already owns this MBID — leaving this row null',
+      );
+      return null;
+    }
+    throw err;
+  }
 }
 
 /**
@@ -35,26 +92,11 @@ export async function fetchSetlistForPerformer(input: {
   performerMbid: string | null;
   date: string;
 }): Promise<SetlistLookupResult | null> {
-  let mbid = input.performerMbid;
-  if (!mbid) {
-    const artists = await searchArtist(input.performerName);
-    if (artists.length > 0) {
-      mbid = artists[0]!.mbid;
-      await db
-        .update(performers)
-        .set({ musicbrainzId: mbid })
-        .where(eq(performers.id, input.performerId));
-      log.info(
-        {
-          event: 'setlist_lookup.mbid_resolved',
-          performerId: input.performerId,
-          performerName: input.performerName,
-          mbid,
-        },
-        'Resolved MBID for performer via setlist.fm search',
-      );
-    }
-  }
+  const mbid = await resolvePerformerMbid({
+    performerId: input.performerId,
+    performerName: input.performerName,
+    existingMbid: input.performerMbid,
+  });
   if (!mbid) return null;
 
   const result = await searchSetlist(mbid, input.date);
