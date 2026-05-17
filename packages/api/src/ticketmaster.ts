@@ -370,10 +370,41 @@ export type InferredKind =
   | "film"
   | "unknown";
 
+// Known festival names that TM consistently mis-segments. Outside Lands, for
+// example, comes back with no music classification at all (its events landed
+// in the "unknown" bucket alongside parking-pass / suite-deposit listings).
+// Kept tiny and explicit so it's not a substring trap; expand only when we
+// confirm a festival is being miscategorised in prod.
+const KNOWN_FESTIVAL_NAMES = ["outside lands"];
+
+function matchesKnownFestivalName(eventName: string): boolean {
+  const normalized = normalizeFestivalText(eventName);
+  return KNOWN_FESTIVAL_NAMES.some((name) => normalized.includes(name));
+}
+
 export function inferKind(
   classifications?: TMEvent["classifications"],
   context?: { eventName?: string | null },
 ): InferredKind {
+  const eventName = context?.eventName ?? "";
+
+  // Festival detection runs FIRST and is name-driven, not segment-gated. TM
+  // is wildly inconsistent about how festivals are classified — Outside Lands
+  // 2026 comes back with no music segment at all (events landed in the
+  // miscellaneous "unknown" bucket pre-fix). Pulling the festival check ahead
+  // of the segment switch means a festival name (or genre/subGenre/type label
+  // that says "Festival") wins regardless of what TM tagged the segment as.
+  const labelText = (classifications ?? [])
+    .flatMap((c) => [c.genre?.name, c.subGenre?.name, c.type?.name, c.subType?.name])
+    .filter((name): name is string => Boolean(name))
+    .join(" ");
+  if (hasFestivalSignal(`${labelText} ${eventName}`)) {
+    return "festival";
+  }
+  if (matchesKnownFestivalName(eventName)) {
+    return "festival";
+  }
+
   // No classifications at all means TM didn't tell us what kind of event
   // this is. We don't want to silently bucket those as concerts (that's how
   // the Orpheum theatre productions ended up mislabelled), so flag them as
@@ -400,24 +431,6 @@ export function inferKind(
   }
 
   if (segmentId === TM_SEGMENT_ID.music) {
-    // Festivals don't have a single canonical TM ID — TM tags them via
-    // genre / subGenre / type / subType *names* (e.g. genre "Festival",
-    // subGenre "Music Festival", type "Festival Pass"). Match those label
-    // fields directly, since that's the structured signal TM provides; this
-    // isn't name-guessing the kind, it's reading TM's own festival flag.
-    const eventName = context?.eventName ?? "";
-    const labelText = classifications
-      .flatMap((c) => [c.genre?.name, c.subGenre?.name, c.type?.name, c.subType?.name])
-      .filter((name): name is string => Boolean(name))
-      .join(" ");
-    if (hasFestivalSignal(`${labelText} ${eventName}`)) {
-      return "festival";
-    }
-    const knownFestivalNames = ["outside lands"];
-    const normalizedEventName = normalizeFestivalText(eventName);
-    if (knownFestivalNames.some((name) => normalizedEventName.includes(name))) {
-      return "festival";
-    }
     return "concert";
   }
 

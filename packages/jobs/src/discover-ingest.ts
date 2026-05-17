@@ -422,6 +422,13 @@ async function pruneDuplicateFestivalSinglesForRun(run: EventRun): Promise<void>
  * change) on Ticketmaster's side would be frozen to whatever status it had
  * at first ingest, because the insert paths short-circuit on known IDs.
  *
+ * Also re-infers `kind` (and renormalizes `headliner` for festivals) so rows
+ * that were misclassified by an older inference pass can heal on the next
+ * ingest. Outside Lands' Aug 2026 rows landed with kind='unknown' because
+ * pre-fix inferKind only checked the festival-name list inside the music
+ * segment branch; without this, those rows stayed 'unknown' forever even
+ * after the inference logic improved.
+ *
  * Only fields derivable from the TMEvent alone are touched — venue/performer
  * resolution is intentionally skipped to avoid extra external calls on every
  * re-ingest of an existing row.
@@ -430,13 +437,19 @@ async function refreshExistingFromTmEvent(event: TMEvent): Promise<void> {
   const onSaleStatus = determineOnSaleStatus(event);
   const onSaleDate = parseOnSaleDate(event);
   const ticketUrl = event.url ?? null;
+  const kind = inferKind(event.classifications, { eventName: event.name });
+  const headliner = kind === 'festival' ? extractFestivalName(event.name) : null;
 
   await db
     .update(announcements)
     .set({
       onSaleStatus,
       onSaleDate,
+      kind,
       ...(ticketUrl ? { ticketUrl } : {}),
+      ...(headliner
+        ? { headliner, productionName: headliner }
+        : {}),
     })
     .where(
       and(

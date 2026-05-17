@@ -481,6 +481,14 @@
   animation: discover-ingest-pulse 1.6s ease-in-out infinite;
 }
 
+.discover-region-explainer {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+  padding: 8px 20px 4px;
+}
+
 @keyframes discover-ingest-pulse {
   0%, 100% { opacity: 0.55; }
   50% { opacity: 1; }

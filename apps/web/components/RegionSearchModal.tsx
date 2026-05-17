@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { usePlaceSearch } from "@/lib/usePlaceSearch";
 
 interface RegionSearchModalProps {
   onClose: () => void;
@@ -20,15 +21,14 @@ export function RegionSearchModal({
   const [radius, setRadius] = useState("25");
   const [manualMode, setManualMode] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
-  const [debouncedCity, setDebouncedCity] = useState("");
-  const cityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const utils = trpc.useUtils();
 
-  const citySearch = trpc.enrichment.searchPlaces.useQuery(
-    { query: debouncedCity, types: "city" },
-    { enabled: debouncedCity.length >= 2 && !manualMode, retry: false },
-  );
+  const citySearch = usePlaceSearch(cityQuery, {
+    types: "city",
+    // Pause the query once a place is selected so the resolved
+    // city name doesn't trigger a redundant searchPlaces request.
+    enabled: !manualMode && cityName === "",
+  });
 
   const addRegion = trpc.preferences.addRegion.useMutation({
     onSuccess: (region) => {
@@ -51,23 +51,16 @@ export function RegionSearchModal({
       setCityName(value);
     }
     setDetailsError(null);
-    if (cityTimerRef.current) clearTimeout(cityTimerRef.current);
-    if (value.length >= 2 && !manualMode) {
-      cityTimerRef.current = setTimeout(() => setDebouncedCity(value), 400);
-    } else {
-      setDebouncedCity("");
-    }
   };
 
   const handleSelectCity = async (placeId: string) => {
     try {
-      const details = await utils.enrichment.placeDetails.fetch({ placeId });
+      const details = await citySearch.fetchPlaceDetails(placeId);
       if (details) {
         setCityName(details.city || details.name);
         setCityQuery(details.city || details.name);
         setLatitude(String(details.latitude));
         setLongitude(String(details.longitude));
-        setDebouncedCity("");
         setDetailsError(null);
       }
     } catch {
@@ -131,20 +124,23 @@ export function RegionSearchModal({
             </label>
           </div>
 
-          {!manualMode && debouncedCity.length >= 2 && (
+          {!manualMode &&
+            cityName === "" &&
+            citySearch.debouncedQuery.length >= 2 &&
+            citySearch.debouncedQuery === cityQuery && (
             <div className="discover-region-form__places">
-              {citySearch.isLoading && (
+              {citySearch.isSearching && (
                 <div className="discover-modal__hint">Searching...</div>
               )}
-              {citySearch.isError && (
+              {citySearch.isSearchError && (
                 <div className="discover-region-form__error">
                   Search unavailable. Use manual entry below.
                 </div>
               )}
-              {citySearch.data?.length === 0 && !citySearch.isLoading && (
+              {citySearch.results.length === 0 && !citySearch.isSearching && (
                 <div className="discover-modal__hint">No matches</div>
               )}
-              {citySearch.data?.map((place) => (
+              {citySearch.results.map((place) => (
                 <button
                   key={place.placeId}
                   type="button"
@@ -208,7 +204,6 @@ export function RegionSearchModal({
                 const next = !prev;
                 if (next) {
                   setCityName(cityQuery);
-                  setDebouncedCity("");
                 }
                 return next;
               });

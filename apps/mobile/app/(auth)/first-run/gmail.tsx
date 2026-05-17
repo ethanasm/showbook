@@ -1,5 +1,5 @@
 /**
- * First-run step 4 of 4 — Gmail import (informational for M1).
+ * First-run step 5 of 5 — Gmail import (informational for M1).
  *
  * Real Gmail OAuth scope-elevation lands in M3. For now both buttons mark
  * first-run complete and route into the main app. The "Connect Gmail"
@@ -11,6 +11,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { FirstRunStep, heroTitleStyle } from './_components';
+import { ExternalSourceDisclaimer } from '../../../components/ExternalSourceDisclaimer';
 import { useTheme } from '../../../lib/theme';
 import { useAuth } from '../../../lib/auth';
 
@@ -92,9 +93,6 @@ export default function FirstRunGmail(): React.JSX.Element {
           </View>
         );
       })}
-      <Text style={[styles.fineprint, { color: colors.faint }]}>
-        Read-only access · we never store the email body.
-      </Text>
       {showComingSoon ? (
         <Text style={[styles.comingSoon, { color: colors.accent }]}>Coming soon — finishing setup…</Text>
       ) : null}
@@ -103,9 +101,9 @@ export default function FirstRunGmail(): React.JSX.Element {
 
   return (
     <FirstRunStep
-      step={4}
-      total={4}
-      eyebrow="STEP 4 OF 4 · OPTIONAL"
+      step={5}
+      total={5}
+      eyebrow="STEP 5 OF 5 · OPTIONAL"
       title={
         <Text style={[heroTitleStyle, { color: colors.ink, textAlign: 'center' }]}>
           Pull in <Text style={{ color: colors.accent }}>past tickets.</Text>
@@ -113,6 +111,11 @@ export default function FirstRunGmail(): React.JSX.Element {
       }
       body="Showbook can scan your inbox for ticket confirmations from Ticketmaster, AXS, See Tickets, and Eventbrite — and pre-build your archive in seconds."
       illustration={illustration}
+      footer={
+        <View style={styles.disclaimerFooter}>
+          <ExternalSourceDisclaimer source="gmail" />
+        </View>
+      }
       primaryLabel="Connect Gmail"
       onPrimary={onPrimary}
       secondaryLabel="Start with an empty showbook"
@@ -162,13 +165,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.8,
   },
-  fineprint: {
-    fontFamily: 'Geist Sans',
-    fontSize: 10,
-    fontWeight: '400',
-    textAlign: 'center',
-    marginTop: 4,
-    lineHeight: 14,
+  disclaimerFooter: {
+    width: '100%',
+    maxWidth: 320,
+    alignSelf: 'center',
   },
   comingSoon: {
     fontFamily: 'Geist Sans',

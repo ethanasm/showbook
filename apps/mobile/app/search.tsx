@@ -25,7 +25,6 @@ import {
   ScrollView,
   Image,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, Link } from 'expo-router';
 import {
   ChevronLeft,
@@ -35,7 +34,7 @@ import {
   Users,
   MapPin,
 } from 'lucide-react-native';
-import { TopBar } from '../components/TopBar';
+import { ScreenWrapper } from '../components/ScreenWrapper';
 import { EmptyState } from '../components/EmptyState';
 import { KindBadge } from '../components/KindBadge';
 import { useTheme, type Kind } from '../lib/theme';
@@ -58,7 +57,6 @@ const SEARCH_DEBOUNCE_MS = 250;
 export default function SearchScreen(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { token } = useAuth();
 
@@ -92,9 +90,7 @@ export default function SearchScreen(): React.JSX.Element {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
-      <TopBar title="Search" eyebrow="SHOWS · ARTISTS · VENUES" leading={back} />
-
+    <ScreenWrapper title="Search" eyebrow="SHOWS · ARTISTS · VENUES" leading={back}>
       <View
         style={[
           styles.searchBar,
@@ -184,7 +180,7 @@ export default function SearchScreen(): React.JSX.Element {
           </>
         )}
       </ScrollView>
-    </View>
+    </ScreenWrapper>
   );
 }
 

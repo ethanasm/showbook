@@ -89,4 +89,23 @@ describe('ShowTabBar', () => {
     assert.match(activeBadge.getAttribute('style') ?? '', /var\(--accent\)/);
     cleanup();
   });
+
+  test('omits tabs listed in hiddenTabs', () => {
+    const { queryByTestId, getAllByRole } = render(
+      <ShowTabBar
+        active="overview"
+        badges={NO_BADGES}
+        onSelect={() => undefined}
+        hiddenTabs={['setlist']}
+      />,
+    );
+    assert.equal(queryByTestId('show-tab-setlist'), null);
+    const tabs = getAllByRole('tab');
+    assert.equal(tabs.length, 3);
+    assert.deepEqual(
+      tabs.map((t) => t.getAttribute('id')),
+      ['show-tab-overview', 'show-tab-media', 'show-tab-notes'],
+    );
+    cleanup();
+  });
 });

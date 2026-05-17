@@ -22,6 +22,7 @@ import {
 } from "@/lib/show-accessors";
 import {
   CenteredMessage,
+  QueryBoundary,
   RemoteImage,
   SectionHeader,
   ShowRow as ShowRowComponent,
@@ -179,7 +180,6 @@ export default function VenueDetailPage() {
 
   const [expandedShowId, setExpandedShowId] = useState<string | null>(null);
 
-  const venue = detailQuery.data;
   const userShows = useMemo(
     () => (userShowsQuery.data ?? []) as ShowData[],
     [userShowsQuery.data],
@@ -197,6 +197,7 @@ export default function VenueDetailPage() {
     followMutation.isPending || unfollowMutation.isPending;
 
   function toggleFollow() {
+    const venue = detailQuery.data;
     if (!venue || followBusy) return;
     if (venue.isFollowed) {
       unfollowMutation.mutate({ venueId: venue.id });
@@ -223,43 +224,37 @@ export default function VenueDetailPage() {
     });
   }
 
-  if (detailQuery.isLoading) {
-    return <CenteredMessage>Loading venue…</CenteredMessage>;
-  }
-
-  if (detailQuery.error || !venue) {
-    return (
-      <CenteredMessage tone="error">
-        Couldn&apos;t load venue.{" "}
-        <button
-          type="button"
-          onClick={() => router.push("/discover")}
-          style={{
-            background: "none",
-            border: "none",
-            color: "var(--accent)",
-            cursor: "pointer",
-            fontFamily: "inherit",
-            fontSize: "inherit",
-            padding: 0,
-            marginLeft: 8,
-          }}
-        >
-          back to discover →
-        </button>
-      </CenteredMessage>
-    );
-  }
-
-  const locationLine = [
-    venue.city,
-    venue.stateRegion,
-    venue.country,
-  ]
-    .filter(Boolean)
-    .join(", ");
-
   return (
+    <QueryBoundary
+      query={detailQuery}
+      loadingLabel="Loading venue…"
+      errorFallback={() => (
+        <CenteredMessage tone="error">
+          Couldn&apos;t load venue.{" "}
+          <button
+            type="button"
+            onClick={() => router.push("/discover")}
+            style={{
+              background: "none",
+              border: "none",
+              color: "var(--accent)",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              fontSize: "inherit",
+              padding: 0,
+              marginLeft: 8,
+            }}
+          >
+            back to discover →
+          </button>
+        </CenteredMessage>
+      )}
+    >
+      {(venue) => {
+        const locationLine = [venue.city, venue.stateRegion, venue.country]
+          .filter(Boolean)
+          .join(", ");
+        return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* Breadcrumb */}
       <div
@@ -727,6 +722,9 @@ export default function VenueDetailPage() {
 
       </div>
     </div>
+        );
+      }}
+    </QueryBoundary>
   );
 }
 

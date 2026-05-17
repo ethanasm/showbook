@@ -10,18 +10,13 @@ import {
   EmptyState,
   ShowRow,
   type ShowKind,
-  type ShowState,
 } from "@/components/design-system";
-import {
-  SortHeader,
-  type SortConfig as SortConfigBase,
-} from "@/components/SortHeader";
+import { SortHeader } from "@/components/SortHeader";
 import {
   Archive,
   Calendar,
   ArrowDownUp,
   Ticket,
-  Square,
   Trash2,
   Mail,
   X,
@@ -31,11 +26,9 @@ import {
 } from "lucide-react";
 import { useCompactMode } from "@/lib/useCompactMode";
 import { useIsMobile } from "@/lib/useIsMobile";
-import { formatDateParts } from "@showbook/shared";
-import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import { useShowContextMenu } from "@/lib/useShowContextMenu";
 import { PaginationFooter } from "@/components/PaginationFooter";
-import { compareNullable } from "@/lib/sort";
+import { ExternalSourceDisclaimer } from "@/components/external-connection/ExternalSourceDisclaimer";
 import {
   getHeadliner,
   getHeadlinerId,
@@ -43,150 +36,26 @@ import {
   getSupport,
   getSupportPerformers,
 } from "@/lib/show-accessors";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type ViewMode = "list" | "calendar" | "stats";
-
-type SortField =
-  | "date"
-  | "kind"
-  | "headliner"
-  | "venue"
-  | "seat"
-  | "paid"
-  | "state";
-
-type SortConfig = SortConfigBase<SortField>;
-
-const KIND_ORDER: Record<ShowKind, number> = {
-  concert: 0,
-  theatre: 1,
-  comedy: 2,
-  festival: 3,
-};
-
-const STATE_ORDER: Record<ShowState, number> = {
-  ticketed: 0,
-  watching: 1,
-  past: 2,
-};
-
-function defaultDirFor(field: SortField): "asc" | "desc" {
-  return field === "date" || field === "paid" ? "desc" : "asc";
-}
-
-function compareShows(a: ShowData, b: ShowData, sort: SortConfig): number {
-  const flip = sort.dir === "desc" ? -1 : 1;
-  switch (sort.field) {
-    case "date":
-      return (
-        flip *
-        (new Date(a.date).getTime() - new Date(b.date).getTime())
-      );
-    case "kind":
-      return flip * (KIND_ORDER[a.kind] - KIND_ORDER[b.kind]);
-    case "state":
-      return flip * (STATE_ORDER[a.state] - STATE_ORDER[b.state]);
-    case "headliner":
-      return flip * getHeadliner(a).localeCompare(getHeadliner(b));
-    case "venue":
-      return flip * a.venue.name.localeCompare(b.venue.name);
-    case "seat":
-      return (
-        flip *
-        compareNullable(a.seat, b.seat, (x, y) => x.localeCompare(y))
-      );
-    case "paid":
-      return (
-        flip *
-        compareNullable(
-          a.pricePaid != null ? parseFloat(a.pricePaid) : null,
-          b.pricePaid != null ? parseFloat(b.pricePaid) : null,
-          (x, y) => x - y,
-        )
-      );
-  }
-}
-
-interface ShowData {
-  id: string;
-  kind: ShowKind;
-  state: ShowState;
-  date: string;
-  endDate: string | null;
-  seat: string | null;
-  pricePaid: string | null;
-  ticketCount: number;
-  tourName: string | null;
-  productionName: string | null;
-  setlist: string[] | null;
-  photos: string[] | null;
-  ticketUrl: string | null;
-  venue: {
-    id: string;
-    name: string;
-    city: string;
-    stateRegion?: string | null;
-    country?: string | null;
-    latitude?: number | null;
-    longitude?: number | null;
-  };
-  showPerformers: {
-    role: string;
-    characterName: string | null;
-    sortOrder: number;
-    performer: {
-      id: string;
-      name: string;
-      imageUrl: string | null;
-    };
-  }[];
-}
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const ALL_KINDS: ShowKind[] = ["concert", "theatre", "comedy", "festival"];
-
-const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const SHOW_LIST_GRID_TEMPLATE = "14px 32px 80px 110px 1.02fr 1.03fr 110px 0.15fr 64px 88px";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-// Re-exported from shared as `formatDateParts` — keep the local alias so the
-// existing call sites read naturally (`toDateParts(show.date)`).
-const toDateParts = formatDateParts;
-
-function getNeighborhood(show: ShowData): string | undefined {
-  const parts: string[] = [];
-  if (show.venue.city) parts.push(show.venue.city);
-  if (show.venue.stateRegion) parts.push(show.venue.stateRegion);
-  return parts.length > 0 ? parts.join(", ") : undefined;
-}
-
-function getYear(dateStr: string): number {
-  return new Date(dateStr + "T00:00:00").getFullYear();
-}
-
-function getUniqueYears(shows: ShowData[]): number[] {
-  const years = new Set(shows.map((s) => getYear(s.date)));
-  return Array.from(years).sort((a, b) => b - a);
-}
-
-function getDaysInMonth(year: number, month: number): number {
-  return new Date(year, month + 1, 0).getDate();
-}
-
-function getFirstDayOfWeek(year: number, month: number): number {
-  return new Date(year, month, 1).getDay();
-}
+import {
+  MODE_LABELS,
+  SHOW_LIST_GRID_TEMPLATE,
+  compareShows,
+  defaultDirFor,
+  getNeighborhood,
+  getUniqueYears,
+  getYear,
+  toDateParts,
+  type CalView,
+  type ShowData,
+  type ShowsListMode,
+  type SortConfig,
+  type SortField,
+  type StatsTimeframe,
+  type ViewMode,
+} from "./helpers";
+import { StatsView } from "./StatsView";
+import { CalendarView } from "./CalendarView";
+import { FilterBar } from "./FilterBar";
 
 
 // ---------------------------------------------------------------------------
@@ -198,27 +67,9 @@ function getFirstDayOfWeek(year: number, month: number): number {
 // Main Page
 // ---------------------------------------------------------------------------
 
-type CalView = "month" | "year";
-type StatsTimeframe = "year" | "5years" | "all";
-
-export type ShowsListMode = 'upcoming' | 'logbook';
-
-const MODE_LABELS: Record<ShowsListMode, { eyebrow: string; title: string; emptyTitle: string; emptyBody: string }> = {
-  upcoming: {
-    eyebrow: 'Plans on the horizon',
-    title: 'Upcoming',
-    emptyTitle: 'Nothing on the horizon',
-    emptyBody:
-      'Add a show or browse Discover for upcoming events from venues and artists you follow.',
-  },
-  logbook: {
-    eyebrow: 'Your live-show log',
-    title: 'Logbook',
-    emptyTitle: 'Your history starts here',
-    emptyBody:
-      "Once your first show happens it'll move into your logbook automatically. Or import receipts from Gmail to backfill past shows.",
-  },
-};
+// `ShowsListMode` is re-exported so the existing `import { type ShowsListMode }
+// from "@/components/shows-list/ShowsListView"` consumers stay green.
+export type { ShowsListMode } from "./helpers";
 
 interface ShowsListViewProps {
   mode: ShowsListMode;
@@ -302,6 +153,9 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     eventId?: string;
   };
   const [importSource, setImportSource] = useState<ImportSource | null>(null);
+  // Gated OAuth: for gmail/eventbrite the consent disclaimer renders
+  // first; the popup only opens once the user explicitly continues.
+  const [oauthConsentStarted, setOauthConsentStarted] = useState(false);
   const [gmailBulkLoading, setGmailBulkLoading] = useState(false);
   const [gmailBulkResults, setGmailBulkResults] = useState<BulkResult[]>([]);
   const [gmailBulkSelected, setGmailBulkSelected] = useState<Set<number>>(new Set());
@@ -607,13 +461,16 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     setSetlistfmUsername("");
     setGmailError(null);
     setGmailProgress(null);
+    setOauthConsentStarted(false);
+    // OAuth popup does NOT open here — the modal first renders a
+    // consent step with the disclaimer; only then does the user click
+    // "Continue with Gmail / Eventbrite" which calls
+    // `startOauthPopup` to open the popup.
+  }, []);
 
-    if (source === "setlistfm") {
-      // No popup — username form is shown inline in the modal.
-      return;
-    }
+  const startOauthPopup = useCallback((source: "gmail" | "eventbrite") => {
+    setOauthConsentStarted(true);
 
-    // OAuth-based sources (gmail, eventbrite) share the popup pattern.
     const expectedAuth = source === "gmail" ? "gmail-auth" : "eventbrite-auth";
     const expectedAuthError = source === "gmail" ? "gmail-auth-error" : "eventbrite-auth-error";
     const popupPath = source === "gmail" ? "/api/gmail" : "/api/eventbrite";
@@ -1064,133 +921,6 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
   // Render: Filter Bar
   // ---------------------------------------------------------------------------
 
-  function renderFilterBar() {
-    // /upcoming swaps the year filter (which is misleading there — it
-    // pulls older years from date-TBD watching shows) for an
-    // All · Tickets · Watching chip toggle that narrows the state set.
-    const upcomingChips: { k: typeof upcomingFilter; l: string }[] = [
-      { k: "all", l: "All" },
-      { k: "ticketed", l: "Tickets" },
-      { k: "watching", l: "Watching" },
-    ];
-
-    return (
-      <div style={{
-        padding: isMobile ? "11px 16px" : "11px var(--page-pad-x)",
-        display: "flex",
-        alignItems: "center",
-        gap: isMobile ? 12 : 18,
-        flexWrap: "wrap",
-        background: "var(--surface)",
-        borderBottom: isMobile ? "1px solid var(--rule-strong)" : "1px solid var(--rule)",
-        // Mobile: pin the in-list filter row so users can flip year / kind /
-        // upcoming-vs-watching mid-scroll without scrolling back to the top.
-        // Desktop has a dedicated sidebar + the filter row already sits within
-        // a non-scrolling header band, so sticky is mobile-only.
-        ...(isMobile ? { position: "sticky", top: 0, zIndex: 5 } : {}),
-      }}>
-        {/* Mode-specific primary filter */}
-        {isLogbook ? (
-          <div data-testid="logbook-year-filter" style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid var(--rule-strong)" }}>
-            {yearButtons.map((y, i, arr) => {
-              const active = y === selectedYear;
-              return (
-                <div
-                  key={y}
-                  onClick={() => setSelectedYear(y)}
-                  style={{
-                    padding: "5px 11px",
-                    borderRight: i === arr.length - 1 ? "none" : "1px solid var(--rule-strong)",
-                    background: active ? "var(--ink)" : "transparent",
-                    color: active ? "var(--bg)" : "var(--ink)",
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11,
-                    fontWeight: active ? 500 : 400,
-                    cursor: "pointer",
-                    letterSpacing: ".02em",
-                  }}
-                >
-                  {y}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div data-testid="upcoming-state-filter" style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid var(--rule-strong)" }}>
-            {upcomingChips.map(({ k, l }, i, arr) => {
-              const active = upcomingFilter === k;
-              return (
-                <button
-                  key={k}
-                  type="button"
-                  data-testid={`upcoming-filter-${k}`}
-                  onClick={() => setUpcomingFilter(k)}
-                  style={{
-                    padding: "5px 11px",
-                    borderRight: i === arr.length - 1 ? "none" : "1px solid var(--rule-strong)",
-                    border: "none",
-                    background: active ? "var(--ink)" : "transparent",
-                    color: active ? "var(--bg)" : "var(--ink)",
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11,
-                    fontWeight: active ? 500 : 400,
-                    cursor: "pointer",
-                    letterSpacing: ".02em",
-                  }}
-                >
-                  {l}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Kind chips */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {ALL_KINDS.map((k) => {
-            const KIcon = KIND_ICONS[k];
-            const active = selectedKind === k;
-            return (
-              <span
-                key={k}
-                onClick={() => setSelectedKind(active ? null : k)}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
-                  padding: "4px 9px",
-                  border: "1px solid var(--rule-strong)",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10.5,
-                  color: active ? "var(--bg)" : "var(--ink)",
-                  background: active ? "var(--ink)" : "transparent",
-                  letterSpacing: ".04em",
-                  cursor: "pointer",
-                  textTransform: "lowercase",
-                }}
-              >
-                <KIcon size={12} color={active ? "var(--bg)" : `var(--kind-${k})`} />
-                {KIND_LABELS[k]}
-              </span>
-            );
-          })}
-        </div>
-
-        {/* Spacer */}
-        <div style={{ flex: 1 }} />
-
-        {/* Filtered count */}
-        <div style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10.5,
-          color: "var(--faint)",
-          letterSpacing: ".04em",
-        }}>
-          {filteredShows.length} show{filteredShows.length !== 1 ? "s" : ""}
-        </div>
-      </div>
-    );
-  }
 
 
   // ---------------------------------------------------------------------------
@@ -1486,1174 +1216,11 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
   // Render: Calendar Mode
   // ---------------------------------------------------------------------------
 
-  function renderCalendar() {
-    const today = new Date();
-
-    // Bounds span from Jan of the earliest show year to Dec of the latest
-    // show year (always including the current year so "Today" is reachable
-    // even when the user has no shows yet). Use the unfiltered show set so
-    // that year filters in the toolbar don't shrink the navigable range.
-    // Date-TBD watching rows have a null date — they're surfaced on the
-    // Date-TBD rail and would crash `new Date(null + "T00:00:00")` if we
-    // mapped them blindly, so drop them here.
-    const boundsSource = (allShowsUnfiltered ?? shows) as ShowData[];
-    const showYears = boundsSource
-      .filter((s) => s.date !== null)
-      .map((s) => new Date(s.date + "T00:00:00").getFullYear());
-    const minYear = Math.min(today.getFullYear(), ...showYears);
-    const maxYear = Math.max(today.getFullYear(), ...showYears);
-
-    const atMin = calYear === minYear && calMonth === 0;
-    const atMax = calYear === maxYear && calMonth === 11;
-    const atMinYear = calYear === minYear;
-    const atMaxYear = calYear === maxYear;
-
-    const goToday = () => {
-      setCalMonth(today.getMonth());
-      setCalYear(today.getFullYear());
-    };
-
-    const stepMonth = (dir: number) => {
-      const m = calMonth + dir;
-      if (m < 0) {
-        if (calYear <= minYear) return;
-        setCalMonth(11);
-        setCalYear((y) => y - 1);
-      } else if (m > 11) {
-        if (calYear >= maxYear) return;
-        setCalMonth(0);
-        setCalYear((y) => y + 1);
-      } else {
-        setCalMonth(m);
-      }
-    };
-
-    const dows = ["S", "M", "T", "W", "T", "F", "S"];
-
-    // Build day -> shows map for any given year/month
-    function buildDayShowsMap(year: number, month: number) {
-      const map = new Map<number, ShowData[]>();
-      for (const show of shows) {
-        const d = new Date(show.date + "T00:00:00");
-        if (d.getMonth() === month && d.getFullYear() === year) {
-          const day = d.getDate();
-          if (!map.has(day)) map.set(day, []);
-          map.get(day)!.push(show);
-        }
-      }
-      return map;
-    }
-
-    // Toolbar buttons
-    const toolbarNav = (
-      <div style={{ display: "flex", alignItems: "stretch", border: "1px solid var(--rule-strong)" }}>
-        <button
-          onClick={() => stepMonth(-1)}
-          disabled={Boolean(atMin)}
-          style={{
-            padding: "7px 12px",
-            fontFamily: "var(--font-geist-sans), sans-serif",
-            fontSize: 13,
-            color: atMin ? "var(--faint)" : "var(--ink)",
-            cursor: atMin ? "not-allowed" : "pointer",
-            border: "none",
-            borderRight: "1px solid var(--rule-strong)",
-            background: "transparent",
-            fontWeight: 500,
-            opacity: atMin ? 0.4 : 1,
-          }}
-          data-testid="cal-prev"
-        >
-          ‹
-        </button>
-        <button onClick={goToday} style={{
-          padding: "7px 14px",
-          fontFamily: "var(--font-geist-sans), sans-serif",
-          fontSize: 13,
-          color: "var(--ink)",
-          cursor: "pointer",
-          border: "none",
-          borderRight: "1px solid var(--rule-strong)",
-          background: "transparent",
-          fontWeight: 500,
-        }}>
-          Today
-        </button>
-        <button
-          onClick={() => stepMonth(1)}
-          disabled={Boolean(atMax)}
-          style={{
-            padding: "7px 12px",
-            fontFamily: "var(--font-geist-sans), sans-serif",
-            fontSize: 13,
-            color: atMax ? "var(--faint)" : "var(--ink)",
-            cursor: atMax ? "not-allowed" : "pointer",
-            border: "none",
-            background: "transparent",
-            fontWeight: 500,
-            opacity: atMax ? 0.4 : 1,
-          }}
-          data-testid="cal-next"
-        >
-          ›
-        </button>
-      </div>
-    );
-
-    const viewToggle = (
-      <div style={{ display: "flex", alignItems: "stretch", border: "1px solid var(--rule-strong)" }}>
-        {(["month", "year"] as CalView[]).map((v, i, arr) => {
-          const active = calView === v;
-          return (
-            <button
-              key={v}
-              onClick={() => setCalView(v)}
-              data-testid={`cal-view-${v}`}
-              style={{
-                padding: "7px 14px",
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
-                border: "none",
-                borderRight: i < arr.length - 1 ? "1px solid var(--rule-strong)" : "none",
-                background: active ? "var(--ink)" : "transparent",
-                color: active ? "var(--bg)" : "var(--ink)",
-                cursor: "pointer",
-                fontWeight: active ? 500 : 400,
-                letterSpacing: ".06em",
-                textTransform: "uppercase",
-              }}
-            >
-              {v}
-            </button>
-          );
-        })}
-      </div>
-    );
-
-    if (calView === "year") {
-      return renderCalendarYearView(today, toolbarNav, viewToggle, atMinYear, atMaxYear);
-    }
-
-    const daysInMonth = getDaysInMonth(calYear, calMonth);
-    const firstDay = getFirstDayOfWeek(calYear, calMonth);
-    const dayShowsMap = buildDayShowsMap(calYear, calMonth);
-
-    const cells: (number | null)[] = [];
-    for (let i = 0; i < firstDay; i++) cells.push(null);
-    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-    while (cells.length % 7) cells.push(null);
-
-    const isToday = (d: number | null) => d !== null && calYear === today.getFullYear() && calMonth === today.getMonth() && d === today.getDate();
-
-    let pastInMonth = 0, upInMonth = 0, watchInMonth = 0;
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dayShows = dayShowsMap.get(d) ?? [];
-      for (const s of dayShows) {
-        if (s.state === "past") pastInMonth++;
-        else if (s.state === "ticketed") upInMonth++;
-        else if (s.state === "watching") watchInMonth++;
-      }
-    }
-
-    const railShows = shows.filter((s) => {
-      if (!s.date) return false;
-      const d = new Date(s.date + "T00:00:00");
-      const m = d.getMonth();
-      const y = d.getFullYear();
-      return (y === calYear && m === calMonth) || (y === calYear && m === calMonth + 1) || (calMonth === 11 && y === calYear + 1 && m === 0);
-    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-    return (
-      <div style={{
-        background: "var(--bg)",
-        padding: isMobile ? "18px 16px 24px" : "22px var(--page-pad-x) var(--page-pad-x)",
-        ...(isMobile ? {} : { flex: 1, minHeight: 0, overflow: "auto" }),
-      }}>
-        {/* Month toolbar */}
-        <div style={{
-          display: "flex",
-          alignItems: isMobile ? "stretch" : "center",
-          justifyContent: "space-between",
-          flexDirection: isMobile ? "column" : "row",
-          gap: isMobile ? 10 : 0,
-          marginBottom: 14,
-        }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
-            <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 30, fontWeight: 600, color: "var(--ink)", letterSpacing: -0.9 }}>
-              {MONTH_NAMES[calMonth]} <span style={{ color: "var(--faint)", fontWeight: 400 }}>{calYear}</span>
-            </div>
-            <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".06em" }}>
-              {pastInMonth} past &middot; {upInMonth} upcoming &middot; {watchInMonth} watching
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {viewToggle}
-            {toolbarNav}
-          </div>
-        </div>
-
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "1fr 320px",
-          gap: isMobile ? 18 : 22,
-          minHeight: 0,
-        }}>
-          {/* Calendar grid */}
-          <div style={{ background: "var(--surface)", border: "1px solid var(--rule)" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "1px solid var(--rule)" }}>
-              {dows.map((d, i) => (
-                <div key={i} style={{ padding: "9px 10px", fontFamily: "var(--font-geist-mono), monospace", fontSize: 10, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase" }}>
-                  {d}
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gridAutoRows: "minmax(92px, 1fr)" }}>
-              {cells.map((d, i) => {
-                const todayCell = isToday(d);
-                const evs = d ? (dayShowsMap.get(d) ?? []) : [];
-                return (
-                  <div key={i} style={{
-                    padding: "7px 9px",
-                    borderRight: (i % 7) === 6 ? "none" : "1px solid var(--rule)",
-                    borderBottom: "1px solid var(--rule)",
-                    background: todayCell ? "var(--surface2)" : "transparent",
-                    opacity: d ? 1 : 0.35,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 5,
-                  }}>
-                    <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: todayCell ? "var(--ink)" : (d ? "var(--muted)" : "var(--faint)"), fontWeight: todayCell ? 600 : 400, letterSpacing: ".02em" }}>
-                      {d ?? ""}
-                    </div>
-                    {evs.map((s) => (
-                      <div key={s.id} style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10, color: "var(--ink)", padding: "3px 6px", background: s.state === "past" ? "transparent" : `var(--kind-${s.kind}, rgba(255,255,255,0.1))`, borderLeft: `2px solid var(--kind-${s.kind})`, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: ".01em" }}>
-                        {getHeadliner(s)}
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Right rail */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--ink)", letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 500 }}>
-              This month & next
-            </div>
-            {railShows.map((show) => {
-              const dp = toDateParts(show.date);
-              const stateTag = show.state === "past" ? "past" : show.state === "ticketed" ? "tix" : "watch";
-              return (
-                <div key={show.id} style={{ padding: "12px 14px", background: "var(--surface)", borderLeft: `2px solid var(--kind-${show.kind})`, display: "grid", gridTemplateColumns: "58px 1fr auto", columnGap: 12, alignItems: "start" }}>
-                  <div>
-                    <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 15, fontWeight: 500, color: stateTag === "past" ? "var(--muted)" : "var(--ink)", letterSpacing: -0.3, lineHeight: 1, fontFeatureSettings: '"tnum"' }}>
-                      {dp.month} {dp.day}
-                    </div>
-                    <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", marginTop: 3 }}>
-                      {dp.dow.toLowerCase()}
-                    </div>
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 13, fontWeight: 500, color: stateTag === "past" ? "var(--muted)" : "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {getHeadliner(show)}
-                    </div>
-                    <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10, color: "var(--muted)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {show.venue.name.toLowerCase()}
-                    </div>
-                  </div>
-                  <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, letterSpacing: ".06em", textTransform: "uppercase", color: stateTag === "past" ? "var(--faint)" : (stateTag === "watch" ? "var(--muted)" : "var(--ink)"), fontWeight: 500 }}>
-                    {stateTag}
-                  </div>
-                </div>
-              );
-            })}
-            {railShows.length === 0 && (
-              <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--faint)" }}>
-                No shows this month or next
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  function renderCalendarYearView(
-    today: Date,
-    _toolbarNav: React.ReactNode,
-    viewToggle: React.ReactNode,
-    atMinYear: boolean,
-    atMaxYear: boolean,
-  ) {
-    // Build all-shows-by-date map
-    const dateShowsMap = new Map<string, ShowData[]>();
-    for (const show of shows) {
-      const key = show.date; // "YYYY-MM-DD"
-      if (!dateShowsMap.has(key)) dateShowsMap.set(key, []);
-      dateShowsMap.get(key)!.push(show);
-    }
-
-    const YEAR_MONTHS = Array.from({ length: 12 }, (_, i) => i);
-    const dows = ["S", "M", "T", "W", "T", "F", "S"];
-
-    function miniMonthGrid(year: number, month: number) {
-      const daysInMonth = getDaysInMonth(year, month);
-      const firstDay = getFirstDayOfWeek(year, month);
-      const cells: (number | null)[] = [];
-      for (let i = 0; i < firstDay; i++) cells.push(null);
-      for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-      while (cells.length % 7) cells.push(null);
-
-      const isThisMonth = year === today.getFullYear() && month === today.getMonth();
-
-      return (
-        <div
-          key={month}
-          data-testid={`year-mini-grid-${month}`}
-          style={{
-            background: "var(--surface)",
-            border: isThisMonth ? "1px solid var(--accent)" : "1px solid var(--rule)",
-            padding: "8px",
-            cursor: "pointer",
-          }}
-          onClick={() => {
-            setCalMonth(month);
-            setCalYear(year);
-            setCalView("month");
-          }}
-        >
-          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9, color: "var(--ink)", letterSpacing: ".08em", textTransform: "uppercase", fontWeight: 500, marginBottom: 4 }}>
-            {MONTHS[month]}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1 }}>
-            {dows.map((d, i) => (
-              <div key={i} style={{ fontSize: 6, color: "var(--faint)", textAlign: "center", fontFamily: "var(--font-geist-mono), monospace" }}>
-                {d}
-              </div>
-            ))}
-            {cells.map((d, ci) => {
-              const dateKey = d ? `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}` : null;
-              const hasDot = dateKey ? (dateShowsMap.get(dateKey) ?? []).length > 0 : false;
-              const isToday = d !== null && year === today.getFullYear() && month === today.getMonth() && d === today.getDate();
-              return (
-                <div key={ci} style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 10, position: "relative" }}>
-                  {d && (
-                    <>
-                      {isToday && (
-                        <div style={{ position: "absolute", inset: 0, background: "var(--accent)", opacity: 0.15, borderRadius: 1 }} />
-                      )}
-                      {hasDot && (
-                        <div style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--accent)" }} />
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div style={{
-        background: "var(--bg)",
-        padding: isMobile ? "18px 16px 24px" : "22px var(--page-pad-x) var(--page-pad-x)",
-        ...(isMobile ? {} : { flex: 1, minHeight: 0, overflow: "auto" }),
-      }}>
-        <div style={{
-          display: "flex",
-          alignItems: isMobile ? "stretch" : "center",
-          justifyContent: "space-between",
-          flexDirection: isMobile ? "column" : "row",
-          gap: isMobile ? 10 : 0,
-          marginBottom: 14,
-        }}>
-          <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 30, fontWeight: 600, color: "var(--ink)", letterSpacing: -0.9 }}>
-            {calYear}
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {viewToggle}
-            <div style={{ display: "flex", gap: 6 }}>
-              <button
-                onClick={() => { if (!atMinYear) setCalYear((y) => y - 1); }}
-                disabled={atMinYear}
-                data-testid="cal-year-prev"
-                style={{ padding: "7px 12px", border: "1px solid var(--rule-strong)", background: "transparent", color: atMinYear ? "var(--faint)" : "var(--ink)", cursor: atMinYear ? "not-allowed" : "pointer", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, opacity: atMinYear ? 0.4 : 1 }}
-              >
-                ‹ {calYear - 1}
-              </button>
-              <button
-                onClick={() => { if (!atMaxYear) setCalYear((y) => y + 1); }}
-                disabled={atMaxYear}
-                data-testid="cal-year-next"
-                style={{ padding: "7px 12px", border: "1px solid var(--rule-strong)", background: "transparent", color: atMaxYear ? "var(--faint)" : "var(--ink)", cursor: atMaxYear ? "not-allowed" : "pointer", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, opacity: atMaxYear ? 0.4 : 1 }}
-              >
-                {calYear + 1} ›
-              </button>
-            </div>
-          </div>
-        </div>
-        <div
-          data-testid="year-view-grid"
-          style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(4, 1fr)",
-            gap: 10,
-          }}
-        >
-          {YEAR_MONTHS.map((m) => miniMonthGrid(calYear, m))}
-        </div>
-      </div>
-    );
-  }
 
   // ---------------------------------------------------------------------------
   // Render: Stats Mode
   // ---------------------------------------------------------------------------
 
-  function renderStats() {
-    const rawShows = (allShowsUnfiltered ?? []) as ShowData[];
-    const currentYear = new Date().getFullYear();
-    const allShowsList = rawShows.filter((s) => {
-      if (statsTimeframe === "all") return true;
-      const y = getYear(s.date);
-      if (statsTimeframe === "year") return y === currentYear;
-      if (statsTimeframe === "5years") return y >= currentYear - 4;
-      return true;
-    });
-    const total = allShowsList.length;
-
-    // Compute stats
-    const totalSpent = allShowsList.reduce((sum, s) => sum + (s.pricePaid ? parseFloat(s.pricePaid) : 0), 0);
-    const avgPerShow = total > 0 ? Math.round(totalSpent / total) : 0;
-
-    const uniqueVenues = new Set(allShowsList.map((s) => s.venue.name)).size;
-    const uniqueArtists = new Set(allShowsList.flatMap((s) => s.showPerformers.map((sp) => sp.performer.name))).size;
-
-    const newArtistsThisYear = (() => {
-      const thisYearArtists = new Set(
-        allShowsList
-          .filter((s) => getYear(s.date) === currentYear)
-          .flatMap((s) => s.showPerformers.map((sp) => sp.performer.name))
-      );
-      const prevArtists = new Set(
-        allShowsList
-          .filter((s) => getYear(s.date) < currentYear)
-          .flatMap((s) => s.showPerformers.map((sp) => sp.performer.name))
-      );
-      return Array.from(thisYearArtists).filter((a) => !prevArtists.has(a)).length;
-    })();
-
-    // Venues in rotation (appeared in last 2 years)
-    const rotationVenues = new Set(
-      allShowsList
-        .filter((s) => getYear(s.date) >= currentYear - 1)
-        .map((s) => s.venue.name)
-    ).size;
-
-    // Rhythm chart — shows per month in current year
-    const rhythm = MONTHS.map((_, i) => {
-      const monthShows = allShowsList.filter((s) => {
-        if (!s.date) return false;
-        const d = new Date(s.date + "T00:00:00");
-        return d.getFullYear() === currentYear && d.getMonth() === i;
-      });
-      const attended = monthShows.filter((s) => s.state === "past").length;
-      const ticketed = monthShows.filter((s) => s.state === "ticketed").length;
-      return { a: attended, t: ticketed };
-    });
-
-    const ytdShows = allShowsList.filter((s) => getYear(s.date) === currentYear).length;
-    const currentMonth = new Date().getMonth();
-    const pace = currentMonth > 0 ? Math.round((ytdShows / (currentMonth + 1)) * 12) : ytdShows * 12;
-
-    // Top artists
-    const artistCounts = new Map<string, { count: number; kind: ShowKind }>();
-    for (const show of allShowsList) {
-      const name = getHeadliner(show);
-      const prev = artistCounts.get(name);
-      artistCounts.set(name, { count: (prev?.count ?? 0) + 1, kind: show.kind });
-    }
-    const topArtists = Array.from(artistCounts.entries())
-      .sort((a, b) => b[1].count - a[1].count)
-      .slice(0, 5);
-    const maxArtistCount = Math.max(...topArtists.map(([, v]) => v.count), 1);
-
-    // Top venues
-    const venueCounts = new Map<string, { count: number; neighborhood: string }>();
-    for (const show of allShowsList) {
-      const name = show.venue.name;
-      const prev = venueCounts.get(name);
-      venueCounts.set(name, {
-        count: (prev?.count ?? 0) + 1,
-        neighborhood: getNeighborhood(show) ?? "",
-      });
-    }
-    const topVenues = Array.from(venueCounts.entries())
-      .sort((a, b) => b[1].count - a[1].count)
-      .slice(0, 5);
-    const maxVenueCount = Math.max(...topVenues.map(([, v]) => v.count), 1);
-
-    // Kind mix
-    const kindCounts = new Map<ShowKind, number>();
-    for (const show of allShowsList) {
-      kindCounts.set(show.kind, (kindCounts.get(show.kind) ?? 0) + 1);
-    }
-    const kindMix = ALL_KINDS
-      .map((k) => ({ kind: k, count: kindCounts.get(k) ?? 0 }))
-      .filter((k) => k.count > 0)
-      .sort((a, b) => b.count - a.count);
-
-    const SPARKLINE_MAX = Math.max(maxArtistCount, maxVenueCount, 8);
-
-    const timeframeLabel = statsTimeframe === "year"
-      ? String(currentYear)
-      : statsTimeframe === "5years"
-        ? `${currentYear - 4}–${currentYear}`
-        : "All time";
-
-    // Compact dollar formatting for mobile — "$6,754.58" overflows a
-    // narrow stat card; "$6.7k" tells the same story without forcing
-    // a horizontal scroll.
-    const compactSpent = (() => {
-      if (totalSpent <= 0) return "$0";
-      if (!isMobile) return `$${totalSpent.toLocaleString()}`;
-      if (totalSpent >= 10_000) return `$${(totalSpent / 1000).toFixed(1)}k`;
-      return `$${Math.round(totalSpent).toLocaleString()}`;
-    })();
-
-    return (
-      <div style={{
-        background: "var(--bg)",
-        padding: isMobile ? "16px 16px 24px" : "22px var(--page-pad-x) var(--page-pad-x)",
-        ...(isMobile ? {} : { flex: 1, minHeight: 0, overflow: "auto" }),
-      }}>
-        {/* Timeframe selector */}
-        <div style={{
-          display: "flex",
-          alignItems: isMobile ? "stretch" : "center",
-          justifyContent: "space-between",
-          flexDirection: isMobile ? "column" : "row",
-          gap: isMobile ? 10 : 0,
-          marginBottom: 18,
-        }}>
-          <div style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
-            color: "var(--muted)",
-            letterSpacing: ".06em",
-          }}>
-            {timeframeLabel} &middot; {total} show{total !== 1 ? "s" : ""}
-          </div>
-          <div style={{
-            display: "flex",
-            alignItems: "stretch",
-            border: "1px solid var(--rule-strong)",
-            // Full-width segmented control on mobile so all three options
-            // are equally tappable; auto-width on desktop.
-            ...(isMobile ? { width: "100%" } : {}),
-          }}>
-            {([
-              { k: "year" as StatsTimeframe, l: "This year" },
-              { k: "5years" as StatsTimeframe, l: "Last 5 yrs" },
-              { k: "all" as StatsTimeframe, l: "All time" },
-            ]).map(({ k, l }, i, arr) => {
-              const active = statsTimeframe === k;
-              return (
-                <button
-                  key={k}
-                  onClick={() => setStatsTimeframe(k)}
-                  data-testid={`stats-timeframe-${k}`}
-                  style={{
-                    padding: isMobile ? "8px 0" : "6px 13px",
-                    border: "none",
-                    borderRight: i < arr.length - 1 ? "1px solid var(--rule-strong)" : "none",
-                    background: active ? "var(--ink)" : "transparent",
-                    color: active ? "var(--bg)" : "var(--ink)",
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11,
-                    fontWeight: active ? 500 : 400,
-                    cursor: "pointer",
-                    letterSpacing: ".04em",
-                    flex: isMobile ? 1 : "0 0 auto",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {l}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Big headline numbers — 4-col on desktop, 2x2 on mobile so each
-            card keeps a readable headline number without forcing a
-            horizontal scroll. */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
-          gap: 1,
-          background: "var(--rule)",
-          border: isMobile ? "1px solid var(--rule)" : undefined,
-          marginBottom: isMobile ? 18 : 22,
-        }}>
-          {[
-            [String(total), "shows", "all time"],
-            [compactSpent, "spent", total > 0 ? `avg $${avgPerShow} / show` : ""],
-            [String(uniqueVenues), "venues", `${rotationVenues} in rotation`],
-            [String(uniqueArtists), "artists", `+ ${newArtistsThisYear} new in ${currentYear}`],
-          ].map(([v, l, sub]) => (
-            <div key={l} style={{
-              background: "var(--surface)",
-              padding: isMobile ? "16px 14px 14px" : "22px 22px 20px",
-              minWidth: 0,
-            }}>
-              <div style={{
-                fontFamily: "var(--font-geist-sans), sans-serif",
-                fontSize: isMobile ? 30 : 44,
-                fontWeight: 500,
-                color: "var(--ink)",
-                letterSpacing: isMobile ? -0.9 : -1.6,
-                lineHeight: 0.95,
-                fontFeatureSettings: '"tnum"',
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}>
-                {v}
-              </div>
-              <div style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: isMobile ? 10 : 11,
-                color: "var(--ink)",
-                letterSpacing: ".1em",
-                textTransform: "uppercase",
-                marginTop: isMobile ? 6 : 10,
-                fontWeight: 500,
-              }}>
-                {l}
-              </div>
-              {sub && (
-                <div style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10,
-                  color: "var(--faint)",
-                  marginTop: 3,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}>
-                  {sub}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Rhythm chart */}
-        <div style={{
-          background: "var(--surface)",
-          padding: isMobile ? "16px 14px" : "22px 26px",
-          marginBottom: isMobile ? 18 : 22,
-        }}>
-          <div style={{
-            display: "flex",
-            alignItems: isMobile ? "flex-start" : "baseline",
-            justifyContent: "space-between",
-            flexDirection: isMobile ? "column" : "row",
-            gap: isMobile ? 10 : 0,
-            marginBottom: isMobile ? 14 : 18,
-          }}>
-            <div>
-              <div style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
-                color: "var(--ink)",
-                letterSpacing: ".1em",
-                textTransform: "uppercase",
-                fontWeight: 500,
-              }}>
-                Rhythm &middot; {currentYear}
-              </div>
-              <div style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
-                color: "var(--faint)",
-                marginTop: 4,
-              }}>
-                {ytdShows} shows year-to-date &middot; pace for ~{pace}
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 16, fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                <div style={{ width: 9, height: 9, background: "var(--ink)" }} /> attended
-              </span>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                <Square size={9} color="var(--ink)" /> ticketed
-              </span>
-            </div>
-          </div>
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(12, 1fr)",
-            gap: isMobile ? 3 : 6,
-            alignItems: "end",
-            height: isMobile ? 72 : 96,
-            position: "relative",
-          }}>
-            {rhythm.map((m, i) => {
-              const isNow = i === currentMonth;
-              const cellH = isMobile ? 12 : 18;
-              return (
-                <div key={i} style={{ display: "flex", flexDirection: "column-reverse", gap: 2, height: "100%", position: "relative" }}>
-                  {Array.from({ length: m.a }).map((_, j) => (
-                    <div key={"a" + j} style={{ height: cellH, background: "var(--ink)" }} />
-                  ))}
-                  {Array.from({ length: m.t }).map((_, j) => (
-                    <div key={"t" + j} style={{ height: cellH, border: "1.25px solid var(--ink)", background: "transparent" }} />
-                  ))}
-                  {isNow && (
-                    <div style={{
-                      position: "absolute",
-                      top: -16,
-                      left: "50%",
-                      transform: "translateX(-50%)",
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 9,
-                      color: "var(--kind-concert)",
-                      letterSpacing: ".1em",
-                      whiteSpace: "nowrap",
-                      fontWeight: 500,
-                    }}>
-                      TODAY
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: isMobile ? 3 : 6, marginTop: 10 }}>
-            {MONTHS.map((m, i) => (
-              <div key={i} style={{
-                textAlign: "center",
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: isMobile ? 8.5 : 10,
-                color: i === currentMonth ? "var(--ink)" : "var(--faint)",
-                letterSpacing: isMobile ? ".02em" : ".06em",
-                fontWeight: i === currentMonth ? 500 : 400,
-              }}>
-                {isMobile ? m[0] : m}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Most seen / Most frequented / By kind. Desktop runs them as a
-            3-col grid; mobile stacks them so the 8-cell sparkline doesn't
-            collapse into an unreadable smear and the venue/artist names
-            keep their full width. */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 340px",
-          gap: isMobile ? 18 : 22,
-        }}>
-          {/* Most seen artists */}
-          <div style={{
-            background: "var(--surface)",
-            padding: isMobile ? "16px 14px 12px" : "22px 22px 18px",
-          }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: isMobile ? 12 : 16 }}>
-              <div style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
-                color: "var(--ink)",
-                letterSpacing: ".1em",
-                textTransform: "uppercase",
-                fontWeight: 500,
-              }}>
-                Most seen
-              </div>
-              <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--faint)" }}>
-                artists &middot; {timeframeLabel.toLowerCase()}
-              </div>
-            </div>
-            {topArtists.map(([name, { count, kind }]) => {
-              const pct = Math.max(8, Math.round((count / maxArtistCount) * 100));
-              if (isMobile) {
-                // Mobile: two-line layout with a proper progress bar.
-                // The desktop 8-cell sparkline gets crushed below ~120px;
-                // a continuous bar reads clearly at any width.
-                return (
-                  <div key={name} style={{ padding: "10px 0", borderBottom: "1px solid var(--rule)" }}>
-                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
-                      <div style={{
-                        fontFamily: "var(--font-geist-sans), sans-serif",
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: "var(--ink)",
-                        letterSpacing: -0.1,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        flex: 1,
-                        minWidth: 0,
-                      }}>
-                        {name}
-                      </div>
-                      <div style={{
-                        fontFamily: "var(--font-geist-mono), monospace",
-                        fontSize: 11.5,
-                        color: "var(--ink)",
-                        fontWeight: 500,
-                        flexShrink: 0,
-                      }}>
-                        {count}&times;
-                      </div>
-                    </div>
-                    <div style={{ height: 6, background: "var(--surface2)" }}>
-                      <div style={{ width: `${pct}%`, height: "100%", background: `var(--kind-${kind})` }} />
-                    </div>
-                  </div>
-                );
-              }
-              return (
-                <div key={name} style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 80px 30px",
-                  columnGap: 14,
-                  alignItems: "center",
-                  padding: "11px 0",
-                  borderBottom: "1px solid var(--rule)",
-                }}>
-                  <div style={{
-                    fontFamily: "var(--font-geist-sans), sans-serif",
-                    fontSize: 14,
-                    color: "var(--ink)",
-                    letterSpacing: -0.1,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}>
-                    {name}
-                  </div>
-                  <div style={{ display: "flex", gap: 2 }}>
-                    {Array.from({ length: SPARKLINE_MAX }).map((_, i) => (
-                      <div key={i} style={{
-                        height: 9,
-                        flex: 1,
-                        background: i < count ? `var(--kind-${kind})` : "transparent",
-                        border: i < count ? "none" : "1px solid var(--rule-strong)",
-                      }} />
-                    ))}
-                  </div>
-                  <div style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11.5,
-                    color: "var(--ink)",
-                    textAlign: "right",
-                    fontWeight: 500,
-                  }}>
-                    {count}&times;
-                  </div>
-                </div>
-              );
-            })}
-            {topArtists.length === 0 && (
-              <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--faint)" }}>No data</div>
-            )}
-          </div>
-
-          {/* Most frequented venues */}
-          <div style={{
-            background: "var(--surface)",
-            padding: isMobile ? "16px 14px 12px" : "22px 22px 18px",
-          }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: isMobile ? 12 : 16 }}>
-              <div style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
-                color: "var(--ink)",
-                letterSpacing: ".1em",
-                textTransform: "uppercase",
-                fontWeight: 500,
-              }}>
-                Most frequented
-              </div>
-              <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--faint)" }}>
-                venues &middot; {timeframeLabel.toLowerCase()}
-              </div>
-            </div>
-            {topVenues.map(([name, { count, neighborhood }]) => {
-              const pct = Math.max(8, Math.round((count / maxVenueCount) * 100));
-              if (isMobile) {
-                return (
-                  <div key={name} style={{ padding: "10px 0", borderBottom: "1px solid var(--rule)" }}>
-                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{
-                          fontFamily: "var(--font-geist-sans), sans-serif",
-                          fontSize: 14,
-                          fontWeight: 500,
-                          color: "var(--ink)",
-                          letterSpacing: -0.1,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}>
-                          {name}
-                        </div>
-                        {neighborhood && (
-                          <div style={{
-                            fontFamily: "var(--font-geist-mono), monospace",
-                            fontSize: 10,
-                            color: "var(--muted)",
-                            marginTop: 1,
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}>
-                            {neighborhood.toLowerCase()}
-                          </div>
-                        )}
-                      </div>
-                      <div style={{
-                        fontFamily: "var(--font-geist-mono), monospace",
-                        fontSize: 11.5,
-                        color: "var(--ink)",
-                        fontWeight: 500,
-                        flexShrink: 0,
-                      }}>
-                        {count}
-                      </div>
-                    </div>
-                    <div style={{ height: 6, background: "var(--surface2)" }}>
-                      <div style={{ width: `${pct}%`, height: "100%", background: "var(--ink)" }} />
-                    </div>
-                  </div>
-                );
-              }
-              return (
-                <div key={name} style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 80px 30px",
-                  columnGap: 14,
-                  alignItems: "center",
-                  padding: "11px 0",
-                  borderBottom: "1px solid var(--rule)",
-                }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{
-                      fontFamily: "var(--font-geist-sans), sans-serif",
-                      fontSize: 14,
-                      color: "var(--ink)",
-                      letterSpacing: -0.1,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}>
-                      {name}
-                    </div>
-                    <div style={{
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 10,
-                      color: "var(--muted)",
-                      marginTop: 2,
-                    }}>
-                      {neighborhood.toLowerCase()}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 2 }}>
-                    {Array.from({ length: SPARKLINE_MAX }).map((_, i) => (
-                      <div key={i} style={{
-                        height: 9,
-                        flex: 1,
-                        background: i < count ? "var(--ink)" : "transparent",
-                        border: i < count ? "none" : "1px solid var(--rule-strong)",
-                      }} />
-                    ))}
-                  </div>
-                  <div style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11.5,
-                    color: "var(--ink)",
-                    textAlign: "right",
-                    fontWeight: 500,
-                  }}>
-                    {count}
-                  </div>
-                </div>
-              );
-            })}
-            {topVenues.length === 0 && (
-              <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--faint)" }}>No data</div>
-            )}
-          </div>
-
-          {/* Kind mix */}
-          <div style={{
-            background: "var(--surface)",
-            padding: isMobile ? "16px 14px 12px" : "22px 22px 18px",
-          }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: isMobile ? 12 : 16 }}>
-              <div style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
-                color: "var(--ink)",
-                letterSpacing: ".1em",
-                textTransform: "uppercase",
-                fontWeight: 500,
-              }}>
-                By kind
-              </div>
-              <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--faint)" }}>
-                all {total}
-              </div>
-            </div>
-            {kindMix.map(({ kind, count }) => {
-              const KIcon = KIND_ICONS[kind];
-              const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-              return (
-                <div key={kind} style={{ padding: "12px 0", borderBottom: "1px solid var(--rule)" }}>
-                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
-                    <span style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 7,
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 11,
-                      color: `var(--kind-${kind})`,
-                      letterSpacing: ".08em",
-                      textTransform: "uppercase",
-                      fontWeight: 500,
-                    }}>
-                      <KIcon size={13} color={`var(--kind-${kind})`} />
-                      {KIND_LABELS[kind]}
-                    </span>
-                    <span style={{
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 11,
-                      color: "var(--ink)",
-                      fontWeight: 500,
-                    }}>
-                      {count} &middot; {pct}%
-                    </span>
-                  </div>
-                  <div style={{ height: 6, background: "var(--surface2)" }}>
-                    <div style={{ width: `${pct}%`, height: "100%", background: `var(--kind-${kind})` }} />
-                  </div>
-                </div>
-              );
-            })}
-            {kindMix.length === 0 && (
-              <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--faint)" }}>No data</div>
-            )}
-          </div>
-        </div>
-
-        {/* Superlatives strip */}
-        <div style={{
-          marginTop: isMobile ? 18 : 22,
-          background: "var(--surface)",
-          padding: isMobile ? "16px 14px" : "20px 26px",
-        }}>
-          <div style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
-            color: "var(--ink)",
-            letterSpacing: ".1em",
-            textTransform: "uppercase",
-            fontWeight: 500,
-            marginBottom: 14,
-          }}>
-            Superlatives &middot; {currentYear}
-          </div>
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
-            gap: isMobile ? 16 : 24,
-          }}>
-            {(() => {
-              const thisYearShows = allShowsList.filter((s) => getYear(s.date) === currentYear);
-
-              // Priciest
-              const priciest = thisYearShows
-                .filter((s) => s.pricePaid)
-                .sort((a, b) => parseFloat(b.pricePaid!) - parseFloat(a.pricePaid!))[0];
-              const priciestVal = priciest ? `$${parseFloat(priciest.pricePaid!).toFixed(0)}` : "--";
-              const priciestSub = priciest ? `${getHeadliner(priciest)} · ${toDateParts(priciest.date).month} ${toDateParts(priciest.date).day}` : "";
-
-              // Total spent this year
-              const yearSpent = thisYearShows.reduce((s, sh) => s + (sh.pricePaid ? parseFloat(sh.pricePaid) : 0), 0);
-
-              // Cheapest
-              const cheapest = thisYearShows
-                .filter((s) => s.pricePaid && parseFloat(s.pricePaid) > 0)
-                .sort((a, b) => parseFloat(a.pricePaid!) - parseFloat(b.pricePaid!))[0];
-              const cheapestVal = cheapest ? `$${parseFloat(cheapest.pricePaid!).toFixed(0)}` : "--";
-              const cheapestSub = cheapest ? `${getHeadliner(cheapest)} · ${toDateParts(cheapest.date).month} ${toDateParts(cheapest.date).day}` : "";
-
-              // Most shows in a month
-              const monthCounts = new Map<number, number>();
-              for (const s of thisYearShows) {
-                if (!s.date) continue;
-                const m = new Date(s.date + "T00:00:00").getMonth();
-                monthCounts.set(m, (monthCounts.get(m) ?? 0) + 1);
-              }
-              const bestMonth = Array.from(monthCounts.entries()).sort((a, b) => b[1] - a[1])[0];
-              const bestMonthVal = bestMonth ? `${bestMonth[1]}` : "--";
-              const bestMonthSub = bestMonth ? `${MONTH_NAMES[bestMonth[0]]}` : "";
-
-              return [
-                ["Priciest", priciestVal, priciestSub],
-                ["Cheapest", cheapestVal, cheapestSub],
-                ["Best month", bestMonthVal, bestMonthSub],
-                [`${currentYear} spent`, yearSpent > 0 ? `$${yearSpent.toLocaleString()}` : "--", `${thisYearShows.length} shows`],
-              ];
-            })().map(([l, v, sub]) => (
-              <div key={l} style={{ minWidth: 0 }}>
-                <div style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10,
-                  color: "var(--faint)",
-                  letterSpacing: ".1em",
-                  textTransform: "uppercase",
-                }}>
-                  {l}
-                </div>
-                <div style={{
-                  fontFamily: "var(--font-geist-sans), sans-serif",
-                  fontSize: isMobile ? 22 : 26,
-                  fontWeight: 500,
-                  color: "var(--ink)",
-                  letterSpacing: -0.7,
-                  marginTop: 6,
-                  fontFeatureSettings: '"tnum"',
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}>
-                  {v}
-                </div>
-                <div style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10.5,
-                  color: "var(--muted)",
-                  marginTop: 4,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}>
-                  {sub}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // ---------------------------------------------------------------------------
   // Render: Page
@@ -2671,11 +1238,41 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
       ...(isMobile ? {} : { height: "100%", minHeight: 0 }),
     }}>
       {renderHeader()}
-      {renderFilterBar()}
+      <FilterBar
+        isMobile={isMobile}
+        isLogbook={isLogbook}
+        yearButtons={yearButtons}
+        selectedYear={selectedYear}
+        onSelectYear={setSelectedYear}
+        upcomingFilter={upcomingFilter}
+        onUpcomingFilterChange={setUpcomingFilter}
+        selectedKind={selectedKind}
+        onSelectKind={setSelectedKind}
+        filteredCount={filteredShows.length}
+      />
 
       {viewMode === "list" && renderList()}
-      {viewMode === "calendar" && renderCalendar()}
-      {viewMode === "stats" && renderStats()}
+      {viewMode === "calendar" && (
+        <CalendarView
+          shows={shows}
+          allShows={(allShowsUnfiltered ?? []) as ShowData[]}
+          calView={calView}
+          calMonth={calMonth}
+          calYear={calYear}
+          setCalView={setCalView}
+          setCalMonth={setCalMonth}
+          setCalYear={setCalYear}
+          isMobile={isMobile}
+        />
+      )}
+      {viewMode === "stats" && (
+        <StatsView
+          shows={(allShowsUnfiltered ?? []) as ShowData[]}
+          timeframe={statsTimeframe}
+          onTimeframeChange={setStatsTimeframe}
+          isMobile={isMobile}
+        />
+      )}
 
       {isMobile && mobileImportOpen && (
         <div
@@ -2892,11 +1489,15 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                         : importSource === "gmail"
                           ? gmailAccessToken
                             ? "No tickets found"
-                            : "Waiting for Gmail authorization..."
+                            : oauthConsentStarted
+                              ? "Waiting for Gmail authorization..."
+                              : "Review what we'll store before connecting"
                           : importSource === "eventbrite"
                             ? eventbriteAccessToken
                               ? "No tickets found"
-                              : "Waiting for Eventbrite authorization..."
+                              : oauthConsentStarted
+                                ? "Waiting for Eventbrite authorization..."
+                                : "Review what we'll store before connecting"
                             : "Enter your setlist.fm username"}
                 </div>
               </div>
@@ -3026,16 +1627,82 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                     Fetch
                   </button>
                 </div>
-                <div style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10.5,
-                  color: "var(--faint)",
-                  letterSpacing: ".02em",
-                }}>
-                  Pulls every concert you&rsquo;ve marked attended on setlist.fm,
-                  including the setlist itself.
-                </div>
+                <ExternalSourceDisclaimer source="setlistfm" />
               </form>
+            )}
+
+            {/* gmail / eventbrite: consent step. Renders before the
+                OAuth popup opens so the user sees what we store and
+                why first. "Continue with X" opens the popup. */}
+            {(importSource === "gmail" || importSource === "eventbrite")
+              && !oauthConsentStarted
+              && !gmailBulkLoading
+              && gmailBulkResults.length === 0
+              && (importSource === "gmail" ? !gmailAccessToken : !eventbriteAccessToken)
+              && (
+              <div
+                style={{
+                  padding: "20px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                  borderBottom: "1px solid var(--rule)",
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "var(--font-geist-sans), sans-serif",
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    color: "var(--ink)",
+                  }}
+                >
+                  {importSource === "gmail"
+                    ? "Showbook will scan your inbox for ticket emails and surface them here so you can pick which shows to import."
+                    : "Showbook will fetch your past Eventbrite orders so you can pick which shows to import."}
+                </div>
+                <ExternalSourceDisclaimer source={importSource} />
+                <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                  <button
+                    type="button"
+                    onClick={() => startOauthPopup(importSource)}
+                    data-testid={`${importSource}-consent-continue`}
+                    style={{
+                      padding: "10px 16px",
+                      border: "none",
+                      background: "var(--ink)",
+                      color: "var(--bg)",
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: ".06em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {importSource === "gmail"
+                      ? "Continue with Gmail →"
+                      : "Continue with Eventbrite →"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImportSource(null)}
+                    style={{
+                      padding: "10px 12px",
+                      border: "none",
+                      background: "transparent",
+                      color: "var(--muted)",
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: 11,
+                      letterSpacing: ".06em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Not now
+                  </button>
+                </div>
+              </div>
             )}
 
             {/* Results list */}

@@ -38,7 +38,6 @@ import {
   Alert,
   StyleSheet,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
   Mail,
@@ -49,7 +48,7 @@ import {
   CloudUpload,
   Music,
 } from 'lucide-react-native';
-import { TopBar } from '../../components/TopBar';
+import { ScreenWrapper } from '../../components/ScreenWrapper';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { EmptyState } from '../../components/EmptyState';
 import { useTheme, type ThemePreference, type Density } from '../../lib/theme';
@@ -82,7 +81,6 @@ export default function MeScreen(): React.JSX.Element {
   const { colors } = tokens;
   const { user, signOut, token } = useAuth();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { count: pendingCount, openDrawer: openPendingDrawer, syncing } =
     useOfflineSync();
 
@@ -122,9 +120,7 @@ export default function MeScreen(): React.JSX.Element {
   const defaultRegion = prefsQuery.data?.regions?.[0];
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
-      <TopBar title="Me" eyebrow="ACCOUNT · SETTINGS" large />
-
+    <ScreenWrapper title="Me" eyebrow="ACCOUNT · SETTINGS" large>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.userRow}>
           <View style={[styles.avatar, { backgroundColor: colors.accent }]}>
@@ -170,13 +166,16 @@ export default function MeScreen(): React.JSX.Element {
         >
           <View style={styles.row}>
             <View style={styles.rowText}>
-              <Text style={[styles.rowLabel, { color: colors.ink }]}>Default region</Text>
+              <Text style={[styles.rowLabel, { color: colors.ink }]}>Region</Text>
               <Text style={[styles.rowSub, { color: colors.muted }]} numberOfLines={1}>
                 {defaultRegion
                   ? `${defaultRegion.cityName} · ${defaultRegion.radiusMiles}mi`
                   : prefsQuery.isLoading
                     ? 'Loading…'
                     : 'Not set'}
+              </Text>
+              <Text style={[styles.rowSub, { color: colors.faint, marginTop: 2 }]} numberOfLines={1}>
+                powers your daily email
               </Text>
             </View>
           </View>
@@ -276,7 +275,7 @@ export default function MeScreen(): React.JSX.Element {
           SHOWBOOK · v0.1 · M5
         </Text>
       </ScrollView>
-    </View>
+    </ScreenWrapper>
   );
 }
 

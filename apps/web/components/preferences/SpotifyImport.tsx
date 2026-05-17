@@ -2,6 +2,7 @@
 
 import { Music } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { ExternalSourceDisclaimer } from "../external-connection/ExternalSourceDisclaimer";
 import { SpotifyImportPicker } from "./SpotifyImportPicker";
 import { useSpotifyImport } from "./useSpotifyImport";
 
@@ -136,6 +137,11 @@ export function SpotifyImport() {
           )}
         </div>
       </div>
+      {!isConnected && (
+        <div style={{ paddingBottom: 14 }}>
+          <ExternalSourceDisclaimer source="spotify" />
+        </div>
+      )}
     </div>
   );
 }

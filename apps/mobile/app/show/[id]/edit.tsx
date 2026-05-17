@@ -13,7 +13,6 @@ import React from 'react';
 import {
   View,
   Text,
-  TextInput,
   ScrollView,
   Pressable,
   StyleSheet,
@@ -29,6 +28,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { TopBar } from '../../../components/TopBar';
 import { SegmentedControl } from '../../../components/SegmentedControl';
 import { VenueTypeahead, type VenueSuggestion } from '../../../components/VenueTypeahead';
+import { FormField, FormRow } from '../../../components/FormField';
 import { useTheme } from '../../../lib/theme';
 import { trpc } from '../../../lib/trpc';
 import { useFeedback } from '../../../lib/feedback';
@@ -320,24 +320,23 @@ export default function EditShowScreen(): React.JSX.Element {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          <Field label="Kind">
+          <FormField label="Kind">
             <SegmentedControl
               options={KIND_OPTIONS}
               value={values.kind}
               onChange={(k) => set('kind', k)}
             />
-          </Field>
+          </FormField>
 
-          <Field label={values.kind === 'theatre' ? 'Production' : 'Headliner'}>
-            <Input
-              value={values.headliner}
-              onChangeText={(v) => set('headliner', v)}
-              placeholder="Required"
-              autoCapitalize="words"
-            />
-          </Field>
+          <FormField
+            label={values.kind === 'theatre' ? 'Production' : 'Headliner'}
+            value={values.headliner}
+            onChangeText={(v) => set('headliner', v)}
+            placeholder="Required"
+            autoCapitalize="words"
+          />
 
-          <Field label="Venue">
+          <FormField label="Venue">
             <VenueTypeahead
               value={values.venueQuery}
               onChange={(v) => {
@@ -365,111 +364,62 @@ export default function EditShowScreen(): React.JSX.Element {
                 <X size={12} color={colors.accentText} strokeWidth={2.4} />
               </Pressable>
             ) : null}
-          </Field>
+          </FormField>
 
-          <Field label="Date">
-            <Input
-              value={values.date}
-              onChangeText={(v) => set('date', v)}
-              placeholder="YYYY-MM-DD"
-              autoCapitalize="none"
+          <FormField
+            label="Date"
+            value={values.date}
+            onChangeText={(v) => set('date', v)}
+            placeholder="YYYY-MM-DD"
+            autoCapitalize="none"
+          />
+
+          <FormField
+            label="Support / lineup"
+            value={values.supportActs}
+            onChangeText={(v) => set('supportActs', v)}
+            placeholder="Comma-separated"
+            multiline
+            numberOfLines={2}
+          />
+
+          <FormRow>
+            <FormField
+              label="Seat"
+              flex={2}
+              value={values.seat}
+              onChangeText={(v) => set('seat', v)}
+              placeholder="Section, row, seat"
             />
-          </Field>
-
-          <Field label="Support / lineup">
-            <Input
-              value={values.supportActs}
-              onChangeText={(v) => set('supportActs', v)}
-              placeholder="Comma-separated"
-              multiline
-              numberOfLines={2}
+            <FormField
+              label="Tickets"
+              flex={1}
+              value={values.ticketCount}
+              onChangeText={(v) => set('ticketCount', v.replace(/[^0-9]/g, ''))}
+              placeholder="1"
+              keyboardType="numeric"
             />
-          </Field>
+          </FormRow>
 
-          <Row>
-            <Field label="Seat" flex={2}>
-              <Input
-                value={values.seat}
-                onChangeText={(v) => set('seat', v)}
-                placeholder="Section, row, seat"
-              />
-            </Field>
-            <Field label="Tickets" flex={1}>
-              <Input
-                value={values.ticketCount}
-                onChangeText={(v) => set('ticketCount', v.replace(/[^0-9]/g, ''))}
-                placeholder="1"
-                keyboardType="numeric"
-              />
-            </Field>
-          </Row>
+          <FormField
+            label="Price paid"
+            value={values.pricePaid}
+            onChangeText={(v) => set('pricePaid', v.replace(/[^0-9.]/g, ''))}
+            placeholder="0.00"
+            keyboardType="decimal-pad"
+          />
 
-          <Field label="Price paid">
-            <Input
-              value={values.pricePaid}
-              onChangeText={(v) => set('pricePaid', v.replace(/[^0-9.]/g, ''))}
-              placeholder="0.00"
-              keyboardType="decimal-pad"
-            />
-          </Field>
-
-          <Field label="Notes">
-            <Input
-              value={values.notes}
-              onChangeText={(v) => set('notes', v)}
-              placeholder="Anything to remember"
-              multiline
-              numberOfLines={4}
-            />
-          </Field>
+          <FormField
+            label="Notes"
+            value={values.notes}
+            onChangeText={(v) => set('notes', v)}
+            placeholder="Anything to remember"
+            multiline
+            numberOfLines={4}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
-  );
-}
-
-function Field({
-  label,
-  children,
-  flex,
-}: {
-  label: string;
-  children: React.ReactNode;
-  flex?: number;
-}): React.JSX.Element {
-  const { tokens } = useTheme();
-  return (
-    <View style={[styles.field, flex !== undefined && { flex }]}>
-      <Text style={[styles.fieldLabel, { color: tokens.colors.faint }]}>
-        {label.toUpperCase()}
-      </Text>
-      {children}
-    </View>
-  );
-}
-
-function Row({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return <View style={styles.row}>{children}</View>;
-}
-
-function Input(props: React.ComponentProps<typeof TextInput>): React.JSX.Element {
-  const { tokens } = useTheme();
-  const { colors } = tokens;
-  return (
-    <TextInput
-      {...props}
-      placeholderTextColor={colors.faint}
-      style={[
-        styles.input,
-        {
-          color: colors.ink,
-          borderColor: colors.rule,
-          backgroundColor: colors.surface,
-        },
-        props.multiline && { minHeight: 72, textAlignVertical: 'top' },
-        props.style,
-      ]}
-    />
   );
 }
 
@@ -484,23 +434,6 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingBottom: 64,
     gap: 16,
-  },
-  field: { gap: 6 },
-  fieldLabel: {
-    fontFamily: 'Geist Sans',
-    fontSize: 10.5,
-    fontWeight: '600',
-    letterSpacing: 1.05,
-  },
-  row: { flexDirection: 'row', gap: 12 },
-  input: {
-    fontFamily: 'Geist Sans',
-    fontSize: 15,
-    fontWeight: '400',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
   },
   venuePill: {
     flexDirection: 'row',

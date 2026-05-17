@@ -13,3 +13,4 @@ export { SectionHeader } from "./SectionHeader";
 export { Toggle } from "./Toggle";
 export { Tooltip } from "./Tooltip";
 export { CenteredMessage } from "./CenteredMessage";
+export { QueryBoundary } from "./QueryBoundary";

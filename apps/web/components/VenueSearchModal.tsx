@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus, Search, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { usePlaceSearch } from "@/lib/usePlaceSearch";
 
 interface VenueSearchModalProps {
   onClose: () => void;
@@ -21,10 +22,7 @@ export function VenueSearchModal({
     { enabled: query.length >= 2 },
   );
 
-  const placesResults = trpc.enrichment.searchPlaces.useQuery(
-    { query, types: "venue" },
-    { enabled: query.length >= 2 },
-  );
+  const placesSearch = usePlaceSearch(query, { types: "venue" });
 
   const followMutation = trpc.venues.follow.useMutation({
     meta: { successToast: "Following venue" },
@@ -45,11 +43,12 @@ export function VenueSearchModal({
   }, []);
 
   const localVenues = searchResults.data ?? [];
-  const places = placesResults.data ?? [];
   const localIds = new Set(
     localVenues.map((v) => v.googlePlaceId).filter(Boolean),
   );
-  const filteredPlaces = places.filter((p) => !localIds.has(p.placeId));
+  const filteredPlaces = placesSearch.results.filter(
+    (p) => !localIds.has(p.placeId),
+  );
   const isPending = followMutation.isPending || createAndFollow.isPending;
 
   return (
@@ -141,6 +140,7 @@ export function VenueSearchModal({
           ))}
           {query.length >= 2 &&
             !searchResults.isLoading &&
+            !placesSearch.isSearching &&
             localVenues.length === 0 &&
             filteredPlaces.length === 0 && (
               <div className="discover-modal__hint">No venues found</div>

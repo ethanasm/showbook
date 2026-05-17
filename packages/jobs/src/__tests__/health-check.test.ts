@@ -79,13 +79,32 @@ function makeResend(opts: {
   return fake;
 }
 
+// Every scheduled queue checked by checkMissedSchedules — used to seed
+// the "all schedules ran" DB result without caring which day-of-week the
+// test runs on.
+const ALL_SCHEDULED_QUEUES = [
+  'shows/nightly',
+  'enrichment/setlist-retry',
+  'backfill/performer-images',
+  'backfill/venue-photos',
+  'notifications/daily-digest',
+  'discover/ingest',
+];
+
+function freshSchedulesRows(at: Date = new Date()): Array<{ name: string; latest: Date }> {
+  const latest = new Date(at.getTime() - 60 * 60 * 1000); // 1h ago
+  return ALL_SCHEDULED_QUEUES.map((name) => ({ name, latest }));
+}
+
 beforeEach(() => {
-  // Default: clean queue, fresh announcements, no stalled scrapes.
+  // Default: clean queue, fresh announcements, no stalled scrapes, every
+  // scheduled queue has a recent firing.
   EXECUTE.results = [
     [], // checkDatabaseConnectivity SELECT 1
     [{ failed: 0, active_stuck: 0, active_total: 0, retry: 0 }], // pgboss queue
     [{ last_discovered: new Date(Date.now() - 60 * 60 * 1000) }], // freshness
     [{ cnt: 0 }], // stalled scrapes
+    freshSchedulesRows(), // checkMissedSchedules pgboss.job / archive union
   ];
   EXECUTE.shouldThrow = null;
   delete process.env.RESEND_API_KEY;
@@ -96,11 +115,12 @@ beforeEach(() => {
 describe('runHealthCheck', () => {
   it('runs every check and rolls up status (ok when all clean and Axiom unset)', async () => {
     const result = await runHealthCheck({ pings: noopPings, resend: null, generatePreamble: noPreamble });
-    // 5 ok (db, queue, freshness, stalled, external) + 3 unknown (axiom checks).
+    // 6 ok (db, queue, freshness, stalled, missed_schedules, external)
+    // + 2 unknown (the remaining axiom-backed checks: failed_jobs, error_volume).
     assert.equal(result.checks.length, 8);
     assert.equal(result.failCount, 0);
-    assert.equal(result.unknownCount, 3);
-    assert.equal(result.okCount, 5);
+    assert.equal(result.unknownCount, 2);
+    assert.equal(result.okCount, 6);
     assert.equal(result.status, 'ok');
     assert.equal(result.emailSent, false); // no recipient configured
   });
@@ -167,6 +187,7 @@ describe('runHealthCheck', () => {
         [{ failed: 0, active_stuck: 0, active_total: 0, retry: 0 }],
         [{ last_discovered: new Date('2026-05-05T11:00:00Z') }],
         [{ cnt: 0 }],
+        freshSchedulesRows(new Date('2026-05-05T11:00:00Z')),
       ];
     };
     seedExecute();

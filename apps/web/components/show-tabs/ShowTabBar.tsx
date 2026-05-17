@@ -6,6 +6,8 @@ interface ShowTabBarProps {
   active: ShowTabKey;
   badges: ShowTabBadges;
   onSelect: (next: ShowTabKey) => void;
+  /** Tabs to omit from the bar (e.g. `setlist` for theatre/comedy shows). */
+  hiddenTabs?: readonly ShowTabKey[];
 }
 
 const TABS: { key: ShowTabKey; label: string }[] = [
@@ -21,7 +23,9 @@ const TABS: { key: ShowTabKey; label: string }[] = [
  * accent-colored badge ring. Hover and focus light up muted-foreground
  * for non-active tabs.
  */
-export function ShowTabBar({ active, badges, onSelect }: ShowTabBarProps) {
+export function ShowTabBar({ active, badges, onSelect, hiddenTabs }: ShowTabBarProps) {
+  const hidden = new Set(hiddenTabs ?? []);
+  const visibleTabs = TABS.filter((tab) => !hidden.has(tab.key));
   return (
     <nav
       role="tablist"
@@ -38,7 +42,7 @@ export function ShowTabBar({ active, badges, onSelect }: ShowTabBarProps) {
         zIndex: 2,
       }}
     >
-      {TABS.map((tab) => {
+      {visibleTabs.map((tab) => {
         const isActive = tab.key === active;
         const badge = badges[tab.key];
         return (
