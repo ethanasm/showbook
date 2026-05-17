@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { SectionFrame } from "./SectionFrame";
 import { SpoilerCurtain } from "./SpoilerCurtain";
 import { HypePlaylistCardPlaceholder } from "./HypePlaylistCardPlaceholder";

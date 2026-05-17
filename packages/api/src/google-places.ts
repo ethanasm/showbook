@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { child } from '@showbook/observability';
 
 const log = child({ component: 'api.google-places' });
@@ -25,6 +26,64 @@ export interface PlaceDetails {
   photoUrl: string | null;
 }
 
+// Google Places API (New) response shapes. Only the fields actually consumed
+// are typed; everything else is permitted via passthrough so an additive
+// upstream change doesn't blow up our parse.
+const AutocompleteResponseSchema = z
+  .object({
+    suggestions: z
+      .array(
+        z
+          .object({
+            placePrediction: z
+              .object({
+                placeId: z.string(),
+                text: z.object({ text: z.string() }).partial().optional(),
+                structuredFormat: z
+                  .object({
+                    mainText: z.object({ text: z.string() }).partial().optional(),
+                    secondaryText: z.object({ text: z.string() }).partial().optional(),
+                  })
+                  .partial()
+                  .optional(),
+              })
+              .optional(),
+          })
+          .passthrough(),
+      )
+      .optional(),
+  })
+  .passthrough();
+
+const AddressComponentSchema = z
+  .object({
+    types: z.array(z.string()).optional(),
+    longText: z.string().optional(),
+    shortText: z.string().optional(),
+  })
+  .passthrough();
+
+const PhotoSchema = z
+  .object({
+    name: z.string().optional(),
+    widthPx: z.number().optional(),
+    heightPx: z.number().optional(),
+  })
+  .passthrough();
+
+const PlaceDetailsResponseSchema = z
+  .object({
+    displayName: z.object({ text: z.string() }).partial().optional(),
+    formattedAddress: z.string().optional(),
+    location: z
+      .object({ latitude: z.number(), longitude: z.number() })
+      .partial()
+      .optional(),
+    addressComponents: z.array(AddressComponentSchema).optional(),
+    photos: z.array(PhotoSchema).optional(),
+  })
+  .passthrough();
+
 export async function autocomplete(
   input: string,
   types: string[] = ['establishment'],
@@ -51,16 +110,30 @@ export async function autocomplete(
     return [];
   }
 
-  const data = await res.json();
-  const suggestions = data.suggestions ?? [];
+  const raw = await res.json();
+  const parsed = AutocompleteResponseSchema.safeParse(raw);
+  if (!parsed.success) {
+    log.error(
+      { event: 'places.autocomplete.parse_failed', issues: parsed.error.issues.slice(0, 5) },
+      'autocomplete response did not match expected shape',
+    );
+    return [];
+  }
 
-  return suggestions
-    .filter((s: any) => s.placePrediction)
-    .map((s: any) => ({
-      placeId: s.placePrediction.placeId,
-      displayName: s.placePrediction.structuredFormat?.mainText?.text ?? s.placePrediction.text?.text ?? '',
-      formattedAddress: s.placePrediction.structuredFormat?.secondaryText?.text ?? '',
-    }));
+  const suggestions = parsed.data.suggestions ?? [];
+
+  return suggestions.flatMap((s) => {
+    const p = s.placePrediction;
+    if (!p) return [];
+    return [
+      {
+        placeId: p.placeId,
+        displayName:
+          p.structuredFormat?.mainText?.text ?? p.text?.text ?? '',
+        formattedAddress: p.structuredFormat?.secondaryText?.text ?? '',
+      },
+    ];
+  });
 }
 
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | null> {
@@ -81,11 +154,20 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
 
   if (!res.ok) return null;
 
-  const data = await res.json();
+  const raw = await res.json();
+  const parsed = PlaceDetailsResponseSchema.safeParse(raw);
+  if (!parsed.success) {
+    log.error(
+      { event: 'places.details.parse_failed', placeId, issues: parsed.error.issues.slice(0, 5) },
+      'place details response did not match expected shape',
+    );
+    return null;
+  }
+  const data = parsed.data;
 
   const components = data.addressComponents ?? [];
   const find = (type: string): string | null => {
-    const comp = components.find((c: any) => c.types?.includes(type));
+    const comp = components.find((c) => c.types?.includes(type));
     return comp?.longText ?? comp?.shortText ?? null;
   };
 
@@ -107,19 +189,23 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
 // food shot or a tight marquee close-up — this picks the next viable
 // landscape instead. Falls back to photos[0] when nothing matches so we
 // never regress to "no photo at all".
-export function pickBestPhotoName(photos: any): string | null {
+//
+// Accepts `unknown` so callers parsing arbitrary JSON can hand the
+// `photos` field directly; the guards below cope with any shape.
+export function pickBestPhotoName(photos: unknown): string | null {
   if (!Array.isArray(photos) || photos.length === 0) return null;
   const MIN_RATIO = 1.3;
   const MIN_WIDTH = 1600;
   const candidates = photos.slice(0, 5);
   for (const photo of candidates) {
-    const name = photo?.name;
-    const w = Number(photo?.widthPx);
-    const h = Number(photo?.heightPx);
-    if (!name || !Number.isFinite(w) || !Number.isFinite(h) || h <= 0) continue;
+    const name = (photo as { name?: unknown })?.name;
+    const w = Number((photo as { widthPx?: unknown })?.widthPx);
+    const h = Number((photo as { heightPx?: unknown })?.heightPx);
+    if (typeof name !== 'string' || !name || !Number.isFinite(w) || !Number.isFinite(h) || h <= 0) continue;
     if (w / h >= MIN_RATIO && w >= MIN_WIDTH) return name;
   }
-  return photos[0]?.name ?? null;
+  const first = photos[0] as { name?: unknown } | undefined;
+  return typeof first?.name === 'string' ? first.name : null;
 }
 
 export function getPlacePhotoMediaUrl(photoName: string, maxWidthPx = 1200): string | null {

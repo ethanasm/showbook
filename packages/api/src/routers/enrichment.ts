@@ -283,14 +283,14 @@ export const enrichmentRouter = router({
       return withTrace(
         'trpc.enrichment.extractFromPdf',
         async () => {
-          const { PDFParse } = await import(/* webpackIgnore: true */ 'pdf-parse');
+          const { extractText, getDocumentProxy } = await import('unpdf');
           const buffer = Buffer.from(input.fileBase64, 'base64');
-          const parser = new PDFParse({ data: new Uint8Array(buffer) });
-          const result = await parser.getText();
-          if (!result.text.trim()) {
+          const pdf = await getDocumentProxy(new Uint8Array(buffer));
+          const { text } = await extractText(pdf, { mergePages: true });
+          if (!text.trim()) {
             throw new TRPCError({ code: 'BAD_REQUEST', message: 'Could not extract text from PDF' });
           }
-          return extractShowFromPdfText(result.text);
+          return extractShowFromPdfText(text);
         },
         { userId: ctx.session.user.id, tags: ['enrichment', 'llm', 'pdf'] },
       );
@@ -328,19 +328,17 @@ export const enrichmentRouter = router({
             if (input.imageBase64) {
               lineup = await extractFestivalLineupFromImage(input.imageBase64);
             } else {
-              const { PDFParse } = await import(
-                /* webpackIgnore: true */ 'pdf-parse'
-              );
+              const { extractText, getDocumentProxy } = await import('unpdf');
               const buffer = Buffer.from(input.pdfBase64!, 'base64');
-              const parser = new PDFParse({ data: new Uint8Array(buffer) });
-              const result = await parser.getText();
-              if (!result.text.trim()) {
+              const pdf = await getDocumentProxy(new Uint8Array(buffer));
+              const { text } = await extractText(pdf, { mergePages: true });
+              if (!text.trim()) {
                 throw new TRPCError({
                   code: 'BAD_REQUEST',
                   message: 'Could not extract text from PDF',
                 });
               }
-              lineup = await extractFestivalLineupFromPdfText(result.text);
+              lineup = await extractFestivalLineupFromPdfText(text);
             }
             log.info(
               {

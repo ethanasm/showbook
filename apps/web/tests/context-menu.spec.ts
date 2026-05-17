@@ -76,9 +76,6 @@ test.describe('Context menus on list pages', () => {
     // OR the headliner should no longer be the first (another row took its place)
     // Since seeds have 20 shows across all states, after deleting 1 from page 1
     // the page still shows 12 rows (backfilled from page 2), but the total should be 19
-    const totalText = await page.locator('[data-testid="pagination-next"]').isVisible()
-      ? await page.textContent('body')
-      : null;
     // At minimum, confirm no JS errors and page still shows rows
     await expect(page.locator('.show-row').first()).toBeVisible();
   });

@@ -24,7 +24,6 @@ import {
   shows,
   showPerformers,
   showSpotifyPlaylists,
-  songs,
   tourSetlists,
   userSpotifyTokens,
   users,

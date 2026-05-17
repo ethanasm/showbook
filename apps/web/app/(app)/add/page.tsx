@@ -21,7 +21,6 @@ import {
 } from "@/components/add/useFestivalLineup";
 import {
   isDatePast,
-  flattenSetlistTitles,
   setlistTotalSongs,
   singleMainSet,
   normalizePerformerSetlist,
@@ -115,14 +114,6 @@ const IMPORT_SOURCES = [
   { tag: "pdf", label: "PDF ticket", sub: "drag or upload" },
   { tag: "mail", label: "Gmail receipts", sub: "scan inbox" },
 ];
-
-const PROVENANCE_ROWS = [
-  { source: "setlist.fm", what: "tour, setlist", defaultStatus: "pending" },
-  { source: "ticketmaster", what: "venue, date, seat, price", defaultStatus: "pending" },
-  { source: "playbill", what: "cast on this night", defaultStatus: "pending" },
-  { source: "musicbrainz", what: "artist disambiguation", defaultStatus: "pending" },
-  { source: "photos", what: "local images", defaultStatus: "pending" },
-] as const;
 
 // ── Styles ───────────────────────────────────────────────────
 

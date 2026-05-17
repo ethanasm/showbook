@@ -33,10 +33,7 @@ import {
   predictionCache,
   tourSetlists,
 } from '@showbook/db';
-import {
-  fetchArtistSetlists,
-  type ArtistSetlistEntry,
-} from '@showbook/api';
+import { fetchArtistSetlists } from '@showbook/api';
 
 const log = child({ component: 'jobs.setlist-corpus-fill' });
 

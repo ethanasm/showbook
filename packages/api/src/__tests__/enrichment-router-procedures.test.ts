@@ -60,7 +60,7 @@ mock.module('../setlistfm.js', {
       if (name === 'unknown') return [];
       return [{ mbid: 'mbid-1', name }];
     },
-    searchSetlist: async (mbid: string, date: string) => {
+    searchSetlist: async (_mbid: string, date: string) => {
       if (date === 'no-setlist') return null;
       return { setlist: [{ name: 'set', songs: ['A'] }], tourName: 'Tour' };
     },

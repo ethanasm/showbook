@@ -17,7 +17,6 @@ import {
   predictionEvalRuns,
   predictionEvalShows,
   tourSetlists,
-  users,
 } from '@showbook/db';
 import { synthesizeTourId } from '../setlist-corpus-fill';
 import { runDailyBacktest } from '../prediction-eval';

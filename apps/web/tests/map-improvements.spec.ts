@@ -61,7 +61,7 @@ test.describe('Map improvements', () => {
     await seedForWorker(page);
 
     // Get venue list via tRPC
-    const response = await page.evaluate(async () => {
+    await page.evaluate(async () => {
       const res = await fetch('/api/trpc/venues.followed', {
         headers: { 'Content-Type': 'application/json' },
       });

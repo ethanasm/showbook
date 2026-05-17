@@ -11,9 +11,7 @@ import { initFullTrackDriver } from "@/lib/spotify-playback";
 import {
   formatDateRangeLong,
   daysUntil,
-  isDatePast,
   normalizePerformerSetlistsMap,
-  setlistTotalSongs,
   type PerformerSetlistsMap,
 } from "@showbook/shared";
 import {
@@ -30,7 +28,6 @@ import { SetlistTab, SetlistTabComingSoon, type ActualSong } from "./SetlistTab"
 import { MediaTab } from "./MediaTab";
 import { NotesTab } from "./NotesTab";
 import { FanLoyaltyRing } from "./FanLoyaltyRing";
-import { DiscoveredRail } from "./DiscoveredRail";
 import { PrimingStat } from "./PrimingStat";
 import { useTrackTabView } from "./use-track-tab-view";
 import { computeShowTabBadges, isHypePlaylistVisible } from "./types";
