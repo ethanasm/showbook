@@ -58,6 +58,8 @@ export const JOB_NAMES = {
   SETLIST_RETRY: 'enrichment/setlist-retry',
   SETLIST_CORPUS_FILL: 'enrichment/setlist-corpus-fill',
   SETLIST_CORPUS_FILL_REFRESH: 'enrichment/setlist-corpus-fill-refresh',
+  BACKFILL_PERFORMER_MBIDS: 'backfill/performer-mbids',
+  BACKFILL_PERFORMER_TICKETMASTER_IDS: 'backfill/performer-ticketmaster-ids',
 } as const;
 
 export type CorpusFillMode = 'predict' | 'deep' | 'refresh';
@@ -132,6 +134,53 @@ export async function enqueueSetlistCorpusFill(
         mode,
       },
       'enqueueSetlistCorpusFill failed',
+    );
+    return null;
+  }
+}
+
+/**
+ * Trigger the performer-MBID backfill outside its 04:30 ET cron — used
+ * by the admin "Backfill performer MBIDs" button after a bulk import
+ * leaves a pile of performers with `musicbrainz_id IS NULL`.
+ */
+export async function enqueueBackfillPerformerMbids(): Promise<string | null> {
+  try {
+    const boss = await getSender();
+    return await boss.send(JOB_NAMES.BACKFILL_PERFORMER_MBIDS, {});
+  } catch (err) {
+    log.error(
+      {
+        err,
+        event: 'job_queue.enqueue.failed',
+        queue: JOB_NAMES.BACKFILL_PERFORMER_MBIDS,
+      },
+      'enqueueBackfillPerformerMbids failed',
+    );
+    return null;
+  }
+}
+
+/**
+ * Trigger the performer-Ticketmaster-id backfill outside its 06:00 ET
+ * cron — used by the admin "Backfill performer Ticketmaster IDs"
+ * button. Side-effect: fills MBID when TM exposes one and the row's
+ * MBID is null.
+ */
+export async function enqueueBackfillPerformerTicketmasterIds(): Promise<
+  string | null
+> {
+  try {
+    const boss = await getSender();
+    return await boss.send(JOB_NAMES.BACKFILL_PERFORMER_TICKETMASTER_IDS, {});
+  } catch (err) {
+    log.error(
+      {
+        err,
+        event: 'job_queue.enqueue.failed',
+        queue: JOB_NAMES.BACKFILL_PERFORMER_TICKETMASTER_IDS,
+      },
+      'enqueueBackfillPerformerTicketmasterIds failed',
     );
     return null;
   }

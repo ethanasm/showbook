@@ -13,6 +13,10 @@ interface Script {
   searchResultsByName: Map<string, Array<{ mbid: string }>>;
   searchErrorsByName: Map<string, Error>;
   conflictMbids: Set<string>;
+  // Performer ids for which the row-state race guard should fail (the
+  // UPDATE returns no rows because the WHERE clause's
+  // `isNull(musicbrainz_id)` predicate evaluates false).
+  raceLossPerformerIds: Set<string>;
   updates: Array<{ id: string; musicbrainzId: string }>;
 }
 
@@ -21,6 +25,7 @@ const SCRIPT: Script = {
   searchResultsByName: new Map(),
   searchErrorsByName: new Map(),
   conflictMbids: new Set(),
+  raceLossPerformerIds: new Set(),
   updates: [],
 };
 
@@ -29,7 +34,34 @@ function reset(opts: Partial<Script> = {}) {
   SCRIPT.searchResultsByName = opts.searchResultsByName ?? new Map();
   SCRIPT.searchErrorsByName = opts.searchErrorsByName ?? new Map();
   SCRIPT.conflictMbids = opts.conflictMbids ?? new Set();
+  SCRIPT.raceLossPerformerIds = opts.raceLossPerformerIds ?? new Set();
   SCRIPT.updates = [];
+}
+
+// Walk the drizzle predicate object recursively for any string that
+// matches a known performer id. The MBID job now wraps the WHERE in
+// `and(eq(id, x), isNull(musicbrainz_id))`, so the previous
+// `queryChunks[3]` extraction no longer holds.
+function findKnownId(predicate: unknown): string | undefined {
+  const known = new Set(SCRIPT.candidates.map((c) => c.id));
+  function walk(node: unknown): string | undefined {
+    if (typeof node === 'string' && known.has(node)) return node;
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        const found = walk(item);
+        if (found) return found;
+      }
+      return undefined;
+    }
+    if (node && typeof node === 'object') {
+      for (const v of Object.values(node)) {
+        const found = walk(v);
+        if (found) return found;
+      }
+    }
+    return undefined;
+  }
+  return walk(predicate);
 }
 
 const fakeDb = {
@@ -39,33 +71,61 @@ const fakeDb = {
     }),
   }),
   update: (_table: unknown) => ({
-    set: (vals: { musicbrainzId?: string }) => ({
-      where: (predicate: { queryChunks?: unknown[] }) => {
-        // `eq(performers.id, performer.id)` — id lands at index 3 of
-        // the drizzle queryChunks array. Same trick as the
-        // backfill-show-cover-images fake.
-        let id = 'unknown';
-        if (predicate && Array.isArray(predicate.queryChunks)) {
-          const idChunk = predicate.queryChunks[3];
-          if (typeof idChunk === 'string') id = idChunk;
-        }
-        const mbid = vals.musicbrainzId ?? '';
-        if (SCRIPT.conflictMbids.has(mbid)) {
+    set: (vals: { musicbrainzId?: string }) => {
+      const builder = {
+        _id: 'unknown' as string,
+        _vals: vals,
+        where(predicate: unknown) {
+          this._id = findKnownId(predicate) ?? 'unknown';
           // Match what drizzle-orm wrapping looks like: outer
           // DrizzleQueryError with a `.cause` that carries SQLSTATE 23505.
-          const cause = Object.assign(
-            new Error('duplicate key value violates unique constraint'),
-            { code: '23505' },
-          );
-          const err = Object.assign(new Error('drizzle: insert failed'), {
-            cause,
-          });
-          return Promise.reject(err);
-        }
-        SCRIPT.updates.push({ id, musicbrainzId: mbid });
-        return Promise.resolve(undefined);
-      },
-    }),
+          const mbid = this._vals.musicbrainzId ?? '';
+          if (SCRIPT.conflictMbids.has(mbid)) {
+            const cause = Object.assign(
+              new Error('duplicate key value violates unique constraint'),
+              { code: '23505' },
+            );
+            const err = Object.assign(new Error('drizzle: insert failed'), {
+              cause,
+            });
+            return Promise.reject(err);
+          }
+          // Default (no .returning chain): just commit and resolve.
+          SCRIPT.updates.push({ id: this._id, musicbrainzId: mbid });
+          return Promise.resolve(undefined);
+        },
+      };
+      // Drizzle's `.where(...).returning(...)` chain. The MBID job now
+      // calls `.returning({ id: performers.id })` so the row-state race
+      // guard can tell apart "wrote one row" from "WHERE matched nothing".
+      return {
+        where(predicate: unknown) {
+          builder._id = findKnownId(predicate) ?? 'unknown';
+          const mbid = builder._vals.musicbrainzId ?? '';
+          if (SCRIPT.conflictMbids.has(mbid)) {
+            return {
+              returning: () => {
+                const cause = Object.assign(
+                  new Error('duplicate key value violates unique constraint'),
+                  { code: '23505' },
+                );
+                const err = Object.assign(new Error('drizzle: insert failed'), {
+                  cause,
+                });
+                return Promise.reject(err);
+              },
+            };
+          }
+          if (SCRIPT.raceLossPerformerIds.has(builder._id)) {
+            return { returning: () => Promise.resolve([]) };
+          }
+          SCRIPT.updates.push({ id: builder._id, musicbrainzId: mbid });
+          return {
+            returning: () => Promise.resolve([{ id: builder._id }]),
+          };
+        },
+      };
+    },
   }),
 };
 
@@ -173,6 +233,23 @@ describe('runBackfillPerformerMbids', () => {
 
     assert.equal(result.updated, 0);
     assert.equal(result.missing, 0);
+    assert.equal(result.skipped, 1);
+    assert.equal(result.failed, 0);
+    assert.equal(SCRIPT.updates.length, 0);
+  });
+
+  it('treats a race-lost UPDATE (row filled between SELECT and UPDATE) as skipped, not updated', async () => {
+    reset({
+      candidates: [{ id: 'perf-raced', name: 'Boygenius' }],
+      searchResultsByName: new Map([
+        ['Boygenius', [{ mbid: 'mb-boygenius' }]],
+      ]),
+      raceLossPerformerIds: new Set(['perf-raced']),
+    });
+
+    const result = await mod.runBackfillPerformerMbids();
+
+    assert.equal(result.updated, 0);
     assert.equal(result.skipped, 1);
     assert.equal(result.failed, 0);
     assert.equal(SCRIPT.updates.length, 0);

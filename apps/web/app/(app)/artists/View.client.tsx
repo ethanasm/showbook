@@ -10,9 +10,9 @@ import { PaginationFooter } from "@/components/PaginationFooter";
 import { SortHeader, type SortConfig } from "@/components/SortHeader";
 import { useCompactMode } from "@/lib/useCompactMode";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
-import { EmptyState, RemoteImage } from "@/components/design-system";
+import { EmptyState, RemoteImage, Tooltip } from "@/components/design-system";
 
-type SortField = "name" | "shows" | "past" | "future" | "firstSeen" | "lastSeen";
+type SortField = "name" | "shows" | "firstSeen" | "lastSeen";
 type Scope = "all" | "inShows" | "seenLive" | "following";
 
 const SCOPE_LABELS: Record<Scope, string> = {
@@ -25,8 +25,6 @@ const SCOPE_LABELS: Record<Scope, string> = {
 const DEFAULT_DIR: Record<SortField, "asc" | "desc"> = {
   name: "asc",
   shows: "desc",
-  past: "desc",
-  future: "desc",
   firstSeen: "desc",
   lastSeen: "desc",
 };
@@ -148,10 +146,6 @@ export default function ArtistsView() {
           return cmpStr(a.name, b.name) * flip;
         case "shows":
           return (a.showCount - b.showCount) * flip;
-        case "past":
-          return (a.pastShowsCount - b.pastShowsCount) * flip;
-        case "future":
-          return (a.futureShowsCount - b.futureShowsCount) * flip;
         case "firstSeen":
           return cmpStr(a.firstSeen, b.firstSeen) * flip;
         case "lastSeen":
@@ -280,13 +274,15 @@ export default function ArtistsView() {
     );
   }
 
-  // Column layout: name | shows | past | future | first seen | last seen | metadata | follow
-  // Mobile collapses to: name | past | future | followed-eye
+  // Column layout: name | activity | [first seen] | last seen | indicators
+  // - Activity merges total/past/future into one cell.
+  // - Indicators is a single cell that flexes Ticket/Music/Eye together.
+  // - Mobile collapses to name | activity (compact) | follow toggle.
   const gridCols = isMobile
-    ? "minmax(0, 1fr) 36px 36px 24px"
+    ? "minmax(0, 1fr) 56px 28px"
     : isHalfWidth
-    ? "minmax(140px,2fr) 58px 52px 58px minmax(98px,0.9fr) 32px 32px 32px"
-    : "minmax(180px,2.4fr) 62px 54px 62px minmax(106px,0.9fr) minmax(106px,0.9fr) 32px 32px 32px";
+    ? "minmax(140px,2fr) minmax(130px,1fr) minmax(96px,120px) 28px"
+    : "minmax(180px,2.4fr) minmax(150px,1.2fr) minmax(106px,128px) minmax(106px,128px) 96px";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
@@ -406,16 +402,28 @@ export default function ArtistsView() {
         ) : (
           <div style={{ margin: "4px var(--page-pad-x) 0", background: "var(--surface)" }}>
             {/* Column headers */}
-            <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 8 : 14, padding: isMobile ? "8px 12px" : "10px 20px", borderBottom: "1px solid var(--rule)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase" }}>
+            <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 8 : 12, padding: isMobile ? "8px 12px" : "10px 20px", borderBottom: "1px solid var(--rule)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase" }}>
               <SortHeader<SortField> field="name" label="Name" sort={sort} onToggle={toggleSort} />
-              {!isMobile && <SortHeader<SortField> field="shows" label="Shows" sort={sort} onToggle={toggleSort} align="center" />}
-              <SortHeader<SortField> field="past" label="Past" sort={sort} onToggle={toggleSort} align="center" />
-              <SortHeader<SortField> field="future" label="Future" sort={sort} onToggle={toggleSort} align="center" />
+              <SortHeader<SortField> field="shows" label={isMobile ? "Shows" : "Activity"} sort={sort} onToggle={toggleSort} align={isMobile ? "center" : undefined} />
               {!isHalfWidth && !isMobile && <SortHeader<SortField> field="firstSeen" label="First Seen" sort={sort} onToggle={toggleSort} />}
               {!isMobile && <SortHeader<SortField> field="lastSeen" label="Last Seen" sort={sort} onToggle={toggleSort} />}
-              {!isMobile && <div style={{ textAlign: "center" }}><Ticket size={10} /></div>}
-              {!isMobile && <div style={{ textAlign: "center" }}><Music2 size={10} /></div>}
-              <div style={{ textAlign: "center" }}><Eye size={10} /></div>
+              {isHalfWidth && !isMobile && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+                  <Tooltip label="Following status"><Eye size={10} /></Tooltip>
+                </div>
+              )}
+              {!isHalfWidth && !isMobile && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, color: "var(--faint)" }}>
+                  <Tooltip label="Ticketmaster link"><Ticket size={10} /></Tooltip>
+                  <Tooltip label="MusicBrainz link"><Music2 size={10} /></Tooltip>
+                  <Tooltip label="Following status"><Eye size={10} /></Tooltip>
+                </div>
+              )}
+              {isMobile && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Tooltip label="Following status"><Eye size={10} /></Tooltip>
+                </div>
+              )}
             </div>
 
             {paged.map((artist) => (
@@ -425,7 +433,7 @@ export default function ArtistsView() {
               >
                 <Link
                   href={`/artists/${artist.id}`}
-                  style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 8 : 14, padding: compact ? "5px 20px" : isMobile ? "10px 12px" : "12px 20px", borderBottom: "1px solid var(--rule)", alignItems: "center", cursor: "pointer", color: "inherit", textDecoration: "none" }}
+                  style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 8 : 12, padding: compact ? "5px 20px" : isMobile ? "10px 12px" : "12px 20px", borderBottom: "1px solid var(--rule)", alignItems: "center", cursor: "pointer", color: "inherit", textDecoration: "none" }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface2, var(--surface))")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
@@ -442,31 +450,36 @@ export default function ArtistsView() {
                       {artist.name}
                     </span>
                   </div>
-                  {!isMobile && (
-                    <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: artist.showCount > 0 ? "var(--ink)" : "var(--faint)", fontFeatureSettings: '"tnum"' }}>
-                      {artist.showCount > 0 ? <>{artist.showCount}&times;</> : "—"}
-                    </div>
-                  )}
-                  <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: artist.pastShowsCount > 0 ? "var(--ink)" : "var(--faint)", fontFeatureSettings: '"tnum"' }}>
-                    {artist.showCount > 0 ? artist.pastShowsCount : "—"}
-                  </div>
-                  <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: artist.futureShowsCount > 0 ? "var(--accent)" : "var(--faint)", fontFeatureSettings: '"tnum"' }}>
-                    {artist.showCount > 0 ? artist.futureShowsCount : "—"}
-                  </div>
+                  <ActivityCell
+                    showCount={artist.showCount}
+                    pastShowsCount={artist.pastShowsCount}
+                    futureShowsCount={artist.futureShowsCount}
+                    compact={isMobile}
+                  />
                   {!isHalfWidth && !isMobile && (
-                    <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: artist.firstSeen ? "var(--muted)" : "var(--faint)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {artist.firstSeen ? formatDate(artist.firstSeen) : "—"}
                     </div>
                   )}
                   {!isMobile && (
-                    <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: artist.lastSeen ? "var(--muted)" : "var(--faint)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {artist.lastSeen ? formatDate(artist.lastSeen) : "—"}
                     </div>
                   )}
-                  {!isMobile && <MetadataIcon linked={Boolean(artist.ticketmasterAttractionId)} label="Ticketmaster ID" Icon={Ticket} color="var(--accent)" />}
-                  {!isMobile && <MetadataIcon linked={Boolean(artist.musicbrainzId)} label="MusicBrainz ID" Icon={Music2} color="var(--kind-concert)" />}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }} title={artist.isFollowed ? "Following" : "Not following"}>
-                    {artist.isFollowed && <Eye size={13} color="var(--accent)" />}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: isMobile ? "center" : "flex-end", gap: 8 }}>
+                    {!isMobile && !isHalfWidth && (
+                      <>
+                        <MetadataIcon linked={Boolean(artist.ticketmasterAttractionId)} label="Ticketmaster" Icon={Ticket} color="var(--accent)" />
+                        <MetadataIcon linked={Boolean(artist.musicbrainzId)} label="MusicBrainz" Icon={Music2} color="var(--kind-concert)" />
+                      </>
+                    )}
+                    <FollowToggle
+                      artistId={artist.id}
+                      artistName={artist.name}
+                      isFollowed={artist.isFollowed}
+                      onFollow={() => followMutation.mutate({ performerId: artist.id })}
+                      onUnfollow={() => unfollowMutation.mutate({ performerId: artist.id })}
+                    />
                   </div>
                 </Link>
               </div>
@@ -512,18 +525,125 @@ function MetadataIcon({
   color: string;
 }) {
   return (
-    <span
-      title={linked ? `${label} linked` : `No ${label}`}
-      data-linked={linked}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: linked ? color : "var(--faint)",
-      }}
-    >
-      <Icon size={13} strokeWidth={2} />
-    </span>
+    <Tooltip label={linked ? `Linked to ${label}` : `Not linked to ${label}`}>
+      <span
+        data-linked={linked}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: linked ? color : "var(--faint)",
+        }}
+      >
+        <Icon size={13} strokeWidth={2} />
+      </span>
+    </Tooltip>
+  );
+}
+
+function ActivityCell({
+  showCount,
+  pastShowsCount,
+  futureShowsCount,
+  compact,
+}: {
+  showCount: number;
+  pastShowsCount: number;
+  futureShowsCount: number;
+  compact: boolean;
+}) {
+  const baseStyle: React.CSSProperties = {
+    fontFamily: "var(--font-geist-mono), monospace",
+    fontSize: 12,
+    fontWeight: 500,
+    fontFeatureSettings: '"tnum"',
+    letterSpacing: ".02em",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  };
+
+  if (compact) {
+    return (
+      <div style={{ ...baseStyle, textAlign: "center", color: showCount > 0 ? "var(--ink)" : "var(--faint)" }}>
+        {showCount > 0 ? <>{showCount}&times;</> : "—"}
+      </div>
+    );
+  }
+
+  if (showCount === 0) {
+    return <div style={{ ...baseStyle, color: "var(--faint)" }}>—</div>;
+  }
+
+  const hasPast = pastShowsCount > 0;
+  const hasFuture = futureShowsCount > 0;
+
+  return (
+    <div style={baseStyle}>
+      {hasPast && (
+        <span style={{ color: "var(--ink)" }}>
+          {pastShowsCount} past
+        </span>
+      )}
+      {hasPast && hasFuture && (
+        <span style={{ color: "var(--faint)", margin: "0 6px" }}>&middot;</span>
+      )}
+      {hasFuture && (
+        <span style={{ color: "var(--accent)" }}>
+          {futureShowsCount} upcoming
+        </span>
+      )}
+    </div>
+  );
+}
+
+function FollowToggle({
+  artistId,
+  artistName,
+  isFollowed,
+  onFollow,
+  onUnfollow,
+}: {
+  artistId: string;
+  artistName: string;
+  isFollowed: boolean;
+  onFollow: () => void;
+  onUnfollow: () => void;
+}) {
+  return (
+    <Tooltip label={isFollowed ? `Unfollow ${artistName}` : `Follow ${artistName}`}>
+      <button
+        type="button"
+        aria-pressed={isFollowed}
+        aria-label={isFollowed ? `Unfollow ${artistName}` : `Follow ${artistName}`}
+        data-testid={`artist-follow-toggle-${artistId}`}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (isFollowed) onUnfollow();
+          else onFollow();
+        }}
+        style={{
+          background: "transparent",
+          border: "none",
+          padding: 4,
+          margin: -4,
+          cursor: "pointer",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: isFollowed ? "var(--accent)" : "var(--faint)",
+        }}
+        onMouseEnter={(e) => {
+          if (!isFollowed) e.currentTarget.style.color = "var(--muted)";
+        }}
+        onMouseLeave={(e) => {
+          if (!isFollowed) e.currentTarget.style.color = "var(--faint)";
+        }}
+      >
+        <Eye size={13} strokeWidth={isFollowed ? 2.25 : 2} />
+      </button>
+    </Tooltip>
   );
 }
 
