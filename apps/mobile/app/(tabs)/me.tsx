@@ -47,6 +47,7 @@ import {
   ChevronRight,
   Inbox,
   CloudUpload,
+  Music,
 } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { SegmentedControl } from '../../components/SegmentedControl';
@@ -55,20 +56,22 @@ import { useTheme, type ThemePreference, type Density } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { trpc } from '../../lib/trpc';
 import { useOfflineSync } from '../../lib/network';
+import { useSpotifyConnection } from '../../lib/spotify-connection';
 
 interface IntegrationRow {
-  id: 'gmail' | 'ticketmaster' | 'google-places';
+  id: 'gmail' | 'ticketmaster' | 'google-places' | 'spotify';
   label: string;
   icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 }
 
 // INTEGRATIONS: the prefs router exposes user preferences + saved regions
-// but not third-party connection status (no Gmail OAuth tokens, no
-// Ticketmaster linkage, no Google Places key state are surfaced via tRPC).
-// For M2 we display each integration with a generic "Not connected" hint
-// and route the row tap to the M3 manage stub. When the API lands, swap
-// the static `status` string for a per-row read of the new procedure.
+// but not third-party connection status for Gmail / Ticketmaster /
+// Google Places. Spotify is the exception — Phase 0 of setlist-
+// intelligence shipped `useSpotifyConnection` which the Spotify row
+// special-cases below to surface "Connected to {handle}" + a tap that
+// drives connect/disconnect.
 const INTEGRATIONS: readonly IntegrationRow[] = [
+  { id: 'spotify', label: 'Spotify', icon: Music },
   { id: 'gmail', label: 'Gmail', icon: Mail },
   { id: 'ticketmaster', label: 'Ticketmaster', icon: Ticket },
   { id: 'google-places', label: 'Google Places', icon: MapPin },
@@ -289,11 +292,13 @@ function IntegrationRowView({
   const { tokens } = useTheme();
   const { colors } = tokens;
   const Icon = row.icon;
+  const status = useIntegrationStatus(row.id);
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`Manage ${row.label} integration`}
+      testID={`integration-row-${row.id}`}
       style={({ pressed }) => [
         styles.row,
         !isLast && { borderBottomColor: colors.rule, borderBottomWidth: StyleSheet.hairlineWidth },
@@ -304,12 +309,29 @@ function IntegrationRowView({
       <View style={styles.rowText}>
         <Text style={[styles.rowLabel, { color: colors.ink }]}>{row.label}</Text>
         <Text style={[styles.rowSub, { color: colors.muted }]} numberOfLines={1}>
-          Not connected
+          {status}
         </Text>
       </View>
       <ChevronRight size={16} color={colors.faint} strokeWidth={2} />
     </Pressable>
   );
+}
+
+/**
+ * Per-row status text. Spotify is the only integration with live
+ * connection state today; the others stay on the static "Not connected"
+ * placeholder until their respective tRPC procedures land.
+ */
+function useIntegrationStatus(id: IntegrationRow['id']): string {
+  // The hook always renders — we read it unconditionally and ignore the
+  // value for non-Spotify rows. Cheap (cached connectionStatus query).
+  const spotify = useSpotifyConnection();
+  if (id !== 'spotify') return 'Not connected';
+  if (spotify.connection.status === 'loading') return 'Checking…';
+  if (spotify.connection.status === 'disconnected') return 'Not connected';
+  return spotify.connection.displayName
+    ? `Connected · ${spotify.connection.displayName}`
+    : 'Connected';
 }
 
 function ThemePreferenceSelector(): React.JSX.Element {

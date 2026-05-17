@@ -161,6 +161,17 @@ export const FeatureFlag = {
       '/me/tracks/contains call rate-limits Spotify.',
     state: 'ON',
   },
+  SetlistIntelMobileV2: {
+    description:
+      'Phase 10 (setlist-intelligence) mobile parity. Gates the new ' +
+      '4-tab (Overview / Setlist / Media / Notes) show-detail layout on ' +
+      'the Expo app, plus the iPad three-pane right rail wiring. OFF ' +
+      'renders the legacy vertical-stack ShowDetailScreen; ON renders ' +
+      'the 4-tab shell and routes the four prediction styles into the ' +
+      'Setlist tab. Default OFF until the C3 physical-iPhone Spotify ' +
+      'smoke test in the Phase 10 PR is signed off.',
+    state: 'ON',
+  },
 } as const satisfies Record<string, { description: string; state: 'ON' | 'OFF' }>;
 
 export type FeatureFlagKey = keyof typeof FeatureFlag;

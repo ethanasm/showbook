@@ -1,17 +1,16 @@
 /**
- * Show detail — M2 read-only view (C-3).
- *
- * Edit, setlist editor, and the action sheet land in M3 (D-1) and the
- * media grid lands in M4 (D-2). For M2 those slots render stub
- * EmptyStates pointing at the upcoming milestone — they are intentional
- * placeholders, not skeletons.
+ * Show detail — Phase 10 brings the 4-tab redesign behind the
+ * `SetlistIntelMobileV2` feature flag. ON renders the new
+ * `ShowDetailTabsView`; OFF renders the legacy vertical stack
+ * (`LegacyShowDetailScreen` below) so the smoke test can compare side
+ * by side before flip.
  *
  * Data: `trpc.shows.detail` returns the show row joined with venue and
  * showPerformers (each carrying its performer). The QueryClient has a
  * SQLite persister attached at app root, so any query that uses the
  * shared client (tRPC's hooks do) is persisted automatically. We
  * piggy-back on CACHE_DEFAULTS so the staleTime / gcTime match the rest
- * of M2's cached queries.
+ * of the cached queries.
  */
 
 import React from 'react';
@@ -39,6 +38,7 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 import type { PerformerSetlist } from '@showbook/shared';
+import { isFeatureOn } from '@showbook/shared';
 
 import { TopBar } from '../../components/TopBar';
 import { KindBadge } from '../../components/KindBadge';
@@ -47,15 +47,14 @@ import { EmptyState } from '../../components/EmptyState';
 import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
+import {
+  ShowDetailTabsView,
+  type ShowDetail as TabbedShowDetail,
+} from '../../components/show-tabs/ShowDetailTabsView';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
 import { CACHE_DEFAULTS } from '../../lib/cache';
 
-// The @showbook/api package isn't a runtime dep of mobile (it's a type-only
-// import via `lib/trpc`), so `inferRouterOutputs` from `@trpc/server` isn't
-// reachable here without adding a dep. Mirror the subset of `shows.detail`
-// fields the screen actually reads — small and stable enough that drift is
-// caught quickly when the procedure changes.
 interface ShowDetailVenue {
   name: string;
   city: string;
@@ -99,9 +98,6 @@ interface DateParts {
 
 function parseShowDate(date: string | null | undefined): DateParts | null {
   if (!date) return null;
-  // shows.date is a YYYY-MM-DD string. Build a Date in local time so the
-  // day-of-week reflects the user's perspective (calendar dates aren't
-  // bound to a particular timezone here).
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
   if (!m) return null;
   const year = Number(m[1]);
@@ -128,7 +124,7 @@ export default function ShowDetailScreen(
   const { colors } = tokens;
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; tab?: string }>();
   const paramId = typeof params.id === 'string' ? params.id : '';
   const showId = props.showIdProp ?? paramId;
 
@@ -142,6 +138,7 @@ export default function ShowDetailScreen(
   );
 
   const show = query.data as ShowDetail | undefined;
+  const tabbedEnabled = isFeatureOn('SetlistIntelMobileV2');
   const refreshControl = useThemedRefreshControl(
     query.isFetching && !query.isLoading,
     () => {
@@ -151,7 +148,9 @@ export default function ShowDetailScreen(
 
   const back = (
     <Pressable
-      onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/shows'))}
+      onPress={() =>
+        router.canGoBack() ? router.back() : router.replace('/(tabs)/shows')
+      }
       hitSlop={12}
       accessibilityRole="button"
       accessibilityLabel="Back"
@@ -172,6 +171,59 @@ export default function ShowDetailScreen(
     </Pressable>
   ) : undefined;
 
+  // ──────────────────────────────────────────────────────────────────
+  // Tabbed layout (Phase 10) — feature-flagged. Reuses the same shows.
+  // detail payload so the swap is invisible to the data layer.
+  // ──────────────────────────────────────────────────────────────────
+  if (tabbedEnabled) {
+    return (
+      <View
+        style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}
+        testID="show-detail-tabs-root"
+      >
+        <TopBar title="Show" leading={back} rightAction={moreAction} />
+        {query.isLoading ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={colors.muted} />
+          </View>
+        ) : null}
+        {query.isError && !show ? (
+          <View style={styles.center}>
+            <EmptyState
+              icon={<AlertCircle size={40} color={colors.faint} strokeWidth={1.5} />}
+              title="Couldn't load show"
+              subtitle={query.error?.message ?? 'Try again in a moment.'}
+              cta={{ label: 'Retry', onPress: () => void query.refetch() }}
+            />
+          </View>
+        ) : null}
+        {show ? (
+          <ShowDetailTabsView
+            show={show as TabbedShowDetail}
+            initialTab={
+              typeof params.tab === 'string'
+                ? (params.tab as 'overview' | 'setlist' | 'media' | 'notes')
+                : undefined
+            }
+          />
+        ) : null}
+        {show ? (
+          <ShowActionSheet
+            open={actionSheetOpen}
+            onClose={() => setActionSheetOpen(false)}
+            showId={show.id}
+            state={show.state as ShowState}
+            popAfterDelete
+          />
+        ) : null}
+      </View>
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // Legacy vertical-stack layout (pre-Phase-10). Default while the
+  // SetlistIntelMobileV2 flag is OFF.
+  // ──────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
       <TopBar
@@ -230,7 +282,7 @@ export default function ShowDetailScreen(
 }
 
 // ---------------------------------------------------------------------------
-// Sub-sections
+// Sub-sections (legacy layout)
 // ---------------------------------------------------------------------------
 
 function formatTitle(show: ShowDetail): string {
@@ -379,9 +431,6 @@ function Lineup({ show }: { show: ShowDetail }): React.JSX.Element | null {
   const { tokens } = useTheme();
   const { colors } = tokens;
 
-  // Theatre uses a "Cast" section that lands in M3 alongside the playbill
-  // editor. Until then, we still surface any cast rows the API returns so
-  // the screen isn't empty for theatre shows that already have data.
   const performers = [...show.showPerformers].sort((a, b) => a.sortOrder - b.sortOrder);
   if (performers.length === 0) return null;
 
@@ -442,9 +491,6 @@ function Setlists({ show }: { show: ShowDetail }): React.JSX.Element {
   const { colors } = tokens;
   const router = useRouter();
 
-  // Setlists are keyed by performer id; only show entries whose
-  // performer is still on the lineup (catches stale rows after a
-  // performer is removed).
   const performerById = React.useMemo(() => {
     const map = new Map<string, { name: string }>();
     for (const sp of show.showPerformers) {
@@ -544,9 +590,6 @@ function Setlists({ show }: { show: ShowDetail }): React.JSX.Element {
 }
 
 function isShowPast(show: ShowDetail): boolean {
-  // Mirrors the server's `isDatePast` rule: media uploads are gated on
-  // the show being in the past. We don't have endDate here so we treat a
-  // missing date conservatively as "not past" — matches server behaviour.
   if (!show.date) return false;
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(
@@ -573,8 +616,6 @@ function Photos({
     },
   );
 
-  // The DTO carries multiple variants (thumb/large/source); the grid wants
-  // a single thumbnail uri. Prefer thumb, then source, then anything.
   const items: MediaGridItem[] = (query.data ?? []).map((dto) => {
     const urls = (dto.urls ?? {}) as Record<string, string>;
     const thumbnailUri = urls.thumb ?? urls.large ?? urls.source ?? Object.values(urls)[0] ?? '';
@@ -621,7 +662,7 @@ function Section({
 }
 
 // ---------------------------------------------------------------------------
-// Styles
+// Styles (legacy)
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({

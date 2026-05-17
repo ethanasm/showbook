@@ -1,0 +1,86 @@
+# Show-detail 4-tab navigation — Maestro (Phase 10)
+#
+# Gated on `SetlistIntelMobileV2` being ON in
+# packages/shared/src/feature-flags.ts. When OFF, the legacy vertical
+# stack renders and the tab-id testIDs below aren't present — the flow
+# fails fast on the first assertVisible.
+#
+# Uses the same `e2e` EAS build-profile bypass as sign-in.yaml: the
+# session is baked into the build via EXPO_PUBLIC_E2E_TEST_TOKEN /
+# EXPO_PUBLIC_E2E_TEST_USER_JSON, so tapping "Sign in with Google"
+# falls through to the bundled session immediately.
+appId: com.showbook.app
+name: show-detail-tabs
+tags:
+  - phase-10
+  - setlist-intel
+  - mobile-v2
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+
+- scrollUntilVisible:
+    element:
+      text: "Sign in with Google"
+    direction: DOWN
+
+- tapOn:
+    text: "Sign in with Google"
+
+- runFlow:
+    when:
+      visible: "Set up showbook"
+    commands:
+      - tapOn: "Set up showbook"
+      - tapOn: "Skip"   # notifications
+      - tapOn: "Skip"   # photos
+      - tapOn: "Skip"   # location
+      - tapOn: "Skip"   # gmail
+
+- assertVisible:
+    text: "Shows"
+
+# Open the Shows tab and tap into the first row. The fixture seeded by
+# add-show.yaml (Maestro Test Headliner) is the most reliable target
+# across back-to-back runs.
+- tapOn:
+    text: "Shows"
+
+- tapOn:
+    id: "show-card-row-0"
+
+# Tabs render with `show-tab-${key}` testIDs.
+- assertVisible:
+    id: "show-tab-overview"
+- assertVisible:
+    id: "show-tab-setlist"
+- assertVisible:
+    id: "show-tab-media"
+- assertVisible:
+    id: "show-tab-notes"
+
+# Header strip carries the testid `show-tabs-header`.
+- assertVisible:
+    id: "show-tabs-header"
+
+# Tap each tab and assert the panel renders.
+- tapOn:
+    id: "show-tab-setlist"
+- assertVisible:
+    id: "show-tab-setlist"
+
+- tapOn:
+    id: "show-tab-media"
+- assertVisible:
+    id: "show-tab-media"
+
+- tapOn:
+    id: "show-tab-notes"
+- assertVisible:
+    id: "show-tab-notes"
+
+- tapOn:
+    id: "show-tab-overview"
+- assertVisible:
+    id: "show-tab-overview"

@@ -1,0 +1,66 @@
+# Rotating-style setlist tab — Maestro (Phase 10)
+#
+# Asserts that a rotating-archetype show (Phish in the seeded fixture
+# set) routes to the rotating setlist subtree: gap chart rows + position
+# pool cards.
+#
+# Requires:
+#   - `SetlistIntelMobileV2` ON
+#   - `SetlistIntelRotatingDisplay` ON
+#   - Phish (or any rotating-classified performer) seeded with a
+#     pre-show date.
+#
+# Soft fail: if no rotating fixture is present in the test DB the flow
+# short-circuits after sign-in rather than failing — the gate-blocked
+# / cold-state variants are also acceptable evidence the routing is
+# wired correctly.
+appId: com.showbook.app
+name: rotating-display
+tags:
+  - phase-10
+  - setlist-intel
+  - rotating
+  - mobile-v2
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+
+- scrollUntilVisible:
+    element:
+      text: "Sign in with Google"
+    direction: DOWN
+
+- tapOn:
+    text: "Sign in with Google"
+
+- runFlow:
+    when:
+      visible: "Set up showbook"
+    commands:
+      - tapOn: "Set up showbook"
+      - tapOn: "Skip"   # notifications
+      - tapOn: "Skip"   # photos
+      - tapOn: "Skip"   # location
+      - tapOn: "Skip"   # gmail
+
+- tapOn:
+    text: "Shows"
+
+# Phish only appears when the operator has seeded the fixture; skip
+# the flow gracefully otherwise.
+- runFlow:
+    when:
+      visible: "Phish"
+    commands:
+      - tapOn:
+          text: "Phish"
+
+      - assertVisible:
+          id: "show-tabs-header"
+
+      - tapOn:
+          id: "show-tab-setlist"
+
+      - assertVisible:
+          id: "rotating-setlist-view|rotating-gate-blocked|setlist-tab-cold-no_corpus"

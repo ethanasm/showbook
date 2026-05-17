@@ -1,0 +1,57 @@
+# Stable-style setlist tab — Maestro (Phase 10)
+#
+# Asserts that opening a stable-archetype show pre-show renders the
+# confidence banner + likely setlist grid, and that the Setlist tab
+# badge mounts.
+#
+# Requires `SetlistIntelMobileV2` ON. Uses the e2e EAS build-profile
+# bypass (EXPO_PUBLIC_E2E_TEST_TOKEN baked in) — see sign-in.yaml.
+appId: com.showbook.app
+name: setlist-stable
+tags:
+  - phase-10
+  - setlist-intel
+  - mobile-v2
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+
+- scrollUntilVisible:
+    element:
+      text: "Sign in with Google"
+    direction: DOWN
+
+- tapOn:
+    text: "Sign in with Google"
+
+- runFlow:
+    when:
+      visible: "Set up showbook"
+    commands:
+      - tapOn: "Set up showbook"
+      - tapOn: "Skip"   # notifications
+      - tapOn: "Skip"   # photos
+      - tapOn: "Skip"   # location
+      - tapOn: "Skip"   # gmail
+
+- tapOn:
+    text: "Shows"
+
+- tapOn:
+    id: "show-card-row-0"
+
+- tapOn:
+    id: "show-tab-setlist"
+
+- assertVisible:
+    id: "show-tab-setlist-badge"
+
+# Pre-show stable: the confidence banner mounts as
+# `setlist-confidence-banner-stable`. Post-show: the actual-setlist
+# banner mounts as `setlist-actual-banner`. Either one proves the
+# Setlist tab is the new 4-tab variant rather than the legacy stack.
+# Cold-state empties are also acceptable when the backend hasn't
+# seeded a corpus for the fixture performer yet.
+- assertVisible:
+    id: "setlist-confidence-banner-stable|setlist-actual-banner|setlist-tab-cold-no_corpus|setlist-tab-past-empty"

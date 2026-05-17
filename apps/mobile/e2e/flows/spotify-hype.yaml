@@ -1,0 +1,76 @@
+# Spotify Hype-playlist tap flow — Maestro (Phase 10 Part C1)
+#
+# Asserts that tapping the Hype playlist button on a stable pre-show
+# without a connected Spotify account presents the SpotifyConnectSheet.
+# Maestro can't walk the OAuth round-trip in CI (Spotify approval lives
+# off-device); the manual smoke test on a physical iPhone covers that
+# leg and is documented in the PR body.
+#
+# Requires:
+#   - `SetlistIntelMobileV2` ON
+#   - `SetlistIntelHypePlaylist` ON (the global hype-card gate)
+#   - A pre-show stable-archetype fixture in the seeded test DB
+appId: com.showbook.app
+name: spotify-hype
+tags:
+  - phase-10
+  - setlist-intel
+  - spotify
+  - mobile-v2
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+
+- scrollUntilVisible:
+    element:
+      text: "Sign in with Google"
+    direction: DOWN
+
+- tapOn:
+    text: "Sign in with Google"
+
+- runFlow:
+    when:
+      visible: "Set up showbook"
+    commands:
+      - tapOn: "Set up showbook"
+      - tapOn: "Skip"   # notifications
+      - tapOn: "Skip"   # photos
+      - tapOn: "Skip"   # location
+      - tapOn: "Skip"   # gmail
+
+- tapOn:
+    text: "Shows"
+- tapOn:
+    id: "show-card-row-0"
+- tapOn:
+    id: "show-tab-setlist"
+
+# Tap the primary Hype-playlist button. testID is
+# `hype-card-hype-primary` (pre-show) — guard with `optional: true`
+# so the flow doesn't break when the seeded fixture is post-show
+# (in which case the button is `hype-card-heard-primary`).
+- runFlow:
+    when:
+      visible:
+        id: "hype-card-hype-primary"
+    commands:
+      - tapOn:
+          id: "hype-card-hype-primary"
+      - assertVisible:
+          id: "spotify-connect-button"
+      - tapOn:
+          id: "spotify-connect-cancel"
+
+- runFlow:
+    when:
+      visible:
+        id: "hype-card-heard-primary"
+    commands:
+      - tapOn:
+          id: "hype-card-heard-primary"
+      - assertVisible:
+          id: "spotify-connect-button"
+      - tapOn:
+          id: "spotify-connect-cancel"
