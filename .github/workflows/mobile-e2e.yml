@@ -40,6 +40,15 @@ jobs:
     # Gate logic mirrors the previous Maestro Cloud workflow:
     #   - vars.MOBILE_E2E_ENABLED must be 'true' so the workflow reports
     #     skipped (not failed) until the prereqs are in place.
+    #   - vars.MOBILE_E2E_API_URL_CONFIGURED must be 'true' to confirm
+    #     the runner has an EXPO_PUBLIC_API_URL secret available; without
+    #     it the APK is built with a missing API base and every tRPC
+    #     fetch fails with "Invalid URL: /api/trpc/...", killing every
+    #     flow that needs to load the Shows list (which is all of them).
+    #     Default unset so the workflow skips cleanly until the secret
+    #     is configured — flip the var to 'true' after adding the secret
+    #     to repo Settings → Secrets and variables → Actions.
+    #     (Tracked in #213 triage comment, 2026-05-17.)
     #   - PR runs require the `mobile-visual` label so opt-in stays
     #     explicit; non-PR triggers (push/schedule/dispatch) always run.
     #
@@ -47,19 +56,27 @@ jobs:
     #   1. Add secrets under Settings → Secrets and variables → Actions:
     #        - MAESTRO_E2E_TOKEN     (Showbook JWT for the test user)
     #        - MAESTRO_E2E_USER_JSON (JSON-serialized SessionUser)
-    #      Both are inlined into the APK at build time via
+    #        - EXPO_PUBLIC_API_URL   (full backend URL the APK targets —
+    #          e.g. https://showbook-e2e.your-host.dev). Only set in
+    #          local dev today; until it's in CI the tRPC client builds
+    #          relative URLs and React Native rejects them. See the
+    #          MOBILE_E2E_API_URL_CONFIGURED gate above.
+    #      The first two are inlined into the APK at build time via
     #      EXPO_PUBLIC_E2E_TEST_TOKEN / EXPO_PUBLIC_E2E_TEST_USER_JSON,
     #      so `lib/auth.ts` can sign in without any deeplink seeding
     #      step. No EXPO_TOKEN / MAESTRO_CLOUD_API_KEY needed.
     #   2. Set repo variable `MOBILE_E2E_ENABLED` to `true`.
-    #   3. Optional: set repo variable `ANDROID_SDK_ROOT` to the install
+    #   3. After adding the EXPO_PUBLIC_API_URL secret in step 1, set
+    #      repo variable `MOBILE_E2E_API_URL_CONFIGURED` to `true`.
+    #   4. Optional: set repo variable `ANDROID_SDK_ROOT` to the install
     #      path on the runner; defaults to /opt/android-sdk.
-    #   4. Run scripts/setup-runner.sh on the prod box (already done if
+    #   5. Run scripts/setup-runner.sh on the prod box (already done if
     #      the runner is up), then scripts/setup-runner-android.sh once
     #      to install Android SDK (incl. build-tools + NDK), create the
     #      e2e AVD, and install Maestro.
     if: >-
       vars.MOBILE_E2E_ENABLED == 'true' &&
+      vars.MOBILE_E2E_API_URL_CONFIGURED == 'true' &&
       (github.event_name != 'pull_request' ||
        contains(github.event.pull_request.labels.*.name, 'mobile-visual'))
     # Self-hosted runner registered by scripts/setup-runner.sh on the
@@ -259,11 +276,20 @@ jobs:
           EXPO_PUBLIC_E2E_MODE: '1'
           EXPO_PUBLIC_E2E_TEST_TOKEN: ${{ secrets.MAESTRO_E2E_TOKEN }}
           EXPO_PUBLIC_E2E_TEST_USER_JSON: ${{ secrets.MAESTRO_E2E_USER_JSON }}
+          # Phase 11 follow-up — inline the backend base URL so the tRPC
+          # client builds absolute fetches. Without this every flow
+          # crashes on the Shows tab with "Invalid URL: /api/trpc/..."
+          # (React Native's fetch rejects relative URLs).
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
         shell: bash
         run: |
           set -euo pipefail
           if [ -z "${EXPO_PUBLIC_E2E_TEST_TOKEN:-}" ] || [ -z "${EXPO_PUBLIC_E2E_TEST_USER_JSON:-}" ]; then
             echo "::error::MAESTRO_E2E_TOKEN / MAESTRO_E2E_USER_JSON secrets are unset"
+            exit 1
+          fi
+          if [ -z "${EXPO_PUBLIC_API_URL:-}" ]; then
+            echo "::error::EXPO_PUBLIC_API_URL secret is unset — every tRPC call will fail with 'Invalid URL: /api/trpc/...'. See the MOBILE_E2E_API_URL_CONFIGURED gate at the top of this workflow."
             exit 1
           fi
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
