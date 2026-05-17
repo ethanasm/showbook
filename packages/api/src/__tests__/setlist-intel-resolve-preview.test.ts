@@ -12,7 +12,13 @@
 import { before, describe, mock, test } from 'node:test';
 import assert from 'node:assert/strict';
 
-let spotifySearchResult: { id: string; previewUrl: string | null; durationMs: number } | null = null;
+let spotifySearchResult: {
+  id: string;
+  previewUrl: string | null;
+  durationMs: number;
+  /** Override the default echo of the headliner artist. */
+  artists?: string[];
+} | null = null;
 let spotifySearchThrows: Error | null = null;
 let spotifySearchCalls = 0;
 
@@ -28,7 +34,11 @@ mock.module('../spotify-tokens.js', {
 
 mock.module('../spotify.js', {
   namedExports: {
-    searchTrack: async () => {
+    // The mock echoes the headliner back as the resolved track's
+    // single artist so the catalog-pollution guard (#192) sees a
+    // matching artist by default. Tests that exercise the mismatch
+    // branch set `spotifySearchResult.artists` to override.
+    searchTrack: async (_token: string, artist: string) => {
       spotifySearchCalls += 1;
       if (spotifySearchThrows) throw spotifySearchThrows;
       return spotifySearchResult
@@ -36,7 +46,7 @@ mock.module('../spotify.js', {
             id: spotifySearchResult.id,
             uri: `spotify:track:${spotifySearchResult.id}`,
             name: 'mock',
-            artists: ['mock'],
+            artists: spotifySearchResult.artists ?? [artist],
             durationMs: spotifySearchResult.durationMs,
             previewUrl: spotifySearchResult.previewUrl,
           }
@@ -404,5 +414,34 @@ describe('resolveTrackPreview — iTunes fallback', () => {
     assert.equal(result.previewUrl, null);
     assert.equal(result.spotifyTrackId, null);
     assert.equal(itunesSearchCalls, 0);
+  });
+
+  test('artist mismatch (security guard #192) returns null without iTunes fallback or persistence', async () => {
+    resetMocks();
+    // Spotify search returns a track but the resolved artist list
+    // doesn't include the headliner — e.g. a cover by another artist
+    // that happened to rank first. The guard from PR #192 refuses to
+    // persist; we also skip iTunes since the same title ambiguity
+    // would pollute the preview URL.
+    spotifySearchResult = {
+      id: 'sp_wrong_artist',
+      previewUrl: null,
+      durationMs: 0,
+      artists: ['Some Cover Band'],
+    };
+    itunesSearchResult = {
+      previewUrl: 'https://audio-ssl.itunes.apple.com/should-not-be-used.m4a',
+      durationMs: 200_000,
+    };
+    const headlinerId = fakeUuid('p', 'hm');
+    const caller = makeCaller(headlinerId, { cachedRow: null }, 'user-artist-mismatch');
+    const result = await caller.resolveTrackPreview({
+      showId: fakeUuid('s', 'm'),
+      title: 'Common Title',
+    });
+    assert.equal(result.previewUrl, null);
+    assert.equal(result.spotifyTrackId, null);
+    assert.equal(spotifySearchCalls, 1);
+    assert.equal(itunesSearchCalls, 0, 'must NOT fall through to iTunes on artist mismatch');
   });
 });
