@@ -320,7 +320,10 @@ export function normalizeFestivalText(value: string): string {
  * nothing usable.
  */
 export function extractFestivalName(eventName: string): string {
-  const prefix = eventName.split(/\s*[-–|]\s*/)[0] ?? eventName;
+  // Split on the separator alone and trim each side, rather than baking
+  // `\s*` into the separator regex — `\s*[-–|]\s*` is polynomial-ReDoS-
+  // ambiguous on inputs full of whitespace and no separator.
+  const prefix = eventName.split(/[-–|]/)[0]?.trim() ?? eventName;
   const stripped = prefix
     .replace(/\b(20\d{2}|'\d{2})\b/g, "")
     .replace(/\b(mon|tue|wed|thu|fri|sat|sun)(day)?\b/gi, "")
