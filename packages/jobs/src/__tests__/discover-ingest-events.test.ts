@@ -101,6 +101,7 @@ mock.module('@showbook/api', {
     inferKind: () => 'concert',
     selectBestImage: () => null,
     extractMusicbrainzId: () => null,
+    extractFestivalName: (name: string) => name,
     matchOrCreateVenue: async () => ({
       venue: { id: 'v1', name: 'Greek', city: 'Berkeley' },
       created: false,

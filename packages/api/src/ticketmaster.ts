@@ -299,12 +299,34 @@ export async function searchAttractions(
 // Pure helpers (no network)
 // ---------------------------------------------------------------------------
 
-function normalizeFestivalText(value: string): string {
+export function normalizeFestivalText(value: string): string {
   return value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
+}
+
+/**
+ * Pull a stable festival name out of a TM event name like
+ * `"Outside Lands 2026 - Friday Single Day"` → `"Outside Lands"`. Used to
+ * give every event in a multi-day festival the same `headliner` so the
+ * existing `groupEventsIntoRuns` cluster key collapses them into one run,
+ * regardless of which artist tops the per-day bill.
+ *
+ * Strategy: take the prefix before the first separator (`-`, `–`, `|`),
+ * strip year tokens (`2026`, `'26`) and day-of-week tokens, then collapse
+ * whitespace. Falls back to the original string when stripping leaves
+ * nothing usable.
+ */
+export function extractFestivalName(eventName: string): string {
+  const prefix = eventName.split(/\s*[-–|]\s*/)[0] ?? eventName;
+  const stripped = prefix
+    .replace(/\b(20\d{2}|'\d{2})\b/g, "")
+    .replace(/\b(mon|tue|wed|thu|fri|sat|sun)(day)?\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return stripped.length > 0 ? stripped : eventName.trim();
 }
 
 function hasFestivalSignal(value: string): boolean {

@@ -274,6 +274,66 @@ test('groupEventsIntoRuns: festival pass and day listings collapse into one repr
   assert.equal(runs[0]!.sourceEventIds.length, 4);
 });
 
+test('groupEventsIntoRuns: festival lineups across days merge into one support list', () => {
+  // Once normalizeTmEvent pins festival headliner to a stable name, all
+  // days cluster together — but each day's NormalizedEvent still carries
+  // that day's TM lineup as `support`. makeRun has to union them so the
+  // canonical row doesn't drop two thirds of the artists on a 3-day fest.
+  const events = [
+    makeEvent({
+      date: '2026-08-07',
+      kind: 'festival',
+      headliner: 'Outside Lands',
+      headlinerPerformerId: null,
+      sourceEventId: 'fri',
+      support: ['Foo Fighters', 'Charli xcx', 'Turnstile'],
+      supportPerformerIds: ['foo-fighters-id', 'charli-id', 'turnstile-id'],
+    }),
+    makeEvent({
+      date: '2026-08-08',
+      kind: 'festival',
+      headliner: 'Outside Lands',
+      headlinerPerformerId: null,
+      sourceEventId: 'sat',
+      support: ['Tame Impala', 'Charli xcx', 'Ethel Cain'],
+      supportPerformerIds: ['tame-impala-id', 'charli-id', 'ethel-id'],
+    }),
+    makeEvent({
+      date: '2026-08-09',
+      kind: 'festival',
+      headliner: 'Outside Lands',
+      headlinerPerformerId: null,
+      sourceEventId: 'sun',
+      support: ['Doja Cat', 'RUFUS DU SOL'],
+      supportPerformerIds: ['doja-id', 'rufus-id'],
+    }),
+  ];
+
+  const { runs, singles } = groupEventsIntoRuns(events);
+  assert.equal(runs.length, 1);
+  assert.equal(singles.length, 0);
+  // Case-insensitive dedup of names, first-seen order preserved.
+  assert.deepEqual(runs[0]!.support, [
+    'Foo Fighters',
+    'Charli xcx',
+    'Turnstile',
+    'Tame Impala',
+    'Ethel Cain',
+    'Doja Cat',
+    'RUFUS DU SOL',
+  ]);
+  // Performer ids dedupe exactly; same 7 distinct ids, first-seen order.
+  assert.deepEqual(runs[0]!.supportPerformerIds, [
+    'foo-fighters-id',
+    'charli-id',
+    'turnstile-id',
+    'tame-impala-id',
+    'ethel-id',
+    'doja-id',
+    'rufus-id',
+  ]);
+});
+
 test('groupEventsIntoRuns: different venues for same artist do not merge', () => {
   const events = [
     makeEvent({

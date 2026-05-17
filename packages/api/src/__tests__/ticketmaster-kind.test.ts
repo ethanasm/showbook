@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { inferKind, type TMEvent } from '../ticketmaster';
+import { extractFestivalName, inferKind, type TMEvent } from '../ticketmaster';
 
 type Classifications = NonNullable<TMEvent['classifications']>;
 type Classification = Classifications[number];
@@ -172,4 +172,42 @@ test('inferKind: empty / missing classifications surface as unknown', () => {
   // TM payload had no classification block at all.
   assert.equal(inferKind(undefined), 'unknown');
   assert.equal(inferKind([]), 'unknown');
+});
+
+test('extractFestivalName strips year + day suffix from real TM names', () => {
+  // TM lists multi-day festivals with one event per day-pass variant,
+  // each named with a year and day-of-week suffix. extractFestivalName
+  // is what normalizeTmEvent uses to give them a shared headliner so
+  // groupEventsIntoRuns can collapse them.
+  assert.equal(
+    extractFestivalName('Outside Lands 2026 - Friday Single Day'),
+    'Outside Lands',
+  );
+  assert.equal(
+    extractFestivalName('Outside Lands 2026 - Saturday'),
+    'Outside Lands',
+  );
+  assert.equal(
+    extractFestivalName('Outside Lands 2026 - 3 Day GA Pass'),
+    'Outside Lands',
+  );
+  assert.equal(extractFestivalName('Outside Lands 2026'), 'Outside Lands');
+});
+
+test('extractFestivalName: en-dash and pipe separators both split', () => {
+  assert.equal(
+    extractFestivalName('Coachella 2026 – Weekend 1'),
+    'Coachella',
+  );
+  assert.equal(
+    extractFestivalName('Bonnaroo 2026 | Day Pass'),
+    'Bonnaroo',
+  );
+});
+
+test('extractFestivalName: falls back to original name when stripping empties it', () => {
+  // No separator, no year, no day token — return as-is so the headliner
+  // is never empty.
+  assert.equal(extractFestivalName('Outside Lands'), 'Outside Lands');
+  assert.equal(extractFestivalName('Lollapalooza'), 'Lollapalooza');
 });
