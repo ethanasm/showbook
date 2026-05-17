@@ -15,7 +15,7 @@ import {
   Eye,
   Square,
 } from "lucide-react";
-import { formatDateParts as toDateParts } from "@showbook/shared";
+import { formatDateParts as toDateParts, parseLocalDate } from "@showbook/shared";
 import { countdownText } from "@/lib/countdown";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import {
@@ -79,7 +79,7 @@ export default function HomeView() {
         (s) =>
           (s.state === "ticketed" || s.state === "watching") &&
           s.date !== null &&
-          new Date(s.date) >= now
+          parseLocalDate(s.date) >= now
       )
       .sort(
         (a, b) => new Date(a.date!).getTime() - new Date(b.date!).getTime()
@@ -104,7 +104,7 @@ export default function HomeView() {
     // Compute stats — exclude dateless watching rows since they have no year.
     const currentYear = new Date().getFullYear();
     const thisYearShows = shows.filter(
-      (s) => s.date !== null && new Date(s.date).getFullYear() === currentYear
+      (s) => s.date !== null && parseLocalDate(s.date).getFullYear() === currentYear
     );
     const totalSpent = thisYearShows.reduce((sum, s) => {
       return sum + (s.pricePaid ? parseFloat(s.pricePaid) : 0);

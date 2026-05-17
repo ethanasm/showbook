@@ -9,6 +9,7 @@ export {
   formatShowDate,
   formatYear,
   isDatePast,
+  parseLocalDate,
   toSetlistFmDate,
   type DateParts,
 } from './dates';
