@@ -15,10 +15,9 @@ import {
   StyleSheet,
   FlatList,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronLeft, MapPin, Search } from 'lucide-react-native';
-import { TopBar } from '../../components/TopBar';
+import { ScreenWrapper } from '../../components/ScreenWrapper';
 import { EmptyState } from '../../components/EmptyState';
 import { VenueCard, type VenueCardVenue } from '../../components/VenueCard';
 import { RowSkeleton } from '../../components/skeletons';
@@ -35,7 +34,6 @@ type FollowedVenueRow = RouterOutput<UtilsClient['venues']['followed']['query']>
 export default function VenuesListScreen(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { token } = useAuth();
   const utils = trpc.useUtils();
@@ -110,9 +108,7 @@ export default function VenuesListScreen(): React.JSX.Element {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
-      <TopBar title="Venues" eyebrow="STAGES" leading={back} rightAction={searchAction} large />
-
+    <ScreenWrapper title="Venues" eyebrow="STAGES" leading={back} rightAction={searchAction} large>
       {isLoading ? (
         <View style={styles.skeletonWrap}>
           {Array.from({ length: 6 }).map((_, i) => (
@@ -147,7 +143,7 @@ export default function VenuesListScreen(): React.JSX.Element {
           }
         />
       )}
-    </View>
+    </ScreenWrapper>
   );
 }
 

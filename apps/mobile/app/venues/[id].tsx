@@ -35,6 +35,7 @@ import {
 } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { EmptyState } from '../../components/EmptyState';
+import { QueryBoundary } from '../../components/QueryBoundary';
 import { KindBadge } from '../../components/KindBadge';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
@@ -173,39 +174,47 @@ export default function VenueDetailScreen(): React.JSX.Element {
         leading={back}
       />
 
-      {detailQuery.isLoading && !venue ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.muted} />
-        </View>
-      ) : detailQuery.isError && !venue ? (
-        <View style={styles.center}>
-          <EmptyState
-            icon={<AlertCircle size={40} color={colors.faint} strokeWidth={1.5} />}
-            title="Couldn't load venue"
-            subtitle={detailQuery.error?.message ?? 'Try again in a moment.'}
-            cta={{ label: 'Retry', onPress: () => void detailQuery.refetch() }}
-          />
-        </View>
-      ) : venue ? (
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={refreshControl}
-        >
-          <Hero venue={venue} />
-          <Upcoming items={upcoming} loading={upcomingQuery.isLoading} />
-          <YourShows
-            shows={shows}
-            loading={showsQuery.isLoading}
-            venueName={venue.name}
-            venueCity={venue.city}
-          />
-          <VenuePhotos
-            items={mediaQuery.data ?? []}
-            loading={mediaQuery.isLoading}
-          />
-        </ScrollView>
-      ) : null}
+      <QueryBoundary
+        query={detailQuery}
+        loading={
+          <View style={styles.center}>
+            <ActivityIndicator color={colors.muted} />
+          </View>
+        }
+        error={(err, retry) => (
+          <View style={styles.center}>
+            <EmptyState
+              icon={<AlertCircle size={40} color={colors.faint} strokeWidth={1.5} />}
+              title="Couldn't load venue"
+              subtitle={
+                (err as { message?: string } | null)?.message ?? 'Try again in a moment.'
+              }
+              cta={{ label: 'Retry', onPress: retry }}
+            />
+          </View>
+        )}
+      >
+        {(venue) => (
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={refreshControl}
+          >
+            <Hero venue={venue} />
+            <Upcoming items={upcoming} loading={upcomingQuery.isLoading} />
+            <YourShows
+              shows={shows}
+              loading={showsQuery.isLoading}
+              venueName={venue.name}
+              venueCity={venue.city}
+            />
+            <VenuePhotos
+              items={mediaQuery.data ?? []}
+              loading={mediaQuery.isLoading}
+            />
+          </ScrollView>
+        )}
+      </QueryBoundary>
     </View>
   );
 }

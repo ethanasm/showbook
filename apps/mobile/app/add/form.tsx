@@ -14,7 +14,6 @@ import React from 'react';
 import {
   View,
   Text,
-  TextInput,
   ScrollView,
   Pressable,
   StyleSheet,
@@ -29,7 +28,9 @@ import { ChevronLeft, X, Check } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { VenueTypeahead, type VenueSuggestion } from '../../components/VenueTypeahead';
+import { FormField, FormRow } from '../../components/FormField';
 import { useTheme } from '../../lib/theme';
+import { useFormState } from '../../lib/useFormState';
 import { trpc } from '../../lib/trpc';
 import { useFeedback } from '../../lib/feedback';
 import { runOptimisticMutation } from '../../lib/mutations';
@@ -84,7 +85,7 @@ export default function AddFormScreen(): React.JSX.Element {
   const utils = trpc.useUtils();
   const { showToast } = useFeedback();
 
-  const [values, setValues] = React.useState<FormValues>({
+  const { values, set } = useFormState<FormValues>({
     kind: paramKind(params.kindHint),
     headliner: paramString(params.headliner),
     venueQuery: paramString(params.venueHint),
@@ -99,12 +100,6 @@ export default function AddFormScreen(): React.JSX.Element {
     notes: '',
     supportActs: '',
   });
-
-  const set = React.useCallback(
-    <K extends keyof FormValues>(key: K, next: FormValues[K]) =>
-      setValues((prev) => ({ ...prev, [key]: next })),
-    [],
-  );
 
   const [venueResults, setVenueResults] = React.useState<VenueSuggestion[]>([]);
   const [venueLoading, setVenueLoading] = React.useState(false);
@@ -252,29 +247,26 @@ export default function AddFormScreen(): React.JSX.Element {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          <Field label="Kind">
+          <FormField label="Kind">
             <SegmentedControl
               options={KIND_OPTIONS}
               value={values.kind}
               onChange={(k) => set('kind', k)}
             />
-          </Field>
+          </FormField>
 
-          <Field label={values.kind === 'theatre' ? 'Production' : 'Headliner'}>
-            <Input
-              value={values.headliner}
-              onChangeText={(v) => set('headliner', v)}
-              placeholder={
-                values.kind === 'theatre'
-                  ? 'Production name'
-                  : 'Artist or comedian'
-              }
-              autoCapitalize="words"
-              testID="headliner-input"
-            />
-          </Field>
+          <FormField
+            label={values.kind === 'theatre' ? 'Production' : 'Headliner'}
+            value={values.headliner}
+            onChangeText={(v) => set('headliner', v)}
+            placeholder={
+              values.kind === 'theatre' ? 'Production name' : 'Artist or comedian'
+            }
+            autoCapitalize="words"
+            testID="headliner-input"
+          />
 
-          <Field label="Venue">
+          <FormField label="Venue">
             <VenueTypeahead
               value={values.venueQuery}
               onChange={(v) => {
@@ -309,93 +301,88 @@ export default function AddFormScreen(): React.JSX.Element {
                 <X size={12} color={colors.accentText} strokeWidth={2.4} />
               </Pressable>
             ) : null}
-          </Field>
+          </FormField>
 
-          <Row>
-            <Field label="Date" flex={1}>
-              <Input
-                value={values.date}
-                onChangeText={(v) => set('date', v)}
-                placeholder="YYYY-MM-DD"
-                autoCapitalize="none"
-              />
-            </Field>
-            <Field label="Time" flex={1}>
-              <Input
-                value={values.time}
-                onChangeText={(v) => set('time', v)}
-                placeholder="HH:MM"
-                autoCapitalize="none"
-              />
-            </Field>
-          </Row>
+          <FormRow>
+            <FormField
+              label="Date"
+              flex={1}
+              value={values.date}
+              onChangeText={(v) => set('date', v)}
+              placeholder="YYYY-MM-DD"
+              autoCapitalize="none"
+            />
+            <FormField
+              label="Time"
+              flex={1}
+              value={values.time}
+              onChangeText={(v) => set('time', v)}
+              placeholder="HH:MM"
+              autoCapitalize="none"
+            />
+          </FormRow>
 
           {values.kind !== 'theatre' && values.kind !== 'festival' ? (
-            <Field label="Tour name (optional)">
-              <Input
-                value={values.tourName}
-                onChangeText={(v) => set('tourName', v)}
-                placeholder="World tour, residency, …"
-              />
-            </Field>
+            <FormField
+              label="Tour name (optional)"
+              value={values.tourName}
+              onChangeText={(v) => set('tourName', v)}
+              placeholder="World tour, residency, …"
+            />
           ) : null}
 
           {values.kind === 'theatre' ? (
-            <Field label="Production name (optional override)">
-              <Input
-                value={values.productionName}
-                onChangeText={(v) => set('productionName', v)}
-                placeholder="Defaults to the headliner field"
-              />
-            </Field>
+            <FormField
+              label="Production name (optional override)"
+              value={values.productionName}
+              onChangeText={(v) => set('productionName', v)}
+              placeholder="Defaults to the headliner field"
+            />
           ) : null}
 
-          <Field label="Support / lineup">
-            <Input
-              value={values.supportActs}
-              onChangeText={(v) => set('supportActs', v)}
-              placeholder="Comma-separated"
-              multiline
-              numberOfLines={2}
-            />
-          </Field>
+          <FormField
+            label="Support / lineup"
+            value={values.supportActs}
+            onChangeText={(v) => set('supportActs', v)}
+            placeholder="Comma-separated"
+            multiline
+            numberOfLines={2}
+          />
 
-          <Row>
-            <Field label="Seat" flex={2}>
-              <Input
-                value={values.seat}
-                onChangeText={(v) => set('seat', v)}
-                placeholder="Section, row, seat"
-              />
-            </Field>
-            <Field label="Tickets" flex={1}>
-              <Input
-                value={values.ticketCount}
-                onChangeText={(v) => set('ticketCount', v.replace(/[^0-9]/g, ''))}
-                placeholder="1"
-                keyboardType="numeric"
-              />
-            </Field>
-          </Row>
-
-          <Field label="Price paid">
-            <Input
-              value={values.pricePaid}
-              onChangeText={(v) => set('pricePaid', v.replace(/[^0-9.]/g, ''))}
-              placeholder="0.00"
-              keyboardType="decimal-pad"
+          <FormRow>
+            <FormField
+              label="Seat"
+              flex={2}
+              value={values.seat}
+              onChangeText={(v) => set('seat', v)}
+              placeholder="Section, row, seat"
             />
-          </Field>
-
-          <Field label="Notes">
-            <Input
-              value={values.notes}
-              onChangeText={(v) => set('notes', v)}
-              placeholder="Anything you want to remember"
-              multiline
-              numberOfLines={4}
+            <FormField
+              label="Tickets"
+              flex={1}
+              value={values.ticketCount}
+              onChangeText={(v) => set('ticketCount', v.replace(/[^0-9]/g, ''))}
+              placeholder="1"
+              keyboardType="numeric"
             />
-          </Field>
+          </FormRow>
+
+          <FormField
+            label="Price paid"
+            value={values.pricePaid}
+            onChangeText={(v) => set('pricePaid', v.replace(/[^0-9.]/g, ''))}
+            placeholder="0.00"
+            keyboardType="decimal-pad"
+          />
+
+          <FormField
+            label="Notes"
+            value={values.notes}
+            onChangeText={(v) => set('notes', v)}
+            placeholder="Anything you want to remember"
+            multiline
+            numberOfLines={4}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -410,81 +397,12 @@ function isYmd(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s.trim());
 }
 
-function Field({
-  label,
-  children,
-  flex,
-}: {
-  label: string;
-  children: React.ReactNode;
-  flex?: number;
-}): React.JSX.Element {
-  const { tokens } = useTheme();
-  return (
-    <View style={[styles.field, flex !== undefined && { flex }]}>
-      <Text style={[styles.fieldLabel, { color: tokens.colors.faint }]}>
-        {label.toUpperCase()}
-      </Text>
-      {children}
-    </View>
-  );
-}
-
-function Row({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return <View style={styles.row}>{children}</View>;
-}
-
-function Input(
-  props: React.ComponentProps<typeof TextInput>,
-): React.JSX.Element {
-  const { tokens } = useTheme();
-  const { colors } = tokens;
-  return (
-    <TextInput
-      {...props}
-      placeholderTextColor={colors.faint}
-      style={[
-        styles.input,
-        {
-          color: colors.ink,
-          borderColor: colors.rule,
-          backgroundColor: colors.surface,
-        },
-        props.multiline && { minHeight: 72, textAlignVertical: 'top' },
-        props.style,
-      ]}
-    />
-  );
-}
-
 const styles = StyleSheet.create({
   scroll: {
     paddingHorizontal: 20,
     paddingVertical: 16,
     paddingBottom: 64,
     gap: 16,
-  },
-  field: {
-    gap: 6,
-  },
-  fieldLabel: {
-    fontFamily: 'Geist Sans',
-    fontSize: 10.5,
-    fontWeight: '600',
-    letterSpacing: 1.05,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  input: {
-    fontFamily: 'Geist Sans',
-    fontSize: 15,
-    fontWeight: '400',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
   },
   venuePill: {
     flexDirection: 'row',

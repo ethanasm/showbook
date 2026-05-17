@@ -28,6 +28,7 @@ import { useLocalSearchParams, useRouter, Link } from 'expo-router';
 import { ChevronLeft, AlertCircle, Image as ImageIcon, Music } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { EmptyState } from '../../components/EmptyState';
+import { QueryBoundary } from '../../components/QueryBoundary';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
@@ -154,33 +155,41 @@ export default function ArtistDetailScreen(): React.JSX.Element {
         leading={back}
       />
 
-      {detailQuery.isLoading && !performer ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.muted} />
-        </View>
-      ) : detailQuery.isError && !performer ? (
-        <View style={styles.center}>
-          <EmptyState
-            icon={<AlertCircle size={40} color={colors.faint} strokeWidth={1.5} />}
-            title="Couldn't load artist"
-            subtitle={detailQuery.error?.message ?? 'Try again in a moment.'}
-            cta={{ label: 'Retry', onPress: () => void detailQuery.refetch() }}
-          />
-        </View>
-      ) : performer ? (
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={refreshControl}
-        >
-          <Hero performer={performer} />
-          <YourShows shows={shows} loading={showsQuery.isLoading} />
-          <TaggedPhotos
-            items={mediaQuery.data ?? []}
-            loading={mediaQuery.isLoading}
-          />
-        </ScrollView>
-      ) : null}
+      <QueryBoundary
+        query={detailQuery}
+        loading={
+          <View style={styles.center}>
+            <ActivityIndicator color={colors.muted} />
+          </View>
+        }
+        error={(err, retry) => (
+          <View style={styles.center}>
+            <EmptyState
+              icon={<AlertCircle size={40} color={colors.faint} strokeWidth={1.5} />}
+              title="Couldn't load artist"
+              subtitle={
+                (err as { message?: string } | null)?.message ?? 'Try again in a moment.'
+              }
+              cta={{ label: 'Retry', onPress: retry }}
+            />
+          </View>
+        )}
+      >
+        {(performer) => (
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={refreshControl}
+          >
+            <Hero performer={performer} />
+            <YourShows shows={shows} loading={showsQuery.isLoading} />
+            <TaggedPhotos
+              items={mediaQuery.data ?? []}
+              loading={mediaQuery.isLoading}
+            />
+          </ScrollView>
+        )}
+      </QueryBoundary>
     </View>
   );
 }

@@ -26,7 +26,6 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
   ChevronLeft,
@@ -36,7 +35,7 @@ import {
   Search,
   Users,
 } from 'lucide-react-native';
-import { TopBar } from '../components/TopBar';
+import { ScreenWrapper } from '../components/ScreenWrapper';
 import { EmptyState } from '../components/EmptyState';
 import { KindBadge } from '../components/KindBadge';
 import { useTheme } from '../lib/theme';
@@ -66,7 +65,6 @@ function parseDate(iso: string): { month: string; day: string } {
 export default function DiscoverScreen(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { token } = useAuth();
   const utils = trpc.useUtils();
@@ -138,9 +136,7 @@ export default function DiscoverScreen(): React.JSX.Element {
     nearby.length === 0;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
-      <TopBar title="Discover" eyebrow="WHAT'S COMING UP" leading={back} rightAction={searchAction} large />
-
+    <ScreenWrapper title="Discover" eyebrow="WHAT'S COMING UP" leading={back} rightAction={searchAction} large>
       <ScrollView
         contentContainerStyle={
           isAllLoading || allEmpty ? styles.scrollFlex : styles.scrollContent
@@ -184,7 +180,7 @@ export default function DiscoverScreen(): React.JSX.Element {
           </>
         )}
       </ScrollView>
-    </View>
+    </ScreenWrapper>
   );
 }
 
