@@ -16,6 +16,12 @@ interface ShowTabsProps {
   /** Optional right-rail slot manifest; hidden when empty. */
   rightRail?: React.ComponentProps<typeof ShowDetailRightRail>["slots"];
   /**
+   * Tabs to omit. Hidden tabs are dropped from the bar and their
+   * panels never mount; URL state pointing at a hidden tab falls
+   * back to `overview`.
+   */
+  hiddenTabs?: readonly ShowTabKey[];
+  /**
    * Callback fired after a tab switch lands. The page-level
    * `useTrackTabView` hook subscribes here to emit the
    * `setlist_intel.show_tab.viewed` event.
@@ -33,12 +39,15 @@ export function ShowTabs({
   badges,
   panels,
   rightRail,
+  hiddenTabs,
   onTabChange,
 }: ShowTabsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const urlTab = parseShowTab(searchParams?.get("tab"));
+  const hiddenSet = new Set(hiddenTabs ?? []);
+  const rawUrlTab = parseShowTab(searchParams?.get("tab"));
+  const urlTab: ShowTabKey = hiddenSet.has(rawUrlTab) ? "overview" : rawUrlTab;
   const [active, setActive] = useState<ShowTabKey>(urlTab);
 
   // Keep state in sync when the user navigates back/forward.
@@ -78,19 +87,30 @@ export function ShowTabs({
       style={{ display: "flex", minHeight: 0, gap: 0 }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
-        <ShowTabBar active={active} badges={badges} onSelect={selectTab} />
+        <ShowTabBar
+          active={active}
+          badges={badges}
+          onSelect={selectTab}
+          hiddenTabs={hiddenTabs}
+        />
         <ShowTabPanel tabKey="overview" active={active}>
           {panels.overview}
         </ShowTabPanel>
-        <ShowTabPanel tabKey="setlist" active={active}>
-          {panels.setlist}
-        </ShowTabPanel>
-        <ShowTabPanel tabKey="media" active={active}>
-          {panels.media}
-        </ShowTabPanel>
-        <ShowTabPanel tabKey="notes" active={active}>
-          {panels.notes}
-        </ShowTabPanel>
+        {!hiddenSet.has("setlist") && (
+          <ShowTabPanel tabKey="setlist" active={active}>
+            {panels.setlist}
+          </ShowTabPanel>
+        )}
+        {!hiddenSet.has("media") && (
+          <ShowTabPanel tabKey="media" active={active}>
+            {panels.media}
+          </ShowTabPanel>
+        )}
+        {!hiddenSet.has("notes") && (
+          <ShowTabPanel tabKey="notes" active={active}>
+            {panels.notes}
+          </ShowTabPanel>
+        )}
       </div>
       {rightRail && (
         <ShowDetailRightRail isPast={isPast} slots={rightRail} />
