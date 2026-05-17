@@ -34,12 +34,23 @@ export interface PendingWritesDrawerProps {
   syncing?: boolean;
 }
 
-const MUTATION_LABEL: Record<PendingMutation, string> = {
+export const MUTATION_LABEL: Record<PendingMutation, string> = {
   'shows.create': 'Create show',
   'shows.update': 'Edit show',
   'shows.delete': 'Delete show',
   'shows.updateState': 'Change show state',
   'shows.setSetlist': 'Update setlist',
+  'shows.setNotes': 'Update notes',
+  'venues.follow': 'Follow venue',
+  'venues.unfollow': 'Unfollow venue',
+  'performers.follow': 'Follow artist',
+  'performers.unfollow': 'Unfollow artist',
+  'preferences.update': 'Update preferences',
+  'preferences.addRegion': 'Add region',
+  'preferences.removeRegion': 'Remove region',
+  'preferences.toggleRegion': 'Toggle region',
+  'spotify.createHypePlaylist': 'Create hype playlist',
+  'spotify.createHeardPlaylist': 'Create heard playlist',
 };
 
 export function PendingWritesDrawer({

@@ -25,7 +25,9 @@ import { ChevronLeft, Music } from 'lucide-react-native';
 import { ExternalSourceDisclaimer } from '../../components/ExternalSourceDisclaimer';
 import { TopBar } from '../../components/TopBar';
 import { SpotifyConnectSheet } from '../../components/SpotifyConnectSheet';
+import { OfflineEmptyState } from '../../components/OfflineEmptyState';
 import { useTheme } from '../../lib/theme';
+import { useNetwork } from '../../lib/network';
 import { useSpotifyConnection } from '../../lib/spotify-connection';
 import { trpc } from '../../lib/trpc';
 
@@ -34,6 +36,7 @@ export default function SpotifyIntegrationScreen(): React.JSX.Element {
   const { colors } = tokens;
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const network = useNetwork();
   const utils = trpc.useUtils();
 
   const {
@@ -73,6 +76,17 @@ export default function SpotifyIntegrationScreen(): React.JSX.Element {
   }, [disconnect]);
 
   const renderBody = (): React.JSX.Element => {
+    if (!network.online) {
+      // OAuth needs the in-app browser → web callback → custom scheme
+      // hop, none of which works offline. Hide the Connect/Disconnect
+      // CTAs so the user doesn't tap a button that can't succeed.
+      return (
+        <OfflineEmptyState
+          title="Connect Spotify when online"
+          subtitle="The Spotify handshake needs a live connection. Try again when you're back online."
+        />
+      );
+    }
     if (connection.status === 'loading') {
       return (
         <View style={styles.center}>

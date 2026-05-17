@@ -45,6 +45,10 @@ import { isNonWatchableKind } from '@showbook/shared';
 import { useAuth } from '../../lib/auth';
 import { trpc, type RouterOutput } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
+import { useQueryClient } from '@tanstack/react-query';
+import { runOptimisticMutation } from '../../lib/mutations';
+import { getCacheOutbox } from '../../lib/cache/db';
+import { useFeedback } from '../../lib/feedback';
 
 // Derive screen types from the tRPC vanilla client so drift in the server
 // contract is caught at the call site instead of papered over with casts.
@@ -200,7 +204,7 @@ export default function VenueDetailScreen(): React.JSX.Element {
             showsVerticalScrollIndicator={false}
             refreshControl={refreshControl}
           >
-            <Hero venue={venue} />
+            <Hero venue={venue} venueId={venueId} />
             <Upcoming items={upcoming} loading={upcomingQuery.isLoading} />
             <YourShows
               shows={shows}
@@ -219,7 +223,13 @@ export default function VenueDetailScreen(): React.JSX.Element {
   );
 }
 
-function Hero({ venue }: { venue: VenueDetail }): React.JSX.Element {
+function Hero({
+  venue,
+  venueId,
+}: {
+  venue: VenueDetail;
+  venueId: string;
+}): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const location = [venue.city, venue.stateRegion, venue.country]
@@ -258,7 +268,120 @@ function Hero({ venue }: { venue: VenueDetail }): React.JSX.Element {
         </View>
       ) : null}
       {summary ? <Text style={[styles.heroSummary, { color: colors.muted }]}>{summary}</Text> : null}
+      <FollowVenueButton venueId={venueId} isFollowed={venue.isFollowed} />
     </View>
+  );
+}
+
+function FollowVenueButton({
+  venueId,
+  isFollowed,
+}: {
+  venueId: string;
+  isFollowed: boolean;
+}): React.JSX.Element {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+  const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
+  const { showToast } = useFeedback();
+  const [pending, setPending] = React.useState(false);
+
+  const toggle = React.useCallback(async () => {
+    if (pending) return;
+    setPending(true);
+    const wasFollowed = isFollowed;
+    type DetailCache = { isFollowed?: boolean } | undefined;
+    type FollowedCache = { id: string }[] | undefined;
+    type ListCache = { id: string; isFollowed?: boolean }[] | undefined;
+    const detailKey = ['mobile', 'venue', venueId, 'detail'];
+    const followedKey = ['mobile', 'venues', 'followed'];
+    const listKey = ['mobile', 'venues', 'list'];
+    try {
+      await runOptimisticMutation({
+        mutation: wasFollowed ? 'venues.unfollow' : 'venues.follow',
+        input: { venueId },
+        outbox: getCacheOutbox(),
+        call: (input) =>
+          wasFollowed
+            ? utils.client.venues.unfollow.mutate(input)
+            : utils.client.venues.follow.mutate(input),
+        optimistic: {
+          snapshot: () => ({
+            detail: queryClient.getQueryData<DetailCache>(detailKey),
+            followed: queryClient.getQueryData<FollowedCache>(followedKey),
+            list: queryClient.getQueryData<ListCache>(listKey),
+          }),
+          apply: () => {
+            queryClient.setQueryData<DetailCache>(detailKey, (prev) =>
+              prev ? { ...prev, isFollowed: !wasFollowed } : prev,
+            );
+            queryClient.setQueryData<FollowedCache>(followedKey, (prev) => {
+              const list = prev ?? [];
+              if (wasFollowed) return list.filter((v) => v.id !== venueId);
+              if (list.some((v) => v.id === venueId)) return list;
+              return [...list, { id: venueId }];
+            });
+            queryClient.setQueryData<ListCache>(listKey, (prev) =>
+              prev?.map((v) =>
+                v.id === venueId ? { ...v, isFollowed: !wasFollowed } : v,
+              ),
+            );
+          },
+          rollback: (snap) => {
+            queryClient.setQueryData(detailKey, snap.detail);
+            queryClient.setQueryData(followedKey, snap.followed);
+            queryClient.setQueryData(listKey, snap.list);
+          },
+        },
+        reconcile: () => {
+          void utils.venues.detail.invalidate({ venueId });
+          void utils.venues.followed.invalidate();
+          void utils.venues.list.invalidate();
+        },
+      });
+    } catch {
+      // The outbox now owns the row; the offline-sync provider polls and
+      // surfaces it in the drawer. A toast keeps the user informed without
+      // alarming them — the change isn't lost.
+      showToast({
+        kind: 'info',
+        text: wasFollowed
+          ? "We'll unfollow when you're back online."
+          : "We'll follow when you're back online.",
+      });
+    } finally {
+      setPending(false);
+    }
+  }, [pending, isFollowed, venueId, utils, queryClient, showToast]);
+
+  return (
+    <Pressable
+      onPress={() => {
+        void toggle();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={isFollowed ? 'Unfollow venue' : 'Follow venue'}
+      testID="venue-follow-button"
+      disabled={pending}
+      style={({ pressed }) => [
+        styles.followButton,
+        {
+          backgroundColor: isFollowed ? colors.surface : colors.accent,
+          borderColor: isFollowed ? colors.rule : colors.accent,
+          opacity: pending || pressed ? 0.7 : 1,
+        },
+      ]}
+    >
+      <Text
+        style={[
+          styles.followLabel,
+          { color: isFollowed ? colors.ink : colors.accentText },
+        ]}
+      >
+        {isFollowed ? 'FOLLOWING' : 'FOLLOW'}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -510,6 +633,19 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '400',
     lineHeight: 18,
+  },
+  followButton: {
+    marginTop: 4,
+    paddingVertical: 9,
+    paddingHorizontal: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+  },
+  followLabel: {
+    fontFamily: 'Geist Mono',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.6,
   },
   section: {
     paddingHorizontal: 20,

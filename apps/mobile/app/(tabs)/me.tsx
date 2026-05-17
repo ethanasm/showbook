@@ -47,15 +47,22 @@ import {
   Inbox,
   CloudUpload,
   Music,
+  RefreshCw,
 } from 'lucide-react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { EmptyState } from '../../components/EmptyState';
 import { useTheme, type ThemePreference, type Density } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { trpc } from '../../lib/trpc';
-import { useOfflineSync } from '../../lib/network';
+import { useNetwork, useOfflineSync } from '../../lib/network';
+import { useFeedback } from '../../lib/feedback';
 import { useSpotifyConnection } from '../../lib/spotify-connection';
+import {
+  readLastWarmup,
+  warmCacheForOfflineUse,
+} from '../../lib/cache/warmup';
 
 interface IntegrationRow {
   id: 'gmail' | 'ticketmaster' | 'google-places' | 'spotify';
@@ -81,8 +88,50 @@ export default function MeScreen(): React.JSX.Element {
   const { colors } = tokens;
   const { user, signOut, token } = useAuth();
   const router = useRouter();
+  const network = useNetwork();
+  const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
+  const { showToast, dismissToast } = useFeedback();
   const { count: pendingCount, openDrawer: openPendingDrawer, syncing } =
     useOfflineSync();
+  const [warming, setWarming] = React.useState(false);
+  const [lastWarmupAt, setLastWarmupAt] = React.useState<number | null>(() =>
+    readLastWarmup(queryClient),
+  );
+
+  const runSyncNow = React.useCallback(async () => {
+    if (warming || !network.online) return;
+    setWarming(true);
+    const startedToast = showToast({
+      kind: 'info',
+      text: 'Syncing offline cache…',
+      durationMs: 0,
+    });
+    try {
+      const result = await warmCacheForOfflineUse({
+        client: utils.client,
+        queryClient,
+      });
+      setLastWarmupAt(result.finishedAt);
+      showToast({
+        kind: result.failed === 0 ? 'success' : 'info',
+        text:
+          result.failed === 0
+            ? 'Offline cache ready'
+            : `Synced with ${result.failed} failure${result.failed === 1 ? '' : 's'}`,
+      });
+    } catch (err) {
+      showToast({
+        kind: 'error',
+        text: err instanceof Error ? err.message : 'Sync failed',
+      });
+    } finally {
+      setWarming(false);
+      // The "syncing" toast was sticky (durationMs=0); dismiss it explicitly
+      // so only the success/error toast remains.
+      dismissToast(startedToast);
+    }
+  }, [warming, network.online, showToast, dismissToast, utils.client, queryClient]);
 
   // Only call the prefs query once the user has a session; the query is
   // protected and would 401 anonymously. The Me tab only renders behind
@@ -212,6 +261,38 @@ export default function MeScreen(): React.JSX.Element {
               </Text>
             </View>
             <ChevronRight size={16} color={colors.faint} strokeWidth={2} />
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              void runSyncNow();
+            }}
+            disabled={warming || !network.online}
+            accessibilityRole="button"
+            accessibilityLabel="Sync offline cache"
+            testID="me-sync-now"
+            style={({ pressed }) => [
+              styles.row,
+              {
+                borderTopColor: colors.rule,
+                borderTopWidth: StyleSheet.hairlineWidth,
+                opacity: warming || !network.online ? 0.5 : 1,
+              },
+              pressed && styles.pressed,
+            ]}
+          >
+            <RefreshCw size={18} color={colors.muted} strokeWidth={2} />
+            <View style={styles.rowText}>
+              <Text style={[styles.rowLabel, { color: colors.ink }]}>
+                {warming ? 'Syncing now…' : 'Sync offline cache'}
+              </Text>
+              <Text style={[styles.rowSub, { color: colors.muted }]} numberOfLines={1}>
+                {!network.online
+                  ? 'Connect to a network to sync'
+                  : lastWarmupAt
+                    ? `Last synced ${formatRelative(new Date(lastWarmupAt))}`
+                    : 'Never synced'}
+              </Text>
+            </View>
           </Pressable>
         </View>
 
@@ -346,6 +427,18 @@ function ThemePreferenceSelector(): React.JSX.Element {
       onChange={setPreference}
     />
   );
+}
+
+function formatRelative(d: Date): string {
+  const diffMs = Date.now() - d.getTime();
+  if (!Number.isFinite(diffMs) || diffMs < 0) return 'just now';
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 function DensitySelector(): React.JSX.Element {

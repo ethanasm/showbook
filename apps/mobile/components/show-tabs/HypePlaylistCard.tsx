@@ -21,9 +21,13 @@ import { Music } from 'lucide-react-native';
 
 import { useTheme } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
+import { useNetwork } from '../../lib/network';
 import { useSpotifyConnection } from '../../lib/spotify-connection';
 import { SpotifyConnectSheet } from '../SpotifyConnectSheet';
 import { buildSpotifyOpenPlan } from '../../lib/setlist-intel';
+import { useQueryClient } from '@tanstack/react-query';
+import { runOptimisticMutation } from '../../lib/mutations';
+import { getCacheOutbox } from '../../lib/cache/db';
 
 export interface HypePlaylistCardProps {
   showId: string;
@@ -38,6 +42,10 @@ interface PlaylistRow {
   spotifyUrl: string;
   trackCount: number;
   durationMs: number;
+  /** Internal sentinel — set when the create is queued in the outbox while
+   *  offline so the UI shows "Will create when online" instead of the
+   *  Create CTA. Cleared on reconcile. */
+  pending?: boolean;
 }
 
 export function HypePlaylistCard({
@@ -50,23 +58,14 @@ export function HypePlaylistCard({
   const { tokens } = useTheme();
   const { colors } = tokens;
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
+  const network = useNetwork();
 
   const existingQuery = trpc.spotify.existingPlaylist.useQuery({
     showId,
     kind,
   });
   const existing = (existingQuery.data ?? null) as PlaylistRow | null;
-
-  const createHype = trpc.spotify.createHypePlaylist.useMutation({
-    onSuccess: () => {
-      void utils.spotify.existingPlaylist.invalidate({ showId, kind });
-    },
-  });
-  const createHeard = trpc.spotify.createHeardPlaylist.useMutation({
-    onSuccess: () => {
-      void utils.spotify.existingPlaylist.invalidate({ showId, kind });
-    },
-  });
 
   const {
     requireConnection,
@@ -78,8 +77,9 @@ export function HypePlaylistCard({
   } = useSpotifyConnection();
 
   const [statusMsg, setStatusMsg] = React.useState<string | null>(null);
+  const [isCreating, setIsCreating] = React.useState(false);
 
-  const isCreating = createHype.isPending || createHeard.isPending;
+  const isQueued = existing?.pending === true;
   const kickerLabel = kind === 'hype' ? 'HYPE PLAYLIST' : `I HEARD ${artist.toUpperCase()}`;
   const headlineText =
     kind === 'hype'
@@ -92,11 +92,56 @@ export function HypePlaylistCard({
 
   const performCreate = React.useCallback(async () => {
     setStatusMsg(null);
+    setIsCreating(true);
+    // Optimistic sentinel: cache a `pending: true` PlaylistRow so the card
+    // immediately flips to the "Will create when online" state and the user
+    // doesn't double-tap. Reconcile invalidates the query to fetch the real
+    // Spotify URL.
+    const existingKey = [
+      ['spotify', 'existingPlaylist'],
+      { input: { showId, kind }, type: 'query' },
+    ];
+    type Cache = PlaylistRow | null | undefined;
+    const sentinel: PlaylistRow = {
+      playlistId: 'pending',
+      spotifyUrl: '',
+      trackCount: 0,
+      durationMs: 0,
+      pending: true,
+    };
     try {
-      const result =
-        kind === 'hype'
-          ? await createHype.mutateAsync({ showId })
-          : await createHeard.mutateAsync({ showId });
+      const mutationKind =
+        kind === 'hype' ? 'spotify.createHypePlaylist' : 'spotify.createHeardPlaylist';
+      type CreateResult = {
+        missing: unknown[];
+        trackCount: number;
+        requested: number;
+      };
+      const { result } = await runOptimisticMutation<
+        { showId: string },
+        Cache,
+        CreateResult
+      >({
+        mutation: mutationKind,
+        input: { showId },
+        outbox: getCacheOutbox(),
+        call: (input) =>
+          (kind === 'hype'
+            ? utils.client.spotify.createHypePlaylist.mutate(input)
+            : utils.client.spotify.createHeardPlaylist.mutate(input)) as Promise<CreateResult>,
+        optimistic: {
+          snapshot: () => queryClient.getQueryData<Cache>(existingKey),
+          apply: () => {
+            queryClient.setQueryData<Cache>(existingKey, sentinel);
+          },
+          rollback: (snap) => {
+            queryClient.setQueryData<Cache>(existingKey, snap);
+          },
+        },
+        reconcile: () => {
+          void utils.spotify.existingPlaylist.invalidate({ showId, kind });
+        },
+      });
       const missing = result.missing.length;
       const made = result.trackCount;
       setStatusMsg(
@@ -124,9 +169,16 @@ export function HypePlaylistCard({
         setStatusMsg('No setlist on file yet — add songs from the Edit panel.');
         return;
       }
+      // Offline / 5xx — the row is in the outbox, so this isn't lost.
+      if (!network.online) {
+        setStatusMsg("Queued — we'll create it on Spotify when you're back online.");
+        return;
+      }
       setStatusMsg('Spotify export failed. Try again in a moment.');
+    } finally {
+      setIsCreating(false);
     }
-  }, [createHeard, createHype, kind, showId]);
+  }, [kind, network.online, queryClient, showId, utils]);
 
   const openExisting = React.useCallback(async () => {
     if (!existing) return;
@@ -152,20 +204,23 @@ export function HypePlaylistCard({
   }, [existing]);
 
   const handlePrimaryPress = React.useCallback(async () => {
-    if (existing) {
+    if (isQueued) return;
+    if (existing && existing.spotifyUrl) {
       await openExisting();
       return;
     }
     await requireConnection(performCreate);
-  }, [existing, openExisting, performCreate, requireConnection]);
+  }, [existing, isQueued, openExisting, performCreate, requireConnection]);
 
-  const ctaLabel = existing
-    ? 'Open in Spotify'
-    : isCreating
-      ? 'Working…'
-      : kind === 'hype'
-        ? 'Open in Spotify'
-        : 'Save to Spotify';
+  const ctaLabel = isQueued
+    ? "Will create when you're online"
+    : existing && existing.spotifyUrl
+      ? 'Open in Spotify'
+      : isCreating
+        ? 'Working…'
+        : kind === 'hype'
+          ? 'Open in Spotify'
+          : 'Save to Spotify';
 
   return (
     <View testID={`hype-playlist-card-${kind}`}>
@@ -211,12 +266,12 @@ export function HypePlaylistCard({
               onPress={() => {
                 void handlePrimaryPress();
               }}
-              disabled={isCreating}
+              disabled={isCreating || isQueued}
               style={({ pressed }) => [
                 styles.primaryButton,
                 {
                   backgroundColor: colors.accent,
-                  opacity: isCreating ? 0.6 : pressed ? 0.85 : 1,
+                  opacity: isCreating || isQueued ? 0.6 : pressed ? 0.85 : 1,
                 },
               ]}
             >

@@ -20,6 +20,9 @@ import { useRouter } from 'expo-router';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
 import { CACHE_DEFAULTS } from '../../lib/cache';
+import { useQueryClient } from '@tanstack/react-query';
+import { runOptimisticMutation } from '../../lib/mutations';
+import { getCacheOutbox } from '../../lib/cache/db';
 import {
   PreviewPlayerProvider,
 } from './TrackPreviewButton';
@@ -111,6 +114,7 @@ function ShowDetailTabsViewInner({
   const router = useRouter();
   const breakpoint = useBreakpoint();
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
   const isPast = show.state === 'past';
 
   const [active, setActive] = React.useState<ShowTabKey>(
@@ -201,11 +205,40 @@ function ShowDetailTabsViewInner({
   );
 
   // ──────────────────────────── Mutations ────────────────────────────
-  const setNotes = trpc.shows.setNotes.useMutation({
-    onSuccess: () => {
-      void utils.shows.detail.invalidate({ showId: show.id });
+  // setNotes runs through the offline outbox so a typed note survives
+  // airplane-mode / app-kill. Optimistic patch updates the cached
+  // `shows.detail` so the textarea + tab-bar pencil indicator both
+  // reflect the new value immediately.
+  const saveNotes = React.useCallback(
+    async (next: string) => {
+      const detailKey = [
+        ['shows', 'detail'],
+        { input: { showId: show.id }, type: 'query' },
+      ];
+      type DetailCache = { notes?: string | null } | undefined;
+      await runOptimisticMutation({
+        mutation: 'shows.setNotes',
+        input: { showId: show.id, notes: next },
+        outbox: getCacheOutbox(),
+        call: (input) => utils.client.shows.setNotes.mutate(input),
+        optimistic: {
+          snapshot: () => queryClient.getQueryData<DetailCache>(detailKey),
+          apply: (input) => {
+            queryClient.setQueryData<DetailCache>(detailKey, (prev) =>
+              prev ? { ...prev, notes: input.notes } : prev,
+            );
+          },
+          rollback: (snap) => {
+            queryClient.setQueryData(detailKey, snap);
+          },
+        },
+        reconcile: () => {
+          void utils.shows.detail.invalidate({ showId: show.id });
+        },
+      });
     },
-  });
+    [queryClient, show.id, utils],
+  );
   const updateState = trpc.shows.updateState.useMutation({
     onSuccess: () => {
       void utils.shows.detail.invalidate({ showId: show.id });
@@ -354,9 +387,7 @@ function ShowDetailTabsViewInner({
     <NotesTab
       isPast={isPast}
       notes={show.notes ?? ''}
-      onSave={async (next) => {
-        await setNotes.mutateAsync({ showId: show.id, notes: next });
-      }}
+      onSave={saveNotes}
     />
   );
 

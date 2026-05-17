@@ -36,9 +36,11 @@ import {
 } from 'lucide-react-native';
 import { ScreenWrapper } from '../components/ScreenWrapper';
 import { EmptyState } from '../components/EmptyState';
+import { OfflineEmptyState } from '../components/OfflineEmptyState';
 import { KindBadge } from '../components/KindBadge';
 import { useTheme, type Kind } from '../lib/theme';
 import { useAuth } from '../lib/auth';
+import { useNetwork } from '../lib/network';
 import { trpc } from '../lib/trpc';
 import { useDebouncedValue } from '../lib/useDebouncedValue';
 import {
@@ -59,6 +61,7 @@ export default function SearchScreen(): React.JSX.Element {
   const { colors } = tokens;
   const router = useRouter();
   const { token } = useAuth();
+  const network = useNetwork();
 
   const [query, setQuery] = React.useState('');
   const debounced = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
@@ -68,7 +71,9 @@ export default function SearchScreen(): React.JSX.Element {
   const searchQuery = trpc.search.global.useQuery(
     { query: trimmed },
     {
-      enabled: Boolean(token) && !empty,
+      // Skip the request when offline — `search.global` has no cached
+      // fallback and would only generate a confusing spinner.
+      enabled: Boolean(token) && !empty && network.online,
       staleTime: 30_000,
     },
   );
@@ -137,7 +142,12 @@ export default function SearchScreen(): React.JSX.Element {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {empty ? (
+        {!network.online ? (
+          <OfflineEmptyState
+            title="Search is offline-only"
+            subtitle="Search needs a live connection. Try again when you're back online."
+          />
+        ) : empty ? (
           <EmptyState
             icon={<SearchIcon size={40} color={colors.faint} strokeWidth={1.5} />}
             title="Search your log"
