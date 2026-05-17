@@ -10,7 +10,6 @@ import { SortHeader } from "@/components/SortHeader";
 import {
   DEFAULT_DIR,
   DEFAULT_SORT,
-  collectYears,
   matchesSearch,
   sortRows,
   type SongRow,
@@ -21,6 +20,23 @@ import { formatDateMedium } from "@showbook/shared";
 
 const PAGE_SIZE = 20;
 
+function useWindowWidth() {
+  // SSR default — overwritten on mount by the effect below. Don't seed
+  // from `window.innerWidth` here: React preserves the SSR state on
+  // hydration and never reruns the useState initializer, so the layout
+  // would stay frozen at the desktop default until a resize event fires.
+  const [width, setWidth] = useState(1440);
+  useEffect(() => {
+    function onResize() {
+      setWidth(window.innerWidth);
+    }
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return width;
+}
+
 export default function SongsView() {
   const [sort, setSort] = useState<SortConfig>(DEFAULT_SORT);
   const [search, setSearch] = useState("");
@@ -28,6 +44,9 @@ export default function SongsView() {
   const [firstHeardOnly, setFirstHeardOnly] = useState(false);
   const [tourDebutOnly, setTourDebutOnly] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
+  const windowWidth = useWindowWidth();
+  const isMobile = windowWidth <= 767;
+  const isHalfWidth = windowWidth < 1024 && !isMobile;
 
   // The router applies the year / firstHeardOnly / tourDebutOnly
   // filters DB-side so the result set stays small even with thousands
@@ -41,6 +60,15 @@ export default function SongsView() {
     },
     { staleTime: 60_000 },
   );
+
+  // Years are fetched independently so the dropdown stays populated
+  // when the user picks a single year (the list query above narrows
+  // server-side, which would otherwise collapse the available-years
+  // set to just the active year).
+  const yearsQuery = trpc.songs.years.useQuery(undefined, {
+    staleTime: 5 * 60_000,
+  });
+  const availableYears = yearsQuery.data ?? [];
 
   // Fire one telemetry ping per mount — same shape as the show-tab
   // events landed in Phase 1.
@@ -62,8 +90,6 @@ export default function SongsView() {
     () => (listQuery.data ?? []) as SongRow[],
     [listQuery.data],
   );
-
-  const availableYears = useMemo(() => collectYears(allRows), [allRows]);
 
   const filtered = useMemo(() => {
     let result = allRows;
@@ -109,7 +135,30 @@ export default function SongsView() {
     return <CenteredMessage tone="error">Failed to load songs.</CenteredMessage>;
   }
 
-  const gridCols = "minmax(0,2.2fr) minmax(0,1.4fr) 70px 110px 40px";
+  // Tighter column distribution: artist sized to its content, count
+  // and date columns sized to their data so the spread between header
+  // and value stays small even on very wide screens. Mobile collapses
+  // artist under the title.
+  // Tight columns: title takes the bulk of the row, artist is capped
+  // so short names ("M83", "HAIM") don't leave a giant gap before the
+  // numeric/date columns. Mobile collapses artist under the title so
+  // the row stays scannable at 390px wide. The list is also wrapped
+  // in a maxWidth container below so on very wide displays the rows
+  // don't stretch full-width and the inter-column whitespace stays
+  // reasonable.
+  const gridCols = isMobile
+    ? "minmax(0, 1fr) 36px 86px 28px"
+    : isHalfWidth
+    ? "minmax(0, 1fr) minmax(110px, 180px) 52px 92px 32px"
+    : "minmax(0, 1fr) minmax(140px, 240px) 56px 96px 32px";
+
+  // Max content width for the list. On displays wider than this the
+  // list left-anchors to the page padding (sidebar already biases the
+  // content towards the right edge), keeping rows readable.
+  const listMaxWidth = isMobile ? undefined : 1080;
+
+  const rowGap = isMobile ? 10 : 16;
+  const rowPadX = isMobile ? 12 : 18;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
@@ -129,7 +178,7 @@ export default function SongsView() {
           padding: "11px var(--page-pad-x)",
           display: "flex",
           alignItems: "center",
-          gap: 16,
+          gap: isMobile ? 8 : 12,
           flexWrap: "wrap",
           background: "var(--surface)",
           borderBottom: "1px solid var(--rule)",
@@ -142,7 +191,8 @@ export default function SongsView() {
             gap: 6,
             padding: "5px 10px",
             border: "1px solid var(--rule-strong)",
-            minWidth: 220,
+            minWidth: isMobile ? 0 : 200,
+            flex: isMobile ? "1 1 100%" : undefined,
           }}
         >
           <Search size={12} color="var(--muted)" />
@@ -171,13 +221,13 @@ export default function SongsView() {
         />
 
         <ToggleChip
-          label="First time only"
+          label={isMobile ? "First only" : "First time only"}
           active={firstHeardOnly}
           onClick={() => setFirstHeardOnly((v) => !v)}
           testId="filter-first-heard"
         />
         <ToggleChip
-          label="Tour debuts"
+          label={isMobile ? "Debuts" : "Tour debuts"}
           active={tourDebutOnly}
           onClick={() => setTourDebutOnly((v) => !v)}
           testId="filter-tour-debuts"
@@ -236,13 +286,13 @@ export default function SongsView() {
             />
           </div>
         ) : (
-          <div style={{ margin: "4px var(--page-pad-x) 0", background: "var(--surface)" }}>
+          <div style={{ margin: "4px var(--page-pad-x) 0", background: "var(--surface)", maxWidth: listMaxWidth }}>
             <div
               style={{
                 display: "grid",
                 gridTemplateColumns: gridCols,
-                columnGap: 20,
-                padding: "10px 20px",
+                columnGap: rowGap,
+                padding: `10px ${rowPadX}px`,
                 borderBottom: "1px solid var(--rule)",
                 fontFamily: "var(--font-geist-mono), monospace",
                 fontSize: 9.5,
@@ -252,7 +302,9 @@ export default function SongsView() {
               }}
             >
               <SortHeader<SortField> field="title" label="Title" sort={sort} onToggle={toggleSort} />
-              <SortHeader<SortField> field="performer" label="Artist" sort={sort} onToggle={toggleSort} />
+              {!isMobile && (
+                <SortHeader<SortField> field="performer" label="Artist" sort={sort} onToggle={toggleSort} />
+              )}
               <SortHeader<SortField> field="count" label="Heard" sort={sort} onToggle={toggleSort} align="right" />
               <SortHeader<SortField> field="last" label="Last" sort={sort} onToggle={toggleSort} align="right" />
               <div style={{ textAlign: "center" }} />
@@ -266,8 +318,8 @@ export default function SongsView() {
                 style={{
                   display: "grid",
                   gridTemplateColumns: gridCols,
-                  columnGap: 20,
-                  padding: "12px 20px",
+                  columnGap: rowGap,
+                  padding: `${isMobile ? 10 : 11}px ${rowPadX}px`,
                   borderBottom: "1px solid var(--rule)",
                   alignItems: "center",
                   cursor: "pointer",
@@ -280,40 +332,62 @@ export default function SongsView() {
                 <div
                   style={{
                     display: "flex",
-                    alignItems: "center",
-                    gap: 8,
+                    flexDirection: isMobile ? "column" : "row",
+                    alignItems: isMobile ? "flex-start" : "center",
+                    gap: isMobile ? 2 : 8,
                     minWidth: 0,
                   }}
                 >
-                  <Music size={12} color="var(--muted)" style={{ flexShrink: 0 }} />
-                  <span
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, maxWidth: "100%" }}>
+                    <Music size={12} color="var(--muted)" style={{ flexShrink: 0 }} />
+                    <span
+                      style={{
+                        fontFamily: "var(--font-geist-sans), sans-serif",
+                        fontSize: 14,
+                        fontWeight: 500,
+                        color: "var(--ink)",
+                        letterSpacing: -0.2,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {row.title}
+                    </span>
+                  </div>
+                  {isMobile && (
+                    <span
+                      style={{
+                        fontFamily: "var(--font-geist-mono), monospace",
+                        fontSize: 10.5,
+                        color: "var(--muted)",
+                        letterSpacing: ".02em",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        maxWidth: "100%",
+                        paddingLeft: 20,
+                      }}
+                    >
+                      {row.performerName}
+                    </span>
+                  )}
+                </div>
+                {!isMobile && (
+                  <div
                     style={{
-                      fontFamily: "var(--font-geist-sans), sans-serif",
-                      fontSize: 14,
-                      fontWeight: 500,
-                      color: "var(--ink)",
-                      letterSpacing: -0.2,
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: 11,
+                      color: "var(--muted)",
+                      letterSpacing: ".02em",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                     }}
                   >
-                    {row.title}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11,
-                    color: "var(--muted)",
-                    letterSpacing: ".02em",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {row.performerName}
-                </div>
+                    {row.performerName}
+                  </div>
+                )}
                 <div
                   style={{
                     textAlign: "right",
