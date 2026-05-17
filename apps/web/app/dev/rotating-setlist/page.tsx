@@ -124,6 +124,12 @@ const PHISH_PREDICTION: RotatingPrediction = {
     ],
     runStartDate: "2026-04-16",
   },
+  setCountPrediction: {
+    setCount: 2,
+    setCountConfidence: 0.98,
+    expectedSongCount: { p25: 17, p50: 19, p75: 22 },
+    expectedDurationMin: 165,
+  },
 };
 
 export default function RotatingPreviewPage() {

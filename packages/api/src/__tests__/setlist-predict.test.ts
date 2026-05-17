@@ -651,6 +651,8 @@ describe('bucketByProbability', () => {
         encoreCount: 0,
         lastPlayedDate: '2026-05-10',
         totalAppearances: 3,
+        realAppearances: 3,
+        syntheticAlbumName: null,
       });
     }
     const buckets = bucketByProbability({ songs, latestTierADate: null, aggregates: aggs });

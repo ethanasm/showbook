@@ -9,7 +9,6 @@ import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
 import {
   EmptyState,
   ShowRow,
-  KindBadge,
   type ShowKind,
   type ShowState,
 } from "@/components/design-system";
@@ -21,7 +20,6 @@ import {
   Archive,
   Calendar,
   ArrowDownUp,
-  MoreHorizontal,
   Ticket,
   Square,
   Trash2,
@@ -29,18 +27,15 @@ import {
   X,
   Check,
   Loader2,
-  ArrowUpRight,
-  Link2,
-  Pencil,
   Eye,
 } from "lucide-react";
 import { useCompactMode } from "@/lib/useCompactMode";
 import { useIsMobile } from "@/lib/useIsMobile";
-import { daysUntil, formatDateParts } from "@showbook/shared";
+import { formatDateParts } from "@showbook/shared";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
-import { STATE_TRANSITIONS } from "@/lib/show-state";
 import { useShowContextMenu } from "@/lib/useShowContextMenu";
 import { PaginationFooter } from "@/components/PaginationFooter";
+import { ExternalSourceDisclaimer } from "@/components/external-connection/ExternalSourceDisclaimer";
 import { compareNullable } from "@/lib/sort";
 import {
   getHeadliner,
@@ -166,15 +161,6 @@ const SHOW_LIST_GRID_TEMPLATE = "14px 32px 80px 110px 1.02fr 1.03fr 110px 0.15fr
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 // Re-exported from shared as `formatDateParts` — keep the local alias so the
 // existing call sites read naturally (`toDateParts(show.date)`).
 const toDateParts = formatDateParts;
@@ -276,8 +262,6 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
   const {
     openContextMenu: handleContextMenu,
     portal: showContextMenuPortal,
-    handleDelete,
-    handleStateTransition,
   } = useShowContextMenu<ShowData>();
 
   // Calendar state
@@ -319,6 +303,9 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     eventId?: string;
   };
   const [importSource, setImportSource] = useState<ImportSource | null>(null);
+  // Gated OAuth: for gmail/eventbrite the consent disclaimer renders
+  // first; the popup only opens once the user explicitly continues.
+  const [oauthConsentStarted, setOauthConsentStarted] = useState(false);
   const [gmailBulkLoading, setGmailBulkLoading] = useState(false);
   const [gmailBulkResults, setGmailBulkResults] = useState<BulkResult[]>([]);
   const [gmailBulkSelected, setGmailBulkSelected] = useState<Set<number>>(new Set());
@@ -349,10 +336,6 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
   const createShow = trpc.shows.create.useMutation();
   const utils = trpc.useUtils();
   const invalidateSidebarCounts = useInvalidateSidebarCounts();
-  const setTicketUrl = trpc.shows.setTicketUrl.useMutation({
-    onSuccess: () => utils.shows.invalidate(),
-  });
-
   // Gmail
   const [gmailProgress, setGmailProgress] = useState<{ phase: string; processed: number; total: number; found: number } | null>(null);
 
@@ -628,13 +611,16 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     setSetlistfmUsername("");
     setGmailError(null);
     setGmailProgress(null);
+    setOauthConsentStarted(false);
+    // OAuth popup does NOT open here — the modal first renders a
+    // consent step with the disclaimer; only then does the user click
+    // "Continue with Gmail / Eventbrite" which calls
+    // `startOauthPopup` to open the popup.
+  }, []);
 
-    if (source === "setlistfm") {
-      // No popup — username form is shown inline in the modal.
-      return;
-    }
+  const startOauthPopup = useCallback((source: "gmail" | "eventbrite") => {
+    setOauthConsentStarted(true);
 
-    // OAuth-based sources (gmail, eventbrite) share the popup pattern.
     const expectedAuth = source === "gmail" ? "gmail-auth" : "eventbrite-auth";
     const expectedAuthError = source === "gmail" ? "gmail-auth-error" : "eventbrite-auth-error";
     const popupPath = source === "gmail" ? "/api/gmail" : "/api/eventbrite";
@@ -1208,269 +1194,6 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Render: Detail Panel
-  // ---------------------------------------------------------------------------
-
-  function renderDetailPanel(show: ShowData) {
-    const support = getSupport(show);
-    const neighborhood = getNeighborhood(show);
-    const dateParts = toDateParts(show.date);
-    const days = daysUntil(show.date);
-    const countdown = show.state !== "past" && days > 0 ? `in ${days} day${days !== 1 ? "s" : ""}` : null;
-    const transition = STATE_TRANSITIONS[show.state];
-
-    return (
-      <div style={{
-        background: "var(--surface2)",
-        borderBottom: "1px solid var(--rule)",
-        padding: "20px 24px 20px 34px",
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr 1fr 1fr",
-        gap: 24,
-      }}>
-        {/* Column 1: Details */}
-        <div>
-          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 6 }}>
-            Details
-          </div>
-          <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 20, fontWeight: 600, color: "var(--ink)", letterSpacing: -0.5, lineHeight: 1.1 }}>
-            {(() => {
-              const hlId = getHeadlinerId(show);
-              const name = getHeadliner(show);
-              return hlId ? (
-                <Link
-                  href={`/artists/${hlId}`}
-                  style={{ color: "inherit", textDecoration: "none" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
-                  onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
-                >
-                  {name}
-                </Link>
-              ) : name;
-            })()}
-          </div>
-          {support.length > 0 && (
-            <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 12.5, color: "var(--muted)", marginTop: 5 }}>
-              with{" "}
-              {(() => {
-                const supportRich = getSupportPerformers(show);
-                return support.map((name, i) => {
-                  const id = supportRich.find((p) => p.name === name)?.id;
-                  return (
-                    <span key={`${name}-${i}`}>
-                      {id ? (
-                        <Link
-                          href={`/artists/${id}`}
-                          style={{ color: "inherit", textDecoration: "none" }}
-                          onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
-                          onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
-                        >
-                          {name}
-                        </Link>
-                      ) : (
-                        name
-                      )}
-                      {i < support.length - 1 ? ", " : ""}
-                    </span>
-                  );
-                });
-              })()}
-            </div>
-          )}
-          {show.tourName && (
-            <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", marginTop: 8, letterSpacing: ".04em" }}>
-              {show.tourName}
-            </div>
-          )}
-        </div>
-
-        {/* Column 2: Venue */}
-        <div>
-          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 6 }}>
-            Venue
-          </div>
-          <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 14, fontWeight: 500, color: "var(--ink)", display: "flex", alignItems: "center", gap: 6 }}>
-            <Link
-              href={`/venues/${show.venue.id}`}
-              style={{ color: "inherit", textDecoration: "none" }}
-              onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
-              onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
-            >
-              {show.venue.name}
-            </Link>
-            {(show.venue.latitude == null || show.venue.longitude == null) && (
-              <span title="No coordinates — won't appear on map" style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--kind-theatre)", flexShrink: 0, opacity: 0.7 }} />
-            )}
-          </div>
-          {neighborhood && (
-            <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", marginTop: 3 }}>
-              {neighborhood.toLowerCase()}
-            </div>
-          )}
-          {show.seat && (
-            <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", marginTop: 6 }}>
-              <span style={{ color: "var(--faint)" }}>seat</span> {show.seat}
-            </div>
-          )}
-        </div>
-
-        {/* Column 3: Date */}
-        <div>
-          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 6 }}>
-            Date
-          </div>
-          <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 14, fontWeight: 500, color: "var(--ink)", fontFeatureSettings: '"tnum"' }}>
-            {dateParts.dow}, {dateParts.month} {dateParts.day}, {dateParts.year}
-          </div>
-          {countdown && (
-            <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--accent)", marginTop: 4 }}>
-              {countdown}
-            </div>
-          )}
-          {show.pricePaid && (
-            <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", marginTop: 6 }}>
-              <span style={{ color: "var(--faint)" }}>paid</span> ${parseFloat(show.pricePaid).toFixed(0)}
-              {show.ticketCount > 1 && (
-                <span style={{ color: "var(--faint)" }}> · ${(parseFloat(show.pricePaid) / show.ticketCount).toFixed(0)}/ea × {show.ticketCount}</span>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Column 4: Actions */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
-          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 2 }}>
-            Actions
-          </div>
-          {show.state === "watching" && show.ticketUrl && (
-            <a
-              href={show.ticketUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                padding: "8px 14px",
-                background: "var(--accent)",
-                color: "var(--accent-text)",
-                border: "none",
-                fontFamily: "var(--font-geist-sans), sans-serif",
-                fontSize: 12.5,
-                fontWeight: 500,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                cursor: "pointer",
-                textDecoration: "none",
-              }}
-            >
-              <ArrowUpRight size={13} /> Tix
-            </a>
-          )}
-          {show.state === "watching" && !show.ticketUrl && (
-            <button
-              onClick={() => {
-                const url = prompt("Paste ticket URL:");
-                if (url) {
-                  setTicketUrl.mutate({ showId: show.id, ticketUrl: url });
-                }
-              }}
-              style={{
-                padding: "8px 14px",
-                background: "transparent",
-                border: "1px solid var(--rule-strong)",
-                color: "var(--ink)",
-                fontFamily: "var(--font-geist-sans), sans-serif",
-                fontSize: 12.5,
-                fontWeight: 500,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                cursor: "pointer",
-              }}
-            >
-              <Link2 size={13} /> Link tickets
-            </button>
-          )}
-          {show.state === "watching" && (
-            <button
-              onClick={() => handleStateTransition(show)}
-              style={{
-                padding: "8px 14px",
-                background: show.ticketUrl ? "transparent" : "var(--accent)",
-                color: show.ticketUrl ? "var(--ink)" : "var(--accent-text)",
-                border: show.ticketUrl ? "1px solid var(--rule-strong)" : "none",
-                fontFamily: "var(--font-geist-sans), sans-serif",
-                fontSize: 12.5,
-                fontWeight: 500,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                cursor: "pointer",
-              }}
-            >
-              <Ticket size={13} /> Got tickets
-            </button>
-          )}
-          {transition && show.state === "ticketed" && (
-            <button
-              onClick={() => handleStateTransition(show)}
-              style={{
-                padding: "8px 14px",
-                background: "var(--accent)",
-                color: "var(--accent-text)",
-                border: "none",
-                fontFamily: "var(--font-geist-sans), sans-serif",
-                fontSize: 12.5,
-                fontWeight: 500,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                cursor: "pointer",
-              }}
-            >
-              {transition.label}
-            </button>
-          )}
-          <button
-            onClick={() => router.push(`/add?editId=${show.id}`)}
-            style={{
-              padding: "8px 14px",
-              background: "transparent",
-              border: "1px solid var(--rule-strong)",
-              color: "var(--ink)",
-              fontFamily: "var(--font-geist-sans), sans-serif",
-              fontSize: 12.5,
-              fontWeight: 500,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              cursor: "pointer",
-            }}
-          >
-            <MoreHorizontal size={13} /> Edit
-          </button>
-          <button
-            onClick={() => handleDelete(show.id)}
-            style={{
-              padding: "8px 14px",
-              background: "transparent",
-              border: "1px solid var(--rule-strong)",
-              color: "#E63946",
-              fontFamily: "var(--font-geist-sans), sans-serif",
-              fontSize: 12.5,
-              fontWeight: 500,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              cursor: "pointer",
-            }}
-          >
-            <Trash2 size={13} /> Delete
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   // ---------------------------------------------------------------------------
   // Render: List Mode
@@ -2060,7 +1783,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
 
   function renderCalendarYearView(
     today: Date,
-    toolbarNav: React.ReactNode,
+    _toolbarNav: React.ReactNode,
     viewToggle: React.ReactNode,
     atMinYear: boolean,
     atMaxYear: boolean,
@@ -2284,12 +2007,6 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
       .map((k) => ({ kind: k, count: kindCounts.get(k) ?? 0 }))
       .filter((k) => k.count > 0)
       .sort((a, b) => b.count - a.count);
-
-    // Superlatives
-    const priciest = allShowsList
-      .filter((s) => s.pricePaid && getYear(s.date) === currentYear)
-      .sort((a, b) => parseFloat(b.pricePaid!) - parseFloat(a.pricePaid!));
-    const priciestShow = priciest[0];
 
     const SPARKLINE_MAX = Math.max(maxArtistCount, maxVenueCount, 8);
 
@@ -3177,11 +2894,15 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                         : importSource === "gmail"
                           ? gmailAccessToken
                             ? "No tickets found"
-                            : "Waiting for Gmail authorization..."
+                            : oauthConsentStarted
+                              ? "Waiting for Gmail authorization..."
+                              : "Review what we'll store before connecting"
                           : importSource === "eventbrite"
                             ? eventbriteAccessToken
                               ? "No tickets found"
-                              : "Waiting for Eventbrite authorization..."
+                              : oauthConsentStarted
+                                ? "Waiting for Eventbrite authorization..."
+                                : "Review what we'll store before connecting"
                             : "Enter your setlist.fm username"}
                 </div>
               </div>
@@ -3311,16 +3032,82 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                     Fetch
                   </button>
                 </div>
-                <div style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10.5,
-                  color: "var(--faint)",
-                  letterSpacing: ".02em",
-                }}>
-                  Pulls every concert you&rsquo;ve marked attended on setlist.fm,
-                  including the setlist itself.
-                </div>
+                <ExternalSourceDisclaimer source="setlistfm" />
               </form>
+            )}
+
+            {/* gmail / eventbrite: consent step. Renders before the
+                OAuth popup opens so the user sees what we store and
+                why first. "Continue with X" opens the popup. */}
+            {(importSource === "gmail" || importSource === "eventbrite")
+              && !oauthConsentStarted
+              && !gmailBulkLoading
+              && gmailBulkResults.length === 0
+              && (importSource === "gmail" ? !gmailAccessToken : !eventbriteAccessToken)
+              && (
+              <div
+                style={{
+                  padding: "20px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                  borderBottom: "1px solid var(--rule)",
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "var(--font-geist-sans), sans-serif",
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    color: "var(--ink)",
+                  }}
+                >
+                  {importSource === "gmail"
+                    ? "Showbook will scan your inbox for ticket emails and surface them here so you can pick which shows to import."
+                    : "Showbook will fetch your past Eventbrite orders so you can pick which shows to import."}
+                </div>
+                <ExternalSourceDisclaimer source={importSource} />
+                <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                  <button
+                    type="button"
+                    onClick={() => startOauthPopup(importSource)}
+                    data-testid={`${importSource}-consent-continue`}
+                    style={{
+                      padding: "10px 16px",
+                      border: "none",
+                      background: "var(--ink)",
+                      color: "var(--bg)",
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: ".06em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {importSource === "gmail"
+                      ? "Continue with Gmail →"
+                      : "Continue with Eventbrite →"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImportSource(null)}
+                    style={{
+                      padding: "10px 12px",
+                      border: "none",
+                      background: "transparent",
+                      color: "var(--muted)",
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: 11,
+                      letterSpacing: ".06em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Not now
+                  </button>
+                </div>
+              </div>
             )}
 
             {/* Results list */}

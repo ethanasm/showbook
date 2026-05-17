@@ -272,6 +272,17 @@ function makeRun(cluster: NormalizedEvent[]): EventRun {
           ? 'sold_out'
           : 'announced';
 
+  // For festivals, the support list is the union of every day's lineup —
+  // otherwise picking a single representative event would throw away two
+  // thirds of the bill on a 3-day festival.
+  const isFestival = representative.kind === 'festival';
+  const support = isFestival
+    ? mergeFestivalSupport(cluster)
+    : representative.support;
+  const supportPerformerIds = isFestival
+    ? mergeFestivalSupportIds(cluster)
+    : representative.supportPerformerIds;
+
   return {
     runStartDate: sortedDates[0]!,
     runEndDate: sortedDates[sortedDates.length - 1]!,
@@ -283,8 +294,8 @@ function makeRun(cluster: NormalizedEvent[]): EventRun {
     headliner: representative.headliner,
     headlinerPerformerId: representative.headlinerPerformerId,
     venueId: representative.venueId,
-    support: representative.support,
-    supportPerformerIds: representative.supportPerformerIds,
+    support,
+    supportPerformerIds,
     onSaleDate:
       representative.kind === 'festival'
         ? representative.onSaleDate
@@ -293,6 +304,37 @@ function makeRun(cluster: NormalizedEvent[]): EventRun {
     source: representative.source,
     ticketUrl: representative.ticketUrl,
   };
+}
+
+function mergeFestivalSupport(cluster: NormalizedEvent[]): string[] | null {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const event of cluster) {
+    for (const name of event.support ?? []) {
+      const key = name.toLowerCase().trim();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        out.push(name);
+      }
+    }
+  }
+  return out.length > 0 ? out : null;
+}
+
+function mergeFestivalSupportIds(
+  cluster: NormalizedEvent[],
+): string[] | null {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const event of cluster) {
+    for (const id of event.supportPerformerIds ?? []) {
+      if (!seen.has(id)) {
+        seen.add(id);
+        out.push(id);
+      }
+    }
+  }
+  return out.length > 0 ? out : null;
 }
 
 function pickRepresentativeEvent(cluster: NormalizedEvent[]): NormalizedEvent {

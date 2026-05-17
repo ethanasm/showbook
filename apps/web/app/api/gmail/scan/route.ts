@@ -96,9 +96,9 @@ async function tryExtractFromPdf(
 
   let text: string;
   try {
-    const { PDFParse } = await import(/* webpackIgnore: true */ 'pdf-parse');
-    const parser = new PDFParse({ data: new Uint8Array(bytes) });
-    const result = await parser.getText();
+    const { extractText, getDocumentProxy } = await import('unpdf');
+    const pdf = await getDocumentProxy(new Uint8Array(bytes));
+    const result = await extractText(pdf, { mergePages: true });
     text = result.text.trim();
   } catch (err) {
     log.warn(

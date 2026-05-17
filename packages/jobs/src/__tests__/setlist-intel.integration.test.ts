@@ -7,7 +7,7 @@
 
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { and, eq, like, sql } from 'drizzle-orm';
+import { eq, like, sql } from 'drizzle-orm';
 import {
   db,
   performers,
@@ -20,10 +20,7 @@ import {
   venues,
 } from '@showbook/db';
 import { runSongIndexRebuild } from '../song-index-rebuild';
-import {
-  predictedSetlistCached,
-  predictSetlist,
-} from '@showbook/api';
+import { predictedSetlistCached } from '@showbook/api';
 import { synthesizeTourId } from '../setlist-corpus-fill';
 
 const PREFIX = 'ff666666';

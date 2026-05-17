@@ -8,7 +8,7 @@
  * exercise the pure window math.
  */
 
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 // Re-implement the windowing math from the job so the test asserts

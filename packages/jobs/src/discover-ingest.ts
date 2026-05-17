@@ -7,12 +7,13 @@ import {
   venues,
   performers,
 } from '@showbook/db';
-import { eq, lt, isNotNull, and, inArray, sql } from 'drizzle-orm';
+import { eq, isNotNull, and, inArray, sql } from 'drizzle-orm';
 import {
   searchEvents,
   inferKind,
   selectBestImage,
   extractMusicbrainzId,
+  extractFestivalName,
   matchOrCreateVenue,
   matchOrCreatePerformer,
   type TMEvent,
@@ -166,9 +167,23 @@ async function normalizeTmEvent(
     venueId = venue.id;
   }
 
+  const kind = inferKind(event.classifications, { eventName: event.name });
   const attractions = event._embedded?.attractions ?? [];
-  const headlinerAttraction = attractions[0];
-  const headlinerName = headlinerAttraction?.name ?? event.name;
+
+  // For festivals, "headliner" is the festival itself, not the day's top
+  // billed act. Real TM data lists a different attraction[0] per day-pass
+  // event (Outside Lands Friday → Foo Fighters, Saturday → Tame Impala,
+  // etc.), which used to land each day in its own cluster in
+  // groupEventsIntoRuns and produced one festival row per day. Pinning
+  // headliner to a stable name derived from event.name collapses them
+  // back into one run. headlinerPerformerId stays null so the cluster key
+  // doesn't fall back to a per-day performer id either; every attraction
+  // is preserved on the support list instead.
+  const isFestival = kind === 'festival';
+  const headlinerAttraction = isFestival ? undefined : attractions[0];
+  const headlinerName = isFestival
+    ? extractFestivalName(event.name)
+    : (headlinerAttraction?.name ?? event.name);
 
   let headlinerPerformerId: string | null = null;
   if (headlinerAttraction) {
@@ -182,7 +197,11 @@ async function normalizeTmEvent(
     headlinerPerformerId = performer.id;
   }
 
-  const supportAttractions = attractions.length > 1 ? attractions.slice(1) : [];
+  const supportAttractions = isFestival
+    ? attractions
+    : attractions.length > 1
+      ? attractions.slice(1)
+      : [];
   const support = supportAttractions.length > 0
     ? supportAttractions.map((a) => a.name)
     : null;
@@ -223,7 +242,7 @@ async function normalizeTmEvent(
     date: event.dates.start.localDate,
     localTime: event.dates.start.localTime ?? null,
     city: (tmVenue.city?.name ?? 'unknown').trim().toLowerCase(),
-    kind: inferKind(event.classifications, { eventName: event.name }),
+    kind,
     headliner: headlinerName,
     headlinerPerformerId,
     venueId,

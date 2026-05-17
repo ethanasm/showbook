@@ -10,7 +10,13 @@ export type PredictionStyle =
   | 'rotating'
   | 'theatrical'
   | 'improvised'
-  | 'cold';
+  | 'cold'
+  // Phase 11 §15g — special-event empty-state branch. The mobile
+  // SetlistTab returns the SpecialEventCard short-circuit before
+  // pickSetlistView is consulted, so this never gets routed to a
+  // view; it's listed here so the type union compiles when the
+  // server returns this style.
+  | 'special_event';
 
 export interface MinimalPrediction {
   style: PredictionStyle;
@@ -65,6 +71,12 @@ export function pickSetlistView(
       return flags.improvisedDisplayEnabled
         ? 'improvised'
         : 'improvised_blocked';
+    case 'special_event':
+      // The SetlistTab renders the SpecialEventCard before consulting
+      // pickSetlistView, so this branch never fires in practice.
+      // Returning 'cold' as a safe fallback keeps the type union
+      // exhaustive for future refactors.
+      return 'cold';
   }
 }
 

@@ -1,7 +1,7 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import superjson from 'superjson';
 import { eq } from 'drizzle-orm';
-import { db, users, type Database } from '@showbook/db';
+import { db, users } from '@showbook/db';
 import { isAdminEmail } from './admin';
 
 // ---------------------------------------------------------------------------

@@ -133,77 +133,85 @@ describe('checkErrorVolume', () => {
 
 describe('checkMissedSchedules', () => {
   // Tuesday morning ET — every daily job + the Monday discover ingest
-  // should have an entry from the prior 24h.
+  // should have a recent firing in pg-boss.
   const tuesdayMorning = new Date('2026-05-05T11:00:00Z'); // 7am ET
+  const TUESDAY_QUEUES = [
+    'shows/nightly',
+    'enrichment/setlist-retry',
+    'backfill/performer-images',
+    'backfill/venue-photos',
+    'notifications/daily-digest',
+    'discover/ingest',
+  ];
 
-  it('reports ok when every expected event has a count', async () => {
-    // 6 expectations on a Tuesday — provide a single shared scripted
-    // result that matches for all calls.
-    const r = await checks.checkMissedSchedules(
-      tuesdayMorning,
-      fakeAxiom(ok([{ cnt: 1 }])),
-    );
+  function rowsFor(queues: string[], latest: Date): Array<{ name: string; latest: Date }> {
+    return queues.map((name) => ({ name, latest }));
+  }
+
+  it('reports ok when every expected queue has a recent firing', async () => {
+    EXECUTE.results = [rowsFor(TUESDAY_QUEUES, new Date(tuesdayMorning.getTime() - 60 * 60 * 1000))];
+    const r = await checks.checkMissedSchedules(tuesdayMorning);
     assert.equal(r.status, 'ok');
+    assert.match(r.summary, /All expected scheduled jobs/);
   });
 
-  it('reports fail when at least one schedule has zero hits', async () => {
-    let call = 0;
-    const fn = (async () => {
-      call += 1;
-      const cnt = call === 5 ? 0 : 1; // digest is the 5th expectation
-      return ok([{ cnt }]);
-    }) as unknown as QueryAxiomFn;
-    const r = await checks.checkMissedSchedules(tuesdayMorning, fn);
+  it('reports fail when at least one schedule has no firing in window', async () => {
+    // Daily-digest queue missing from the result set entirely.
+    const withoutDigest = TUESDAY_QUEUES.filter((q) => q !== 'notifications/daily-digest');
+    EXECUTE.results = [rowsFor(withoutDigest, new Date(tuesdayMorning.getTime() - 60 * 60 * 1000))];
+    const r = await checks.checkMissedSchedules(tuesdayMorning);
     assert.equal(r.status, 'fail');
-    assert.match(r.summary, /Missing/);
+    assert.match(r.summary, /Missing scheduled runs/);
+    assert.match(r.summary, /daily-digest/);
+  });
+
+  it('reports fail when latest firing is older than the per-schedule window', async () => {
+    // All queues present, but shows/nightly's last firing was 30h ago
+    // (outside the 24h window).
+    const recent = new Date(tuesdayMorning.getTime() - 60 * 60 * 1000);
+    const stale = new Date(tuesdayMorning.getTime() - 30 * 60 * 60 * 1000);
+    EXECUTE.results = [
+      TUESDAY_QUEUES.map((name) => ({ name, latest: name === 'shows/nightly' ? stale : recent })),
+    ];
+    const r = await checks.checkMissedSchedules(tuesdayMorning);
+    assert.equal(r.status, 'fail');
+    assert.match(r.summary, /shows-nightly/);
   });
 
   it('skips discover-ingest expectation outside Tuesday', async () => {
     const wednesdayMorning = new Date('2026-05-06T11:00:00Z');
-    let call = 0;
-    const fn = (async () => {
-      call += 1;
-      return ok([{ cnt: 1 }]);
-    }) as unknown as QueryAxiomFn;
-    await checks.checkMissedSchedules(wednesdayMorning, fn);
-    // 5 expectations expected on Wed (no discover-ingest).
-    assert.equal(call, 5);
-  });
-
-  it('reports unknown when token is unset', async () => {
-    const r = await checks.checkMissedSchedules(
-      tuesdayMorning,
-      fakeAxiom(unknown()),
-    );
-    assert.equal(r.status, 'unknown');
-  });
-
-  it('uses an 8d lookback for discover-ingest (weekly cron) and 24h for daily jobs', async () => {
-    const aplCalls: string[] = [];
-    const fn = (async (apl: string) => {
-      aplCalls.push(apl);
-      return ok([{ cnt: 1 }]);
-    }) as unknown as QueryAxiomFn;
-    await checks.checkMissedSchedules(tuesdayMorning, fn);
-    // 6 expectations on Tuesday: 5 daily + discover-ingest (weekly).
-    assert.equal(aplCalls.length, 6);
-    const discoverApl = aplCalls.find((a) => /discover\.ingest\./.test(a));
-    assert.ok(discoverApl, 'expected an APL call for discover-ingest');
-    assert.match(discoverApl!, /ago\(8d\)/);
-    const dailyApls = aplCalls.filter((a) => !/discover\.ingest\./.test(a));
-    for (const apl of dailyApls) {
-      assert.match(apl, /ago\(24h\)/);
-    }
-  });
-
-  it('passes when discover-ingest ran within the last 8d even if last 24h is empty', async () => {
-    // Simulate "Monday's run was missed (deploy timing) but the prior
-    // Monday is in the 8d window" — every expectation reports 1 hit.
-    const r = await checks.checkMissedSchedules(
-      tuesdayMorning,
-      fakeAxiom(ok([{ cnt: 1 }])),
-    );
+    const dailyOnly = TUESDAY_QUEUES.filter((q) => q !== 'discover/ingest');
+    EXECUTE.results = [rowsFor(dailyOnly, new Date(wednesdayMorning.getTime() - 60 * 60 * 1000))];
+    const r = await checks.checkMissedSchedules(wednesdayMorning);
     assert.equal(r.status, 'ok');
+    // Discover-ingest must not appear in `expected` on a Wednesday — a
+    // missing run would otherwise surface in the detail payload.
+    const expectedLabels = (r.detail?.expected as string[] | undefined) ?? [];
+    assert.ok(!expectedLabels.includes('discover-ingest'));
+    assert.equal(expectedLabels.length, 5);
+  });
+
+  it('passes when discover-ingest ran in the last 8d even if last 24h is empty', async () => {
+    // Simulate "last Monday's run; this Monday missed" — discover/ingest
+    // is 7 days old, daily queues are fresh. Within the 8d window for
+    // discover-ingest so we should not flag.
+    const recent = new Date(tuesdayMorning.getTime() - 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(tuesdayMorning.getTime() - 7 * 24 * 60 * 60 * 1000);
+    EXECUTE.results = [
+      TUESDAY_QUEUES.map((name) => ({
+        name,
+        latest: name === 'discover/ingest' ? sevenDaysAgo : recent,
+      })),
+    ];
+    const r = await checks.checkMissedSchedules(tuesdayMorning);
+    assert.equal(r.status, 'ok');
+  });
+
+  it('reports warn when the DB query throws', async () => {
+    EXECUTE.shouldThrow = new Error('connection refused');
+    const r = await checks.checkMissedSchedules(tuesdayMorning);
+    assert.equal(r.status, 'warn');
+    assert.match(r.summary, /pgboss.job/);
   });
 });
 

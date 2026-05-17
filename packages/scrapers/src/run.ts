@@ -1,7 +1,6 @@
 import { db } from '@showbook/db';
 import {
   announcements,
-  performers,
   shows,
   venues,
   venueScrapeRuns,

@@ -330,7 +330,7 @@ async function hasConnection(userId: string): Promise<boolean> {
 }
 
 async function countActualPlayed(
-  db: Database,
+  _db: Database,
   show: typeof shows.$inferSelect,
   headlinerId: string,
 ): Promise<number> {

@@ -1,6 +1,6 @@
 import { auth } from '@/auth';
 import { db, shows, venues } from '@showbook/db';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import {
   getMyPastOrders,
   EventbriteError,

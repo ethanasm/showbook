@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, and, sql, desc, inArray, isNotNull } from 'drizzle-orm';
+import { eq, and, sql, desc, inArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
 import {
@@ -16,10 +16,7 @@ import {
 } from '@showbook/db';
 import { computeSongBadges, type SongBadgesMap } from '../song-badges';
 import { matchOrCreateVenue, type VenueInput } from '../venue-matcher';
-import {
-  matchOrCreatePerformer,
-  type PerformerInput,
-} from '../performer-matcher';
+import { matchOrCreatePerformer } from '../performer-matcher';
 import { searchEvents, selectBestImage } from '../ticketmaster';
 import { geocodeVenue } from '../geocode';
 import { fetchSetlistForPerformer, resolvePerformerMbid } from '../setlist-lookup';
@@ -28,7 +25,6 @@ import {
   type PerformerSetlist,
   type PerformerSetlistsMap,
   isSetlistEmpty,
-  singleMainSet,
 } from '@showbook/shared';
 
 const log = child({ component: 'api.shows' });

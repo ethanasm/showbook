@@ -24,6 +24,7 @@ coverage/
 coverage/.tmp/
 packages/*/coverage/
 apps/*/coverage/
+.verify-logs/
 
 # Playwright
 apps/web/test-results/

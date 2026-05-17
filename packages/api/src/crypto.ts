@@ -28,7 +28,7 @@ const TAG_BYTES = 16;
 const KEY_BYTES = 32; // 256-bit key
 
 export class CryptoError extends Error {
-  constructor(message: string, public readonly cause?: unknown) {
+  constructor(message: string, public override readonly cause?: unknown) {
     super(message);
     this.name = 'CryptoError';
   }

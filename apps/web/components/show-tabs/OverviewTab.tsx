@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { MapPin, Ticket, CalendarPlus, Trash2, MoreHorizontal } from "lucide-react";
+import { Ticket, CalendarPlus, Trash2, MoreHorizontal } from "lucide-react";
 import { SectionFrame } from "./SectionFrame";
 import { StatRow, type StatCell } from "./StatRow";
 import "./show-tabs.css";

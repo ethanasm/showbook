@@ -1,19 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { EditableName } from "@/components/EditableName";
-import {
-  Music,
-  ArrowUpRight,
-  MoreHorizontal,
-  Trash2,
-  Ticket,
-} from "lucide-react";
+import { Music, ArrowUpRight } from "lucide-react";
 import { FollowButton } from "@/components/FollowButton";
 import { ShowDetailPanel } from "@/components/ShowDetailPanel";
 import { ScrapeConfigSection } from "@/components/ScrapeConfigSection";
@@ -37,7 +31,6 @@ import {
 } from "@/components/design-system";
 import { MediaSection } from "@/components/media";
 import {
-  daysUntil,
   formatDateMedium as formatDateLong,
   formatDateParts,
   formatOnSaleDate,

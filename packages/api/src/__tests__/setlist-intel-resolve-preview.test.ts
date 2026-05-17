@@ -108,7 +108,7 @@ interface CallerFixtureOpts {
   } | null;
 }
 
-function makeResolverDb(headlinerId: string, opts: CallerFixtureOpts) {
+function makeResolverDb(_headlinerId: string, opts: CallerFixtureOpts) {
   // The mutation does:
   //   1) select song row by performerId+title.lower
   //   2) update songs (no select), OR insert songs onConflictDoNothing

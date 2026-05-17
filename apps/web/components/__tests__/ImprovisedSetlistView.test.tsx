@@ -50,6 +50,7 @@ const KING_GIZZARD_PREDICTION: ImprovisedPrediction = {
     albumsRepresentedRecently: ['Flight b741 (2024)'],
     knownTendencies: ['Marathon shows occur ≈1 in 5'],
   },
+  setCountPrediction: null,
 };
 
 describe('ImprovisedSetlistView — King Gizzard worked example', () => {

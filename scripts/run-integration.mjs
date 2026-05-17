@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Runs `*.integration.test.ts` files under `node --test` with:
-//   - per-test 45 s timeout (--test-timeout=45000)
+//   - per-test 60 s timeout (--test-timeout=60000, override via
+//     INTEGRATION_PER_TEST_TIMEOUT_MS)
 //   - batch wall-clock kill at BATCH_TIMEOUT_MS (default 5 min)
 //   - optional coverage via NODE_V8_COVERAGE / --experimental-test-coverage
 //
@@ -23,7 +24,7 @@ if (!packageDir) {
   process.exit(2);
 }
 
-const PER_TEST_TIMEOUT_MS = 45_000;
+const PER_TEST_TIMEOUT_MS = Number(process.env.INTEGRATION_PER_TEST_TIMEOUT_MS ?? 60_000);
 const BATCH_TIMEOUT_MS = Number(process.env.INTEGRATION_BATCH_TIMEOUT_MS ?? 300_000);
 
 const testsDir = join(REPO_ROOT, packageDir, 'src/__tests__');

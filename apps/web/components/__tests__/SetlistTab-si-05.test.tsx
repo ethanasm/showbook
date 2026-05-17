@@ -102,6 +102,7 @@ function rotatingPrediction(): RotatingPrediction {
     bustoutCandidates: [],
     positions: [],
     multiNightContext: null,
+    setCountPrediction: null,
   } as RotatingPrediction;
 }
 
@@ -114,10 +115,12 @@ function theatricalPrediction(): TheatricalPrediction {
     tourId: null,
     tourName: 'Eras Tour',
     deterministicSetlist: [
-      { title: 'Lavender Haze', act: 'Act I', slotShare: 1 },
+      { title: 'Lavender Haze', act: 'Act I', actIndex: 0, slotShare: 1, probability: 1 },
     ],
     rotatingSlots: [],
     spoilerBlurDefault: false,
+    expectedSongCount: 1,
+    setCountPrediction: null,
   } as TheatricalPrediction;
 }
 
@@ -147,7 +150,9 @@ function improvisedPrediction(): ImprovisedPrediction {
       knownTendencies: [],
       popularPicks: [],
       headlineDescriptor: 'mid-tempo',
+      albumsRepresentedRecently: [],
     },
+    setCountPrediction: null,
   } as ImprovisedPrediction;
 }
 

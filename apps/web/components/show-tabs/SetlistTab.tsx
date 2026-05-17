@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { SectionFrame } from "./SectionFrame";
 import { SpoilerCurtain } from "./SpoilerCurtain";
 import { HypePlaylistCardPlaceholder } from "./HypePlaylistCardPlaceholder";
@@ -26,8 +26,11 @@ import type {
   RotatingPrediction,
   SongBadge,
   SongBadgesMap,
+  SpecialEventPrediction,
   TheatricalPrediction,
 } from "@showbook/api";
+import { SetCountStrip } from "./SetCountStrip";
+import { SpecialEventCard } from "./SpecialEventCard";
 import "./show-tabs.css";
 
 const SPOILER_KEY_PREFIX = "showbook:setlist-tab:spoiler-shown:";
@@ -59,6 +62,7 @@ interface SetlistTabProps {
     | RotatingPrediction
     | TheatricalPrediction
     | ImprovisedPrediction
+    | SpecialEventPrediction
     | null;
   /** When true, the predicted-setlist query is in-flight. */
   predictionLoading: boolean;
@@ -210,6 +214,18 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
       />
     );
   }
+  // Phase 11 §15g — special-event short-circuit. When the router
+  // matches a special-event rule, the prediction is intentionally
+  // suppressed and we render the operator-curated explainer copy
+  // plus a list of prior matching events.
+  if (prediction.style === "special_event") {
+    return (
+      <SpecialEventCard
+        copy={prediction.copy}
+        pastEvents={prediction.pastEvents}
+      />
+    );
+  }
   if (prediction.style === "rotating") {
     // Per SI-05: HypePlaylistCard is hidden for rotating performers —
     // a 25-song hype playlist is low-relevance when the model can't
@@ -267,6 +283,13 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
   const totalCount = mainSet.length + encore.length;
   const approxMinutes = totalCount > 0 ? Math.round(totalCount * 4) : null;
 
+  // Phase 11 §15f — set-count strip rendered above the predicted
+  // setlist whenever the algorithm produced a non-null payload. Stable
+  // predictions surface "1 set · ~22 songs"; rotating "2 sets · ~19
+  // songs · ~165 min" once duration data arrives.
+  const setCountPrediction =
+    "setCountPrediction" in prediction ? prediction.setCountPrediction : null;
+
   return (
     <div>
       <ConfidenceBanner
@@ -274,6 +297,7 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
         sampleSize={prediction.sampleSize}
         tourName={prediction.tourName}
       />
+      <SetCountStrip prediction={setCountPrediction} />
 
       <SectionFrame title="Hype playlist">
         {hypePlaylistEnabled ? (

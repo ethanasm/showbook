@@ -28,7 +28,6 @@ import {
   db,
   setlistSongAppearances,
   shows,
-  showPerformers,
   songs,
   tourSetlists,
 } from '@showbook/db';

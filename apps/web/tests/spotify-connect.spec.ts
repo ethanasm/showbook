@@ -40,13 +40,14 @@ test.describe('Spotify connect-once flow', () => {
         });
         // Return a non-null window-like object so the caller's
         // popup-blocker branch doesn't trigger.
-        return {
+        const popup: { closed: boolean; close: () => void; postMessage: () => void } = {
           closed: false,
           close() {
             this.closed = true;
           },
           postMessage() {},
-        } as unknown as Window;
+        };
+        return popup as unknown as Window;
       }) as typeof origOpen;
     });
 

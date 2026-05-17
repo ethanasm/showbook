@@ -34,6 +34,16 @@ export const performers = pgTable(
     // where the auto-classifier disagrees with a seed-table entry. At
     // ≥3 the cron flips `setlistStyle` to `computedStyle`.
     styleDisagreementCount: integer('style_disagreement_count').notNull().default(0),
+    // Phase 11 (§15m) — Spotify catalog id. Backfilled lazily by the
+    // album-metadata-fill cron via `/v1/search?type=artist`; null until
+    // first resolution. Used to fetch `/v1/artists/{id}/albums` for
+    // the album-drop forward signal.
+    spotifyArtistId: text('spotify_artist_id'),
+    // Phase 11 (§15l) — dedup for the setlist-tour-watch cron. Updated
+    // each time the every-3h job enqueues a corpus refresh for this
+    // performer; 21h window prevents same-day repeats and respects the
+    // setlist.fm rate limit.
+    lastWatchRefreshAt: timestamp('last_watch_refresh_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [
@@ -49,6 +59,9 @@ export const performers = pgTable(
     uniqueIndex('performers_musicbrainz_uniq')
       .on(table.musicbrainzId)
       .where(sql`${table.musicbrainzId} IS NOT NULL`),
+    uniqueIndex('performers_spotify_artist_uniq')
+      .on(table.spotifyArtistId)
+      .where(sql`${table.spotifyArtistId} IS NOT NULL`),
     index('performers_name_idx').on(table.name),
   ]
 );

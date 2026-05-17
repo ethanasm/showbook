@@ -14,7 +14,10 @@ import {
 } from '@showbook/db';
 import { and, eq, gte, lte, isNotNull, inArray, asc } from 'drizzle-orm';
 import { renderDailyDigest } from '@showbook/emails';
-import { generateDigestPreamble } from '@showbook/api';
+import {
+  generateDigestPreamble,
+  predictedSetlistCached,
+} from '@showbook/api';
 import { child } from '@showbook/observability';
 
 const log = child({ component: 'notifications' });
@@ -284,6 +287,9 @@ export async function runDailyDigest(
       email: users.email,
       displayName: users.name,
       lastDigestSentAt: userPreferences.lastDigestSentAt,
+      // Phase 11 §15o — spoiler-blur preference applied to the
+      // PredictedSetlistTile in the "Tonight" section.
+      setlistSpoilers: userPreferences.setlistSpoilers,
     })
     .from(userPreferences)
     .innerJoin(users, eq(userPreferences.userId, users.id))
@@ -345,11 +351,32 @@ export async function runDailyDigest(
       const todayHeadliners = await getHeadlinersForShows(
         todayRows.map((r) => r.id),
       );
-      const todayShows = todayRows.map((row) => ({
-        headliner: todayHeadliners.get(row.id) ?? 'Unknown Artist',
-        venueName: row.venueName,
-        seat: row.seat,
-      }));
+
+      // Phase 11 §15o — prefetch the predicted setlist for each
+      // today show so the PredictedSetlistTile can render top-5 (or
+      // blur with count + "tap to reveal") respecting the user's
+      // setlistSpoilers preference. Falls through silently on
+      // prediction failure so the digest still ships.
+      const todayPredictions = await buildTodayPredictions({
+        showIds: todayRows.map((r) => r.id),
+        targetDate: todayStr,
+      });
+
+      const todayShows = todayRows.map((row) => {
+        const prediction = todayPredictions.get(row.id);
+        const tile = prediction
+          ? renderPredictedSetlistTile({
+              prediction,
+              setlistSpoilers: user.setlistSpoilers ?? 'style_default',
+            })
+          : null;
+        return {
+          headliner: todayHeadliners.get(row.id) ?? 'Unknown Artist',
+          venueName: row.venueName,
+          seat: row.seat,
+          predictedSetlistTile: tile,
+        };
+      });
 
       // Upcoming ticketed shows (next 7 days, excluding today)
       const upcomingRows = await db
@@ -535,4 +562,112 @@ export async function runDailyDigest(
   }
 
   return { sent, skipped };
+}
+
+// ── Phase 11 §15o — PredictedSetlistTile prefetch + spoiler-aware shape ──
+
+interface DigestPrediction {
+  /** Total predicted song count surfaced in the tile summary line. */
+  songCount: number;
+  /** 0-1 confidence — rendered as a percentage in the summary. */
+  confidence: number;
+  /** First 5 predicted song titles for the reveal path. */
+  topTitles: string[];
+  /** True when the algorithm flags the style as spoiler-prone (stable
+   *  + theatrical). Honored when `setlistSpoilers === 'style_default'`. */
+  spoilerBlurDefault: boolean;
+}
+
+export type SetlistSpoilersPref = 'always_blur' | 'never_blur' | 'style_default';
+
+export interface PredictedSetlistTile {
+  /** Summary line: "{N} song setlist predicted ({P}%)". Always shown. */
+  summary: string;
+  /** Reveal payload — empty when blur is on. */
+  topTitles: string[];
+  /** True when the tile shows the blur curtain instead of titles. */
+  blurred: boolean;
+}
+
+/**
+ * For each of today's shows, prefetch the stable predicted setlist so
+ * the PredictedSetlistTile in the digest can render counts + top-5
+ * (or blur the titles per the user's preference). Failures are
+ * silent — the digest still ships with the standard headliner row.
+ */
+async function buildTodayPredictions(opts: {
+  showIds: string[];
+  targetDate: string;
+}): Promise<Map<string, DigestPrediction>> {
+  const out = new Map<string, DigestPrediction>();
+  if (opts.showIds.length === 0) return out;
+
+  const headlinerRows = await db
+    .select({
+      showId: showPerformers.showId,
+      performerId: showPerformers.performerId,
+    })
+    .from(showPerformers)
+    .where(
+      and(
+        inArray(showPerformers.showId, opts.showIds),
+        eq(showPerformers.role, 'headliner'),
+      ),
+    );
+  const headlinerByShow = new Map<string, string>();
+  for (const row of headlinerRows) {
+    if (!headlinerByShow.has(row.showId)) {
+      headlinerByShow.set(row.showId, row.performerId);
+    }
+  }
+
+  for (const [showId, performerId] of headlinerByShow) {
+    try {
+      const result = await predictedSetlistCached({
+        performerId,
+        targetDate: opts.targetDate,
+      });
+      if (result.style === 'cold') continue;
+      const top = result.core.slice(0, 5).map((s) => s.title);
+      out.set(showId, {
+        songCount: result.core.length + result.likely.length,
+        confidence: result.confidence,
+        topTitles: top,
+        spoilerBlurDefault: result.spoilerBlurDefault,
+      });
+    } catch (err) {
+      log.warn(
+        {
+          event: 'notifications.digest.prediction_failed',
+          err,
+          showId,
+          performerId,
+        },
+        'prediction prefetch failed; digest tile skipped for this show',
+      );
+    }
+  }
+  return out;
+}
+
+/**
+ * Apply the user's `setlistSpoilers` preference to a prediction and
+ * produce the tile payload that renders in the digest. The renderer
+ * always shows the summary line; only the title list is conditional.
+ */
+export function renderPredictedSetlistTile(opts: {
+  prediction: DigestPrediction;
+  setlistSpoilers: SetlistSpoilersPref;
+}): PredictedSetlistTile {
+  const { prediction, setlistSpoilers } = opts;
+  const pct = Math.round(prediction.confidence * 100);
+  const summary = `${prediction.songCount} song setlist predicted (${pct}%)`;
+  const blurred =
+    setlistSpoilers === 'always_blur' ||
+    (setlistSpoilers === 'style_default' && prediction.spoilerBlurDefault);
+  return {
+    summary,
+    topTitles: blurred ? [] : prediction.topTitles,
+    blurred,
+  };
 }

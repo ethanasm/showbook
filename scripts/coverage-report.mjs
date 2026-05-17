@@ -81,9 +81,11 @@ const EXCLUDE_PATTERNS = [
 const args = process.argv.slice(2);
 let threshold = 80;
 let writePath = 'coverage/lcov.info';
+let jsonOutPath = null;
 for (const arg of args) {
   if (arg.startsWith('--threshold=')) threshold = Number(arg.slice('--threshold='.length));
   else if (arg.startsWith('--write=')) writePath = arg.slice('--write='.length);
+  else if (arg.startsWith('--json-out=')) jsonOutPath = arg.slice('--json-out='.length);
 }
 
 const COVERAGE_DIRS = [
@@ -379,6 +381,42 @@ async function main() {
   console.log(`LCOV inputs:    ${lcovFiles.length}`);
   console.log(`Threshold:      ${threshold}% on lines, branches, functions (per scope)`);
   console.log(`Merged LCOV:    ${writePath}`);
+
+  if (jsonOutPath) {
+    const scopeSummaries = SCOPES.map((scope) => {
+      const { totals, perFile } = byScope.get(scope.name);
+      return {
+        scope: scope.name,
+        files: perFile.length,
+        lines: pct(totals.linesHit, totals.lines),
+        branches: pct(totals.branchesHit, totals.branches),
+        functions: pct(totals.functionsHit, totals.functions),
+      };
+    });
+    const structuredBreaches = [];
+    for (const s of scopeSummaries) {
+      if (s.files === 0) continue;
+      if (s.lines < threshold) {
+        structuredBreaches.push({ scope: s.scope, metric: 'lines', value: s.lines });
+      }
+      if (s.branches < threshold) {
+        structuredBreaches.push({ scope: s.scope, metric: 'branches', value: s.branches });
+      }
+      if (s.functions < threshold) {
+        structuredBreaches.push({ scope: s.scope, metric: 'functions', value: s.functions });
+      }
+    }
+    const dir = resolve(REPO_ROOT, jsonOutPath, '..');
+    if (!existsSync(dir)) await mkdir(dir, { recursive: true });
+    await writeFile(
+      resolve(REPO_ROOT, jsonOutPath),
+      JSON.stringify(
+        { thresholdPct: threshold, scopes: scopeSummaries, breaches: structuredBreaches },
+        null,
+        2,
+      ),
+    );
+  }
 
   if (breaches.length > 0) {
     console.error('\n\x1b[31m✗ Coverage below threshold:\x1b[0m');
