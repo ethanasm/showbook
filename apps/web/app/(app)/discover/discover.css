@@ -328,15 +328,16 @@
   /* Headliner column is `minmax(0, 1fr)` so it can shrink with ellipsis
      instead of forcing the row to overflow. Fixed columns sized for typical
      content: dates ~"Aug 1 – Oct 29", kind chips up to "FESTIVAL", on-sale
-     dates ~"Sep 12, 2026", status badge "ANNOUNCED", actions 180 px to fit
-     the Watch + Calendar buttons (the Tix button on `ticketUrl` rows is
-     allowed to overflow slightly rather than steal width from headliner).
+     dates ~"Sep 12, 2026", status badge "ANNOUNCED", actions 240 px to fit
+     the Watch + Calendar + Tix buttons together — the previous 180 px let
+     the Tix button overflow leftward onto the Status badge on rows that
+     had a `ticketUrl`, since the flex container is `justify-content: flex-end`.
      The actions column is a fixed width — not `auto` — so the header row
      (which has an empty 6th cell) keeps the same 1fr column as the data
      rows; otherwise the "ON SALE" / "STATUS" headers drift right of their
      data. Original template (72/100/1fr/120/110/200) left only ~40 px for
      the headliner at a 1280 px viewport, truncating "Bon Iver" to "Bon…". */
-  grid-template-columns: 72px 84px minmax(0, 1fr) 96px 88px 180px;
+  grid-template-columns: 72px 84px minmax(0, 1fr) 96px 88px 240px;
   column-gap: 16px;
   padding: 0 12px 10px;
   font-family: var(--font-geist-mono), monospace;
@@ -349,7 +350,7 @@
 
 /* Near You table has an extra Venue column between Kind and Headliner. */
 .discover-col-headers--region {
-  grid-template-columns: 72px 84px 100px minmax(0, 1fr) 88px 80px 180px;
+  grid-template-columns: 72px 84px 100px minmax(0, 1fr) 88px 80px 240px;
 }
 
 /* ── Venue Group ─────────────────────────────────────── */
@@ -441,7 +442,7 @@
   display: grid;
   /* Keep this in lock-step with `.discover-col-headers`. See that block for
      why the columns were re-sized. */
-  grid-template-columns: 72px 84px minmax(0, 1fr) 96px 88px 180px;
+  grid-template-columns: 72px 84px minmax(0, 1fr) 96px 88px 240px;
   column-gap: 16px;
   padding: 12px;
   align-items: center;
@@ -451,7 +452,7 @@
 
 /* Near You row layout includes a Venue cell. */
 .discover-row.discover-row--region {
-  grid-template-columns: 72px 84px 100px minmax(0, 1fr) 88px 80px 180px;
+  grid-template-columns: 72px 84px 100px minmax(0, 1fr) 88px 80px 240px;
 }
 
 .discover-row__venue-cell {
