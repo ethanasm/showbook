@@ -1,16 +1,15 @@
-# Sign-in flow — Maestro Cloud
+# Sign-in flow — Maestro
 #
-# Prereq: app is built with the `e2e` EAS profile (EXPO_PUBLIC_E2E_MODE=1).
-# In that build, apps/mobile/lib/auth.ts skips Google OAuth entirely and
-# instead reads a Showbook JWT from SecureStore keys `e2e.test-token`
-# and `e2e.test-user`. Maestro is responsible for seeding those keys
-# before tapping "Continue with Google".
+# The `e2e` build profile (apps/mobile/eas.json) sets:
+#   EXPO_PUBLIC_E2E_MODE=1            — flip lib/auth.ts into bypass mode
+#   EXPO_PUBLIC_E2E_TEST_TOKEN        — pre-baked Showbook JWT
+#   EXPO_PUBLIC_E2E_TEST_USER_JSON    — pre-baked SessionUser JSON
 #
-# Seeding contract: the e2e build registers a debug-only deeplink
-# handler `showbook://e2e/seed-session?token=...&user=...` that writes
-# both keys into SecureStore. The runScript step below builds the
-# deeplink from environment variables that CI exports from the
-# MAESTRO_E2E_TOKEN / MAESTRO_E2E_USER_JSON Maestro Cloud secrets.
+# Those env vars are inlined at build time, so `loadE2ETestSession`
+# returns the bundled session as soon as the user taps "Continue with
+# Google" — no in-app deeplink seeding step, no Maestro `runScript`,
+# no race. The bypass guards on EXPO_PUBLIC_E2E_MODE === '1' so the
+# code path is dead in TestFlight / Play Store builds.
 appId: com.showbook.app
 name: sign-in
 tags:
@@ -21,22 +20,14 @@ tags:
     clearState: true
     clearKeychain: true
 
-# Seed SecureStore via the e2e debug deeplink. The token and user JSON
-# come from Maestro Cloud secrets exported as MAESTRO_E2E_TOKEN /
-# MAESTRO_E2E_USER_JSON; if either is empty the assertion below fails
-# loudly and the sign-in tap returns the invalid_response error path.
-- runScript:
-    file: ../scripts/seed-session.js
-    env:
-      MAESTRO_E2E_TOKEN: ${MAESTRO_E2E_TOKEN}
-      MAESTRO_E2E_USER_JSON: ${MAESTRO_E2E_USER_JSON}
-
-- openLink: ${output.seedDeeplink}
-
-# Re-launch so the app boots into the auth gate with the seeded session
-# already on disk. clearState:false keeps SecureStore intact.
-- launchApp:
-    clearState: false
+# The signin screen wraps the button in a ScrollView below a 4-card
+# preview block + brand intro, so on Pixel-6-sized AVDs the CTA is
+# below the fold on first paint. Scroll to it before asserting /
+# tapping — Maestro's assertVisible / tapOn don't auto-scroll.
+- scrollUntilVisible:
+    element:
+      text: "Sign in with Google"
+    direction: DOWN
 
 - assertVisible:
     text: "Sign in with Google"
@@ -45,18 +36,20 @@ tags:
     text: "Sign in with Google"
 
 # After the bypass writes the cached session and re-renders, the auth
-# gate routes either to first-run welcome or directly to the tabs.
-# Either landing screen is acceptable — we just need to confirm we're
-# out of the sign-in screen and into the authenticated app shell.
+# gate routes either to the first-run welcome flow (fresh install,
+# `e2e.firstRunComplete` unset) or directly to the tabs (already-
+# completed first-run, e.g. from a prior test run on a warm AVD).
+# clearState:true at the top of this flow guarantees the welcome path
+# on each run.
 - runFlow:
     when:
-      visible: "Welcome"
+      visible: "Set up showbook"
     commands:
-      - tapOn: "Continue"
-      - tapOn: "Skip for now"
-      - tapOn: "Skip for now"
-      - tapOn: "Skip for now"
-      - tapOn: "Skip for now"
+      - tapOn: "Set up showbook"
+      - tapOn: "Skip"   # notifications
+      - tapOn: "Skip"   # photos
+      - tapOn: "Skip"   # location
+      - tapOn: "Skip"   # gmail
 
 # expo-router renders the tab bar with the title as visible text and the
 # Add tab via accessibilityLabel="Add" (no label). Match on those.
@@ -69,4 +62,4 @@ tags:
 - assertVisible:
     text: "Me"
 - assertVisible:
-    id: "Add"
+    id: "add-tab"

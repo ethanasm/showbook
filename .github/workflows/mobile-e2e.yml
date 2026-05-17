@@ -23,7 +23,9 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: read
+  # contents:write needed for the failure-publish step that pushes
+  # maestro debug screenshots to the pr-screenshots orphan branch.
+  contents: write
   pull-requests: write
 
 concurrency:
@@ -34,7 +36,7 @@ concurrency:
 
 jobs:
   android-e2e:
-    name: EAS Android build + Maestro on self-hosted emulator
+    name: Local Android build + Maestro on self-hosted emulator
     # Gate logic mirrors the previous Maestro Cloud workflow:
     #   - vars.MOBILE_E2E_ENABLED must be 'true' so the workflow reports
     #     skipped (not failed) until the prereqs are in place.
@@ -43,10 +45,12 @@ jobs:
     #
     # To enable this workflow:
     #   1. Add secrets under Settings → Secrets and variables → Actions:
-    #        - MAESTRO_E2E_TOKEN, MAESTRO_E2E_USER_JSON (used by the run step)
-    #      (EXPO_TOKEN / MAESTRO_CLOUD_API_KEY are no longer needed —
-    #      the APK is built locally on the runner via Gradle and
-    #      Maestro runs locally too.)
+    #        - MAESTRO_E2E_TOKEN     (Showbook JWT for the test user)
+    #        - MAESTRO_E2E_USER_JSON (JSON-serialized SessionUser)
+    #      Both are inlined into the APK at build time via
+    #      EXPO_PUBLIC_E2E_TEST_TOKEN / EXPO_PUBLIC_E2E_TEST_USER_JSON,
+    #      so `lib/auth.ts` can sign in without any deeplink seeding
+    #      step. No EXPO_TOKEN / MAESTRO_CLOUD_API_KEY needed.
     #   2. Set repo variable `MOBILE_E2E_ENABLED` to `true`.
     #   3. Optional: set repo variable `ANDROID_SDK_ROOT` to the install
     #      path on the runner; defaults to /opt/android-sdk.
@@ -62,12 +66,55 @@ jobs:
     # prod WSL box (label `showbook-prod`). It needs Android SDK + AVD
     # installed via scripts/setup-runner-android.sh (one-time).
     runs-on: [self-hosted, showbook-prod]
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       ANDROID_SDK_ROOT: ${{ vars.ANDROID_SDK_ROOT || '/opt/android-sdk' }}
       ANDROID_AVD_NAME: showbook_e2e
+      ANDROID_AVD_HOME: ${{ github.workspace }}/.android-avd
+      # Gradle in CI: no daemon (single-job runner), single worker
+      # process, and a 2 GB heap cap. The previous 4 GB cap + parallel
+      # emulator (2 GB AVD) + Metro overran the WSL runner's memory
+      # budget and Gradle got OOM-killed ~16 min into the build.
+      GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=1 -Dorg.gradle.parallel=false -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m"'
     steps:
       - uses: actions/checkout@v6
+
+      # Diagnose the runner up-front. The previous workflow used to hit
+      # the 45-min timeout because nobody knew where the time was going
+      # — disk, KVM availability, and SDK presence are the three usual
+      # suspects, so we log them here before anything expensive runs.
+      - name: Diagnose runner
+        shell: bash
+        run: |
+          set -u
+          echo "::group::Runner diagnostics"
+          uname -a
+          free -h || true
+          df -h /
+          df -h "$HOME" || true
+          echo "JAVA: $(java -version 2>&1 | head -1)"
+          echo "KVM:"
+          if [ -e /dev/kvm ]; then
+            ls -l /dev/kvm
+            if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+              echo "  KVM accessible"
+            else
+              echo "  KVM exists but not r/w by $USER — emulator falls back to software CPU emulation"
+            fi
+          else
+            echo "  /dev/kvm missing — software CPU emulation (slow)"
+          fi
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          if [ -d "$ANDROID_SDK_ROOT" ]; then
+            ls -la "$ANDROID_SDK_ROOT" 2>/dev/null || true
+          else
+            echo "  ANDROID_SDK_ROOT does not exist — run scripts/setup-runner-android.sh on the runner"
+          fi
+          echo "AVDs:"
+          if [ -x "$ANDROID_SDK_ROOT/emulator/emulator" ]; then
+            "$ANDROID_SDK_ROOT/emulator/emulator" -list-avds || true
+          fi
+          echo "::endgroup::"
 
       - uses: pnpm/action-setup@v6
         with:
@@ -81,29 +128,115 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Build the APK locally on the runner instead of going through EAS
-      # Build. The runner already has Android SDK + build-tools + NDK
-      # from scripts/setup-runner-android.sh, and EAS Build's free tier
-      # is too tight to cover per-PR runs. Mirrors what
-      # `pnpm mobile:android` does locally on a dev machine.
+      # ── Caching ─────────────────────────────────────────────────────
       #
-      # EXPO_PUBLIC_E2E_MODE=1 is set here (matching the `e2e` profile
-      # in eas.json) so apps/mobile/lib/auth.ts takes the SecureStore-
-      # bypass branch and Maestro doesn't need real Google OAuth.
-      - name: Build Android APK locally
-        working-directory: apps/mobile
+      # The cold Gradle build dominated the previous wall-clock budget
+      # (20–30 min on first run with no cache). Restoring the Gradle
+      # caches keyed on the dependency files brings warm runs to ~5
+      # min. The AVD snapshot cache cuts emulator first-boot from 5–8
+      # min (software-rendered) down to <30 s.
+      - name: Restore Gradle caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.gradle/build-cache
+          key: gradle-${{ runner.os }}-${{ hashFiles('apps/mobile/package.json', 'apps/mobile/app.config.ts', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Restore AVD snapshot
+        id: avd-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.android-avd
+          key: avd-${{ runner.os }}-android-34-google_apis-${{ env.ANDROID_AVD_NAME }}
+          restore-keys: |
+            avd-${{ runner.os }}-android-34-google_apis-
+
+      # Seed the workspace cache dir from any AVD the runner already
+      # has, OR create one inline. Subsequent runs restore from
+      # actions/cache; either way the emulator boots against
+      # ANDROID_AVD_HOME so the snapshot follows the workspace, not
+      # the runner (sharing a runner-home path would race across
+      # concurrent workflow_dispatch runs).
+      #
+      # The inline create branch makes the workflow self-bootstrapping:
+      # the runner only needs the Android SDK (incl. emulator,
+      # platform-tools, system-image, and the cmdline-tools that ship
+      # `avdmanager`) — `scripts/setup-runner-android.sh § 4`'s AVD
+      # creation step is no longer a prerequisite.
+      - name: Materialize AVD into workspace
+        shell: bash
         env:
-          EXPO_PUBLIC_E2E_MODE: '1'
+          ANDROID_AVD_SYSTEM_IMAGE: ${{ vars.ANDROID_AVD_SYSTEM_IMAGE || 'system-images;android-34;google_apis;x86_64' }}
         run: |
-          export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
-          pnpm exec expo prebuild --platform android --non-interactive --no-install
-          cd android
-          ./gradlew :app:assembleDebug --no-daemon --console=plain
-          APK="app/build/outputs/apk/debug/app-debug.apk"
-          ls -lh "$APK"
-          cp "$APK" /tmp/showbook-e2e.apk
+          set -euo pipefail
+          mkdir -p "$ANDROID_AVD_HOME"
+          if [ -d "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd" ]; then
+            echo "AVD already present in workspace (restored from cache)"
+          else
+            # Look for a runner-hosted copy in the usual locations
+            # before falling through to inline creation.
+            CANDIDATES=(
+              "$HOME/.android/avd"
+              "${ANDROID_USER_HOME:-}/avd"
+              "/opt/android-sdk/.android/avd"
+            )
+            FOUND=""
+            for dir in "${CANDIDATES[@]}"; do
+              [ -z "$dir" ] && continue
+              if [ -d "$dir/${ANDROID_AVD_NAME}.avd" ]; then
+                FOUND="$dir"
+                break
+              fi
+            done
+
+            if [ -n "$FOUND" ]; then
+              echo "Seeding workspace AVD from $FOUND (one-time)"
+              cp -a "$FOUND/${ANDROID_AVD_NAME}.ini"  "$ANDROID_AVD_HOME/" 2>/dev/null || true
+              cp -a "$FOUND/${ANDROID_AVD_NAME}.avd"  "$ANDROID_AVD_HOME/"
+              if [ -f "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.ini" ]; then
+                sed -i "s#path=.*#path=$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd#" \
+                  "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.ini"
+              fi
+            else
+              echo "AVD '${ANDROID_AVD_NAME}' not found on runner — creating inline"
+              SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+              AVDMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/avdmanager"
+              if [ ! -x "$SDKMANAGER" ] || [ ! -x "$AVDMANAGER" ]; then
+                echo "::error::cmdline-tools missing — run scripts/setup-runner-android.sh on the runner so sdkmanager + avdmanager are installed"
+                exit 1
+              fi
+              # Make sure the system image is present (idempotent — sdkmanager
+              # skips already-installed packages).
+              yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+              "$SDKMANAGER" --install "$ANDROID_AVD_SYSTEM_IMAGE" >/dev/null
+              ANDROID_AVD_HOME="$ANDROID_AVD_HOME" \
+                echo "no" | "$AVDMANAGER" create avd \
+                  --name "$ANDROID_AVD_NAME" \
+                  --package "$ANDROID_AVD_SYSTEM_IMAGE" \
+                  --device "pixel_6" \
+                  --path "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd" \
+                  --force
+              # Mirror the runner setup script's perf-tuning tweaks.
+              CFG="$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd/config.ini"
+              if [ -f "$CFG" ]; then
+                {
+                  echo "hw.ramSize=2048"
+                  echo "vm.heapSize=512"
+                  echo "disk.dataPartition.size=4096M"
+                  echo "hw.gpu.enabled=yes"
+                  echo "hw.gpu.mode=swiftshader_indirect"
+                } >> "$CFG"
+              fi
+            fi
+          fi
+          ls -la "$ANDROID_AVD_HOME"
 
       - name: Install Maestro CLI
+        shell: bash
         run: |
           if ! command -v maestro >/dev/null 2>&1; then
             curl -fsSL "https://get.maestro.mobile.dev" | bash
@@ -113,60 +246,359 @@ jobs:
       - name: Validate Maestro flow YAML
         run: pnpm --filter mobile e2e:dry
 
-      - name: Boot Android emulator
+      # Build the APK locally on the runner instead of going through EAS
+      # Build. The runner has Android SDK + build-tools + NDK from
+      # scripts/setup-runner-android.sh, and EAS Build's free tier is
+      # too tight to cover per-PR runs.
+      #
+      # We build the **release** variant, not debug. With `expo-dev-client`
+      # in dependencies, `assembleDebug` produces a dev-client APK that
+      # shows the "Development Build / Start a local development server"
+      # launcher and waits for Metro — there's no Metro in CI, so the
+      # Showbook UI never renders and Maestro times out asserting on
+      # signin text that doesn't exist on screen. `assembleRelease`
+      # bundles the JS into the APK (via Hermes/Metro at build time) and
+      # is signed with the debug keystore by Expo's prebuild template,
+      # so the APK is self-contained and installable.
+      #
+      # The bundled-env auth bypass (lib/auth-helpers.ts) reads
+      # EXPO_PUBLIC_E2E_TEST_TOKEN / EXPO_PUBLIC_E2E_TEST_USER_JSON
+      # inlined at build time, so the Maestro flow YAML doesn't need
+      # a deeplink seeding step.
+      - name: Build Android APK locally
+        working-directory: apps/mobile
+        env:
+          EXPO_PUBLIC_E2E_MODE: '1'
+          EXPO_PUBLIC_E2E_TEST_TOKEN: ${{ secrets.MAESTRO_E2E_TOKEN }}
+          EXPO_PUBLIC_E2E_TEST_USER_JSON: ${{ secrets.MAESTRO_E2E_USER_JSON }}
+        shell: bash
         run: |
+          set -euo pipefail
+          if [ -z "${EXPO_PUBLIC_E2E_TEST_TOKEN:-}" ] || [ -z "${EXPO_PUBLIC_E2E_TEST_USER_JSON:-}" ]; then
+            echo "::error::MAESTRO_E2E_TOKEN / MAESTRO_E2E_USER_JSON secrets are unset"
+            exit 1
+          fi
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+          pnpm exec expo prebuild --platform android --non-interactive --no-install
+          cd android
+          # --build-cache uses the restored gradle caches; --no-daemon
+          # keeps the runner clean between invocations.
+          ./gradlew :app:assembleRelease \
+            --no-daemon --console=plain \
+            --build-cache
+          APK="app/build/outputs/apk/release/app-release.apk"
+          ls -lh "$APK"
+          cp "$APK" /tmp/showbook-e2e.apk
+          echo "::group::Memory after build"
+          free -h || true
+          df -h "$HOME" || true
+          echo "::endgroup::"
+
+      # ── Boot the emulator now that Gradle is done ──────────────────
+      #
+      # An earlier revision booted in parallel with the Gradle build to
+      # save 5–10 min on cold cache runs, but on the WSL self-hosted
+      # runner the 2 GB AVD + 4 GB Gradle heap + Metro overran memory
+      # and Gradle was OOM-killed mid-build. Sequencing the two phases
+      # keeps the peak footprint within budget; the warm-cache Gradle
+      # build is short enough that the lost parallelism doesn't matter.
+      - name: Start Android emulator (background)
+        shell: bash
+        run: |
+          set -euo pipefail
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
-          # Kill any stale emulator from a previous run that crashed.
           adb kill-server || true
           adb start-server
-          # Boot headless. -no-snapshot-load skips a flaky snapshot
-          # restore path; -gpu swiftshader_indirect is the most reliable
-          # software-renderer option on a headless WSL host.
-          nohup emulator -avd "$ANDROID_AVD_NAME" \
-            -no-window -no-audio -no-boot-anim -no-snapshot-load \
-            -gpu swiftshader_indirect \
+          # -no-snapshot-save: don't write back into the cached AVD
+          # -accel auto: use KVM when available, fall through to TCG
+          # -gpu swiftshader_indirect: software GL, only sane option headless
+          nohup env ANDROID_AVD_HOME="$ANDROID_AVD_HOME" \
+            emulator -avd "$ANDROID_AVD_NAME" \
+              -no-window -no-audio -no-boot-anim -no-snapshot-save \
+              -accel auto \
+              -gpu swiftshader_indirect \
             > /tmp/emulator.log 2>&1 &
           echo "emulator pid: $!"
-          # Wait up to 5 min for boot completion.
+
+      - name: Wait for emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
           adb wait-for-device
+          # Poll boot completion for up to 10 min, logging progress
+          # every 30 s so a hang is diagnosable from the run UI rather
+          # than appearing as silence followed by a timeout kill.
           for i in $(seq 1 60); do
-            BOOTED=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
-            if [ "$BOOTED" = "1" ]; then
-              echo "emulator booted"
+            BOOTED=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
+            ANIM_DONE=$(adb shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r' || true)
+            if [ "$BOOTED" = "1" ] && [ "$ANIM_DONE" != "running" ]; then
+              echo "emulator booted after $((i * 10))s"
+              # Unlock screen + disable animations so Maestro doesn't
+              # have to wait for transitions or swipe past a lockscreen.
+              adb shell input keyevent 82 || true
+              adb shell settings put global window_animation_scale 0 || true
+              adb shell settings put global transition_animation_scale 0 || true
+              adb shell settings put global animator_duration_scale 0 || true
               exit 0
             fi
-            sleep 5
+            if [ $((i % 3)) -eq 0 ]; then
+              echo "  $((i * 10))s — boot_completed=${BOOTED:-?} bootanim=${ANIM_DONE:-?}"
+            fi
+            sleep 10
           done
-          echo "emulator failed to boot in 5 minutes" >&2
-          tail -50 /tmp/emulator.log >&2
+          echo "::error::emulator failed to boot in 10 minutes"
+          tail -100 /tmp/emulator.log || true
           exit 1
 
       - name: Install APK
+        shell: bash
         run: |
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
           adb install -r /tmp/showbook-e2e.apk
 
-      - name: Run Maestro flows
-        env:
-          MAESTRO_E2E_TOKEN: ${{ secrets.MAESTRO_E2E_TOKEN }}
-          MAESTRO_E2E_USER_JSON: ${{ secrets.MAESTRO_E2E_USER_JSON }}
+      # Launch the app + capture a screenshot + UI hierarchy dump
+      # before Maestro runs. The hierarchy XML names every visible
+      # text element, so "is the Sign in with Google button actually
+      # on screen?" stops being a guess. Both artefacts also help
+      # diagnose post-Maestro state (the dump is taken before flows
+      # so `clearState: true` in the flow wipes it after this, but
+      # the screenshot captures the cold-launch landing screen).
+      - name: Capture cold-launch state
+        shell: bash
         run: |
-          export PATH="$ANDROID_SDK_ROOT/platform-tools:$HOME/.maestro/bin:$PATH"
-          maestro test \
-            --env MAESTRO_E2E_TOKEN="$MAESTRO_E2E_TOKEN" \
-            --env MAESTRO_E2E_USER_JSON="$MAESTRO_E2E_USER_JSON" \
-            apps/mobile/e2e/flows/
+          set -uo pipefail
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          mkdir -p /tmp/maestro-debug
+          # Cold-launch the app the same way Maestro will (clear data
+          # + start MainActivity). `pm clear` is a no-op if the package
+          # wasn't installed; the install step above guarantees it is.
+          adb shell pm clear com.showbook.app || true
+          adb shell am start -W -n com.showbook.app/.MainActivity || true
+          sleep 8
+          adb exec-out screencap -p > /tmp/maestro-debug/cold-launch.png || true
+          adb shell uiautomator dump /sdcard/cold-launch.xml >/dev/null 2>&1 || true
+          adb pull /sdcard/cold-launch.xml /tmp/maestro-debug/cold-launch.xml || true
+          echo "::group::Cold-launch UI hierarchy (text nodes only)"
+          if [ -f /tmp/maestro-debug/cold-launch.xml ]; then
+            # Print every node with non-empty text= attr. Tells us
+            # whether 'Sign in with Google' is actually rendered.
+            grep -oE 'text="[^"]*"' /tmp/maestro-debug/cold-launch.xml \
+              | grep -v 'text=""' | sort -u | head -50 || true
+          else
+            echo "no UI dump captured"
+          fi
+          echo "::endgroup::"
+          echo "::group::Cold-launch screenshot size"
+          ls -lh /tmp/maestro-debug/cold-launch.png 2>/dev/null || echo "no screenshot"
+          echo "::endgroup::"
+          # Kill the app again so Maestro's first launchApp starts cleanly.
+          adb shell am force-stop com.showbook.app || true
 
-      - name: Upload Maestro debug artifacts on failure
+      - name: Run Maestro flows
+        shell: bash
+        run: |
+          set -uo pipefail
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$HOME/.maestro/bin:$PATH"
+          # `--debug-output` is a flag on the `test` subcommand, not a
+          # global flag — it writes detailed step traces + screenshots
+          # to the named dir. Uploaded as an artifact below regardless
+          # of outcome so reviewers see exactly what Maestro saw.
+          # Wipe only Maestro's own subdirectory so /tmp doesn't
+          # accumulate screenshots across runs, but preserve the
+          # cold-launch.png + cold-launch.xml that the previous step
+          # wrote into /tmp/maestro-debug/.
+          rm -rf /tmp/maestro-debug/.maestro
+          mkdir -p /tmp/maestro-debug
+          # Maestro's `launchApp: clearState: true` in flow YAML
+          # translates to `pm clear`, but on this AOSP system-image
+          # SecureStore values appear to survive that across flows in
+          # the same `maestro test <dir>` invocation — run
+          # 25977641842's three flows all landed on the same signed-in
+          # Welcome screen even though each flow declares clearState.
+          # Work around it by invoking maestro once per flow file with
+          # an explicit pm clear in between.
+          RC=0
+          for flow in apps/mobile/e2e/flows/*.yaml; do
+            echo "::group::pm clear before $(basename "$flow")"
+            adb shell pm clear com.showbook.app || true
+            sleep 2
+            echo "::endgroup::"
+            maestro test --debug-output /tmp/maestro-debug "$flow" || {
+              status=$?
+              echo "::warning::$(basename "$flow") failed with status $status"
+              RC=$status
+            }
+          done
+          exit $RC
+
+      # Summarise the debug dir into the run log so a failed Maestro
+      # step is diagnosable from the GitHub Actions UI even when the
+      # artifact viewer fails to render the .png screenshots. The
+      # commands.json + Maestro stdout in the debug dir name the
+      # exact flow + step that failed.
+      - name: Summarise Maestro debug output
         if: failure()
+        shell: bash
+        run: |
+          set -u
+          echo "::group::Maestro debug dir contents"
+          ls -la /tmp/maestro-debug/ 2>/dev/null || echo "no debug dir"
+          echo "::endgroup::"
+          # Look for any plain-text log or json summary Maestro left
+          # behind and dump the last 200 lines into the run log.
+          shopt -s nullglob
+          for f in /tmp/maestro-debug/**/*.txt /tmp/maestro-debug/**/*.json /tmp/maestro-debug/**/*.log /tmp/maestro-debug/*.txt /tmp/maestro-debug/*.json /tmp/maestro-debug/*.log; do
+            echo "::group::$f"
+            tail -200 "$f" 2>/dev/null || true
+            echo "::endgroup::"
+          done
+          # List screenshots so we know which steps ran before the failure.
+          echo "::group::Screenshots captured"
+          find /tmp/maestro-debug -name '*.png' -printf '%p\n' 2>/dev/null | sort || true
+          echo "::endgroup::"
+
+      - name: Upload Maestro debug artifacts
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: maestro-debug-${{ github.run_id }}
           path: |
-            ~/.maestro/tests/**
+            /tmp/maestro-debug/**
             /tmp/emulator.log
           if-no-files-found: ignore
           retention-days: 7
+
+      # Push the Maestro debug PNGs to the existing `pr-screenshots`
+      # orphan branch under `mobile-e2e/run-<id>/` and post the raw
+      # URLs as a PR comment. Repo is public so
+      # raw.githubusercontent.com URLs are fetchable without auth —
+      # that lets Claude pull the cold-launch screenshot directly via
+      # WebFetch instead of asking the operator to download the
+      # artefact ZIP. Mirrors the existing upload-pr-screenshots
+      # pattern used by the web PR-screenshots flow.
+      #
+      # We deliberately reuse `pr-screenshots` rather than creating a
+      # separate `mobile-e2e-debug` orphan branch because the
+      # `git worktree add --orphan` syntax used to create a new orphan
+      # branch requires Git ≥ 2.42, which the WSL Ubuntu 22.04 runner
+      # doesn't have. The existing branch's worktree path works on any
+      # Git version.
+      - name: Publish maestro debug to pr-screenshots branch
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          if [ ! -d /tmp/maestro-debug ]; then
+            echo "no /tmp/maestro-debug — nothing to publish"
+            exit 0
+          fi
+
+          # Flatten Maestro's nested per-run dirs into one flat dir
+          # with sanitised filenames. Each per-flow screenshot is named
+          # `screenshot-<emoji>-<ts>-(flow).png`; collapse to
+          # `maestro-<flow>-<n>.png` so the orphan-branch URL stays
+          # clean.
+          FLAT=/tmp/maestro-debug-flat
+          rm -rf "$FLAT"
+          mkdir -p "$FLAT"
+          [ -f /tmp/maestro-debug/cold-launch.png ] && cp /tmp/maestro-debug/cold-launch.png "$FLAT/cold-launch.png"
+          n=1
+          while IFS= read -r -d '' f; do
+            base="$(basename "$f")"
+            flow="$(echo "$base" | sed -E 's/.*\(([^)]+)\)\.png$/\1/' | tr -c '[:alnum:]-' '-')"
+            [ -z "$flow" ] && flow="unknown"
+            cp "$f" "$FLAT/maestro-${flow}-${n}.png"
+            n=$((n + 1))
+          done < <(find /tmp/maestro-debug -name '*.png' -path '*tests*' -print0)
+
+          echo "::group::Files staged for upload"
+          ls -la "$FLAT"
+          echo "::endgroup::"
+
+          # The upload script's `git commit` requires an author identity.
+          # actions/checkout doesn't set one by default on self-hosted
+          # runners, so configure the GitHub Actions bot identity here.
+          # Scoped to --global because the script operates inside a
+          # temporary worktree, not the original checkout.
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          # Reuse the existing orphan-branch uploader, targeting the
+          # already-existing `pr-screenshots` branch. The `--branch`
+          # value becomes the subdirectory inside that branch — using a
+          # slash-prefixed value puts our files under
+          # `mobile-e2e/run-<id>/`, alongside the web PR screenshots
+          # already there.
+          RUN_DIR="mobile-e2e/run-${{ github.run_id }}"
+          # Don't swallow errors — if upload fails, we want the run to
+          # show it. The diagnostic step above + the artefact upload
+          # above are still preserved as fallbacks.
+          OUTPUT=$(node scripts/upload-pr-screenshots.mjs \
+            --branch "$RUN_DIR" \
+            --pr "$PR_NUMBER" \
+            --dir "$FLAT" \
+            --target-branch pr-screenshots 2>&1)
+          UPLOAD_RC=$?
+          echo "::group::upload-pr-screenshots output"
+          echo "$OUTPUT"
+          echo "exit code: $UPLOAD_RC"
+          echo "::endgroup::"
+          if [ "$UPLOAD_RC" -ne 0 ]; then
+            echo "::error::upload-pr-screenshots failed — see group above"
+            exit 0   # don't fail the job over the debug-publish step itself
+          fi
+
+          # Extract the JSON array (script prints log lines before it).
+          URLS_JSON=$(echo "$OUTPUT" | sed -n '/^\[$/,/^\]$/p')
+          IMAGES_MD=$(echo "$URLS_JSON" | jq -r '.[] | "![\(.name)](\(.url))"')
+
+          # Inline the text= nodes from the cold-launch UI dump
+          # directly in the PR comment — small enough to fit, readable
+          # without opening an external file. Capped at 100 entries to
+          # stay under the 64 KB comment limit.
+          UI_TEXT=""
+          if [ -f /tmp/maestro-debug/cold-launch.xml ]; then
+            UI_TEXT=$(grep -oE 'text="[^"]*"' /tmp/maestro-debug/cold-launch.xml \
+              | grep -v 'text=""' | sort -u | head -100 || true)
+          fi
+
+          BODY_FILE=$(mktemp)
+          {
+            printf '## Mobile e2e debug — `%s`\n\n' "$RUN_DIR"
+            printf '[Workflow run](%s) failed. Cold-launch screenshot first, then Maestro per-flow screenshots.\n\n' "$RUN_URL"
+            printf '%s\n\n' "$IMAGES_MD"
+            if [ -n "$UI_TEXT" ]; then
+              printf '<details><summary>Cold-launch UI hierarchy (text nodes)</summary>\n\n'
+              printf '```\n%s\n```\n\n' "$UI_TEXT"
+              printf '</details>\n'
+            fi
+            printf '\n_Hosted on the `pr-screenshots` branch alongside the maestro-debug-%s artifact._\n' "${{ github.run_id }}"
+          } > "$BODY_FILE"
+
+          echo "::group::PR comment body preview"
+          cat "$BODY_FILE"
+          echo "::endgroup::"
+          # The previous failed runs uploaded screenshots to the orphan
+          # branch but never produced a comment — `gh pr comment` was
+          # exiting non-zero silently. Capture the exit code + output
+          # so a future regression is visible in the log instead of
+          # only by the absence of a comment.
+          set +e
+          GH_OUTPUT=$(gh pr comment "$PR_NUMBER" --body-file "$BODY_FILE" 2>&1)
+          GH_RC=$?
+          set -uo pipefail
+          echo "::group::gh pr comment result"
+          echo "$GH_OUTPUT"
+          echo "exit code: $GH_RC"
+          echo "::endgroup::"
+          if [ "$GH_RC" -ne 0 ]; then
+            echo "::warning::gh pr comment failed (rc=$GH_RC); upload to orphan branch still succeeded"
+          fi
 
       # Only on PR runs: append/replace a `## Mobile screenshots` section
       # in the PR body, bracketed by sentinel comments so re-runs replace
@@ -191,8 +623,8 @@ jobs:
           ## Mobile e2e (Android)
 
           Workflow run: $RUN_URL
-          (Failed runs upload Maestro screenshots + emulator log as the
-          \`maestro-debug-${{ github.run_id }}\` artifact.)
+          (Maestro screenshots + emulator log are uploaded as the
+          \`maestro-debug-${{ github.run_id }}\` artifact on every run.)
           <!-- mobile-screenshots:end -->
           EOF
           )
@@ -201,6 +633,7 @@ jobs:
 
       - name: Shut down emulator
         if: always()
+        shell: bash
         run: |
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
           adb emu kill || true

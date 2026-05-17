@@ -111,6 +111,11 @@ export default function TabsLayout(): React.JSX.Element {
         options={{
           title: '',
           tabBarLabel: () => null,
+          // testID for Maestro flows — see apps/mobile/e2e/flows/. The
+          // accessibilityLabel below is what voice-over reads; the
+          // testID is what Maestro selectors match. React Navigation
+          // bottom-tab passes this prop through to tabBarButton.
+          tabBarButtonTestID: 'add-tab',
           // Custom button so the tappable region matches the visible FAB
           // (which extends 16pt above the tab cell). Without this the top
           // half of the disc is non-interactive — see header docblock.

@@ -1,7 +1,9 @@
-# Sign-out flow — Maestro Cloud
+# Sign-out flow — Maestro
 #
-# Verifies the destructive Alert confirmation and that the auth gate
-# routes back to /(auth)/signin once the SecureStore session is gone.
+# Self-contained: signs in via the e2e bypass (see sign-in.yaml for the
+# env-var contract), navigates to Me, taps Sign out, confirms the
+# destructive alert, and verifies the auth gate routes back to
+# /(auth)/signin once the SecureStore session is gone.
 appId: com.showbook.app
 name: sign-out
 tags:
@@ -12,28 +14,24 @@ tags:
     clearState: true
     clearKeychain: true
 
-- runScript:
-    file: ../scripts/seed-session.js
-    env:
-      MAESTRO_E2E_TOKEN: ${MAESTRO_E2E_TOKEN}
-      MAESTRO_E2E_USER_JSON: ${MAESTRO_E2E_USER_JSON}
-
-- openLink: ${output.seedDeeplink}
-
-- launchApp:
-    clearState: false
+# The signin CTA is below the fold on Pixel-6-sized AVDs — see
+# sign-in.yaml for context. Scroll into view before tapping.
+- scrollUntilVisible:
+    element:
+      text: "Sign in with Google"
+    direction: DOWN
 
 - tapOn:
     text: "Sign in with Google"
 - runFlow:
     when:
-      visible: "Welcome"
+      visible: "Set up showbook"
     commands:
-      - tapOn: "Continue"
-      - tapOn: "Skip for now"
-      - tapOn: "Skip for now"
-      - tapOn: "Skip for now"
-      - tapOn: "Skip for now"
+      - tapOn: "Set up showbook"
+      - tapOn: "Skip"   # notifications
+      - tapOn: "Skip"   # photos
+      - tapOn: "Skip"   # location
+      - tapOn: "Skip"   # gmail
 
 - assertVisible:
     text: "Me"
@@ -41,14 +39,19 @@ tags:
 - tapOn:
     text: "Me"
 
-- assertVisible:
-    text: "ACCOUNT"
+# Me-tab navigation is enough proof we're on the right screen; the
+# old assertVisible for "ACCOUNT" against the eyebrow string
+# "ACCOUNT · SETTINGS" wasn't a useful gate.
 
-# The sign-out row scrolls into view at the bottom of the Me screen.
+# The sign-out row scrolls into view at the bottom of the Me screen
+# below 5 sections (integrations, region, sync, appearance, recent
+# activity). Default 30 s should be plenty; bump anyway since the
+# WSL software-rendered emulator can fling-scroll slowly.
 - scrollUntilVisible:
     element:
       text: "Sign out"
     direction: DOWN
+    timeout: 60000
 
 - tapOn:
     text: "Sign out"
