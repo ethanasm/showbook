@@ -71,6 +71,21 @@ export const FeatureFlag = {
       'the placeholder absorbs taps with disabled CTAs.',
     state: 'ON',
   },
+  SetlistIntelPreviews: {
+    description:
+      'Phase 9 (setlist-intelligence) 30-second preview buttons on ' +
+      'every setlist track row + the Spotify-follow rail on Discover ' +
+      "Artists tab. OFF leaves Phase-1's empty 24px slot in place and " +
+      'hides the rail entirely; ON wires both surfaces. Web Playback ' +
+      'SDK for full-track playback (Premium-only) is gated by this ' +
+      'flag too — non-Premium users always get the 30s preview when ' +
+      'the flag is ON. Flip OFF if the playback context regresses ' +
+      '(rows fail to stop the previous track, audio element leaks, ' +
+      "Web Playback SDK crashes on Premium accounts) — the row's " +
+      'data-testid="predicted-row-preview-slot" stays the same so the ' +
+      'rollback is invisible to E2E.',
+    state: 'ON',
+  },
   SetlistIntelEvalHarness: {
     description:
       'Phase 4 (setlist-intelligence) eval-harness admin surface. ' +

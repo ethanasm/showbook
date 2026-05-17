@@ -61,8 +61,8 @@ Mirror every component from
 - `BustoutCandidateRow` (rotating)
 - `ShowModeOddsCard` (rotating, improvised)
 - `VibeSketchCard` (improvised)
-- `VibeRadar` (Phase 8 surfaces; mobile uses simpler 4-axis variant)
-- `EnergyArc` (Phase 8 surfaces; mobile uses inline sparkline)
+- ~~`VibeRadar` (Phase 8 surfaces; mobile uses simpler 4-axis variant)~~ — **deferred v2** (P8 dropped after 2026-05-17 probe 403)
+- ~~`EnergyArc` (Phase 8 surfaces; mobile uses inline sparkline)~~ — **deferred v2**
 
 All components compose the existing mobile primitives (`Sheet`,
 `SegmentedControl`, `Skeleton`, `Banner`, `Toast`).
@@ -210,7 +210,7 @@ specific log context: `child({ component: 'mobile.predicted-setlist' })`.
 | Risk | Mitigation |
 |------|-----------|
 | iPad three-pane right pane competes for space with map | SegmentedControl at top of right pane lets user switch |
-| Mobile vibe radar is unreadable at phone width | 4-axis simplified variant (Phase 8); document the rationale |
+| ~~Mobile vibe radar is unreadable at phone width~~ | N/A in v1 — Phase 8 deferred after 2026-05-17 probe 403; revisit in v2 |
 | Outbox handlers diverge from web semantics | Shared mutation handlers in `apps/mobile/lib/mutations/` mirror server-side validation; integration tests run both surfaces |
 | Push notifications not yet wired (root planned-improvements item) | Tonight's predicted setlist + year-end soundtrack send via email today; push wiring is a separate effort tracked outside this plan |
 

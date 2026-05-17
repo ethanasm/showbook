@@ -74,8 +74,11 @@ export const USER_SCOPED_PURGE_TABLES: readonly UserScopedPurgeTable[] = [
   // idempotency record; the playlists themselves stay on Spotify
   // (we never delete from Spotify on disconnect).
   { table: 'show_spotify_playlists', filter: 'user_id' },
-  // Phase 9 will add:
-  //   { table: 'user_spotify_skipped_artists', filter: 'user_id' },
+  // Phase 9 — per-user dismiss list for the Spotify-follow rail.
+  // A re-connect after disconnect should start with a clean slate
+  // so freshly-followed artists from the previous Spotify account
+  // don't stay hidden under a new one.
+  { table: 'user_spotify_skipped_artists', filter: 'user_id' },
 ];
 
 /**
@@ -96,8 +99,9 @@ export const CATALOG_KEEP_COLUMNS: readonly string[] = [
   //   'songs.spotify_track_id_resolved_at',
   // Phase 7 (catalog audio metadata):
   //   'songs.spotify_audio_features',
-  // Phase 9:
-  //   'songs.spotify_preview_url',
+  // Phase 9 — cached 30-second preview clip URL; catalog data shared
+  // across users, so disconnect leaves the column intact.
+  'songs.spotify_preview_url',
   // Phase 11+ (Spotify catalog metadata):
   //   'songs.isrc',
   //   'songs.spotify_album_id',

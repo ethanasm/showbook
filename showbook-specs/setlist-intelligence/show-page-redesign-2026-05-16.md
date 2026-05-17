@@ -27,14 +27,23 @@ as separate cards stacked between setlist and photos.
 
 ### After (this redesign)
 
+> **Update 2026-05-17 — Phase 8 deferred to v2.** The audio-features
+> probe returned 403, so VibeRadar / EnergyArc are dropped from v1.
+> Wherever this doc mentions them below, treat the slot as **empty
+> (right rail)** or **omitted (tab body)** for the v1 rollout. The
+> rest of the redesign is unchanged.
+
 Show detail becomes a **4-tab page**, always in this order:
 
-| Tab | Pre-show | Post-show |
+| Tab | Pre-show (v1) | Post-show (v1) |
 |---|---|---|
-| **Overview** | Stats · lineup · history · actions | Stats · lineup · vibe radar + fan loyalty · "went" badge |
-| **Setlist** | Confidence % · Hype Playlist card · predicted vibe + energy arc · likely setlist (2-col) | Songs count · "I Heard" playlist card · actual energy arc · setlist with energy + library flag · discovered-live rail |
+| **Overview** | Stats · lineup · history · actions | Stats · lineup · fan loyalty · "went" badge |
+| **Setlist** | Confidence % · Hype Playlist card · likely setlist (2-col) | Songs count · "I Heard" playlist card · setlist with library flag · discovered-live rail |
 | **Media** | Empty + "what we'll add automatically" | Photo grid · ticket stub · live playlist · press recap |
 | **Notes** | Pre-show prompts | Post-show recap prompts |
+
+(Original-design table with the vibe-radar / energy-arc cells is
+preserved in the Phase 8 spec for v2 reference.)
 
 Tab labels never change — muscle memory survives the show
 transition. **What changes is the badge** on each tab:
@@ -44,18 +53,20 @@ The hero shrinks but never disappears. Tab bar is sticky. Stats
 collapse 4-col → 2×2 below 480px.
 
 **Music-layer is woven into the tabs**, not stacked beside them.
-- `VibeRadar` (7-axis) — Overview tab (past) + Setlist tab (pre + post)
-- `EnergyArc` (per-track bar chart with encore divider) — Setlist tab
+- ~~`VibeRadar` (7-axis) — Overview tab (past) + Setlist tab (pre + post)~~ — **deferred v2**
+- ~~`EnergyArc` (per-track bar chart with encore divider) — Setlist tab~~ — **deferred v2**
 - `HypePlaylistCard` (hero card with branded cover) — Setlist tab top
 - `FanLoyaltyRing` — Overview tab (past)
 - `DiscoveredRail` — Setlist tab (past, list rows with save buttons)
 - `PrimingStat` — italic line in the title block (past)
 - `TrackPreview` — inline 30s-preview button on every setlist row
 
-There is also a **right rail** on desktop (≥1200px) that pins
-the music-layer atoms: `VibeRadar` + `EnergyArc` + (`HypePlaylistCard`
-pre-show / `FanLoyaltyRing` post-show). Hidden below 1200px and
-the same components appear inline in the tabs instead.
+There is also a **right rail** on desktop (≥1200px). In v1 it pins
+only `HypePlaylistCard` (pre-show) and `FanLoyaltyRing` (post-show).
+VibeRadar / EnergyArc were the planned third + fourth atoms but are
+deferred to v2 — see the right-rail ownership table below for the
+v1 state vs. the v2 plan. The rail is hidden below 1200px; the
+remaining atoms appear inline in the tabs instead.
 
 ---
 
@@ -108,15 +119,15 @@ appropriate atoms based on show state. **Phase 1 ships the rail
 shell as an empty container** so future phases can drop atoms in
 without re-plumbing layout.
 
-| Atom | Phase that ships data + visual |
-|---|---|
-| `VibeRadar` (post-show, actual) | Phase 8 (FF-gated) |
-| `VibeRadar` (pre-show, predicted) | Phase 8 (FF-gated) |
-| `EnergyArc` (post-show, actual) | Phase 8 (FF-gated) |
-| `EnergyArc` (pre-show, predicted) | Phase 8 (FF-gated) |
-| `HypePlaylistCard` (pre-show) | Phase 3 |
-| `FanLoyaltyRing` (post-show) | Phase 7 |
-| Hide entirely when no atoms apply | Phase 1 (shell logic) |
+| Atom | Phase that ships data + visual | v1 state |
+|---|---|---|
+| `VibeRadar` (post-show, actual) | ~~Phase 8~~ — **deferred v2** | empty slot |
+| `VibeRadar` (pre-show, predicted) | ~~Phase 8~~ — **deferred v2** | empty slot |
+| `EnergyArc` (post-show, actual) | ~~Phase 8~~ — **deferred v2** | empty slot |
+| `EnergyArc` (pre-show, predicted) | ~~Phase 8~~ — **deferred v2** | empty slot |
+| `HypePlaylistCard` (pre-show) | Phase 3 | shipping |
+| `FanLoyaltyRing` (post-show) | Phase 7 | shipping |
+| Hide entirely when no atoms apply | Phase 1 (shell logic) | shipping — without VibeRadar/EnergyArc the rail hides for many show states |
 
 ---
 
@@ -127,7 +138,7 @@ without re-plumbing layout.
 **New Phase 1 scope:**
 - Token swap: Geist → Space Grotesk + Marquee Gold (separate PR ahead of the tab work).
 - Ship the **4-tab shell** for `/(app)/shows/[id]/` — `<ShowTabs>` with Overview / Setlist / Media / Notes; sticky tab bar; URL param `?tab=…` for routing; ~120ms crossfade on tab change.
-- Wire **Overview tab content** (stat row + lineup + history + actions). The "went" badge for past shows. Pre-show shows the music-layer slot for `VibeRadar` + `FanLoyaltyRing` as empty placeholders ("we'll fill this in once your Spotify is connected").
+- Wire **Overview tab content** (stat row + lineup + history + actions). The "went" badge for past shows. Pre-show shows the music-layer slot for `FanLoyaltyRing` as an empty placeholder ("we'll fill this in once your Spotify is connected"). (The VibeRadar slot from the original design is dropped — Phase 8 deferred to v2.)
 - Ship **Setlist tab content for stable-style artists** (the bulk of the original Phase 1 work, but slotted into the Setlist tab instead of a SegmentedControl):
   - Pre-show: confidence banner + `<HypePlaylistCard placeholder />` (real card lands in Phase 3) + predicted setlist (2-col on wide, 1-col on compact) + `EncoreDivider` + ★ openers/closers + per-row evidence ("12/12").
   - Post-show: count banner + actual setlist + `EncoreDivider` + ★ markers.
@@ -168,10 +179,23 @@ without re-plumbing layout.
 - `PrimingStat` becomes the italic line **in the show title block** (not a standalone one-liner section).
 - Year-end soundtrack + library cross-reference logic unchanged.
 
-### Phase 8 — **adjustment** (vibe atoms move to tabs + right rail)
+### Phase 8 — **DEFERRED to v2** (audio-features probe returned 403 on 2026-05-17)
 
-- `VibeRadar` and `EnergyArc` are the right-rail atoms (desktop) + appear inline in the **Setlist tab "Predicted shape" section** (pre-show) and **Overview tab** (post-show, alongside `FanLoyaltyRing`).
-- Set-length inline becomes the `· 1h 47m 22s on stage` segment in the **title block**, not a separate line.
+- The SI-11 probe ran on prod 2026-05-17 and Spotify denied access
+  to `/audio-features` for our app registration. Per SI-16, Phase 8
+  drops from v1 entirely (AcousticBrainz fallback rejected — frozen
+  at 2022).
+- `VibeRadar`, `EnergyArc`, and set-length-inline are **not shipping
+  in v1**. The right-rail slots stay empty for those atoms; the
+  inline "Predicted shape" section in the Setlist tab is omitted
+  entirely; the title block does not get the `· 1h 47m s on stage`
+  segment.
+- Phase 8 spec preserved as v2 design reference. Re-probe via
+  `pnpm --filter @showbook/api probe-audio-features <userId>` if a
+  third-party data source emerges or Spotify reverses the
+  deprecation. The `SpotifyAudioFeaturesAvailable` feature flag
+  stays in code at OFF so a flip-to-ON via PR is the only thing
+  needed to re-enable the work.
 
 ### Phase 9 — **adjustment** (previews inline on every track row)
 

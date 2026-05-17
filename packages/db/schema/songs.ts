@@ -32,6 +32,11 @@ export const songs = pgTable(
     isCover: boolean('is_cover').notNull().default(false),
     coverOf: text('cover_of'),
     spotifyTrackId: text('spotify_track_id'),
+    // Cached 30-second preview clip URL from Spotify's track lookup.
+    // Populated lazily when the Phase-9 row-play button is tapped on
+    // a non-premium client; null when Spotify never had a preview for
+    // the track (true for ~30% of catalog post-2024 thinning).
+    spotifyPreviewUrl: text('spotify_preview_url'),
     durationMs: integer('duration_ms'),
     firstKnownPerformance: date('first_known_performance'),
     historicalPlayCount: integer('historical_play_count').notNull().default(0),

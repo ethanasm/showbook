@@ -316,7 +316,19 @@ playlist button on Show detail, which lands in Phase 10. SI-08
 gets validated there instead — see
 [`../plan-review.md`](../plan-review.md) SI-08.)
 
-### Audio-features probe (runbook)
+### Audio-features probe (runbook) — **RESOLVED 2026-05-17: 403, Phase 8 deferred to v2**
+
+The probe ran on prod on 2026-05-17 against the operator user and
+returned **HTTP 403**. Spotify did not grandfather our app
+registration. Per SI-16, Phase 8 (vibe radar + energy arc) is
+**deferred to v2**; AcousticBrainz fallback was rejected. The
+`SpotifyAudioFeaturesAvailable` feature flag stays at `'OFF'`. A
+future operator can re-probe and flip the flag via PR if Spotify
+changes their policy or a third-party data source emerges.
+
+Original runbook content preserved below for v2 re-probe.
+
+---
 
 The setlist-intel spec includes a Phase 8 feature (vibe radar +
 energy arc) that depends on Spotify's `audio-features` endpoint,
@@ -401,4 +413,5 @@ shipped the column ahead of the Phase 3 resolver job). Phases 3,
 
 The audio-features API probe (open question Q1) lives at the **end**
 of Phase 0 — one call, write the result to a config flag, gate
-Phase 8 on it.
+Phase 8 on it. **Probe ran 2026-05-17 → 403; Phase 8 deferred to
+v2.** See implementation.md §11 Q1.

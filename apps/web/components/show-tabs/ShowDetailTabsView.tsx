@@ -1,8 +1,13 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
+import {
+  PreviewPlayerProvider,
+  usePreviewPlayer,
+} from "@/lib/preview-player";
+import { initFullTrackDriver } from "@/lib/spotify-playback";
 import {
   formatDateRangeLong,
   daysUntil,
@@ -69,7 +74,17 @@ interface ShowDetailTabsViewProps {
  * payload as the legacy page; deltas only in the inside-the-tabs
  * layout.
  */
-export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
+export function ShowDetailTabsView(props: ShowDetailTabsViewProps) {
+  // Wrap in the PreviewPlayerProvider so every PredictedSetlistRow's
+  // TrackPreview button shares the single audio element. Phase 9.
+  return (
+    <PreviewPlayerProvider>
+      <ShowDetailTabsViewInner {...props} />
+    </PreviewPlayerProvider>
+  );
+}
+
+function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
   const router = useRouter();
   const utils = trpc.useUtils();
   const isPast = show.state === "past";
@@ -123,6 +138,20 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
     { showId: show.id },
     {
       enabled: isPast && songsFlagOn,
+      staleTime: 1000 * 60 * 5,
+    },
+  );
+
+  // Phase 9 — cached previews. Cheap (single read of the songs table
+  // for the headliner), so we fire it unconditionally when the
+  // SetlistIntelPreviews flag is on. The row UI gracefully degrades
+  // when the response is missing the title; the resolver mutation
+  // backfills on first tap.
+  const previewsFlagOn = isFeatureOn("SetlistIntelPreviews");
+  const previewsQuery = trpc.setlistIntel.trackPreviewsForShow.useQuery(
+    { showId: show.id },
+    {
+      enabled: previewsFlagOn,
       staleTime: 1000 * 60 * 5,
     },
   );
@@ -326,6 +355,7 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
         hypePlaylistEnabled={hypePlaylistEnabled}
         musicLayerV2Enabled={musicLayerV2Enabled}
         badgePayload={badgeQuery.data ?? null}
+        trackPreviews={previewsQuery.data?.previews ?? null}
         rotatingDisplayEnabled={rotatingDisplayEnabled}
         rotatingGateBlocked={rotatingGateBlocked}
       />
@@ -418,6 +448,7 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
         background: "var(--bg)",
       }}
     >
+      {previewsFlagOn && <FullTrackDriverMount />}
       <ShowHeaderStrip
         show={show}
         showPrimingStat={isPast && musicLayerV2Enabled}
@@ -439,6 +470,61 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
       </div>
     </div>
   );
+}
+
+/**
+ * Phase 9 — mount the Web Playback SDK driver when the connected
+ * user has Spotify Premium. Lazy: the SDK script tag is only
+ * appended for premium accounts, so non-premium pages never pay
+ * the load cost. Renders nothing.
+ */
+function FullTrackDriverMount() {
+  const player = usePreviewPlayer();
+  const spotifyStatus = trpc.spotify.connectionStatus.useQuery(undefined, {
+    staleTime: 5 * 60_000,
+  });
+  const utils = trpc.useUtils();
+
+  useEffect(() => {
+    if (!spotifyStatus.data?.connected) return;
+    if (spotifyStatus.data.product !== "premium") return;
+
+    let cancelled = false;
+    let driverHandle: { stop: () => Promise<void> } | null = null;
+
+    void initFullTrackDriver({
+      // The SDK re-asks for a fresh access token whenever its
+      // internal one is near expiry. `spotify.playbackToken` is a
+      // server-side wrapper around `ensureFreshUserToken` that
+      // re-runs the refresh hop server-side and returns the bearer.
+      getAccessToken: async () => {
+        const token = await utils.spotify.playbackToken.fetch(undefined);
+        if (!token) {
+          throw new Error("Spotify playback token unavailable");
+        }
+        return token.accessToken;
+      },
+      onFatal: () => {
+        player.setFullTrackDriver(null);
+      },
+    }).then((driver) => {
+      if (cancelled) return;
+      if (driver) {
+        driverHandle = driver;
+        player.setFullTrackDriver(driver);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      if (driverHandle) {
+        void driverHandle.stop().catch(() => undefined);
+      }
+      player.setFullTrackDriver(null);
+    };
+  }, [player, spotifyStatus.data, utils.spotify.playbackToken]);
+
+  return null;
 }
 
 function ShowHeaderStrip({

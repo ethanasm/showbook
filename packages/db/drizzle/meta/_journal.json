@@ -286,7 +286,14 @@
       "idx": 40,
       "version": "7",
       "when": 1790286400000,
-      "tag": "0040_setlist_intel_music_layer_v2",
+      "tag": "0040_spotify_previews_follow_rail",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790372800000,
+      "tag": "0041_setlist_intel_music_layer_v2",
       "breakpoints": true
     }
   ]
