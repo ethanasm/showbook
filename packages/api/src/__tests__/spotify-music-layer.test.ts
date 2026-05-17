@@ -20,12 +20,21 @@ interface DbState {
     firstKnownPerformance: string | null;
   }>;
   spotifyTokenRow: { accessTokenEnc?: string | null; expiresAt?: Date; revokedAt?: Date | null } | null;
+  /**
+   * Optional FIFO queue overriding `songRows` for tests that need to
+   * stub multiple distinct `select()` results in sequence (e.g.
+   * `saveDiscoveredSong` does an ownership lookup followed by a
+   * songs-row lookup). Each `select()` shifts one result off the
+   * queue; when null the legacy `songRows` path is used.
+   */
+  selectQueue: unknown[] | null;
 }
 
 const DB_STATE: DbState = {
   showRow: null,
   songRows: [],
   spotifyTokenRow: null,
+  selectQueue: null,
 };
 
 function makeChain(getResult: () => unknown) {
@@ -49,7 +58,13 @@ const fakeDb = {
       findFirst: async () => DB_STATE.showRow,
     },
   },
-  select: () => makeChain(() => DB_STATE.songRows),
+  select: () =>
+    makeChain(() => {
+      if (DB_STATE.selectQueue !== null) {
+        return DB_STATE.selectQueue.shift() ?? [];
+      }
+      return DB_STATE.songRows;
+    }),
   update: () =>
     makeChain(() => {
       return [];
@@ -88,6 +103,7 @@ beforeEach(() => {
   origFetch = globalThis.fetch;
   DB_STATE.showRow = null;
   DB_STATE.songRows = [];
+  DB_STATE.selectQueue = null;
   nextAccessToken = 'fake-access-token';
   musicLayer.__resetSavedCacheForTests();
 });
@@ -169,8 +185,10 @@ describe('checkTracksSavedForUser', () => {
   it('mixes cached and to-fetch ids without losing order', async () => {
     let captured: string[] = [];
     globalThis.fetch = (async (url: string) => {
-      const m = url.match(/ids=([^&]+)/);
-      captured = m ? decodeURIComponent(m[1]!).split(',') : [];
+      // Post-Feb-2026 the endpoint is /me/library/contains?uris=spotify:track:...
+      const m = url.match(/uris=([^&]+)/);
+      const uris = m ? decodeURIComponent(m[1]!).split(',') : [];
+      captured = uris.map((uri) => uri.replace(/^spotify:track:/, ''));
       return jsonResponse(captured.map(() => true));
     }) as typeof globalThis.fetch;
     await musicLayer.checkTracksSavedForUser('user-1', 'token', ['t1']);
@@ -316,5 +334,79 @@ describe('discoveredLiveForShow', () => {
     });
     assert.equal(result.noData, true);
     assert.equal(result.tracks.length, 0);
+  });
+});
+
+describe('saveDiscoveredSong', () => {
+  it('rejects with not_in_user_history when the user has not heard the song live', async () => {
+    // First select() — the ownership-check join against
+    // setlist_song_appearances + shows — returns no rows, simulating
+    // an attacker calling the mutation with a catalog songId that
+    // doesn't appear in any of their attended setlists.
+    DB_STATE.selectQueue = [[]];
+    let fetchCalled = false;
+    globalThis.fetch = (async () => {
+      fetchCalled = true;
+      return jsonResponse({});
+    }) as typeof globalThis.fetch;
+    const result = await musicLayer.saveDiscoveredSong({
+      db: fakeDb as unknown as realDb.Database,
+      userId: 'user-1',
+      songId: '00000000-0000-4000-8000-00000000abcd',
+    });
+    assert.deepEqual(result, { ok: false, reason: 'not_in_user_history' });
+    // The ownership gate must short-circuit before we ever touch
+    // Spotify — otherwise the mutation still leaks "this song exists
+    // in the catalog and has a Spotify id" via timing.
+    assert.equal(fetchCalled, false);
+  });
+
+  it('proceeds when the song appears in one of the caller\'s attended setlists', async () => {
+    // First select() — ownership row present. Second select() — the
+    // songs-row lookup for the Spotify track id. Third select() —
+    // ensureFreshUserToken's stub (returns the access token directly,
+    // so no select happens here; the queue can be left short).
+    DB_STATE.selectQueue = [
+      [{ id: 'appearance-1' }],
+      [{ spotifyTrackId: 'tr-x' }],
+    ];
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      return new Response(null, { status: 200 });
+    }) as typeof globalThis.fetch;
+    const result = await musicLayer.saveDiscoveredSong({
+      db: fakeDb as unknown as realDb.Database,
+      userId: 'user-1',
+      songId: '00000000-0000-4000-8000-00000000abce',
+    });
+    assert.deepEqual(result, { ok: true });
+    assert.equal(calls, 1);
+  });
+
+  it('rejects with no_spotify_id when the song exists in user history but has no resolved Spotify id', async () => {
+    DB_STATE.selectQueue = [
+      [{ id: 'appearance-1' }],
+      [{ spotifyTrackId: null }],
+    ];
+    const result = await musicLayer.saveDiscoveredSong({
+      db: fakeDb as unknown as realDb.Database,
+      userId: 'user-1',
+      songId: '00000000-0000-4000-8000-00000000abcf',
+    });
+    assert.deepEqual(result, { ok: false, reason: 'no_spotify_id' });
+  });
+
+  it('treats the negative `__none__` sentinel as no_spotify_id, not a missing row', async () => {
+    DB_STATE.selectQueue = [
+      [{ id: 'appearance-1' }],
+      [{ spotifyTrackId: '__none__' }],
+    ];
+    const result = await musicLayer.saveDiscoveredSong({
+      db: fakeDb as unknown as realDb.Database,
+      userId: 'user-1',
+      songId: '00000000-0000-4000-8000-00000000abd0',
+    });
+    assert.deepEqual(result, { ok: false, reason: 'no_spotify_id' });
   });
 });

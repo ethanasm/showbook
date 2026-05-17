@@ -29,7 +29,6 @@ import { OverviewTab, type OverviewLineupEntry } from "./OverviewTab";
 import { SetlistTab, SetlistTabComingSoon, type ActualSong } from "./SetlistTab";
 import { MediaTab } from "./MediaTab";
 import { NotesTab } from "./NotesTab";
-import { MusicLayerEmpty } from "./MusicLayerEmpty";
 import { HypePlaylistCard } from "./HypePlaylistCard";
 import { FanLoyaltyRing } from "./FanLoyaltyRing";
 import { DiscoveredRail } from "./DiscoveredRail";
@@ -315,23 +314,15 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
     name: entry.name,
   }));
 
-  // Music-layer slot for the Overview tab.
-  // Past: FanLoyaltyRing (Phase 7) gets the whole slot — VibeRadar
-  //   was paired with it in the 2026-05-16 handoff but Phase 8 has
-  //   been deferred to v2 (Spotify audio-features probe returned 403
-  //   on 2026-05-17), so there's nothing to share the slot with.
-  // Pre-show: keep the VibeRadar placeholder — pre-show fan loyalty
-  //   isn't a thing (we can't know what hasn't been played), so the
-  //   vibe-radar placeholder is the only music-layer atom we have.
-  const musicLayerPlaceholder = isPast ? (
-    musicLayerV2Enabled ? (
-      <FanLoyaltyRing showId={show.id} />
-    ) : (
-      <MusicLayerEmpty variant="fan-loyalty" spotifyConnected={false} />
-    )
-  ) : (
-    <MusicLayerEmpty variant="vibe-radar" spotifyConnected={false} />
-  );
+  // Music-layer slot for the Overview tab. Only rendered when the
+  // FanLoyaltyRing is going to mount — past show + v2 flag on. The
+  // pre-show VibeRadar placeholder is gone (Phase 8 deferred to v2 —
+  // Spotify audio-features probe returned 403 on 2026-05-17) and the
+  // past-show "Fan loyalty coming in Phase 7" empty card was dead
+  // space for the long tail of users not in the v2 allowlist.
+  // FanLoyaltyRing owns its own loading/empty/disconnected states.
+  const musicLayerPlaceholder =
+    isPast && musicLayerV2Enabled ? <FanLoyaltyRing showId={show.id} /> : null;
 
   const showLikeForGate: ShowLike = show;
   const isUnsupportedKind =

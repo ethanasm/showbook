@@ -83,7 +83,6 @@ export async function runYearEndSoundtrack(
   const userRows = await db
     .select({
       userId: userSpotifyTokens.userId,
-      spotifyUserId: userSpotifyTokens.spotifyUserId,
     })
     .from(userSpotifyTokens)
     .where(
@@ -103,7 +102,6 @@ export async function runYearEndSoundtrack(
     try {
       const result = await runForUser({
         userId: row.userId,
-        spotifyUserId: row.spotifyUserId,
         year,
         start,
         end,
@@ -143,7 +141,6 @@ export async function runYearEndSoundtrack(
 
 interface RunForUserInput {
   userId: string;
-  spotifyUserId: string;
   year: number;
   start: string;
   end: string;
@@ -242,7 +239,7 @@ async function buildFresh(args: {
   yearKey: string;
 }): Promise<RunForUserResult> {
   const { accessToken, input, uris, yearKey } = args;
-  const playlist = await createPlaylist(accessToken, input.spotifyUserId, {
+  const playlist = await createPlaylist(accessToken, {
     name: `Showbook · ${input.year}`,
     description: `Your ${input.year} in concerts. One signature track per show, ordered DJ-set style.`,
     isPublic: false,

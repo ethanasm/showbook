@@ -37,6 +37,7 @@
     "prod:logs": "docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f web",
     "prod:db:migrate": "docker compose --env-file .env.prod -f docker-compose.prod.yml exec web pnpm --filter @showbook/db drizzle-kit migrate",
     "prod:query": "node scripts/prod-query.mjs",
+    "db:check-duplicates": "node scripts/check-external-id-duplicates.mjs",
     "mobile:start": "pnpm --filter mobile start",
     "mobile:start:dev-client": "pnpm --filter mobile start:dev-client",
     "mobile:start:go": "pnpm --filter mobile start:go",

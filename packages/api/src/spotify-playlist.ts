@@ -695,27 +695,12 @@ async function executePlaylistCreate(
     });
   }
 
-  // Look up the Spotify user id from the persisted token row — POST
-  // /users/{id}/playlists needs it, and asking again would be a wasted
-  // hop since we cached the id at connect time.
-  const [tokenRow] = await db
-    .select({ spotifyUserId: userSpotifyTokens.spotifyUserId })
-    .from(userSpotifyTokens)
-    .where(eq(userSpotifyTokens.userId, input.userId))
-    .limit(1);
-  if (!tokenRow?.spotifyUserId) {
-    throw new TRPCError({
-      code: 'PRECONDITION_FAILED',
-      message: 'spotify_not_connected',
-    });
-  }
-
   const name = buildPlaylistName(input.kind, input.meta);
   const description = buildPlaylistDescription(input.kind, input.meta);
 
   let playlist;
   try {
-    playlist = await createPlaylist(accessToken, tokenRow.spotifyUserId, {
+    playlist = await createPlaylist(accessToken, {
       name,
       description,
       isPublic: false,

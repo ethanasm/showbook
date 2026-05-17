@@ -401,10 +401,9 @@ interface SpotifyPlaylistRaw {
  */
 export async function createPlaylist(
   accessToken: string,
-  spotifyUserId: string,
   opts: { name: string; description: string; isPublic?: boolean },
 ): Promise<SpotifyPlaylist> {
-  const url = `${API_BASE}/users/${encodeURIComponent(spotifyUserId)}/playlists`;
+  const url = `${API_BASE}/me/playlists`;
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -452,7 +451,7 @@ export async function addTracksToPlaylist(
       0,
     );
   }
-  const url = `${API_BASE}/playlists/${encodeURIComponent(playlistId)}/tracks`;
+  const url = `${API_BASE}/playlists/${encodeURIComponent(playlistId)}/items`;
   const body: Record<string, unknown> = { uris };
   if (typeof position === 'number') body.position = position;
   const res = await fetch(url, {
@@ -475,22 +474,28 @@ export async function addTracksToPlaylist(
 }
 
 // ---------------------------------------------------------------------------
-// Library cross-reference (GET /me/tracks/contains)
+// Library cross-reference (GET /me/library/contains)
 // ---------------------------------------------------------------------------
 
 /**
- * Spotify caps `/me/tracks/contains` at 50 IDs per call. Setlists rarely
- * exceed this — but the batch loop is straightforward so we support
- * arbitrarily large inputs without surprising the caller.
+ * Spotify's generic `/me/library` endpoints cap each request at 40
+ * URIs — tighter than the per-type endpoints' 50-id ceiling. Setlists
+ * rarely exceed this, but the batch loop is straightforward so larger
+ * inputs still work.
  */
-const TRACKS_CONTAINS_BATCH = 50;
+const LIBRARY_BATCH = 40;
+
+function trackIdsToUris(trackIds: string[]): string[] {
+  return trackIds.map((id) => `spotify:track:${id}`);
+}
 
 /**
  * Check whether each of `trackIds` is in the connected user's saved
- * library. Wraps `GET /v1/me/tracks/contains?ids=...` — Spotify accepts
- * up to 50 IDs per call and returns a boolean array in the same order.
- * Larger inputs batch into multiple calls and the results are stitched
- * back into the original order.
+ * library. Wraps `GET /v1/me/library/contains?uris=spotify:track:...` —
+ * the generic library endpoint accepts full Spotify URIs and caps at
+ * 40 per call. Returns a boolean array in the same order as the input
+ * track ids; larger inputs batch across multiple calls and are
+ * stitched back together.
  *
  * Used by the Phase 7 fan-loyalty + discovered-live procedures (per-show
  * intersection, on demand). Empty input short-circuits — no HTTP call.
@@ -501,14 +506,15 @@ export async function tracksContains(
 ): Promise<boolean[]> {
   if (trackIds.length === 0) return [];
   const out: boolean[] = [];
-  for (let offset = 0; offset < trackIds.length; offset += TRACKS_CONTAINS_BATCH) {
-    const batch = trackIds.slice(offset, offset + TRACKS_CONTAINS_BATCH);
-    const url = `${API_BASE}/me/tracks/contains?ids=${encodeURIComponent(batch.join(','))}`;
+  for (let offset = 0; offset < trackIds.length; offset += LIBRARY_BATCH) {
+    const batch = trackIds.slice(offset, offset + LIBRARY_BATCH);
+    const uris = trackIdsToUris(batch).join(',');
+    const url = `${API_BASE}/me/library/contains?uris=${encodeURIComponent(uris)}`;
     const res = await spotifyFetch(url, accessToken);
     if (!res.ok) {
       const detail = await res.text();
       throw new SpotifyError(
-        `Spotify /me/tracks/contains ${res.status}`,
+        `Spotify /me/library/contains ${res.status}`,
         res.status,
         detail.slice(0, 500),
       );
@@ -516,7 +522,7 @@ export async function tracksContains(
     const data = (await res.json()) as boolean[];
     if (!Array.isArray(data) || data.length !== batch.length) {
       throw new SpotifyError(
-        `Spotify /me/tracks/contains shape mismatch (expected ${batch.length}, got ${
+        `Spotify /me/library/contains shape mismatch (expected ${batch.length}, got ${
           Array.isArray(data) ? data.length : typeof data
         })`,
         0,
@@ -528,29 +534,34 @@ export async function tracksContains(
 }
 
 /**
- * Save one or more tracks to the user's library — `PUT /v1/me/tracks`.
+ * Save one or more tracks to the user's library — `PUT /v1/me/library`.
  * Requires the `user-library-modify` scope, which is in `SPOTIFY_SCOPES`
- * (granted at first connect). 50-IDs-per-call ceiling; the Phase 7
- * "save discovered" button only ever passes a single id, but the loop is
- * forwards-compatible with bulk saves.
+ * (granted at first connect). 40-URIs-per-call ceiling on the generic
+ * library endpoint. The Phase 7 "save discovered" button only ever
+ * passes a single id, but the loop is forwards-compatible with bulk
+ * saves.
  */
 export async function saveTracksToLibrary(
   accessToken: string,
   trackIds: string[],
 ): Promise<void> {
   if (trackIds.length === 0) return;
-  for (let offset = 0; offset < trackIds.length; offset += TRACKS_CONTAINS_BATCH) {
-    const batch = trackIds.slice(offset, offset + TRACKS_CONTAINS_BATCH);
-    const url = `${API_BASE}/me/tracks?ids=${encodeURIComponent(batch.join(','))}`;
+  const url = `${API_BASE}/me/library`;
+  for (let offset = 0; offset < trackIds.length; offset += LIBRARY_BATCH) {
+    const batch = trackIds.slice(offset, offset + LIBRARY_BATCH);
     const res = await fetch(url, {
       method: 'PUT',
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ uris: trackIdsToUris(batch) }),
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) {
       const detail = await res.text();
       throw new SpotifyError(
-        `Spotify PUT /me/tracks ${res.status}`,
+        `Spotify PUT /me/library ${res.status}`,
         res.status,
         detail.slice(0, 500),
       );
@@ -660,7 +671,7 @@ export async function getTopTracks(
 // ---------------------------------------------------------------------------
 
 /**
- * Replace the items on a playlist — `PUT /v1/playlists/{id}/tracks`.
+ * Replace the items on a playlist — `PUT /v1/playlists/{id}/items`.
  * Used by the year-end-soundtrack cron's idempotent re-run: when the
  * users.spotify_year_playlists map already references a playlist for
  * the current year, we overwrite its items rather than creating a
@@ -671,7 +682,7 @@ export async function replacePlaylistItems(
   playlistId: string,
   uris: string[],
 ): Promise<void> {
-  const url = `${API_BASE}/playlists/${encodeURIComponent(playlistId)}/tracks`;
+  const url = `${API_BASE}/playlists/${encodeURIComponent(playlistId)}/items`;
   if (uris.length > 100) {
     throw new SpotifyError(
       `replacePlaylistItems accepts ≤100 URIs per call (got ${uris.length})`,

@@ -19,7 +19,6 @@ export { HypePlaylistCard } from "./HypePlaylistCard";
 export { PredictedSetlistRow } from "./PredictedSetlistRow";
 export { TrackPreview } from "./TrackPreview";
 export { EncoreDivider } from "./EncoreDivider";
-export { MusicLayerEmpty } from "./MusicLayerEmpty";
 export { FanLoyaltyRing } from "./FanLoyaltyRing";
 export { DiscoveredRail } from "./DiscoveredRail";
 export { PrimingStat } from "./PrimingStat";
