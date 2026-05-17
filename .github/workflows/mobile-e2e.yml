@@ -23,7 +23,9 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: read
+  # contents:write needed for the failure-publish step that pushes
+  # maestro debug screenshots to the pr-screenshots orphan branch.
+  contents: write
   pull-requests: write
 
 concurrency:
@@ -492,6 +494,14 @@ jobs:
           echo "::group::Files staged for upload"
           ls -la "$FLAT"
           echo "::endgroup::"
+
+          # The upload script's `git commit` requires an author identity.
+          # actions/checkout doesn't set one by default on self-hosted
+          # runners, so configure the GitHub Actions bot identity here.
+          # Scoped to --global because the script operates inside a
+          # temporary worktree, not the original checkout.
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
           # Reuse the existing orphan-branch uploader, targeting the
           # already-existing `pr-screenshots` branch. The `--branch`
