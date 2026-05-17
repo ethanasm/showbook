@@ -74,9 +74,11 @@ tags:
 # to land on the right one.
 - hideKeyboard
 
-# The Save button is an icon-only Check button in the TopBar.
+# The Save button is an icon-only Check button in the TopBar. Use
+# the testID — the accessibilityLabel="Save" text matcher proved
+# unreliable when other "Save"-shaped elements are nearby (IME, etc.).
 - tapOn:
-    text: "Save"
+    id: "save-show"
 
 - assertVisible:
     text: "Show added"

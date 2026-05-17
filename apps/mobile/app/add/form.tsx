@@ -233,6 +233,7 @@ export default function AddFormScreen(): React.JSX.Element {
             disabled={submitting}
             accessibilityRole="button"
             accessibilityLabel="Save"
+            testID="save-show"
           >
             {submitting ? (
               <ActivityIndicator size="small" color={colors.accent} />
