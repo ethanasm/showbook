@@ -26,7 +26,6 @@ import {
 } from "lucide-react";
 import { useCompactMode } from "@/lib/useCompactMode";
 import { useIsMobile } from "@/lib/useIsMobile";
-import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import { useShowContextMenu } from "@/lib/useShowContextMenu";
 import { PaginationFooter } from "@/components/PaginationFooter";
 import { ExternalSourceDisclaimer } from "@/components/external-connection/ExternalSourceDisclaimer";
@@ -38,7 +37,6 @@ import {
   getSupportPerformers,
 } from "@/lib/show-accessors";
 import {
-  ALL_KINDS,
   MODE_LABELS,
   SHOW_LIST_GRID_TEMPLATE,
   compareShows,
@@ -57,6 +55,7 @@ import {
 } from "./helpers";
 import { StatsView } from "./StatsView";
 import { CalendarView } from "./CalendarView";
+import { FilterBar } from "./FilterBar";
 
 
 // ---------------------------------------------------------------------------
@@ -922,128 +921,6 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
   // Render: Filter Bar
   // ---------------------------------------------------------------------------
 
-  function renderFilterBar() {
-    // /upcoming swaps the year filter (which is misleading there — it
-    // pulls older years from date-TBD watching shows) for an
-    // All · Tickets · Watching chip toggle that narrows the state set.
-    const upcomingChips: { k: typeof upcomingFilter; l: string }[] = [
-      { k: "all", l: "All" },
-      { k: "ticketed", l: "Tickets" },
-      { k: "watching", l: "Watching" },
-    ];
-
-    return (
-      <div style={{
-        padding: isMobile ? "11px 16px" : "11px var(--page-pad-x)",
-        display: "flex",
-        alignItems: "center",
-        gap: isMobile ? 12 : 18,
-        flexWrap: "wrap",
-        background: "var(--surface)",
-        borderBottom: "1px solid var(--rule)",
-      }}>
-        {/* Mode-specific primary filter */}
-        {isLogbook ? (
-          <div data-testid="logbook-year-filter" style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid var(--rule-strong)" }}>
-            {yearButtons.map((y, i, arr) => {
-              const active = y === selectedYear;
-              return (
-                <div
-                  key={y}
-                  onClick={() => setSelectedYear(y)}
-                  style={{
-                    padding: "5px 11px",
-                    borderRight: i === arr.length - 1 ? "none" : "1px solid var(--rule-strong)",
-                    background: active ? "var(--ink)" : "transparent",
-                    color: active ? "var(--bg)" : "var(--ink)",
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11,
-                    fontWeight: active ? 500 : 400,
-                    cursor: "pointer",
-                    letterSpacing: ".02em",
-                  }}
-                >
-                  {y}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div data-testid="upcoming-state-filter" style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid var(--rule-strong)" }}>
-            {upcomingChips.map(({ k, l }, i, arr) => {
-              const active = upcomingFilter === k;
-              return (
-                <button
-                  key={k}
-                  type="button"
-                  data-testid={`upcoming-filter-${k}`}
-                  onClick={() => setUpcomingFilter(k)}
-                  style={{
-                    padding: "5px 11px",
-                    borderRight: i === arr.length - 1 ? "none" : "1px solid var(--rule-strong)",
-                    border: "none",
-                    background: active ? "var(--ink)" : "transparent",
-                    color: active ? "var(--bg)" : "var(--ink)",
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11,
-                    fontWeight: active ? 500 : 400,
-                    cursor: "pointer",
-                    letterSpacing: ".02em",
-                  }}
-                >
-                  {l}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Kind chips */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {ALL_KINDS.map((k) => {
-            const KIcon = KIND_ICONS[k];
-            const active = selectedKind === k;
-            return (
-              <span
-                key={k}
-                onClick={() => setSelectedKind(active ? null : k)}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
-                  padding: "4px 9px",
-                  border: "1px solid var(--rule-strong)",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10.5,
-                  color: active ? "var(--bg)" : "var(--ink)",
-                  background: active ? "var(--ink)" : "transparent",
-                  letterSpacing: ".04em",
-                  cursor: "pointer",
-                  textTransform: "lowercase",
-                }}
-              >
-                <KIcon size={12} color={active ? "var(--bg)" : `var(--kind-${k})`} />
-                {KIND_LABELS[k]}
-              </span>
-            );
-          })}
-        </div>
-
-        {/* Spacer */}
-        <div style={{ flex: 1 }} />
-
-        {/* Filtered count */}
-        <div style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10.5,
-          color: "var(--faint)",
-          letterSpacing: ".04em",
-        }}>
-          {filteredShows.length} show{filteredShows.length !== 1 ? "s" : ""}
-        </div>
-      </div>
-    );
-  }
 
 
   // ---------------------------------------------------------------------------
@@ -1361,7 +1238,18 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
       ...(isMobile ? {} : { height: "100%", minHeight: 0 }),
     }}>
       {renderHeader()}
-      {renderFilterBar()}
+      <FilterBar
+        isMobile={isMobile}
+        isLogbook={isLogbook}
+        yearButtons={yearButtons}
+        selectedYear={selectedYear}
+        onSelectYear={setSelectedYear}
+        upcomingFilter={upcomingFilter}
+        onUpcomingFilterChange={setUpcomingFilter}
+        selectedKind={selectedKind}
+        onSelectKind={setSelectedKind}
+        filteredCount={filteredShows.length}
+      />
 
       {viewMode === "list" && renderList()}
       {viewMode === "calendar" && (
