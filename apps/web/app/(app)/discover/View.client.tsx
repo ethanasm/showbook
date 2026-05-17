@@ -474,11 +474,12 @@ function AnnouncementRow({
             href={announcement.ticketUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="discover-tix-btn"
+            aria-label="Open ticket page in a new tab"
+            title="Tickets"
+            className="discover-tix-btn discover-tix-btn--icon-only"
             onClick={(e) => e.stopPropagation()}
           >
             <ArrowUpRight size={11} />
-            Tix
           </a>
         )}
       </div>

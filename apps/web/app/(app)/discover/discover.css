@@ -328,15 +328,18 @@
   /* Headliner column is `minmax(0, 1fr)` so it can shrink with ellipsis
      instead of forcing the row to overflow. Fixed columns sized for typical
      content: dates ~"Aug 1 – Oct 29", kind chips up to "FESTIVAL", on-sale
-     dates ~"Sep 12, 2026", status badge "ANNOUNCED", actions 180 px to fit
-     the Watch + Calendar buttons (the Tix button on `ticketUrl` rows is
-     allowed to overflow slightly rather than steal width from headliner).
+     dates ~"Sep 12, 2026", status badge "ANNOUNCED", actions 200 px to fit
+     the Watch + Calendar labels plus the icon-only Tix link (the leftmost
+     button used to overflow onto the Status badge when all three buttons
+     were labelled and the column was 180 px). 200 px is the largest size
+     that still keeps the 1fr headliner column ≥ 100 px at the 1280 px
+     viewport asserted by `tests/discover-kind-alignment.spec.ts`.
      The actions column is a fixed width — not `auto` — so the header row
      (which has an empty 6th cell) keeps the same 1fr column as the data
      rows; otherwise the "ON SALE" / "STATUS" headers drift right of their
      data. Original template (72/100/1fr/120/110/200) left only ~40 px for
      the headliner at a 1280 px viewport, truncating "Bon Iver" to "Bon…". */
-  grid-template-columns: 72px 84px minmax(0, 1fr) 96px 88px 180px;
+  grid-template-columns: 72px 84px minmax(0, 1fr) 96px 88px 200px;
   column-gap: 16px;
   padding: 0 12px 10px;
   font-family: var(--font-geist-mono), monospace;
@@ -349,7 +352,7 @@
 
 /* Near You table has an extra Venue column between Kind and Headliner. */
 .discover-col-headers--region {
-  grid-template-columns: 72px 84px 100px minmax(0, 1fr) 88px 80px 180px;
+  grid-template-columns: 72px 84px 100px minmax(0, 1fr) 88px 80px 200px;
 }
 
 /* ── Venue Group ─────────────────────────────────────── */
@@ -441,7 +444,7 @@
   display: grid;
   /* Keep this in lock-step with `.discover-col-headers`. See that block for
      why the columns were re-sized. */
-  grid-template-columns: 72px 84px minmax(0, 1fr) 96px 88px 180px;
+  grid-template-columns: 72px 84px minmax(0, 1fr) 96px 88px 200px;
   column-gap: 16px;
   padding: 12px;
   align-items: center;
@@ -451,7 +454,7 @@
 
 /* Near You row layout includes a Venue cell. */
 .discover-row.discover-row--region {
-  grid-template-columns: 72px 84px 100px minmax(0, 1fr) 88px 80px 180px;
+  grid-template-columns: 72px 84px 100px minmax(0, 1fr) 88px 80px 200px;
 }
 
 .discover-row__venue-cell {
@@ -713,6 +716,16 @@ a.discover-row__headliner-link:hover {
 
 .discover-tix-btn:hover {
   border-color: var(--ink);
+}
+
+/* Icon-only variant for the external "Tix" link. The arrow-up-right icon
+   alone reads as "open ticket page in a new tab"; dropping the redundant
+   "Tix" label keeps Watch + Calendar + Tix inside the 200 px actions
+   column without overflowing onto the Status badge. Tighter padding gives
+   the three-button row ~3 px of breathing room against the column edge.
+   The label is preserved as `aria-label` + `title`. */
+.discover-tix-btn--icon-only {
+  padding: 5px 6px;
 }
 
 /* ── Footer ──────────────────────────────────────────── */
