@@ -90,9 +90,15 @@ export function OverviewTab({
       <StatRow cells={cells} />
 
       {musicLayerPlaceholder && (
-        <SectionFrame title={isPast ? "Show shape" : "Music layer"}>
-          {musicLayerPlaceholder}
-        </SectionFrame>
+        <div
+          className={`overview-music-layer-slot${
+            isPast ? " overview-music-layer-slot--past" : ""
+          }`}
+        >
+          <SectionFrame title={isPast ? "Show shape" : "Music layer"}>
+            {musicLayerPlaceholder}
+          </SectionFrame>
+        </div>
       )}
 
       <SectionFrame title="Lineup" count={lineup.length}>

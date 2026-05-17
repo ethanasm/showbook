@@ -271,26 +271,22 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
     name: entry.name,
   }));
 
-  // Music-layer slot for the Overview tab — pre-show always shows the
-  // vibe-radar empty state (Phase 8). Post-show, the fan-loyalty ring
-  // replaces its placeholder once the music-layer-v2 flag is on
-  // (Phase 7); without the flag, the empty placeholder stays.
-  const musicLayerPlaceholder = (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-        gap: 10,
-      }}
-    >
-      <MusicLayerEmpty variant="vibe-radar" spotifyConnected={false} />
-      {isPast &&
-        (musicLayerV2Enabled ? (
-          <FanLoyaltyRing showId={show.id} />
-        ) : (
-          <MusicLayerEmpty variant="fan-loyalty" spotifyConnected={false} />
-        ))}
-    </div>
+  // Music-layer slot for the Overview tab.
+  // Past: FanLoyaltyRing (Phase 7) gets the whole slot — VibeRadar
+  //   was paired with it in the 2026-05-16 handoff but Phase 8 has
+  //   been deferred to v2 (Spotify audio-features probe returned 403
+  //   on 2026-05-17), so there's nothing to share the slot with.
+  // Pre-show: keep the VibeRadar placeholder — pre-show fan loyalty
+  //   isn't a thing (we can't know what hasn't been played), so the
+  //   vibe-radar placeholder is the only music-layer atom we have.
+  const musicLayerPlaceholder = isPast ? (
+    musicLayerV2Enabled ? (
+      <FanLoyaltyRing showId={show.id} />
+    ) : (
+      <MusicLayerEmpty variant="fan-loyalty" spotifyConnected={false} />
+    )
+  ) : (
+    <MusicLayerEmpty variant="vibe-radar" spotifyConnected={false} />
   );
 
   const showLikeForGate: ShowLike = show;
@@ -400,13 +396,15 @@ export function ShowDetailTabsView({ show }: ShowDetailTabsViewProps) {
         compact
       />
     ) : null,
-    // Fan-loyalty was originally slotted into the desktop right rail
-    // per the 2026-05-16 handoff, but the in-Overview-body placement
-    // already covers the same information and the right-rail copy
-    // squeezes the stat row at common laptop widths (~960–1100px) on
-    // the way to its 1200px breakpoint. Keep the ring in the Overview
-    // tab only.
-    fanLoyaltyRing: null,
+    // Phase 8 deferred → the post-show rail no longer stacks
+    // FanLoyaltyRing above VibeRadar; it's the single atom. The
+    // Overview-body music-layer slot is hidden at ≥1200px (via the
+    // .overview-music-layer-slot--past CSS rule) so the rail copy is
+    // the only one visible at desktop width.
+    fanLoyaltyRing:
+      isPast && musicLayerV2Enabled ? (
+        <FanLoyaltyRing showId={show.id} compact />
+      ) : null,
   };
 
   // Header — collapsed hero strip. Tab bar is sticky below.
