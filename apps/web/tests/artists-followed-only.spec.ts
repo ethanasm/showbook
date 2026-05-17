@@ -14,7 +14,13 @@ test.describe('/artists — Followed only filter', () => {
     await page.goto('/artists');
 
     // Seeded user has 12 non-theatre performers; filter starts off.
-    const toggle = page.getByTestId('artists-followed-only-toggle');
+    // `.first()` defends against a transient hydration race where
+    // both the server-rendered shell and the client-rendered tree
+    // are momentarily in the DOM with the same testid — see the
+    // same pattern in global-search.spec.ts. The click below also
+    // uses the resolved single-locator handle so we drive the same
+    // element both times.
+    const toggle = page.getByTestId('artists-followed-only-toggle').first();
     await expect(toggle).toBeVisible();
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
     const beforeCountText = await page.getByText(/\d+ artists?/).first().textContent();
@@ -25,7 +31,7 @@ test.describe('/artists — Followed only filter', () => {
     // No follows in the seed → the empty state copy renders. Use the
     // testid the empty-state action group emits so we don't double-match
     // the eyebrow or filter-bar text.
-    await expect(page.getByTestId('artists-empty-actions')).toBeVisible();
+    await expect(page.getByTestId('artists-empty-actions').first()).toBeVisible();
 
     // Toggle back off restores the full list.
     await toggle.click();

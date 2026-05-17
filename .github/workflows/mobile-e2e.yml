@@ -70,7 +70,12 @@ jobs:
     env:
       ANDROID_SDK_ROOT: ${{ vars.ANDROID_SDK_ROOT || '/opt/android-sdk' }}
       ANDROID_AVD_NAME: showbook_e2e
-      ANDROID_AVD_HOME: ${{ github.workspace }}/.android-avd
+      # Persist the AVD home outside the workspace so it survives
+      # actions/checkout's clean step and we don't have to re-upload
+      # 3 GB of disk image to GitHub's cache backend on every run.
+      # The self-hosted runner has a stable HOME between jobs, so
+      # the AVD persists naturally on disk without actions/cache.
+      ANDROID_AVD_HOME: ${{ vars.ANDROID_AVD_HOME || '/home/ethan/.android-avd' }}
       # Gradle in CI: no daemon (single-job runner), single worker
       # process, and a 2 GB heap cap. The previous 4 GB cap + parallel
       # emulator (2 GB AVD) + Metro overran the WSL runner's memory
@@ -110,10 +115,16 @@ jobs:
           else
             echo "  ANDROID_SDK_ROOT does not exist — run scripts/setup-runner-android.sh on the runner"
           fi
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME"
+          if [ -d "$ANDROID_AVD_HOME" ]; then
+            ls -la "$ANDROID_AVD_HOME" 2>/dev/null || true
+          fi
           echo "AVDs:"
           if [ -x "$ANDROID_SDK_ROOT/emulator/emulator" ]; then
             "$ANDROID_SDK_ROOT/emulator/emulator" -list-avds || true
           fi
+          echo "Gradle cache dir:"
+          du -sh "$HOME/.gradle/caches" 2>/dev/null || echo "  empty"
           echo "::endgroup::"
 
       - uses: pnpm/action-setup@v6
@@ -128,46 +139,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # ── Caching ─────────────────────────────────────────────────────
+      # ── No actions/cache for Gradle / AVD on self-hosted runner ────
       #
-      # The cold Gradle build dominated the previous wall-clock budget
-      # (20–30 min on first run with no cache). Restoring the Gradle
-      # caches keyed on the dependency files brings warm runs to ~5
-      # min. The AVD snapshot cache cuts emulator first-boot from 5–8
-      # min (software-rendered) down to <30 s.
-      - name: Restore Gradle caches
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-            ~/.gradle/build-cache
-          key: gradle-${{ runner.os }}-${{ hashFiles('apps/mobile/package.json', 'apps/mobile/app.config.ts', 'pnpm-lock.yaml') }}
-          restore-keys: |
-            gradle-${{ runner.os }}-
-
-      - name: Restore AVD snapshot
-        id: avd-cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/.android-avd
-          key: avd-${{ runner.os }}-android-34-google_apis-${{ env.ANDROID_AVD_NAME }}
-          restore-keys: |
-            avd-${{ runner.os }}-android-34-google_apis-
-
-      # Seed the workspace cache dir from any AVD the runner already
-      # has, OR create one inline. Subsequent runs restore from
-      # actions/cache; either way the emulator boots against
-      # ANDROID_AVD_HOME so the snapshot follows the workspace, not
-      # the runner (sharing a runner-home path would race across
-      # concurrent workflow_dispatch runs).
+      # actions/cache@v4 was tarballing the 3 GB workspace AVD (incl.
+      # userdata.img + boot snapshot) and uploading to GitHub's cache
+      # backend on every run, then downloading and extracting it back
+      # on the next run. The first half of run 25980860191 spent ~15
+      # min on that upload, dominating the wall-clock budget.
       #
-      # The inline create branch makes the workflow self-bootstrapping:
-      # the runner only needs the Android SDK (incl. emulator,
-      # platform-tools, system-image, and the cmdline-tools that ship
-      # `avdmanager`) — `scripts/setup-runner-android.sh § 4`'s AVD
-      # creation step is no longer a prerequisite.
-      - name: Materialize AVD into workspace
+      # This runner is self-hosted with a persistent disk — `~/.gradle/`,
+      # `~/.android/avd/`, and the pnpm store all survive between jobs
+      # already. The previous "restore from GHA cache → unpack to
+      # workspace → re-pack and upload at job end" dance was solving
+      # the GitHub-hosted ephemeral-runner problem we don't have. The
+      # AVD now lives at $ANDROID_AVD_HOME (default
+      # /home/ethan/.android-avd) and persists across runs as plain
+      # disk state.
+      #
+      # If the AVD doesn't exist yet (fresh runner), the
+      # "Materialize AVD" step below still bootstraps it inline.
+      - name: Materialize AVD on disk
         shell: bash
         env:
           ANDROID_AVD_SYSTEM_IMAGE: ${{ vars.ANDROID_AVD_SYSTEM_IMAGE || 'system-images;android-34;google_apis;x86_64' }}
@@ -175,10 +166,10 @@ jobs:
           set -euo pipefail
           mkdir -p "$ANDROID_AVD_HOME"
           if [ -d "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd" ]; then
-            echo "AVD already present in workspace (restored from cache)"
+            echo "AVD already present at $ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd"
           else
-            # Look for a runner-hosted copy in the usual locations
-            # before falling through to inline creation.
+            # First-run bootstrap. After this, the AVD lives on disk
+            # and subsequent runs hit the "already present" branch.
             CANDIDATES=(
               "$HOME/.android/avd"
               "${ANDROID_USER_HOME:-}/avd"
@@ -194,7 +185,7 @@ jobs:
             done
 
             if [ -n "$FOUND" ]; then
-              echo "Seeding workspace AVD from $FOUND (one-time)"
+              echo "Seeding $ANDROID_AVD_HOME AVD from $FOUND (one-time)"
               cp -a "$FOUND/${ANDROID_AVD_NAME}.ini"  "$ANDROID_AVD_HOME/" 2>/dev/null || true
               cp -a "$FOUND/${ANDROID_AVD_NAME}.avd"  "$ANDROID_AVD_HOME/"
               if [ -f "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.ini" ]; then
@@ -202,15 +193,13 @@ jobs:
                   "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.ini"
               fi
             else
-              echo "AVD '${ANDROID_AVD_NAME}' not found on runner — creating inline"
+              echo "AVD '${ANDROID_AVD_NAME}' not found anywhere — creating inline"
               SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
               AVDMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/avdmanager"
               if [ ! -x "$SDKMANAGER" ] || [ ! -x "$AVDMANAGER" ]; then
                 echo "::error::cmdline-tools missing — run scripts/setup-runner-android.sh on the runner so sdkmanager + avdmanager are installed"
                 exit 1
               fi
-              # Make sure the system image is present (idempotent — sdkmanager
-              # skips already-installed packages).
               yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
               "$SDKMANAGER" --install "$ANDROID_AVD_SYSTEM_IMAGE" >/dev/null
               ANDROID_AVD_HOME="$ANDROID_AVD_HOME" \
@@ -220,7 +209,6 @@ jobs:
                   --device "pixel_6" \
                   --path "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd" \
                   --force
-              # Mirror the runner setup script's perf-tuning tweaks.
               CFG="$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd/config.ini"
               if [ -f "$CFG" ]; then
                 {
@@ -638,3 +626,17 @@ jobs:
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
           adb emu kill || true
           adb kill-server || true
+          # Wait for the emulator process to actually release its lock
+          # files. `adb emu kill` sends SIGTERM and returns immediately,
+          # but the qemu/emulator process keeps running for another
+          # second or two while it cleans up *.lock files in the AVD
+          # dir. Without this wait the leftover locks accumulate on
+          # disk and the next run starts with a stale state.
+          for i in $(seq 1 30); do
+            pgrep -f "emulator -avd ${ANDROID_AVD_NAME}" >/dev/null || break
+            sleep 1
+          done
+          # Belt-and-suspenders: nuke any stragglers if the emulator
+          # didn't release them itself.
+          rm -f "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd"/*.lock 2>/dev/null || true
+          rm -f "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd"/*.lock.lock 2>/dev/null || true
