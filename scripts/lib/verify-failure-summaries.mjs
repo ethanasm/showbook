@@ -168,58 +168,105 @@ function prettyPath(absOrRel) {
   return absOrRel;
 }
 
+// Strip absolute prefixes that don't match cwd (e.g. GitHub Actions
+// runner path "/home/runner/work/showbook/showbook/...") by anchoring
+// on the first repo-recognizable path segment.
+function stripToRepoRelative(file, repoRoot) {
+  if (file.startsWith(repoRoot + '/')) return file.slice(repoRoot.length + 1);
+  const m = file.match(/\/((?:apps|packages|scripts|specs)\/.+)$/);
+  if (m) return m[1];
+  return file.replace(/^(\.\.\/)+/, '');
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // node:test (spec reporter)
 // ──────────────────────────────────────────────────────────────────────
 //
-// node:test spec output for failures looks like:
+// node:test spec output ends with a "✖ failing tests:" section that
+// lists each failure in a clean, parseable form:
 //
-//   ✖ failing test name (5.123ms)
+//   ✖ failing tests:
+//
+//   test at /abs/path/file.test.ts:42:5
+//   ✖ test name (5.123ms)
 //     AssertionError [ERR_ASSERTION]: expected x to equal y
-//         at TestContext.<anonymous> (/repo/path/file.test.ts:42:5)
+//         at TestContext.<anonymous> (/abs/path/file.test.ts:42:5)
 //         ...
 //
-// We pull the title line, the first assertion-message line, and the
-// first repo-relative stack frame.
+// We parse only that section so we don't mistake the inline-progress
+// `✖` lines (e.g. `✖ outer suite (Xms)`, `✖ /path/to/file.test.ts`)
+// for individual failures.
 
 export async function summarizeNodeTest(logPath, kind) {
   const text = await readLog(logPath);
   if (text === null) return null;
-  const items = [];
   const lines = text.split(/\r?\n/);
   const repoRoot = process.cwd();
+  const items = [];
 
-  for (let i = 0; i < lines.length && items.length < MAX_ITEMS; i += 1) {
-    const line = lines[i];
-    // node:test spec format: indented "✖" or "not ok" lines.
-    const fail = line.match(/^\s*(?:✖|✘|not ok)\s+(?:\d+\s+-?\s*)?(.+?)(?:\s+\(\d+(?:\.\d+)?ms\))?\s*$/);
-    if (!fail) continue;
-    const title = fail[1].trim();
-    // Skip the rollup line ("tests N", "fail N").
-    if (/^(tests|pass|fail|cancelled|skipped|todo|duration|suites)\b/i.test(title)) continue;
+  const sectionStart = lines.findIndex((l) => /^✖\s+failing tests:/.test(l));
+  if (sectionStart !== -1) {
+    let pendingLocation = null;
+    for (let i = sectionStart + 1; i < lines.length && items.length < MAX_ITEMS; i += 1) {
+      const line = lines[i];
 
-    let message = '';
-    let location;
-    for (let j = i + 1; j < Math.min(i + 40, lines.length); j += 1) {
-      const sub = lines[j];
-      if (!sub.trim()) continue;
-      // A new ✖ line ends this failure's block.
-      if (/^\s*(?:✖|✘|not ok)\s+/.test(sub)) break;
-      if (!message && /^\s+\S/.test(sub) && !/^\s+at\s/.test(sub)) {
-        message = sub.trim();
+      const loc = line.match(/^test at\s+(.+?\.tsx?):(\d+):(\d+)\s*$/);
+      if (loc) {
+        pendingLocation = `${stripToRepoRelative(loc[1], repoRoot)}:${loc[2]}:${loc[3]}`;
+        continue;
       }
-      if (!location) {
-        const at = sub.match(/at\s+(?:[^(]+\()?([^)\s]+\.tsx?):(\d+):(\d+)/);
-        if (at && !at[1].includes('node_modules')) {
-          let file = at[1];
-          if (file.startsWith(repoRoot + '/')) file = file.slice(repoRoot.length + 1);
-          location = `${file}:${at[2]}:${at[3]}`;
+
+      const header = line.match(/^✖\s+(.+?)(?:\s+\(\d+(?:\.\d+)?ms\))?\s*$/);
+      if (!header || !pendingLocation) continue;
+      const title = header[1].trim();
+      // Skip the section's own banner if we somehow looped back to it.
+      if (/^failing tests:?$/i.test(title)) continue;
+
+      let message = '';
+      for (let j = i + 1; j < Math.min(i + 20, lines.length); j += 1) {
+        const sub = lines[j];
+        if (!sub.trim()) continue;
+        if (/^test at\s+/.test(sub)) break;
+        if (/^✖\s+/.test(sub)) break;
+        // The first non-stack-frame indented line is the assertion message.
+        if (/^\s+\S/.test(sub) && !/^\s+at\s/.test(sub) && !/^\s+(code|generatedMessage|actual|expected|operator|diff):/.test(sub)) {
+          message = sub.trim();
+          break;
         }
       }
-      if (message && location) break;
+      items.push({ title, location: pendingLocation, message });
+      pendingLocation = null;
     }
+  }
 
-    items.push({ title, location, message });
+  // Fallback: scan for inline `✖` lines paired with stack frames (used
+  // when the run was killed before the "failing tests:" footer was
+  // emitted, e.g. a batch-timeout SIGKILL).
+  if (items.length === 0) {
+    for (let i = 0; i < lines.length && items.length < MAX_ITEMS; i += 1) {
+      const line = lines[i];
+      const fail = line.match(/^\s+✖\s+(.+?)(?:\s+\(\d+(?:\.\d+)?ms\))?\s*$/);
+      if (!fail) continue;
+      const title = fail[1].trim();
+      let message = '';
+      let location;
+      for (let j = i + 1; j < Math.min(i + 30, lines.length); j += 1) {
+        const sub = lines[j];
+        if (!sub.trim()) continue;
+        if (/^\s+(?:✖|✔)\s+/.test(sub)) break;
+        if (!message && /^\s+\S/.test(sub) && !/^\s+at\s/.test(sub)) {
+          message = sub.trim();
+        }
+        if (!location) {
+          const at = sub.match(/at\s+(?:[^(]+\()?([^)\s]+\.tsx?):(\d+):(\d+)/);
+          if (at && !at[1].includes('node_modules')) {
+            location = `${stripToRepoRelative(at[1], repoRoot)}:${at[2]}:${at[3]}`;
+          }
+        }
+        if (message && location) break;
+      }
+      items.push({ title, location, message });
+    }
   }
 
   const label = kind === 'integration' ? 'integration' : 'unit';
@@ -228,11 +275,24 @@ export async function summarizeNodeTest(logPath, kind) {
       ? `${label} tests failed (no structured failures parsed — see raw log)`
       : `${items.length}${items.length >= MAX_ITEMS ? '+' : ''} failing ${label} ${pluralize(items.length, 'test')}`;
 
+  // Prefer the "failing tests:" section as the rawTail — it's the part
+  // a triager actually needs, and it survives the coverage report that
+  // otherwise pushes everything useful out of the last 80 lines.
+  let rawTail;
+  if (sectionStart !== -1) {
+    rawTail = lines.slice(sectionStart).join('\n').trimEnd();
+    if (rawTail.split('\n').length > TAIL_LINES * 2) {
+      rawTail = lines.slice(sectionStart, sectionStart + TAIL_LINES * 2).join('\n').trimEnd();
+    }
+  } else {
+    rawTail = tailLines(text);
+  }
+
   return {
     stepName: kind === 'integration' ? 'Integration tests' : 'Unit tests',
     headline,
     items,
-    rawTail: tailLines(text),
+    rawTail,
   };
 }
 
