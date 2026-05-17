@@ -122,6 +122,23 @@ test('enqueueIngestRegion: returns null on send failure', async () => {
   assert.equal(id, null);
 });
 
+// ── enqueueSetlistRetry ───────────────────────────────────────────────
+
+test('enqueueSetlistRetry: sends job with empty payload, returns job id', async () => {
+  nextSendResult = 'setlist-job-1';
+  const id = await mod.enqueueSetlistRetry();
+  assert.equal(id, 'setlist-job-1');
+  assert.equal(lastSent?.queue, mod.JOB_NAMES.SETLIST_RETRY);
+  assert.deepEqual(lastSent?.payload, {});
+});
+
+test('enqueueSetlistRetry: returns null on send failure', async () => {
+  shouldThrow = new Error('queue is down');
+  const id = await mod.enqueueSetlistRetry();
+  assert.equal(id, null);
+  assert.equal(lastSent, null);
+});
+
 // ── isRegionIngestPending ─────────────────────────────────────────────
 
 test('isRegionIngestPending: true when execute returns rows', async () => {

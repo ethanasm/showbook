@@ -1,11 +1,11 @@
-import { eq, and, isNotNull, sql } from 'drizzle-orm';
+import { eq, and, isNotNull, isNull, inArray, notInArray, sql } from 'drizzle-orm';
 import { router, protectedProcedure, adminProcedure } from '../trpc';
-import { venues, users } from '@showbook/db';
+import { venues, users, shows, showPerformers, enrichmentQueue } from '@showbook/db';
 import { findTmVenueId } from '../venue-matcher';
 import { geocodeVenue } from '../geocode';
 import { enforceRateLimit } from '../rate-limit';
 import { isAdminEmail } from '../admin';
-import { enqueuePruneOrphanCatalog } from '../job-queue';
+import { enqueuePruneOrphanCatalog, enqueueSetlistRetry } from '../job-queue';
 import { child } from '@showbook/observability';
 
 const log = child({ component: 'api.admin' });
@@ -172,5 +172,81 @@ export const adminRouter = router({
     );
     const jobId = await enqueuePruneOrphanCatalog();
     return { jobId };
+  }),
+
+  /**
+   * Globally enqueue every past concert that's missing a setlist into the
+   * enrichment queue, then trigger the setlist-retry pg-boss job for
+   * immediate processing. Covers the Gmail-import gap (past shows created
+   * directly in `past` state never hit the nightly ticketed→past transition
+   * that normally schedules enrichment) without waiting for the next 03:00
+   * ET nightly catch-up sweep.
+   *
+   * `setlists IS NULL` is deliberate — `{}` is the give-up marker from
+   * setlist-retry and we don't want to re-queue forever.
+   */
+  enqueueSetlistRetry: adminProcedure.mutation(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    log.info(
+      { event: 'admin.setlist_retry.start', userId },
+      'Admin setlist enrichment started',
+    );
+
+    // Already-queued shows (any attempt count) — skip them so we don't
+    // duplicate work the existing queue entries will already handle.
+    const alreadyQueuedRows = await ctx.db
+      .select({ showId: enrichmentQueue.showId })
+      .from(enrichmentQueue)
+      .where(eq(enrichmentQueue.type, 'setlist'));
+    const alreadyQueued = alreadyQueuedRows.map((r) => r.showId);
+
+    const headlinerShowIds = ctx.db
+      .select({ showId: showPerformers.showId })
+      .from(showPerformers)
+      .where(eq(showPerformers.role, 'headliner'));
+
+    const conditions = [
+      eq(shows.state, 'past'),
+      eq(shows.kind, 'concert'),
+      isNull(shows.setlists),
+      isNotNull(shows.date),
+      inArray(shows.id, headlinerShowIds),
+    ];
+    if (alreadyQueued.length > 0) {
+      conditions.push(notInArray(shows.id, alreadyQueued));
+    }
+
+    const eligible = await ctx.db
+      .select({ id: shows.id })
+      .from(shows)
+      .where(and(...conditions));
+
+    let queued = 0;
+    if (eligible.length > 0) {
+      await ctx.db.insert(enrichmentQueue).values(
+        eligible.map((s) => ({
+          showId: s.id,
+          type: 'setlist' as const,
+          attempts: 0,
+          maxAttempts: 14,
+          nextRetry: new Date(),
+        })),
+      );
+      queued = eligible.length;
+    }
+
+    const jobId = await enqueueSetlistRetry();
+
+    log.info(
+      {
+        event: 'admin.setlist_retry.complete',
+        userId,
+        queued,
+        jobId,
+      },
+      'Admin setlist enrichment complete',
+    );
+
+    return { queued, jobId };
   }),
 });

@@ -272,7 +272,21 @@
       "idx": 38,
       "version": "7",
       "when": 1790123200000,
-      "tag": "0038_spotify_previews_follow_rail",
+      "tag": "0038_fix_warfield_sf_coordinates",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790200000000,
+      "tag": "0039_setlist_style_phase5",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790286400000,
+      "tag": "0040_spotify_previews_follow_rail",
       "breakpoints": true
     }
   ]

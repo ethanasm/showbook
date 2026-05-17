@@ -7,6 +7,7 @@ import {
   showPerformers,
   showAnnouncementLinks,
   announcements,
+  enrichmentQueue,
   venues,
   performers,
   setlistSongAppearances,
@@ -21,6 +22,7 @@ import {
 } from '../performer-matcher';
 import { searchEvents, selectBestImage } from '../ticketmaster';
 import { geocodeVenue } from '../geocode';
+import { fetchSetlistForPerformer } from '../setlist-lookup';
 import { child } from '@showbook/observability';
 import {
   type PerformerSetlist,
@@ -576,6 +578,65 @@ export const showsRouter = router({
 
         return created;
       });
+
+      // Past concerts created directly in `past` state (Gmail import,
+      // manual entry of a show I just attended, setlist.fm import without
+      // an inline setlist) skip the nightly ticketed→past transition, so
+      // shows-nightly never enqueues them for setlist enrichment. Try an
+      // inline setlist.fm lookup first so the user sees their setlist
+      // immediately on import; fall back to the retry queue if setlist.fm
+      // can't resolve it right now (no MBID, no setlist published yet,
+      // setlist.fm down). Best-effort + non-blocking — never fail the
+      // create on a setlist hiccup.
+      if (
+        state === 'past' &&
+        input.kind === 'concert' &&
+        headlinerId &&
+        Object.keys(setlistsMap).length === 0
+      ) {
+        let inlineHit = false;
+        try {
+          const result = await fetchSetlistForPerformer({
+            performerId: headlinerId,
+            performerName: input.headliner.name,
+            performerMbid: input.headliner.musicbrainzId ?? null,
+            date: input.date,
+          });
+          if (result) {
+            await ctx.db
+              .update(shows)
+              .set({
+                setlists: { [headlinerId]: result.setlist },
+                tourName: result.tourName ?? undefined,
+              })
+              .where(eq(shows.id, show.id));
+            inlineHit = true;
+            log.info(
+              {
+                event: 'shows.create.setlist_inline.hit',
+                showId: show.id,
+                performerId: headlinerId,
+              },
+              'Fetched setlist inline on shows.create',
+            );
+          }
+        } catch (err) {
+          log.warn(
+            { err, event: 'shows.create.setlist_inline.failed', showId: show.id },
+            'Inline setlist.fm lookup failed; falling back to retry queue',
+          );
+        }
+
+        if (!inlineHit) {
+          await ctx.db.insert(enrichmentQueue).values({
+            showId: show.id,
+            type: 'setlist' as const,
+            attempts: 0,
+            maxAttempts: 14,
+            nextRetry: new Date(),
+          });
+        }
+      }
 
       // Lazy Place ID + photo backfill for the venue. The matcher's geocode
       // path can silently fall back to Nominatim (which doesn't return Place

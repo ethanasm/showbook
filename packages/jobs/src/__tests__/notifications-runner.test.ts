@@ -65,19 +65,29 @@ mock.module('@showbook/db', {
   },
 });
 
-let resendCalls: Array<unknown> = [];
-mock.module('resend', {
-  namedExports: {
-    Resend: class {
-      emails = {
-        send: async (payload: unknown) => {
-          resendCalls.push(payload);
-          return { id: 'email-1' };
-        },
-      };
+// Inject a fake Resend client via runDailyDigest's `resend` option rather
+// than `mock.module('resend', ...)`. Node's experimental module mock loses
+// to the module cache once any other test file in the same `node --test`
+// invocation has already imported the real SDK (health-check.test.ts loads
+// it transitively via ../health-check), so DI is the only reliable path.
+const resendMock: {
+  calls: unknown[];
+  response: {
+    data: { id: string } | null;
+    error: { name: string; message: string } | null;
+  };
+} = {
+  calls: [],
+  response: { data: { id: 'email-1' }, error: null },
+};
+const fakeResend = {
+  emails: {
+    send: async (payload: unknown) => {
+      resendMock.calls.push(payload);
+      return resendMock.response;
     },
   },
-});
+};
 
 mock.module('@showbook/api', {
   namedExports: {
@@ -98,7 +108,8 @@ before(async () => {
 });
 
 beforeEach(() => {
-  resendCalls = [];
+  resendMock.calls = [];
+  resendMock.response = { data: { id: 'email-1' }, error: null };
   delete process.env.RESEND_API_KEY;
 });
 
@@ -128,7 +139,6 @@ describe('runDailyDigest', () => {
   });
 
   it('sends digest when there are upcoming shows (with Resend)', async () => {
-    process.env.RESEND_API_KEY = 'test-key';
     const today = new Date();
     const tz = new Date(today.toLocaleString('en-US', { timeZone: 'America/New_York' }));
     const todayStr = tz.toISOString().split('T')[0]!;
@@ -150,10 +160,11 @@ describe('runDailyDigest', () => {
       [], // performerRows
     ]);
 
-    const result = await runDailyDigest();
+    const result = await runDailyDigest({ resend: fakeResend });
     assert.equal(result.sent, 1);
     assert.equal(SCRIPT.updateCalls, 1);
-    delete process.env.RESEND_API_KEY;
+    assert.equal(resendMock.calls.length, 1);
+    void todayStr;
   });
 
   it('dry-runs when Resend key is missing but content exists', async () => {
@@ -178,12 +189,11 @@ describe('runDailyDigest', () => {
     const result = await runDailyDigest();
     assert.equal(result.sent, 0);
     assert.equal(result.skipped, 1);
-    assert.equal(resendCalls.length, 0);
+    assert.equal(resendMock.calls.length, 0);
     void todayStr;
   });
 
   it('uses theatre productionName as headliner', async () => {
-    process.env.RESEND_API_KEY = 'test-key';
     const today = new Date();
     const tz = new Date(today.toLocaleString('en-US', { timeZone: 'America/New_York' }));
     const tomorrow = new Date(tz);
@@ -201,9 +211,37 @@ describe('runDailyDigest', () => {
       [], // performerRows
     ]);
 
-    const result = await runDailyDigest();
+    const result = await runDailyDigest({ resend: fakeResend });
     assert.equal(result.sent, 1);
-    delete process.env.RESEND_API_KEY;
+  });
+
+  it('treats Resend error responses as failed and does not stamp lastDigestSentAt', async () => {
+    resendMock.response = {
+      data: null,
+      error: { name: 'validation_error', message: 'Invalid `from`' },
+    };
+    const today = new Date();
+    const tz = new Date(today.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const tomorrow = new Date(tz);
+    tomorrow.setDate(tomorrow.getDate() + 2);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0]!;
+
+    reset([
+      [], // allRecentAnnouncements
+      [{ userId: 'u1', email: 'u1@example.com', displayName: 'U', lastDigestSentAt: null }],
+      [], // todayRows
+      [{ id: 's1', date: tomorrowStr, venueName: 'Greek' }], // upcomingRows
+      [{ id: 's1', kind: 'concert', productionName: null }], // showRows
+      [{ showId: 's1', name: 'Phoebe' }], // performerRows
+      [], // venueRows
+      [], // performerRows
+    ]);
+
+    const result = await runDailyDigest({ resend: fakeResend });
+    assert.equal(result.sent, 0);
+    assert.equal(result.skipped, 1);
+    assert.equal(resendMock.calls.length, 1);
+    assert.equal(SCRIPT.updateCalls, 0);
   });
 
   it('catches per-user errors and continues', async () => {

@@ -133,6 +133,12 @@ export interface CorpusRow {
   setlist: PerformerSetlist;
   songCount: number;
   fetchedAt: Date;
+  /** Raw venue name from setlist.fm. Optional — `loadCorpusForPrediction`
+   *  hydrates it so the Phase 5 multi-night-run detector can find
+   *  consecutive same-venue runs. Older serialized corpus rows (cache
+   *  snapshots, tests) may omit this field; consumers must tolerate
+   *  null/undefined. */
+  venueNameRaw?: string | null;
 }
 
 export interface CorpusLoadResult {
@@ -175,6 +181,7 @@ export async function loadCorpusForPrediction(opts: {
         setlist: tourSetlists.setlist,
         songCount: tourSetlists.songCount,
         fetchedAt: tourSetlists.fetchedAt,
+        venueNameRaw: tourSetlists.venueNameRaw,
       })
       .from(tourSetlists)
       .where(
@@ -202,6 +209,7 @@ export async function loadCorpusForPrediction(opts: {
         setlist: r.setlist as PerformerSetlist,
         songCount: r.songCount,
         fetchedAt: r.fetchedAt,
+        venueNameRaw: r.venueNameRaw,
       })),
       signature: sigRow?.signature
         ? new Date(sigRow.signature).toISOString()

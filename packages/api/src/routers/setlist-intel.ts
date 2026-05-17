@@ -26,24 +26,39 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import {
   performers,
+  predictionEvalRuns,
   setlistSongAppearances,
-  showPerformers,
   shows,
   songs,
   userPerformerFollows,
   userSpotifySkippedArtists,
   users,
 } from '@showbook/db';
-import { getHeadlinerId, isProductionShow, type ShowLike } from '@showbook/shared';
+import {
+  getHeadlinerId,
+  isFeatureOn,
+  isProductionShow,
+  type ShowLike,
+} from '@showbook/shared';
 import { child } from '@showbook/observability';
-import { isFeatureOn } from '@showbook/shared';
-import { protectedProcedure, router } from '../trpc';
+import { protectedProcedure, publicProcedure, router } from '../trpc';
 import {
   coldPrediction,
+  loadCorpusForPrediction,
   predictedSetlistCached,
   type ColdPrediction,
   type HotPrediction,
 } from '../setlist-predict';
+import {
+  evaluateReleaseGate,
+  type ReleaseGateBreach,
+  RELEASE_GATE_THRESHOLDS,
+} from '../setlist-release-gate';
+import {
+  predictRotating,
+  type RotatingPrediction,
+} from '../setlist-predict-rotating';
+import { detectMultiNightRun } from '../multi-night-run-detector';
 import { ensureFreshUserToken } from '../spotify-tokens';
 import {
   getFollowedArtists,
@@ -84,7 +99,7 @@ export const setlistIntelRouter = router({
    */
   predictedSetlist: protectedProcedure
     .input(predictedSetlistInput)
-    .query(async ({ ctx, input }): Promise<HotPrediction | ColdPrediction> => {
+    .query(async ({ ctx, input }): Promise<HotPrediction | ColdPrediction | RotatingPrediction> => {
       const userId = ctx.session.user.id;
       const show = await ctx.db.query.shows.findFirst({
         where: and(eq(shows.id, input.showId), eq(shows.userId, userId)),
@@ -113,11 +128,16 @@ export const setlistIntelRouter = router({
       // No-MBID short-circuit (SI-04). The corpus-fill job is the
       // primary writer; we additionally check here so a fresh
       // performer with no corpus row yet doesn't burn a wasted query.
+      // Phase 5 — also pull the persisted style + override in this
+      // same select so the rotating branch below doesn't need a
+      // second round-trip.
       const [perf] = await ctx.db
         .select({
           id: performers.id,
           name: performers.name,
           musicbrainzId: performers.musicbrainzId,
+          setlistStyle: performers.setlistStyle,
+          setlistStyleOverride: performers.setlistStyleOverride,
         })
         .from(performers)
         .where(eq(performers.id, headlinerId))
@@ -127,6 +147,92 @@ export const setlistIntelRouter = router({
       }
       if (!perf.musicbrainzId) {
         return coldPrediction('no_mbid', perf.name);
+      }
+
+      // Phase 5 — style classifier branch. When the §15b classifier
+      // is on AND the performer is rotating-style, we run the gap-
+      // based rotating model instead of §4c stable. The
+      // SetlistIntelStyleClassifier flag exists so we can fall every
+      // performer back to 'stable' if the classifier misbehaves.
+      const styleClassifierOn = isFeatureOn('SetlistIntelStyleClassifier');
+      const effectiveStyle = styleClassifierOn
+        ? (perf.setlistStyleOverride ?? perf.setlistStyle ?? 'stable')
+        : 'stable';
+
+      if (effectiveStyle === 'rotating') {
+        try {
+          const { setlists } = await loadCorpusForPrediction({
+            performerId: headlinerId,
+            targetDate: show.date,
+          });
+          if (setlists.length === 0) {
+            return coldPrediction('no_corpus', perf.name);
+          }
+          // Venue match for multi-night-run detection — the corpus
+          // rows carry `venueNameRaw` from setlist.fm; we compare the
+          // show's saved venue name against that. Fuzzy matching is
+          // future work; v1 uses exact string match.
+          const targetVenueName = (show as { venue?: { name?: string } | null }).venue?.name ?? null;
+          const runContext = detectMultiNightRun({
+            targetDate: show.date,
+            targetVenue: targetVenueName,
+            corpus: setlists,
+          });
+          const prediction = predictRotating({
+            performerId: headlinerId,
+            targetDate: show.date,
+            corpus: setlists,
+            multiNightRun: runContext,
+          });
+          if (runContext) {
+            log.info(
+              {
+                event: 'setlist.run_detection.matched',
+                performerId: headlinerId,
+                showId: input.showId,
+                venue: runContext.venue,
+                runIndex: runContext.runIndex,
+                priorNights: runContext.priorNights,
+              },
+              'multi-night run detected',
+            );
+          } else {
+            log.info(
+              {
+                event: 'setlist.run_detection.not_found',
+                performerId: headlinerId,
+                showId: input.showId,
+                targetVenue: targetVenueName,
+              },
+              'no multi-night run detected',
+            );
+          }
+          log.info(
+            {
+              event: 'setlist.predict.served',
+              performerId: headlinerId,
+              targetDate: show.date,
+              style: prediction.style,
+              confidence: prediction.confidence,
+              sampleSize: prediction.sampleSize,
+              cache: 'bypass',
+            },
+            'predicted-setlist served (rotating)',
+          );
+          return prediction;
+        } catch (err) {
+          log.error(
+            {
+              event: 'setlist.predict.failed',
+              err,
+              showId: input.showId,
+              performerId: headlinerId,
+              style: 'rotating',
+            },
+            'rotating predicted-setlist failed',
+          );
+          return coldPrediction('no_corpus', perf.name);
+        }
       }
 
       try {
@@ -649,6 +755,99 @@ export const setlistIntelRouter = router({
         spotifyTrackId: track.id,
       };
     }),
+
+  /**
+   * Phase 5 release-gate check. Reads the most-recent
+   * `prediction_eval_runs` row (the cron's nightly back-test output)
+   * and evaluates the three thresholds from the spec:
+   *
+   *   - stable-style mean Brier ≤ 0.15
+   *   - rotating-style recall-at-15 ≥ 0.55
+   *   - no calibration bin with |delta| > 0.20
+   *
+   * Public so the client can short-circuit the rotating-display FF
+   * without needing admin access to the eval surface. Returns
+   * `{ passes, reasons }` plus the latest run's id + ranAt for
+   * audit traceability.
+   *
+   * Emits `setlist.release_gate.{passed,failed}` so Axiom keeps a
+   * daily trail of the verdict.
+   */
+  releaseGate: publicProcedure.query(async ({ ctx }) => {
+    const [row] = await ctx.db
+      .select({
+        id: predictionEvalRuns.id,
+        ranAt: predictionEvalRuns.ranAt,
+        byStyle: predictionEvalRuns.byStyle,
+        calibrationCurve: predictionEvalRuns.calibrationCurve,
+      })
+      .from(predictionEvalRuns)
+      .orderBy(desc(predictionEvalRuns.ranAt))
+      .limit(1);
+    if (!row) {
+      log.warn(
+        { event: 'setlist.release_gate.failed', reason: 'no_runs' },
+        'release-gate failed — no eval run on disk yet',
+      );
+      return {
+        passes: false,
+        reasons: [
+          {
+            metric: 'rotating_recall_top15' as const,
+            value: 0,
+            threshold: RELEASE_GATE_THRESHOLDS.rotatingRecallTop15Min,
+            style: 'rotating' as const,
+          },
+        ] satisfies ReleaseGateBreach[],
+        rotatingEvaluable: false,
+        stableEvaluable: false,
+        latestRunId: null,
+        latestRunAt: null,
+      };
+    }
+    const result = evaluateReleaseGate({
+      byStyle: (row.byStyle as Array<{
+        style: string;
+        brier: number;
+        recallTop15: number;
+        predictions: number;
+      }>) ?? [],
+      calibrationCurve: (row.calibrationCurve as Array<{
+        lower: number;
+        upper: number;
+        predictions: number;
+        meanProbability: number;
+        empiricalRate: number;
+        delta: number;
+      }>) ?? [],
+    });
+    for (const breach of result.reasons) {
+      log.warn(
+        {
+          event: 'setlist.release_gate.failed',
+          metric: breach.metric,
+          value: breach.value,
+          threshold: breach.threshold,
+          style: breach.style,
+          binLower: breach.binLower,
+          binUpper: breach.binUpper,
+          runId: row.id,
+        },
+        'release-gate breach',
+      );
+    }
+    if (result.passes) {
+      log.info(
+        { event: 'setlist.release_gate.passed', runId: row.id },
+        'release-gate passed',
+      );
+    }
+    return {
+      ...result,
+      latestRunId: row.id,
+      latestRunAt: row.ranAt,
+    };
+  }),
 });
 
 export type SetlistIntelRouter = typeof setlistIntelRouter;

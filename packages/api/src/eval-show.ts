@@ -32,12 +32,17 @@ import {
   type CorpusRow,
   type HotPrediction,
 } from './setlist-predict';
+import {
+  inferStyle as inferSetlistStyle,
+  type SetlistStyleOrUnknown,
+} from './setlist-style';
 
 const log = child({ component: 'api.eval-show' });
 const MS_PER_DAY = 86_400_000;
 
-/** Style label persisted alongside each per-show row. Phase 1 only emits
- * `stable`; the four-way classifier from Phase 5 will replace this. */
+/** Style label persisted alongside each per-show row. Phase 5 wires
+ * the four-way classifier; the cron-managed `performers.setlist_style`
+ * is the source of truth for `evaluateShow` callers. */
 export type EvalStyle = 'stable' | 'rotating' | 'theatrical' | 'improvised';
 
 export interface PerShowEvalRow {
@@ -80,7 +85,34 @@ export function flattenPrediction(prediction: HotPrediction): PredictedSongLike[
   ].map((s) => ({ title: s.title, probability: s.probability }));
 }
 
-/** Phase 1 emits `stable` only. Placeholder until the classifier lands. */
+/**
+ * Phase 5 classifier driver. Picks the eval bucket for a (performer,
+ * corpus) pair using the same `inferStyle` helper that backs the
+ * setlist-style-refresh cron and the predicted-setlist surface.
+ *
+ * The legacy single-arg `inferStyle(performerId)` is preserved for any
+ * caller that hasn't been migrated yet; it returns 'stable' (the safe
+ * fallback) since it has no corpus to inspect. New call sites should
+ * pass `inferStyleForEval({ corpus, override, seed })`.
+ */
+export function inferStyleForEval(opts: {
+  corpus: CorpusRow[];
+  override?: SetlistStyleOrUnknown | null;
+  seed?: SetlistStyleOrUnknown | null;
+}): EvalStyle {
+  const overrideStyle =
+    opts.override && opts.override !== 'unknown' ? opts.override : null;
+  const seedStyle = opts.seed && opts.seed !== 'unknown' ? opts.seed : null;
+  const { style } = inferSetlistStyle(opts.corpus, {
+    override: overrideStyle,
+    seed: seedStyle,
+  });
+  return style === 'unknown' ? 'stable' : style;
+}
+
+/** @deprecated Pass the loaded corpus via `inferStyleForEval`. Kept so
+ * older callers still compile; the eval bucketing they produce is the
+ * safe-default 'stable'. */
 export function inferStyle(_performerId: string): EvalStyle {
   return 'stable';
 }
@@ -153,6 +185,7 @@ export async function loadTruncatedCorpus(opts: {
       setlist: tourSetlists.setlist,
       songCount: tourSetlists.songCount,
       fetchedAt: tourSetlists.fetchedAt,
+      venueNameRaw: tourSetlists.venueNameRaw,
     })
     .from(tourSetlists)
     .where(
@@ -172,6 +205,7 @@ export async function loadTruncatedCorpus(opts: {
     setlist: r.setlist as PerformerSetlist,
     songCount: r.songCount,
     fetchedAt: r.fetchedAt,
+    venueNameRaw: r.venueNameRaw,
   }));
 }
 
@@ -197,7 +231,13 @@ export async function rerunEvalForShow(opts: {
   if (!row) return null;
 
   const [perfRow] = await db
-    .select({ id: performers.id, name: performers.name })
+    .select({
+      id: performers.id,
+      name: performers.name,
+      musicbrainzId: performers.musicbrainzId,
+      setlistStyle: performers.setlistStyle,
+      setlistStyleOverride: performers.setlistStyleOverride,
+    })
     .from(performers)
     .where(eq(performers.id, row.performerId))
     .limit(1);
@@ -232,7 +272,11 @@ export async function rerunEvalForShow(opts: {
     predicted: flattenPrediction(prediction),
     sampleSize: prediction.sampleSize,
     actualTitles,
-    style: inferStyle(row.performerId),
+    style: inferStyleForEval({
+      corpus,
+      override: perfRow.setlistStyleOverride as SetlistStyleOrUnknown | null,
+      seed: perfRow.setlistStyle as SetlistStyleOrUnknown | null,
+    }),
   });
 
   if (opts.attachToRunId) {

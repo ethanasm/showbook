@@ -94,6 +94,17 @@ describe('adminRouter', () => {
       );
     });
 
+    it('enqueueSetlistRetry throws FORBIDDEN for a non-admin caller', async () => {
+      const db = makeFakeDb({
+        authUserId: null,
+        selectResults: [[{ id: 'test-user', email: NON_ADMIN_EMAIL }]],
+      });
+      await assert.rejects(
+        () => caller(db).enqueueSetlistRetry(),
+        (err: unknown) => err instanceof TRPCError && err.code === 'FORBIDDEN',
+      );
+    });
+
     it('backfillVenueCoordinates returns an empty summary when no venues need it (admin caller)', async () => {
       // adminProcedure auth lookup → returns admin email.
       // Then handler queries venues → returns []. No further calls.

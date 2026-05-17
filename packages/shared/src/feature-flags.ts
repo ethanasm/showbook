@@ -99,6 +99,34 @@ export const FeatureFlag = {
       'backtest cron keeps writing rows in the background.',
     state: 'ON',
   },
+  SetlistIntelStyleClassifier: {
+    description:
+      'Phase 5 (setlist-intelligence) — gates running the §15b style ' +
+      'classifier on the prediction path. When OFF, every performer ' +
+      "falls back to 'stable' archetype and the stable §4c algorithm " +
+      'serves every prediction. When ON, predictedSetlistCached branches ' +
+      'on the performer\'s setlistStyle and the rotating variant is ' +
+      'served for rotating-classified performers (subject to the ' +
+      'SetlistIntelRotatingDisplay flag + release-gate check on the ' +
+      "client). Default ON. Flip OFF if the classifier misbehaves — " +
+      'every artist will look "stable" but predictions stay correct ' +
+      'for that subset.',
+    state: 'ON',
+  },
+  SetlistIntelRotatingDisplay: {
+    description:
+      'Phase 5 (setlist-intelligence) — gates the rotating-style ' +
+      'predicted-setlist UI variant (gap chart + position pools + ' +
+      'multi-night context banner). ON in single-user prod so the ' +
+      'model can be tuned against real shows; the calibration ' +
+      'release-gate (setlistIntel.releaseGate) still computes a ' +
+      'verdict and emits setlist.release_gate.{passed,failed} ' +
+      'observability events, but the client no longer hard-blocks ' +
+      'the rotating UI when the gate fails. Flip OFF if rotating ' +
+      'shows a regression that takes longer than a deploy cycle to ' +
+      'fix; stable display is unaffected.',
+    state: 'ON',
+  },
 } as const satisfies Record<string, { description: string; state: 'ON' | 'OFF' }>;
 
 export type FeatureFlagKey = keyof typeof FeatureFlag;
