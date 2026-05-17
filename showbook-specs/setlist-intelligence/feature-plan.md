@@ -1258,7 +1258,14 @@ This caveat applies primarily to §13b (audio features) and §13e
 (related-artist graph). Everything else in §13 uses
 non-deprecated, durable endpoints.
 
-### 13b. Audio features → "show vibe" + energy arc
+### 13b. Audio features → "show vibe" + energy arc — **DEFERRED to v2** (2026-05-17)
+
+> **Status:** Phase 8 deferred. The SI-11 probe ran 2026-05-17 and
+> Spotify returned HTTP 403 on `/v1/audio-features` for our app
+> registration. AcousticBrainz fallback was rejected per SI-16
+> (frozen at 2022, ~100% miss for current tours). The spec content
+> below is preserved as the v2 design reference — implement only
+> after re-probing and getting a 200.
 
 The single highest-value unused dataset. `audio-features` returns
 seven numerical floats per track:
@@ -1763,7 +1770,7 @@ Gmail-scope-management pattern.
 | Phase | Scope |
 |-------|-------|
 | **L3.5** | Persistent token storage + scope ladder UI (§13k, §13l). Prerequisite for everything below. |
-| **L6** | Audio features fill (§13b). Verify deprecation status with a probe call before shipping. Vibe radar + energy arc + set-length on Show detail. |
+| ~~**L6**~~ | ~~Audio features fill (§13b).~~ **DEFERRED to v2** — probe ran 2026-05-17 and returned 403. Vibe radar + energy arc + set-length not shipping in v1. |
 | **L7** | ISRC + album metadata (§13g). De-dup song identity. Album-release context display. |
 | **L8** | Library cross-reference (§13c). Fan-loyalty ring on Show detail. |
 | **L9** | Top-tracks-enhanced predicted setlist (§13e). |

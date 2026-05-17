@@ -1,10 +1,37 @@
 # Phase 8 — Vibe radar + energy arc
 
-> **Goal.** Add the audio-feature-driven displays — vibe radar, energy
-> arc, set length to the second. **Hard-gated** on whether Spotify
-> grandfathered our app's access to the deprecated audio-features
-> endpoint (probed in Phase 0). If access is denied, Phase 8 is
-> **dropped from v1** (SI-16) — see "The probe" below.
+> ## ❌ STATUS: DEFERRED to v2 (2026-05-17)
+>
+> The SI-11 audio-features probe ran on **2026-05-17** against the
+> prod app registration and returned **HTTP 403** —
+> `GET /v1/audio-features/3n3Ppam7vgaVa1iaRUc9Lp` (Mr. Brightside) is
+> denied. Spotify's late-2024 deprecation applied to our app.
+>
+> Per SI-16, Phase 8 is **dropped from v1**. AcousticBrainz is not a
+> viable fallback (frozen at 2022, ~100% miss for current tours).
+> Revisit when a third-party data source emerges; the probe script
+> (`packages/api/scripts/probe-audio-features.ts`) and the
+> `SpotifyAudioFeaturesAvailable` feature flag stay in place so a
+> future operator can re-probe without redoing the plumbing.
+>
+> The downstream impact:
+>
+> - The right-rail VibeRadar + EnergyArc slots from the 2026-05-16
+>   redesign render as **empty / hidden** in v1.
+> - `FanLoyaltyRing` (Phase 7) is the only post-show right-rail atom.
+> - Phase 10 (mobile parity) does NOT include the mobile VibeRadar /
+>   EnergyArc variants.
+> - The Phase 5 release gate still applies; Phase 8 metrics are not
+>   gated because nothing ships.
+>
+> Everything below is preserved as the v2 design reference — do not
+> implement against it without re-running the probe.
+
+> **Goal (v2 only).** Add the audio-feature-driven displays — vibe
+> radar, energy arc, set length to the second. **Hard-gated** on
+> whether Spotify grandfathered our app's access to the deprecated
+> audio-features endpoint (probed in Phase 0). If access is denied,
+> Phase 8 is **dropped from v1** (SI-16) — see "The probe" below.
 
 | Estimated effort | ~1 week (only if probe returns access) |
 | Critical path? | No |
