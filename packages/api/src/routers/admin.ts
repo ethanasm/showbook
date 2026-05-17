@@ -1,12 +1,10 @@
-import { eq, and, ilike, isNotNull, isNull, inArray, notInArray, sql } from 'drizzle-orm';
+import { eq, and, ilike, isNotNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure, adminProcedure } from '../trpc';
 import {
   venues,
   users,
-  shows,
-  showPerformers,
   enrichmentQueue,
   performers,
 } from '@showbook/db';
@@ -194,15 +192,21 @@ export const adminRouter = router({
   }),
 
   /**
-   * Globally enqueue every past concert that's missing a setlist into the
-   * enrichment queue, then trigger the setlist-retry pg-boss job for
-   * immediate processing. Covers the Gmail-import gap (past shows created
-   * directly in `past` state never hit the nightly ticketed→past transition
-   * that normally schedules enrichment) without waiting for the next 03:00
+   * Globally enqueue every (past show, lineup performer) pair that's
+   * missing a setlist into the enrichment queue, then trigger the
+   * setlist-retry pg-boss job for immediate processing. Covers both the
+   * Gmail-import gap (past shows created directly in `past` state never
+   * hit the nightly ticketed→past transition that normally schedules
+   * enrichment) and any festival lineup artists that were skipped before
+   * per-performer queueing existed — without waiting for the next 03:00
    * ET nightly catch-up sweep.
    *
-   * `setlists IS NULL` is deliberate — `{}` is the give-up marker from
-   * setlist-retry and we don't want to re-queue forever.
+   * Eligibility: state='past', kind in (concert,festival), date set,
+   * performer role in (headliner,support), no existing queue entry for
+   * the pair, and the performer is not already represented in
+   * `shows.setlists` (whether by a full setlist or an empty give-up
+   * marker). The legacy `setlists = '{}'` global give-up marker is
+   * respected — we don't re-queue exhausted shows.
    */
   enqueueSetlistRetry: adminProcedure.mutation(async ({ ctx }) => {
     const userId = ctx.session.user.id;
@@ -211,47 +215,48 @@ export const adminRouter = router({
       'Admin setlist enrichment started',
     );
 
-    // Already-queued shows (any attempt count) — skip them so we don't
-    // duplicate work the existing queue entries will already handle.
-    const alreadyQueuedRows = await ctx.db
-      .select({ showId: enrichmentQueue.showId })
-      .from(enrichmentQueue)
-      .where(eq(enrichmentQueue.type, 'setlist'));
-    const alreadyQueued = alreadyQueuedRows.map((r) => r.showId);
-
-    const headlinerShowIds = ctx.db
-      .select({ showId: showPerformers.showId })
-      .from(showPerformers)
-      .where(eq(showPerformers.role, 'headliner'));
-
-    const conditions = [
-      eq(shows.state, 'past'),
-      eq(shows.kind, 'concert'),
-      isNull(shows.setlists),
-      isNotNull(shows.date),
-      inArray(shows.id, headlinerShowIds),
-    ];
-    if (alreadyQueued.length > 0) {
-      conditions.push(notInArray(shows.id, alreadyQueued));
-    }
-
-    const eligible = await ctx.db
-      .select({ id: shows.id })
-      .from(shows)
-      .where(and(...conditions));
+    const eligible = await ctx.db.execute<{
+      show_id: string;
+      performer_id: string;
+    }>(sql`
+      SELECT s.id AS show_id, sp.performer_id
+      FROM shows s
+      JOIN show_performers sp ON sp.show_id = s.id
+      LEFT JOIN enrichment_queue eq
+        ON eq.show_id = sp.show_id
+        AND eq.performer_id = sp.performer_id
+        AND eq.type = 'setlist'
+      WHERE s.state = 'past'
+        AND s.kind IN ('concert', 'festival')
+        AND s.date IS NOT NULL
+        AND sp.role IN ('headliner', 'support')
+        AND eq.id IS NULL
+        AND (
+          s.setlists IS NULL
+          OR (
+            s.setlists != '{}'::jsonb
+            AND NOT (s.setlists ? sp.performer_id::text)
+          )
+        )
+    `);
 
     let queued = 0;
     if (eligible.length > 0) {
-      await ctx.db.insert(enrichmentQueue).values(
-        eligible.map((s) => ({
-          showId: s.id,
-          type: 'setlist' as const,
-          attempts: 0,
-          maxAttempts: 14,
-          nextRetry: new Date(),
-        })),
-      );
-      queued = eligible.length;
+      const inserted = await ctx.db
+        .insert(enrichmentQueue)
+        .values(
+          eligible.map((row) => ({
+            showId: row.show_id,
+            performerId: row.performer_id,
+            type: 'setlist' as const,
+            attempts: 0,
+            maxAttempts: 14,
+            nextRetry: new Date(),
+          })),
+        )
+        .onConflictDoNothing()
+        .returning({ id: enrichmentQueue.id });
+      queued = inserted.length;
     }
 
     const jobId = await enqueueSetlistRetry();
