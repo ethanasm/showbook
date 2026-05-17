@@ -33,6 +33,8 @@ export { getPlacePhotoMediaUrl, getPlaceDetails } from './google-places';
 export {
   extractShowFromEmail,
   extractShowFromPdfText,
+  extractFestivalLineupFromImage,
+  extractFestivalLineupFromPdfText,
   generateDigestPreamble,
   generateHealthSummaryPreamble,
   pingGroq,
@@ -41,6 +43,8 @@ export type {
   ExtractedTicketInfo,
   DigestPreambleInput,
   HealthSummaryPreambleInput,
+  FestivalLineup,
+  FestivalLineupArtist,
 } from './groq';
 export {
   searchMessages,

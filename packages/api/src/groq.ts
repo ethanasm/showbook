@@ -42,6 +42,18 @@ const castResponseSchema = z.object({
   cast: z.array(castMemberSchema).default([]),
 });
 
+const lineupArtistSchema = z.object({
+  name: z.string().min(1).max(120),
+  tier: z.enum(['headliner', 'support']).default('support'),
+});
+const festivalLineupSchema = z.object({
+  festival_name: z.string().nullable(),
+  start_date: z.string().nullable(),
+  end_date: z.string().nullable(),
+  venue_hint: z.string().nullable(),
+  artists: z.array(lineupArtistSchema).max(200).default([]),
+});
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -57,6 +69,19 @@ export interface ParsedShowInput {
 export interface CastMember {
   actor: string;
   role: string;
+}
+
+export interface FestivalLineupArtist {
+  name: string;
+  tier: 'headliner' | 'support';
+}
+
+export interface FestivalLineup {
+  festivalName: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  venueHint: string | null;
+  artists: FestivalLineupArtist[];
 }
 
 export interface ExtractedTicketInfo {
@@ -680,4 +705,138 @@ function truncateDetail(detail: Record<string, unknown>): Record<string, unknown
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// extractFestivalLineup — festival poster / schedule → lineup with tiers
+// ---------------------------------------------------------------------------
+
+const FESTIVAL_LINEUP_INSTRUCTIONS =
+  'You are extracting a music festival lineup. Read EVERY performing artist name. ' +
+  'Tier the artists: the visually largest / topmost / boldest names are "headliner"; ' +
+  'all other artists are "support". For text (PDF) input, use ALL-CAPS or top-of-grid ' +
+  'lines as the headliner signal. Skip sponsor logos, presenter blurbs ("XYZ Presents…"), ' +
+  'stage names, ticket pricing, and time-slot labels with no artist attached. If the ' +
+  'festival name, dates, or venue appear on the source, extract them; otherwise null. ' +
+  'Dates must be YYYY-MM-DD format — if the source only shows "June 6-8 2026", emit ' +
+  'start_date "2026-06-06" and end_date "2026-06-08". ' +
+  'Return ONLY a JSON object with this exact shape: ' +
+  '{"festival_name": string|null, "start_date": string|null, "end_date": string|null, ' +
+  '"venue_hint": string|null, "artists": [{"name": string, "tier": "headliner"|"support"}]}.';
+
+function parseFestivalLineupContent(content: string | null): FestivalLineup {
+  if (!content) {
+    return {
+      festivalName: null,
+      startDate: null,
+      endDate: null,
+      venueHint: null,
+      artists: [],
+    };
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(content);
+  } catch {
+    return {
+      festivalName: null,
+      startDate: null,
+      endDate: null,
+      venueHint: null,
+      artists: [],
+    };
+  }
+  const parsed = festivalLineupSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      festivalName: null,
+      startDate: null,
+      endDate: null,
+      venueHint: null,
+      artists: [],
+    };
+  }
+  return {
+    festivalName: parsed.data.festival_name,
+    startDate: parsed.data.start_date,
+    endDate: parsed.data.end_date,
+    venueHint: parsed.data.venue_hint,
+    artists: parsed.data.artists,
+  };
+}
+
+export async function extractFestivalLineupFromImage(
+  imageBase64: string,
+): Promise<FestivalLineup> {
+  const dataUrl = imageBase64.startsWith('data:')
+    ? imageBase64
+    : `data:${detectImageMime(imageBase64)};base64,${imageBase64}`;
+  const mime = detectImageMime(imageBase64.replace(/^data:[^;]+;base64,/, ''));
+
+  const tracedInput = [
+    {
+      role: 'user' as const,
+      content: [
+        { type: 'image_marker', mime },
+        { type: 'text', text: FESTIVAL_LINEUP_INSTRUCTIONS },
+      ],
+    },
+  ];
+
+  const result = await traceLLM({
+    name: 'groq.extractFestivalLineup',
+    model: MODEL_VISION,
+    input: tracedInput,
+    modelParameters: { response_format: 'json_object' },
+    metadata: { source: 'image', imageMime: mime, imageBytes: imageBase64.length },
+    run: () =>
+      groq().chat.completions.create({
+        model: MODEL_VISION,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'image_url', image_url: { url: dataUrl } },
+              { type: 'text', text: FESTIVAL_LINEUP_INSTRUCTIONS },
+            ],
+          },
+        ],
+        response_format: { type: 'json_object' },
+      }),
+    extractUsage: groqUsage,
+    extractOutput: pickContent,
+  });
+
+  return parseFestivalLineupContent(pickContent(result));
+}
+
+export async function extractFestivalLineupFromPdfText(
+  pdfText: string,
+): Promise<FestivalLineup> {
+  const messages = [
+    { role: 'system' as const, content: FESTIVAL_LINEUP_INSTRUCTIONS },
+    { role: 'user' as const, content: pdfText.slice(0, 12000) },
+  ];
+
+  const result = await traceLLM({
+    name: 'groq.extractFestivalLineup',
+    model: MODEL_TEXT,
+    input: messages,
+    modelParameters: {
+      response_format: 'json_object',
+      reasoning_effort: TEXT_REASONING_EFFORT,
+    },
+    metadata: { source: 'pdf', textBytes: pdfText.length },
+    run: () =>
+      groq().chat.completions.create({
+        model: MODEL_TEXT,
+        messages,
+        response_format: { type: 'json_object' },
+        reasoning_effort: TEXT_REASONING_EFFORT,
+      }),
+    extractUsage: groqUsage,
+    extractOutput: pickContent,
+  });
+
+  return parseFestivalLineupContent(pickContent(result));
 }

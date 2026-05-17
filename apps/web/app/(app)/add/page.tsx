@@ -13,6 +13,12 @@ import {
   uploadVideoForShow,
 } from "@/components/media";
 import { PerformerSetlistBlock } from "@/components/PerformerSetlistBlock";
+import { FestivalLineupModal } from "@/components/add/FestivalLineupModal";
+import {
+  useFestivalLineup,
+  type SelectedFestivalArtist,
+  type FestivalLineupMeta,
+} from "@/components/add/useFestivalLineup";
 import {
   isDatePast,
   flattenSetlistTitles,
@@ -589,6 +595,118 @@ export default function AddPage() {
       if (pdfInputRef.current) pdfInputRef.current.value = "";
     }
   }, [extractFromPdf]);
+
+  // ── Festival poster / schedule upload ─────────────────────────
+  const [festivalModalOpen, setFestivalModalOpen] = useState(false);
+  const festivalFileInputRef = useRef<HTMLInputElement>(null);
+  const chatFestivalFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFestivalSubmit = useCallback(
+    async (artists: SelectedFestivalArtist[], meta: FestivalLineupMeta) => {
+      // Chat mode submits the show directly. Form mode writes back to local
+      // state and lets the user keep editing before the form-save click.
+      if (mode === "Chat") {
+        const today = new Date().toISOString().split("T")[0]!;
+        // For festivals the show "headliner" is the festival itself — pass
+        // the extracted festival name (fallback to first artist or a generic
+        // placeholder). Drop any matching artist from `performers` so the
+        // (showId, performerId, role) primary key on show_performers can't
+        // collide when the same name lands as both the show headliner and
+        // a lineup headliner.
+        const headlinerName =
+          meta.festivalName ?? artists[0]?.name ?? "Festival";
+        const performersDeduped = artists.filter(
+          (a) => a.name !== headlinerName,
+        );
+        const created = await createShow.mutateAsync({
+          kind: "festival",
+          headliner: { name: headlinerName },
+          productionName: meta.festivalName ?? undefined,
+          venue: {
+            name: meta.venueHint ?? "Unknown Venue",
+            city: "Unknown",
+          },
+          date: meta.startDate ?? today,
+          endDate: meta.endDate ?? undefined,
+          performers: performersDeduped,
+        });
+        setFestivalModalOpen(false);
+        if (created?.id) {
+          router.push(`/shows/${created.id}`);
+        }
+        return;
+      }
+
+      // Form mode: write back to form state. Don't clobber values the user
+      // has already typed.
+      if (kind !== "festival") setKind("festival");
+      if (meta.festivalName) {
+        setProductionName((prev) => prev || meta.festivalName!);
+      }
+      if (meta.startDate) {
+        setDate((prev) => prev || meta.startDate!);
+      }
+      if (meta.endDate) {
+        setEndDate((prev) => prev || meta.endDate!);
+      }
+      if (meta.venueHint) {
+        setVenue((prev) =>
+          prev.name
+            ? prev
+            : { ...prev, name: meta.venueHint!, city: prev.city || "" },
+        );
+        setVenueQuery((prev) => prev || meta.venueHint!);
+      }
+      setPerformers(
+        artists.map((a) => ({
+          name: a.name,
+          role: a.role,
+          sortOrder: a.sortOrder,
+          tmAttractionId: a.tmAttractionId,
+          imageUrl: a.imageUrl,
+          musicbrainzId: a.musicbrainzId,
+        })),
+      );
+      setFestivalModalOpen(false);
+    },
+    [mode, kind, createShow, router],
+  );
+
+  const festivalFlow = useFestivalLineup({ onSubmit: handleFestivalSubmit });
+
+  const openFestivalPicker = useCallback(
+    async (file: File) => {
+      setFestivalModalOpen(true);
+      await festivalFlow.extractFromFile(file);
+    },
+    [festivalFlow],
+  );
+
+  const handleFestivalFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      // Reset the input so the same filename can be re-selected later.
+      e.target.value = "";
+      if (!file) return;
+      await openFestivalPicker(file);
+    },
+    [openFestivalPicker],
+  );
+
+  const handleChatFestivalFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file) return;
+      setChatMessages((prev) => [
+        ...prev,
+        { role: "user", content: `📎 ${file.name}` },
+        { role: "assistant", content: "Reading poster — pick artists you saw…" },
+      ]);
+      await openFestivalPicker(file);
+    },
+    [openFestivalPicker],
+  );
 
   const handlePlaybillUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1473,6 +1591,78 @@ export default function AddPage() {
                 width: "100%",
               }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* ── Festival: upload poster / schedule to auto-fill the lineup ── */}
+      {kind === "festival" && (
+        <div style={{ marginBottom: 26 }}>
+          <FieldLabel hint="image or PDF · LLM extracts the lineup" optional>Poster or Schedule</FieldLabel>
+          <div style={{
+            padding: "12px 14px",
+            background: "var(--surface)",
+            border: `1px solid var(--rule-strong)`,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+          }}>
+            <input
+              ref={festivalFileInputRef}
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={handleFestivalFileChange}
+              style={{ display: "none" }}
+            />
+            <button
+              type="button"
+              onClick={() => festivalFileInputRef.current?.click()}
+              disabled={festivalFlow.phase === "extracting"}
+              style={{
+                fontFamily: mono,
+                fontSize: 11,
+                fontWeight: 600,
+                color: "var(--accent-text)",
+                background: "var(--accent)",
+                border: "none",
+                padding: "9px 14px",
+                cursor: festivalFlow.phase === "extracting" ? "wait" : "pointer",
+                letterSpacing: ".08em",
+                textTransform: "uppercase",
+                opacity: festivalFlow.phase === "extracting" ? 0.6 : 1,
+              }}
+            >
+              {festivalFlow.phase === "extracting" ? "Reading…" : "Upload poster"}
+            </button>
+            <span style={{ fontFamily: mono, fontSize: 10.5, color: "var(--muted)", letterSpacing: ".04em" }}>
+              {festivalFlow.rows.length > 0
+                ? `${festivalFlow.rows.length} artists extracted · ${performers.length} added`
+                : "drop the poster image or schedule PDF — pick who you saw"}
+            </span>
+            {festivalFlow.rows.length > 0 && festivalFlow.phase !== "extracting" && (
+              <button
+                type="button"
+                onClick={() => setFestivalModalOpen(true)}
+                style={{
+                  fontFamily: mono,
+                  fontSize: 10.5,
+                  fontWeight: 500,
+                  color: "var(--muted)",
+                  background: "transparent",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  letterSpacing: ".06em",
+                  textTransform: "uppercase",
+                  textDecoration: "underline",
+                  textDecorationColor: "var(--rule-strong)",
+                  textUnderlineOffset: 3,
+                }}
+              >
+                Reopen picker
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -2639,6 +2829,33 @@ export default function AddPage() {
       )}
 
       <div style={{ display: "flex", gap: 8 }}>
+        <input
+          ref={chatFestivalFileInputRef}
+          type="file"
+          accept="image/*,application/pdf"
+          onChange={handleChatFestivalFileChange}
+          style={{ display: "none" }}
+        />
+        <button
+          type="button"
+          title="Attach a festival poster or schedule"
+          aria-label="Attach a festival poster or schedule"
+          onClick={() => chatFestivalFileInputRef.current?.click()}
+          disabled={festivalFlow.phase === "extracting"}
+          style={{
+            padding: "9px 12px",
+            background: "transparent",
+            color: "var(--muted)",
+            fontFamily: mono,
+            fontSize: 15,
+            border: `1px solid var(--rule-strong)`,
+            cursor: festivalFlow.phase === "extracting" ? "wait" : "pointer",
+            opacity: festivalFlow.phase === "extracting" ? 0.6 : 1,
+            lineHeight: 1,
+          }}
+        >
+          📎
+        </button>
         <textarea
           style={{
             flex: 1,
@@ -2652,7 +2869,7 @@ export default function AddPage() {
             resize: "none",
             minHeight: 48,
           }}
-          placeholder="Describe your show..."
+          placeholder="Describe your show, or attach a festival poster..."
           value={chatInput}
           onChange={(e) => setChatInput(e.target.value)}
           onKeyDown={(e) => {
@@ -3070,6 +3287,12 @@ export default function AddPage() {
         </div>
       </div>
     </div>
+    <FestivalLineupModal
+      open={festivalModalOpen}
+      onClose={() => setFestivalModalOpen(false)}
+      flow={festivalFlow}
+      submitLabel={mode === "Chat" ? "Save festival" : "Add to show"}
+    />
     </>
   );
 }
