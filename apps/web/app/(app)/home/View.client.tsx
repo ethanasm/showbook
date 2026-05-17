@@ -324,6 +324,7 @@ export default function HomeView() {
           {heroShow ? (
             <HeroCard
               show={{
+                id: heroShow.id,
                 headliner: getHeadliner(heroShow),
                 headlinerId: getHeadlinerId(heroShow),
                 support: getSupport(heroShow),
@@ -378,10 +379,14 @@ export default function HomeView() {
                 return (
                   <div
                     key={u.id}
+                    data-testid="upcoming-mini-card"
+                    data-show-id={u.id}
+                    onClick={() => router.push(`/shows/${u.id}`)}
                     style={{
                       padding: "14px 18px",
                       background: "var(--surface)",
                       borderLeft: `2px solid ${kindColor}`,
+                      cursor: "pointer",
                     }}
                   >
                     {/* Top row: kind badge + state */}
@@ -460,6 +465,7 @@ export default function HomeView() {
                         return id ? (
                           <Link
                             href={`/artists/${id}`}
+                            onClick={(e) => e.stopPropagation()}
                             style={{ color: "inherit", textDecoration: "none" }}
                             onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
                             onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
@@ -484,6 +490,7 @@ export default function HomeView() {
                     >
                       <Link
                         href={`/venues/${u.venue.id}`}
+                        onClick={(e) => e.stopPropagation()}
                         style={{ color: "inherit", textDecoration: "none" }}
                         onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
                         onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}

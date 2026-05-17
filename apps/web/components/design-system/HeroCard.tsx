@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import "./design-system.css";
 import type { ShowKind } from "./KindBadge";
 import { PulseLabel } from "./PulseLabel";
@@ -9,6 +10,7 @@ import { MapPin, Ticket, Clock, Check } from "lucide-react";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 
 export interface HeroShow {
+  id?: string;
   headliner: string;
   headlinerId?: string;
   support: string[];
@@ -30,11 +32,22 @@ interface HeroCardProps {
 }
 
 export function HeroCard({ show }: HeroCardProps) {
+  const router = useRouter();
   const KindIcon = KIND_ICONS[show.kind];
   const kindColor = `var(--kind-${show.kind})`;
+  const showId = show.id;
 
   return (
-    <div className="hero-card" style={{ borderLeft: `3px solid ${kindColor}` }}>
+    <div
+      className="hero-card"
+      data-testid={showId ? "hero-card" : undefined}
+      data-show-id={showId}
+      onClick={showId ? () => router.push(`/shows/${showId}`) : undefined}
+      style={{
+        borderLeft: `3px solid ${kindColor}`,
+        cursor: showId ? "pointer" : undefined,
+      }}
+    >
       <div className="glow-backdrop" style={{ opacity: 0.55 }} />
       {show.headlinerImageUrl && (
         <div
@@ -129,6 +142,7 @@ export function HeroCard({ show }: HeroCardProps) {
             {show.headlinerId ? (
               <Link
                 href={`/artists/${show.headlinerId}`}
+                onClick={(e) => e.stopPropagation()}
                 style={{ color: "inherit", textDecoration: "none" }}
                 onMouseEnter={(e) =>
                   (e.currentTarget.style.textDecoration = "underline")
@@ -157,6 +171,7 @@ export function HeroCard({ show }: HeroCardProps) {
                     {id ? (
                       <Link
                         href={`/artists/${id}`}
+                        onClick={(e) => e.stopPropagation()}
                         style={{ color: "inherit", textDecoration: "none" }}
                         onMouseEnter={(e) =>
                           (e.currentTarget.style.textDecoration = "underline")
@@ -189,6 +204,7 @@ export function HeroCard({ show }: HeroCardProps) {
                   {show.venueId ? (
                     <Link
                       href={`/venues/${show.venueId}`}
+                      onClick={(e) => e.stopPropagation()}
                       style={{ color: "inherit", textDecoration: "none" }}
                       onMouseEnter={(e) =>
                         (e.currentTarget.style.textDecoration = "underline")

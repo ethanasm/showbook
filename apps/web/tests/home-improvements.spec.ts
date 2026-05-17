@@ -85,6 +85,47 @@ test.describe('Home page — seeded shows', () => {
     });
   });
 
+  test('hero card click navigates to show detail', async ({ page }) => {
+    await page.waitForSelector('text=Next up', { timeout: 10000 });
+
+    const hero = page.getByRole('main').getByTestId('hero-card').first();
+    await expect(hero).toBeVisible({ timeout: 8000 });
+    const expectedId = await hero.getAttribute('data-show-id');
+    expect(expectedId).toMatch(/^[0-9a-f-]+$/);
+
+    // Click on a region that is NOT an artist / venue link — the date column
+    // on the right is plain text so it's a safe click target.
+    await hero.locator('.hero-card__date').click();
+    await page.waitForURL(new RegExp(`/shows/${expectedId}`), { timeout: 8000 });
+  });
+
+  test('hero card artist link still navigates to artist (not show detail)', async ({ page }) => {
+    await page.waitForSelector('text=Next up', { timeout: 10000 });
+
+    const hero = page.getByRole('main').getByTestId('hero-card').first();
+    await expect(hero).toBeVisible({ timeout: 8000 });
+    const artistLink = hero.locator('a[href^="/artists/"]').first();
+    await expect(artistLink).toBeVisible({ timeout: 8000 });
+    await artistLink.click();
+    await page.waitForURL(/\/artists\/[0-9a-f-]+/, { timeout: 8000 });
+  });
+
+  test('upcoming mini card click navigates to show detail', async ({ page }) => {
+    await page.waitForSelector('text=Next up', { timeout: 10000 });
+
+    const miniCard = page.locator('[data-testid="upcoming-mini-card"]').first();
+    // The seeded fixture may not have enough upcoming shows for mini cards to
+    // render; skip rather than fail when they're absent.
+    if ((await miniCard.count()) === 0) {
+      test.skip(true, 'Seed has no mini upcoming cards');
+    }
+    await expect(miniCard).toBeVisible({ timeout: 8000 });
+    const expectedId = await miniCard.getAttribute('data-show-id');
+    expect(expectedId).toMatch(/^[0-9a-f-]+$/);
+    await miniCard.click();
+    await page.waitForURL(new RegExp(`/shows/${expectedId}`), { timeout: 8000 });
+  });
+
   test('wordmark header visible instead of greeting', async ({ page }) => {
     await page.waitForSelector('[data-testid="home-wordmark"]', { timeout: 10000 });
     await expect(page.locator('[data-testid="home-wordmark"]')).toBeVisible();
