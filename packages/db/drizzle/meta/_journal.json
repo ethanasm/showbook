@@ -272,7 +272,21 @@
       "idx": 38,
       "version": "7",
       "when": 1790123200000,
-      "tag": "0038_setlist_intel_music_layer_v2",
+      "tag": "0038_fix_warfield_sf_coordinates",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790200000000,
+      "tag": "0039_setlist_style_phase5",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790286400000,
+      "tag": "0040_setlist_intel_music_layer_v2",
       "breakpoints": true
     }
   ]

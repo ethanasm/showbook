@@ -214,6 +214,8 @@ export default function AddPage() {
 
   // Performer search
   const [performerSearchInput, setPerformerSearchInput] = useState("");
+  const [debouncedPerformerQuery, setDebouncedPerformerQuery] = useState("");
+  const performerSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const utils = trpc.useUtils();
 
@@ -238,9 +240,25 @@ export default function AddPage() {
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debouncedQuery, setDebouncedQuery] = useState("");
 
+  // Ticketmaster event search powers the headliner picker for concerts /
+  // theatre / comedy (it auto-fills venue + date from the picked event).
+  // Festivals are built up by name + lineup, so picking a one-off TM event
+  // is the wrong abstraction — we use the artist search below instead.
   const tmSearch = trpc.enrichment.searchTM.useQuery(
     { headliner: debouncedQuery },
-    { enabled: debouncedQuery.length >= 2 },
+    { enabled: debouncedQuery.length >= 2 && kind !== "festival" },
+  );
+
+  // Artist (TM attraction) search — returns artists, not events. Used for the
+  // festival headliner picker and the "+ search artists" lineup add input so
+  // those flows never surface ticketmaster events.
+  const festivalHeadlinerSearch = trpc.performers.searchExternal.useQuery(
+    { query: debouncedQuery },
+    { enabled: debouncedQuery.length >= 2 && kind === "festival" },
+  );
+  const performerArtistSearch = trpc.performers.searchExternal.useQuery(
+    { query: debouncedPerformerQuery },
+    { enabled: debouncedPerformerQuery.length >= 2 },
   );
 
   const fetchTMEvent = trpc.enrichment.fetchTMEventByUrl.useMutation();
@@ -287,7 +305,6 @@ export default function AddPage() {
     onSuccess: () => {
       utils.shows.invalidate();
       invalidateSidebarCounts();
-      router.push("/shows");
     },
   });
   const createUploadIntent = trpc.media.createUploadIntent.useMutation();
@@ -432,9 +449,9 @@ export default function AddPage() {
       if (performers.length > 0) count++;
     }
     if (Object.keys(setlistsByPerformer).length > 0) count++;
-    if (tourName && setlistQuery.data) count++;
+    if (tourName && setlistQuery.data && kind !== "festival") count++;
     return count;
-  }, [tmEnriched, venue, date, headliner, performers, setlistsByPerformer, tourName, setlistQuery.data]);
+  }, [tmEnriched, venue, date, headliner, performers, setlistsByPerformer, tourName, setlistQuery.data, kind]);
 
   // ── Handlers ─────────────────────────────────────────────
 
@@ -795,7 +812,7 @@ export default function AddPage() {
         date: showDate,
         seat: chatParsed.seat_hint ?? undefined,
       });
-      router.push(created ? `/shows/${created.id}` : "/shows");
+      router.push(created ? `/shows/${created.id}` : "/home");
     } catch {
       setChatMessages((prev) => [
         ...prev,
@@ -867,10 +884,10 @@ export default function AddPage() {
         venue: venueToSave,
         date,
         endDate: endDate || undefined,
-        seat: seat || undefined,
+        seat: kind === "festival" ? undefined : (seat || undefined),
         pricePaid: pricePaid || undefined,
         ticketCount: parseInt(ticketCount) || 1,
-        tourName: tourName || undefined,
+        tourName: kind === "festival" ? undefined : (tourName || undefined),
         productionName: productionName || undefined,
         notes: notes || undefined,
         performers: performersWithSetlists.length > 0 ? performersWithSetlists : undefined,
@@ -885,7 +902,7 @@ export default function AddPage() {
       } else {
         const created = await createShow.mutateAsync(payload);
         if (!created) {
-          router.push("/shows");
+          router.push("/home");
           return;
         }
         targetShowId = created.id;
@@ -1001,6 +1018,18 @@ export default function AddPage() {
     } catch { /* place details failed, user can enter manually */ }
   }, [utils]);
 
+  const handlePerformerSearchInput = useCallback((value: string) => {
+    setPerformerSearchInput(value);
+    if (performerSearchTimerRef.current) clearTimeout(performerSearchTimerRef.current);
+    if (value.length >= 2) {
+      performerSearchTimerRef.current = setTimeout(() => {
+        setDebouncedPerformerQuery(value);
+      }, 500);
+    } else {
+      setDebouncedPerformerQuery("");
+    }
+  }, []);
+
   const handleAddPerformer = useCallback(() => {
     if (!performerSearchInput.trim()) return;
     setPerformers((prev) => [
@@ -1012,10 +1041,56 @@ export default function AddPage() {
       },
     ]);
     setPerformerSearchInput("");
+    setDebouncedPerformerQuery("");
   }, [performerSearchInput]);
+
+  const handleSelectArtistAsPerformer = useCallback(
+    (artist: { tmAttractionId: string; name: string; imageUrl: string | null; musicbrainzId: string | null }) => {
+      setPerformers((prev) => [
+        ...prev,
+        {
+          name: artist.name,
+          role: "support",
+          sortOrder: prev.length + 1,
+          tmAttractionId: artist.tmAttractionId,
+          musicbrainzId: artist.musicbrainzId ?? undefined,
+          imageUrl: artist.imageUrl ?? undefined,
+        },
+      ]);
+      setPerformerSearchInput("");
+      setDebouncedPerformerQuery("");
+    },
+    [],
+  );
+
+  const handleSelectArtistAsHeadliner = useCallback(
+    (artist: { tmAttractionId: string; name: string; imageUrl: string | null; musicbrainzId: string | null }) => {
+      setHeadlinerName(artist.name);
+      setHeadliner({
+        name: artist.name,
+        tmAttractionId: artist.tmAttractionId,
+        musicbrainzId: artist.musicbrainzId ?? undefined,
+        imageUrl: artist.imageUrl ?? undefined,
+      });
+      setSelectedTmEvent(null);
+      setTmEnriched(false);
+      setDebouncedQuery("");
+    },
+    [],
+  );
 
   const handleRemovePerformer = useCallback((index: number) => {
     setPerformers((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleTogglePerformerRole = useCallback((index: number) => {
+    setPerformers((prev) =>
+      prev.map((p, i) =>
+        i === index
+          ? { ...p, role: p.role === "headliner" ? "support" : "headliner" }
+          : p,
+      ),
+    );
   }, []);
 
   // Determine if form can save
@@ -1404,7 +1479,7 @@ export default function AddPage() {
 
       {/* ── Lineup / Headliner (still WHAT) ── */}
       <div style={{ marginBottom: 26 }}>
-        <FieldLabel hint={kind === "theatre" ? "lead performer" : "first is headliner"}>{kind === "theatre" ? "Cast" : "Lineup"}</FieldLabel>
+        <FieldLabel hint={kind === "theatre" ? "lead performer" : "click role to toggle"}>{kind === "theatre" ? "Cast" : "Lineup"}</FieldLabel>
         <div style={{ border: `1px solid var(--rule-strong)` }}>
           {/* Headliner input row */}
           <div style={{
@@ -1446,7 +1521,10 @@ export default function AddPage() {
             </div>
           </div>
 
-          {/* TM search results dropdown */}
+          {/* Search results dropdown — for festivals we surface artists
+              (TM attractions), not events. Events would drag in a venue /
+              date / kind from a single show, which is wrong for a festival
+              lineup built up artist-by-artist. */}
           {debouncedQuery.length >= 2 && (
             <div style={{ borderTop: `1px solid var(--rule)` }}>
               {/* Manual entry option */}
@@ -1479,45 +1557,89 @@ export default function AddPage() {
                 </span>
               </button>
 
-              {tmSearch.isLoading && (
-                <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--muted)" }}>
-                  Searching upcoming events...
-                </div>
-              )}
-              {tmSearch.data && tmSearch.data.length > 0 && tmSearch.data.map((result) => (
-                <button
-                  key={result.tmEventId}
-                  type="button"
-                  onClick={() => {
-                    handleSelectTmResult(result);
-                    setDebouncedQuery("");
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "10px 16px",
-                    background: selectedTmEvent?.tmEventId === result.tmEventId
-                      ? "var(--surface)"
-                      : "transparent",
-                    border: "none",
-                    borderBottom: `1px solid var(--rule)`,
-                    cursor: "pointer",
-                    textAlign: "left",
-                  }}
-                >
-                  <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>
-                    {result.name}
-                  </div>
-                  <div style={{ fontFamily: mono, fontSize: 10, color: "var(--muted)", marginTop: 2 }}>
-                    {result.venueName && `${result.venueName}`}
-                    {result.venueCity && ` · ${result.venueCity}`}
-                    {result.date && ` · ${result.date}`}
-                  </div>
-                </button>
-              ))}
-              {tmSearch.data && tmSearch.data.length === 0 && (
-                <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--faint)" }}>
-                  No upcoming events found
-                </div>
+              {kind === "festival" ? (
+                <>
+                  {festivalHeadlinerSearch.isLoading && (
+                    <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--muted)" }}>
+                      Searching artists...
+                    </div>
+                  )}
+                  {festivalHeadlinerSearch.data && festivalHeadlinerSearch.data.length > 0 && festivalHeadlinerSearch.data.map((artist) => (
+                    <button
+                      key={artist.tmAttractionId}
+                      type="button"
+                      onClick={() => handleSelectArtistAsHeadliner(artist)}
+                      style={{
+                        width: "100%",
+                        padding: "10px 16px",
+                        background: "transparent",
+                        border: "none",
+                        borderBottom: `1px solid var(--rule)`,
+                        cursor: "pointer",
+                        textAlign: "left",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                      }}
+                    >
+                      {artist.imageUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={artist.imageUrl} alt="" style={{ width: 24, height: 24, objectFit: "cover", borderRadius: 2 }} />
+                      )}
+                      <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>
+                        {artist.name}
+                      </div>
+                    </button>
+                  ))}
+                  {festivalHeadlinerSearch.data && festivalHeadlinerSearch.data.length === 0 && (
+                    <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--faint)" }}>
+                      No matching artists found
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {tmSearch.isLoading && (
+                    <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--muted)" }}>
+                      Searching upcoming events...
+                    </div>
+                  )}
+                  {tmSearch.data && tmSearch.data.length > 0 && tmSearch.data.map((result) => (
+                    <button
+                      key={result.tmEventId}
+                      type="button"
+                      onClick={() => {
+                        handleSelectTmResult(result);
+                        setDebouncedQuery("");
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "10px 16px",
+                        background: selectedTmEvent?.tmEventId === result.tmEventId
+                          ? "var(--surface)"
+                          : "transparent",
+                        border: "none",
+                        borderBottom: `1px solid var(--rule)`,
+                        cursor: "pointer",
+                        textAlign: "left",
+                      }}
+                    >
+                      <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>
+                        {result.name}
+                      </div>
+                      <div style={{ fontFamily: mono, fontSize: 10, color: "var(--muted)", marginTop: 2 }}>
+                        {result.venueName && `${result.venueName}`}
+                        {result.venueCity && ` · ${result.venueCity}`}
+                        {result.date && ` · ${result.date}`}
+                      </div>
+                    </button>
+                  ))}
+                  {tmSearch.data && tmSearch.data.length === 0 && (
+                    <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--faint)" }}>
+                      No upcoming events found
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -1532,20 +1654,41 @@ export default function AddPage() {
                 alignItems: "center",
                 columnGap: 14,
                 padding: "12px 16px",
-                background: "transparent",
-                borderLeft: "2px solid transparent",
+                background: p.role === "headliner" ? "var(--surface)" : "transparent",
+                borderLeft: p.role === "headliner" ? `2px solid ${kind ? kindColor(kind) : "var(--ink)"}` : "2px solid transparent",
                 borderTop: `1px solid var(--rule)`,
               }}
             >
               <div style={{ color: "var(--faint)", fontFamily: mono, fontSize: 11 }}>⋮⋮</div>
               <div>
-                <div style={{ fontFamily: sans, fontSize: 14, fontWeight: 500, color: "var(--ink)", letterSpacing: -0.15 }}>
+                <div style={{ fontFamily: sans, fontSize: 14, fontWeight: p.role === "headliner" ? 600 : 500, color: "var(--ink)", letterSpacing: -0.15 }}>
                   {p.name}
                 </div>
               </div>
-              <div style={{ fontFamily: mono, fontSize: 10.5, color: "var(--muted)", letterSpacing: ".06em", textTransform: "uppercase" }}>
-                {p.role}
-              </div>
+              {p.role === "cast" ? (
+                <div style={{ fontFamily: mono, fontSize: 10.5, color: "var(--muted)", letterSpacing: ".06em", textTransform: "uppercase" }}>
+                  {p.role}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleTogglePerformerRole(i)}
+                  title="Toggle headliner / support"
+                  style={{
+                    fontFamily: mono,
+                    fontSize: 10.5,
+                    color: "var(--muted)",
+                    letterSpacing: ".06em",
+                    textTransform: "uppercase",
+                    background: "transparent",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                  }}
+                >
+                  {p.role}
+                </button>
+              )}
               <div style={{
                 fontFamily: mono,
                 fontSize: 10,
@@ -1590,7 +1733,7 @@ export default function AddPage() {
               type="text"
               placeholder="search artists..."
               value={performerSearchInput}
-              onChange={(e) => setPerformerSearchInput(e.target.value)}
+              onChange={(e) => handlePerformerSearchInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
@@ -1622,6 +1765,75 @@ export default function AddPage() {
               </div>
             )}
           </div>
+
+          {/* Artist (TM attraction) search dropdown for support performers.
+              Surfaces artists not events — picking one preserves the
+              tmAttractionId / musicbrainzId / image so the row shows
+              "✓ matched" instead of "no match". */}
+          {debouncedPerformerQuery.length >= 2 && (
+            <div style={{ borderTop: `1px solid var(--rule)` }}>
+              <button
+                type="button"
+                onClick={handleAddPerformer}
+                style={{
+                  width: "100%",
+                  padding: "10px 16px",
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: `1px solid var(--rule)`,
+                  cursor: "pointer",
+                  textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                }}
+              >
+                <span style={{ fontFamily: sans, fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>
+                  Add &quot;{performerSearchInput}&quot;
+                </span>
+                <span style={{ fontFamily: mono, fontSize: 10, color: "var(--faint)" }}>
+                  enter manually
+                </span>
+              </button>
+              {performerArtistSearch.isLoading && (
+                <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--muted)" }}>
+                  Searching artists...
+                </div>
+              )}
+              {performerArtistSearch.data && performerArtistSearch.data.length > 0 && performerArtistSearch.data.map((artist) => (
+                <button
+                  key={artist.tmAttractionId}
+                  type="button"
+                  onClick={() => handleSelectArtistAsPerformer(artist)}
+                  style={{
+                    width: "100%",
+                    padding: "10px 16px",
+                    background: "transparent",
+                    border: "none",
+                    borderBottom: `1px solid var(--rule)`,
+                    cursor: "pointer",
+                    textAlign: "left",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  {artist.imageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={artist.imageUrl} alt="" style={{ width: 24, height: 24, objectFit: "cover", borderRadius: 2 }} />
+                  )}
+                  <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>
+                    {artist.name}
+                  </div>
+                </button>
+              ))}
+              {performerArtistSearch.data && performerArtistSearch.data.length === 0 && !performerArtistSearch.isLoading && (
+                <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--faint)" }}>
+                  No matching artists found
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1785,34 +1997,38 @@ export default function AddPage() {
         </div>
       </div>
 
-      {/* Festival: End Date */}
+      {/* Festival: End Date — sized to match the Date field above */}
       {kind === "festival" && (
         <div style={{ marginBottom: 26 }}>
-          <FieldLabel>End Date</FieldLabel>
-          <div style={{
-            padding: "10px 14px",
-            background: "var(--surface)",
-            border: `1px solid var(--rule-strong)`,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            maxWidth: 300,
-          }}>
-            <span style={{ color: "var(--muted)", fontSize: 14 }}>📅</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              style={{
-                flex: 1,
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                fontFamily: mono,
-                fontSize: 13,
-                color: endDate ? "var(--ink)" : "var(--faint)",
-              }}
-            />
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(160px, 200px) 1fr", gap: 14, alignItems: "start" }}>
+            <div>
+              <FieldLabel>End Date</FieldLabel>
+              <div style={{
+                padding: "10px 14px",
+                background: "var(--surface)",
+                border: `1px solid var(--rule-strong)`,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+              }}>
+                <span style={{ color: "var(--muted)", fontSize: 14 }}>📅</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  style={{
+                    flex: 1,
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    fontFamily: mono,
+                    fontSize: 13,
+                    color: endDate ? "var(--ink)" : "var(--faint)",
+                    minWidth: 0,
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1820,37 +2036,39 @@ export default function AddPage() {
       {/* ── DETAILS ── */}
       <SectionLabel>Details</SectionLabel>
 
-      {/* Tour name */}
-      <div style={{ marginBottom: 26 }}>
-        <FieldLabel hint={setlistQuery.data?.tourName ? "auto · setlist.fm" : undefined} optional>Tour</FieldLabel>
-        <div style={{
-          padding: "10px 14px",
-          background: "var(--surface)",
-          border: `1px solid var(--rule-strong)`,
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-        }}>
-          <span style={{ color: "var(--muted)", fontSize: 14 }}>♫</span>
-          <input
-            type="text"
-            placeholder="e.g. Romance World Tour"
-            value={tourName}
-            onChange={(e) => setTourName(e.target.value)}
-            style={{
-              flex: 1,
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              fontFamily: sans,
-              fontSize: 14,
-              color: tourName ? "var(--ink)" : "var(--faint)",
-              letterSpacing: -0.1,
-              width: "100%",
-            }}
-          />
+      {/* Tour name — festivals don't have tours */}
+      {kind !== "festival" && (
+        <div style={{ marginBottom: 26 }}>
+          <FieldLabel hint={setlistQuery.data?.tourName ? "auto · setlist.fm" : undefined} optional>Tour</FieldLabel>
+          <div style={{
+            padding: "10px 14px",
+            background: "var(--surface)",
+            border: `1px solid var(--rule-strong)`,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}>
+            <span style={{ color: "var(--muted)", fontSize: 14 }}>♫</span>
+            <input
+              type="text"
+              placeholder="e.g. Romance World Tour"
+              value={tourName}
+              onChange={(e) => setTourName(e.target.value)}
+              style={{
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                fontFamily: sans,
+                fontSize: 14,
+                color: tourName ? "var(--ink)" : "var(--faint)",
+                letterSpacing: -0.1,
+                width: "100%",
+              }}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Notes */}
       <div style={{ marginBottom: 26 }}>
@@ -1916,7 +2134,7 @@ export default function AddPage() {
               </ul>
               <button
                 type="button"
-                onClick={() => router.push(`/shows`)}
+                onClick={() => router.push(`/home`)}
                 style={{
                   marginTop: 6,
                   background: "transparent",
@@ -1928,7 +2146,7 @@ export default function AddPage() {
                   color: "var(--ink)",
                 }}
               >
-                Go to shows
+                Go home
               </button>
             </div>
           )}
@@ -2124,44 +2342,46 @@ export default function AddPage() {
             fontSize: 8,
           }}>▶</span>
           More details
-          {(seat || pricePaid) && !showMoreDetails && (
+          {((seat && kind !== "festival") || pricePaid) && !showMoreDetails && (
             <span style={{ color: "var(--faint)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
-              · {[seat && "seat", pricePaid && "price"].filter(Boolean).join(", ")}
+              · {[seat && kind !== "festival" && "seat", pricePaid && "price"].filter(Boolean).join(", ")}
             </span>
           )}
         </button>
         {showMoreDetails && (
           <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>
-            <div>
-              <FieldLabel optional>Seat</FieldLabel>
-              <div style={{
-                padding: "10px 14px",
-                background: "var(--surface)",
-                border: `1px solid var(--rule-strong)`,
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-              }}>
-                <span style={{ color: "var(--muted)", fontSize: 14 }}>🎫</span>
-                <input
-                  type="text"
-                  placeholder="e.g. ORCH L · 14"
-                  value={seat}
-                  onChange={(e) => setSeat(e.target.value)}
-                  style={{
-                    flex: 1,
-                    background: "transparent",
-                    border: "none",
-                    outline: "none",
-                    fontFamily: mono,
-                    fontSize: 13,
-                    color: seat ? "var(--ink)" : "var(--faint)",
-                    letterSpacing: -0.1,
-                    width: "100%",
-                  }}
-                />
+            {kind !== "festival" && (
+              <div>
+                <FieldLabel optional>Seat</FieldLabel>
+                <div style={{
+                  padding: "10px 14px",
+                  background: "var(--surface)",
+                  border: `1px solid var(--rule-strong)`,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                }}>
+                  <span style={{ color: "var(--muted)", fontSize: 14 }}>🎫</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. ORCH L · 14"
+                    value={seat}
+                    onChange={(e) => setSeat(e.target.value)}
+                    style={{
+                      flex: 1,
+                      background: "transparent",
+                      border: "none",
+                      outline: "none",
+                      fontFamily: mono,
+                      fontSize: 13,
+                      color: seat ? "var(--ink)" : "var(--faint)",
+                      letterSpacing: -0.1,
+                      width: "100%",
+                    }}
+                  />
+                </div>
               </div>
-            </div>
+            )}
             <div>
               <FieldLabel optional>Tickets</FieldLabel>
               <div style={{
@@ -2262,7 +2482,7 @@ export default function AddPage() {
         </div>
         <button
           type="button"
-          onClick={() => router.push("/shows")}
+          onClick={() => router.back()}
           style={{
             padding: "9px 14px",
             border: `1px solid var(--rule-strong)`,
@@ -2504,13 +2724,13 @@ export default function AddPage() {
     const detailRows: [string, string][] = [];
     if (venue.name) detailRows.push(["Venue", venue.name]);
     if (venue.city) detailRows.push(["City", venue.city]);
-    if (seat) detailRows.push(["Seat", seat]);
+    if (seat && kind !== "festival") detailRows.push(["Seat", seat]);
     if (pricePaid) {
       const count = parseInt(ticketCount) || 1;
       const perTicket = (parseFloat(pricePaid) / count).toFixed(2);
       detailRows.push(["Paid", `$${pricePaid}${count > 1 ? ` ($${perTicket}/ea × ${count})` : ""}`]);
     }
-    if (tourName) detailRows.push(["Tour", tourName]);
+    if (tourName && kind !== "festival") detailRows.push(["Tour", tourName]);
     const totalSongs = Object.values(setlistsByPerformer).reduce(
       (sum, sl) => sum + setlistTotalSongs(sl),
       0,
@@ -2807,8 +3027,6 @@ export default function AddPage() {
           letterSpacing: ".04em",
         }}>
           <span style={{ cursor: "pointer" }} onClick={() => router.push("/home")}>home</span>
-          <span style={{ color: "var(--faint)" }}>&gt;</span>
-          <span style={{ cursor: "pointer" }} onClick={() => router.push("/shows")}>shows</span>
           <span style={{ color: "var(--faint)" }}>&gt;</span>
           <span style={{ color: "var(--ink)", fontWeight: 500 }}>{isEditMode ? "edit" : "add a show"}</span>
           {!isEditMode && (

@@ -8,8 +8,13 @@ import { HypePlaylistCard } from "./HypePlaylistCard";
 import { PredictedSetlistRow } from "./PredictedSetlistRow";
 import { EncoreDivider } from "./EncoreDivider";
 import { DiscoveredRail } from "./DiscoveredRail";
+import {
+  RotatingSetlistView,
+  RotatingGateBlocked,
+} from "./RotatingSetlistView";
 import type {
   PredictedSetlistResult,
+  RotatingPrediction,
   SongBadge,
   SongBadgesMap,
 } from "@showbook/api";
@@ -28,7 +33,7 @@ interface SetlistTabProps {
   isPast: boolean;
   artistName: string;
   /** Predicted-setlist tRPC response. Null while loading. */
-  prediction: PredictedSetlistResult | null;
+  prediction: PredictedSetlistResult | RotatingPrediction | null;
   /** When true, the predicted-setlist query is in-flight. */
   predictionLoading: boolean;
   /** Actual setlist (post-show). Each entry is `{ title, isEncore }`. */
@@ -45,6 +50,18 @@ interface SetlistTabProps {
    * the flag and passes it down.
    */
   hypePlaylistEnabled?: boolean;
+  /**
+   * Phase 5 — when true, the rotating-style display variant renders for
+   * `prediction.style === 'rotating'` payloads. Resolved at the page
+   * level from `SetlistIntelRotatingDisplay` && release-gate verdict.
+   */
+  rotatingDisplayEnabled?: boolean;
+  /**
+   * Phase 5 — when true, the rotating-display flag is wired ON but the
+   * calibration release-gate hasn't cleared, so the rotating subtree
+   * is replaced with the labeled placeholder ("model not calibrated").
+   */
+  rotatingGateBlocked?: boolean;
   /**
    * Phase 7 — when true, mount the DiscoveredRail (past variant)
    * beneath the actual setlist. Gated by `SetlistIntelMusicLayerV2`
@@ -85,7 +102,14 @@ export function SetlistTab(props: SetlistTabProps) {
 // ─────────────────────────────────────────────────────────────────────
 
 function SetlistTabUpcoming(props: SetlistTabProps) {
-  const { prediction, predictionLoading, artistName, hypePlaylistEnabled } = props;
+  const {
+    prediction,
+    predictionLoading,
+    artistName,
+    hypePlaylistEnabled,
+    rotatingDisplayEnabled,
+    rotatingGateBlocked,
+  } = props;
   const [spoilerShown, setSpoilerShown] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -117,6 +141,15 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
         artistName={prediction.performerName ?? artistName}
       />
     );
+  }
+  if (prediction.style === "rotating") {
+    // Per SI-05: HypePlaylistCard is hidden for rotating performers —
+    // a 25-song hype playlist is low-relevance when the model can't
+    // pick the next 25 songs confidently.
+    if (!rotatingDisplayEnabled || rotatingGateBlocked) {
+      return <RotatingGateBlocked />;
+    }
+    return <RotatingSetlistView prediction={prediction} />;
   }
 
   const core = prediction.core;

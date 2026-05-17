@@ -146,8 +146,8 @@ test.describe('Add Show redesign', () => {
 
     if (isEnabled) {
       await submitBtn.click();
-      await page.waitForURL('**/shows', { timeout: 10000 });
-      expect(page.url()).toContain('/shows');
+      await page.waitForURL(/\/shows\/[0-9a-f-]+/, { timeout: 10000 });
+      expect(page.url()).toMatch(/\/shows\/[0-9a-f-]+/);
     } else {
       // Form not complete enough to submit — that's ok for this structural test
       // Just verify the button exists and form is rendered correctly

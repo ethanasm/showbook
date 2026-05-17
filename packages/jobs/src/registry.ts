@@ -22,6 +22,7 @@ import {
 } from './setlist-corpus-fill';
 import { runSongIndexRebuild } from './song-index-rebuild';
 import { runDailyBacktest } from './prediction-eval';
+import { runSetlistStyleRefresh } from './setlist-style-refresh';
 import { runSpotifyRecentlyPlayed } from './spotify-recently-played';
 import { runYearEndSoundtrack } from './year-end-soundtrack';
 // @showbook/scrapers pulls in Playwright, which the Next.js dev server
@@ -46,6 +47,7 @@ export const JOBS = {
   SETLIST_CORPUS_FILL_REFRESH: 'enrichment/setlist-corpus-fill-refresh',
   SONG_INDEX_REBUILD: 'enrichment/song-index-rebuild',
   EVAL_RUN_DAILY_BACKTEST: 'eval/run-daily-backtest',
+  SETLIST_STYLE_REFRESH: 'enrichment/setlist-style-refresh',
   SPOTIFY_RECENTLY_PLAYED: 'spotify/recently-played',
   YEAR_END_SOUNDTRACK: 'spotify/year-end-soundtrack',
 } as const;
@@ -105,6 +107,7 @@ const QUEUE_OPTIONS: Record<string, QueueOptions> = {
   'enrichment/setlist-corpus-fill-refresh': LONG_BATCH,
   'enrichment/song-index-rebuild': LONG_BATCH,
   'eval/run-daily-backtest': LONG_BATCH,
+  'enrichment/setlist-style-refresh': LONG_BATCH,
   'spotify/recently-played': LONG_BATCH,
   'spotify/year-end-soundtrack': LONG_BATCH,
 };
@@ -165,6 +168,7 @@ async function showsNightlyHandler(jobs: PgBoss.Job[]) {
           event: 'shows.nightly.summary',
           transitioned: result.transitioned,
           queued: result.queued,
+          catchupQueued: result.catchupQueued,
           deleted: result.deleted,
         },
         'Shows nightly complete',
@@ -490,6 +494,15 @@ async function evalRunDailyBacktestHandler(jobs: PgBoss.Job[]) {
   }
 }
 
+async function setlistStyleRefreshHandler(jobs: PgBoss.Job[]) {
+  for (const job of jobs) {
+    await runJob(JOBS.SETLIST_STYLE_REFRESH, job, async () => {
+      const result = await runSetlistStyleRefresh();
+      return result;
+    });
+  }
+}
+
 async function spotifyRecentlyPlayedHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
     await runJob(JOBS.SPOTIFY_RECENTLY_PLAYED, job, async () => {
@@ -603,6 +616,7 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   await boss.work(JOBS.SETLIST_CORPUS_FILL_REFRESH, setlistCorpusFillRefreshHandler);
   await boss.work(JOBS.SONG_INDEX_REBUILD, songIndexRebuildHandler);
   await boss.work(JOBS.EVAL_RUN_DAILY_BACKTEST, evalRunDailyBacktestHandler);
+  await boss.work(JOBS.SETLIST_STYLE_REFRESH, setlistStyleRefreshHandler);
   await boss.work(JOBS.SPOTIFY_RECENTLY_PLAYED, spotifyRecentlyPlayedHandler);
   await boss.work(JOBS.YEAR_END_SOUNDTRACK, yearEndSoundtrackHandler);
 
@@ -637,6 +651,12 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   // 04:45 ET later that morning brings fresh setlists in for *tomorrow's*
   // back-test. Phase 4 ships this in shadow mode — no release gate yet.
   await boss.schedule(JOBS.EVAL_RUN_DAILY_BACKTEST, '0 3 * * *', {}, { tz: 'America/New_York' });
+  // Setlist-style refresh at 03:30 ET — runs after the eval back-test
+  // (which only consumes the *current* stored styles) and before the
+  // corpus-fill refresh (which doesn't depend on styles). Three-runs-
+  // to-disagree on seed entries; auto-applies on first run for new
+  // performers.
+  await boss.schedule(JOBS.SETLIST_STYLE_REFRESH, '30 3 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.NOTIFICATIONS_DAILY_DIGEST, '0 8 * * *', {}, { tz: 'America/New_York' });
   // Phase 7 — recently-played priming-stat sweep at 09:00 ET nightly,
   // settling each show's prep/post counts 6h post-show.

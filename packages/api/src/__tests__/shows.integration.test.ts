@@ -17,6 +17,7 @@ import {
   shows,
   showAnnouncementLinks,
   announcements,
+  enrichmentQueue,
   performers,
   venues,
 } from '@showbook/db';
@@ -333,6 +334,37 @@ describe('shows router', () => {
     assert.equal(created!.state, 'past');
     assert.ok(created!.showPerformers.length >= 2);
     assert.ok(created!.setlists);
+    // Past concert created WITH an inline setlist should NOT be queued for
+    // enrichment — the create-time queue is for setlistless past concerts.
+    const inlineQueueRows = await db
+      .select()
+      .from(enrichmentQueue)
+      .where(eq(enrichmentQueue.showId, created!.id));
+    assert.equal(inlineQueueRows.length, 0, 'inline-setlist past concerts should not be queued');
+  });
+
+  it('create falls back to setlist enrichment queue when inline setlist.fm lookup misses', async () => {
+    // The inline lookup runs against setlist.fm with a fake performer name —
+    // setlist.fm returns no matching artist (or the call throws when
+    // SETLISTFM_API_KEY is unset in CI) and the create handler falls back to
+    // enqueuing the show for retry. Either way the queue row is the assertion
+    // that the Gmail-import gap is closed.
+    const created = await callerFor(USER).shows.create({
+      kind: 'concert',
+      headliner: { name: `${PREFIX} Setlistless Headliner` },
+      venue: { name: `${PREFIX} Venue`, city: 'NYC' },
+      date: '2022-12-01',
+      ticketCount: 1,
+    });
+    assert.ok(created);
+    assert.equal(created!.state, 'past');
+    const queueRows = await db
+      .select()
+      .from(enrichmentQueue)
+      .where(eq(enrichmentQueue.showId, created!.id));
+    assert.equal(queueRows.length, 1, 'past concert should be queued for setlist enrichment');
+    assert.equal(queueRows[0].type, 'setlist');
+    assert.equal(queueRows[0].attempts, 0);
   });
 
   it('create theatre uses production name as title', async () => {
@@ -346,6 +378,13 @@ describe('shows router', () => {
     assert.ok(created);
     assert.equal(created!.kind, 'theatre');
     assert.equal(created!.productionName, 'Some Show');
+    // Theatre shows should NOT enqueue setlist enrichment — the create-time
+    // queue is concert-only.
+    const theatreQueueRows = await db
+      .select()
+      .from(enrichmentQueue)
+      .where(eq(enrichmentQueue.showId, created!.id));
+    assert.equal(theatreQueueRows.length, 0, 'theatre shows should not be queued');
   });
 
   it('update mutates an existing show', async () => {
