@@ -475,6 +475,229 @@ export async function addTracksToPlaylist(
 }
 
 // ---------------------------------------------------------------------------
+// Library cross-reference (GET /me/tracks/contains)
+// ---------------------------------------------------------------------------
+
+/**
+ * Spotify caps `/me/tracks/contains` at 50 IDs per call. Setlists rarely
+ * exceed this — but the batch loop is straightforward so we support
+ * arbitrarily large inputs without surprising the caller.
+ */
+const TRACKS_CONTAINS_BATCH = 50;
+
+/**
+ * Check whether each of `trackIds` is in the connected user's saved
+ * library. Wraps `GET /v1/me/tracks/contains?ids=...` — Spotify accepts
+ * up to 50 IDs per call and returns a boolean array in the same order.
+ * Larger inputs batch into multiple calls and the results are stitched
+ * back into the original order.
+ *
+ * Used by the Phase 7 fan-loyalty + discovered-live procedures (per-show
+ * intersection, on demand). Empty input short-circuits — no HTTP call.
+ */
+export async function tracksContains(
+  accessToken: string,
+  trackIds: string[],
+): Promise<boolean[]> {
+  if (trackIds.length === 0) return [];
+  const out: boolean[] = [];
+  for (let offset = 0; offset < trackIds.length; offset += TRACKS_CONTAINS_BATCH) {
+    const batch = trackIds.slice(offset, offset + TRACKS_CONTAINS_BATCH);
+    const url = `${API_BASE}/me/tracks/contains?ids=${encodeURIComponent(batch.join(','))}`;
+    const res = await spotifyFetch(url, accessToken);
+    if (!res.ok) {
+      const detail = await res.text();
+      throw new SpotifyError(
+        `Spotify /me/tracks/contains ${res.status}`,
+        res.status,
+        detail.slice(0, 500),
+      );
+    }
+    const data = (await res.json()) as boolean[];
+    if (!Array.isArray(data) || data.length !== batch.length) {
+      throw new SpotifyError(
+        `Spotify /me/tracks/contains shape mismatch (expected ${batch.length}, got ${
+          Array.isArray(data) ? data.length : typeof data
+        })`,
+        0,
+      );
+    }
+    out.push(...data);
+  }
+  return out;
+}
+
+/**
+ * Save one or more tracks to the user's library — `PUT /v1/me/tracks`.
+ * Requires the `user-library-modify` scope, which is in `SPOTIFY_SCOPES`
+ * (granted at first connect). 50-IDs-per-call ceiling; the Phase 7
+ * "save discovered" button only ever passes a single id, but the loop is
+ * forwards-compatible with bulk saves.
+ */
+export async function saveTracksToLibrary(
+  accessToken: string,
+  trackIds: string[],
+): Promise<void> {
+  if (trackIds.length === 0) return;
+  for (let offset = 0; offset < trackIds.length; offset += TRACKS_CONTAINS_BATCH) {
+    const batch = trackIds.slice(offset, offset + TRACKS_CONTAINS_BATCH);
+    const url = `${API_BASE}/me/tracks?ids=${encodeURIComponent(batch.join(','))}`;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      const detail = await res.text();
+      throw new SpotifyError(
+        `Spotify PUT /me/tracks ${res.status}`,
+        res.status,
+        detail.slice(0, 500),
+      );
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Recently played + top tracks (Phase 7 jobs)
+// ---------------------------------------------------------------------------
+
+export interface SpotifyRecentlyPlayedTrack {
+  trackId: string;
+  trackName: string;
+  artistNames: string[];
+  playedAt: Date;
+}
+
+interface RecentlyPlayedRaw {
+  items: Array<{
+    track: { id: string; name: string; artists: Array<{ name: string }> };
+    played_at: string;
+  }>;
+}
+
+/**
+ * Pull the user's last 50 plays from `/me/player/recently-played`. The
+ * Phase 7 priming job buckets the results against the user's shows.
+ * `limit` is capped at 50 by Spotify; we forward the default.
+ */
+export async function getRecentlyPlayed(
+  accessToken: string,
+  limit = 50,
+): Promise<SpotifyRecentlyPlayedTrack[]> {
+  const url = `${API_BASE}/me/player/recently-played?limit=${Math.min(
+    Math.max(limit, 1),
+    50,
+  )}`;
+  const res = await spotifyFetch(url, accessToken);
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new SpotifyError(
+      `Spotify recently-played ${res.status}`,
+      res.status,
+      detail.slice(0, 500),
+    );
+  }
+  const data = (await res.json()) as RecentlyPlayedRaw;
+  return (data.items ?? [])
+    .filter((item) => item?.track?.id && item?.played_at)
+    .map((item) => ({
+      trackId: item.track.id,
+      trackName: item.track.name,
+      artistNames: item.track.artists.map((a) => a.name),
+      playedAt: new Date(item.played_at),
+    }));
+}
+
+export interface SpotifyTopTrack {
+  id: string;
+  name: string;
+  popularity: number;
+  artists: string[];
+}
+
+interface TopTracksRaw {
+  items: Array<{
+    id: string;
+    name: string;
+    popularity: number;
+    artists: Array<{ name: string }>;
+  }>;
+}
+
+/**
+ * Per-user `/me/top/tracks?time_range=long_term&limit=50`. Used by the
+ * Phase 7 year-end soundtrack scorer (signature-track multiplier) and
+ * the predicted-setlist ⭐ top-track chip on PersonalWeightChip overlays.
+ */
+export async function getTopTracks(
+  accessToken: string,
+  opts: { timeRange?: 'short_term' | 'medium_term' | 'long_term'; limit?: number } = {},
+): Promise<SpotifyTopTrack[]> {
+  const timeRange = opts.timeRange ?? 'long_term';
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 50);
+  const url = `${API_BASE}/me/top/tracks?time_range=${timeRange}&limit=${limit}`;
+  const res = await spotifyFetch(url, accessToken);
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new SpotifyError(
+      `Spotify top-tracks ${res.status}`,
+      res.status,
+      detail.slice(0, 500),
+    );
+  }
+  const data = (await res.json()) as TopTracksRaw;
+  return (data.items ?? []).map((item) => ({
+    id: item.id,
+    name: item.name,
+    popularity: item.popularity ?? 0,
+    artists: item.artists.map((a) => a.name),
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Playlist cover upload + replace items (year-end soundtrack)
+// ---------------------------------------------------------------------------
+
+/**
+ * Replace the items on a playlist — `PUT /v1/playlists/{id}/tracks`.
+ * Used by the year-end-soundtrack cron's idempotent re-run: when the
+ * users.spotify_year_playlists map already references a playlist for
+ * the current year, we overwrite its items rather than creating a
+ * duplicate playlist.
+ */
+export async function replacePlaylistItems(
+  accessToken: string,
+  playlistId: string,
+  uris: string[],
+): Promise<void> {
+  const url = `${API_BASE}/playlists/${encodeURIComponent(playlistId)}/tracks`;
+  if (uris.length > 100) {
+    throw new SpotifyError(
+      `replacePlaylistItems accepts ≤100 URIs per call (got ${uris.length})`,
+      0,
+    );
+  }
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ uris }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new SpotifyError(
+      `Spotify replace-playlist-items ${res.status}`,
+      res.status,
+      detail.slice(0, 500),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Scope inspection
 // ---------------------------------------------------------------------------
 

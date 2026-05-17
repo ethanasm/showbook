@@ -7,6 +7,7 @@ import { HypePlaylistCardPlaceholder } from "./HypePlaylistCardPlaceholder";
 import { HypePlaylistCard } from "./HypePlaylistCard";
 import { PredictedSetlistRow } from "./PredictedSetlistRow";
 import { EncoreDivider } from "./EncoreDivider";
+import { DiscoveredRail } from "./DiscoveredRail";
 import {
   RotatingSetlistView,
   RotatingGateBlocked,
@@ -112,6 +113,12 @@ interface SetlistTabProps {
    * show-mode calibration check hasn't cleared.
    */
   improvisedGateBlocked?: boolean;
+  /**
+   * Phase 7 — when true, mount the DiscoveredRail (past variant)
+   * beneath the actual setlist. Gated by `SetlistIntelMusicLayerV2`
+   * + admin email bypass; resolved at the page level.
+   */
+  musicLayerV2Enabled?: boolean;
 }
 
 /** Resolve a row's title to (songId, badge) for the past variant. */
@@ -538,6 +545,7 @@ function SetlistTabPast({
   artistName,
   actualSongs = [],
   hypePlaylistEnabled,
+  musicLayerV2Enabled,
   showId,
   badgePayload,
   trackPreviews,
@@ -600,6 +608,7 @@ function SetlistTabPast({
           />
         </SectionFrame>
       )}
+      {musicLayerV2Enabled && <DiscoveredRail showId={showId} />}
       <SectionFrame title="Setlist" count={total}>
         <div className="predicted-grid" data-testid="actual-setlist-grid">
           {mainSet.map((song, idx) => {

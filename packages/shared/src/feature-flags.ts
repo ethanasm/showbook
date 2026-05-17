@@ -150,6 +150,17 @@ export const FeatureFlag = {
       'classified performers fall through to SetlistTabComingSoon.',
     state: 'ON',
   },
+  SetlistIntelMusicLayerV2: {
+    description:
+      'Phase 7 (setlist-intelligence) music layer v2. Gates the ' +
+      'fan-loyalty ring on the Overview tab + desktop right rail, the ' +
+      "discovered-live rail on the Setlist tab, and the show-title " +
+      "priming-stat italic. Single-user prod so 'ON' is equivalent to " +
+      'ON for the developer; flip OFF if the recently-played + ' +
+      'year-end-soundtrack jobs regress or the per-show ' +
+      '/me/tracks/contains call rate-limits Spotify.',
+    state: 'ON',
+  },
 } as const satisfies Record<string, { description: string; state: 'ON' | 'OFF' }>;
 
 export type FeatureFlagKey = keyof typeof FeatureFlag;

@@ -55,10 +55,12 @@ export const USER_SCOPED_PURGE_COLUMNS: readonly UserScopedPurgeColumn[] = [
   // legacy stubs are kept here for plan-fidelity:
   //   { table: 'shows', column: 'spotify_playlist_url', filter: 'user_id' },
   //   { table: 'shows', column: 'spotify_attended_playlist_url', filter: 'user_id' },
-  // Phase 7 will add:
-  //   { table: 'shows', column: 'spotify_prep_track_count', filter: 'user_id' },
-  //   { table: 'shows', column: 'spotify_post_track_count', filter: 'user_id' },
-  //   { table: 'users', column: 'spotify_year_playlists', filter: 'id' },
+  // Phase 7 — per-show priming counts derived from the user's
+  // /me/player/recently-played history, plus the year-end-soundtrack
+  // playlist-id map on users. All three wipe on disconnect.
+  { table: 'shows', column: 'spotify_prep_track_count', filter: 'user_id' },
+  { table: 'shows', column: 'spotify_post_track_count', filter: 'user_id' },
+  { table: 'users', column: 'spotify_year_playlists', filter: 'id' },
 ];
 
 /**

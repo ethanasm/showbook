@@ -23,6 +23,8 @@ import {
 import { runSongIndexRebuild } from './song-index-rebuild';
 import { runDailyBacktest } from './prediction-eval';
 import { runSetlistStyleRefresh } from './setlist-style-refresh';
+import { runSpotifyRecentlyPlayed } from './spotify-recently-played';
+import { runYearEndSoundtrack } from './year-end-soundtrack';
 // @showbook/scrapers pulls in Playwright, which the Next.js dev server
 // tries to bundle. Import it lazily inside the handler so it stays out of
 // the web app's static dependency graph.
@@ -46,6 +48,8 @@ export const JOBS = {
   SONG_INDEX_REBUILD: 'enrichment/song-index-rebuild',
   EVAL_RUN_DAILY_BACKTEST: 'eval/run-daily-backtest',
   SETLIST_STYLE_REFRESH: 'enrichment/setlist-style-refresh',
+  SPOTIFY_RECENTLY_PLAYED: 'spotify/recently-played',
+  YEAR_END_SOUNDTRACK: 'spotify/year-end-soundtrack',
 } as const;
 
 // pg-boss v10 ignores constructor-level retry/expiration options when
@@ -104,6 +108,8 @@ const QUEUE_OPTIONS: Record<string, QueueOptions> = {
   'enrichment/song-index-rebuild': LONG_BATCH,
   'eval/run-daily-backtest': LONG_BATCH,
   'enrichment/setlist-style-refresh': LONG_BATCH,
+  'spotify/recently-played': LONG_BATCH,
+  'spotify/year-end-soundtrack': LONG_BATCH,
 };
 
 const log = child({ component: 'jobs.registry' });
@@ -497,6 +503,46 @@ async function setlistStyleRefreshHandler(jobs: PgBoss.Job[]) {
   }
 }
 
+async function spotifyRecentlyPlayedHandler(jobs: PgBoss.Job[]) {
+  for (const job of jobs) {
+    await runJob(JOBS.SPOTIFY_RECENTLY_PLAYED, job, async () => {
+      const result = await runSpotifyRecentlyPlayed();
+      log.info(
+        {
+          event: 'spotify.recently_played.summary',
+          attempted: result.attempted,
+          matched: result.matched,
+          noMatch: result.noMatch,
+          failed: result.failed,
+        },
+        'Recently-played sweep complete',
+      );
+      return result;
+    });
+  }
+}
+
+async function yearEndSoundtrackHandler(jobs: PgBoss.Job[]) {
+  for (const job of jobs) {
+    await runJob(JOBS.YEAR_END_SOUNDTRACK, job, async () => {
+      const result = await runYearEndSoundtrack();
+      log.info(
+        {
+          event: 'year_end_soundtrack.summary',
+          attempted: result.attempted,
+          built: result.built,
+          reused: result.reused,
+          skipped: result.skipped,
+          failed: result.failed,
+          year: result.year,
+        },
+        'Year-end soundtrack sweep complete',
+      );
+      return result;
+    });
+  }
+}
+
 async function notificationsDailyDigestHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
     await runJob(JOBS.NOTIFICATIONS_DAILY_DIGEST, job, async () => {
@@ -571,6 +617,8 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   await boss.work(JOBS.SONG_INDEX_REBUILD, songIndexRebuildHandler);
   await boss.work(JOBS.EVAL_RUN_DAILY_BACKTEST, evalRunDailyBacktestHandler);
   await boss.work(JOBS.SETLIST_STYLE_REFRESH, setlistStyleRefreshHandler);
+  await boss.work(JOBS.SPOTIFY_RECENTLY_PLAYED, spotifyRecentlyPlayedHandler);
+  await boss.work(JOBS.YEAR_END_SOUNDTRACK, yearEndSoundtrackHandler);
 
   // Backstop sweep for the orphan-cleanup triggers (0002 / 0014 / 0023 /
   // 0025). Runs before shows-nightly so the nightly transition operates on
@@ -610,6 +658,13 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   // performers.
   await boss.schedule(JOBS.SETLIST_STYLE_REFRESH, '30 3 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.NOTIFICATIONS_DAILY_DIGEST, '0 8 * * *', {}, { tz: 'America/New_York' });
+  // Phase 7 — recently-played priming-stat sweep at 09:00 ET nightly,
+  // settling each show's prep/post counts 6h post-show.
+  await boss.schedule(JOBS.SPOTIFY_RECENTLY_PLAYED, '0 9 * * *', {}, { tz: 'America/New_York' });
+  // Phase 7 — year-end soundtrack on Dec 31 at 03:00 ET. Idempotent
+  // against the users.spotify_year_playlists map so re-runs overwrite
+  // instead of creating duplicates.
+  await boss.schedule(JOBS.YEAR_END_SOUNDTRACK, '0 3 31 12 *', {}, { tz: 'America/New_York' });
 
   log.info(
     { event: 'pgboss.registered', jobs: Object.values(JOBS) },
