@@ -30,7 +30,7 @@ import { NotesTab } from "./NotesTab";
 import { FanLoyaltyRing } from "./FanLoyaltyRing";
 import { PrimingStat } from "./PrimingStat";
 import { useTrackTabView } from "./use-track-tab-view";
-import { computeShowTabBadges, isHypePlaylistVisible } from "./types";
+import { computeShowTabBadges, isHypePlaylistVisible, type ShowTabKey } from "./types";
 import type { StatCell } from "./StatRow";
 
 interface ShowDetailTabsViewProps {
@@ -388,6 +388,7 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
       showId={show.id}
       isPast={isPast}
       state={show.state}
+      kind={show.kind}
       cells={cells}
       lineup={lineupEntries}
       artistHistorySummary={null}
@@ -401,6 +402,12 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
       musicLayerPlaceholder={musicLayerPlaceholder}
     />
   );
+
+  // Theatre + comedy shows have no setlist concept — drop the tab
+  // entirely rather than routing every visit to a coming-soon
+  // placeholder.
+  const hiddenTabs: ShowTabKey[] =
+    show.kind === "theatre" || show.kind === "comedy" ? ["setlist"] : [];
 
   const mediaPanel = (
     <MediaTab
@@ -464,6 +471,7 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
             media: mediaPanel,
             notes: notesPanel,
           }}
+          hiddenTabs={hiddenTabs}
           rightRail={rightRailSlots}
           onTabChange={trackTabView}
         />

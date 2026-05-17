@@ -15,10 +15,21 @@ export interface OverviewLineupEntry {
   sortOrder: number;
 }
 
+type ShowKind =
+  | "concert"
+  | "theatre"
+  | "comedy"
+  | "festival"
+  | "sports"
+  | "film"
+  | "unknown";
+
 interface OverviewTabProps {
   showId: string;
   isPast: boolean;
   state: "past" | "ticketed" | "watching";
+  /** Drives kind-specific copy in the "Your history" placeholders. */
+  kind?: ShowKind;
   cells: StatCell[];
   lineup: OverviewLineupEntry[];
   artistHistorySummary?: string | null;
@@ -35,6 +46,21 @@ interface OverviewTabProps {
   musicLayerPlaceholder?: React.ReactNode;
 }
 
+function defaultArtistHistoryCopy(kind: ShowKind | undefined): string {
+  switch (kind) {
+    case "comedy":
+      return "First time seeing this comedian";
+    case "theatre":
+      return "First time seeing this production";
+    case "sports":
+      return "First time seeing this team";
+    case "film":
+      return "First time seeing this film";
+    default:
+      return "First show with this lineup";
+  }
+}
+
 /**
  * Overview tab — the canonical "what is this show" landing surface.
  * Shows the stat row, music-layer placeholder block (when supplied),
@@ -45,6 +71,7 @@ interface OverviewTabProps {
 export function OverviewTab({
   isPast,
   state,
+  kind,
   cells,
   lineup,
   artistHistorySummary,
@@ -171,7 +198,7 @@ export function OverviewTab({
           }}
         >
           {[
-            { label: "Artist", value: artistHistorySummary ?? "First show with this lineup" },
+            { label: "Artist", value: artistHistorySummary ?? defaultArtistHistoryCopy(kind) },
             { label: "Venue", value: venueHistorySummary ?? "First time at this venue" },
           ].map((row) => (
             <div
