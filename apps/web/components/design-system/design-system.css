@@ -1499,11 +1499,11 @@ a.show-row__support-link:hover {
 
 /* ── Home: Recent table row ────────────────────────────────
    3-column collapse on mobile (date | headline+venue inline | chevron).
-   The desktop layout (7 cols) is rendered with extra cells that
+   The desktop layout (5 cols) is rendered with extra cells that
    are display: none on mobile. */
 .home-recent-row {
   display: grid;
-  grid-template-columns: 72px 110px minmax(0, 1fr) minmax(0, 1fr) 110px 64px 28px;
+  grid-template-columns: 72px 110px minmax(0, 1fr) minmax(0, 1fr) 28px;
   column-gap: 16px;
   padding: 14px 20px;
   border-bottom: 1px solid var(--rule);
@@ -1513,7 +1513,7 @@ a.show-row__support-link:hover {
 
 .home-recent-headers {
   display: grid;
-  grid-template-columns: 72px 110px minmax(0, 1fr) minmax(0, 1fr) 110px 64px 28px;
+  grid-template-columns: 72px 110px minmax(0, 1fr) minmax(0, 1fr) 28px;
   column-gap: 16px;
   padding: 10px 20px;
   border-bottom: 1px solid var(--rule);
