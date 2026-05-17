@@ -11,6 +11,7 @@ import { runSetlistRetry } from './setlist-retry';
 import { runShowsNightly } from './shows-nightly';
 import { runBackfillPerformerImages } from './backfill-performer-images';
 import { runBackfillPerformerMbids } from './backfill-performer-mbids';
+import { runBackfillPerformerTicketmasterIds } from './backfill-performer-ticketmaster-ids';
 import { runBackfillVenuePhotos } from './backfill-venue-photos';
 import { runBackfillShowCoverImages } from './backfill-show-cover-images';
 import { runPruneOrphanCatalog } from './prune-orphan-catalog';
@@ -41,6 +42,7 @@ export const JOBS = {
   NOTIFICATIONS_DAILY_DIGEST: 'notifications/daily-digest',
   BACKFILL_PERFORMER_IMAGES: 'backfill/performer-images',
   BACKFILL_PERFORMER_MBIDS: 'backfill/performer-mbids',
+  BACKFILL_PERFORMER_TICKETMASTER_IDS: 'backfill/performer-ticketmaster-ids',
   BACKFILL_VENUE_PHOTOS: 'backfill/venue-photos',
   BACKFILL_SHOW_COVER_IMAGES: 'backfill/show-cover-images',
   PRUNE_ORPHAN_CATALOG: 'prune/orphan-catalog',
@@ -120,6 +122,7 @@ const QUEUE_OPTIONS: Record<string, QueueOptions> = {
   'notifications/daily-digest': LONG_BATCH_CRON,
   'backfill/performer-images': LONG_BATCH_CRON,
   'backfill/performer-mbids': LONG_BATCH_CRON,
+  'backfill/performer-ticketmaster-ids': LONG_BATCH_CRON,
   'backfill/venue-photos': LONG_BATCH_CRON,
   'backfill/show-cover-images': LONG_BATCH_CRON,
   'prune/orphan-catalog': LONG_BATCH_CRON,
@@ -348,6 +351,26 @@ async function backfillPerformerMbidsHandler(jobs: PgBoss.Job[]) {
           failed: result.failed,
         },
         'Performer MBID backfill complete',
+      );
+      return result;
+    });
+  }
+}
+
+async function backfillPerformerTicketmasterIdsHandler(jobs: PgBoss.Job[]) {
+  for (const job of jobs) {
+    await runJob(JOBS.BACKFILL_PERFORMER_TICKETMASTER_IDS, job, async () => {
+      const result = await runBackfillPerformerTicketmasterIds();
+      log.info(
+        {
+          event: 'backfill.performer_ticketmaster_ids.summary',
+          total: result.total,
+          updated: result.updated,
+          missing: result.missing,
+          skipped: result.skipped,
+          failed: result.failed,
+        },
+        'Performer Ticketmaster ID backfill complete',
       );
       return result;
     });
@@ -657,6 +680,10 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   await boss.work(JOBS.NOTIFICATIONS_DAILY_DIGEST, notificationsDailyDigestHandler);
   await boss.work(JOBS.BACKFILL_PERFORMER_IMAGES, backfillPerformerImagesHandler);
   await boss.work(JOBS.BACKFILL_PERFORMER_MBIDS, backfillPerformerMbidsHandler);
+  await boss.work(
+    JOBS.BACKFILL_PERFORMER_TICKETMASTER_IDS,
+    backfillPerformerTicketmasterIdsHandler,
+  );
   await boss.work(JOBS.BACKFILL_VENUE_PHOTOS, backfillVenuePhotosHandler);
   await boss.work(JOBS.BACKFILL_SHOW_COVER_IMAGES, backfillShowCoverImagesHandler);
   await boss.work(JOBS.PRUNE_ORPHAN_CATALOG, pruneOrphanCatalogHandler);
@@ -685,6 +712,11 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   // pass are available when we look up TM attractions by name.
   await boss.schedule(JOBS.BACKFILL_PERFORMER_IMAGES, '30 5 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.BACKFILL_VENUE_PHOTOS, '45 5 * * *', {}, { tz: 'America/New_York' });
+  // Performer TM-id backfill at 06:00 ET — slotted between venue-photos
+  // (05:45) and show-cover-images (06:15). Catches performers that
+  // already have images (so the 05:30 image backfill skipped them) but
+  // are still missing a TM attraction id.
+  await boss.schedule(JOBS.BACKFILL_PERFORMER_TICKETMASTER_IDS, '0 6 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.BACKFILL_SHOW_COVER_IMAGES, '15 6 * * *', {}, { tz: 'America/New_York' });
   await boss.schedule(JOBS.DISCOVER_INGEST, '0 6 * * 1', {}, { tz: 'America/New_York' });
   // Health summary at 07:00 ET — runs after every overnight cron has had

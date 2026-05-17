@@ -19,6 +19,8 @@ import {
   enqueueSetlistRetry,
   enqueueSetlistCorpusFill,
   enqueueSetlistCorpusFillRefresh,
+  enqueueBackfillPerformerMbids,
+  enqueueBackfillPerformerTicketmasterIds,
 } from '../job-queue';
 import { child } from '@showbook/observability';
 
@@ -362,4 +364,46 @@ export const adminRouter = router({
     );
     return { jobId };
   }),
+
+  /**
+   * Enqueue the `backfill/performer-mbids` cron on demand. Looks up
+   * MusicBrainz IDs via setlist.fm for every performer with
+   * `musicbrainz_id IS NULL`. Already runs daily at 04:30 ET — this
+   * lets an operator trigger after a bulk Gmail / manual-entry import.
+   */
+  enqueueBackfillPerformerMbids: adminProcedure.mutation(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const jobId = await enqueueBackfillPerformerMbids();
+    log.info(
+      {
+        event: 'admin.backfill_performer_mbids.enqueue',
+        userId,
+        jobId,
+      },
+      'Admin enqueued backfill-performer-mbids job',
+    );
+    return { jobId };
+  }),
+
+  /**
+   * Enqueue the `backfill/performer-ticketmaster-ids` cron on demand.
+   * Looks up TM attraction IDs (and any missing MBIDs available via
+   * TM's external links) for every performer without a TM ID. Already
+   * runs daily at 06:00 ET.
+   */
+  enqueueBackfillPerformerTicketmasterIds: adminProcedure.mutation(
+    async ({ ctx }) => {
+      const userId = ctx.session.user.id;
+      const jobId = await enqueueBackfillPerformerTicketmasterIds();
+      log.info(
+        {
+          event: 'admin.backfill_performer_ticketmaster_ids.enqueue',
+          userId,
+          jobId,
+        },
+        'Admin enqueued backfill-performer-ticketmaster-ids job',
+      );
+      return { jobId };
+    },
+  ),
 });

@@ -5,7 +5,7 @@
 import './load-env-local';
 
 import { db, performers } from '@showbook/db';
-import { eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { searchArtist, isUniqueViolation } from '@showbook/api';
 import { child, flushObservability } from '@showbook/observability';
 
@@ -77,10 +77,36 @@ export async function runBackfillPerformerMbids(): Promise<BackfillPerformerMbid
 
       const mbid = artists[0]!.mbid;
       try {
-        await db
+        // Race guard: only write if the row's MBID is still null. The
+        // SELECT above already filters, but the inline `shows.create`
+        // MBID hop, manual operator action, or a concurrent
+        // backfill-performer-images run can fill the column between
+        // the SELECT and this UPDATE. `.returning` lets us tell the
+        // race-loss case apart from a successful write.
+        const result = await db
           .update(performers)
           .set({ musicbrainzId: mbid })
-          .where(eq(performers.id, performer.id));
+          .where(
+            and(
+              eq(performers.id, performer.id),
+              isNull(performers.musicbrainzId),
+            ),
+          )
+          .returning({ id: performers.id });
+        if (result.length === 0) {
+          skipped++;
+          log.warn(
+            {
+              event: 'performer.mbid.conflict',
+              performerId: performer.id,
+              performerName: performer.name,
+              mbid,
+              reason: 'row_already_filled',
+            },
+            'MBID set by another writer between SELECT and UPDATE',
+          );
+          continue;
+        }
         updated++;
         log.info(
           {
@@ -104,6 +130,7 @@ export async function runBackfillPerformerMbids(): Promise<BackfillPerformerMbid
               performerId: performer.id,
               performerName: performer.name,
               mbid,
+              reason: 'other_row_owns_id',
             },
             'MBID already owned by another performer row — leaving this row null',
           );
