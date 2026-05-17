@@ -1396,6 +1396,9 @@ a.show-row__support-link:hover {
   margin-top: 4px;
 }
 
+.hero-card__date-month { margin-top: 4px; }
+.hero-card__date-countdown { margin-top: 10px; }
+
 @media (max-width: 899px) {
   .hero-card {
     padding: 20px 18px;

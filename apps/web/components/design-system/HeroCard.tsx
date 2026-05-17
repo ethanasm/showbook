@@ -302,7 +302,6 @@ export function HeroCard({ show }: HeroCardProps) {
               fontSize: 12,
               color: "var(--ink)",
               letterSpacing: ".14em",
-              marginTop: 4,
               textTransform: "uppercase",
               fontWeight: 500,
             }}
@@ -315,7 +314,6 @@ export function HeroCard({ show }: HeroCardProps) {
               fontFamily: "var(--font-geist-mono), monospace",
               fontSize: 10.5,
               color: "var(--muted)",
-              marginTop: 10,
               letterSpacing: ".06em",
             }}
           >
