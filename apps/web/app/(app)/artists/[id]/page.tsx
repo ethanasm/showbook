@@ -10,6 +10,7 @@ import { useIsMobile } from "@/lib/useIsMobile";
 import {
   CenteredMessage,
   EmptyState,
+  QueryBoundary,
   RemoteImage,
   SectionHeader,
   ShowRow as ShowRowComponent,
@@ -151,7 +152,6 @@ export default function ArtistDetailPage() {
     },
   });
 
-  const performer = detailQuery.data;
   const userShows = useMemo(
     () => (userShowsQuery.data ?? []) as ShowData[],
     [userShowsQuery.data],
@@ -171,6 +171,7 @@ export default function ArtistDetailPage() {
     followMutation.isPending || unfollowMutation.isPending;
 
   function toggleFollow() {
+    const performer = detailQuery.data;
     if (!performer || followBusy) return;
     if (performer.isFollowed) {
       unfollowMutation.mutate({ performerId: performer.id });
@@ -179,35 +180,33 @@ export default function ArtistDetailPage() {
     }
   }
 
-  if (detailQuery.isLoading) {
-    return <CenteredMessage>Loading artist…</CenteredMessage>;
-  }
-
-  if (detailQuery.error || !performer) {
-    return (
-      <CenteredMessage tone="error">
-        Couldn&apos;t load artist.{" "}
-        <button
-          type="button"
-          onClick={() => router.push("/artists")}
-          style={{
-            background: "none",
-            border: "none",
-            color: "var(--accent)",
-            cursor: "pointer",
-            fontFamily: "inherit",
-            fontSize: "inherit",
-            padding: 0,
-            marginLeft: 8,
-          }}
-        >
-          back to artists →
-        </button>
-      </CenteredMessage>
-    );
-  }
-
   return (
+    <QueryBoundary
+      query={detailQuery}
+      loadingLabel="Loading artist…"
+      errorFallback={() => (
+        <CenteredMessage tone="error">
+          Couldn&apos;t load artist.{" "}
+          <button
+            type="button"
+            onClick={() => router.push("/artists")}
+            style={{
+              background: "none",
+              border: "none",
+              color: "var(--accent)",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              fontSize: "inherit",
+              padding: 0,
+              marginLeft: 8,
+            }}
+          >
+            back to artists →
+          </button>
+        </CenteredMessage>
+      )}
+    >
+      {(performer) => (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* Breadcrumb */}
       <div
@@ -494,6 +493,8 @@ export default function ArtistDetailPage() {
         </section>
       </div>
     </div>
+      )}
+    </QueryBoundary>
   );
 }
 

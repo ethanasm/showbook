@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ExternalLink, Music } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { CenteredMessage } from "@/components/design-system";
+import { CenteredMessage, QueryBoundary } from "@/components/design-system";
 import { formatDateLong, formatDateMedium, isFeatureOn } from "@showbook/shared";
 
 export default function SongDetailPage() {
@@ -35,45 +35,39 @@ export default function SongDetailPage() {
     });
   }, [songId]);
 
-  // Compute sparkline points unconditionally so the hook order stays
-  // stable across the gated / loading / error branches.
-  const sparklinePoints = computeSparklinePoints(
-    detailQuery.data?.timeline ?? [],
-  );
-
   if (!flagOn) {
     router.replace("/home");
     return null;
   }
 
-  if (detailQuery.isLoading) {
-    return <CenteredMessage>Loading song…</CenteredMessage>;
-  }
-  if (detailQuery.error || !detailQuery.data) {
-    return (
-      <CenteredMessage tone="error">
-        Couldn&apos;t load this song.{" "}
-        <button
-          type="button"
-          onClick={() => router.push("/songs")}
-          style={{
-            background: "none",
-            border: "none",
-            color: "var(--accent)",
-            cursor: "pointer",
-            fontFamily: "inherit",
-            fontSize: "inherit",
-          }}
-        >
-          back to songs →
-        </button>
-      </CenteredMessage>
-    );
-  }
-
-  const { song, timesHeard, firstHeard, lastHeard, timeline, rarity } = detailQuery.data;
-
   return (
+    <QueryBoundary
+      query={detailQuery}
+      loadingLabel="Loading song…"
+      errorFallback={() => (
+        <CenteredMessage tone="error">
+          Couldn&apos;t load this song.{" "}
+          <button
+            type="button"
+            onClick={() => router.push("/songs")}
+            style={{
+              background: "none",
+              border: "none",
+              color: "var(--accent)",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              fontSize: "inherit",
+            }}
+          >
+            back to songs →
+          </button>
+        </CenteredMessage>
+      )}
+    >
+      {(data) => {
+        const { song, timesHeard, firstHeard, lastHeard, timeline, rarity } = data;
+        const sparklinePoints = computeSparklinePoints(timeline);
+        return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* Breadcrumb */}
       <div
@@ -296,6 +290,9 @@ export default function SongDetailPage() {
         </section>
       </div>
     </div>
+        );
+      }}
+    </QueryBoundary>
   );
 }
 
