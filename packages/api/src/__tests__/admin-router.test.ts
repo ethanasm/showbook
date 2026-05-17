@@ -105,6 +105,63 @@ describe('adminRouter', () => {
       );
     });
 
+    it('enqueueSetlistCorpusFill throws FORBIDDEN for a non-admin caller', async () => {
+      const db = makeFakeDb({
+        authUserId: null,
+        selectResults: [[{ id: 'test-user', email: NON_ADMIN_EMAIL }]],
+      });
+      await assert.rejects(
+        () =>
+          caller(db).enqueueSetlistCorpusFill({ performerQuery: 'St. Lucia' }),
+        (err: unknown) => err instanceof TRPCError && err.code === 'FORBIDDEN',
+      );
+    });
+
+    it('enqueueSetlistCorpusFill throws NOT_FOUND when no performer matches', async () => {
+      const db = makeFakeDb({
+        authUserId: null,
+        selectResults: [
+          [{ id: 'test-user', email: ADMIN_EMAIL }], // adminProcedure auth
+          [], // performers lookup returns nothing
+        ],
+      });
+      await assert.rejects(
+        () =>
+          caller(db).enqueueSetlistCorpusFill({ performerQuery: 'nobody' }),
+        (err: unknown) => err instanceof TRPCError && err.code === 'NOT_FOUND',
+      );
+    });
+
+    it('enqueueSetlistCorpusFill throws PRECONDITION_FAILED when multiple performers match', async () => {
+      const db = makeFakeDb({
+        authUserId: null,
+        selectResults: [
+          [{ id: 'test-user', email: ADMIN_EMAIL }],
+          [
+            { id: 'p1', name: 'St. Lucia', musicbrainzId: 'mb-1' },
+            { id: 'p2', name: 'St. Lucia Tribute', musicbrainzId: null },
+          ],
+        ],
+      });
+      await assert.rejects(
+        () =>
+          caller(db).enqueueSetlistCorpusFill({ performerQuery: 'St. Lucia' }),
+        (err: unknown) =>
+          err instanceof TRPCError && err.code === 'PRECONDITION_FAILED',
+      );
+    });
+
+    it('enqueueSetlistCorpusFillRefresh throws FORBIDDEN for a non-admin caller', async () => {
+      const db = makeFakeDb({
+        authUserId: null,
+        selectResults: [[{ id: 'test-user', email: NON_ADMIN_EMAIL }]],
+      });
+      await assert.rejects(
+        () => caller(db).enqueueSetlistCorpusFillRefresh(),
+        (err: unknown) => err instanceof TRPCError && err.code === 'FORBIDDEN',
+      );
+    });
+
     it('backfillVenueCoordinates returns an empty summary when no venues need it (admin caller)', async () => {
       // adminProcedure auth lookup → returns admin email.
       // Then handler queries venues → returns []. No further calls.

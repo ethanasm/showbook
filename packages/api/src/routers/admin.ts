@@ -1,12 +1,29 @@
-import { eq, and, isNotNull, isNull, inArray, notInArray, sql } from 'drizzle-orm';
+import { eq, and, ilike, isNotNull, isNull, inArray, notInArray, sql } from 'drizzle-orm';
+import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure, adminProcedure } from '../trpc';
-import { venues, users, shows, showPerformers, enrichmentQueue } from '@showbook/db';
+import {
+  venues,
+  users,
+  shows,
+  showPerformers,
+  enrichmentQueue,
+  performers,
+} from '@showbook/db';
 import { findTmVenueId } from '../venue-matcher';
 import { geocodeVenue } from '../geocode';
 import { enforceRateLimit } from '../rate-limit';
 import { isAdminEmail } from '../admin';
-import { enqueuePruneOrphanCatalog, enqueueSetlistRetry } from '../job-queue';
+import {
+  enqueuePruneOrphanCatalog,
+  enqueueSetlistRetry,
+  enqueueSetlistCorpusFill,
+  enqueueSetlistCorpusFillRefresh,
+} from '../job-queue';
 import { child } from '@showbook/observability';
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const log = child({ component: 'api.admin' });
 
@@ -248,5 +265,101 @@ export const adminRouter = router({
     );
 
     return { queued, jobId };
+  }),
+
+  /**
+   * Enqueue an `enrichment/setlist-corpus-fill` job for a single performer
+   * so the predicted-setlist tab can leave the "We're pulling recent
+   * setlists" cold state ahead of an upcoming show. Accepts either a
+   * performer UUID or a name (case-insensitive substring). Errors with
+   * NOT_FOUND if no performer matches and PRECONDITION_FAILED if more than
+   * one does, so the operator can disambiguate by ID.
+   */
+  enqueueSetlistCorpusFill: adminProcedure
+    .input(
+      z.object({
+        performerQuery: z.string().trim().min(1).max(200),
+        mode: z.enum(['predict', 'deep', 'refresh']).default('predict'),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      const isUuid = UUID_RE.test(input.performerQuery);
+      const matches = await ctx.db
+        .select({
+          id: performers.id,
+          name: performers.name,
+          musicbrainzId: performers.musicbrainzId,
+        })
+        .from(performers)
+        .where(
+          isUuid
+            ? eq(performers.id, input.performerQuery)
+            : ilike(performers.name, `%${input.performerQuery}%`),
+        )
+        .limit(10);
+
+      if (matches.length === 0) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `No performer matched "${input.performerQuery}"`,
+        });
+      }
+      if (matches.length > 1) {
+        const sample = matches
+          .slice(0, 5)
+          .map((m) => `${m.name} (${m.id})`)
+          .join(', ');
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: `${matches.length} performers matched — refine the query or paste an ID. Matches: ${sample}`,
+        });
+      }
+
+      const performer = matches[0];
+      const jobId = await enqueueSetlistCorpusFill(performer.id, input.mode);
+
+      log.info(
+        {
+          event: 'admin.setlist_corpus_fill.enqueue',
+          userId,
+          performerId: performer.id,
+          performerName: performer.name,
+          hasMbid: performer.musicbrainzId != null,
+          mode: input.mode,
+          jobId,
+        },
+        'Admin enqueued setlist-corpus-fill job',
+      );
+
+      return {
+        jobId,
+        performerId: performer.id,
+        performerName: performer.name,
+        hasMbid: performer.musicbrainzId != null,
+        mode: input.mode,
+      };
+    }),
+
+  /**
+   * Enqueue the `enrichment/setlist-corpus-fill-refresh` cron job on
+   * demand. The handler refreshes corpus for the top-500 followed
+   * performers plus everyone with a watching / ticketed show in the next
+   * 30 days. Already runs daily at 04:45 ET — this lets an operator
+   * trigger the sweep without waiting for the next cron firing.
+   */
+  enqueueSetlistCorpusFillRefresh: adminProcedure.mutation(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const jobId = await enqueueSetlistCorpusFillRefresh();
+    log.info(
+      {
+        event: 'admin.setlist_corpus_fill_refresh.enqueue',
+        userId,
+        jobId,
+      },
+      'Admin enqueued setlist-corpus-fill-refresh job',
+    );
+    return { jobId };
   }),
 });
