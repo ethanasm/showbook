@@ -4,6 +4,11 @@ import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
 import { userPreferences, userRegions, userVenueFollows, userPerformerFollows, announcements, venues } from '@showbook/db';
 import { enqueueIngestRegion } from '../job-queue';
+import {
+  regionBbox as sharedRegionBbox,
+  isPointInRegion as sharedIsPointInRegion,
+  type RegionBbox as SharedRegionBbox,
+} from '@showbook/shared';
 
 // ---------------------------------------------------------------------------
 // Pure cleanup helper — unit-testable without DB
@@ -18,21 +23,10 @@ export interface AnnouncementCandidate {
   venueLng: number | null;
 }
 
-export interface RegionBbox {
-  latitude: number;
-  longitude: number;
-  radiusMiles: number;
-}
+export type RegionBbox = SharedRegionBbox;
 
 export function isVenueInBbox(lat: number, lng: number, region: RegionBbox): boolean {
-  const latDelta = region.radiusMiles / 69.0;
-  const lngDelta = region.radiusMiles / (69.0 * Math.cos((region.latitude * Math.PI) / 180));
-  return (
-    lat >= region.latitude - latDelta &&
-    lat <= region.latitude + latDelta &&
-    lng >= region.longitude - lngDelta &&
-    lng <= region.longitude + lngDelta
-  );
+  return sharedIsPointInRegion(lat, lng, region);
 }
 
 export function computeAnnouncementsToDelete(
@@ -277,8 +271,7 @@ export const preferencesRouter = router({
         longitude: existing.longitude,
         radiusMiles: existing.radiusMiles,
       };
-      const latDelta = removedRegion.radiusMiles / 69.0;
-      const lngDelta = removedRegion.radiusMiles / (69.0 * Math.cos((removedRegion.latitude * Math.PI) / 180));
+      const removedBounds = sharedRegionBbox(removedRegion);
 
       const candidateRows = await ctx.db
         .select({
@@ -293,8 +286,8 @@ export const preferencesRouter = router({
         .innerJoin(venues, eq(announcements.venueId, venues.id))
         .where(
           sql`(
-            ${venues.latitude} BETWEEN ${removedRegion.latitude - latDelta} AND ${removedRegion.latitude + latDelta}
-            AND ${venues.longitude} BETWEEN ${removedRegion.longitude - lngDelta} AND ${removedRegion.longitude + lngDelta}
+            ${venues.latitude} BETWEEN ${removedBounds.minLat} AND ${removedBounds.maxLat}
+            AND ${venues.longitude} BETWEEN ${removedBounds.minLng} AND ${removedBounds.maxLng}
           )`
         );
 

@@ -1,5 +1,5 @@
 /**
- * First-run step 1 of 4 — push notifications permission.
+ * First-run step 1 of 5 — push notifications permission.
  *
  * Shows a pre-explanation screen, then on Continue triggers the OS permission
  * prompt via expo-notifications. Whether the user grants or denies, we
@@ -44,8 +44,8 @@ export default function FirstRunNotifications(): React.JSX.Element {
   return (
     <FirstRunStep
       step={1}
-      total={4}
-      eyebrow="STEP 1 OF 4"
+      total={5}
+      eyebrow="STEP 1 OF 5"
       title={
         <Text style={[heroTitleStyle, { color: colors.ink, textAlign: 'center' }]}>
           Don&apos;t miss the <Text style={{ color: colors.accent }}>on-sale.</Text>

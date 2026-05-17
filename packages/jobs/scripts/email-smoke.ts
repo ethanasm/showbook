@@ -58,11 +58,15 @@ async function main() {
       'Then Caroline Polachek lands at Brooklyn Steel in three days, and a Phoebe ' +
       'Bridgers date at Forest Hills just dropped — on sale soon.',
     appUrl,
+    noRegionNudge: process.env.SMOKE_NO_REGION === '1',
   });
 
   writeFileSync(out, html);
   console.log(`✓ Rendered daily digest (${html.length} chars)`);
   console.log(`  → ${out}`);
+  if (process.env.SMOKE_NO_REGION === '1') {
+    console.log('  (rendered with noRegionNudge=true for the no-region preview)');
+  }
 }
 
 main().catch((err) => {
