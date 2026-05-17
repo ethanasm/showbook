@@ -25,6 +25,7 @@ export function VenueSearchModal({
   const placesSearch = usePlaceSearch(query, { types: "venue" });
 
   const followMutation = trpc.venues.follow.useMutation({
+    meta: { successToast: "Following venue" },
     onSuccess: () => {
       onFollowed();
       onClose();

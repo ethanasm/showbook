@@ -38,7 +38,9 @@ export function useShowContextMenu<T extends ShowForContextMenu>() {
   const utils = trpc.useUtils();
   const invalidateSidebarCounts = useInvalidateSidebarCounts();
   const updateState = trpc.shows.updateState.useMutation();
-  const deleteShow = trpc.shows.delete.useMutation();
+  const deleteShow = trpc.shows.delete.useMutation({
+    meta: { successToast: "Show deleted" },
+  });
 
   const [menu, setMenu] = useState<ContextMenuState<T> | null>(null);
   const [transitionShow, setTransitionShow] = useState<T | null>(null);

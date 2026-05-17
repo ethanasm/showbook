@@ -441,6 +441,7 @@ function VenueInspector({
   );
 
   const followMutation = trpc.venues.follow.useMutation({
+    meta: { successToast: "Following venue" },
     onSuccess: () => {
       utils.venues.followed.invalidate();
       utils.discover.followedFeed.invalidate();
@@ -449,6 +450,7 @@ function VenueInspector({
   });
 
   const unfollowMutation = trpc.venues.unfollow.useMutation({
+    meta: { successToast: "Unfollowed venue" },
     onSuccess: () => {
       utils.venues.followed.invalidate();
       utils.discover.followedFeed.invalidate();

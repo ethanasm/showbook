@@ -80,6 +80,7 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
   const popupRef = useRef<Window | null>(null);
 
   const listFollowed = trpc.spotifyImport.listFollowed.useMutation({
+    meta: { errorToast: false },
     onSuccess: (data) => {
       setArtists(data.artists);
       setMeta({
@@ -99,6 +100,7 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
   });
 
   const importSelected = trpc.spotifyImport.importSelected.useMutation({
+    meta: { errorToast: false },
     onSuccess: (data) => {
       setImportedCount(data.imported.length);
       setArtists(null);

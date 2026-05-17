@@ -134,14 +134,40 @@ export default function ArtistDetailPage() {
   );
 
   const followMutation = trpc.performers.follow.useMutation({
-    onSuccess: () => {
+    meta: { successToast: "Following artist" },
+    onMutate: async ({ performerId: id }) => {
+      await utils.performers.detail.cancel({ performerId: id });
+      const prev = utils.performers.detail.getData({ performerId: id });
+      if (prev) {
+        utils.performers.detail.setData({ performerId: id }, { ...prev, isFollowed: true });
+      }
+      return { prev };
+    },
+    onError: (_err, { performerId: id }, ctx) => {
+      if (ctx?.prev) utils.performers.detail.setData({ performerId: id }, ctx.prev);
+    },
+    onSettled: () => {
       utils.performers.detail.invalidate({ performerId });
+      utils.performers.followed.invalidate();
     },
   });
 
   const unfollowMutation = trpc.performers.unfollow.useMutation({
-    onSuccess: () => {
+    meta: { successToast: "Unfollowed artist" },
+    onMutate: async ({ performerId: id }) => {
+      await utils.performers.detail.cancel({ performerId: id });
+      const prev = utils.performers.detail.getData({ performerId: id });
+      if (prev) {
+        utils.performers.detail.setData({ performerId: id }, { ...prev, isFollowed: false });
+      }
+      return { prev };
+    },
+    onError: (_err, { performerId: id }, ctx) => {
+      if (ctx?.prev) utils.performers.detail.setData({ performerId: id }, ctx.prev);
+    },
+    onSettled: () => {
       utils.performers.detail.invalidate({ performerId });
+      utils.performers.followed.invalidate();
     },
   });
 

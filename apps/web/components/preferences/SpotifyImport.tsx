@@ -13,6 +13,7 @@ export function SpotifyImport() {
   const utils = trpc.useUtils();
   const connection = trpc.spotify.connectionStatus.useQuery();
   const disconnect = trpc.spotify.disconnect.useMutation({
+    meta: { successToast: "Spotify disconnected" },
     onSuccess: () => {
       utils.spotify.connectionStatus.invalidate();
       flow.reset();

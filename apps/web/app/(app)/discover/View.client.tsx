@@ -97,6 +97,7 @@ function FeedSection({
   const utils = trpc.useUtils();
 
   const unfollowVenueMutation = trpc.venues.unfollow.useMutation({
+    meta: { successToast: "Unfollowed venue" },
     onMutate: ({ venueId }) => {
       setSelectedGroupId((prev) => (prev === venueId ? null : prev));
     },
@@ -108,6 +109,7 @@ function FeedSection({
   });
 
   const unfollowArtistMutation = trpc.performers.unfollow.useMutation({
+    meta: { successToast: "Unfollowed artist" },
     onMutate: ({ performerId }) => {
       setSelectedGroupId((prev) => (prev === performerId ? null : prev));
     },
@@ -793,6 +795,7 @@ export default function DiscoverView() {
   );
 
   const refreshNow = trpc.discover.refreshNow.useMutation({
+    meta: { errorToast: false },
     onSuccess: (data) => {
       const enqueued = data.enqueuedVenues + data.enqueuedPerformers;
       // Seed the watermark with the enqueue count so progress reflects

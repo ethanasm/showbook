@@ -88,9 +88,11 @@ export default function ArtistsView() {
     },
   });
   const followMutation = trpc.performers.follow.useMutation({
+    meta: { successToast: "Following artist" },
     onSuccess: () => utils.performers.invalidate(),
   });
   const unfollowMutation = trpc.performers.unfollow.useMutation({
+    meta: { successToast: "Unfollowed artist" },
     onSuccess: () => utils.performers.invalidate(),
   });
   const updateStateMutation = trpc.shows.updateState.useMutation({

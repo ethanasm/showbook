@@ -103,7 +103,19 @@ export default function VenueDetailPage() {
   );
 
   const followMutation = trpc.venues.follow.useMutation({
-    onSuccess: () => {
+    meta: { successToast: "Following venue" },
+    onMutate: async ({ venueId: id }) => {
+      await utils.venues.detail.cancel({ venueId: id });
+      const prev = utils.venues.detail.getData({ venueId: id });
+      if (prev) {
+        utils.venues.detail.setData({ venueId: id }, { ...prev, isFollowed: true });
+      }
+      return { prev };
+    },
+    onError: (_err, { venueId: id }, ctx) => {
+      if (ctx?.prev) utils.venues.detail.setData({ venueId: id }, ctx.prev);
+    },
+    onSettled: () => {
       utils.venues.detail.invalidate({ venueId });
       utils.venues.followed.invalidate();
       utils.discover.followedFeed.invalidate();
@@ -112,11 +124,25 @@ export default function VenueDetailPage() {
   });
 
   const unfollowMutation = trpc.venues.unfollow.useMutation({
+    meta: { successToast: "Unfollowed venue" },
+    onMutate: async ({ venueId: id }) => {
+      await utils.venues.detail.cancel({ venueId: id });
+      const prev = utils.venues.detail.getData({ venueId: id });
+      if (prev) {
+        utils.venues.detail.setData({ venueId: id }, { ...prev, isFollowed: false });
+      }
+      return { prev };
+    },
+    onError: (_err, { venueId: id }, ctx) => {
+      if (ctx?.prev) utils.venues.detail.setData({ venueId: id }, ctx.prev);
+    },
     onSuccess: (data) => {
       if (data.deleted) {
         router.push("/venues");
         return;
       }
+    },
+    onSettled: () => {
       utils.venues.detail.invalidate({ venueId });
       utils.venues.followed.invalidate();
       utils.discover.followedFeed.invalidate();
@@ -142,6 +168,7 @@ export default function VenueDetailPage() {
   });
 
   const deleteShow = trpc.shows.delete.useMutation({
+    meta: { successToast: "Show deleted" },
     onSuccess: () => {
       setExpandedShowId(null);
       utils.venues.userShows.invalidate();

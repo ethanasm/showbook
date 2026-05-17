@@ -6,15 +6,21 @@ interface SegmentedControlProps {
   options: string[];
   selected: string;
   onChange: (value: string) => void;
+  ariaLabel?: string;
 }
 
 export function SegmentedControl({
   options,
   selected,
   onChange,
+  ariaLabel,
 }: SegmentedControlProps) {
   return (
-    <div className="segmented-control">
+    <div
+      className="segmented-control"
+      role="group"
+      aria-label={ariaLabel}
+    >
       {options.map((option) => (
         <button
           key={option}
@@ -25,6 +31,7 @@ export function SegmentedControl({
           }`}
           onClick={() => onChange(option)}
           type="button"
+          aria-pressed={option === selected}
         >
           {option}
         </button>

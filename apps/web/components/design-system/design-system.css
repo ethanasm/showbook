@@ -1,5 +1,17 @@
 /* ── Design System Shared Styles ─────────────────────────── */
 
+/* Global focus ring — keyboard-only via :focus-visible. Mouse clicks
+   don't trip it. Components that need a custom focus surface can
+   override with a more specific selector. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
 /* KindBadge */
 .kind-badge {
   display: inline-flex;
@@ -174,7 +186,13 @@
   display: block;
   overflow: hidden;
   border: 1px solid var(--rule);
-  background: color-mix(in srgb, var(--monogram-color) 12%, var(--surface));
+  /* Loading placeholder matches the eventual monogram fallback so the
+     swap to the loaded image is a crossfade rather than a flash from
+     white/blank to opaque. The <Image> overlay starts at opacity 0 and
+     fades in via .remote-image__img--loaded. */
+  background:
+    radial-gradient(circle at 28% 18%, color-mix(in srgb, var(--monogram-color) 22%, transparent), transparent 58%),
+    color-mix(in srgb, var(--monogram-color) 12%, var(--surface));
   isolation: isolate;
 }
 
@@ -202,6 +220,12 @@
 
 .remote-image__img {
   object-fit: cover;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.remote-image__img--loaded {
+  opacity: 1;
 }
 
 /* Bias the hero crop upward — most artist/band photos place faces in the

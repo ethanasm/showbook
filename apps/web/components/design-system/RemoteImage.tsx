@@ -82,10 +82,12 @@ export function RemoteImage({
   className?: string;
 }) {
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const imageSrc = src && !failed ? src : null;
 
   useEffect(() => {
     setFailed(false);
+    setLoaded(false);
   }, [src]);
 
   return (
@@ -106,7 +108,7 @@ export function RemoteImage({
           alt={alt}
           fill
           sizes={SIZE_HINTS[size]}
-          className="remote-image__img"
+          className={`remote-image__img${loaded ? " remote-image__img--loaded" : ""}`}
           priority={priority}
           // The Next.js image optimizer fetches same-origin URLs
           // server-to-server without forwarding cookies, so any
@@ -115,6 +117,7 @@ export function RemoteImage({
           // browser fetches them directly with the user's session.
           unoptimized={imageSrc.startsWith("/api/")}
           onError={() => setFailed(true)}
+          onLoad={() => setLoaded(true)}
         />
       ) : (
         <MonogramFallback name={name} kind={kind} />

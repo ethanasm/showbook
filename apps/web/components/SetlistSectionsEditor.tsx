@@ -411,6 +411,7 @@ export function SetlistSectionsEditor({
   );
 
   const setSetlist = trpc.shows.setSetlist.useMutation({
+    meta: { errorToast: false },
     onSuccess: () => {
       utils.shows.detail.invalidate({ showId });
       utils.shows.invalidate();
