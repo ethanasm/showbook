@@ -55,6 +55,7 @@ export const JOB_NAMES = {
   INGEST_PERFORMER: 'discover/ingest-performer',
   INGEST_REGION: 'discover/ingest-region',
   PRUNE_ORPHAN_CATALOG: 'prune/orphan-catalog',
+  SETLIST_RETRY: 'enrichment/setlist-retry',
 } as const;
 
 export async function enqueueIngestVenue(venueId: string): Promise<void> {
@@ -80,6 +81,24 @@ export async function enqueueIngestPerformer(performerId: string): Promise<void>
 export async function enqueuePruneOrphanCatalog(): Promise<string | null> {
   const boss = await getSender();
   return await boss.send(JOB_NAMES.PRUNE_ORPHAN_CATALOG, {});
+}
+
+/**
+ * Trigger the setlist-retry handler outside of its 04:00 ET cron — used by
+ * the admin "Run setlist enrichment" button to process freshly-queued items
+ * (e.g. Gmail imports) without waiting for the next nightly window.
+ */
+export async function enqueueSetlistRetry(): Promise<string | null> {
+  try {
+    const boss = await getSender();
+    return await boss.send(JOB_NAMES.SETLIST_RETRY, {});
+  } catch (err) {
+    log.error(
+      { err, event: 'job_queue.enqueue.failed', queue: JOB_NAMES.SETLIST_RETRY },
+      'enqueueSetlistRetry failed',
+    );
+    return null;
+  }
 }
 
 export async function enqueueIngestRegion(
