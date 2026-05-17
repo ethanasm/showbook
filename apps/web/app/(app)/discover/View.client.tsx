@@ -1,18 +1,17 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { SortHeader } from "@/components/SortHeader";
 import { EmptyState } from "@/components/design-system";
-import { Music, Plus } from "lucide-react";
+import { Music } from "lucide-react";
 import {
   groupAnnouncementsByRegion,
   groupVenuesByRegion,
 } from "./region-helpers";
 import { computeAnnouncementGroupKeys } from "./grouping";
-import { DISCOVER_KIND_ICONS as KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import { ContextMenu } from "@/components/ContextMenu";
 import { VenueSearchModal } from "@/components/VenueSearchModal";
 import { RegionSearchModal } from "@/components/RegionSearchModal";
@@ -25,7 +24,6 @@ import {
   type DiscoverSortField,
   type PendingIngestSnapshot,
   DISCOVER_DEFAULT_SORT,
-  DISCOVER_KIND_ORDER,
   compareAnnouncements,
 } from "./types";
 import { IngestStatusPoller } from "./IngestStatusPoller";
