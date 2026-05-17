@@ -67,9 +67,11 @@ export default function VenuesView() {
     onSuccess: () => utils.venues.invalidate(),
   });
   const followMutation = trpc.venues.follow.useMutation({
+    meta: { successToast: "Following venue" },
     onSuccess: () => utils.venues.invalidate(),
   });
   const unfollowMutation = trpc.venues.unfollow.useMutation({
+    meta: { successToast: "Unfollowed venue" },
     onSuccess: () => utils.venues.invalidate(),
   });
 

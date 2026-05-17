@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
 import { type ShowKind } from "@/components/design-system";
@@ -292,13 +293,39 @@ export default function AddPage() {
   const extractCast = trpc.enrichment.extractCast.useMutation();
   const extractFromPdf = trpc.enrichment.extractFromPdf.useMutation();
   const invalidateSidebarCounts = useInvalidateSidebarCounts();
+  // Undo for create reuses the same delete mutation. Silenced so the
+  // "Show removed" toast isn't shadowed by the generic "Show deleted"
+  // surface that ShowDetailTabsView and the context menu use.
+  const undoDelete = trpc.shows.delete.useMutation({
+    meta: { errorToast: false },
+  });
   const createShow = trpc.shows.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       utils.shows.invalidate();
       invalidateSidebarCounts();
+      if (data?.id) {
+        toast.success("Show added", {
+          duration: 5000,
+          action: {
+            label: "Undo",
+            onClick: async () => {
+              try {
+                await undoDelete.mutateAsync({ showId: data.id });
+                utils.shows.invalidate();
+                invalidateSidebarCounts();
+                toast.success("Show removed");
+                router.push("/home");
+              } catch {
+                toast.error("Couldn't undo — try again");
+              }
+            },
+          },
+        });
+      }
     },
   });
   const updateShow = trpc.shows.update.useMutation({
+    meta: { successToast: "Show updated" },
     onSuccess: () => {
       utils.shows.invalidate();
       invalidateSidebarCounts();

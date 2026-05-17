@@ -1082,7 +1082,12 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
         gap: isMobile ? 12 : 18,
         flexWrap: "wrap",
         background: "var(--surface)",
-        borderBottom: "1px solid var(--rule)",
+        borderBottom: isMobile ? "1px solid var(--rule-strong)" : "1px solid var(--rule)",
+        // Mobile: pin the in-list filter row so users can flip year / kind /
+        // upcoming-vs-watching mid-scroll without scrolling back to the top.
+        // Desktop has a dedicated sidebar + the filter row already sits within
+        // a non-scrolling header band, so sticky is mobile-only.
+        ...(isMobile ? { position: "sticky", top: 0, zIndex: 5 } : {}),
       }}>
         {/* Mode-specific primary filter */}
         {isLogbook ? (

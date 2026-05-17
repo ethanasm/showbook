@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { Space_Grotesk, IBM_Plex_Mono } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
+import { Toaster } from "sonner";
 import { TRPCProvider } from "@/lib/trpc";
 import { NavigationProgress } from "@/components/NavigationProgress";
 import "./globals.css";
@@ -55,6 +56,23 @@ export default function RootLayout({
             {children}
           </TRPCProvider>
         </SessionProvider>
+        <Toaster
+          position="bottom-right"
+          theme="dark"
+          richColors={false}
+          closeButton
+          toastOptions={{
+            style: {
+              background: "var(--surface)",
+              color: "var(--ink)",
+              border: "1px solid var(--rule-strong)",
+              borderRadius: 0,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 13,
+              letterSpacing: -0.1,
+            },
+          }}
+        />
       </body>
     </html>
   );

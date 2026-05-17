@@ -485,6 +485,7 @@ function VenueFollowModal({ onClose, onFollowed }: { onClose: () => void; onFoll
     { enabled: query.length >= 2, retry: false },
   );
   const followMutation = trpc.venues.follow.useMutation({
+    meta: { successToast: "Following venue" },
     onSuccess: () => { setQuery(""); onFollowed(); },
   });
   const createAndFollow = trpc.venues.createFromPlace.useMutation({
@@ -657,6 +658,7 @@ export default function PreferencesView() {
     onSuccess: () => prefsQuery.refetch(),
   });
   const unfollowVenue = trpc.venues.unfollow.useMutation({
+    meta: { successToast: "Unfollowed venue" },
     onSuccess: () => {
       venuesQuery.refetch();
       utils.discover.followedFeed.invalidate();
@@ -664,6 +666,7 @@ export default function PreferencesView() {
     },
   });
   const unfollowArtist = trpc.performers.unfollow.useMutation({
+    meta: { successToast: "Unfollowed artist" },
     onSuccess: () => {
       followedArtistsQuery.refetch();
       utils.discover.followedArtistsFeed.invalidate();

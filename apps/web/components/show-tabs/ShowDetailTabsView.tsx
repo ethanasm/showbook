@@ -173,6 +173,7 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
     },
   });
   const deleteShow = trpc.shows.delete.useMutation({
+    meta: { successToast: "Show deleted" },
     onSuccess: () => {
       router.push(isPast ? "/logbook" : "/upcoming");
     },
