@@ -12,6 +12,26 @@
   outline: none;
 }
 
+/* Press-feedback: every button gets a subtle scale on :active. We
+   exclude buttons inside form controls and the segmented control
+   (which manages its own pressed visual via aria-pressed) so the
+   scale doesn't collide with their existing depressed-state
+   surfaces. Honours prefers-reduced-motion. */
+button {
+  transition: transform 80ms ease;
+}
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+@media (prefers-reduced-motion: reduce) {
+  button {
+    transition: none;
+  }
+  button:active:not(:disabled) {
+    transform: none;
+  }
+}
+
 /* KindBadge */
 .kind-badge {
   display: inline-flex;
@@ -24,26 +44,44 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   line-height: 1.6;
+  transform: translateY(0);
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+
+.kind-badge:hover {
+  transform: translateY(-1px);
 }
 
 .kind-badge--concert {
   color: var(--kind-concert);
   background: color-mix(in srgb, var(--kind-concert) 12%, transparent);
 }
+.kind-badge--concert:hover {
+  background: color-mix(in srgb, var(--kind-concert) 20%, transparent);
+}
 
 .kind-badge--theatre {
   color: var(--kind-theatre);
   background: color-mix(in srgb, var(--kind-theatre) 12%, transparent);
+}
+.kind-badge--theatre:hover {
+  background: color-mix(in srgb, var(--kind-theatre) 20%, transparent);
 }
 
 .kind-badge--comedy {
   color: var(--kind-comedy);
   background: color-mix(in srgb, var(--kind-comedy) 12%, transparent);
 }
+.kind-badge--comedy:hover {
+  background: color-mix(in srgb, var(--kind-comedy) 20%, transparent);
+}
 
 .kind-badge--festival {
   color: var(--kind-festival);
   background: color-mix(in srgb, var(--kind-festival) 12%, transparent);
+}
+.kind-badge--festival:hover {
+  background: color-mix(in srgb, var(--kind-festival) 20%, transparent);
 }
 
 /* StateChip */
@@ -286,10 +324,51 @@
   box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.6);
 }
 
-.stacked-card:nth-child(1) { transform: translateX(-32px) rotate(-1.5deg); }
-.stacked-card:nth-child(2) { transform: translateX(8px) rotate(0.5deg); }
-.stacked-card:nth-child(3) { transform: translateX(-12px) rotate(-0.8deg); }
-.stacked-card:nth-child(4) { transform: translateX(24px) rotate(1.2deg); }
+/* Each card drifts on its own 12-14s cycle, offset so they never
+   move in lockstep. Range is intentionally tiny (±3px) so the
+   motion reads as "alive, breathing" rather than animated. */
+.stacked-card:nth-child(1) {
+  transform: translateX(-32px) rotate(-1.5deg);
+  animation: sb-stack-drift-1 12s ease-in-out infinite;
+}
+.stacked-card:nth-child(2) {
+  transform: translateX(8px) rotate(0.5deg);
+  animation: sb-stack-drift-2 14s ease-in-out infinite;
+}
+.stacked-card:nth-child(3) {
+  transform: translateX(-12px) rotate(-0.8deg);
+  animation: sb-stack-drift-3 13s ease-in-out infinite;
+}
+.stacked-card:nth-child(4) {
+  transform: translateX(24px) rotate(1.2deg);
+  animation: sb-stack-drift-4 15s ease-in-out infinite;
+}
+
+@keyframes sb-stack-drift-1 {
+  0%, 100% { transform: translate(-32px, 0) rotate(-1.5deg); }
+  50%      { transform: translate(-30px, -3px) rotate(-1.3deg); }
+}
+@keyframes sb-stack-drift-2 {
+  0%, 100% { transform: translate(8px, 0) rotate(0.5deg); }
+  50%      { transform: translate(10px, 2px) rotate(0.7deg); }
+}
+@keyframes sb-stack-drift-3 {
+  0%, 100% { transform: translate(-12px, 0) rotate(-0.8deg); }
+  50%      { transform: translate(-14px, -2px) rotate(-0.6deg); }
+}
+@keyframes sb-stack-drift-4 {
+  0%, 100% { transform: translate(24px, 0) rotate(1.2deg); }
+  50%      { transform: translate(22px, 3px) rotate(1.4deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stacked-card:nth-child(1),
+  .stacked-card:nth-child(2),
+  .stacked-card:nth-child(3),
+  .stacked-card:nth-child(4) {
+    animation: none;
+  }
+}
 
 .stacked-card__bar {
   align-self: stretch;
@@ -757,11 +836,18 @@ a.show-row__support-link:hover {
 
 .show-row__chevron {
   color: var(--faint);
-  transition: color 0.12s;
+  opacity: 0.4;
+  transform: translateX(0);
+  transition:
+    color 120ms ease,
+    opacity 120ms ease,
+    transform 120ms ease;
 }
 
 .show-row:hover .show-row__chevron {
   color: var(--muted);
+  opacity: 1;
+  transform: translateX(2px);
 }
 
 /* HeroCard — uses inline styles per v2-home spec */
@@ -952,7 +1038,13 @@ a.show-row__support-link:hover {
   font-weight: 400;
   color: var(--muted);
   cursor: pointer;
-  transition: all 0.12s ease;
+  /* Animate the active-state surfaces explicitly so the left-accent
+     bar and background-tint slide in together rather than the
+     blanket `all` triggering layout-affecting properties. */
+  transition:
+    background-color 150ms ease,
+    border-left-color 150ms ease,
+    color 150ms ease;
   border: none;
   background: transparent;
   width: 100%;

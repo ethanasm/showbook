@@ -8,7 +8,10 @@
  * stale-data warnings, ongoing background work.
  *
  * Pure logic + provider lives here; visual primitives are in
- * `components/Toast.tsx` + `components/Banner.tsx`.
+ * `components/Toast.tsx` + `components/Banner.tsx`. Haptic helpers
+ * live in their own module at `lib/haptics.ts` so unit tests of
+ * lib-layer code don't transitively pull `react-native` +
+ * `expo-haptics` through this file.
  *
  * Usage:
  *   const { showToast } = useFeedback();
