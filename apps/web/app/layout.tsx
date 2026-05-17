@@ -25,7 +25,7 @@ const monoFont = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "Showbook",
-  description: "Personal entertainment tracker for live shows",
+  description: "Personal tracker for concerts, theatre, comedy & festivals — with setlist predictions, Gmail ticket import, and Spotify playlist generation.",
 };
 
 // Lock the viewport explicitly. iOS Safari renders pages at ~980 CSS-px
