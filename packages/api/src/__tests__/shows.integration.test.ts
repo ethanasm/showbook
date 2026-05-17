@@ -378,14 +378,15 @@ describe('shows router', () => {
     assert.ok(created);
     assert.equal(created!.kind, 'theatre');
     assert.equal(created!.productionName, 'Some Show');
-    // Theatre shows should NOT enqueue setlist enrichment — the create-time
-    // queue is concert-only.
+    // Theatre shows should NOT enqueue setlist enrichment — theatre
+    // productions don't have setlists.
     const theatreQueueRows = await db
       .select()
       .from(enrichmentQueue)
       .where(eq(enrichmentQueue.showId, created!.id));
     assert.equal(theatreQueueRows.length, 0, 'theatre shows should not be queued');
   });
+
 
   it('update mutates an existing show', async () => {
     const updated = await callerFor(USER).shows.update({
