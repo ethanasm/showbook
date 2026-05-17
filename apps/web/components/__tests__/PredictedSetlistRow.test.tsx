@@ -63,7 +63,6 @@ describe('PredictedSetlistRow + TrackPreview wiring', () => {
       position: 1,
       title: 'Greek Song',
       evidence: '12/12',
-      role: 'core',
       showId: 'show-xyz',
       previewUrl: 'https://p/preview.mp3',
       spotifyTrackId: 'sp-track-1',
@@ -83,7 +82,6 @@ describe('PredictedSetlistRow + TrackPreview wiring', () => {
       position: 2,
       title: 'Unresolved Title',
       evidence: '11/12',
-      role: 'core',
       showId: 'show-xyz',
       previewUrl: null,
       spotifyTrackId: null,
@@ -101,7 +99,6 @@ describe('PredictedSetlistRow + TrackPreview wiring', () => {
       position: 3,
       title: 'No Show Context',
       evidence: '8/12',
-      role: 'core',
       // showId intentionally omitted
       previewUrl: null,
       spotifyTrackId: null,
@@ -110,5 +107,37 @@ describe('PredictedSetlistRow + TrackPreview wiring', () => {
     // grid columns don't collapse.
     assert.ok(getByTestId('predicted-row-preview-slot'));
     assert.equal(queryByTestId('track-preview-button'), null);
+  });
+});
+
+describe('PredictedSetlistRow badge tooltips', () => {
+  it('renders First time + Rare badges with matching title and aria-label so the emoji is explained on hover and to screen readers', () => {
+    const { getByTestId } = renderRow({
+      position: 4,
+      title: 'A Rare First Listen',
+      evidence: 'actual · setlist.fm',
+      badge: {
+        firstTime: true,
+        rareCatch: { fractionPct: 3 },
+      },
+    });
+    const firstTime = getByTestId('predicted-row-badge-first-time');
+    assert.equal(
+      firstTime.getAttribute('title'),
+      'First time you heard this song live',
+    );
+    assert.equal(
+      firstTime.getAttribute('aria-label'),
+      'First time you heard this song live',
+    );
+    const rare = getByTestId('predicted-row-badge-rare');
+    assert.equal(
+      rare.getAttribute('title'),
+      'Played in 3% of recent setlists',
+    );
+    assert.equal(
+      rare.getAttribute('aria-label'),
+      'Played in 3% of recent setlists',
+    );
   });
 });
