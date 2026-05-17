@@ -29,7 +29,6 @@ import { OverviewTab, type OverviewLineupEntry } from "./OverviewTab";
 import { SetlistTab, SetlistTabComingSoon, type ActualSong } from "./SetlistTab";
 import { MediaTab } from "./MediaTab";
 import { NotesTab } from "./NotesTab";
-import { HypePlaylistCard } from "./HypePlaylistCard";
 import { FanLoyaltyRing } from "./FanLoyaltyRing";
 import { DiscoveredRail } from "./DiscoveredRail";
 import { PrimingStat } from "./PrimingStat";
@@ -429,54 +428,15 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
     />
   );
 
-  // Right-rail slots. Phase 3 fills the pre-show HypePlaylistCard slot;
-  // the post-show FanLoyaltyRing slot lands in Phase 7. The rail hides
-  // itself entirely when every slot is null (Phase 1 shell logic).
-  const railHypeMeta = useMemo(() => {
-    if (isPast) return null;
-    if (!hypePlaylistEnabled) return null;
-    if (!predictionQuery.data) return null;
-    // Phase 6 — theatrical also gets the hype playlist (deterministic
-    // setlist is ordering-stable + hype-worthy). Rotating + improvised
-    // hide per SI-05: a hype playlist for a 25-song setlist the model
-    // can't pick is low-relevance.
-    if (predictionQuery.data.style === "stable") {
-      const total = predictionQuery.data.core.length;
-      return { total, approxMinutes: total > 0 ? Math.round(total * 4) : null };
-    }
-    if (
-      predictionQuery.data.style === "theatrical" &&
-      theatricalDisplayEnabled
-    ) {
-      const total =
-        predictionQuery.data.deterministicSetlist.length +
-        predictionQuery.data.rotatingSlots.length;
-      return { total, approxMinutes: total > 0 ? Math.round(total * 4) : null };
-    }
-    return null;
-  }, [
-    hypePlaylistEnabled,
-    isPast,
-    predictionQuery.data,
-    theatricalDisplayEnabled,
-  ]);
-
+  // Right-rail slots. Every slot is null on this page: the
+  // HypePlaylistCard renders inline inside SetlistTab (its canonical
+  // home), and FanLoyaltyRing renders inline inside OverviewTab — the
+  // rail-copy of either felt like a stray duplicate next to its inline
+  // sibling. The shell stays wired so a future phase can re-populate a
+  // slot without re-plumbing the layout; ShowDetailRightRail hides
+  // itself when every slot is null.
   const rightRailSlots = {
-    hypePlaylistCard: railHypeMeta ? (
-      <HypePlaylistCard
-        showId={show.id}
-        kind="hype"
-        artist={headlinerName}
-        trackCount={railHypeMeta.total}
-        approxMinutes={railHypeMeta.approxMinutes}
-        compact
-      />
-    ) : null,
-    // FanLoyaltyRing stays inline in the Overview body at every
-    // viewport. The handoff originally slotted it into the right rail
-    // too, but seeing it off to the right of the venue stat row felt
-    // wrong — the inline placement under the stats reads as the
-    // canonical home for the data, and the rail copy was duplicative.
+    hypePlaylistCard: null,
     fanLoyaltyRing: null,
   };
 
