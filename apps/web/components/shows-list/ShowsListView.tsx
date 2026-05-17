@@ -35,6 +35,7 @@ import { formatDateParts } from "@showbook/shared";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import { useShowContextMenu } from "@/lib/useShowContextMenu";
 import { PaginationFooter } from "@/components/PaginationFooter";
+import { ExternalSourceDisclaimer } from "@/components/external-connection/ExternalSourceDisclaimer";
 import { compareNullable } from "@/lib/sort";
 import {
   getHeadliner,
@@ -302,6 +303,9 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     eventId?: string;
   };
   const [importSource, setImportSource] = useState<ImportSource | null>(null);
+  // Gated OAuth: for gmail/eventbrite the consent disclaimer renders
+  // first; the popup only opens once the user explicitly continues.
+  const [oauthConsentStarted, setOauthConsentStarted] = useState(false);
   const [gmailBulkLoading, setGmailBulkLoading] = useState(false);
   const [gmailBulkResults, setGmailBulkResults] = useState<BulkResult[]>([]);
   const [gmailBulkSelected, setGmailBulkSelected] = useState<Set<number>>(new Set());
@@ -607,13 +611,16 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     setSetlistfmUsername("");
     setGmailError(null);
     setGmailProgress(null);
+    setOauthConsentStarted(false);
+    // OAuth popup does NOT open here — the modal first renders a
+    // consent step with the disclaimer; only then does the user click
+    // "Continue with Gmail / Eventbrite" which calls
+    // `startOauthPopup` to open the popup.
+  }, []);
 
-    if (source === "setlistfm") {
-      // No popup — username form is shown inline in the modal.
-      return;
-    }
+  const startOauthPopup = useCallback((source: "gmail" | "eventbrite") => {
+    setOauthConsentStarted(true);
 
-    // OAuth-based sources (gmail, eventbrite) share the popup pattern.
     const expectedAuth = source === "gmail" ? "gmail-auth" : "eventbrite-auth";
     const expectedAuthError = source === "gmail" ? "gmail-auth-error" : "eventbrite-auth-error";
     const popupPath = source === "gmail" ? "/api/gmail" : "/api/eventbrite";
@@ -2887,11 +2894,15 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                         : importSource === "gmail"
                           ? gmailAccessToken
                             ? "No tickets found"
-                            : "Waiting for Gmail authorization..."
+                            : oauthConsentStarted
+                              ? "Waiting for Gmail authorization..."
+                              : "Review what we'll store before connecting"
                           : importSource === "eventbrite"
                             ? eventbriteAccessToken
                               ? "No tickets found"
-                              : "Waiting for Eventbrite authorization..."
+                              : oauthConsentStarted
+                                ? "Waiting for Eventbrite authorization..."
+                                : "Review what we'll store before connecting"
                             : "Enter your setlist.fm username"}
                 </div>
               </div>
@@ -3021,16 +3032,82 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                     Fetch
                   </button>
                 </div>
-                <div style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10.5,
-                  color: "var(--faint)",
-                  letterSpacing: ".02em",
-                }}>
-                  Pulls every concert you&rsquo;ve marked attended on setlist.fm,
-                  including the setlist itself.
-                </div>
+                <ExternalSourceDisclaimer source="setlistfm" />
               </form>
+            )}
+
+            {/* gmail / eventbrite: consent step. Renders before the
+                OAuth popup opens so the user sees what we store and
+                why first. "Continue with X" opens the popup. */}
+            {(importSource === "gmail" || importSource === "eventbrite")
+              && !oauthConsentStarted
+              && !gmailBulkLoading
+              && gmailBulkResults.length === 0
+              && (importSource === "gmail" ? !gmailAccessToken : !eventbriteAccessToken)
+              && (
+              <div
+                style={{
+                  padding: "20px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                  borderBottom: "1px solid var(--rule)",
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "var(--font-geist-sans), sans-serif",
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    color: "var(--ink)",
+                  }}
+                >
+                  {importSource === "gmail"
+                    ? "Showbook will scan your inbox for ticket emails and surface them here so you can pick which shows to import."
+                    : "Showbook will fetch your past Eventbrite orders so you can pick which shows to import."}
+                </div>
+                <ExternalSourceDisclaimer source={importSource} />
+                <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                  <button
+                    type="button"
+                    onClick={() => startOauthPopup(importSource)}
+                    data-testid={`${importSource}-consent-continue`}
+                    style={{
+                      padding: "10px 16px",
+                      border: "none",
+                      background: "var(--ink)",
+                      color: "var(--bg)",
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: ".06em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {importSource === "gmail"
+                      ? "Continue with Gmail →"
+                      : "Continue with Eventbrite →"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImportSource(null)}
+                    style={{
+                      padding: "10px 12px",
+                      border: "none",
+                      background: "transparent",
+                      color: "var(--muted)",
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: 11,
+                      letterSpacing: ".06em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Not now
+                  </button>
+                </div>
+              </div>
             )}
 
             {/* Results list */}

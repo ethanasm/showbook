@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronLeft, Music } from 'lucide-react-native';
 
+import { ExternalSourceDisclaimer } from '../../components/ExternalSourceDisclaimer';
 import { TopBar } from '../../components/TopBar';
 import { SpotifyConnectSheet } from '../../components/SpotifyConnectSheet';
 import { useTheme } from '../../lib/theme';
@@ -96,6 +97,7 @@ export default function SpotifyIntegrationScreen(): React.JSX.Element {
               Showbook uses Spotify to make playlists, identify songs, and
               surface stats about your shows.
             </Text>
+            <ExternalSourceDisclaimer source="spotify" />
             <Pressable
               accessibilityRole="button"
               testID="spotify-connect-primary"

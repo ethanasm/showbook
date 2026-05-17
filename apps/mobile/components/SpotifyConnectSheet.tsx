@@ -11,6 +11,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Music } from 'lucide-react-native';
 
+import { ExternalSourceDisclaimer } from './ExternalSourceDisclaimer';
 import { Sheet } from './Sheet';
 import { useTheme } from '../lib/theme';
 
@@ -38,7 +39,7 @@ export function SpotifyConnectSheet({
   const { colors } = tokens;
 
   return (
-    <Sheet open={open} onClose={onClose} snapPoints={['55%']}>
+    <Sheet open={open} onClose={onClose} snapPoints={['72%']}>
       <View style={styles.container}>
         <View style={styles.iconRow}>
           <Music size={18} color={colors.ink} />
@@ -52,9 +53,7 @@ export function SpotifyConnectSheet({
             "Showbook uses Spotify to make playlists, identify songs, and surface stats about your shows. Connect once and we'll handle the rest."}
         </Text>
 
-        <Text style={[styles.privacy, { color: colors.muted, fontFamily: 'Geist Mono' }]}>
-          {"We'll never post on your behalf. Disconnect any time from Preferences."}
-        </Text>
+        <ExternalSourceDisclaimer source="spotify" />
 
         <Pressable
           accessibilityRole="button"
@@ -117,11 +116,6 @@ const styles = StyleSheet.create({
   body: {
     fontSize: 15,
     lineHeight: 22,
-  },
-  privacy: {
-    fontSize: 11,
-    lineHeight: 16,
-    letterSpacing: 0.3,
   },
   primaryButton: {
     marginTop: 4,

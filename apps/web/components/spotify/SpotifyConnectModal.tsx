@@ -3,6 +3,8 @@
 import { useEffect, useRef } from "react";
 import { Music } from "lucide-react";
 
+import { ExternalSourceDisclaimer } from "../external-connection/ExternalSourceDisclaimer";
+
 const mono = "var(--font-geist-mono)";
 
 /**
@@ -72,10 +74,7 @@ export function SpotifyConnectModal(props: SpotifyConnectModalProps) {
           {props.ctaLabel ??
             "Showbook uses Spotify to make playlists, identify songs, and surface stats about your shows. Connect once and we'll handle the rest."}
         </p>
-        <p style={privacyStyle}>
-          We&apos;ll never post on your behalf. You can disconnect any time
-          from Preferences or your Spotify account.
-        </p>
+        <ExternalSourceDisclaimer source="spotify" />
         <button
           type="button"
           onClick={props.onConnect}
@@ -146,15 +145,6 @@ const bodyStyle: React.CSSProperties = {
   fontSize: 14,
   lineHeight: 1.5,
   color: "var(--ink)",
-  margin: 0,
-};
-
-const privacyStyle: React.CSSProperties = {
-  fontFamily: mono,
-  fontSize: 10.5,
-  lineHeight: 1.6,
-  letterSpacing: ".03em",
-  color: "var(--muted)",
   margin: 0,
 };
 
