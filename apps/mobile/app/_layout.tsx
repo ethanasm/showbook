@@ -34,6 +34,8 @@ import { AuthProvider, useAuth } from '../lib/auth';
 import { trpc, createQueryClient, createTrpcClient } from '../lib/trpc';
 import { CacheBridge } from '../lib/cache/CacheBridge';
 import { deleteCacheDatabase } from '../lib/cache';
+import { warmCacheForOfflineUse } from '../lib/cache/warmup';
+import { useForegroundWarmup } from '../lib/cache/useForegroundWarmup';
 import { loadAppFonts } from '../lib/fonts';
 import { FeedbackProvider } from '../lib/feedback';
 import {
@@ -150,6 +152,31 @@ function OfflineBridge({ children }: { children: React.ReactNode }): React.JSX.E
           return c.shows.updateState.mutate(payload);
         case 'shows.setSetlist':
           return c.shows.setSetlist.mutate(payload);
+        case 'shows.setNotes':
+          return c.shows.setNotes.mutate(payload);
+        case 'venues.follow':
+          return swallowAlreadyInState(() => c.venues.follow.mutate(payload));
+        case 'venues.unfollow':
+          return swallowAlreadyInState(() => c.venues.unfollow.mutate(payload));
+        case 'performers.follow':
+          return swallowAlreadyInState(() => c.performers.follow.mutate(payload));
+        case 'performers.unfollow':
+          return swallowAlreadyInState(() => c.performers.unfollow.mutate(payload));
+        case 'preferences.update':
+          return c.preferences.update.mutate(payload);
+        case 'preferences.addRegion':
+          return c.preferences.addRegion.mutate(payload);
+        case 'preferences.removeRegion':
+          // The server 404s when the region was already deleted from
+          // another device — treat that as success so the queued row
+          // doesn't stick forever.
+          return swallowAlreadyInState(() => c.preferences.removeRegion.mutate(payload));
+        case 'preferences.toggleRegion':
+          return c.preferences.toggleRegion.mutate(payload);
+        case 'spotify.createHypePlaylist':
+          return c.spotify.createHypePlaylist.mutate(payload);
+        case 'spotify.createHeardPlaylist':
+          return c.spotify.createHeardPlaylist.mutate(payload);
         default: {
           const _exhaustive: never = m;
           throw new Error(`Unknown pending mutation: ${String(_exhaustive)}`);
@@ -159,6 +186,24 @@ function OfflineBridge({ children }: { children: React.ReactNode }): React.JSX.E
     [utils],
   );
   return <OfflineSyncProvider dispatch={dispatch}>{children}</OfflineSyncProvider>;
+}
+
+/**
+ * On post-replay paths and offline mutations that move the server to a state
+ * the user already wants, the server typically returns 404 (target row gone)
+ * or 409 (already there). For follow/unfollow + region remove these are
+ * end-state matches, not failures — swallow them so the queued row drops
+ * cleanly. Other 4xx (e.g. addRegion 400 "max 5 regions") still surface.
+ */
+async function swallowAlreadyInState<T>(call: () => Promise<T>): Promise<T | { success: true }> {
+  try {
+    return await call();
+  } catch (err) {
+    const status =
+      (err as { data?: { httpStatus?: number } } | null | undefined)?.data?.httpStatus ?? 0;
+    if (status === 404 || status === 409) return { success: true };
+    throw err;
+  }
 }
 
 function PendingWritesDrawerHost(): React.JSX.Element {
@@ -193,12 +238,38 @@ function TrpcProviders({ children }: { children: React.ReactNode }): React.JSX.E
   );
 
   useSignOutCleanup(queryClient, user?.id ?? null);
+  usePostSignInWarmup(trpcClient, queryClient, user?.id ?? null);
+  useForegroundWarmup(trpcClient, queryClient, user?.id ?? null);
 
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </trpc.Provider>
   );
+}
+
+/**
+ * Fires `warmCacheForOfflineUse` exactly once per sign-in (null → set
+ * transition). Best-effort: failures are swallowed inside warm-up so the
+ * sign-in flow never blocks on cache hydration. The warm-up walker also
+ * runs `replayOutboxOnce` first to drain any queued writes from the
+ * previous online session before we overwrite their cache slots with
+ * fresh server state.
+ */
+function usePostSignInWarmup(
+  trpcClient: ReturnType<typeof createTrpcClient>,
+  queryClient: QueryClient,
+  userId: string | null,
+): void {
+  const previousUserId = React.useRef<string | null>(userId);
+  React.useEffect(() => {
+    const prev = previousUserId.current;
+    previousUserId.current = userId;
+    if (prev || !userId) return;
+    void warmCacheForOfflineUse({ client: trpcClient, queryClient }).catch(
+      () => undefined,
+    );
+  }, [trpcClient, queryClient, userId]);
 }
 
 /**

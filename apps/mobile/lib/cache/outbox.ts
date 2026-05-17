@@ -22,7 +22,18 @@ export type PendingMutation =
   | 'shows.update'
   | 'shows.delete'
   | 'shows.updateState'
-  | 'shows.setSetlist';
+  | 'shows.setSetlist'
+  | 'shows.setNotes'
+  | 'venues.follow'
+  | 'venues.unfollow'
+  | 'performers.follow'
+  | 'performers.unfollow'
+  | 'preferences.update'
+  | 'preferences.addRegion'
+  | 'preferences.removeRegion'
+  | 'preferences.toggleRegion'
+  | 'spotify.createHypePlaylist'
+  | 'spotify.createHeardPlaylist';
 
 export interface PendingWrite {
   id: string;

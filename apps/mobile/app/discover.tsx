@@ -37,9 +37,11 @@ import {
 } from 'lucide-react-native';
 import { ScreenWrapper } from '../components/ScreenWrapper';
 import { EmptyState } from '../components/EmptyState';
+import { OfflineEmptyState } from '../components/OfflineEmptyState';
 import { KindBadge } from '../components/KindBadge';
 import { useTheme } from '../lib/theme';
 import { useAuth } from '../lib/auth';
+import { useNetwork } from '../lib/network';
 import { trpc, type RouterOutput } from '../lib/trpc';
 import { useCachedQuery } from '../lib/cache';
 import { useThemedRefreshControl } from '../components/PullToRefresh';
@@ -67,6 +69,7 @@ export default function DiscoverScreen(): React.JSX.Element {
   const { colors } = tokens;
   const router = useRouter();
   const { token } = useAuth();
+  const network = useNetwork();
   const utils = trpc.useUtils();
 
   const followedVenuesQuery = useCachedQuery<FollowedFeed>({
@@ -129,6 +132,13 @@ export default function DiscoverScreen(): React.JSX.Element {
   const followedVenues = followedVenuesQuery.data?.items ?? [];
   const followedArtists = followedArtistsQuery.data?.items ?? [];
   const nearby = nearbyQuery.data?.items ?? [];
+  // Discover feeds are not in the warm-up scope, so an offline cold-start
+  // user has no cached rows. Render an offline placeholder only when we
+  // have nothing to show — if any rail has cached items from a previous
+  // online session, let those render so the user still gets value.
+  const hasAnyCachedItems =
+    followedVenues.length > 0 || followedArtists.length > 0 || nearby.length > 0;
+  const showOfflineEmpty = !network.online && !hasAnyCachedItems;
   const allEmpty =
     !isAllLoading &&
     followedVenues.length === 0 &&
@@ -139,11 +149,18 @@ export default function DiscoverScreen(): React.JSX.Element {
     <ScreenWrapper title="Discover" eyebrow="WHAT'S COMING UP" leading={back} rightAction={searchAction} large>
       <ScrollView
         contentContainerStyle={
-          isAllLoading || allEmpty ? styles.scrollFlex : styles.scrollContent
+          isAllLoading || allEmpty || showOfflineEmpty
+            ? styles.scrollFlex
+            : styles.scrollContent
         }
         refreshControl={refreshControl}
       >
-        {isAllLoading ? (
+        {showOfflineEmpty ? (
+          <OfflineEmptyState
+            title="Discover needs a connection"
+            subtitle="Followed feeds and nearby announcements update only when you're online."
+          />
+        ) : isAllLoading ? (
           <View style={styles.center}>
             <ActivityIndicator color={colors.muted} />
           </View>

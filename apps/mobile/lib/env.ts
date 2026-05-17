@@ -32,6 +32,15 @@ export const GOOGLE_OAUTH_CLIENT_ID_WEB: string | undefined =
   process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB;
 
 /**
+ * Build-time override that pins the NetworkProvider to offline. Used by the
+ * Playwright headless web verification loop and Maestro flows that need to
+ * exercise offline UX without flipping airplane mode. Production builds
+ * leave this unset; the bypass is dead code there.
+ */
+export const FORCE_OFFLINE: boolean =
+  process.env.EXPO_PUBLIC_FORCE_OFFLINE === '1';
+
+/**
  * Returns null when Google OAuth is correctly configured for the current
  * platform, or a human-readable error message when something's missing.
  *

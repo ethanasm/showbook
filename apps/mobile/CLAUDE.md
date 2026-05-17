@@ -30,9 +30,15 @@ been fully addressed).
 - `lib/` — non-UI code:
   - `auth.ts` — Google ID token round-trip + token storage
   - `trpc.ts` — bearer-auth tRPC client targeting `@showbook/api`
-  - `cache/` — `expo-sqlite` cache + `useCachedQuery` + outbox
+  - `cache/` — `expo-sqlite` cache + `useCachedQuery` + outbox +
+    `warmup.ts` (offline pre-fetch walker) + `useForegroundWarmup`
   - `mutations/` — optimistic mutation runner + outbox replay
   - `media/` — chunked upload pipeline (presigned R2)
+  - `setlist-intel/` — pure helpers for the Phase 10 4-tab show detail
+    (badge resolver, preview player, style switcher, tab routing,
+    Spotify deep-link)
+  - `spotify-connection.ts` — mobile Spotify OAuth flow
+  - `useFormState.ts`, `env.ts`
   - `feedback.ts`, `network.ts`, `theme.ts`, `responsive.ts`,
     `search.ts`, `useDebouncedValue.ts`
 - `e2e/flows/` — Maestro flow YAML (sign-in / add-show / sign-out)
@@ -67,6 +73,7 @@ Set locally via shell or `.env.local`. Mobile-side vars are prefixed
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID` | - | Android sign-in |
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB` | - | Expo web preview sign-in |
 | `EXPO_PUBLIC_E2E_MODE` | unset | Maestro Cloud only — bypasses Google OAuth and reads a pre-baked JWT from SecureStore. Production builds ship with this unset; the bypass is dead code there. |
+| `EXPO_PUBLIC_FORCE_OFFLINE` | unset | Set to `1` to pin `NetworkProvider` offline at module eval (skips the NetInfo subscription entirely). Used by the Playwright web harness + Maestro flows that need to exercise offline UX without flipping airplane mode. Production builds leave this unset. Runtime tests can also flip it via `__setForceOfflineForTest`. |
 
 ## Commands
 
@@ -172,11 +179,52 @@ through to an empty SecureStore and the sign-in tap surfaces
 See `specs/mobile-testing-strategy.md` § Wave F for the
 rationale on the Android-CI / iOS-manual split.
 
+## Offline mode
+
+The app is offline-first for the personal logbook. Three pieces:
+
+- **Cache warm-up** (`lib/cache/warmup.ts`) — `warmCacheForOfflineUse`
+  walks every read query for the user's shows, venues, performers (and
+  the per-show setlist-intel data: `shows.detail`, `media.listForShow`,
+  `setlistIntel.predictedSetlist`, plus past-only `songBadges` and
+  `trackPreviewsForShow`) and writes each into the React Query cache.
+  The persister attached by `CacheBridge` then writes them to SQLite for
+  free. Triggers: post sign-in (in `TrpcProviders`), foreground if
+  `lastWarmupAt > 6h` (`useForegroundWarmup`), and a "Sync now" button
+  on the Me tab.
+- **Outbox** (`lib/cache/outbox.ts`) — `PendingMutation` covers show
+  CRUD + setlist + notes + venue / performer follow-unfollow + every
+  `preferences.*` mutation + the two Spotify playlist exports
+  (`spotify.createHypePlaylist` / `createHeardPlaylist`). The dispatcher
+  in `OfflineBridge` swallows 404 / 409 on idempotent paths (follow /
+  unfollow / removeRegion) so a queued change that's already in target
+  state on the server doesn't stick forever.
+- **Offline placeholders** — Discover / Search / Spotify integrations
+  render `components/OfflineEmptyState.tsx` when `useNetwork().online`
+  is false (no cached payload to fall back on for those routes).
+  Everything else (Home / Shows / Venues / Artists / Show detail) reads
+  from the persisted cache, so it renders offline once warm-up has run.
+
+Discover feeds and search are **not** in the warm-up scope — they
+update only when online. The map screen uses cached `shows.listForMap`
++ the native map provider's tile cache.
+
 ## When changing the app
 
 - Touching `lib/cache/`, `lib/mutations/`, or anything that talks to
   SQLite? Add a unit test under `lib/__tests__/` — that scope is
   inside the 80% coverage gate.
+- Adding a new mutation? Add it to the `PendingMutation` union in
+  `lib/cache/outbox.ts`, extend the `switch` in `OfflineBridge`
+  (`app/_layout.tsx`), add a label to `MUTATION_LABEL` in
+  `components/PendingWritesDrawer.tsx`, and wrap the call site in
+  `runOptimisticMutation`. The exhaustive `_exhaustive: never` in the
+  dispatcher catches missing cases at compile time.
+- Adding a new read query the user should see offline? Extend
+  `warmCacheForOfflineUse` in `lib/cache/warmup.ts` and write the
+  result into the same React Query cache key the screen reads from
+  (tRPC-native shape if the screen uses `trpc.X.useQuery`, mobile-
+  prefixed if it uses `useCachedQuery`).
 - Touching a screen under `app/`? Layout-heavy RN code is excluded
   from coverage, but you should still walk it in the simulator. If
   the screen calls a new tRPC procedure or mutation, the helper in

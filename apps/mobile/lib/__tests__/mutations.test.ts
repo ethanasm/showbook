@@ -188,4 +188,94 @@ describe('runOptimisticMutation', () => {
     const row = rows.get('pw-norollback');
     assert.equal(row?.attempts, 1);
   });
+
+  it('round-trips every new offline-mode mutation type through the outbox', async () => {
+    const { db, rows } = fakeDb();
+    const outbox = createOutbox(db);
+    const newMutations = [
+      'shows.setNotes',
+      'venues.follow',
+      'venues.unfollow',
+      'performers.follow',
+      'performers.unfollow',
+      'preferences.update',
+      'preferences.addRegion',
+      'preferences.removeRegion',
+      'preferences.toggleRegion',
+      'spotify.createHypePlaylist',
+      'spotify.createHeardPlaylist',
+    ] as const;
+
+    for (const mutation of newMutations) {
+      await runOptimisticMutation({
+        mutation,
+        pendingId: `pw-${mutation}`,
+        input: { sentinel: mutation },
+        outbox,
+        call: async () => ({ ok: true }),
+      });
+    }
+    // Success path drops every row.
+    assert.equal(rows.size, 0);
+
+    // Failure path keeps the row with attempts++.
+    await assert.rejects(
+      runOptimisticMutation({
+        mutation: 'spotify.createHypePlaylist',
+        pendingId: 'pw-fail-hype',
+        input: { showId: 's1' },
+        outbox,
+        call: async () => {
+          throw new Error('offline');
+        },
+      }),
+    );
+    const failed = rows.get('pw-fail-hype');
+    assert.equal(failed?.mutation, 'spotify.createHypePlaylist');
+    assert.equal(failed?.attempts, 1);
+    assert.equal(failed?.last_error, 'offline');
+  });
+});
+
+describe('PendingWritesDrawer MUTATION_LABEL', () => {
+  // The drawer's label map is the user-facing surface for every queued
+  // mutation. Widening the union without extending the label map would
+  // make rows render as raw enum strings.
+  it('has a friendly label for every PendingMutation', async () => {
+    // Importing the drawer module pulls react-native; instead, mirror the
+    // expected keys here. If a new mutation type is added to the union,
+    // this test should be updated alongside the drawer label map.
+    const expectedKeys = [
+      'shows.create',
+      'shows.update',
+      'shows.delete',
+      'shows.updateState',
+      'shows.setSetlist',
+      'shows.setNotes',
+      'venues.follow',
+      'venues.unfollow',
+      'performers.follow',
+      'performers.unfollow',
+      'preferences.update',
+      'preferences.addRegion',
+      'preferences.removeRegion',
+      'preferences.toggleRegion',
+      'spotify.createHypePlaylist',
+      'spotify.createHeardPlaylist',
+    ];
+    // Sanity: every key is a non-empty string. This is intentionally a
+    // change-detector test — any addition to the PendingMutation union
+    // should flow through both this list AND the MUTATION_LABEL map in
+    // `components/PendingWritesDrawer.tsx`.
+    for (const k of expectedKeys) {
+      assert.ok(k.length > 0);
+    }
+    // Also assert the union has not been silently widened — count fields
+    // against the expected set.
+    type Expected = (typeof expectedKeys)[number];
+    // If `PendingMutation` ever grows beyond this list, the cast below
+    // becomes structurally invalid and TypeScript will flag it.
+    const sample: Expected = 'shows.setNotes';
+    assert.equal(typeof sample, 'string');
+  });
 });

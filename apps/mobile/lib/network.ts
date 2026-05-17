@@ -31,6 +31,7 @@ import {
 } from './cache/outbox';
 import { getCacheOutbox } from './cache/db';
 import { useFeedback } from './feedback';
+import { FORCE_OFFLINE } from './env';
 
 // ---------------------------------------------------------------------------
 // NetInfo abstraction
@@ -47,6 +48,19 @@ export interface NetInfoLike {
 }
 
 let _netInfoSource: NetInfoLike | null = null;
+
+// `EXPO_PUBLIC_FORCE_OFFLINE` pins the provider offline at module eval. A
+// runtime override is exposed for unit tests so we can flip without
+// rebuilding. `null` defers to the build-time flag.
+let _forceOfflineOverride: boolean | null = null;
+function effectiveForceOffline(): boolean {
+  return _forceOfflineOverride ?? FORCE_OFFLINE;
+}
+
+/** Tests inject a forced-offline state. Pass `null` to restore the env flag. */
+export function __setForceOfflineForTest(value: boolean | null): void {
+  _forceOfflineOverride = value;
+}
 
 function loadDefaultNetInfo(): NetInfoLike {
   if (_netInfoSource) return _netInfoSource;
@@ -131,9 +145,18 @@ export function NetworkProvider({
   source,
   now,
 }: NetworkProviderProps): React.JSX.Element {
-  const [state, setState] = React.useState<NetworkState>(INITIAL_STATE);
+  const forced = effectiveForceOffline();
+  const [state, setState] = React.useState<NetworkState>(
+    forced ? { online: false, lastSeenOnline: null } : INITIAL_STATE,
+  );
 
   React.useEffect(() => {
+    if (forced) {
+      // Pin offline; ignore NetInfo entirely so a real connection doesn't
+      // flip the state back. `lastSeenOnline` stays as set above.
+      setState({ online: false, lastSeenOnline: null });
+      return;
+    }
     const src = source ?? resolveNetInfo();
     let cancelled = false;
     const apply = (next: NetInfoLikeState): void => {
@@ -148,7 +171,7 @@ export function NetworkProvider({
       cancelled = true;
       unsub();
     };
-  }, [source, now]);
+  }, [forced, source, now]);
 
   return React.createElement(NetworkContext.Provider, { value: state }, children);
 }

@@ -37,6 +37,10 @@ import { isNonWatchableKind } from '@showbook/shared';
 import { useAuth } from '../../lib/auth';
 import { trpc, type RouterOutput } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
+import { useQueryClient } from '@tanstack/react-query';
+import { runOptimisticMutation } from '../../lib/mutations';
+import { getCacheOutbox } from '../../lib/cache/db';
+import { useFeedback } from '../../lib/feedback';
 
 // Derive screen types from the tRPC vanilla client so drift in the server
 // contract is caught at the call site instead of papered over with casts.
@@ -181,7 +185,7 @@ export default function ArtistDetailScreen(): React.JSX.Element {
             showsVerticalScrollIndicator={false}
             refreshControl={refreshControl}
           >
-            <Hero performer={performer} />
+            <Hero performer={performer} performerId={performerId} />
             <YourShows shows={shows} loading={showsQuery.isLoading} />
             <TaggedPhotos
               items={mediaQuery.data ?? []}
@@ -194,7 +198,13 @@ export default function ArtistDetailScreen(): React.JSX.Element {
   );
 }
 
-function Hero({ performer }: { performer: PerformerDetail }): React.JSX.Element {
+function Hero({
+  performer,
+  performerId,
+}: {
+  performer: PerformerDetail;
+  performerId: string;
+}): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const initial = performer.name.trim()[0]?.toUpperCase() ?? '?';
@@ -226,7 +236,117 @@ function Hero({ performer }: { performer: PerformerDetail }): React.JSX.Element 
         {performer.name}
       </Text>
       {summary ? <Text style={[styles.heroSummary, { color: colors.muted }]}>{summary}</Text> : null}
+      <FollowArtistButton performerId={performerId} isFollowed={performer.isFollowed} />
     </View>
+  );
+}
+
+function FollowArtistButton({
+  performerId,
+  isFollowed,
+}: {
+  performerId: string;
+  isFollowed: boolean;
+}): React.JSX.Element {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+  const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
+  const { showToast } = useFeedback();
+  const [pending, setPending] = React.useState(false);
+
+  const toggle = React.useCallback(async () => {
+    if (pending) return;
+    setPending(true);
+    const wasFollowed = isFollowed;
+    type DetailCache = { isFollowed?: boolean } | undefined;
+    type FollowedCache = { id: string }[] | undefined;
+    type ListCache = { id: string; isFollowed?: boolean }[] | undefined;
+    const detailKey = ['mobile', 'artist', performerId, 'detail'];
+    const followedKey = ['mobile', 'artists', 'followed'];
+    const listKey = ['mobile', 'artists', 'list'];
+    try {
+      await runOptimisticMutation({
+        mutation: wasFollowed ? 'performers.unfollow' : 'performers.follow',
+        input: { performerId },
+        outbox: getCacheOutbox(),
+        call: (input) =>
+          wasFollowed
+            ? utils.client.performers.unfollow.mutate(input)
+            : utils.client.performers.follow.mutate(input),
+        optimistic: {
+          snapshot: () => ({
+            detail: queryClient.getQueryData<DetailCache>(detailKey),
+            followed: queryClient.getQueryData<FollowedCache>(followedKey),
+            list: queryClient.getQueryData<ListCache>(listKey),
+          }),
+          apply: () => {
+            queryClient.setQueryData<DetailCache>(detailKey, (prev) =>
+              prev ? { ...prev, isFollowed: !wasFollowed } : prev,
+            );
+            queryClient.setQueryData<FollowedCache>(followedKey, (prev) => {
+              const list = prev ?? [];
+              if (wasFollowed) return list.filter((p) => p.id !== performerId);
+              if (list.some((p) => p.id === performerId)) return list;
+              return [...list, { id: performerId }];
+            });
+            queryClient.setQueryData<ListCache>(listKey, (prev) =>
+              prev?.map((p) =>
+                p.id === performerId ? { ...p, isFollowed: !wasFollowed } : p,
+              ),
+            );
+          },
+          rollback: (snap) => {
+            queryClient.setQueryData(detailKey, snap.detail);
+            queryClient.setQueryData(followedKey, snap.followed);
+            queryClient.setQueryData(listKey, snap.list);
+          },
+        },
+        reconcile: () => {
+          void utils.performers.detail.invalidate({ performerId });
+          void utils.performers.followed.invalidate();
+          void utils.performers.list.invalidate();
+        },
+      });
+    } catch {
+      showToast({
+        kind: 'info',
+        text: wasFollowed
+          ? "We'll unfollow when you're back online."
+          : "We'll follow when you're back online.",
+      });
+    } finally {
+      setPending(false);
+    }
+  }, [pending, isFollowed, performerId, utils, queryClient, showToast]);
+
+  return (
+    <Pressable
+      onPress={() => {
+        void toggle();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={isFollowed ? 'Unfollow artist' : 'Follow artist'}
+      testID="artist-follow-button"
+      disabled={pending}
+      style={({ pressed }) => [
+        styles.followButton,
+        {
+          backgroundColor: isFollowed ? colors.surface : colors.accent,
+          borderColor: isFollowed ? colors.rule : colors.accent,
+          opacity: pending || pressed ? 0.7 : 1,
+        },
+      ]}
+    >
+      <Text
+        style={[
+          styles.followLabel,
+          { color: isFollowed ? colors.ink : colors.accentText },
+        ]}
+      >
+        {isFollowed ? 'FOLLOWING' : 'FOLLOW'}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -392,6 +512,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '400',
     lineHeight: 18,
+  },
+  followButton: {
+    marginTop: 4,
+    paddingVertical: 9,
+    paddingHorizontal: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+  },
+  followLabel: {
+    fontFamily: 'Geist Mono',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.6,
   },
   section: {
     paddingHorizontal: 20,
