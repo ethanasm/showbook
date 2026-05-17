@@ -132,12 +132,13 @@ keychain can't override the build-time token.
 
 **Debugging a failed run.** On every PR run that fails, the workflow
 pushes the cold-launch screenshot + the Maestro per-flow screenshots
-to the orphan `mobile-e2e-debug` branch under `run-<id>/`, then posts
-a PR comment with the raw `raw.githubusercontent.com` URLs and an
-inlined text-node dump of the cold-launch UI hierarchy. Reviewers
-(and Claude on the web) can `WebFetch` those URLs directly — no need
-to download the GitHub Actions artifact. The same files are also
-preserved as the `maestro-debug-<run-id>` artifact for 7 days.
+to the existing `pr-screenshots` orphan branch under
+`mobile-e2e/run-<id>/`, then posts a PR comment with the raw
+`raw.githubusercontent.com` URLs and an inlined text-node dump of the
+cold-launch UI hierarchy. Reviewers (and Claude on the web) can
+`WebFetch` those URLs directly — no need to download the GitHub
+Actions artifact. The same files are also preserved as the
+`maestro-debug-<run-id>` artifact for 7 days.
 
 **Automated (Android only):** `.github/workflows/mobile-e2e.yml`
 runs nightly + on push-to-`main` + on PRs labeled `mobile-visual`,

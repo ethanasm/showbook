@@ -442,16 +442,22 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      # Push the Maestro debug PNGs to the `mobile-e2e-debug` orphan
-      # branch and post the raw URLs (plus inlined UI hierarchy text)
-      # as a PR comment. The repo is public so
+      # Push the Maestro debug PNGs to the existing `pr-screenshots`
+      # orphan branch under `mobile-e2e/run-<id>/` and post the raw
+      # URLs as a PR comment. Repo is public so
       # raw.githubusercontent.com URLs are fetchable without auth —
       # that lets Claude pull the cold-launch screenshot directly via
-      # WebFetch on the next failure instead of asking the operator
-      # to download the artefact ZIP. Mirrors the existing
-      # upload-pr-screenshots pattern used by the web PR screenshots
-      # flow.
-      - name: Publish maestro debug to orphan branch
+      # WebFetch instead of asking the operator to download the
+      # artefact ZIP. Mirrors the existing upload-pr-screenshots
+      # pattern used by the web PR-screenshots flow.
+      #
+      # We deliberately reuse `pr-screenshots` rather than creating a
+      # separate `mobile-e2e-debug` orphan branch because the
+      # `git worktree add --orphan` syntax used to create a new orphan
+      # branch requires Git ≥ 2.42, which the WSL Ubuntu 22.04 runner
+      # doesn't have. The existing branch's worktree path works on any
+      # Git version.
+      - name: Publish maestro debug to pr-screenshots branch
         if: failure() && github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -483,33 +489,43 @@ jobs:
             n=$((n + 1))
           done < <(find /tmp/maestro-debug -name '*.png' -path '*tests*' -print0)
 
-          echo "Files staged for upload:"
+          echo "::group::Files staged for upload"
           ls -la "$FLAT"
+          echo "::endgroup::"
 
-          # Reuse the existing orphan-branch uploader. Each run gets
-          # its own subdirectory keyed on the run id so re-runs don't
-          # clobber each other.
-          RUN_DIR="run-${{ github.run_id }}"
+          # Reuse the existing orphan-branch uploader, targeting the
+          # already-existing `pr-screenshots` branch. The `--branch`
+          # value becomes the subdirectory inside that branch — using a
+          # slash-prefixed value puts our files under
+          # `mobile-e2e/run-<id>/`, alongside the web PR screenshots
+          # already there.
+          RUN_DIR="mobile-e2e/run-${{ github.run_id }}"
+          # Don't swallow errors — if upload fails, we want the run to
+          # show it. The diagnostic step above + the artefact upload
+          # above are still preserved as fallbacks.
           OUTPUT=$(node scripts/upload-pr-screenshots.mjs \
             --branch "$RUN_DIR" \
             --pr "$PR_NUMBER" \
             --dir "$FLAT" \
-            --target-branch mobile-e2e-debug 2>&1) || {
-              echo "upload-pr-screenshots failed:"
-              echo "$OUTPUT"
-              exit 0
-            }
+            --target-branch pr-screenshots 2>&1)
+          UPLOAD_RC=$?
+          echo "::group::upload-pr-screenshots output"
           echo "$OUTPUT"
+          echo "exit code: $UPLOAD_RC"
+          echo "::endgroup::"
+          if [ "$UPLOAD_RC" -ne 0 ]; then
+            echo "::error::upload-pr-screenshots failed — see group above"
+            exit 0   # don't fail the job over the debug-publish step itself
+          fi
 
-          # The script logs its progress to stderr / stdout above the
-          # JSON; isolate the JSON array using its `[`/`]` lines.
+          # Extract the JSON array (script prints log lines before it).
           URLS_JSON=$(echo "$OUTPUT" | sed -n '/^\[$/,/^\]$/p')
           IMAGES_MD=$(echo "$URLS_JSON" | jq -r '.[] | "![\(.name)](\(.url))"')
 
           # Inline the text= nodes from the cold-launch UI dump
-          # directly in the PR comment — small enough to fit, and
-          # readable without opening an external file. Truncated to
-          # 100 entries to stay under the 64 KB comment limit.
+          # directly in the PR comment — small enough to fit, readable
+          # without opening an external file. Capped at 100 entries to
+          # stay under the 64 KB comment limit.
           UI_TEXT=""
           if [ -f /tmp/maestro-debug/cold-launch.xml ]; then
             UI_TEXT=$(grep -oE 'text="[^"]*"' /tmp/maestro-debug/cold-launch.xml \
@@ -526,7 +542,7 @@ jobs:
               printf '```\n%s\n```\n\n' "$UI_TEXT"
               printf '</details>\n'
             fi
-            printf '\n_Orphan branch `mobile-e2e-debug` retains these for 7 days alongside the run artefact._\n'
+            printf '\n_Hosted on the `pr-screenshots` branch alongside the maestro-debug-%s artifact._\n' "${{ github.run_id }}"
           } > "$BODY_FILE"
 
           gh pr comment "$PR_NUMBER" --body-file "$BODY_FILE"
