@@ -166,112 +166,9 @@
   letter-spacing: -0.1px;
 }
 
-/* Year toggle group */
-
-.map-filterbar__years {
-  display: flex;
-  align-items: stretch;
-  border: 1px solid var(--rule-strong);
-  background: var(--bg);
-  overflow-x: auto;
-  max-width: calc(5 * 80px + 1px);
-  scrollbar-width: thin;
-  scrollbar-color: var(--rule-strong) transparent;
-}
-
-.map-filterbar__years::-webkit-scrollbar {
-  height: 4px;
-}
-
-.map-filterbar__years::-webkit-scrollbar-thumb {
-  background: var(--rule-strong);
-  border-radius: 2px;
-}
-
-.map-filterbar__years::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.map-filterbar__year-btn {
-  padding: 9px 16px;
-  border: none;
-  border-right: 1px solid var(--rule-strong);
-  background: transparent;
-  color: var(--ink);
-  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
-  font-size: 13.5px;
-  font-weight: 500;
-  letter-spacing: -0.2px;
-  cursor: pointer;
-  font-feature-settings: "tnum";
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.map-filterbar__year-btn:last-child {
-  border-right: none;
-}
-
-.map-filterbar__year-btn--active {
-  background: var(--ink);
-  color: var(--bg);
-  font-weight: 600;
-}
-
-/* Kind chip buttons */
-
-.map-filterbar__kinds {
-  display: flex;
-  align-items: stretch;
-  border: 1px solid var(--rule-strong);
-  background: var(--bg);
-}
-
-.map-filterbar__kind-btn {
-  padding: 11px 11px;
-  border: none;
-  border-right: 1px solid var(--rule-strong);
-  background: transparent;
-  color: var(--muted);
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.map-filterbar__kind-btn:last-child {
-  border-right: none;
-}
-
-.map-filterbar__kind-btn--active-all {
-  background: var(--ink);
-  color: var(--bg);
-}
-
-.map-filterbar__kind-btn--active-concert {
-  background: var(--kind-concert);
-  color: var(--bg);
-}
-
-.map-filterbar__kind-btn--active-theatre {
-  background: var(--kind-theatre);
-  color: var(--bg);
-}
-
-.map-filterbar__kind-btn--active-comedy {
-  background: var(--kind-comedy);
-  color: var(--bg);
-}
-
-.map-filterbar__kind-btn--active-festival {
-  background: var(--kind-festival);
-  color: var(--bg);
-}
+/* Year + kind filter groups live in a shared
+   apps/web/components/design-system/segmented-filter.css so the same
+   markup is reused by the logbook/upcoming FilterBar. */
 
 .map-filterbar__spacer {
   flex: 1;
@@ -894,8 +791,7 @@
     flex-wrap: wrap;
   }
 
-  .map-filterbar__years,
-  .map-filterbar__kinds {
+  .map-filterbar .segmented-filter {
     flex-wrap: wrap;
   }
 }

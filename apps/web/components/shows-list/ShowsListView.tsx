@@ -81,7 +81,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
   const compact = useCompactMode();
   const isMobile = useIsMobile();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [selectedYear, setSelectedYear] = useState<string>("All");
+  const [selectedYear, setSelectedYear] = useState<string>("All time");
   const [selectedKind, setSelectedKind] = useState<ShowKind | null>(null);
   // Upcoming defaults to date-asc (next-up first); Logbook keeps date-desc.
   // Stats is past-context only — never an option on /upcoming.
@@ -169,7 +169,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
   const setlistfmFetchAttended = trpc.imports.setlistfmFetchAttended.useMutation();
 
   // Fetch shows
-  const yearFilter = selectedYear === "All" ? undefined :
+  const yearFilter = selectedYear === "All time" ? undefined :
     selectedYear === "older" ? undefined :
     parseInt(selectedYear);
 
@@ -264,7 +264,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
 
   // Year buttons
   const yearButtons = useMemo(() => {
-    const buttons: string[] = ["All"];
+    const buttons: string[] = ["All time"];
     const currentYear = new Date().getFullYear();
     // Add recent years (current + next year and 2 previous)
     const recentYears = allYears.filter((y) => y >= currentYear - 2);

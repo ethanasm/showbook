@@ -3,12 +3,17 @@
 import type { ShowKind } from "@/components/design-system";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import { ALL_KINDS } from "./helpers";
+import "@/components/design-system/segmented-filter.css";
 
 /**
  * Filter strip under the page header. Two modes:
- *   - logbook: year-only chips (All · 2024 · 2023 · … · older)
+ *   - logbook: year-only chips (All time · 2024 · 2023 · … · older)
  *   - upcoming: state chips (All · Tickets · Watching)
  * Both modes share the kind toggles + the filtered-count read-out.
+ *
+ * The chip group uses the shared `.segmented-filter` styling so the
+ * year/state strip and the kind strip render as flush segmented
+ * controls with identical heights, matching the /map filter bar.
  */
 export type UpcomingFilter = "all" | "ticketed" | "watching";
 
@@ -63,50 +68,26 @@ export function FilterBar({
     >
       {/* Mode-specific primary filter */}
       {isLogbook ? (
-        <div
-          data-testid="logbook-year-filter"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 0,
-            border: "1px solid var(--rule-strong)",
-          }}
-        >
-          {yearButtons.map((y, i, arr) => {
+        <div data-testid="logbook-year-filter" className="segmented-filter">
+          {yearButtons.map((y) => {
             const active = y === selectedYear;
             return (
-              <div
+              <button
                 key={y}
+                type="button"
                 onClick={() => onSelectYear(y)}
-                style={{
-                  padding: "5px 11px",
-                  borderRight:
-                    i === arr.length - 1 ? "none" : "1px solid var(--rule-strong)",
-                  background: active ? "var(--ink)" : "transparent",
-                  color: active ? "var(--bg)" : "var(--ink)",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
-                  fontWeight: active ? 500 : 400,
-                  cursor: "pointer",
-                  letterSpacing: ".02em",
-                }}
+                className={`segmented-filter__btn ${
+                  active ? "segmented-filter__btn--active" : ""
+                }`}
               >
                 {y}
-              </div>
+              </button>
             );
           })}
         </div>
       ) : (
-        <div
-          data-testid="upcoming-state-filter"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 0,
-            border: "1px solid var(--rule-strong)",
-          }}
-        >
-          {UPCOMING_CHIPS.map(({ k, l }, i, arr) => {
+        <div data-testid="upcoming-state-filter" className="segmented-filter">
+          {UPCOMING_CHIPS.map(({ k, l }) => {
             const active = upcomingFilter === k;
             return (
               <button
@@ -114,19 +95,9 @@ export function FilterBar({
                 type="button"
                 data-testid={`upcoming-filter-${k}`}
                 onClick={() => onUpcomingFilterChange(k)}
-                style={{
-                  padding: "5px 11px",
-                  borderRight:
-                    i === arr.length - 1 ? "none" : "1px solid var(--rule-strong)",
-                  border: "none",
-                  background: active ? "var(--ink)" : "transparent",
-                  color: active ? "var(--bg)" : "var(--ink)",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
-                  fontWeight: active ? 500 : 400,
-                  cursor: "pointer",
-                  letterSpacing: ".02em",
-                }}
+                className={`segmented-filter__btn ${
+                  active ? "segmented-filter__btn--active" : ""
+                }`}
               >
                 {l}
               </button>
@@ -135,33 +106,33 @@ export function FilterBar({
         </div>
       )}
 
-      {/* Kind chips */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {/* Kind chips — All kinds is the no-filter sentinel. */}
+      <div className="segmented-filter">
+        <button
+          key="all"
+          type="button"
+          onClick={() => onSelectKind(null)}
+          className={`segmented-filter__btn segmented-filter__btn--kind ${
+            selectedKind === null ? "segmented-filter__btn--active" : ""
+          }`}
+        >
+          All kinds
+        </button>
         {ALL_KINDS.map((k) => {
           const KIcon = KIND_ICONS[k];
           const active = selectedKind === k;
           return (
-            <span
+            <button
               key={k}
+              type="button"
               onClick={() => onSelectKind(active ? null : k)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                padding: "4px 9px",
-                border: "1px solid var(--rule-strong)",
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
-                color: active ? "var(--bg)" : "var(--ink)",
-                background: active ? "var(--ink)" : "transparent",
-                letterSpacing: ".04em",
-                cursor: "pointer",
-                textTransform: "lowercase",
-              }}
+              className={`segmented-filter__btn segmented-filter__btn--kind ${
+                active ? `segmented-filter__btn--active-${k}` : ""
+              }`}
             >
               <KIcon size={12} color={active ? "var(--bg)" : `var(--kind-${k})`} />
               {KIND_LABELS[k]}
-            </span>
+            </button>
           );
         })}
       </div>
