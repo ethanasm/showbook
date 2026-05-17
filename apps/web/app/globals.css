@@ -8,6 +8,7 @@
   --faint: rgba(245,245,243,.32);
   --rule: rgba(245,245,243,.10);
   --rule-strong: rgba(245,245,243,.22);
+  --rule-faint: rgba(245,245,243,.06);
 
   /* Accent */
   --accent: #FFD166;
@@ -57,6 +58,7 @@
   --faint: rgba(11,11,10,.32);
   --rule: rgba(11,11,10,.10);
   --rule-strong: rgba(11,11,10,.22);
+  --rule-faint: rgba(11,11,10,.06);
 
   /* Accent */
   --accent: #E5A800;

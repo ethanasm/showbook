@@ -215,10 +215,10 @@
 /* Predicted / actual track row */
 .predicted-row {
   display: grid;
-  grid-template-columns: 24px 24px 1fr auto;
-  column-gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--rule);
+  grid-template-columns: 24px 24px 1fr;
+  column-gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--rule-faint);
   align-items: center;
 }
 
@@ -227,6 +227,7 @@
   font-size: 10.5px;
   color: var(--faint);
   font-feature-settings: "tnum";
+  text-align: right;
 }
 
 .predicted-row__preview-slot {
@@ -331,15 +332,6 @@
   letter-spacing: 0.02em;
 }
 
-.predicted-row__star {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9px;
-  color: var(--accent);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  font-weight: 500;
-}
-
 /* Phase 2 — inline song badges. Sit alongside the evidence string so
    the row height doesn't grow when they appear. */
 .predicted-row__title-link {
@@ -358,13 +350,11 @@
   font-size: 9.5px;
   letter-spacing: 0.04em;
   margin-left: 8px;
-  padding: 1px 6px;
-  border: 1px solid var(--rule-strong);
   white-space: nowrap;
+  cursor: help;
 }
 .predicted-row__badge--first-time {
   color: var(--accent);
-  border-color: var(--accent);
 }
 .predicted-row__badge--rare {
   color: var(--ink);
