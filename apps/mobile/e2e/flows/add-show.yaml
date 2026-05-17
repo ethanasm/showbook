@@ -74,11 +74,16 @@ tags:
 # to land on the right one.
 - hideKeyboard
 
-# The Save button is an icon-only Check button in the TopBar. Use
-# the testID — the accessibilityLabel="Save" text matcher proved
-# unreliable when other "Save"-shaped elements are nearby (IME, etc.).
+# Tap the Save check icon in the TopBar. Coordinate-based tap
+# because neither `text: "Save"` (accessibilityLabel) nor
+# `id: "save-show"` (testID) reliably landed on the Pressable on
+# the WSL-emulator + Hermes bundle combo — the testID variant
+# works fine on the Add tab in (tabs)/_layout.tsx, so this is
+# specific to the TopBar `rightAction` wrapper. The button is
+# fixed at the top-right of the screen so a percentage-coord tap
+# is stable across emulator sizes.
 - tapOn:
-    id: "save-show"
+    point: "95%,8%"
 
 - assertVisible:
     text: "Show added"
