@@ -106,8 +106,9 @@ Cloudflare Tunnel reaches web via loopback.
 - `pnpm test:unit` — unit tests across all packages (uses `node:test`)
 - Integration tests live in `*.integration.test.ts` and are excluded from
   the unit-test glob; run with `pnpm test:integration`. Each integration
-  test has a 45 s per-test timeout enforced by `--test-timeout=45000`,
-  and the batch is killed after 5 min by `scripts/run-integration.mjs`.
+  test has a 60 s per-test timeout (overridable via
+  `INTEGRATION_PER_TEST_TIMEOUT_MS`) enforced by `scripts/run-integration.mjs`,
+  and the batch is killed after 5 min.
 - `pnpm email:smoke` — render the daily digest with sample data to disk
 - `pnpm email:preview` — react-email dev server with hot reload
 
