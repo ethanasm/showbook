@@ -26,10 +26,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { Slot } from 'expo-router';
+import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 
-import { ThemeProvider } from '../lib/theme';
+import { ThemeProvider, useTheme } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { trpc, createQueryClient, createTrpcClient } from '../lib/trpc';
 import { CacheBridge } from '../lib/cache/CacheBridge';
@@ -87,9 +87,20 @@ export default function RootLayout(): React.JSX.Element {
                     <NetworkProvider>
                       <OfflineBridge>
                         <BannerHost />
-                        <Slot />
+                        {/*
+                         * Root <Stack> exposes per-screen `presentation`
+                         * options (modal + native swipe-down) to leaf
+                         * route files via `<Stack.Screen options={...} />`.
+                         * Defaults: header hidden, swipe-back gesture on.
+                         */}
+                        <Stack
+                          screenOptions={{
+                            headerShown: false,
+                            gestureEnabled: true,
+                          }}
+                        />
                         <ToastHost />
-                        <StatusBar style="auto" />
+                        <ThemedStatusBar />
                         <PendingWritesDrawerHost />
                       </OfflineBridge>
                     </NetworkProvider>
@@ -189,6 +200,7 @@ function OfflineBridge({ children }: { children: React.ReactNode }): React.JSX.E
 }
 
 /**
+/**
  * On post-replay paths and offline mutations that move the server to a state
  * the user already wants, the server typically returns 404 (target row gone)
  * or 409 (already there). For follow/unfollow + region remove these are
@@ -204,6 +216,17 @@ async function swallowAlreadyInState<T>(call: () => Promise<T>): Promise<T | { s
     if (status === 404 || status === 409) return { success: true };
     throw err;
   }
+}
+
+/**
+ * Routes the StatusBar style to the resolved theme mode so dark
+ * surfaces get light glyphs and vice versa. Lives inside ThemeProvider
+ * so it sees the current `mode`; the `expo-status-bar` component
+ * updates the native bar on each render.
+ */
+function ThemedStatusBar(): React.JSX.Element {
+  const { mode } = useTheme();
+  return <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />;
 }
 
 function PendingWritesDrawerHost(): React.JSX.Element {

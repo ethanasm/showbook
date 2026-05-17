@@ -186,7 +186,12 @@ test.describe('Hype playlist card — pre-show variant', () => {
 
     await expect(page.getByTestId('hype-playlist-placeholder')).toHaveCount(0);
     await expect(inlineCard(page)).toBeVisible({ timeout: 15_000 });
-    await expect(inlineCard(page).getByText(/Hype playlist/i).first()).toBeVisible();
+    await expect(
+      page
+        .getByTestId('show-section-hype-playlist')
+        .getByText(/Hype playlist/i)
+        .first(),
+    ).toBeVisible();
   });
 
   test('falls back to the P1 placeholder when the feature is disabled', async ({ page }) => {

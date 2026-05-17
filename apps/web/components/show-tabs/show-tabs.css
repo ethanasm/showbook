@@ -111,26 +111,27 @@
 
 /* Setlist confidence / count banner */
 .setlist-banner {
-  padding: 20px var(--page-pad-x);
+  padding: 22px var(--page-pad-x);
   background: var(--surface);
   border-bottom: 1px solid var(--rule);
   display: grid;
   grid-template-columns: auto 1fr;
-  column-gap: 24px;
-  row-gap: 14px;
+  column-gap: 28px;
+  row-gap: 18px;
   align-items: center;
 }
 
 @media (max-width: 720px) {
   .setlist-banner {
     grid-template-columns: 1fr;
+    padding: 20px var(--page-pad-x);
   }
 }
 
 .setlist-banner__lead {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: 14px;
 }
 
 .setlist-banner__number {
@@ -386,7 +387,9 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
-  padding: 8px 0 12px 0;
+  padding: 16px var(--page-pad-x);
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface);
   display: flex;
   gap: 12px;
   align-items: baseline;
@@ -543,8 +546,15 @@
   background: var(--surface);
   border: 1px solid var(--rule);
   display: flex;
-  gap: 14px;
-  align-items: center;
+  gap: 16px;
+  align-items: stretch;
+}
+
+@media (max-width: 480px) {
+  .hype-card {
+    padding: 14px;
+    gap: 12px;
+  }
 }
 
 .hype-card__cover {
@@ -558,6 +568,14 @@
   flex-direction: column;
   justify-content: space-between;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+@media (max-width: 480px) {
+  .hype-card__cover {
+    width: 84px;
+    height: 84px;
+    padding: 9px;
+  }
 }
 
 .hype-card__brand {
@@ -588,15 +606,7 @@
   flex-direction: column;
   justify-content: space-between;
   min-width: 0;
-  gap: 12px;
-}
-
-.hype-card__kicker {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9.5px;
-  color: var(--faint);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  gap: 14px;
 }
 
 .hype-card__headline {
@@ -605,19 +615,20 @@
   color: var(--ink);
   font-weight: 600;
   letter-spacing: -0.3px;
-  margin-top: 3px;
+  line-height: 1.25;
 }
 
 .hype-card__sub {
   font-family: var(--font-geist-mono), monospace;
   font-size: 10.5px;
   color: var(--muted);
-  margin-top: 4px;
+  margin-top: 6px;
   letter-spacing: 0.02em;
+  line-height: 1.5;
 }
 
 .hype-card__cta {
-  padding: 8px 12px;
+  padding: 9px 14px;
   background: var(--accent);
   color: var(--accent-text);
   font-family: var(--font-geist-sans), sans-serif;
@@ -625,7 +636,7 @@
   font-weight: 600;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   cursor: not-allowed;
   opacity: 0.85;
   border: none;
@@ -644,19 +655,20 @@
 }
 
 .hype-card__cta-secondary {
-  padding: 8px 10px;
+  padding: 9px 12px;
   border: 1px solid var(--rule-strong);
   color: var(--ink);
   font-family: var(--font-geist-sans), sans-serif;
   font-size: 12.5px;
   cursor: not-allowed;
   opacity: 0.85;
+  background: transparent;
 }
 
 .hype-card__buttons {
   display: flex;
-  gap: 6px;
-  margin-top: 4px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* Empty-rail placeholder */

@@ -22,7 +22,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { ChevronLeft, X, Check } from 'lucide-react-native';
 
 import { TopBar } from '../../components/TopBar';
@@ -208,6 +208,8 @@ export default function AddFormScreen(): React.JSX.Element {
   }, [values, utils, router, showToast]);
 
   return (
+    <>
+      <Stack.Screen options={{ presentation: 'modal', gestureEnabled: true }} />
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
       <TopBar
         title="New show"
@@ -386,6 +388,7 @@ export default function AddFormScreen(): React.JSX.Element {
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
+    </>
   );
 }
 

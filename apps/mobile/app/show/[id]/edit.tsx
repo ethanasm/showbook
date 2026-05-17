@@ -21,7 +21,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { ChevronLeft, X, Check, Circle } from 'lucide-react-native';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -284,6 +284,8 @@ export default function EditShowScreen(): React.JSX.Element {
   }
 
   return (
+    <>
+      <Stack.Screen options={{ presentation: 'modal', gestureEnabled: true }} />
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
       <TopBar
         title="Edit show"
@@ -420,6 +422,7 @@ export default function EditShowScreen(): React.JSX.Element {
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
+    </>
   );
 }
 
