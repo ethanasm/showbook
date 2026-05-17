@@ -55,6 +55,7 @@ mock.module('@showbook/db', {
     },
     users: {},
     userPreferences: {},
+    userRegions: {},
     shows: {},
     showPerformers: {},
     performers: {},
@@ -132,6 +133,7 @@ describe('runDailyDigest', () => {
       [], // upcomingRows
       [], // venueRows
       [], // performerRows
+      [], // activeRegionRows
     ]);
     const result = await runDailyDigest();
     assert.equal(result.skipped, 1);
@@ -158,6 +160,7 @@ describe('runDailyDigest', () => {
       [{ showId: 's1', name: 'Phoebe' }], // performerRows
       [], // venueRows
       [], // performerRows
+      [], // activeRegionRows
     ]);
 
     const result = await runDailyDigest({ resend: fakeResend });
@@ -184,6 +187,7 @@ describe('runDailyDigest', () => {
       [], // upcomingRows
       [], // venueRows
       [], // performerRows
+      [], // activeRegionRows
     ]);
 
     const result = await runDailyDigest();

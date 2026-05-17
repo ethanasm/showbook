@@ -24,6 +24,8 @@ function makeAnnouncement(overrides: Partial<AnnouncementInput>): AnnouncementIn
     headliner: overrides.headliner ?? 'Test Artist',
     venueId: overrides.venueId ?? 'venue-a',
     venueName: overrides.venueName ?? 'Test Venue',
+    venueLat: overrides.venueLat ?? null,
+    venueLng: overrides.venueLng ?? null,
     headlinerPerformerId: overrides.headlinerPerformerId ?? null,
     showDate: overrides.showDate ?? '2026-08-01',
     runStartDate: overrides.runStartDate ?? null,
@@ -32,6 +34,9 @@ function makeAnnouncement(overrides: Partial<AnnouncementInput>): AnnouncementIn
     onSaleDate: overrides.onSaleDate ?? null,
   };
 }
+
+const SF_REGION = { latitude: 37.7749, longitude: -122.4194, radiusMiles: 25 };
+const NYC_REGION = { latitude: 40.7128, longitude: -74.006, radiusMiles: 25 };
 
 test('drops announcements that match neither follow', () => {
   const result = bucketAnnouncementsForUser(
@@ -278,4 +283,139 @@ test('whenLabel: falls back to showDate when run dates are null', () => {
     performanceDates: null,
   });
   assert.match(out, /Dec 31/);
+});
+
+// ── region filter ───────────────────────────────────────────────────────
+
+test('region filter: empty regions list is a no-op (keeps current behavior)', () => {
+  const result = bucketAnnouncementsForUser(
+    [
+      makeAnnouncement({
+        venueId: 'unfollowed',
+        headlinerPerformerId: 'perf-1',
+        venueLat: 41.4993,
+        venueLng: -81.6944, // Cleveland
+        headliner: 'Lizzo',
+      }),
+    ],
+    new Set(),
+    new Set(['perf-1']),
+    TODAY,
+    SEVEN_OUT,
+    [], // no active regions
+  );
+  assert.equal(result.length, 1);
+  assert.equal(result[0]!.reason, 'artist');
+});
+
+test('region filter: artist-only match inside an active region is kept', () => {
+  const result = bucketAnnouncementsForUser(
+    [
+      makeAnnouncement({
+        venueId: 'unfollowed',
+        headlinerPerformerId: 'perf-1',
+        venueLat: 37.78, // SF
+        venueLng: -122.42,
+        headliner: 'Local SF Show',
+      }),
+    ],
+    new Set(),
+    new Set(['perf-1']),
+    TODAY,
+    SEVEN_OUT,
+    [SF_REGION],
+  );
+  assert.equal(result.length, 1);
+  assert.equal(result[0]!.reason, 'artist');
+});
+
+test('region filter: artist-only match outside active regions is dropped and counted', () => {
+  const counts = { droppedArtistMatches: 0, droppedOnSale: 0 };
+  const result = bucketAnnouncementsForUser(
+    [
+      makeAnnouncement({
+        venueId: 'unfollowed',
+        headlinerPerformerId: 'perf-1',
+        venueLat: 41.4993, // Cleveland
+        venueLng: -81.6944,
+        headliner: 'Lizzo Cleveland',
+      }),
+    ],
+    new Set(),
+    new Set(['perf-1']),
+    TODAY,
+    SEVEN_OUT,
+    [SF_REGION],
+    counts,
+  );
+  assert.equal(result.length, 0);
+  assert.equal(counts.droppedArtistMatches, 1);
+});
+
+test('region filter: explicit venue follow overrides region filter', () => {
+  const result = bucketAnnouncementsForUser(
+    [
+      makeAnnouncement({
+        venueId: 'venue-followed',
+        headlinerPerformerId: 'perf-1',
+        venueLat: 41.4993, // Cleveland — outside SF region
+        venueLng: -81.6944,
+        headliner: 'House of Blues Show',
+      }),
+    ],
+    new Set(['venue-followed']),
+    new Set(['perf-1']),
+    TODAY,
+    SEVEN_OUT,
+    [SF_REGION],
+  );
+  assert.equal(result.length, 1);
+  assert.equal(result[0]!.reason, 'venue');
+});
+
+test('region filter: artist-only match in any of multiple regions is kept', () => {
+  const result = bucketAnnouncementsForUser(
+    [
+      makeAnnouncement({
+        venueId: 'unfollowed-nyc',
+        headlinerPerformerId: 'perf-1',
+        venueLat: 40.7128,
+        venueLng: -74.006,
+        headliner: 'NYC Show',
+      }),
+      makeAnnouncement({
+        venueId: 'unfollowed-cleveland',
+        headlinerPerformerId: 'perf-1',
+        venueLat: 41.4993,
+        venueLng: -81.6944,
+        headliner: 'Cleveland Show',
+      }),
+    ],
+    new Set(),
+    new Set(['perf-1']),
+    TODAY,
+    SEVEN_OUT,
+    [SF_REGION, NYC_REGION],
+  );
+  assert.equal(result.length, 1);
+  assert.equal(result[0]!.headliner, 'NYC Show');
+});
+
+test('region filter: artist-only match with null venue coords is dropped when regions are set', () => {
+  const result = bucketAnnouncementsForUser(
+    [
+      makeAnnouncement({
+        venueId: 'unfollowed',
+        headlinerPerformerId: 'perf-1',
+        venueLat: null,
+        venueLng: null,
+      }),
+    ],
+    new Set(),
+    new Set(['perf-1']),
+    TODAY,
+    SEVEN_OUT,
+    [SF_REGION],
+  );
+  assert.equal(result.length, 0);
 });

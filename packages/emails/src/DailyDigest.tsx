@@ -61,6 +61,10 @@ export interface DailyDigestProps {
    *  greeting when null. Paragraphs are separated by a blank line. */
   preamble?: string | null;
   appUrl: string;
+  /** True when the user has no active regions. Renders a small footer
+   *  nudge inviting them to add one so the digest can focus on their
+   *  area instead of pulling shows from everywhere. */
+  noRegionNudge?: boolean;
 }
 
 // Brand palette mirrors apps/web/app/globals.css (dark default).
@@ -368,6 +372,7 @@ export function DailyDigest({
   newAnnouncements,
   preamble,
   appUrl,
+  noRegionNudge,
 }: DailyDigestProps) {
   const todayCount = todayShows.length;
   const upcomingCount = upcomingShows.length;
@@ -565,6 +570,18 @@ export function DailyDigest({
           </Section>
 
           <Section style={styles.footer}>
+            {noRegionNudge ? (
+              <Text style={{ margin: '0 0 10px', color: C.muted }}>
+                Showing shows from everywhere ·{' '}
+                <Link
+                  href={`${appUrl}/preferences#regions`}
+                  style={styles.footerLink}
+                >
+                  set a region
+                </Link>{' '}
+                to focus this digest near you.
+              </Text>
+            ) : null}
             <Text style={{ margin: 0, color: C.faint }}>
               You're receiving this because email notifications are on for your
               Showbook account.

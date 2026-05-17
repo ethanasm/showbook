@@ -170,13 +170,16 @@ export default function MeScreen(): React.JSX.Element {
         >
           <View style={styles.row}>
             <View style={styles.rowText}>
-              <Text style={[styles.rowLabel, { color: colors.ink }]}>Default region</Text>
+              <Text style={[styles.rowLabel, { color: colors.ink }]}>Region</Text>
               <Text style={[styles.rowSub, { color: colors.muted }]} numberOfLines={1}>
                 {defaultRegion
                   ? `${defaultRegion.cityName} · ${defaultRegion.radiusMiles}mi`
                   : prefsQuery.isLoading
                     ? 'Loading…'
                     : 'Not set'}
+              </Text>
+              <Text style={[styles.rowSub, { color: colors.faint, marginTop: 2 }]} numberOfLines={1}>
+                powers your daily email
               </Text>
             </View>
           </View>

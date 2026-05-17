@@ -1183,6 +1183,14 @@ function FeedSection({
 
       {/* Feed */}
       <div className="discover-feed">
+        {isNearby && (regionGroups?.length ?? 0) > 0 && (
+          <div
+            className="discover-region-explainer"
+            data-testid="discover-region-explainer"
+          >
+            These regions also power your daily email digest.
+          </div>
+        )}
         {/* Column headers */}
         <div className={`discover-col-headers ${groupBy === "region" ? "discover-col-headers--region" : ""}`}>
           <SortHeader<DiscoverSortField>

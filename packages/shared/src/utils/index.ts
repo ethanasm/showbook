@@ -14,3 +14,11 @@ export {
 } from './dates';
 export { formatCurrency, formatSeatDisplay } from './format';
 export { buildIcs, defaultShowTime, slugifyForFilename, type IcsEvent } from './ical';
+export {
+  regionBbox,
+  isPointInBbox,
+  isPointInRegion,
+  isPointInAnyRegion,
+  type RegionBbox,
+  type BboxBounds,
+} from './regions';

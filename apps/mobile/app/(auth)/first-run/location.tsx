@@ -1,8 +1,10 @@
 /**
- * First-run step 3 of 4 — coarse foreground location.
+ * First-run step 3 of 5 — coarse foreground location.
  *
  * We only ever ask for foreground permission — Showbook doesn't need
- * background tracking. The illustration is a simplified stylized map.
+ * background tracking. On grant we read the device location once
+ * (low accuracy is enough — we just need a city) and hand the coords
+ * to the region step so the user can confirm or override.
  */
 
 import React from 'react';
@@ -18,20 +20,41 @@ export default function FirstRunLocation(): React.JSX.Element {
   const router = useRouter();
   const [pending, setPending] = React.useState(false);
 
-  const advance = React.useCallback(() => {
-    router.push('/(auth)/first-run/gmail');
-  }, [router]);
+  const advance = React.useCallback(
+    (params?: { lat?: string; lng?: string }) => {
+      router.push({
+        pathname: '/(auth)/first-run/region',
+        params: params ?? {},
+      });
+    },
+    [router],
+  );
 
   const onPrimary = React.useCallback(async () => {
     if (pending) return;
     setPending(true);
+    let lat: string | undefined;
+    let lng: string | undefined;
     try {
-      await Location.requestForegroundPermissionsAsync();
+      const perm = await Location.requestForegroundPermissionsAsync();
+      if (perm.granted) {
+        try {
+          const pos = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Low,
+          });
+          lat = String(pos.coords.latitude);
+          lng = String(pos.coords.longitude);
+        } catch {
+          // getCurrentPositionAsync can time out on a cold GPS — the region
+          // screen handles "no coords" by going straight into the city
+          // picker.
+        }
+      }
     } catch {
-      // ignore — advance regardless
+      // permission API can throw on some sims — fall through to region step
     } finally {
       setPending(false);
-      advance();
+      advance(lat && lng ? { lat, lng } : undefined);
     }
   }, [advance, pending]);
 
@@ -69,19 +92,19 @@ export default function FirstRunLocation(): React.JSX.Element {
   return (
     <FirstRunStep
       step={3}
-      total={4}
-      eyebrow="STEP 3 OF 4"
+      total={5}
+      eyebrow="STEP 3 OF 5"
       title={
         <Text style={[heroTitleStyle, { color: colors.ink, textAlign: 'center' }]}>
           Shows <Text style={{ color: colors.accent }}>near you.</Text>
         </Text>
       }
-      body="We use your location only to surface venues nearby and prioritize the on-sales in your region. Coarse location is enough — no background tracking."
+      body="We use your location only to surface venues nearby, focus your daily email on shows around you, and prioritize on-sales in your region. Coarse location is enough — no background tracking."
       illustration={illustration}
       primaryLabel="Share my region"
       onPrimary={onPrimary}
       secondaryLabel="Use city instead"
-      onSecondary={advance}
+      onSecondary={() => advance()}
       pending={pending}
     />
   );

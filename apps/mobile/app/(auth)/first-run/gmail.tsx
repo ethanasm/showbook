@@ -1,5 +1,5 @@
 /**
- * First-run step 4 of 4 — Gmail import (informational for M1).
+ * First-run step 5 of 5 — Gmail import (informational for M1).
  *
  * Real Gmail OAuth scope-elevation lands in M3. For now both buttons mark
  * first-run complete and route into the main app. The "Connect Gmail"
@@ -101,9 +101,9 @@ export default function FirstRunGmail(): React.JSX.Element {
 
   return (
     <FirstRunStep
-      step={4}
-      total={4}
-      eyebrow="STEP 4 OF 4 · OPTIONAL"
+      step={5}
+      total={5}
+      eyebrow="STEP 5 OF 5 · OPTIONAL"
       title={
         <Text style={[heroTitleStyle, { color: colors.ink, textAlign: 'center' }]}>
           Pull in <Text style={{ color: colors.accent }}>past tickets.</Text>

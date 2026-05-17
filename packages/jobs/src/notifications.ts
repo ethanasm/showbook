@@ -4,6 +4,7 @@ import { db } from '@showbook/db';
 import {
   users,
   userPreferences,
+  userRegions,
   shows,
   showPerformers,
   performers,
@@ -19,6 +20,10 @@ import {
   predictedSetlistCached,
 } from '@showbook/api';
 import { child } from '@showbook/observability';
+import {
+  isPointInAnyRegion,
+  type RegionBbox,
+} from '@showbook/shared';
 
 const log = child({ component: 'notifications' });
 
@@ -164,6 +169,11 @@ export interface AnnouncementInput {
   headliner: string;
   venueId: string;
   venueName: string;
+  /** Venue coordinates, used for the region-filter step. Null when the
+   *  venue has no geocoded location — those announcements can only enter
+   *  the digest via an explicit venue follow. */
+  venueLat: number | null;
+  venueLng: number | null;
   headlinerPerformerId: string | null;
   showDate: string;
   runStartDate: string | null;
@@ -180,10 +190,19 @@ export interface BucketedAnnouncement {
   onSaleSoon: boolean;
 }
 
+export interface BucketCounts {
+  droppedArtistMatches: number;
+  droppedOnSale: number;
+}
+
 /**
  * Bucket new announcements for a single user, given their follows.
  * - Drops announcements that match neither a followed venue nor a followed artist.
  * - Venue match wins over artist match (more specific to "where I'd see it").
+ * - Region filter: when `activeRegions` is non-empty, artist-only matches
+ *   are kept only if the venue lat/lng falls inside any active region's
+ *   bbox. Explicit venue-follow matches are kept regardless of region —
+ *   following a venue is itself a geographic signal we respect.
  * - Dedupes by (headliner, venue, when) so an announcement matching both
  *   follows isn't doubled.
  * - Sorts by show date ascending. Caller decides on the cap.
@@ -194,8 +213,16 @@ export function bucketAnnouncementsForUser(
   followedPerformerIds: ReadonlySet<string>,
   todayStr: string,
   sevenDaysOutStr: string,
+  activeRegions: ReadonlyArray<RegionBbox> = [],
+  counts?: BucketCounts,
 ): BucketedAnnouncement[] {
   const matched: Array<BucketedAnnouncement & { showDateMs: number }> = [];
+  const filterByRegion = activeRegions.length > 0;
+
+  function venueInAnyRegion(a: AnnouncementInput): boolean {
+    if (a.venueLat == null || a.venueLng == null) return false;
+    return isPointInAnyRegion(a.venueLat, a.venueLng, activeRegions);
+  }
 
   for (const a of newAnnouncements) {
     const matchVenue = followedVenueIds.has(a.venueId);
@@ -203,6 +230,15 @@ export function bucketAnnouncementsForUser(
       a.headlinerPerformerId !== null &&
       followedPerformerIds.has(a.headlinerPerformerId);
     if (!matchVenue && !matchArtist) continue;
+
+    // Region filter applies only to artist-only matches. Venue follows
+    // override geography because they're an explicit user signal.
+    if (filterByRegion && !matchVenue && matchArtist) {
+      if (!venueInAnyRegion(a)) {
+        if (counts) counts.droppedArtistMatches += 1;
+        continue;
+      }
+    }
 
     const showDateMs = new Date(a.showDate + 'T00:00:00').getTime();
     const onSaleSoon =
@@ -269,6 +305,8 @@ export async function runDailyDigest(
       headliner: announcements.headliner,
       venueId: announcements.venueId,
       venueName: venues.name,
+      venueLat: venues.latitude,
+      venueLng: venues.longitude,
       headlinerPerformerId: announcements.headlinerPerformerId,
       showDate: announcements.showDate,
       runStartDate: announcements.runStartDate,
@@ -427,6 +465,24 @@ export async function runDailyDigest(
         .from(userPerformerFollows)
         .where(eq(userPerformerFollows.userId, user.userId));
 
+      // Active regions narrow the artist-follow and on-sale buckets to the
+      // user's geographic interests, mirroring the Discover near-you feed.
+      // Zero active regions = filter is a no-op so existing users without
+      // regions keep getting today's global digest.
+      const activeRegionRows = await db
+        .select({
+          latitude: userRegions.latitude,
+          longitude: userRegions.longitude,
+          radiusMiles: userRegions.radiusMiles,
+        })
+        .from(userRegions)
+        .where(
+          and(
+            eq(userRegions.userId, user.userId),
+            eq(userRegions.active, true),
+          ),
+        );
+
       const followedVenueIds = new Set(venueRows.map((r) => r.venueId));
       const followedPerformerIds = new Set(
         performerRows.map((r) => r.performerId),
@@ -436,6 +492,10 @@ export async function runDailyDigest(
         (a) => a.discoveredAt !== null && a.discoveredAt >= cutoff,
       );
 
+      const filterCounts: BucketCounts = {
+        droppedArtistMatches: 0,
+        droppedOnSale: 0,
+      };
       const newAnnouncements =
         followedVenueIds.size === 0 && followedPerformerIds.size === 0
           ? []
@@ -445,7 +505,24 @@ export async function runDailyDigest(
               followedPerformerIds,
               todayStr,
               nextWeekStr,
+              activeRegionRows,
+              filterCounts,
             ).slice(0, ANNOUNCEMENT_CAP);
+
+      if (
+        activeRegionRows.length > 0 &&
+        filterCounts.droppedArtistMatches > 0
+      ) {
+        log.info(
+          {
+            event: 'notifications.digest.region_filtered',
+            userId: user.userId,
+            droppedArtistMatches: filterCounts.droppedArtistMatches,
+            activeRegionCount: activeRegionRows.length,
+          },
+          'Region filter dropped artist-only announcements outside active regions',
+        );
+      }
 
       if (
         todayShows.length === 0 &&
@@ -479,6 +556,7 @@ export async function runDailyDigest(
         newAnnouncements,
         preamble,
         appUrl,
+        noRegionNudge: activeRegionRows.length === 0,
       });
 
       const subject =

@@ -1,5 +1,5 @@
 /**
- * First-run step 2 of 4 — photo library permission.
+ * First-run step 2 of 5 — photo library permission.
  *
  * Triggers the OS prompt via expo-media-library on Continue. Skip advances
  * silently — the user can grant later via the Settings screen.
@@ -66,8 +66,8 @@ export default function FirstRunPhotos(): React.JSX.Element {
   return (
     <FirstRunStep
       step={2}
-      total={4}
-      eyebrow="STEP 2 OF 4"
+      total={5}
+      eyebrow="STEP 2 OF 5"
       title={
         <Text style={[heroTitleStyle, { color: colors.ink, textAlign: 'center' }]}>
           Save your <Text style={{ color: colors.accent }}>encore.</Text>

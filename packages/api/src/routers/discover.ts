@@ -14,7 +14,7 @@ import {
   userRegions,
   venues,
 } from '@showbook/db';
-import { isNonWatchableKind, KIND_LABELS } from '@showbook/shared';
+import { isNonWatchableKind, KIND_LABELS, regionBbox } from '@showbook/shared';
 import { matchOrCreatePerformer } from '../performer-matcher';
 import {
   enqueueIngestVenue,
@@ -244,19 +244,10 @@ export const discoverRouter = router({
 
       const followedVenueIds = followedVenues.map((v) => v.venueId);
 
-      const regionBboxes = regions.map((region) => {
-        const latDelta = region.radiusMiles / 69.0;
-        const lngDelta =
-          region.radiusMiles /
-          (69.0 * Math.cos((region.latitude * Math.PI) / 180));
-        return {
-          region,
-          minLat: region.latitude - latDelta,
-          maxLat: region.latitude + latDelta,
-          minLng: region.longitude - lngDelta,
-          maxLng: region.longitude + lngDelta,
-        };
-      });
+      const regionBboxes = regions.map((region) => ({
+        region,
+        ...regionBbox(region),
+      }));
 
       // OR every region's (bbox AND its own cursor). A row qualifies if it
       // lies in at least one region whose cursor it is past.

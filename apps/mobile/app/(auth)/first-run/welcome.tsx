@@ -23,7 +23,7 @@ interface AgendaRow {
 const AGENDA: AgendaRow[] = [
   { Icon: Bell, label: 'On-sale alerts', sub: '~5 sec' },
   { Icon: ImageIcon, label: 'Photo & video access', sub: '~5 sec' },
-  { Icon: MapPin, label: 'Region (for nearby shows)', sub: '~5 sec' },
+  { Icon: MapPin, label: 'Region (for nearby shows + email)', sub: '~10 sec' },
   { Icon: Mail, label: 'Gmail (optional · skip OK)', sub: '~10 sec' },
 ];
 
@@ -76,7 +76,7 @@ export default function FirstRunWelcome(): React.JSX.Element {
           </View>
 
           <Text style={[styles.body, { color: colors.muted }]}>
-            Four quick questions and your showbook is ready. Less than 30 seconds.
+            A few quick questions and your showbook is ready. Under a minute.
           </Text>
 
           <View style={styles.agenda}>

@@ -814,7 +814,7 @@ export default function PreferencesView() {
           <div style={styles.card}>
             <SettingRow
               label="Email notifications"
-              description="daily digest of your shows and new announcements at 8 AM ET"
+              description="daily digest of your shows and announcements from your followed regions, at 8 AM ET"
             >
               <Toggle
                 checked={prefs?.emailNotifications ?? false}
@@ -841,13 +841,13 @@ export default function PreferencesView() {
           </div>
 
           {/* ── Regions ──────────────────────────────── */}
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 18 }}>
+          <div id="regions" style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 18 }}>
             <div>
               <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 11, color: "var(--ink)", letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 500 }}>
                 Regions
               </div>
               <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)", marginTop: 3, letterSpacing: ".04em" }}>
-                where to look for nearby shows
+                where to look for nearby shows · powers your daily digest
               </div>
             </div>
             <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: regions.length >= 5 ? "#E63946" : "var(--muted)", letterSpacing: ".04em", marginLeft: "auto" }}>
