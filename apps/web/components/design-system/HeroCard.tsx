@@ -8,6 +8,7 @@ import type { ShowKind } from "./KindBadge";
 import { PulseLabel } from "./PulseLabel";
 import { MapPin, Ticket, Clock, Check } from "lucide-react";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
+import { useLiveCountdown } from "@/lib/useLiveCountdown";
 
 export interface HeroShow {
   id?: string;
@@ -23,6 +24,13 @@ export interface HeroShow {
   kind: ShowKind;
   date: { month: string; day: string; year: string; dow: string };
   countdown: string;
+  /**
+   * Raw calendar date (YYYY-MM-DD) of the show. When provided, the
+   * hero label upgrades to a live-ticking countdown inside the last
+   * 48 h (h-min beyond an hour, hh:mm:ss inside the last hour).
+   * Falls back to the static `countdown` string when omitted.
+   */
+  dateYmd?: string | null;
   hasTix: boolean;
   headlinerImageUrl?: string | null;
 }
@@ -36,6 +44,13 @@ export function HeroCard({ show }: HeroCardProps) {
   const KindIcon = KIND_ICONS[show.kind];
   const kindColor = `var(--kind-${show.kind})`;
   const showId = show.id;
+  // Live ticker — falls through to the static countdown when no dateYmd
+  // was provided (callers that haven't been migrated yet still render
+  // the calendar-day label as before).
+  const live = useLiveCountdown(show.dateYmd ?? null, {
+    fallback: show.countdown,
+  });
+  const countdownLabel = show.dateYmd ? live : show.countdown;
 
   return (
     <div
@@ -87,7 +102,7 @@ export function HeroCard({ show }: HeroCardProps) {
         <div className="hero-card__main">
           <div style={{ marginBottom: 16 }}>
             <PulseLabel>
-              Next up &middot; {show.countdown} &middot; doors 7:00 pm
+              Next up &middot; {countdownLabel} &middot; doors 7:00 pm
             </PulseLabel>
           </div>
 
@@ -317,7 +332,7 @@ export function HeroCard({ show }: HeroCardProps) {
               letterSpacing: ".06em",
             }}
           >
-            {show.countdown}
+            {countdownLabel}
           </div>
         </div>
       </div>

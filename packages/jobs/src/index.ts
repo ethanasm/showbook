@@ -1,4 +1,4 @@
-export { getBoss, startBoss, stopBoss } from './boss';
+export { getBoss, startBoss, stopBoss, getBossState } from './boss';
 export { registerAllJobs, JOBS } from './registry';
 export {
   runDiscoverIngest,

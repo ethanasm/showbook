@@ -29,6 +29,21 @@ services:
       target: dev
     container_name: showbook-dev-web
     restart: unless-stopped
+    # Cap json-file log size so a chatty dev session can't fill the disk.
+    # 10 MB × 3 rotations = ~30 MB max retained per service.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Container healthcheck pings the liveness endpoint (cheap, no DB hop).
+    # `start_period` covers the Next.js dev compile cost on first boot.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3001/api/health/live > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     env_file:
       - path: .env.dev
         required: false

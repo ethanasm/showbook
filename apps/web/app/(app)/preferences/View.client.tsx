@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
+import { toast } from "sonner";
 import { MapPin, Check, Plus, Search, X, LogOut, Music, ShieldCheck } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { usePlaceSearch } from "@/lib/usePlaceSearch";
@@ -625,6 +626,7 @@ export default function PreferencesView() {
   const utils = trpc.useUtils();
   const [venuePage, setVenuePage] = useState(0);
   const [artistPage, setArtistPage] = useState(0);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   const prefsQuery = trpc.preferences.get.useQuery(undefined, {
     staleTime: 60_000,
@@ -1191,11 +1193,199 @@ export default function PreferencesView() {
             ))}
           </div>
 
+          {/* ── Danger zone (account deletion) ───────────────────────── */}
+          <SectionHead
+            label="Danger zone"
+            sub="permanent, irreversible actions"
+          />
+          <div style={styles.card}>
+            <SettingRow
+              label="Delete account"
+              description="erase all shows, follows, integrations, media metadata"
+              last
+            >
+              <button
+                type="button"
+                onClick={() => setDeleteModalOpen(true)}
+                style={styles.deleteButton}
+                aria-label="Delete account"
+              >
+                <span>Delete account…</span>
+              </button>
+            </SettingRow>
+          </div>
+        </div>
+      </div>
+      {deleteModalOpen ? (
+        <DeleteAccountModal
+          userEmail={userEmail}
+          onClose={() => setDeleteModalOpen(false)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Typed-confirm modal for irreversible account deletion. The user must
+ * type the literal string `DELETE` (matching `z.literal('DELETE')` on
+ * the server side) before the destructive button enables.
+ */
+function DeleteAccountModal({
+  userEmail,
+  onClose,
+}: {
+  userEmail: string;
+  onClose: () => void;
+}) {
+  const [typed, setTyped] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const utils = trpc.useUtils();
+  const deleteMutation = trpc.account.delete.useMutation();
+  const canDelete = typed === "DELETE" && !submitting;
+
+  async function handleDelete() {
+    if (!canDelete) return;
+    setSubmitting(true);
+    try {
+      await deleteMutation.mutateAsync({ confirmation: "DELETE" });
+      toast.success("Account deleted");
+      // Clear any cached queries so the post-signout shell has no stale
+      // user-scoped data to flash before the route redirect lands.
+      utils.invalidate();
+      await signOut({ callbackUrl: "/signin" });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Delete failed — try again";
+      toast.error(message);
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-account-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 100,
+        display: "grid",
+        placeItems: "center",
+        background: "rgba(0, 0, 0, 0.6)",
+        padding: 16,
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 440,
+          background: "var(--surface)",
+          border: "1px solid var(--rule-strong)",
+          borderRadius: 12,
+          padding: 24,
+          display: "grid",
+          gap: 16,
+        }}
+      >
+        <div style={{ display: "grid", gap: 6 }}>
+          <h2
+            id="delete-account-title"
+            style={{
+              margin: 0,
+              fontFamily: "var(--font-display)",
+              fontSize: 20,
+              fontWeight: 700,
+              color: "var(--ink)",
+            }}
+          >
+            Delete your account?
+          </h2>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 13,
+              lineHeight: 1.5,
+              color: "var(--muted)",
+            }}
+          >
+            This permanently erases every show, setlist, follow, media
+            tag, and integration tied to {userEmail ? <strong style={{ color: "var(--ink)" }}>{userEmail}</strong> : "this account"}. It cannot be undone.
+          </p>
+        </div>
+        <div style={{ display: "grid", gap: 6 }}>
+          <label
+            htmlFor="delete-account-confirm"
+            style={{
+              fontFamily: "var(--font-geist-mono)",
+              fontSize: 11,
+              letterSpacing: 0.2,
+              textTransform: "uppercase",
+              color: "var(--faint)",
+            }}
+          >
+            Type <strong style={{ color: "var(--ink)" }}>DELETE</strong> to confirm
+          </label>
+          <input
+            id="delete-account-confirm"
+            type="text"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "10px 12px",
+              borderRadius: 6,
+              border: "1px solid var(--rule-strong)",
+              background: "var(--bg)",
+              color: "var(--ink)",
+              fontFamily: "var(--font-geist-mono)",
+              fontSize: 14,
+              letterSpacing: 1,
+            }}
+          />
+        </div>
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            justifyContent: "flex-end",
+            marginTop: 4,
+          }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            style={styles.signOutButton}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={!canDelete}
+            style={{
+              ...styles.deleteButton,
+              opacity: canDelete ? 1 : 0.45,
+              cursor: canDelete ? "pointer" : "not-allowed",
+            }}
+          >
+            {submitting ? "Deleting…" : "Delete forever"}
+          </button>
         </div>
       </div>
     </div>
   );
 }
+
 
 // ── Styles ─────────────────────────────────────────────────
 
@@ -1286,6 +1476,26 @@ const styles: Record<string, React.CSSProperties> = {
     color: "var(--ink)",
     background: "transparent",
     border: "1px solid var(--rule-strong)",
+    borderRadius: 0,
+    padding: "6px 12px",
+    cursor: "pointer",
+    letterSpacing: ".06em",
+    textTransform: "uppercase",
+    flexShrink: 0,
+  },
+  // Destructive variant: red outline + ink-on-danger fill on the
+  // submit, matching the existing danger-zone visual treatment in the
+  // theatre kind-color (var(--kind-theatre) is a saturated red).
+  deleteButton: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: 10.5,
+    fontWeight: 600,
+    color: "var(--kind-theatre)",
+    background: "transparent",
+    border: "1px solid var(--kind-theatre)",
     borderRadius: 0,
     padding: "6px 12px",
     cursor: "pointer",
