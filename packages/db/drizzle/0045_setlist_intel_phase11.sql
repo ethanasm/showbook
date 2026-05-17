@@ -11,7 +11,7 @@
 --   special_event_rules     — operator/auto-detected rules that short-
 --                             circuit the prediction algorithm and route
 --                             to a special-event empty state (§15g). The
---                             0044 seed inserts the canonical Phish
+--                             0045 seed inserts the canonical Phish
 --                             Halloween rule.
 --   user_preferences.setlist_spoilers (+ enum)
 --                           — three-state user preference governing the
