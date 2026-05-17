@@ -28,7 +28,7 @@ const EMPTY_DRAFT: DraftRule = {
  * Phase 11 §15g — admin CRUD for `special_event_rules`. Lives under
  * /admin/eval as a sibling section to the Phase-4 prediction-eval
  * metrics. The operator adds Springsteen NYE / Sphere residency rules
- * here; the 0045 seed only covers Phish Halloween.
+ * here; the 0046 seed only covers Phish Halloween.
  */
 export function SpecialEventRulesSection() {
   const list = trpc.eval.listSpecialEventRules.useQuery();
@@ -79,7 +79,7 @@ export function SpecialEventRulesSection() {
       <h2 style={styles.title}>Special event rules</h2>
       <p style={styles.body}>
         When a rule matches a show, the predicted-setlist surface
-        replaces its prediction with an explainer card. The 0045
+        replaces its prediction with an explainer card. The 0046
         migration seeds the Phish Halloween rule; add others here as
         you notice them in the wild.
       </p>

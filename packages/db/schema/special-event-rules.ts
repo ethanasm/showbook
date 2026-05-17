@@ -14,7 +14,7 @@ import { performers } from './performers';
 // the prediction algorithm. When a rule matches the target date /
 // venue, the predicted-setlist procedure returns
 // `style: 'special_event'` carrying `effect.copy` and a list of
-// prior matching events for context. The 0045 migration seeds the
+// prior matching events for context. The 0046 migration seeds the
 // canonical Phish Halloween rule; additional rules (Springsteen NYE
 // marathons, Sphere residencies) are added via the admin UI at
 // `/admin/eval`.

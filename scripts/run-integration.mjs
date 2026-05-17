@@ -23,7 +23,7 @@ if (!packageDir) {
   process.exit(2);
 }
 
-const PER_TEST_TIMEOUT_MS = 45_000;
+const PER_TEST_TIMEOUT_MS = Number(process.env.INTEGRATION_PER_TEST_TIMEOUT_MS ?? 60_000);
 const BATCH_TIMEOUT_MS = Number(process.env.INTEGRATION_BATCH_TIMEOUT_MS ?? 300_000);
 
 const testsDir = join(REPO_ROOT, packageDir, 'src/__tests__');

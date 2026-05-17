@@ -200,8 +200,8 @@ export const discoverRouter = router({
    * Single OR'd bbox query against announcements ⨝ venues, then per-region
    * assignment in JS (smallest matching radius wins). Replaces the earlier
    * one-query-per-region implementation, which could drop announcements at
-   * an overlapping bbox edge: rows fetched by a larger region's 250-row cap
-   * but later reassigned to a smaller region used up the larger region's
+   * an overlapping bbox edge: rows fetched by a larger region's per-region
+   * cap but later reassigned to a smaller region used up the larger region's
    * window without contributing to it.
    *
    * Cursors are still per-region so the client can scroll regions
@@ -217,9 +217,9 @@ export const discoverRouter = router({
           .number()
           .int()
           .min(1)
-          .max(250)
+          .max(2500)
           .optional()
-          .default(250),
+          .default(2500),
       }),
     )
     .query(async ({ input, ctx }) => {
@@ -280,11 +280,11 @@ export const discoverRouter = router({
         conditions.push(notInArray(announcements.venueId, followedVenueIds));
       }
 
-      // Generous global cap (regions × perRegionLimit + 1) capped at 1500 so
+      // Generous global cap (regions × perRegionLimit + 1) capped at 10000 so
       // a dense region can't starve others while still not blowing memory.
       const globalLimit = Math.min(
         regions.length * (perRegionLimit + 1),
-        1500,
+        10000,
       );
 
       const rows = await db
