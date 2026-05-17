@@ -49,7 +49,7 @@ tags:
 # Skip the LLM chat path entirely — tap the pen-line "Open form"
 # affordance to land directly on the structured form.
 - tapOn:
-    id: "Open form"
+    text: "Open form"
 
 - assertVisible:
     text: "New show"
@@ -70,7 +70,7 @@ tags:
 
 # The Save button is an icon-only Check button in the TopBar.
 - tapOn:
-    id: "Save"
+    text: "Save"
 
 - assertVisible:
     text: "Show added"

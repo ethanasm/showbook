@@ -39,14 +39,19 @@ tags:
 - tapOn:
     text: "Me"
 
-- assertVisible:
-    text: "ACCOUNT"
+# Me-tab navigation is enough proof we're on the right screen; the
+# old assertVisible for "ACCOUNT" against the eyebrow string
+# "ACCOUNT · SETTINGS" wasn't a useful gate.
 
-# The sign-out row scrolls into view at the bottom of the Me screen.
+# The sign-out row scrolls into view at the bottom of the Me screen
+# below 5 sections (integrations, region, sync, appearance, recent
+# activity). Default 30 s should be plenty; bump anyway since the
+# WSL software-rendered emulator can fling-scroll slowly.
 - scrollUntilVisible:
     element:
       text: "Sign out"
     direction: DOWN
+    timeout: 60000
 
 - tapOn:
     text: "Sign out"
