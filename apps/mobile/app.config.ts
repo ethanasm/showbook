@@ -2,8 +2,10 @@ import type { ExpoConfig } from 'expo/config';
 
 // Asset files in ./assets are 1x1 PNG placeholders for development. Before
 // shipping to TestFlight / App Store / Play Store, replace icon.png with
-// 1024x1024, splash.png at proper resolution, and adaptive-icon.png with
-// 432x432 foreground per platform guidelines.
+// 1024x1024, splash.png + splash-dark.png at proper resolution, and
+// adaptive-icon.png with 432x432 foreground per platform guidelines. The
+// expo-splash-screen plugin below picks up the dark variant automatically
+// when the device is in dark mode.
 //
 // Google Maps API key (used by react-native-maps on the Map tab):
 //   EXPO_PUBLIC_GOOGLE_MAPS_API_KEY  — single key sourced from the user's
@@ -25,6 +27,10 @@ const config: ExpoConfig = {
   icon: './assets/icon.png',
   scheme: 'showbook',
   userInterfaceStyle: 'automatic',
+  // The legacy `splash` block stays as the iOS fallback for SDKs that
+  // haven't migrated to the plugin yet. The expo-splash-screen plugin
+  // below is the canonical wiring on SDK 55 and supports the dark
+  // variant the design calls for.
   splash: {
     image: './assets/splash.png',
     resizeMode: 'cover',
@@ -89,6 +95,27 @@ const config: ExpoConfig = {
     'expo-font',
     'expo-secure-store',
     'react-native-maps',
+    [
+      'expo-splash-screen',
+      {
+        // Light splash (default). When the asset is replaced with real
+        // artwork, the gold-on-black brand mark renders against the
+        // bg color below for the brief moment Expo holds the splash.
+        image: './assets/splash.png',
+        backgroundColor: '#0C0C0C',
+        resizeMode: 'cover',
+        // Dark-mode variant. Kicks in when userInterfaceStyle resolves
+        // to `dark`. Showbook is dark-everywhere so this differs only
+        // in the explicit `backgroundColor` hint to native splash —
+        // until the real splash-dark.png exists, the file points at
+        // the same placeholder.
+        dark: {
+          image: './assets/splash.png',
+          backgroundColor: '#0C0C0C',
+          resizeMode: 'cover',
+        },
+      },
+    ],
     [
       'expo-image-picker',
       {

@@ -47,6 +47,7 @@ const WEB_SHIMS = {
   'expo-media-library': path.resolve(projectRoot, 'web-shims/expo-media-library.js'),
   'expo-location': path.resolve(projectRoot, 'web-shims/expo-location.js'),
   'expo-notifications': path.resolve(projectRoot, 'web-shims/expo-notifications.js'),
+  'expo-haptics': path.resolve(projectRoot, 'web-shims/expo-haptics.js'),
   'react-native-maps': path.resolve(projectRoot, 'web-shims/react-native-maps.js'),
 };
 

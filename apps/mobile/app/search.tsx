@@ -25,7 +25,7 @@ import {
   ScrollView,
   Image,
 } from 'react-native';
-import { useRouter, Link } from 'expo-router';
+import { useRouter, Link, Stack } from 'expo-router';
 import {
   ChevronLeft,
   Search as SearchIcon,
@@ -90,6 +90,17 @@ export default function SearchScreen(): React.JSX.Element {
   );
 
   return (
+    <>
+      <Stack.Screen
+        options={{
+          // Present as a sheet so iOS native swipe-down dismisses
+          // without a back-tap. `fullScreenModal` keeps the screen
+          // full-height; switch to `'modal'` if a partial sheet is
+          // preferred.
+          presentation: 'modal',
+          gestureEnabled: true,
+        }}
+      />
     <ScreenWrapper title="Search" eyebrow="SHOWS · ARTISTS · VENUES" leading={back}>
       <View
         style={[
@@ -181,6 +192,7 @@ export default function SearchScreen(): React.JSX.Element {
         )}
       </ScrollView>
     </ScreenWrapper>
+    </>
   );
 }
 

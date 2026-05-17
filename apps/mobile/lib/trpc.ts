@@ -10,11 +10,12 @@
  * we don't need to recreate the tRPC client when the user signs in/out.
  */
 
-import { QueryClient } from '@tanstack/react-query';
+import { MutationCache, QueryClient } from '@tanstack/react-query';
 import { createTRPCReact, httpBatchLink } from '@trpc/react-query';
 import superjson from 'superjson';
 import type { AppRouter } from '@showbook/api';
 import { API_URL } from './env';
+import { hapticSuccess, hapticWarning } from './haptics';
 
 export const trpc = createTRPCReact<AppRouter>();
 
@@ -31,8 +32,37 @@ export const trpc = createTRPCReact<AppRouter>();
  */
 export type RouterOutput<F> = F extends (...args: never[]) => Promise<infer R> ? R : never;
 
+// Mutation meta on mobile mirrors the web pattern (apps/web/lib/trpc.tsx):
+// each useMutation can opt into a haptic via `meta.haptic`. The default
+// is `'success'` so most write paths get the success cue without each
+// call site opting in; pass `meta: { haptic: false }` to silence (e.g.
+// silent autosave) or `'warning'` for already-flagged destructive
+// confirmations. Errors always fire the warning cue.
+declare module '@tanstack/react-query' {
+  interface Register {
+    mutationMeta: {
+      haptic?: 'success' | 'warning' | false;
+    };
+  }
+}
+
 export function createQueryClient(): QueryClient {
   return new QueryClient({
+    mutationCache: new MutationCache({
+      onSuccess: (_data, _vars, _ctx, mutation) => {
+        const cue = mutation.meta?.haptic;
+        if (cue === false) return;
+        if (cue === 'warning') {
+          void hapticWarning();
+          return;
+        }
+        // Default: success cue on every mutation resolution.
+        void hapticSuccess();
+      },
+      onError: () => {
+        void hapticWarning();
+      },
+    }),
     defaultOptions: {
       queries: {
         staleTime: 30_000,

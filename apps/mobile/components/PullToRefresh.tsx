@@ -19,6 +19,7 @@ import {
   type ScrollViewProps,
 } from 'react-native';
 import { useTheme } from '../lib/theme';
+import { hapticSelection, hapticSuccess } from '../lib/haptics';
 
 export interface PullToRefreshProps {
   refreshing: boolean;
@@ -28,17 +29,30 @@ export interface PullToRefreshProps {
 
 /**
  * Build a themed RefreshControl element for use with FlatList / SectionList /
- * ScrollView's `refreshControl` prop.
+ * ScrollView's `refreshControl` prop. Fires a selection haptic on pull-start
+ * and a success haptic when the refresh finishes.
  */
 export function useThemedRefreshControl(
   refreshing: boolean,
   onRefresh: () => void,
 ): React.ReactElement<RefreshControlProps> {
   const { tokens } = useTheme();
+  const prevRefreshing = React.useRef(refreshing);
+  React.useEffect(() => {
+    if (prevRefreshing.current && !refreshing) {
+      // Transition from refreshing → done: fire the success cue.
+      void hapticSuccess();
+    }
+    prevRefreshing.current = refreshing;
+  }, [refreshing]);
+  const handleRefresh = React.useCallback(() => {
+    void hapticSelection();
+    onRefresh();
+  }, [onRefresh]);
   return (
     <RefreshControl
       refreshing={refreshing}
-      onRefresh={onRefresh}
+      onRefresh={handleRefresh}
       tintColor={tokens.colors.accent}
       colors={[tokens.colors.accent]}
       progressBackgroundColor={tokens.colors.surface}

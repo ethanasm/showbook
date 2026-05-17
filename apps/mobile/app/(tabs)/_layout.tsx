@@ -39,6 +39,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, List, Plus, MapPin, User } from 'lucide-react-native';
 import { useTheme } from '../../lib/theme';
 import { useBreakpoint } from '../../lib/responsive';
+import { hapticSelection } from '../../lib/haptics';
 import { ThreePaneLayout, useSelectedShow } from '../../components/ThreePaneLayout';
 import { EmptyState } from '../../components/EmptyState';
 import ShowsScreen from './shows';
@@ -73,6 +74,13 @@ export default function TabsLayout(): React.JSX.Element {
 
   return (
     <Tabs
+      screenListeners={{
+        tabPress: () => {
+          // Fire-and-forget; the haptic helper short-circuits on web
+          // and swallows errors on native.
+          void hapticSelection();
+        },
+      }}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.accent,
