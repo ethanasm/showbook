@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { SectionHead } from "@/components/PreferencesPrimitives";
@@ -57,6 +58,11 @@ export default function AdminView() {
   const tmMutation = trpc.admin.backfillVenueTicketmaster.useMutation();
   const pruneMutation = trpc.admin.enqueuePruneOrphanCatalog.useMutation();
   const setlistMutation = trpc.admin.enqueueSetlistRetry.useMutation();
+  const corpusFillMutation = trpc.admin.enqueueSetlistCorpusFill.useMutation();
+  const corpusRefreshMutation =
+    trpc.admin.enqueueSetlistCorpusFillRefresh.useMutation();
+
+  const [performerQuery, setPerformerQuery] = useState("");
 
   const coordsResult = coordsMutation.data
     ? `Last run: ${coordsMutation.data.geocoded} geocoded · ${coordsMutation.data.failed} failed · ${coordsMutation.data.total} total`
@@ -71,6 +77,14 @@ export default function AdminView() {
     : null;
   const setlistResult = setlistMutation.data
     ? `Last run: ${setlistMutation.data.queued} queued · job ${setlistMutation.data.jobId ?? 'n/a'}`
+    : null;
+  const corpusFillResult = corpusFillMutation.data
+    ? `Enqueued ${corpusFillMutation.data.mode} for ${corpusFillMutation.data.performerName} (${corpusFillMutation.data.performerId})${corpusFillMutation.data.hasMbid ? '' : ' — no MBID, job will short-circuit'} · job ${corpusFillMutation.data.jobId ?? 'n/a'}`
+    : null;
+  const corpusRefreshResult = corpusRefreshMutation.data
+    ? corpusRefreshMutation.data.jobId
+      ? `Enqueued job ${corpusRefreshMutation.data.jobId}`
+      : 'Enqueue returned no job id (likely a duplicate already queued)'
     : null;
 
   return (
@@ -136,6 +150,75 @@ export default function AdminView() {
             errorMessage={setlistMutation.error?.message ?? null}
             resultLine={setlistResult}
             onRun={() => setlistMutation.mutate()}
+          />
+
+          <SectionHead
+            label="Setlist corpus"
+            sub="Pre-show setlist.fm fetches that warm up the predicted-setlist tab"
+          />
+
+          <div style={styles.card}>
+            <div style={styles.cardTitle}>Refresh setlist corpus for performer</div>
+            <div style={styles.cardDescription}>
+              Enqueue an enrichment/setlist-corpus-fill job (mode: predict, ~3
+              pages / 60 setlists) for a specific performer. Use this when a
+              show is approaching and the Setlist tab is stuck on
+              &ldquo;We&rsquo;re pulling recent setlists&rdquo;. Accepts a
+              performer UUID or a name substring; ambiguous matches return the
+              candidate list.
+            </div>
+            <div style={styles.cardActions}>
+              <input
+                type="text"
+                value={performerQuery}
+                onChange={(e) => setPerformerQuery(e.target.value)}
+                placeholder="Performer name or UUID"
+                disabled={corpusFillMutation.isPending}
+                style={styles.input}
+                aria-label="Performer name or UUID"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (corpusFillMutation.isPending) return;
+                  const q = performerQuery.trim();
+                  if (q.length === 0) return;
+                  corpusFillMutation.mutate({ performerQuery: q });
+                }}
+                disabled={
+                  corpusFillMutation.isPending ||
+                  performerQuery.trim().length === 0
+                }
+                style={
+                  corpusFillMutation.isPending ||
+                  performerQuery.trim().length === 0
+                    ? styles.runButtonDisabled
+                    : styles.runButton
+                }
+                aria-label="Enqueue corpus fill"
+              >
+                {corpusFillMutation.isPending ? 'Enqueuing…' : 'Enqueue'}
+              </button>
+              {corpusFillResult && (
+                <span style={styles.resultLine}>{corpusFillResult}</span>
+              )}
+              {corpusFillMutation.error && (
+                <span style={styles.errorLine}>
+                  {corpusFillMutation.error.message}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <BackfillCard
+            title="Refresh setlist corpus (all upcoming)"
+            description="Trigger the enrichment/setlist-corpus-fill-refresh job — the same one that runs daily at 04:45 ET. Refreshes corpus for the top-500 followed performers plus everyone with a watching / ticketed show in the next 30 days. Use this if the cron missed or you can't wait until tomorrow morning."
+            buttonLabel="Enqueue corpus refresh"
+            confirmText="Enqueue the setlist-corpus-fill-refresh sweep? It calls setlist.fm once per qualifying performer (~500+ calls)."
+            isPending={corpusRefreshMutation.isPending}
+            errorMessage={corpusRefreshMutation.error?.message ?? null}
+            resultLine={corpusRefreshResult}
+            onRun={() => corpusRefreshMutation.mutate()}
           />
         </div>
       </div>
@@ -252,5 +335,16 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: "var(--font-geist-mono)",
     fontSize: 11,
     color: "#E63946",
+  },
+  input: {
+    fontFamily: "var(--font-geist-mono)",
+    fontSize: 12,
+    color: "var(--ink)",
+    background: "transparent",
+    border: "1px solid var(--rule)",
+    padding: "8px 10px",
+    minWidth: 260,
+    flex: "1 1 260px",
+    maxWidth: 360,
   },
 };

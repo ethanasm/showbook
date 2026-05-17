@@ -56,7 +56,11 @@ export const JOB_NAMES = {
   INGEST_REGION: 'discover/ingest-region',
   PRUNE_ORPHAN_CATALOG: 'prune/orphan-catalog',
   SETLIST_RETRY: 'enrichment/setlist-retry',
+  SETLIST_CORPUS_FILL: 'enrichment/setlist-corpus-fill',
+  SETLIST_CORPUS_FILL_REFRESH: 'enrichment/setlist-corpus-fill-refresh',
 } as const;
+
+export type CorpusFillMode = 'predict' | 'deep' | 'refresh';
 
 export async function enqueueIngestVenue(venueId: string): Promise<void> {
   try {
@@ -96,6 +100,61 @@ export async function enqueueSetlistRetry(): Promise<string | null> {
     log.error(
       { err, event: 'job_queue.enqueue.failed', queue: JOB_NAMES.SETLIST_RETRY },
       'enqueueSetlistRetry failed',
+    );
+    return null;
+  }
+}
+
+/**
+ * Trigger a per-performer setlist corpus fill. The corpus is what powers
+ * the predicted-setlist tab; without rows in `tour_setlists` the tab shows
+ * the "We're pulling recent setlists" cold state. `mode` controls how many
+ * setlist.fm pages we fetch — 'predict' (3 pages) is the default for a
+ * manual operator trigger.
+ */
+export async function enqueueSetlistCorpusFill(
+  performerId: string,
+  mode: CorpusFillMode = 'predict',
+): Promise<string | null> {
+  try {
+    const boss = await getSender();
+    return await boss.send(JOB_NAMES.SETLIST_CORPUS_FILL, {
+      performerId,
+      mode,
+    });
+  } catch (err) {
+    log.error(
+      {
+        err,
+        event: 'job_queue.enqueue.failed',
+        queue: JOB_NAMES.SETLIST_CORPUS_FILL,
+        performerId,
+        mode,
+      },
+      'enqueueSetlistCorpusFill failed',
+    );
+    return null;
+  }
+}
+
+/**
+ * Trigger the daily corpus-fill refresh sweep outside its 04:45 ET cron —
+ * top-500 followed performers plus every performer with a watching /
+ * ticketed show in the next 30 days. Used by the admin "Refresh setlist
+ * corpus (all upcoming)" button.
+ */
+export async function enqueueSetlistCorpusFillRefresh(): Promise<string | null> {
+  try {
+    const boss = await getSender();
+    return await boss.send(JOB_NAMES.SETLIST_CORPUS_FILL_REFRESH, {});
+  } catch (err) {
+    log.error(
+      {
+        err,
+        event: 'job_queue.enqueue.failed',
+        queue: JOB_NAMES.SETLIST_CORPUS_FILL_REFRESH,
+      },
+      'enqueueSetlistCorpusFillRefresh failed',
     );
     return null;
   }
