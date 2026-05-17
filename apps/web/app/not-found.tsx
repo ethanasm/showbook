@@ -2,20 +2,34 @@ import Link from "next/link";
 import { EmptyState } from "@/components/design-system/EmptyState";
 
 export default function AppNotFound() {
+  // Root not-found.tsx renders outside the (app) AppShell — apply a
+  // page-padded wrapper so EmptyState's 2-col grid has the breathing
+  // room it gets inside the app sidebar layout.
   return (
-    <EmptyState
-      kind="shows"
-      title="Couldn't find that page"
-      body="The link you followed doesn't lead anywhere we know about. Try one of these instead."
-      action={
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            flexWrap: "wrap",
-            alignItems: "center",
-          }}
-        >
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "var(--bg)",
+        padding: "48px var(--page-pad-x)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div style={{ width: "100%", maxWidth: 960 }}>
+        <EmptyState
+          kind="shows"
+          title="Couldn't find that page"
+          body="The link you followed doesn't lead anywhere we know about. Try one of these instead."
+          action={
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+                alignItems: "center",
+              }}
+            >
           <Link
             href="/home"
             style={{
@@ -67,8 +81,10 @@ export default function AppNotFound() {
           >
             Logbook
           </Link>
-        </div>
-      }
-    />
+            </div>
+          }
+        />
+      </div>
+    </main>
   );
 }
