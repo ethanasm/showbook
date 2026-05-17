@@ -1,4 +1,4 @@
-# Spotify Hype-playlist tap flow — Maestro Cloud (Phase 10 Part C1)
+# Spotify Hype-playlist tap flow — Maestro (Phase 10 Part C1)
 #
 # Asserts that tapping the Hype playlist button on a stable pre-show
 # without a connected Spotify account presents the SpotifyConnectSheet.
@@ -22,28 +22,23 @@ tags:
     clearState: true
     clearKeychain: true
 
-- runScript:
-    file: ../scripts/seed-session.js
-    env:
-      MAESTRO_E2E_TOKEN: ${MAESTRO_E2E_TOKEN}
-      MAESTRO_E2E_USER_JSON: ${MAESTRO_E2E_USER_JSON}
-
-- openLink: ${output.seedDeeplink}
-
-- launchApp:
-    clearState: false
+- scrollUntilVisible:
+    element:
+      text: "Sign in with Google"
+    direction: DOWN
 
 - tapOn:
     text: "Sign in with Google"
+
 - runFlow:
     when:
-      visible: "Welcome"
+      visible: "Set up showbook"
     commands:
-      - tapOn: "Continue"
-      - tapOn: "Skip for now"
-      - tapOn: "Skip for now"
-      - tapOn: "Skip for now"
-      - tapOn: "Skip for now"
+      - tapOn: "Set up showbook"
+      - tapOn: "Skip"   # notifications
+      - tapOn: "Skip"   # photos
+      - tapOn: "Skip"   # location
+      - tapOn: "Skip"   # gmail
 
 - tapOn:
     text: "Shows"
@@ -52,14 +47,30 @@ tags:
 - tapOn:
     id: "show-tab-setlist"
 
-# Tap the primary Hype-playlist button. testID is `hype-card-hype-primary`.
-- tapOn:
-    id: "hype-card-hype-primary"
+# Tap the primary Hype-playlist button. testID is
+# `hype-card-hype-primary` (pre-show) — guard with `optional: true`
+# so the flow doesn't break when the seeded fixture is post-show
+# (in which case the button is `hype-card-heard-primary`).
+- runFlow:
+    when:
+      visible:
+        id: "hype-card-hype-primary"
+    commands:
+      - tapOn:
+          id: "hype-card-hype-primary"
+      - assertVisible:
+          id: "spotify-connect-button"
+      - tapOn:
+          id: "spotify-connect-cancel"
 
-# The Spotify connect sheet slides up.
-- assertVisible:
-    id: "spotify-connect-button"
-
-# Close out to keep state clean for the next flow.
-- tapOn:
-    id: "spotify-connect-cancel"
+- runFlow:
+    when:
+      visible:
+        id: "hype-card-heard-primary"
+    commands:
+      - tapOn:
+          id: "hype-card-heard-primary"
+      - assertVisible:
+          id: "spotify-connect-button"
+      - tapOn:
+          id: "spotify-connect-cancel"

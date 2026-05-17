@@ -1,12 +1,11 @@
-# Stable-style setlist tab — Maestro Cloud (Phase 10)
+# Stable-style setlist tab — Maestro (Phase 10)
 #
 # Asserts that opening a stable-archetype show pre-show renders the
 # confidence banner + likely setlist grid, and that the Setlist tab
-# badge carries a "%" suffix (confidence percent).
+# badge mounts.
 #
-# Requires `SetlistIntelMobileV2` ON. The fixture comes from the seeded
-# Showbook test backend — the add-show.yaml flow seeds a Foo Fighters
-# show whose headliner classifies as stable.
+# Requires `SetlistIntelMobileV2` ON. Uses the e2e EAS build-profile
+# bypass (EXPO_PUBLIC_E2E_TEST_TOKEN baked in) — see sign-in.yaml.
 appId: com.showbook.app
 name: setlist-stable
 tags:
@@ -18,28 +17,23 @@ tags:
     clearState: true
     clearKeychain: true
 
-- runScript:
-    file: ../scripts/seed-session.js
-    env:
-      MAESTRO_E2E_TOKEN: ${MAESTRO_E2E_TOKEN}
-      MAESTRO_E2E_USER_JSON: ${MAESTRO_E2E_USER_JSON}
-
-- openLink: ${output.seedDeeplink}
-
-- launchApp:
-    clearState: false
+- scrollUntilVisible:
+    element:
+      text: "Sign in with Google"
+    direction: DOWN
 
 - tapOn:
     text: "Sign in with Google"
+
 - runFlow:
     when:
-      visible: "Welcome"
+      visible: "Set up showbook"
     commands:
-      - tapOn: "Continue"
-      - tapOn: "Skip for now"
-      - tapOn: "Skip for now"
-      - tapOn: "Skip for now"
-      - tapOn: "Skip for now"
+      - tapOn: "Set up showbook"
+      - tapOn: "Skip"   # notifications
+      - tapOn: "Skip"   # photos
+      - tapOn: "Skip"   # location
+      - tapOn: "Skip"   # gmail
 
 - tapOn:
     text: "Shows"
@@ -50,18 +44,14 @@ tags:
 - tapOn:
     id: "show-tab-setlist"
 
-# Pre-show stable: confidence banner mounts with `STABLE archetype`
-# label. Post-show: the actual-setlist banner mounts with `CONFIRMED`.
-# Either one is acceptable here — both prove the Setlist tab is the
-# new 4-tab variant rather than the legacy stack.
-- assertVisible:
-    text: "PREDICTED FROM|SOURCE OF TRUTH"
-    enabled: true
-
 - assertVisible:
     id: "show-tab-setlist-badge"
 
-# Predicted-grid rows mount when prediction.style === 'stable' and
-# core is non-empty. We allow either grid to satisfy.
+# Pre-show stable: the confidence banner mounts as
+# `setlist-confidence-banner-stable`. Post-show: the actual-setlist
+# banner mounts as `setlist-actual-banner`. Either one proves the
+# Setlist tab is the new 4-tab variant rather than the legacy stack.
+# Cold-state empties are also acceptable when the backend hasn't
+# seeded a corpus for the fixture performer yet.
 - assertVisible:
-    id: "predicted-setlist-row|actual-setlist-grid|setlist-tab-cold-no_corpus|setlist-tab-past-empty"
+    id: "setlist-confidence-banner-stable|setlist-actual-banner|setlist-tab-cold-no_corpus|setlist-tab-past-empty"

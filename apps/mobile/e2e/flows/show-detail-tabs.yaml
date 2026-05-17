@@ -1,13 +1,14 @@
-# Show-detail 4-tab navigation — Maestro Cloud (Phase 10)
+# Show-detail 4-tab navigation — Maestro (Phase 10)
 #
 # Gated on `SetlistIntelMobileV2` being ON in
 # packages/shared/src/feature-flags.ts. When OFF, the legacy vertical
 # stack renders and the tab-id testIDs below aren't present — the flow
 # fails fast on the first assertVisible.
 #
-# Prereq: the e2e build is signed in via the same SecureStore-seeding
-# deeplink as sign-in.yaml + add-show.yaml. We seed a session here so
-# the flow can run independently.
+# Uses the same `e2e` EAS build-profile bypass as sign-in.yaml: the
+# session is baked into the build via EXPO_PUBLIC_E2E_TEST_TOKEN /
+# EXPO_PUBLIC_E2E_TEST_USER_JSON, so tapping "Sign in with Google"
+# falls through to the bundled session immediately.
 appId: com.showbook.app
 name: show-detail-tabs
 tags:
@@ -19,36 +20,30 @@ tags:
     clearState: true
     clearKeychain: true
 
-- runScript:
-    file: ../scripts/seed-session.js
-    env:
-      MAESTRO_E2E_TOKEN: ${MAESTRO_E2E_TOKEN}
-      MAESTRO_E2E_USER_JSON: ${MAESTRO_E2E_USER_JSON}
-
-- openLink: ${output.seedDeeplink}
-
-- launchApp:
-    clearState: false
+- scrollUntilVisible:
+    element:
+      text: "Sign in with Google"
+    direction: DOWN
 
 - tapOn:
     text: "Sign in with Google"
 
 - runFlow:
     when:
-      visible: "Welcome"
+      visible: "Set up showbook"
     commands:
-      - tapOn: "Continue"
-      - tapOn: "Skip for now"
-      - tapOn: "Skip for now"
-      - tapOn: "Skip for now"
-      - tapOn: "Skip for now"
+      - tapOn: "Set up showbook"
+      - tapOn: "Skip"   # notifications
+      - tapOn: "Skip"   # photos
+      - tapOn: "Skip"   # location
+      - tapOn: "Skip"   # gmail
 
 - assertVisible:
     text: "Shows"
 
 # Open the Shows tab and tap into the first row. The fixture seeded by
-# add-show.yaml (Foo Fighters) is the most reliable target across
-# back-to-back runs.
+# add-show.yaml (Maestro Test Headliner) is the most reliable target
+# across back-to-back runs.
 - tapOn:
     text: "Shows"
 
