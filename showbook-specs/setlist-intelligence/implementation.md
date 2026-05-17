@@ -562,9 +562,19 @@ Exit criteria:
 
 ---
 
-### Phase 8 — Vibe radar + energy arc (gated on Spotify API access) (~1 week)
+### Phase 8 — ~~Vibe radar + energy arc~~ — **DEFERRED to v2** (probe 403 on 2026-05-17)
 
-**Goal:** if the audio-features endpoint is reachable, ship #3 + #4.
+**Status:** dropped from v1. The SI-11 probe ran against the prod
+app registration on 2026-05-17 and Spotify returned 403 on
+`/v1/audio-features/...`. Per SI-16, AcousticBrainz is NOT a
+fallback (frozen at 2022, ~100% miss for current tours), so Phase
+8 ships nothing in v1. The probe script
+(`packages/api/scripts/probe-audio-features.ts`) and the
+`SpotifyAudioFeaturesAvailable` feature flag stay in place — a
+future operator can re-probe and flip the flag if a new data
+source emerges. Spec content below preserved as the v2 reference.
+
+**(Original v2 goal):** if the audio-features endpoint is reachable, ship #3 + #4.
 If not, ship via AcousticBrainz fallback for older tracks.
 
 Code:
@@ -854,17 +864,24 @@ remaining grouping reason is order-of-implementation.
 These are the actual blocking decisions where reasonable defaults
 exist but I want to flag before we start.
 
-### Q1. Audio-features API access (gates Phase 8)
+### Q1. Audio-features API access (gates Phase 8) — **RESOLVED 2026-05-17: denied**
 
-We don't know whether Spotify grandfathered our app's access to the
-deprecated audio-features endpoint. **Action:** Phase 0 ends with a
-probe call that writes the answer to a config flag. If access is
-denied, Phase 8 ships with AcousticBrainz fallback only; the feature
-flag drives the UI's "we couldn't compute a vibe for this show" empty
-state on tracks newer than 2022.
+Probe ran 2026-05-17 on prod against user
+`e9f0f9ec-5422-4c93-a204-aecee44921d3`. Spotify returned **HTTP 403**
+on `GET /v1/audio-features/3n3Ppam7vgaVa1iaRUc9Lp` (Mr. Brightside).
+Our app registration is NOT grandfathered.
 
-**Default if not answered:** ship Phase 8 with the AcousticBrainz
-fallback; don't request the upgrade from Spotify.
+Decision: **Phase 8 is deferred to v2.** AcousticBrainz was rejected
+as a fallback during the plan review (SI-16, options A vs C — C
+won): frozen at 2022, ~100% coverage miss for current tours, would
+ship a feature that's broken on every concert anyone actually
+attends.
+
+Feature flag `SpotifyAudioFeaturesAvailable` stays in code at OFF.
+Re-probe via `pnpm --filter @showbook/api probe-audio-features
+<userId>` if Spotify changes their access policy or a viable
+third-party source emerges; flipping the flag to ON via PR is the
+only thing needed to re-enable Phase 8.
 
 ### Q2. TOKEN_KEY rotation
 

@@ -50,13 +50,13 @@ use the docs:
 | 5 | Style classifier + rotating display (Phish) | [phase-05](phases/phase-05-style-classifier-rotating.md) | 2w | After P4 |
 | 6 | Theatrical + improvised displays | [phase-06](phases/phase-06-theatrical-improvised.md) | 1w | After P5 |
 | 7 | Library sync + priming + year-end soundtrack | [phase-07](phases/phase-07-music-layer-v2.md) | 2w | After P0 |
-| 8 | Vibe radar + energy arc | [phase-08](phases/phase-08-vibe-radar.md) | 1w | Gated on probe |
+| 8 | ~~Vibe radar + energy arc~~ — **DEFERRED v2** (probe 403, 2026-05-17) | [phase-08](phases/phase-08-vibe-radar.md) | — | Dropped per SI-16 |
 | 9 | Spotify-follow rail + previews + Web Playback | [phase-09](phases/phase-09-follow-rail-previews.md) | 1w | After P0 |
 | 10 | Mobile parity + iPad three-pane | [phase-10](phases/phase-10-mobile-parity.md) | 1w | After P3, P5, P6 |
 | 11 | §15 polish (album-drop, special events, etc.) | [phase-11](phases/phase-11-polish.md) | 2w | Last |
 
-Total: ~14 weeks single-developer; ~5 weeks for v1 (P0–P3) with
-P1/P2/P3 in parallel after P0.
+Total: ~13 weeks single-developer (P8 deferred); ~5 weeks for v1
+(P0–P3) with P1/P2/P3 in parallel after P0.
 
 ---
 

@@ -450,28 +450,31 @@ a way it currently isn't.
 
 ---
 
-## The catch — a paragraph
+## The catch — resolved 2026-05-17: vibe radar + energy arc dropped from v1
 
-In late 2024, Spotify announced they were closing some of their data
-endpoints to *new* applications. The endpoints we'd most want for the
-vibe radar (#3) and energy arc (#4) — the audio-features data — are
-on that closed list. So is the related-artists data we'd use for a
-cross-tour discovery rail (a feature §15 calls out as a deferred
-enhancement).
+In late 2024, Spotify closed `/audio-features` and `/audio-analysis`
+to new applications. We probed our app registration on 2026-05-17
+(via `pnpm --filter @showbook/api probe-audio-features`) and got
+**HTTP 403** — we are not grandfathered. So:
 
-Whether *Showbook* still has access depends on whether our app
-registration was made before Spotify's cutoff. We don't know yet —
-we'd find out by making one test call and seeing what comes back.
+**Cut from v1:**
+- #3 Vibe radar
+- #4 Energy arc
+- The related-artists cross-tour discovery rail (which §15 had
+  already deferred).
 
-**If we do have access:** ship as designed. All ten capabilities work.
+We considered the community-run AcousticBrainz project as a
+fallback. It's frozen at 2022, so it'd be useless on every show
+anyone's going to in 2026+ — we'd be shipping broken features
+labelled "not enough data" 95% of the time. Not worth it.
 
-**If we don't:** three of the features (vibe radar, energy arc,
-related-artist discovery) need backup data. The community-run
-**AcousticBrainz** project has equivalent data for tracks released
-before mid-2022, which covers most of the catalog but leaves newer
-releases thinner. Worst case: those three features ship for older
-songs and gracefully degrade ("not enough data") for songs released
-after 2022.
+**What remains:** the seven other capabilities (priming stat,
+fan-loyalty ring, hype playlist export, post-show playlist export,
+discovered-live rail, 30-second previews, year-end soundtrack)
+all still ship.
+
+We'll re-probe in v2 if Spotify changes their policy or a viable
+third-party data source emerges.
 
 The other seven capabilities are unaffected — they use endpoints
 that aren't on the closed list.
