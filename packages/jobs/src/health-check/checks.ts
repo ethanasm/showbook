@@ -72,100 +72,126 @@ export async function checkFailedJobs(
 interface ScheduledExpectation {
   /** Human-readable label for the scheduled run. */
   label: string;
-  /** APL filter clause that uniquely identifies the run summary. Should
-   *  match a single event (or event-prefix) the cron emits on success. */
-  matchClause: string;
-  /** APL relative-time literal for the lookback window. Defaults to
-   *  `'24h'` for daily jobs. Weekly jobs widen this so a single missed
-   *  cron firing (e.g., a deploy that pushed past the scheduled minute)
-   *  doesn't immediately page — multiple consecutive misses still do. */
-  agoWindow?: string;
+  /** pg-boss queue name — must match a value in `JOBS` (registry.ts).
+   *  Used to look up firings in `pgboss.job` / `pgboss.archive`. */
+  queueName: string;
+  /** Lookback window in hours. Defaults to 24 for daily jobs. Weekly
+   *  jobs widen this so a single missed cron firing (e.g. a deploy that
+   *  pushed past the scheduled minute) doesn't immediately page —
+   *  multiple consecutive misses still do. */
+  windowHours?: number;
   /** Predicate run against the day-of-week (0=Sun..6=Sat) for the
    *  configured timezone. Returns true when the job is expected to have
-   *  run within `agoWindow`. Defaults to "every day". */
+   *  run within the window. Defaults to "every day". */
   expectedOnDay?: (dow: number) => boolean;
 }
 
 const SCHEDULED_EXPECTATIONS: readonly ScheduledExpectation[] = [
-  { label: 'shows-nightly', matchClause: 'event == "shows.nightly.summary"' },
-  {
-    label: 'setlist-retry',
-    matchClause: 'event == "setlist.retry.summary"',
-  },
-  {
-    label: 'backfill-performer-images',
-    matchClause: 'event == "backfill.performer_images.summary"',
-  },
-  {
-    label: 'backfill-venue-photos',
-    matchClause: 'event == "backfill.venue_photos.summary"',
-  },
-  {
-    label: 'daily-digest',
-    matchClause: 'event == "notifications.digest.summary"',
-  },
+  { label: 'shows-nightly', queueName: 'shows/nightly' },
+  { label: 'setlist-retry', queueName: 'enrichment/setlist-retry' },
+  { label: 'backfill-performer-images', queueName: 'backfill/performer-images' },
+  { label: 'backfill-venue-photos', queueName: 'backfill/venue-photos' },
+  { label: 'daily-digest', queueName: 'notifications/daily-digest' },
   {
     label: 'discover-ingest',
-    matchClause: 'event startswith "discover.ingest." and event endswith ".summary"',
+    queueName: 'discover/ingest',
     // Discover ingest is scheduled `0 6 * * 1` — Mondays only, so it
     // appears in two consecutive Tuesday windows if we use 8d. That
     // grace catches a single missed Monday (deploy past 6am, brief
     // outage) without hiding a genuinely broken cron: two missed
     // Mondays in a row still leaves the 8d window empty.
-    agoWindow: '8d',
+    windowHours: 8 * 24,
     expectedOnDay: (dow) => dow === 2,
   },
 ];
 
-interface ScheduleHitRow {
-  cnt: number | null;
+interface ScheduleLatestRow {
+  name: string | null;
+  latest: string | Date | null;
 }
 
+/**
+ * Source of truth: `pgboss.job` (live) and `pgboss.archive` (completed
+ * jobs roll off `pgboss.job` after ~12h). For every expected scheduled
+ * queue, look up the most recent firing in either table and flag those
+ * whose latest run is outside the per-schedule window. This replaces the
+ * previous Axiom-log-based check, which produced false positives when
+ * per-handler logs were lost in transit (the `job.start` log made it but
+ * the `*.summary` line did not). The DB-backed check answers the
+ * narrower question — "did pg-boss fire the cron?" — independent of
+ * whether the resulting log line reached Axiom.
+ */
 export async function checkMissedSchedules(
   now: Date = new Date(),
-  queryAxiom: QueryAxiomFn = defaultQueryAxiom,
 ): Promise<CheckResult> {
   const etDow = etDayOfWeek(now);
   const expected = SCHEDULED_EXPECTATIONS.filter((e) =>
     e.expectedOnDay ? e.expectedOnDay(etDow) : true,
   );
 
-  const missing: string[] = [];
-  let queryFailures = 0;
-  let skipped = 0;
-
-  for (const exp of expected) {
-    const window = exp.agoWindow ?? '24h';
-    const apl = `["showbook-prod"]
-      | where _time > ago(${window}) and ${exp.matchClause}
-      | summarize cnt = count()`;
-    const res = await queryAxiom<ScheduleHitRow>(apl);
-    if (res.skipped) {
-      skipped++;
-      continue;
-    }
-    if (!res.ok || res.rows === null) {
-      queryFailures++;
-      continue;
-    }
-    const cnt = Number(res.rows[0]?.cnt ?? 0);
-    if (cnt === 0) missing.push(exp.label);
-  }
-
-  if (skipped === expected.length) {
+  if (expected.length === 0) {
     return {
       name: 'missed_schedules',
-      status: 'unknown',
-      summary: 'Axiom query token unset — skipped',
+      status: 'ok',
+      summary: 'No schedules expected today',
+      detail: { missing: [], expected: [] },
     };
   }
 
-  if (queryFailures > 0 && missing.length === 0) {
+  const queueNames = expected.map((e) => e.queueName);
+  const maxWindowHours = expected.reduce(
+    (acc, e) => Math.max(acc, e.windowHours ?? 24),
+    24,
+  );
+  const sinceThreshold = new Date(now.getTime() - maxWindowHours * 60 * 60 * 1000);
+
+  let rows: ScheduleLatestRow[];
+  try {
+    const result = await db.execute(sql`
+      SELECT name, MAX(created_on) AS latest
+      FROM (
+        SELECT name, created_on
+        FROM pgboss.job
+        WHERE name = ANY(${queueNames}) AND created_on > ${sinceThreshold}
+        UNION ALL
+        SELECT name, created_on
+        FROM pgboss.archive
+        WHERE name = ANY(${queueNames}) AND created_on > ${sinceThreshold}
+      ) j
+      GROUP BY name
+    `);
+    rows =
+      (result as unknown as { rows?: ScheduleLatestRow[] }).rows ??
+      (result as unknown as ScheduleLatestRow[]);
+  } catch (err) {
+    log.error(
+      { err, event: 'health.check.missed_schedules.query_failed' },
+      'pgboss.job/archive query failed',
+    );
     return {
       name: 'missed_schedules',
       status: 'warn',
-      summary: `${queryFailures} schedule check${queryFailures === 1 ? '' : 's'} couldn't reach Axiom`,
+      summary: `Could not inspect pgboss.job: ${err instanceof Error ? err.message : String(err)}`,
     };
+  }
+
+  const latestByQueue = new Map<string, number>();
+  for (const r of rows) {
+    if (!r.name || !r.latest) continue;
+    const ts =
+      r.latest instanceof Date ? r.latest.getTime() : new Date(r.latest).getTime();
+    if (!Number.isFinite(ts)) continue;
+    latestByQueue.set(r.name, ts);
+  }
+
+  const nowMs = now.getTime();
+  const missing: string[] = [];
+  for (const exp of expected) {
+    const windowMs = (exp.windowHours ?? 24) * 60 * 60 * 1000;
+    const latest = latestByQueue.get(exp.queueName);
+    if (latest === undefined || latest < nowMs - windowMs) {
+      missing.push(exp.label);
+    }
   }
 
   return {
@@ -173,9 +199,9 @@ export async function checkMissedSchedules(
     status: missing.length === 0 ? 'ok' : 'fail',
     summary:
       missing.length === 0
-        ? 'All expected scheduled jobs ran in last 24h'
+        ? 'All expected scheduled jobs ran in their window'
         : `Missing scheduled runs: ${missing.join(', ')}`,
-    detail: { missing, queryFailures, expected: expected.map((e) => e.label) },
+    detail: { missing, expected: expected.map((e) => e.label) },
   };
 }
 
