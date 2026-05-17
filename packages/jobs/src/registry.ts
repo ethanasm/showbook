@@ -162,6 +162,7 @@ async function showsNightlyHandler(jobs: PgBoss.Job[]) {
           event: 'shows.nightly.summary',
           transitioned: result.transitioned,
           queued: result.queued,
+          catchupQueued: result.catchupQueued,
           deleted: result.deleted,
         },
         'Shows nightly complete',

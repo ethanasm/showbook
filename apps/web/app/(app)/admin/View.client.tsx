@@ -56,6 +56,7 @@ export default function AdminView() {
   const coordsMutation = trpc.admin.backfillVenueCoordinates.useMutation();
   const tmMutation = trpc.admin.backfillVenueTicketmaster.useMutation();
   const pruneMutation = trpc.admin.enqueuePruneOrphanCatalog.useMutation();
+  const setlistMutation = trpc.admin.enqueueSetlistRetry.useMutation();
 
   const coordsResult = coordsMutation.data
     ? `Last run: ${coordsMutation.data.geocoded} geocoded · ${coordsMutation.data.failed} failed · ${coordsMutation.data.total} total`
@@ -67,6 +68,9 @@ export default function AdminView() {
     ? pruneMutation.data.jobId
       ? `Enqueued job ${pruneMutation.data.jobId}`
       : 'Enqueue returned no job id (likely a duplicate already queued)'
+    : null;
+  const setlistResult = setlistMutation.data
+    ? `Last run: ${setlistMutation.data.queued} queued · job ${setlistMutation.data.jobId ?? 'n/a'}`
     : null;
 
   return (
@@ -121,6 +125,17 @@ export default function AdminView() {
             errorMessage={tmMutation.error?.message ?? null}
             resultLine={tmResult}
             onRun={() => tmMutation.mutate()}
+          />
+
+          <BackfillCard
+            title="Run setlist enrichment"
+            description="Queue every past concert that's missing a setlist (skipping ones already queued) and trigger setlist-retry now. Covers Gmail imports and other past shows that bypassed the nightly ticketed→past transition. Calls setlist.fm once per show; respects the 14-attempt give-up marker."
+            buttonLabel="Run setlist enrichment"
+            confirmText="Queue all past concerts without a setlist and trigger setlist-retry? This will call setlist.fm for each one."
+            isPending={setlistMutation.isPending}
+            errorMessage={setlistMutation.error?.message ?? null}
+            resultLine={setlistResult}
+            onRun={() => setlistMutation.mutate()}
           />
         </div>
       </div>
