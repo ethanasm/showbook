@@ -528,8 +528,56 @@ export const showsRouter = router({
         }
       }
 
-      // Atomic: show + headliner + support performers all-or-nothing.
-      // Performer rows are now batched into a single insert.
+      // Past concerts created directly in `past` state (Gmail import,
+      // manual entry of a show I just attended, setlist.fm import without
+      // an inline setlist) skip the nightly ticketed→past transition, so
+      // shows-nightly never enqueues them for setlist enrichment. Try an
+      // inline setlist.fm lookup BEFORE the transaction so we can either
+      // (a) include the fetched setlist in the show insert or (b) include
+      // the enrichmentQueue row in the same transaction. Either way the
+      // show is created together with its enrichment plan — no possibility
+      // of a show landing without a path to setlist coverage. Best-effort
+      // and never fails the create.
+      const needsSetlistLookup =
+        state === 'past' &&
+        input.kind === 'concert' &&
+        !!headlinerId &&
+        Object.keys(setlistsMap).length === 0;
+
+      let inlineSetlistsForInsert: PerformerSetlistsMap | null = null;
+      let inlineTourName: string | null = null;
+      if (needsSetlistLookup && headlinerId) {
+        try {
+          const result = await fetchSetlistForPerformer({
+            performerId: headlinerId,
+            performerName: input.headliner.name,
+            performerMbid: input.headliner.musicbrainzId ?? null,
+            date: input.date,
+          });
+          if (result) {
+            inlineSetlistsForInsert = { [headlinerId]: result.setlist };
+            inlineTourName = result.tourName ?? null;
+          }
+        } catch (err) {
+          log.warn(
+            { err, event: 'shows.create.setlist_inline.failed' },
+            'Inline setlist.fm lookup failed; falling back to retry queue',
+          );
+        }
+      }
+
+      const initialSetlists =
+        inlineSetlistsForInsert ??
+        (Object.keys(setlistsMap).length > 0 ? setlistsMap : null);
+      const initialTourName = inlineTourName ?? input.tourName ?? null;
+      const queueSetlistEnrichment = needsSetlistLookup && !inlineSetlistsForInsert;
+
+      // Atomic: show + headliner + support performers + setlist enrichment
+      // queue row all-or-nothing. Previously the enrichmentQueue insert
+      // ran outside the tx, so a connection blip between the show commit
+      // and the queue insert would create a setlistless past concert with
+      // no retry path. Folding it into the same tx via the transactional
+      // outbox pattern makes that failure mode impossible.
       const show = await ctx.db.transaction(async (tx) => {
         const [created] = await tx
           .insert(shows)
@@ -543,9 +591,9 @@ export const showsRouter = router({
             seat: input.seat ?? null,
             pricePaid: input.pricePaid ?? null,
             ticketCount: input.ticketCount,
-            tourName: input.tourName ?? null,
+            tourName: initialTourName,
             productionName,
-            setlists: Object.keys(setlistsMap).length > 0 ? setlistsMap : null,
+            setlists: initialSetlists,
             photos: null,
             coverImageUrl: input.coverImageUrl ?? null,
             notes: input.notes ?? null,
@@ -576,66 +624,28 @@ export const showsRouter = router({
           await tx.insert(showPerformers).values(showPerformerRows);
         }
 
-        return created;
-      });
-
-      // Past concerts created directly in `past` state (Gmail import,
-      // manual entry of a show I just attended, setlist.fm import without
-      // an inline setlist) skip the nightly ticketed→past transition, so
-      // shows-nightly never enqueues them for setlist enrichment. Try an
-      // inline setlist.fm lookup first so the user sees their setlist
-      // immediately on import; fall back to the retry queue if setlist.fm
-      // can't resolve it right now (no MBID, no setlist published yet,
-      // setlist.fm down). Best-effort + non-blocking — never fail the
-      // create on a setlist hiccup.
-      if (
-        state === 'past' &&
-        input.kind === 'concert' &&
-        headlinerId &&
-        Object.keys(setlistsMap).length === 0
-      ) {
-        let inlineHit = false;
-        try {
-          const result = await fetchSetlistForPerformer({
-            performerId: headlinerId,
-            performerName: input.headliner.name,
-            performerMbid: input.headliner.musicbrainzId ?? null,
-            date: input.date,
-          });
-          if (result) {
-            await ctx.db
-              .update(shows)
-              .set({
-                setlists: { [headlinerId]: result.setlist },
-                tourName: result.tourName ?? undefined,
-              })
-              .where(eq(shows.id, show.id));
-            inlineHit = true;
-            log.info(
-              {
-                event: 'shows.create.setlist_inline.hit',
-                showId: show.id,
-                performerId: headlinerId,
-              },
-              'Fetched setlist inline on shows.create',
-            );
-          }
-        } catch (err) {
-          log.warn(
-            { err, event: 'shows.create.setlist_inline.failed', showId: show.id },
-            'Inline setlist.fm lookup failed; falling back to retry queue',
-          );
-        }
-
-        if (!inlineHit) {
-          await ctx.db.insert(enrichmentQueue).values({
-            showId: show.id,
+        if (queueSetlistEnrichment) {
+          await tx.insert(enrichmentQueue).values({
+            showId: created.id,
             type: 'setlist' as const,
             attempts: 0,
             maxAttempts: 14,
             nextRetry: new Date(),
           });
         }
+
+        return created;
+      });
+
+      if (inlineSetlistsForInsert && headlinerId) {
+        log.info(
+          {
+            event: 'shows.create.setlist_inline.hit',
+            showId: show.id,
+            performerId: headlinerId,
+          },
+          'Fetched setlist inline on shows.create',
+        );
       }
 
       // Lazy Place ID + photo backfill for the venue. The matcher's geocode

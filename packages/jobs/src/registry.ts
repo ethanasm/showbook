@@ -66,10 +66,24 @@ type QueueOptions = {
   retryLimit: number;
   retryDelay: number;
   retryBackoff: boolean;
+  // pg-boss v10 'singleton' policy: at most one job in `created | active`
+  // state per queue at a time. Applied to every cron-driven queue so that
+  // (a) if `boss.schedule` ever runs from more than one process (HMR
+  // double-register, future multi-replica) the duplicate `boss.send` from
+  // the second timekeeper is rejected at INSERT time instead of producing
+  // two parallel runs, and (b) a long-running cron (e.g. a 75-min digest)
+  // can't pile up tomorrow's run behind itself — the next firing is
+  // suppressed until the active one drains. User-triggered queues
+  // (FAST_INGEST + the per-performer corpus fill) stay on the default
+  // 'standard' policy so multiple in-flight jobs for different
+  // performers/venues run in parallel.
+  policy?: 'standard' | 'singleton';
 };
 
 // Fast user-triggered ingests (Spotify import, follow, refresh-now). A
-// killed handler should recover within minutes, not 15+.
+// killed handler should recover within minutes, not 15+. Default
+// 'standard' policy — multiple in-flight jobs for different IDs are
+// expected and desirable.
 const FAST_INGEST: QueueOptions = {
   expireInSeconds: 300,
   retryLimit: 3,
@@ -77,9 +91,9 @@ const FAST_INGEST: QueueOptions = {
   retryBackoff: true,
 };
 
-// Long batch jobs (digest, backfills, scrapers, weekly discover ingest).
-// Half-hour ceiling fits the longest observed runs with margin and is
-// short enough that an orphan recovers same-day.
+// Long batch jobs that are *user-triggered* (e.g. cron-refresh of
+// performer corpus). Same retry profile as scheduled crons but
+// standard policy so two different performers can refresh in parallel.
 const LONG_BATCH: QueueOptions = {
   expireInSeconds: 1800,
   retryLimit: 2,
@@ -87,29 +101,40 @@ const LONG_BATCH: QueueOptions = {
   retryBackoff: true,
 };
 
+// Long batch jobs that are *cron-driven*. Singleton policy collapses any
+// duplicate scheduling into one run.
+const LONG_BATCH_CRON: QueueOptions = {
+  ...LONG_BATCH,
+  policy: 'singleton',
+};
+
 const QUEUE_OPTIONS: Record<string, QueueOptions> = {
-  'shows/nightly': LONG_BATCH,
-  'enrichment/setlist-retry': LONG_BATCH,
-  'discover/ingest': LONG_BATCH,
+  'shows/nightly': LONG_BATCH_CRON,
+  'enrichment/setlist-retry': LONG_BATCH_CRON,
+  'discover/ingest': LONG_BATCH_CRON,
   'discover/ingest-venue': FAST_INGEST,
   'discover/ingest-performer': FAST_INGEST,
   'discover/ingest-region': FAST_INGEST,
-  'notifications/daily-digest': LONG_BATCH,
-  'backfill/performer-images': LONG_BATCH,
-  'backfill/venue-photos': LONG_BATCH,
-  'backfill/show-cover-images': LONG_BATCH,
-  'prune/orphan-catalog': LONG_BATCH,
-  'health/morning-check': LONG_BATCH,
+  'notifications/daily-digest': LONG_BATCH_CRON,
+  'backfill/performer-images': LONG_BATCH_CRON,
+  'backfill/venue-photos': LONG_BATCH_CRON,
+  'backfill/show-cover-images': LONG_BATCH_CRON,
+  'prune/orphan-catalog': LONG_BATCH_CRON,
+  'health/morning-check': LONG_BATCH_CRON,
   // Per-performer corpus fill is user-triggered (follow / show-detail
-  // open) so fast turnaround matters. The daily refresh cron schedules
-  // through a separate queue with the LONG_BATCH profile.
+  // open) so fast turnaround matters and parallel runs across different
+  // performers are expected. The daily refresh cron schedules through a
+  // separate queue with the singleton cron profile.
   'enrichment/setlist-corpus-fill': FAST_INGEST,
-  'enrichment/setlist-corpus-fill-refresh': LONG_BATCH,
+  'enrichment/setlist-corpus-fill-refresh': LONG_BATCH_CRON,
+  // Song-index rebuild is invoked both as a cron and inline after a
+  // corpus-fill. Keep 'standard' so the inline-chained rebuild can run
+  // alongside ad-hoc admin rebuilds; the cron itself is rare and brief.
   'enrichment/song-index-rebuild': LONG_BATCH,
-  'eval/run-daily-backtest': LONG_BATCH,
-  'enrichment/setlist-style-refresh': LONG_BATCH,
-  'spotify/recently-played': LONG_BATCH,
-  'spotify/year-end-soundtrack': LONG_BATCH,
+  'eval/run-daily-backtest': LONG_BATCH_CRON,
+  'enrichment/setlist-style-refresh': LONG_BATCH_CRON,
+  'spotify/recently-played': LONG_BATCH_CRON,
+  'spotify/year-end-soundtrack': LONG_BATCH_CRON,
 };
 
 const log = child({ component: 'jobs.registry' });

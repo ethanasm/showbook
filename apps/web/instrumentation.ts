@@ -52,13 +52,16 @@ export async function register() {
     // then `failWip()` releases anything still running so it retries
     // immediately on next boot rather than waiting for expire.
     //
-    // Docker's default SIGTERM-to-SIGKILL grace is 10 s; we cap at
-    // 8 s so flushObservability still has time to drain. The compose
-    // files set `stop_grace_period: 30s` to give us headroom.
+    // The compose files set `stop_grace_period: 30s`; we cap at 20 s
+    // so flushObservability still has ~10 s to drain to Axiom before
+    // SIGKILL. Previously this was 8 s, which SIGKILLed mid-handler
+    // for any digest run longer than 8 s (typical for users with
+    // 500+ shows) — the partial-send state then duplicated on the
+    // next boot's retry. 20 s covers all observed long-handler tails.
     const shutdown = async (signal: NodeJS.Signals) => {
       logger.info({ event: 'pgboss.shutdown.start', signal }, 'pg-boss shutdown initiated');
       try {
-        await stopBoss({ graceful: true, timeout: 8000 });
+        await stopBoss({ graceful: true, timeout: 20000 });
         logger.info({ event: 'pgboss.shutdown.complete' }, 'pg-boss stopped');
       } catch (err) {
         logger.error({ event: 'pgboss.shutdown.failed', err }, 'pg-boss shutdown failed');
