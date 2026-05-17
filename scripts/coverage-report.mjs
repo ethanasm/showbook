@@ -22,7 +22,7 @@ const REPO_ROOT = resolve(fileURLToPath(import.meta.url), '..', '..');
 // union of all scopes. Excludes are shared across scopes because the
 // same junk (tests, barrels, generated code) is junk regardless.
 //
-// Per `showbook-specs/mobile-testing-strategy.md`, the mobile gate scopes
+// Per `specs/mobile-testing-strategy.md`, the mobile gate scopes
 // to `apps/mobile/lib/**` only — no `app/`, no `components/`. Web's gate
 // is unchanged.
 const SCOPES = [

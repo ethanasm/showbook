@@ -1,7 +1,7 @@
 # Showbook Mobile
 
 Expo + TypeScript app for Showbook. See
-[`showbook-specs/mobile-roadmap.md`](../../showbook-specs/mobile-roadmap.md)
+[`specs/mobile-roadmap.md`](../../specs/mobile-roadmap.md)
 for the milestone plan.
 
 ## Setup
@@ -39,7 +39,7 @@ to this package.
 The mobile app runs an 80% line / branch / function coverage gate
 scoped to **`apps/mobile/lib/**` only**. Layout-heavy code under
 `app/` and `components/` is intentionally excluded — see
-[`showbook-specs/mobile-testing-strategy.md`](../../showbook-specs/mobile-testing-strategy.md)
+[`specs/mobile-testing-strategy.md`](../../specs/mobile-testing-strategy.md)
 for the rationale and the test plan. The gate is
 enforced by `pnpm verify:coverage` (run on every PR by CI), which
 merges per-package LCOV via `scripts/coverage-report.mjs`. Locally:
@@ -91,7 +91,7 @@ MKCERT_ROOT_CA=/absolute/path/to/rootCA.pem pnpm mobile:ios
 
 ## Status
 
-See [`showbook-specs/mobile-roadmap.md`](../../showbook-specs/mobile-roadmap.md)
+See [`specs/mobile-roadmap.md`](../../specs/mobile-roadmap.md)
 for the milestone plan, what's shipped, and what's next.
 
 ## Maestro E2E flows
@@ -100,7 +100,7 @@ Three flows live under `e2e/flows/` — sign-in, add-show, sign-out.
 The Android workflow runs them nightly + on push-to-`main` + on PRs
 labeled `mobile-visual` via `.github/workflows/mobile-e2e.yml`; iOS
 is manual (`pnpm mobile:e2e:ios`) on the dev Mac. See
-`showbook-specs/mobile-testing-strategy.md` § Wave F.
+`specs/mobile-testing-strategy.md` § Wave F.
 
 The `e2e` EAS profile (see `eas.json`) sets `EXPO_PUBLIC_E2E_MODE=1`,
 which flips `lib/auth.ts` into bypass mode. With that flag on,

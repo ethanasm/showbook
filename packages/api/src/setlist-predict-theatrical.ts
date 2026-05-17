@@ -37,9 +37,9 @@
  * returns the payload the router serves. Identical to
  * `predictRotating` / `predictSetlist`'s pure contract.
  *
- * Spec: showbook-specs/setlist-intelligence/phases/phase-06-theatrical-improvised.md,
- *       showbook-specs/setlist-intelligence/feature-plan.md §15c (theatrical),
- *       showbook-specs/setlist-intelligence/worked-examples.md §3 (Beyoncé).
+ * Spec: specs/setlist-intelligence/phases/phase-06-theatrical-improvised.md,
+ *       specs/setlist-intelligence/feature-plan.md §15c (theatrical),
+ *       specs/setlist-intelligence/worked-examples.md §3 (Beyoncé).
  */
 
 import type { PerformerSetlist } from '@showbook/shared';

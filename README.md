@@ -5,7 +5,7 @@ Personal entertainment tracker for live shows — concerts, theatre, comedy, fes
 ## Tech Stack
 
 - **Web:** Next.js 15 (App Router) — see [`apps/web/CLAUDE.md`](apps/web/CLAUDE.md)
-- **Mobile:** Expo SDK 55 + Expo Router (React Native) — feature-complete; see [`apps/mobile/CLAUDE.md`](apps/mobile/CLAUDE.md) and [`showbook-specs/mobile-roadmap.md`](showbook-specs/mobile-roadmap.md)
+- **Mobile:** Expo SDK 55 + Expo Router (React Native) — feature-complete; see [`apps/mobile/CLAUDE.md`](apps/mobile/CLAUDE.md) and [`specs/mobile-roadmap.md`](specs/mobile-roadmap.md)
 - **Language:** TypeScript
 - **Database:** PostgreSQL + Drizzle ORM
 - **API:** tRPC
@@ -68,7 +68,7 @@ pnpm prod:down            # stop
 Operator runbook — self-hosted runner / continuous deployment, querying
 the prod DB from another machine via `/api/admin/sql`, and the dev/prod
 port + volume layout — lives in
-[`showbook-specs/operations.md`](showbook-specs/operations.md).
+[`specs/operations.md`](specs/operations.md).
 
 ## Environment Variables
 
@@ -99,7 +99,7 @@ showbook/
 │   ├── observability/        # pino logger + Langfuse LLM-trace wrapper
 │   └── shared/               # Types, constants, utils
 ├── scripts/                  # verify.sh and other workspace scripts
-├── showbook-specs/           # Project specifications (see operations.md for runbook)
+├── specs/           # Project specifications (see operations.md for runbook)
 ├── design/                   # Hi-fi prototypes
 ├── docker-compose.yml
 └── nx.json
@@ -149,7 +149,7 @@ pnpm dev:db:studio      # Open Drizzle Studio
 ## CI workflows
 
 - [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — runs `pnpm verify:coverage` on every push and PR to `main`; merges are blocked below the 80% line/branch/function threshold (web scope + `apps/mobile/lib/**` scoped independently).
-- [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) — redeploys the prod box on a green `main` via a self-hosted runner. Setup in [`operations.md`](showbook-specs/operations.md).
+- [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) — redeploys the prod box on a green `main` via a self-hosted runner. Setup in [`operations.md`](specs/operations.md).
 - [`.github/workflows/mobile-e2e.yml`](.github/workflows/mobile-e2e.yml) — Android Maestro smoke layer on `apps/mobile/**` changes (label-gated on PRs, scheduled on `main`).
 
 ## Email Notifications
@@ -193,8 +193,8 @@ simulator pointed at the local web stack with the dev cert, or to a
 LAN/tunnel URL for a physical device. Google sign-in requires the development client or a
 signed native build; Expo Go uses an `exp://...` redirect URI that
 Google rejects. Build / submit / push-notification follow-ups live in
-[`showbook-specs/mobile-deployment.md`](showbook-specs/mobile-deployment.md)
-and [`showbook-specs/planned-improvements.md`](./showbook-specs/planned-improvements.md).
+[`specs/mobile-deployment.md`](specs/mobile-deployment.md)
+and [`specs/planned-improvements.md`](./specs/planned-improvements.md).
 
 ## Security
 

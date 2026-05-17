@@ -1,7 +1,7 @@
 # Research task: Spotify developer policy + branding compliance
 
 **Owner:** unassigned. Block Phase 3 of setlist-intelligence
-(`showbook-specs/setlist-intelligence/phases/phase-03-spotify-export.md`)
+(`specs/setlist-intelligence/phases/phase-03-spotify-export.md`)
 from shipping until this brief is closed.
 
 **Why this exists:** see SI-19 in

@@ -9,7 +9,7 @@ import "./globals.css";
 // Font swap (2026-05-16 redesign). The CSS variables keep their original
 // names (`--font-geist-sans` / `--font-geist-mono`) so every inline-style
 // reference across the app keeps working with value-only changes — see
-// `showbook-specs/setlist-intelligence/show-page-redesign-2026-05-16.md`.
+// `specs/setlist-intelligence/show-page-redesign-2026-05-16.md`.
 const sansFont = Space_Grotesk({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],

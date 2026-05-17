@@ -1,7 +1,7 @@
 /**
  * Phase 6 — component tests for the theatrical-style display variant.
  * Mirrors the Beyoncé Cowboy Carter worked example
- * (`showbook-specs/setlist-intelligence/worked-examples.md` §3) with a
+ * (`specs/setlist-intelligence/worked-examples.md` §3) with a
  * compressed fixture: a 9-act program plus the Act V surprise +
  * Act VII family-appearance rotating slots.
  */

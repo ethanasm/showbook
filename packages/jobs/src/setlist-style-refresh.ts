@@ -12,7 +12,7 @@
  * corpus-fill refresh (04:45) so the cron operates on the freshest
  * corpus the day produced.
  *
- * Spec: showbook-specs/setlist-intelligence/phases/phase-05-style-classifier-rotating.md
+ * Spec: specs/setlist-intelligence/phases/phase-05-style-classifier-rotating.md
  */
 
 import { eq, sql, desc, and, gte } from 'drizzle-orm';

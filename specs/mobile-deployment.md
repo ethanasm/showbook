@@ -35,7 +35,7 @@ Before either dev or prod builds talk to your backend you need:
 1. `EXPO_PUBLIC_API_URL` pointing at a reachable backend. For dev that
    can be your laptop over `expo start --tunnel`; for prod it's the
    Cloudflare Tunnel hostname documented in
-   `showbook-specs/infrastructure.md`.
+   `specs/infrastructure.md`.
 2. Google OAuth client IDs created in Google Cloud Console:
    - **iOS** client (type: iOS) with bundle ID `com.showbook.app`.
    - **Android** client (type: Android) with package `com.showbook.app`

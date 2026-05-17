@@ -20,7 +20,7 @@ import { users } from './users';
 // `external_urls.spotify` value we surface in the toast / button.
 //
 // Phase 3 of setlist-intelligence — see
-// showbook-specs/setlist-intelligence/phases/phase-03-spotify-export.md.
+// specs/setlist-intelligence/phases/phase-03-spotify-export.md.
 export const showSpotifyPlaylists = pgTable(
   'show_spotify_playlists',
   {

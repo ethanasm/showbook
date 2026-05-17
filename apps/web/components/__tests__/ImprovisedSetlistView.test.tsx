@@ -1,7 +1,7 @@
 /**
  * Phase 6 — component tests for the improvised-style display variant.
  * Mirrors the King Gizzard worked example
- * (`showbook-specs/setlist-intelligence/worked-examples.md` §4): show
+ * (`specs/setlist-intelligence/worked-examples.md` §4): show
  * modes + vibe sketch, no song-by-song list.
  */
 

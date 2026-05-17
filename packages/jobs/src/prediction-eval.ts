@@ -17,7 +17,7 @@
  * tRPC `eval.rerunShow` mutation can call them without a circular
  * import; this module owns the corpus walk and the persistence shape.
  *
- * Spec: showbook-specs/setlist-intelligence/phases/phase-04-eval-harness.md
+ * Spec: specs/setlist-intelligence/phases/phase-04-eval-harness.md
  */
 
 import { and, asc, gte, inArray, lte } from 'drizzle-orm';

@@ -51,7 +51,7 @@ services:
 
   web:
     build:
-      context: showbook-specs
+      context: specs
       dockerfile: apps/web/Dockerfile
     container_name: showbook-dev-web
     restart: unless-stopped

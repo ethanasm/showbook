@@ -1,5 +1,5 @@
 -- Phase 0 of setlist-intelligence — persistent Spotify OAuth tokens.
--- See showbook-specs/setlist-intelligence/implementation.md §3.1 + §3.2.
+-- See specs/setlist-intelligence/implementation.md §3.1 + §3.2.
 --
 -- Both `access_token_enc` and `refresh_token_enc` are AES-256-GCM ciphertext
 -- produced by `packages/api/src/crypto.ts` using the `TOKEN_KEY` env var as

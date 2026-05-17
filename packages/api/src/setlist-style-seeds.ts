@@ -12,8 +12,8 @@
  * Adding an entry is cheap; getting it wrong is also cheap because the
  * auto-classifier overrides after three consecutive disagreements.
  *
- * Spec: showbook-specs/setlist-intelligence/implementation.md §11 Q3,
- *       showbook-specs/setlist-intelligence/phases/phase-05-style-classifier-rotating.md
+ * Spec: specs/setlist-intelligence/implementation.md §11 Q3,
+ *       specs/setlist-intelligence/phases/phase-05-style-classifier-rotating.md
  */
 
 import type { SetlistStyle } from './setlist-style';

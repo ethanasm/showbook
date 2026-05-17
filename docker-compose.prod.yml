@@ -79,7 +79,7 @@ services:
       # Generate once with `openssl rand -hex 32` and paste into
       # .env.prod. Don't rotate unless a leak is suspected; rotating
       # invalidates every connected user's Spotify session. See
-      # showbook-specs/setlist-intelligence/implementation.md §11 Q2.
+      # specs/setlist-intelligence/implementation.md §11 Q2.
       TOKEN_KEY: ${TOKEN_KEY:?TOKEN_KEY must be set in .env.prod (openssl rand -hex 32)}
     ports:
       - "127.0.0.1:3002:3001"

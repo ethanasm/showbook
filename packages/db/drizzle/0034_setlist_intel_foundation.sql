@@ -1,6 +1,6 @@
 -- Phase 0 of the setlist-intelligence feature. Schema foundation for the
 -- predicted-setlist algorithm + per-song stats. See
--- showbook-specs/setlist-intelligence/phases/phase-00-foundation.md.
+-- specs/setlist-intelligence/phases/phase-00-foundation.md.
 --
 -- New tables:
 --   tour_setlists              — corpus of setlist.fm setlists per artist

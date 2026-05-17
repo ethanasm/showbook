@@ -45,13 +45,13 @@ When you're running in the Claude Code web sandbox, this checkout is a **shallow
   templates), `scrapers` (Playwright-bound external scrapers),
   `observability` (pino logger + Langfuse wrapper), `shared` (types,
   constants, utils).
-- `showbook-specs/` — All specs: schema, data sources, pipelines,
+- `specs/` — All specs: schema, data sources, pipelines,
   infrastructure, decisions. Index at
-  [`showbook-specs/README.md`](showbook-specs/README.md).
-- `showbook-specs/TASKS.md` — Master task list with dependency DAG.
-- `showbook-specs/phases/VERIFICATION.md` — Playwright testing + visual
+  [`specs/README.md`](specs/README.md).
+- `specs/TASKS.md` — Master task list with dependency DAG.
+- `specs/phases/VERIFICATION.md` — Playwright testing + visual
   verification strategy.
-- `showbook-specs/mobile-roadmap.md` — Mobile build plan; the app
+- `specs/mobile-roadmap.md` — Mobile build plan; the app
   is feature-complete against the design handoff.
 - `design/` — Hi-fi prototypes from Claude Design (reference only,
   don't modify).
@@ -184,7 +184,7 @@ The stdout copy in the prod web container (`docker logs showbook-prod-web`) is a
 - `backfill.performer_images.summary`, `backfill.venue_photos.summary` — scheduled backfill jobs (daily 05:30 / 05:45 ET).
 - `notifications.digest.summary` — daily email digest. Per-user outcomes log as `notifications.digest.sent` on a Resend-accepted send, `notifications.digest.send_failed` when Resend returns a non-throwing error response (the SDK resolves with `{ data: null, error }` on bounces / unverified-domain / rate-limit so the rejection has to be inspected on the result), `notifications.digest.failed` for unexpected exceptions in the per-user loop, `notifications.digest.already_sent_today` for the per-user idempotency skip, `notifications.digest.dry_run` when `RESEND_API_KEY` is unset, and `notifications.digest.preamble_failed` when Groq preamble generation falls back to the static greeting.
 - `pgboss.{started,stopped,registered,shutdown.start,shutdown.complete,shutdown.failed,register.invoked,register.duplicate,boot.ok,boot.failed}` — pg-boss lifecycle. The `shutdown.*` events fire from the Next.js SIGTERM/SIGINT handler in `apps/web/instrumentation.ts`; absence of a `shutdown.start` before a `started` means the previous boot was killed without graceful release of in-flight jobs. `register.invoked` carries a per-process counter so Axiom can confirm whether Next.js invokes `register()` more than once per process; `register.duplicate` fires when `registerAllJobs` is called twice against the same boss instance and the second call is suppressed (this is the guard that prevents the doubled `boss.work` registrations that surfaced as duplicate `job.start` events for every cron job in May 2026).
-- `gmail.scan.{truncated,summary,dedup.skipped,attachment.used,attachment.fetch_failed,attachment.parse_failed,attachment.llm_failed}` — Gmail scan orchestrator (`apps/web/app/api/gmail/scan/route.ts`). `summary` rolls up per-scan counts (`heuristicSkipped`, `pdfFallbackUsed`, `dedupSkipped`, `extracted`); the `attachment.*` events trace the R1 PDF-fallback branch; `dedup.skipped` is the P4 cross-scan dedup short-circuit fired before any Groq call. See `showbook-specs/email-ingestion-improvements-2026-05-08.md`.
+- `gmail.scan.{truncated,summary,dedup.skipped,attachment.used,attachment.fetch_failed,attachment.parse_failed,attachment.llm_failed}` — Gmail scan orchestrator (`apps/web/app/api/gmail/scan/route.ts`). `summary` rolls up per-scan counts (`heuristicSkipped`, `pdfFallbackUsed`, `dedupSkipped`, `extracted`); the `attachment.*` events trace the R1 PDF-fallback branch; `dedup.skipped` is the P4 cross-scan dedup short-circuit fired before any Groq call. See `specs/email-ingestion-improvements-2026-05-08.md`.
 - `trpc.error` — last-resort tRPC procedure error log.
 - `admin.backfill_coordinates.{start,complete}`, `admin.backfill_ticketmaster.{start,complete}` — operator-triggered global venue backfills via the `/admin` page.
 - `job.{start,complete,failed}` — pg-boss job wrapper from `runJob` in `packages/jobs/src/registry.ts`.
@@ -212,8 +212,8 @@ If a new code path doesn't fit these patterns (e.g. a CLI script), extend the pa
 
 ## For agents
 
-Read `showbook-specs/README.md` first. It indexes all spec files.
-Read `showbook-specs/TASKS.md` for the full task breakdown and dependency graph.
+Read `specs/README.md` first. It indexes all spec files.
+Read `specs/TASKS.md` for the full task breakdown and dependency graph.
 Each task specifies which spec files to read and how to verify completion.
 
 When the work is web- or mobile-specific, read the relevant per-app
