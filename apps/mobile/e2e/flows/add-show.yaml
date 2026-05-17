@@ -44,7 +44,7 @@ tags:
 # pen-line "form" affordance in the input footer. The middle FAB tab
 # has no label — it's exposed via accessibilityLabel="Add".
 - tapOn:
-    id: "Add"
+    id: "add-tab"
 
 # Skip the LLM chat path entirely — tap the pen-line "Open form"
 # affordance to land directly on the structured form.

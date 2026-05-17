@@ -62,4 +62,4 @@ tags:
 - assertVisible:
     text: "Me"
 - assertVisible:
-    id: "Add"
+    id: "add-tab"

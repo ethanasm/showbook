@@ -580,7 +580,25 @@ jobs:
             printf '\n_Hosted on the `pr-screenshots` branch alongside the maestro-debug-%s artifact._\n' "${{ github.run_id }}"
           } > "$BODY_FILE"
 
-          gh pr comment "$PR_NUMBER" --body-file "$BODY_FILE"
+          echo "::group::PR comment body preview"
+          cat "$BODY_FILE"
+          echo "::endgroup::"
+          # The previous failed runs uploaded screenshots to the orphan
+          # branch but never produced a comment — `gh pr comment` was
+          # exiting non-zero silently. Capture the exit code + output
+          # so a future regression is visible in the log instead of
+          # only by the absence of a comment.
+          set +e
+          GH_OUTPUT=$(gh pr comment "$PR_NUMBER" --body-file "$BODY_FILE" 2>&1)
+          GH_RC=$?
+          set -uo pipefail
+          echo "::group::gh pr comment result"
+          echo "$GH_OUTPUT"
+          echo "exit code: $GH_RC"
+          echo "::endgroup::"
+          if [ "$GH_RC" -ne 0 ]; then
+            echo "::warning::gh pr comment failed (rc=$GH_RC); upload to orphan branch still succeeded"
+          fi
 
       # Only on PR runs: append/replace a `## Mobile screenshots` section
       # in the PR body, bracketed by sentinel comments so re-runs replace
