@@ -222,13 +222,15 @@
 
 .map-filterbar__kinds {
   display: flex;
-  gap: 6px;
-  align-items: center;
+  align-items: stretch;
+  border: 1px solid var(--rule-strong);
+  background: var(--bg);
 }
 
 .map-filterbar__kind-btn {
-  padding: 6px 11px;
-  border: 1px solid var(--rule-strong);
+  padding: 11px 11px;
+  border: none;
+  border-right: 1px solid var(--rule-strong);
   background: transparent;
   color: var(--muted);
   font-family: var(--font-geist-mono, "Geist Mono", monospace);
@@ -242,30 +244,33 @@
   gap: 7px;
 }
 
+.map-filterbar__kind-btn:last-child {
+  border-right: none;
+}
+
 .map-filterbar__kind-btn--active-all {
   background: var(--ink);
   color: var(--bg);
-  border-color: var(--ink);
 }
 
 .map-filterbar__kind-btn--active-concert {
-  border-color: var(--kind-concert);
-  color: var(--kind-concert);
+  background: var(--kind-concert);
+  color: var(--bg);
 }
 
 .map-filterbar__kind-btn--active-theatre {
-  border-color: var(--kind-theatre);
-  color: var(--kind-theatre);
+  background: var(--kind-theatre);
+  color: var(--bg);
 }
 
 .map-filterbar__kind-btn--active-comedy {
-  border-color: var(--kind-comedy);
-  color: var(--kind-comedy);
+  background: var(--kind-comedy);
+  color: var(--bg);
 }
 
 .map-filterbar__kind-btn--active-festival {
-  border-color: var(--kind-festival);
-  color: var(--kind-festival);
+  background: var(--kind-festival);
+  color: var(--bg);
 }
 
 .map-filterbar__spacer {
