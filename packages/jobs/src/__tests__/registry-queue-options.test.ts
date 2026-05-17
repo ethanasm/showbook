@@ -115,6 +115,71 @@ describe('registerAllJobs queue options', () => {
     }
   });
 
+  it('applies singleton policy to every cron-driven queue', async () => {
+    // Belt-and-suspenders against duplicate cron firings. If `boss.schedule`
+    // ever runs from more than one process (HMR re-register, future
+    // multi-replica) the singleton queue policy rejects the second
+    // `boss.send` at INSERT time. Also prevents a slow cron (e.g. a
+    // 75-min digest) from piling up tomorrow's run behind itself.
+    const { fakeBoss, created, updated } = makeFakeBoss();
+    await registerAllJobs(fakeBoss as never);
+
+    const cronQueues = [
+      JOBS.SHOWS_NIGHTLY,
+      JOBS.SETLIST_RETRY,
+      JOBS.DISCOVER_INGEST,
+      JOBS.NOTIFICATIONS_DAILY_DIGEST,
+      JOBS.BACKFILL_PERFORMER_IMAGES,
+      JOBS.BACKFILL_VENUE_PHOTOS,
+      JOBS.BACKFILL_SHOW_COVER_IMAGES,
+      JOBS.PRUNE_ORPHAN_CATALOG,
+      JOBS.HEALTH_CHECK,
+      JOBS.SETLIST_CORPUS_FILL_REFRESH,
+      JOBS.EVAL_RUN_DAILY_BACKTEST,
+      JOBS.SETLIST_STYLE_REFRESH,
+      JOBS.SPOTIFY_RECENTLY_PLAYED,
+      JOBS.YEAR_END_SOUNDTRACK,
+    ];
+
+    for (const name of cronQueues) {
+      const c = created.find((x) => x.name === name);
+      const u = updated.find((x) => x.name === name);
+      assert.ok(c, `createQueue called for ${name}`);
+      assert.ok(u, `updateQueue called for ${name}`);
+      const opts = c!.opts as Record<string, unknown>;
+      assert.equal(opts.policy, 'singleton', `${name}: policy = 'singleton'`);
+      assert.deepEqual(u!.opts, c!.opts, `${name}: update opts match create opts`);
+    }
+  });
+
+  it('leaves user-triggered queues on the default policy', async () => {
+    // The user-triggered queues (follow → ingest, refresh-now, per-
+    // performer corpus fill) must allow parallel jobs for different
+    // IDs. Singleton would serialize every Spotify import to one
+    // performer at a time.
+    const { fakeBoss, created } = makeFakeBoss();
+    await registerAllJobs(fakeBoss as never);
+
+    const parallelQueues = [
+      JOBS.DISCOVER_INGEST_VENUE,
+      JOBS.DISCOVER_INGEST_PERFORMER,
+      JOBS.DISCOVER_INGEST_REGION,
+      JOBS.SETLIST_CORPUS_FILL,
+      JOBS.SONG_INDEX_REBUILD,
+    ];
+
+    for (const name of parallelQueues) {
+      const c = created.find((x) => x.name === name);
+      assert.ok(c, `createQueue called for ${name}`);
+      const opts = c!.opts as Record<string, unknown>;
+      assert.notEqual(
+        opts.policy,
+        'singleton',
+        `${name}: must allow parallel jobs across different IDs`,
+      );
+    }
+  });
+
   it('never falls back to pg-boss defaults (expireInSeconds undefined would mean 15 min)', async () => {
     const { fakeBoss, created, updated } = makeFakeBoss();
     await registerAllJobs(fakeBoss as never);
