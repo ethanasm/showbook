@@ -1,9 +1,12 @@
 /**
  * PredictedSetlistRow (mobile) — single row in the Setlist tab's
- * predicted-or-actual list. Mirrors the web `PredictedSetlistRow` —
- * position number · TrackPreview button · title + evidence · ★ marker
- * for openers/closers/encore-edges. Inline song badges (🆕 / 🎯) ride
- * along underneath the evidence line.
+ * predicted-or-actual list. Mirrors the web `PredictedSetlistRow`:
+ * position number · TrackPreview button · title · optional evidence
+ * line · inline song badges (🆕 / 🎯). Past-show "actual · setlist.fm"
+ * boilerplate is omitted upstream so rows for played songs look clean.
+ * When `songId` is supplied (past shows from `shows.songBadges`), the
+ * title/evidence area is wrapped in a Pressable that routes to
+ * `/songs/[id]`.
  */
 
 import React from 'react';
@@ -13,13 +16,6 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../lib/theme';
 import { TrackPreviewButton } from './TrackPreviewButton';
 import type { SongBadge } from '../../lib/setlist-intel';
-
-const STAR_ROLES = new Set([
-  'opener',
-  'closer',
-  'encore_open',
-  'encore_close',
-]);
 
 export type RowRole = 'opener' | 'closer' | 'encore_open' | 'encore_close' | 'core';
 
@@ -42,7 +38,6 @@ export function PredictedSetlistRow({
   position,
   title,
   evidence,
-  role,
   showId,
   previewUrl,
   spotifyTrackId,
@@ -52,6 +47,7 @@ export function PredictedSetlistRow({
   const { tokens } = useTheme();
   const { colors } = tokens;
   const router = useRouter();
+  const showEvidence = evidence.length > 0;
   return (
     <View
       testID="predicted-setlist-row"
@@ -67,73 +63,51 @@ export function PredictedSetlistRow({
         spotifyTrackId={spotifyTrackId}
       />
       <Pressable
-        onPress={
-          songId
-            ? () => router.push(`/songs/${songId}`)
-            : undefined
-        }
+        onPress={songId ? () => router.push(`/songs/${songId}`) : undefined}
         disabled={!songId}
         accessibilityRole={songId ? 'link' : undefined}
-        accessibilityLabel={songId ? `Open song history for ${title}` : undefined}
+        accessibilityLabel={
+          songId ? `Open song history for ${title}` : undefined
+        }
         testID={songId ? 'predicted-setlist-row-tap' : undefined}
-        style={({ pressed }) => [styles.body, songId && pressed ? { opacity: 0.7 } : null]}
+        style={({ pressed }) => [
+          styles.body,
+          songId && pressed ? { opacity: 0.7 } : null,
+        ]}
       >
-        <Text style={[styles.title, { color: colors.ink }]} numberOfLines={2}>
-          {title}
-        </Text>
-        <View style={styles.evidenceRow}>
+        <View style={styles.titleRow}>
+          <Text
+            style={[styles.title, { color: colors.ink }]}
+            numberOfLines={2}
+          >
+            {title}
+          </Text>
+          {badge?.firstTime ? (
+            <Text
+              style={[styles.badgeText, { color: colors.accent }]}
+              testID="predicted-row-badge-first-time"
+            >
+              NEW
+            </Text>
+          ) : null}
+          {badge?.rareCatch ? (
+            <Text
+              style={[styles.badgeText, { color: colors.muted }]}
+              testID="predicted-row-badge-rare"
+            >
+              RARE · {badge.rareCatch.fractionPct}%
+            </Text>
+          ) : null}
+        </View>
+        {showEvidence ? (
           <Text
             style={[styles.evidence, { color: colors.muted }]}
             numberOfLines={2}
           >
             {evidence}
           </Text>
-          {badge?.firstTime ? (
-            <View
-              style={[
-                styles.badge,
-                {
-                  backgroundColor: colors.accent,
-                  borderColor: colors.accent,
-                },
-              ]}
-              testID="predicted-row-badge-first-time"
-            >
-              <Text
-                style={[styles.badgeText, { color: colors.accentText }]}
-              >
-                🆕 First
-              </Text>
-            </View>
-          ) : null}
-          {badge?.rareCatch ? (
-            <View
-              style={[
-                styles.badge,
-                {
-                  backgroundColor: 'transparent',
-                  borderColor: colors.accent,
-                },
-              ]}
-              testID="predicted-row-badge-rare"
-            >
-              <Text style={[styles.badgeText, { color: colors.accent }]}>
-                🎯 Rare ({badge.rareCatch.fractionPct}%)
-              </Text>
-            </View>
-          ) : null}
-        </View>
+        ) : null}
       </Pressable>
-      {STAR_ROLES.has(role) ? (
-        <Text
-          testID="predicted-row-star"
-          style={[styles.star, { color: colors.accent }]}
-        >
-          ★
-        </Text>
-      ) : (
-        <View style={styles.starSpacer} />
-      )}
     </View>
   );
 }
@@ -158,43 +132,29 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
   title: {
     fontFamily: 'Geist Sans',
     fontSize: 14,
     fontWeight: '500',
     letterSpacing: -0.2,
-  },
-  evidenceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-    flexWrap: 'wrap',
+    flexShrink: 1,
   },
   evidence: {
     fontFamily: 'Geist Mono',
     fontSize: 10.5,
     letterSpacing: 0.3,
-    flexShrink: 1,
-  },
-  badge: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 4,
+    marginTop: 2,
   },
   badgeText: {
     fontFamily: 'Geist Mono',
     fontSize: 9.5,
-    fontWeight: '500',
-    letterSpacing: 0.3,
-  },
-  star: {
-    width: 12,
-    textAlign: 'center',
-    fontSize: 14,
-  },
-  starSpacer: {
-    width: 12,
+    fontWeight: '600',
+    letterSpacing: 0.6,
   },
 });
