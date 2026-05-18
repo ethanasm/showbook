@@ -265,27 +265,39 @@ export default function EditShowScreen(): React.JSX.Element {
     }
   }, [values, detail, queryClient, utils, showId, router, showToast]);
 
+  // Render on every branch — if the loading branch omits it, the
+  // route boots as a push and then flips to `modal` once detail
+  // resolves, and react-native-screens reacts to the presentation
+  // change by re-mounting the screen, which resets local state and
+  // re-enters the loading branch in a tight loop.
+  const stackOptions = (
+    <Stack.Screen options={{ presentation: 'modal', gestureEnabled: true }} />
+  );
+
   if (!detail || !values) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
-        <TopBar
-          title="Edit show"
-          leading={
-            <Pressable onPress={() => router.back()} hitSlop={10}>
-              <ChevronLeft size={22} color={colors.ink} strokeWidth={2} />
-            </Pressable>
-          }
-        />
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.muted} />
+      <>
+        {stackOptions}
+        <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
+          <TopBar
+            title="Edit show"
+            leading={
+              <Pressable onPress={() => router.back()} hitSlop={10}>
+                <ChevronLeft size={22} color={colors.ink} strokeWidth={2} />
+              </Pressable>
+            }
+          />
+          <View style={styles.center}>
+            <ActivityIndicator color={colors.muted} />
+          </View>
         </View>
-      </View>
+      </>
     );
   }
 
   return (
     <>
-      <Stack.Screen options={{ presentation: 'modal', gestureEnabled: true }} />
+      {stackOptions}
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
       <TopBar
         title="Edit show"
