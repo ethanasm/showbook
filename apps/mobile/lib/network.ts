@@ -45,9 +45,31 @@ export interface NetInfoLikeState {
 export interface NetInfoLike {
   addEventListener(cb: (state: NetInfoLikeState) => void): () => void;
   fetch(): Promise<NetInfoLikeState>;
+  /**
+   * Force NetInfo to re-probe and emit a fresh reading via the listener.
+   * iOS NetInfo can latch onto a stale `isInternetReachable: false` after
+   * an airplane-mode toggle and never re-emit on its own — `refresh()`
+   * is how `NetworkProvider` un-sticks that state. Optional so tests can
+   * supply a minimal stub.
+   */
+  refresh?(): Promise<NetInfoLikeState>;
+}
+
+/**
+ * Minimal AppState surface used by `NetworkProvider` to re-probe NetInfo
+ * when the app returns to the foreground. Mirrors the slice of
+ * `react-native`'s `AppState` we care about so node:test runs don't have
+ * to resolve the RN runtime.
+ */
+export interface AppStateLike {
+  addEventListener(
+    event: 'change',
+    cb: (state: string) => void,
+  ): { remove: () => void };
 }
 
 let _netInfoSource: NetInfoLike | null = null;
+let _appStateSource: AppStateLike | null | undefined = undefined;
 
 // `EXPO_PUBLIC_FORCE_OFFLINE` pins the provider offline at module eval. A
 // runtime override is exposed for unit tests so we can flip without
@@ -72,12 +94,14 @@ function loadDefaultNetInfo(): NetInfoLike {
         cb: (s: NetInfoLikeState) => void,
       ) => () => void;
       fetch: () => Promise<NetInfoLikeState>;
+      refresh: () => Promise<NetInfoLikeState>;
     };
   };
   const NetInfo = mod.default;
   _netInfoSource = {
     addEventListener: (cb) => NetInfo.addEventListener((s) => cb(s)),
     fetch: () => NetInfo.fetch(),
+    refresh: () => NetInfo.refresh(),
   };
   return _netInfoSource;
 }
@@ -92,6 +116,28 @@ function resolveNetInfo(): NetInfoLike {
   return loadDefaultNetInfo();
 }
 
+function loadDefaultAppState(): AppStateLike | null {
+  if (_appStateSource !== undefined) return _appStateSource;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const RN = require('react-native') as { AppState?: AppStateLike };
+    _appStateSource = RN.AppState ?? null;
+  } catch {
+    _appStateSource = null;
+  }
+  return _appStateSource;
+}
+
+/**
+ * Tests inject a stub AppState. Pass `null` to disable the foreground
+ * refresh hook entirely; pass `undefined` to restore the lazy default.
+ */
+export function __setAppStateSourceForTest(
+  source: AppStateLike | null | undefined,
+): void {
+  _appStateSource = source;
+}
+
 // ---------------------------------------------------------------------------
 // Pure state reducer
 // ---------------------------------------------------------------------------
@@ -99,15 +145,27 @@ function resolveNetInfo(): NetInfoLike {
 export interface NetworkState {
   online: boolean;
   lastSeenOnline: Date | null;
+  /**
+   * False until NetInfo has produced its first reading. Consumers that
+   * trigger work on "we're online" (e.g. the outbox replay) gate on this
+   * so they don't fire against the optimistic boot-time `online: true`
+   * default before the device's actual connectivity is known.
+   */
+  ready: boolean;
 }
 
-const INITIAL_STATE: NetworkState = { online: true, lastSeenOnline: null };
+const INITIAL_STATE: NetworkState = {
+  online: true,
+  lastSeenOnline: null,
+  ready: false,
+};
 
 /**
  * Reduce a fresh NetInfo reading into the next `NetworkState`. Identity-
  * stable when the connectivity status doesn't change so React consumers
  * don't re-render on every poll. `lastSeenOnline` only moves at a
- * transition boundary — both directions capture the moment.
+ * transition boundary — both directions capture the moment. The first
+ * reading also flips `ready` from false to true.
  */
 export function deriveNetworkState(
   prev: NetworkState,
@@ -122,8 +180,13 @@ export function deriveNetworkState(
   // it as offline. `null`/`undefined` means "unknown", in which case fall
   // back to `isConnected`.
   const online = next.isConnected === true && reachable !== false;
-  if (online === prev.online) return prev;
-  return { online, lastSeenOnline: new Date(now()) };
+  const sameOnline = online === prev.online;
+  if (sameOnline && prev.ready) return prev;
+  return {
+    online,
+    lastSeenOnline: sameOnline ? prev.lastSeenOnline : new Date(now()),
+    ready: true,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -138,40 +201,103 @@ export interface NetworkProviderProps {
   source?: NetInfoLike;
   /** Override the time source. Useful for deterministic tests. */
   now?: () => number;
+  /**
+   * Tests inject an AppState stub. Omitted in production, where the
+   * default React Native `AppState` is resolved lazily.
+   */
+  appState?: AppStateLike;
+  /**
+   * Cadence (ms) at which `NetworkProvider` actively re-probes NetInfo
+   * while it believes we're offline. Defaults to 15s — enough to feel
+   * snappy without hammering the reachability endpoint. Tests pass
+   * something larger (or 0 / -1 to disable) for determinism.
+   */
+  offlineRefreshIntervalMs?: number;
 }
+
+const DEFAULT_OFFLINE_REFRESH_INTERVAL_MS = 15_000;
 
 export function NetworkProvider({
   children,
   source,
   now,
+  appState,
+  offlineRefreshIntervalMs = DEFAULT_OFFLINE_REFRESH_INTERVAL_MS,
 }: NetworkProviderProps): React.JSX.Element {
   const forced = effectiveForceOffline();
   const [state, setState] = React.useState<NetworkState>(
-    forced ? { online: false, lastSeenOnline: null } : INITIAL_STATE,
+    forced ? { online: false, lastSeenOnline: null, ready: true } : INITIAL_STATE,
   );
 
   React.useEffect(() => {
     if (forced) {
       // Pin offline; ignore NetInfo entirely so a real connection doesn't
       // flip the state back. `lastSeenOnline` stays as set above.
-      setState({ online: false, lastSeenOnline: null });
+      setState({ online: false, lastSeenOnline: null, ready: true });
       return;
     }
     const src = source ?? resolveNetInfo();
+    const appStateSrc = appState ?? loadDefaultAppState();
     let cancelled = false;
-    const apply = (next: NetInfoLikeState): void => {
-      if (cancelled) return;
+    // The seed `fetch()` resolution can race the first live event from
+    // `addEventListener` (NetInfo emits the cached state on subscribe,
+    // and on iOS that cached state can be stale). If a live event has
+    // already arrived, drop the seed so it can't clobber the fresher
+    // reading.
+    let receivedLiveEvent = false;
+
+    const applySeed = (next: NetInfoLikeState): void => {
+      if (cancelled || receivedLiveEvent) return;
       setState((prev) => deriveNetworkState(prev, next, now));
     };
-    // Seed with the current reading so consumers don't render a wrong
-    // "online" state for a tick.
-    src.fetch().then(apply).catch(() => undefined);
-    const unsub = src.addEventListener(apply);
+    const applyLive = (next: NetInfoLikeState): void => {
+      if (cancelled) return;
+      receivedLiveEvent = true;
+      setState((prev) => deriveNetworkState(prev, next, now));
+    };
+
+    src.fetch().then(applySeed).catch(() => undefined);
+    const unsub = src.addEventListener(applyLive);
+
+    // Re-probe on foreground. iOS NetInfo sometimes misses the
+    // airplane-mode-off transition entirely — the user toggles back to
+    // the app expecting it to "just work", so this is the highest-
+    // signal moment to force a fresh reading.
+    let appStateSub: { remove: () => void } | null = null;
+    if (appStateSrc && src.refresh) {
+      const refreshFn = src.refresh.bind(src);
+      appStateSub = appStateSrc.addEventListener('change', (next) => {
+        if (next === 'active') {
+          // `refresh()` re-emits via the listener; we don't have to
+          // apply the resolved value ourselves.
+          refreshFn().catch(() => undefined);
+        }
+      });
+    }
+
     return () => {
       cancelled = true;
       unsub();
+      appStateSub?.remove();
     };
-  }, [forced, source, now]);
+  }, [forced, source, now, appState]);
+
+  // Belt-and-suspenders: while we believe we're offline, actively
+  // re-probe on a slow cadence so we don't depend on NetInfo emitting
+  // the transition. The interval is only armed when we're offline so
+  // there's no battery cost on the happy path.
+  React.useEffect(() => {
+    if (forced) return;
+    if (state.online) return;
+    if (offlineRefreshIntervalMs <= 0) return;
+    const src = source ?? resolveNetInfo();
+    if (!src.refresh) return;
+    const refreshFn = src.refresh.bind(src);
+    const id = setInterval(() => {
+      refreshFn().catch(() => undefined);
+    }, offlineRefreshIntervalMs);
+    return () => clearInterval(id);
+  }, [forced, state.online, source, offlineRefreshIntervalMs]);
 
   return React.createElement(NetworkContext.Provider, { value: state }, children);
 }
@@ -478,17 +604,31 @@ export function OfflineSyncProvider({
     }
   }, [outbox, showBanner, dismissBanner, refresh]);
 
-  // Auto-replay on reconnect. The single-flight wrapper handles repeat
-  // online events that fire while the previous pass is still running.
-  const wasOnlineRef = React.useRef(network.online);
+  // Auto-replay whenever we have both an online network and an open
+  // outbox. The single-flight wrapper in `replayOutboxOnce` collapses
+  // duplicate calls, and `runReplay` early-exits when the outbox is
+  // empty — so it's safe to fire on every dep change:
+  //   - On a fresh offline → online transition (the obvious case).
+  //   - On mount when the app cold-starts already online with pending
+  //     writes (the "force-quit while a queued mutation is still
+  //     stuck on `pending: true`" case — without this, the row would
+  //     sit in the outbox forever because the transition guard
+  //     wouldn't trip).
+  // The `network.ready` gate keeps us from firing against the
+  // optimistic boot-time `online: true` default before NetInfo has
+  // confirmed the device's actual connectivity. `runReplay` is held
+  // in a ref so its identity churn (it's a useCallback that re-binds
+  // when `outbox` changes) doesn't re-fire the effect.
+  const runReplayRef = React.useRef(runReplay);
   React.useEffect(() => {
-    const wasOnline = wasOnlineRef.current;
-    wasOnlineRef.current = network.online;
+    runReplayRef.current = runReplay;
+  }, [runReplay]);
+  React.useEffect(() => {
+    if (!network.ready) return;
     if (!network.online) return;
-    if (wasOnline) return; // No transition.
     if (!outbox) return;
-    void runReplay();
-  }, [network.online, outbox, runReplay]);
+    void runReplayRef.current();
+  }, [network.ready, network.online, outbox]);
 
   const retry = React.useCallback(() => {
     if (!network.online) return;
