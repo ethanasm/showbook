@@ -36,6 +36,7 @@ import { HypePlaylistCard } from './HypePlaylistCard';
 import { KindBadge } from '../KindBadge';
 import { StateChip } from '../StateChip';
 import { MediaGrid, type MediaGridItem } from '../MediaGrid';
+import { Eyebrow, GlowBackdrop, GradientEmphasis } from '../design-system';
 import {
   computeShowTabBadges,
   parseShowTab,
@@ -496,45 +497,62 @@ function HeaderStrip({ show }: { show: ShowDetail }): React.JSX.Element {
       ? show.productionName ?? headliner?.performer.name ?? 'Untitled'
       : headliner?.performer.name ?? show.productionName ?? 'Untitled';
   const date = parseDate(show.date);
+
+  // Gradient-emphasis the last word of the title for a touch of editorial flair.
+  const parts = title.trim().split(/\s+/);
+  const head = parts.length > 1 ? parts.slice(0, -1).join(' ') + ' ' : '';
+  const tail = parts.length > 1 ? (parts[parts.length - 1] as string) : title;
+  const venueLine = [show.venue.name, show.venue.city].filter(Boolean).join(' · ');
+
   return (
     <View
       testID="show-tabs-header"
       style={[styles.header, { borderBottomColor: colors.rule }]}
     >
-      <View style={styles.headerChips}>
-        <KindBadge kind={show.kind as Kind} size="sm" />
-        {show.state !== 'past' ? (
-          <StateChip state={show.state as ShowState} />
-        ) : (
-          <View
-            testID="went-badge"
-            style={[
-              styles.wentBadge,
-              { borderColor: colors.ruleStrong },
-            ]}
-          >
-            <Text style={[styles.wentBadgeText, { color: colors.muted }]}>
-              WENT
-            </Text>
-          </View>
-        )}
+      <GlowBackdrop grid={false} />
+      <View style={styles.headerContent}>
+        <Eyebrow>
+          {show.kind === 'theatre' ? 'THEATRE' : show.kind.toUpperCase()}
+          {date ? ` · ${date}` : ''}
+        </Eyebrow>
+        <View style={styles.headerChips}>
+          <KindBadge kind={show.kind as Kind} size="sm" />
+          {show.state !== 'past' ? (
+            <StateChip state={show.state as ShowState} />
+          ) : (
+            <View
+              testID="went-badge"
+              style={[
+                styles.wentBadge,
+                { borderColor: colors.ruleStrong },
+              ]}
+            >
+              <Text style={[styles.wentBadgeText, { color: colors.muted }]}>
+                WENT
+              </Text>
+            </View>
+          )}
+        </View>
+        <Text
+          style={[styles.headerTitle, { color: colors.ink }]}
+          numberOfLines={2}
+        >
+          {head ? <Text>{head}</Text> : null}
+          <GradientEmphasis style={[styles.headerTitle, { color: colors.accent }]}>
+            {tail}
+          </GradientEmphasis>
+        </Text>
+        {show.tourName ? (
+          <Text style={[styles.headerSub, { color: colors.muted }]} numberOfLines={1}>
+            {show.tourName}
+          </Text>
+        ) : null}
+        {venueLine ? (
+          <Text style={[styles.headerVenue, { color: colors.muted }]} numberOfLines={1}>
+            {venueLine}
+          </Text>
+        ) : null}
       </View>
-      <Text
-        style={[styles.headerTitle, { color: colors.ink }]}
-        numberOfLines={2}
-      >
-        {title}
-      </Text>
-      {show.tourName ? (
-        <Text style={[styles.headerSub, { color: colors.muted }]} numberOfLines={1}>
-          {show.tourName}
-        </Text>
-      ) : null}
-      {date ? (
-        <Text style={[styles.headerDate, { color: colors.muted }]}>
-          {date}
-        </Text>
-      ) : null}
     </View>
   );
 }
@@ -563,10 +581,15 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
   },
   header: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 6,
+    position: 'relative',
+    overflow: 'hidden',
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerContent: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 18,
+    gap: 8,
   },
   headerChips: {
     flexDirection: 'row',
@@ -575,19 +598,18 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: 'Georgia',
-    fontSize: 26,
-    fontWeight: '600',
+    fontSize: 28,
+    fontWeight: '700',
     letterSpacing: -0.6,
-    lineHeight: 30,
+    lineHeight: 32,
   },
   headerSub: {
     fontFamily: 'Geist Sans',
     fontSize: 14,
   },
-  headerDate: {
-    fontFamily: 'Geist Mono',
-    fontSize: 11,
-    letterSpacing: 0.4,
+  headerVenue: {
+    fontFamily: 'Geist Sans',
+    fontSize: 13,
     marginTop: 2,
   },
   wentBadge: {

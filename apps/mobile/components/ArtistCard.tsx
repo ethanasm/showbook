@@ -9,9 +9,10 @@
  */
 
 import React from 'react';
-import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../lib/theme';
+import { RemoteImage } from './design-system/RemoteImage';
 
 export interface ArtistCardArtist {
   id: string;
@@ -42,7 +43,6 @@ export function ArtistCard({ artist, onPress }: ArtistCardProps): React.JSX.Elem
 
   const showCount = artist.showCount ?? 0;
   const lastSeen = formatLastSeen(artist.lastSeen);
-  const initial = artist.name.trim()[0]?.toUpperCase() ?? '?';
 
   const subtitleParts: string[] = [];
   if (showCount > 0) {
@@ -60,18 +60,15 @@ export function ArtistCard({ artist, onPress }: ArtistCardProps): React.JSX.Elem
         pressed && styles.pressed,
       ]}
     >
-      <View
-        style={[
-          styles.avatar,
-          { backgroundColor: colors.surfaceRaised, borderColor: colors.rule },
-        ]}
-      >
-        {artist.imageUrl ? (
-          <Image source={{ uri: artist.imageUrl }} style={styles.avatarImage} />
-        ) : (
-          <Text style={[styles.avatarInitial, { color: colors.muted }]}>{initial}</Text>
-        )}
-      </View>
+      <RemoteImage
+        uri={artist.imageUrl}
+        name={artist.name}
+        kind="concert"
+        size="custom"
+        width={44}
+        height={44}
+        style={styles.avatar}
+      />
 
       <View style={styles.content}>
         <Text
@@ -111,22 +108,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   avatar: {
-    width: 44,
-    height: 44,
     borderRadius: 22,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarImage: {
-    width: 44,
-    height: 44,
-  },
-  avatarInitial: {
-    fontFamily: 'Geist Sans',
-    fontSize: 17,
-    fontWeight: '600',
   },
   content: {
     flex: 1,

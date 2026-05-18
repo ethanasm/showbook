@@ -25,12 +25,13 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Link } from 'expo-router';
-import { ChevronLeft, ChevronRight, List as ListIcon } from 'lucide-react-native';
+import { Link, useRouter } from 'expo-router';
+import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { EmptyState } from '../../components/EmptyState';
+import { EmptyStateHero } from '../../components/design-system';
 import { ShowCardListSkeleton } from '../../components/skeletons';
 import { CalendarGrid, type CalendarEvent } from '../../components/CalendarGrid';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
@@ -143,6 +144,7 @@ export default function ShowsScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
   const utils = trpc.useUtils();
+  const router = useRouter();
   const [mode, setMode] = React.useState<Mode>('timeline');
   // Top-level state cut: Upcoming (watching/ticketed) vs Past, mirroring
   // the web /upcoming + /logbook split. Mobile keeps the single tab so
@@ -271,13 +273,22 @@ export default function ShowsScreen(): React.JSX.Element {
         </ScrollView>
       ) : rows.length === 0 ? (
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingVertical: 12 }}
           refreshControl={refreshControl}
         >
-          <EmptyState
-            icon={<ListIcon size={40} color={colors.faint} strokeWidth={1.5} />}
-            title="No shows yet"
-            subtitle="Add a show from the + tab to get started."
+          <EmptyStateHero
+            kind="shows"
+            title={stateBucket === 'upcoming' ? 'Nothing on the calendar' : 'Log your first show'}
+            body={
+              stateBucket === 'upcoming'
+                ? 'Tickets in hand or a date on hold? Add it here and we’ll keep it visible until it’s over.'
+                : 'Concerts, theatre, comedy, festivals — the things you saw live, all in one place.'
+            }
+            action={{ label: 'Add a show', onPress: () => router.push('/add') }}
+            secondaryAction={{
+              label: 'Find in Discover',
+              onPress: () => router.push('/discover'),
+            }}
           />
         </ScrollView>
       ) : mode === 'timeline' ? (

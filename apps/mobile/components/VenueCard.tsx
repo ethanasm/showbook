@@ -7,9 +7,10 @@
  */
 
 import React from 'react';
-import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
-import { ChevronRight, MapPin } from 'lucide-react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../lib/theme';
+import { RemoteImage } from './design-system/RemoteImage';
 
 export interface VenueCardVenue {
   id: string;
@@ -47,18 +48,15 @@ export function VenueCard({ venue, onPress }: VenueCardProps): React.JSX.Element
         pressed && styles.pressed,
       ]}
     >
-      <View
-        style={[
-          styles.photo,
-          { backgroundColor: colors.surfaceRaised, borderColor: colors.rule },
-        ]}
-      >
-        {venue.photoUrl ? (
-          <Image source={{ uri: venue.photoUrl }} style={styles.photoImage} />
-        ) : (
-          <MapPin size={18} color={colors.faint} strokeWidth={1.5} />
-        )}
-      </View>
+      <RemoteImage
+        uri={venue.photoUrl}
+        name={venue.name}
+        kind="concert"
+        size="custom"
+        width={56}
+        height={44}
+        style={styles.photo}
+      />
 
       <View style={styles.content}>
         <Text
@@ -98,17 +96,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   photo: {
-    width: 56,
-    height: 44,
     borderRadius: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  photoImage: {
-    width: 56,
-    height: 44,
   },
   content: {
     flex: 1,

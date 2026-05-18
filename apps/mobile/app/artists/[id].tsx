@@ -19,7 +19,6 @@ import {
   Text,
   ScrollView,
   Pressable,
-  Image,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
@@ -28,6 +27,7 @@ import { useLocalSearchParams, useRouter, Link } from 'expo-router';
 import { ChevronLeft, AlertCircle, Image as ImageIcon, Music } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { EmptyState } from '../../components/EmptyState';
+import { Eyebrow, GradientEmphasis, RemoteImage } from '../../components/design-system';
 import { QueryBoundary } from '../../components/QueryBoundary';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
@@ -207,7 +207,6 @@ function Hero({
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
-  const initial = performer.name.trim()[0]?.toUpperCase() ?? '?';
   const range = formatRangeLabel(performer);
   const summary = [
     performer.showCount > 0
@@ -218,25 +217,35 @@ function Hero({
     .filter(Boolean)
     .join(' · ');
 
+  // Pull the last word of the name into the gradient emphasis to match
+  // the web title treatment. Single-word names get the gradient applied
+  // to the whole name.
+  const parts = performer.name.trim().split(/\s+/);
+  const head = parts.length > 1 ? parts.slice(0, -1).join(' ') + ' ' : '';
+  const tail = parts.length > 1 ? (parts[parts.length - 1] as string) : performer.name;
+
   return (
     <View style={styles.heroWrap}>
-      <View
-        style={[
-          styles.heroAvatar,
-          { backgroundColor: colors.surfaceRaised, borderColor: colors.rule },
-        ]}
-      >
-        {performer.imageUrl ? (
-          <Image source={{ uri: performer.imageUrl }} style={styles.heroAvatarImage} />
-        ) : (
-          <Text style={[styles.heroInitial, { color: colors.muted }]}>{initial}</Text>
-        )}
+      <RemoteImage
+        uri={performer.imageUrl}
+        name={performer.name}
+        kind="concert"
+        size="hero"
+        aspect="16/9"
+        style={styles.heroBanner}
+        accessibilityLabel={`${performer.name} hero image`}
+      />
+      <View style={styles.heroBody}>
+        <Eyebrow>{performer.isFollowed ? 'FOLLOWING · ARTIST' : 'ARTIST'}</Eyebrow>
+        <Text style={[styles.heroTitle, { color: colors.ink }]} numberOfLines={2}>
+          {head ? <Text>{head}</Text> : null}
+          <GradientEmphasis style={[styles.heroTitle, { color: colors.accent }]}>
+            {tail}
+          </GradientEmphasis>
+        </Text>
+        {summary ? <Text style={[styles.heroSummary, { color: colors.muted }]}>{summary}</Text> : null}
+        <FollowArtistButton performerId={performerId} isFollowed={performer.isFollowed} />
       </View>
-      <Text style={[styles.heroTitle, { color: colors.ink }]} numberOfLines={2}>
-        {performer.name}
-      </Text>
-      {summary ? <Text style={[styles.heroSummary, { color: colors.muted }]}>{summary}</Text> : null}
-      <FollowArtistButton performerId={performerId} isFollowed={performer.isFollowed} />
     </View>
   );
 }
@@ -475,37 +484,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   heroWrap: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
     paddingBottom: 22,
-    alignItems: 'center',
-    gap: 12,
   },
-  heroAvatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
+  heroBanner: {
+    borderRadius: 0,
   },
-  heroAvatarImage: {
-    width: 96,
-    height: 96,
-  },
-  heroInitial: {
-    fontFamily: 'Geist Sans',
-    fontSize: 36,
-    fontWeight: '700',
+  heroBody: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    alignItems: 'flex-start',
+    gap: 10,
   },
   heroTitle: {
     fontFamily: 'Georgia',
-    fontSize: 28,
-    fontWeight: '600',
-    lineHeight: 32,
-    letterSpacing: -0.4,
-    textAlign: 'center',
+    fontSize: 30,
+    fontWeight: '700',
+    lineHeight: 34,
+    letterSpacing: -0.6,
   },
   heroSummary: {
     fontFamily: 'Geist Sans',

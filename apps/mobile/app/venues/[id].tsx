@@ -18,7 +18,6 @@ import {
   Text,
   ScrollView,
   Pressable,
-  Image,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
@@ -31,10 +30,10 @@ import {
   Calendar,
   Music,
   Image as ImageIcon,
-  Building2,
 } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { EmptyState } from '../../components/EmptyState';
+import { Eyebrow, GradientEmphasis, RemoteImage } from '../../components/design-system';
 import { QueryBoundary } from '../../components/QueryBoundary';
 import { KindBadge } from '../../components/KindBadge';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
@@ -244,31 +243,40 @@ function Hero({
     .filter(Boolean)
     .join(' · ');
 
+  // Gradient-emphasis the last word of the venue name (matches the
+  // artist detail treatment).
+  const parts = venue.name.trim().split(/\s+/);
+  const head = parts.length > 1 ? parts.slice(0, -1).join(' ') + ' ' : '';
+  const tail = parts.length > 1 ? (parts[parts.length - 1] as string) : venue.name;
+
   return (
     <View style={styles.heroWrap}>
-      <View
-        style={[
-          styles.heroPhoto,
-          { backgroundColor: colors.surfaceRaised, borderColor: colors.rule },
-        ]}
-      >
-        {venue.photoUrl ? (
-          <Image source={{ uri: venue.photoUrl }} style={styles.heroPhotoImage} />
-        ) : (
-          <Building2 size={48} color={colors.faint} strokeWidth={1.5} />
-        )}
+      <RemoteImage
+        uri={venue.photoUrl}
+        name={venue.name}
+        kind="concert"
+        size="hero"
+        aspect="16/9"
+        style={styles.heroPhoto}
+        accessibilityLabel={`${venue.name} venue photo`}
+      />
+      <View style={styles.heroBody}>
+        <Eyebrow>{venue.isFollowed ? 'FOLLOWING · VENUE' : 'VENUE'}</Eyebrow>
+        <Text style={[styles.heroTitle, { color: colors.ink }]} numberOfLines={2}>
+          {head ? <Text>{head}</Text> : null}
+          <GradientEmphasis style={[styles.heroTitle, { color: colors.accent }]}>
+            {tail}
+          </GradientEmphasis>
+        </Text>
+        {location ? (
+          <View style={styles.heroLocation}>
+            <MapPin size={13} color={colors.muted} strokeWidth={2} />
+            <Text style={[styles.heroLocationText, { color: colors.muted }]}>{location}</Text>
+          </View>
+        ) : null}
+        {summary ? <Text style={[styles.heroSummary, { color: colors.muted }]}>{summary}</Text> : null}
+        <FollowVenueButton venueId={venueId} isFollowed={venue.isFollowed} />
       </View>
-      <Text style={[styles.heroTitle, { color: colors.ink }]} numberOfLines={2}>
-        {venue.name}
-      </Text>
-      {location ? (
-        <View style={styles.heroLocation}>
-          <MapPin size={13} color={colors.muted} strokeWidth={2} />
-          <Text style={[styles.heroLocationText, { color: colors.muted }]}>{location}</Text>
-        </View>
-      ) : null}
-      {summary ? <Text style={[styles.heroSummary, { color: colors.muted }]}>{summary}</Text> : null}
-      <FollowVenueButton venueId={venueId} isFollowed={venue.isFollowed} />
     </View>
   );
 }
@@ -591,32 +599,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   heroWrap: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
     paddingBottom: 22,
-    alignItems: 'center',
-    gap: 12,
   },
   heroPhoto: {
-    width: '100%',
-    height: 180,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 0,
   },
-  heroPhotoImage: {
-    width: '100%',
-    height: 180,
+  heroBody: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    alignItems: 'flex-start',
+    gap: 10,
   },
   heroTitle: {
     fontFamily: 'Georgia',
-    fontSize: 28,
-    fontWeight: '600',
-    lineHeight: 32,
-    letterSpacing: -0.4,
-    textAlign: 'center',
+    fontSize: 30,
+    fontWeight: '700',
+    lineHeight: 34,
+    letterSpacing: -0.6,
   },
   heroLocation: {
     flexDirection: 'row',
