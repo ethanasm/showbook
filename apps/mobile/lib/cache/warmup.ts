@@ -12,7 +12,12 @@
  *     shows.list, shows.listForMap, venues.list, venues.followed,
  *     performers.list, performers.followed, preferences.get,
  *     setlistIntel.musicLayerV2Feature, spotify.hypePlaylistFeature,
- *     spotify.connectionStatus
+ *     spotify.connectionStatus,
+ *     discover.followedFeed, discover.followedArtistsFeed,
+ *     discover.nearbyFeed (added 2026-05-19 so the daily-digest
+ *     deep-link into /discover renders meaningfully on a cold
+ *     offline start instead of dropping straight to
+ *     OfflineEmptyState).
  *   Phase 2 — per-show fan-out (concurrency-capped):
  *     shows.detail, media.listForShow, setlistIntel.predictedSetlist for
  *     every show; songBadges + trackPreviewsForShow only for past shows.
@@ -90,6 +95,11 @@ export interface WarmupClientSurface {
   spotify: {
     hypePlaylistFeature: AnyInputQuery;
     connectionStatus: AnyInputQuery;
+  };
+  discover: {
+    followedFeed: AnyInputQuery;
+    followedArtistsFeed: AnyInputQuery;
+    nearbyFeed: AnyInputQuery;
   };
 }
 
@@ -358,6 +368,26 @@ export async function warmCacheForOfflineUse(
   await step('spotify.connectionStatus', async () => {
     const data = await c.spotify.connectionStatus.query();
     qc.setQueryData(trpcKey(['spotify', 'connectionStatus'], undefined), data);
+    return data;
+  });
+
+  // Discover feeds — same limits the screen uses so a cold offline
+  // open reads the exact rows the warm cache already holds.
+  await step('discover.followedFeed', async () => {
+    const data = await c.discover.followedFeed.query({ limit: 12 });
+    qc.setQueryData(['mobile', 'discover', 'followedFeed'], data);
+    return data;
+  });
+
+  await step('discover.followedArtistsFeed', async () => {
+    const data = await c.discover.followedArtistsFeed.query({ limit: 12 });
+    qc.setQueryData(['mobile', 'discover', 'followedArtistsFeed'], data);
+    return data;
+  });
+
+  await step('discover.nearbyFeed', async () => {
+    const data = await c.discover.nearbyFeed.query({ perRegionLimit: 8 });
+    qc.setQueryData(['mobile', 'discover', 'nearbyFeed'], data);
     return data;
   });
 

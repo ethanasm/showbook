@@ -119,6 +119,11 @@ function buildClient(opts: BuildClientOptions = {}): {
         query: make('spotify.connectionStatus', { connected: false }),
       },
     },
+    discover: {
+      followedFeed: { query: make('discover.followedFeed', { items: [] }) },
+      followedArtistsFeed: { query: make('discover.followedArtistsFeed', { items: [] }) },
+      nearbyFeed: { query: make('discover.nearbyFeed', { items: [] }) },
+    },
   };
 
   return { client, calls };
@@ -147,6 +152,21 @@ describe('warmCacheForOfflineUse', () => {
     assert.equal(counts['setlistIntel.musicLayerV2Feature'], 1);
     assert.equal(counts['spotify.hypePlaylistFeature'], 1);
     assert.equal(counts['spotify.connectionStatus'], 1);
+    assert.equal(counts['discover.followedFeed'], 1);
+    assert.equal(counts['discover.followedArtistsFeed'], 1);
+    assert.equal(counts['discover.nearbyFeed'], 1);
+
+    // Discover feeds end up at the same cache keys the screen reads.
+    assert.deepEqual(qc.getQueryData(['mobile', 'discover', 'followedFeed']), {
+      items: [],
+    });
+    assert.deepEqual(
+      qc.getQueryData(['mobile', 'discover', 'followedArtistsFeed']),
+      { items: [] },
+    );
+    assert.deepEqual(qc.getQueryData(['mobile', 'discover', 'nearbyFeed']), {
+      items: [],
+    });
 
     // Both shows.list cache keys present from a single network call.
     assert.deepEqual(qc.getQueryData(['mobile', 'shows.list']), []);
