@@ -1,10 +1,14 @@
 /**
  * Tab navigator for the authenticated app shell.
  *
- * Five tabs in the order Home · Shows · Add · Map · Me, matching the design
- * source (showbook-tokens.jsx BottomNav). The center "Add" tab is rendered
- * as a raised FAB-style button (accent fill, marginTop: -16) that lifts above
- * the tab bar — this is the primary visual affordance of the bottom nav.
+ * Five tabs in the order Home · Shows · Add · Map · Discover. Discover
+ * lives in the bottom bar (replacing the old Me tab) so the queue of
+ * what's coming up is one tap away; Me/Settings has moved to a stack
+ * route reachable via the user icon in the top-right of every main
+ * screen (see `components/MeTopBarAction.tsx`). The center "Add" tab
+ * is rendered as a raised FAB-style button (accent fill, marginTop:
+ * -16) that lifts above the tab bar — this is the primary visual
+ * affordance of the bottom nav.
  *
  * The headerShown:false at the screenOptions level means each tab screen
  * owns its own TopBar; the tab bar itself is the only chrome rendered by
@@ -36,7 +40,7 @@ import {
 } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Home, List, Plus, MapPin, User } from 'lucide-react-native';
+import { Home, List, Plus, MapPin, Compass } from 'lucide-react-native';
 import { useTheme } from '../../lib/theme';
 import { useBreakpoint } from '../../lib/responsive';
 import { hapticSelection } from '../../lib/haptics';
@@ -144,10 +148,10 @@ export default function TabsLayout(): React.JSX.Element {
         }}
       />
       <Tabs.Screen
-        name="me"
+        name="discover"
         options={{
-          title: 'Me',
-          tabBarIcon: ({ color, size }) => <User size={size} color={color} strokeWidth={2} />,
+          title: 'Discover',
+          tabBarIcon: ({ color, size }) => <Compass size={size} color={color} strokeWidth={2} />,
         }}
       />
     </Tabs>
