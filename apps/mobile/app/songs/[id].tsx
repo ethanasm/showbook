@@ -218,42 +218,46 @@ function TimelineRow({
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const router = useRouter();
   const block = formatDateBlock(date);
 
+  // Direct onPress + router.push instead of <Link asChild> — the asChild
+  // wrapper was eating the inner row layout on react-native-web, making
+  // the date column wrap below the body. The plain Pressable keeps the
+  // flexDirection: 'row' intact on both native and web.
   return (
-    <Link href={`/show/${showId}`} asChild>
-      <Pressable
-        accessibilityRole="link"
-        accessibilityLabel={`Open show on ${formatLongDate(date)}`}
-        style={({ pressed }) => [
-          styles.timelineRow,
-          {
-            backgroundColor: colors.surface,
-            borderLeftColor: isEncore ? colors.accent : colors.ruleStrong,
-            opacity: pressed ? 0.85 : 1,
-          },
-        ]}
-      >
-        <View style={styles.timelineDate}>
-          <Text style={[styles.timelineDay, { color: colors.ink }]}>{block.day}</Text>
-          <Text style={[styles.timelineMonth, { color: colors.muted }]}>{block.month}</Text>
-          <Text style={[styles.timelineYear, { color: colors.faint }]}>{block.year}</Text>
+    <Pressable
+      onPress={() => router.push(`/show/${showId}`)}
+      accessibilityRole="link"
+      accessibilityLabel={`Open show on ${formatLongDate(date)}`}
+      style={({ pressed }) => [
+        styles.timelineRow,
+        {
+          backgroundColor: colors.surface,
+          borderLeftColor: isEncore ? colors.accent : colors.ruleStrong,
+          opacity: pressed ? 0.85 : 1,
+        },
+      ]}
+    >
+      <View style={styles.timelineDate}>
+        <Text style={[styles.timelineDay, { color: colors.ink }]}>{block.day}</Text>
+        <Text style={[styles.timelineMonth, { color: colors.muted }]}>{block.month}</Text>
+        <Text style={[styles.timelineYear, { color: colors.faint }]}>{block.year}</Text>
+      </View>
+      <View style={styles.timelineBody}>
+        <Text style={[styles.timelineVenue, { color: colors.ink }]} numberOfLines={1}>
+          {venueName}
+        </Text>
+        <Text style={[styles.timelineCity, { color: colors.muted }]} numberOfLines={1}>
+          {venueCity}
+        </Text>
+      </View>
+      {isEncore ? (
+        <View style={[styles.encoreChip, { borderColor: colors.accent }]}>
+          <Text style={[styles.encoreChipLabel, { color: colors.accent }]}>ENCORE</Text>
         </View>
-        <View style={styles.timelineBody}>
-          <Text style={[styles.timelineVenue, { color: colors.ink }]} numberOfLines={1}>
-            {venueName}
-          </Text>
-          <Text style={[styles.timelineCity, { color: colors.muted }]} numberOfLines={1}>
-            {venueCity}
-          </Text>
-        </View>
-        {isEncore ? (
-          <View style={[styles.encoreChip, { borderColor: colors.accent }]}>
-            <Text style={[styles.encoreChipLabel, { color: colors.accent }]}>ENCORE</Text>
-          </View>
-        ) : null}
-      </Pressable>
-    </Link>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -390,10 +394,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   timelineDate: {
-    minWidth: 56,
+    width: 64,
     paddingLeft: 12,
     paddingRight: 4,
     alignItems: 'center',
+    flexShrink: 0,
   },
   timelineDay: {
     fontFamily: 'Geist Sans',
