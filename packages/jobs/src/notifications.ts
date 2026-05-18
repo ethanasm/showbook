@@ -33,6 +33,13 @@ const log = child({ component: 'notifications' });
 // would put the digest in spam folders and trigger ESP rate-limits.
 const DEFAULT_FROM_ADDRESS = 'Showbook <digest@example.com>';
 
+// Regex anchored on `@example.com` followed by a word boundary or end-
+// of-address. Matches the placeholder forms (`digest@example.com`,
+// `Showbook <digest@example.com>`) without false-positiving on
+// otherwise-legitimate hostnames that happen to contain the string
+// "example.com" as a substring (CodeQL js/incomplete-url-substring-sanitization).
+const PLACEHOLDER_SENDER_RE = /@example\.com\b/i;
+
 function getFromAddress(): string {
   const candidate = process.env.EMAIL_FROM ?? DEFAULT_FROM_ADDRESS;
   // Fail loudly if a prod deploy was misconfigured with the placeholder.
@@ -40,7 +47,7 @@ function getFromAddress(): string {
   // `pnpm email:smoke` and unit tests don't need the env var set.
   if (
     process.env.NODE_ENV === 'production' &&
-    candidate.includes('example.com')
+    PLACEHOLDER_SENDER_RE.test(candidate)
   ) {
     throw new Error(
       'EMAIL_FROM is unset (or still points at example.com) — refusing to send daily digest with a non-routable sender. Set EMAIL_FROM in .env.prod (e.g. "Showbook <digest@showbook.app>").',
