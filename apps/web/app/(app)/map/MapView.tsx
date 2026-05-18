@@ -14,12 +14,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { trpc } from "@/lib/trpc";
 import { EmptyState, RemoteImage, type ShowKind } from "@/components/design-system";
-import {
-  ArrowUpRight,
-  Plus,
-  Filter,
-  X,
-} from "lucide-react";
+import { ArrowUpRight, Plus, X } from "lucide-react";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import "./map.css";
 import "@/components/design-system/segmented-filter.css";
@@ -272,16 +267,12 @@ function FilterBar({
   setYear,
   kind,
   setKind,
-  venueCount,
-  showCount,
   years,
 }: {
   year: string;
   setYear: (y: string) => void;
   kind: string;
   setKind: (k: string) => void;
-  venueCount: number;
-  showCount: number;
   years: string[];
 }) {
   return (
@@ -331,15 +322,6 @@ function FilterBar({
             </button>
           );
         })}
-      </div>
-
-      <div className="map-filterbar__spacer" />
-
-      <div className="map-filterbar__counts">
-        <Filter size={12} />
-        <span>
-          {venueCount} venues &middot; {showCount} shows
-        </span>
       </div>
     </div>
   );
@@ -876,8 +858,6 @@ export default function MapView() {
         setYear={setYearFilter}
         kind={kindFilter}
         setKind={setKindFilter}
-        venueCount={filteredVenues.length}
-        showCount={totalShowCount}
         years={yearOptions}
       />
 

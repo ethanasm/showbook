@@ -170,20 +170,6 @@
    apps/web/components/design-system/segmented-filter.css so the same
    markup is reused by the logbook/upcoming FilterBar. */
 
-.map-filterbar__spacer {
-  flex: 1;
-}
-
-.map-filterbar__counts {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 10.5px;
-  color: var(--muted);
-  letter-spacing: 0.04em;
-}
-
 /* ── Body: map + inspector row ──────────────────────────────────────────── */
 
 .map-body {
