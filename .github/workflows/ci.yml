@@ -174,6 +174,45 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  build-prod-image:
+    name: Build + push prod web image
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build the prod target on the GitHub-hosted runner (fast, reliable
+      # network to registry.npmjs.org) and push to GHCR. The prod box's
+      # deploy step then just `docker pull`s instead of running its own
+      # pnpm install over its flaky tunnel link. The GHA cache backend
+      # keeps the install layer warm across CI runs when pnpm-lock.yaml
+      # hasn't changed.
+      - name: Build and push prod web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          target: prod
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/showbook-web:latest
+            ghcr.io/${{ github.repository_owner }}/showbook-web:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   e2e:
     name: Playwright E2E (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     needs: build
