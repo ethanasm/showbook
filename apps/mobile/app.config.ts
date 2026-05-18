@@ -132,6 +132,12 @@ const config: ExpoConfig = {
   experiments: {
     typedRoutes: true,
   },
+  updates: {
+    url: 'https://u.expo.dev/24b77f4d-8ac8-4fac-9920-3ee9155e51f6',
+  },
+  runtimeVersion: {
+    policy: 'appVersion',
+  },
   extra: {
     eas: {
       projectId: '24b77f4d-8ac8-4fac-9920-3ee9155e51f6',
