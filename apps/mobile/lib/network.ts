@@ -341,8 +341,6 @@ export function __resetReplayInFlightForTest(): void {
 // OfflineSyncProvider — orchestration glue used by the layout
 // ---------------------------------------------------------------------------
 
-const OFFLINE_BANNER_TEXT = "You're offline. Changes will sync when you're back.";
-
 export interface OfflineSyncContextValue {
   /** Snapshot of the outbox as of the most recent poll. */
   entries: PendingWrite[];
@@ -432,26 +430,11 @@ export function OfflineSyncProvider({
     return () => clearInterval(id);
   }, [outbox, pollMs, refresh]);
 
-  // Persistent offline banner. Held as a ref so we can dismiss it on
-  // reconnect without losing track of the id.
-  const offlineBannerIdRef = React.useRef<string | null>(null);
+  // Transient "Syncing N changes…" banner shown during a replay pass.
+  // The persistent offline indicator is owned by `OfflineBanner`, which
+  // reads `useNetwork()` directly so it doesn't get tangled with the
+  // dismissable feedback queue.
   const syncingBannerIdRef = React.useRef<string | null>(null);
-
-  React.useEffect(() => {
-    if (!network.online) {
-      if (!offlineBannerIdRef.current) {
-        offlineBannerIdRef.current = showBanner({
-          kind: 'info',
-          text: OFFLINE_BANNER_TEXT,
-        });
-      }
-      return;
-    }
-    if (offlineBannerIdRef.current) {
-      dismissBanner(offlineBannerIdRef.current);
-      offlineBannerIdRef.current = null;
-    }
-  }, [network.online, showBanner, dismissBanner]);
 
   const runReplay = React.useCallback(async () => {
     if (!outbox) return;

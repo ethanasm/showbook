@@ -47,6 +47,7 @@ import {
 } from '../lib/network';
 import { ToastHost } from '../components/Toast';
 import { BannerHost } from '../components/Banner';
+import { OfflineBanner } from '../components/OfflineBanner';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { PendingWritesDrawer } from '../components/PendingWritesDrawer';
 import { useNetwork } from '../lib/network';
@@ -87,6 +88,7 @@ export default function RootLayout(): React.JSX.Element {
                     <NetworkProvider>
                       <OfflineBridge>
                         <BannerHost />
+                        <OfflineBanner />
                         {/*
                          * Root <Stack> exposes per-screen `presentation`
                          * options (modal + native swipe-down) to leaf
