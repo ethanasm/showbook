@@ -86,6 +86,17 @@ jobs:
       - name: Push OTA update
         if: github.event_name == 'workflow_run' || inputs.mode == 'update'
         working-directory: apps/mobile
+        env:
+          # `eas update` does NOT read the eas.json build profile `env` block
+          # — that's a build-only feature. For OTA updates the env vars must
+          # be set in the shell so Metro inlines them into the JS bundle. We
+          # mirror the values from eas.json's preview profile here. These are
+          # public client IDs / URLs (the EXPO_PUBLIC_ prefix means they ship
+          # in the JS bundle anyway), so committing them is safe.
+          EXPO_PUBLIC_API_URL: https://showbook.ethanasm.me
+          EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS: 222563763412-v5hj97rgnhnl2uesff3kvefvn2n4na2a.apps.googleusercontent.com
+          EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID: 222563763412-noa32760ohv25v56b8kka0ba9rf49529.apps.googleusercontent.com
+          EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB: 222563763412-i4g7a2t7to8qce4oa9j0msmhk9bmejal.apps.googleusercontent.com
         run: |
           MSG=$(git -C "$GITHUB_WORKSPACE" log -1 --pretty=%s)
           pnpm dlx eas-cli update \
