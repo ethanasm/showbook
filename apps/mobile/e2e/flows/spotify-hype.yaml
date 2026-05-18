@@ -10,7 +10,7 @@
 #   - `SetlistIntelMobileV2` ON
 #   - `SetlistIntelHypePlaylist` ON (the global hype-card gate)
 #   - A pre-show stable-archetype fixture in the seeded test DB
-appId: com.showbook.app
+appId: me.ethanasm.showbook
 name: spotify-hype
 tags:
   - phase-10

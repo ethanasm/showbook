@@ -9,7 +9,7 @@
 # session is baked into the build via EXPO_PUBLIC_E2E_TEST_TOKEN /
 # EXPO_PUBLIC_E2E_TEST_USER_JSON, so tapping "Sign in with Google"
 # falls through to the bundled session immediately.
-appId: com.showbook.app
+appId: me.ethanasm.showbook
 name: show-detail-tabs
 tags:
   - phase-10

@@ -4,7 +4,7 @@
 # env-var contract), navigates to Me, taps Sign out, confirms the
 # destructive alert, and verifies the auth gate routes back to
 # /(auth)/signin once the SecureStore session is gone.
-appId: com.showbook.app
+appId: me.ethanasm.showbook
 name: sign-out
 tags:
   - critical

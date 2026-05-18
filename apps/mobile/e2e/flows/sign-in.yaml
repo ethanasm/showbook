@@ -10,7 +10,7 @@
 # Google" — no in-app deeplink seeding step, no Maestro `runScript`,
 # no race. The bypass guards on EXPO_PUBLIC_E2E_MODE === '1' so the
 # code path is dead in TestFlight / Play Store builds.
-appId: com.showbook.app
+appId: me.ethanasm.showbook
 name: sign-in
 tags:
   - critical

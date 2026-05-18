@@ -6,7 +6,7 @@
 #
 # Requires `SetlistIntelMobileV2` ON. Uses the e2e EAS build-profile
 # bypass (EXPO_PUBLIC_E2E_TEST_TOKEN baked in) — see sign-in.yaml.
-appId: com.showbook.app
+appId: me.ethanasm.showbook
 name: setlist-stable
 tags:
   - phase-10

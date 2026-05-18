@@ -387,8 +387,8 @@ jobs:
           # Cold-launch the app the same way Maestro will (clear data
           # + start MainActivity). `pm clear` is a no-op if the package
           # wasn't installed; the install step above guarantees it is.
-          adb shell pm clear com.showbook.app || true
-          adb shell am start -W -n com.showbook.app/.MainActivity || true
+          adb shell pm clear me.ethanasm.showbook || true
+          adb shell am start -W -n me.ethanasm.showbook/.MainActivity || true
           sleep 8
           adb exec-out screencap -p > /tmp/maestro-debug/cold-launch.png || true
           adb shell uiautomator dump /sdcard/cold-launch.xml >/dev/null 2>&1 || true
@@ -407,7 +407,7 @@ jobs:
           ls -lh /tmp/maestro-debug/cold-launch.png 2>/dev/null || echo "no screenshot"
           echo "::endgroup::"
           # Kill the app again so Maestro's first launchApp starts cleanly.
-          adb shell am force-stop com.showbook.app || true
+          adb shell am force-stop me.ethanasm.showbook || true
 
       - name: Run Maestro flows
         shell: bash
@@ -435,7 +435,7 @@ jobs:
           RC=0
           for flow in apps/mobile/e2e/flows/*.yaml; do
             echo "::group::pm clear before $(basename "$flow")"
-            adb shell pm clear com.showbook.app || true
+            adb shell pm clear me.ethanasm.showbook || true
             sleep 2
             echo "::endgroup::"
             maestro test --debug-output /tmp/maestro-debug "$flow" || {

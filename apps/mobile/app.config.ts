@@ -37,7 +37,7 @@ const config: ExpoConfig = {
     backgroundColor: '#0C0C0C',
   },
   ios: {
-    bundleIdentifier: 'com.showbook.app',
+    bundleIdentifier: 'me.ethanasm.showbook',
     supportsTablet: true,
     // ios.config must always be a defined object — Expo SDK 55's
     // withUsesNonExemptEncryption plugin does `'usesNonExemptEncryption' in
@@ -81,7 +81,7 @@ const config: ExpoConfig = {
     },
   },
   android: {
-    package: 'com.showbook.app',
+    package: 'me.ethanasm.showbook',
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#0C0C0C',
