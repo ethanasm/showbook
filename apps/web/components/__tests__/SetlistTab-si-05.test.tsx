@@ -86,6 +86,9 @@ function stablePrediction(): HotPrediction {
       { title: 'Exes', evidence: '10/12', role: 'core', songId: null },
       { title: 'Run For The Hills', evidence: '11/12', role: 'closer', songId: null },
     ],
+    likely: [],
+    wildcards: [],
+    rotation: [],
   } as HotPrediction;
 }
 

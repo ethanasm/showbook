@@ -139,6 +139,55 @@ const TIER_E_DAYS = 365;
 
 const MS_PER_DAY = 86_400_000;
 
+/**
+ * For a show whose target date is more than 30 days in the future and
+ * has no setlists within ±30d of the target, pivot the tier-bucketing
+ * anchor to the most recent past setlist (or today if none).
+ *
+ * Why: `pickActiveTour` and `bucketTiers` use the target date to compute
+ * "is this setlist in the active leg?" For a far-future show — say
+ * Aug 16 viewed in May — none of the artist's recent shows fall within
+ * ±30d of Aug 16, so every setlist would collapse to Tier-E (weight 0.04)
+ * and confidence would round to 0%. Treating the future target as
+ * "as-if today" lets the model capture the artist's *current* activity
+ * as the Tier-A window — the right signal for a future show whose tour
+ * is happening right now.
+ *
+ * Recency decay still applies in `computeConfidence` against the actual
+ * target date, so a 3-month-out show naturally lands at lower confidence
+ * than a next-week show.
+ */
+export function pickBucketingDate(opts: {
+  targetDate: string;
+  setlists: CorpusRow[];
+  now?: Date;
+}): string {
+  const target = new Date(opts.targetDate).getTime();
+  const today = (opts.now ?? new Date()).getTime();
+  // Past or near-term (≤30d in future) targets — no slide.
+  if (target <= today + TIER_A_DAYS * MS_PER_DAY) return opts.targetDate;
+  // Some artists have future-scheduled setlists in setlist.fm; if any
+  // sit within ±30d of the target, the original target is the right
+  // anchor and no slide is needed.
+  for (const s of opts.setlists) {
+    if (s.isSynthetic) continue;
+    const ts = new Date(s.performanceDate).getTime();
+    if (Math.abs(ts - target) <= TIER_A_DAYS * MS_PER_DAY) return opts.targetDate;
+  }
+  // Slide to the most-recent past setlist; fall back to today when the
+  // corpus has nothing in the past (rare — a fresh corpus might only
+  // hold the synthesized future rows).
+  let mostRecent: number | null = null;
+  for (const s of opts.setlists) {
+    if (s.isSynthetic) continue;
+    const ts = new Date(s.performanceDate).getTime();
+    if (ts > today) continue;
+    if (mostRecent === null || ts > mostRecent) mostRecent = ts;
+  }
+  const anchor = mostRecent ?? today;
+  return new Date(anchor).toISOString().slice(0, 10);
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Corpus loader (SI-06 — race-free REPEATABLE READ)
 // ─────────────────────────────────────────────────────────────────────
@@ -200,7 +249,14 @@ export async function loadCorpusForPrediction(opts: {
    *  uses the headline corpus rather than empty. */
   prefer?: 'festival' | 'headline';
 }): Promise<CorpusLoadResult> {
-  const earliest = new Date(new Date(opts.targetDate).getTime() - TIER_E_DAYS * MS_PER_DAY)
+  // "Last 365 days" anchors to today when the target is in the future,
+  // otherwise to the target. Without the `min`, a show 90 days out drops
+  // any setlist older than `target - 365d` even when the band toured
+  // 3 months before that cutoff — those rows belong in the corpus.
+  const today = Date.now();
+  const targetTs = new Date(opts.targetDate).getTime();
+  const anchorTs = Math.min(today, targetTs);
+  const earliest = new Date(anchorTs - TIER_E_DAYS * MS_PER_DAY)
     .toISOString()
     .slice(0, 10);
 
@@ -732,16 +788,28 @@ export function predictSetlist(opts: {
   targetDate: string;
   corpus: CorpusRow[];
   runContext?: PredictSetlistInput['runContext'];
+  /** Injected for tests so future-date scenarios are deterministic;
+   *  defaults to wall clock in production. */
+  now?: Date;
 }): HotPrediction | ColdPrediction {
   if (opts.corpus.length === 0) {
     return coldPrediction('no_corpus');
   }
 
-  const active = pickActiveTour({ setlists: opts.corpus, targetDate: opts.targetDate });
+  // For far-future shows, pivot the tier-bucketing anchor to the artist's
+  // recent activity (or today). Without this every setlist collapses to
+  // Tier-E and confidence rounds to 0% — see `pickBucketingDate`.
+  const bucketingDate = pickBucketingDate({
+    targetDate: opts.targetDate,
+    setlists: opts.corpus,
+    now: opts.now,
+  });
+
+  const active = pickActiveTour({ setlists: opts.corpus, targetDate: bucketingDate });
   const activeTourId = active?.tourId ?? null;
   const tier = bucketTiers({
     setlists: opts.corpus,
-    targetDate: opts.targetDate,
+    targetDate: bucketingDate,
     activeTourId,
   });
   if (tier.length === 0) {

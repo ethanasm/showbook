@@ -20,6 +20,7 @@ import {
   coldPrediction,
   computeConfidence,
   pickActiveTour,
+  pickBucketingDate,
   pickRole,
   predictSetlist,
   type CorpusRow,
@@ -1490,5 +1491,177 @@ describe('defensive guards', () => {
     // W_total should include the empty setlist's tier weight,
     // suppressing Real's probability slightly.
     assert.ok(real.probability < 0.7);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// 15. pickBucketingDate — far-future-show anchor slide
+// ─────────────────────────────────────────────────────────────────────
+
+describe('pickBucketingDate', () => {
+  const now = new Date('2026-05-18T12:00:00Z');
+
+  test('past targets pass through unchanged', () => {
+    const result = pickBucketingDate({
+      targetDate: '2025-09-15',
+      setlists: [
+        corpusRow({ date: '2025-09-10', tourId: 't', tourName: 'T', songs: ['s'] }),
+      ],
+      now,
+    });
+    assert.equal(result, '2025-09-15');
+  });
+
+  test('near-future targets (≤30d) pass through unchanged', () => {
+    const result = pickBucketingDate({
+      targetDate: '2026-06-10', // 23 days out
+      setlists: [
+        corpusRow({ date: '2026-05-01', tourId: 't', tourName: 'T', songs: ['s'] }),
+      ],
+      now,
+    });
+    assert.equal(result, '2026-06-10');
+  });
+
+  test('far-future target with setlists near target keeps original anchor', () => {
+    // Artist has future-scheduled setlists within ±30d of target.
+    const result = pickBucketingDate({
+      targetDate: '2026-08-16', // 90 days out
+      setlists: [
+        corpusRow({ date: '2026-08-10', tourId: 't', tourName: 'T', songs: ['s'] }),
+      ],
+      now,
+    });
+    assert.equal(result, '2026-08-16');
+  });
+
+  test('far-future target slides to most-recent past setlist when no nearby data', () => {
+    const result = pickBucketingDate({
+      targetDate: '2026-08-16', // 90 days out
+      setlists: [
+        corpusRow({ date: '2026-05-10', tourId: 't', tourName: 'T', songs: ['s'] }),
+        corpusRow({ date: '2026-04-22', tourId: 't', tourName: 'T', songs: ['s'] }),
+      ],
+      now,
+    });
+    assert.equal(result, '2026-05-10');
+  });
+
+  test('far-future target with no past setlists falls back to today', () => {
+    const result = pickBucketingDate({
+      targetDate: '2026-08-16',
+      setlists: [],
+      now,
+    });
+    assert.equal(result, '2026-05-18');
+  });
+
+  test('ignores synthetic album-drop rows when picking the slide anchor', () => {
+    // Synthetic rows are positioned around the target; they shouldn't
+    // be considered "real recent activity" for the slide.
+    const result = pickBucketingDate({
+      targetDate: '2026-08-16',
+      setlists: [
+        corpusRow({ date: '2026-05-10', tourId: 't', tourName: 'T', songs: ['s'] }),
+        { ...corpusRow({ date: '2026-08-15', tourId: null, tourName: null, songs: ['album-drop'] }), isSynthetic: true },
+      ],
+      now,
+    });
+    // Should slide to the real setlist, not the synthetic one.
+    assert.equal(result, '2026-05-10');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// 16. predictSetlist — far-future show end-to-end
+// ─────────────────────────────────────────────────────────────────────
+
+describe('far-future show (regression — was returning confidence=0)', () => {
+  // Mirrors the Passion Pit bug: target is 90 days in the future, the
+  // artist has recently toured but every setlist sits outside ±30d of
+  // the target. The old code collapsed everything to Tier-E
+  // (weight 0.04) → tierA.length = 0 → confidence = 0.
+  const target = '2026-08-16';
+  const now = new Date('2026-05-18T12:00:00Z');
+  const tourId = 'passion-pit-2026';
+  const tourName = 'Tropical Hangover Tour';
+  const core = [
+    'Sleepyhead',
+    'The Reeling',
+    "Moth's Wings",
+    'Constant Conversations',
+    'Carried Away',
+    'Take a Walk',
+  ];
+
+  // 6 recent setlists, all within ±30d of `now` (none within ±30d of
+  // the future target).
+  function buildCorpus(): CorpusRow[] {
+    const dates = ['2026-04-22', '2026-04-29', '2026-05-03', '2026-05-08', '2026-05-12', '2026-05-15'];
+    return dates.map((d, i) =>
+      corpusRow({ id: `pp-${i}`, date: d, tourId, tourName, songs: core }),
+    );
+  }
+
+  test('produces non-zero confidence (>= 0.5) instead of 0', () => {
+    const r = predictSetlist({ performerId: 'p', targetDate: target, corpus: buildCorpus(), now });
+    if (r.style !== 'stable') throw new Error('expected stable');
+    assert.ok(r.confidence >= 0.5, `expected ≥0.5, got ${r.confidence}`);
+  });
+
+  test('coverage is active_tour, not last_year', () => {
+    const r = predictSetlist({ performerId: 'p', targetDate: target, corpus: buildCorpus(), now });
+    if (r.style !== 'stable') throw new Error('expected stable');
+    assert.equal(r.tourCoverage, 'active_tour');
+    assert.equal(r.tourId, tourId);
+    assert.equal(r.tourName, tourName);
+  });
+
+  test('every core song lands in the core bucket', () => {
+    const r = predictSetlist({ performerId: 'p', targetDate: target, corpus: buildCorpus(), now });
+    if (r.style !== 'stable') throw new Error('expected stable');
+    const coreSet = new Set(r.core.map((s) => s.title.toLowerCase()));
+    for (const title of core) {
+      assert.ok(
+        coreSet.has(title.toLowerCase()),
+        `expected ${title} in core bucket, got core=${[...coreSet].join(',')}`,
+      );
+    }
+  });
+
+  test('sampleSize equals the corpus length (6)', () => {
+    const r = predictSetlist({ performerId: 'p', targetDate: target, corpus: buildCorpus(), now });
+    if (r.style !== 'stable') throw new Error('expected stable');
+    assert.equal(r.sampleSize, 6);
+  });
+
+  test('songs in only some setlists land in `likely` (non-empty)', () => {
+    // Add a "sometimes" song that appears in 3 of 6 — should land in
+    // likely (p ≈ 0.5), not core (≥0.65) and not rotation.
+    const corpus = buildCorpus();
+    corpus[0]!.setlist.sections[0]!.songs.push({ title: 'Mirror Mirror' });
+    corpus[2]!.setlist.sections[0]!.songs.push({ title: 'Mirror Mirror' });
+    corpus[4]!.setlist.sections[0]!.songs.push({ title: 'Mirror Mirror' });
+    const r = predictSetlist({ performerId: 'p', targetDate: target, corpus, now });
+    if (r.style !== 'stable') throw new Error('expected stable');
+    const likelyTitles = r.likely.map((s) => s.title.toLowerCase());
+    assert.ok(
+      likelyTitles.includes('mirror mirror'),
+      `expected Mirror Mirror in likely, got likely=${likelyTitles.join(',')}`,
+    );
+  });
+
+  test('past-target prior-tour-only case still caps at last_year confidence', () => {
+    // Sanity: when the only setlists are >365 days from the target
+    // AND the slide doesn't help (no Tier-A regardless), we still
+    // fall through to the cold guard.
+    const oldTour = [
+      corpusRow({ id: 'old1', date: '2024-06-01', tourId: 't-old', tourName: 'Old', songs: core }),
+    ];
+    const r = predictSetlist({ performerId: 'p', targetDate: target, corpus: oldTour, now });
+    // 2024-06-01 is >365 days from both `target` (Aug 16, 2026) and
+    // `now` (May 18, 2026 → slide anchor 2024-06-01), so bucketTiers
+    // drops it → cold.
+    assert.equal(r.style, 'cold');
   });
 });

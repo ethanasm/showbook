@@ -273,15 +273,27 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
     return <ImprovisedSetlistView prediction={prediction} />;
   }
 
-  const core = prediction.core;
-  const encore = core.filter(
+  // Render core + likely together so the "Likely setlist" surfaces a
+  // full predicted set rather than only the ≥0.65 core. With a small
+  // corpus (e.g. 6 setlists) the Bayesian smoothing keeps most songs
+  // under 0.65, so showing only `core` would clip the prediction to
+  // the few near-certain songs. The evidence string ("N of last M
+  // shows") already differentiates strength to the reader.
+  const allLikely = [...prediction.core, ...(prediction.likely ?? [])];
+  const encore = allLikely.filter(
     (s) => s.role === "encore_open" || s.role === "encore_close",
   );
-  const mainSet = core.filter(
+  const mainSet = allLikely.filter(
     (s) => s.role !== "encore_open" && s.role !== "encore_close",
   );
   const totalCount = mainSet.length + encore.length;
-  const approxMinutes = totalCount > 0 ? Math.round(totalCount * 4) : null;
+  // Hype playlist track count stays scoped to `core` so the
+  // displayed count matches what Spotify actually receives (the
+  // playlist builder reads `prediction.core` only — see
+  // `packages/api/src/spotify-playlist.ts`).
+  const hypeTotalCount = prediction.core.length;
+  const hypeApproxMinutes =
+    hypeTotalCount > 0 ? Math.round(hypeTotalCount * 4) : null;
 
   // Phase 11 §15f — set-count strip rendered above the predicted
   // setlist whenever the algorithm produced a non-null payload. Stable
@@ -305,14 +317,14 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
             showId={props.showId}
             kind="hype"
             artist={artistName}
-            trackCount={totalCount}
-            approxMinutes={approxMinutes}
+            trackCount={hypeTotalCount}
+            approxMinutes={hypeApproxMinutes}
           />
         ) : (
           <HypePlaylistCardPlaceholder
             artist={prediction.tourName ?? artistName}
-            trackCount={totalCount}
-            approxMinutes={approxMinutes}
+            trackCount={hypeTotalCount}
+            approxMinutes={hypeApproxMinutes}
           />
         )}
       </SectionFrame>
