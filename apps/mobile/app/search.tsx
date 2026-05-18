@@ -157,6 +157,19 @@ export default function SearchScreen(): React.JSX.Element {
           <View style={styles.center}>
             <ActivityIndicator color={colors.muted} />
           </View>
+        ) : searchQuery.isError && !searchQuery.data ? (
+          <EmptyState
+            title="Search failed"
+            subtitle={
+              searchQuery.error instanceof Error
+                ? searchQuery.error.message
+                : 'Tap to try again.'
+            }
+            cta={{
+              label: 'Try again',
+              onPress: () => void searchQuery.refetch(),
+            }}
+          />
         ) : grouped.total === 0 ? (
           <EmptyState
             icon={<SearchIcon size={40} color={colors.faint} strokeWidth={1.5} />}

@@ -32,6 +32,7 @@ import { Calendar, MapPin, Search, Users } from 'lucide-react-native';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { EmptyStateHero } from '../../components/design-system';
+import { EmptyState } from '../../components/EmptyState';
 import { OfflineEmptyState } from '../../components/OfflineEmptyState';
 import { KindBadge } from '../../components/KindBadge';
 import { useTheme, type Kind } from '../../lib/theme';
@@ -142,7 +143,8 @@ export default function DiscoverScreen(): React.JSX.Element {
 
   const showOfflineEmpty = !network.online && !activeQuery.data;
   const isLoading = activeQuery.isLoading;
-  const isEmpty = !isLoading && items.length === 0;
+  const isErrored = !isLoading && activeQuery.isError && !activeQuery.data;
+  const isEmpty = !isLoading && !isErrored && items.length === 0;
 
   return (
     <ScreenWrapper
@@ -179,6 +181,21 @@ export default function DiscoverScreen(): React.JSX.Element {
         ) : isLoading ? (
           <View style={styles.center}>
             <ActivityIndicator color={colors.muted} />
+          </View>
+        ) : isErrored ? (
+          <View style={styles.center}>
+            <EmptyState
+              title="Couldn't load Discover"
+              subtitle={
+                activeQuery.error instanceof Error
+                  ? activeQuery.error.message
+                  : 'Tap to try again.'
+              }
+              cta={{
+                label: 'Try again',
+                onPress: () => void activeQuery.refetch(),
+              }}
+            />
           </View>
         ) : isEmpty ? (
           <EmptyForTab

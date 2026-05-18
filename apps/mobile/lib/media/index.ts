@@ -13,5 +13,5 @@ export {
   type UploadIntentInput,
   type UploadIntentResult,
 } from './upload';
-export { pickMediaFromLibrary, MAX_SELECTION } from './picker';
+export { pickMediaFromLibrary, captureMediaFromCamera, MAX_SELECTION } from './picker';
 export { looksLikeQuotaMessage } from './errors';

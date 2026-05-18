@@ -33,6 +33,10 @@ interface RouteSpec {
   /** Per-procedure tRPC stubs. Keys are procedure paths
    *  (e.g. "songs.byId"). Values are the raw `data.json` payload. */
   trpcStubs?: Record<string, unknown>;
+  /** When true, scroll the page (and any inner RN Web ScrollView) to
+   *  the bottom before snapshotting. Use for screens whose visible
+   *  delta is below the fold on the 390×844 viewport. */
+  scrollToBottom?: boolean;
 }
 
 const ROUTES: RouteSpec[] = [
@@ -73,6 +77,39 @@ const ROUTES: RouteSpec[] = [
         spotifyUserId: 'shim',
       },
     },
+  },
+  // Me tab — covers the Recent-Activity-removal + version-footer cleanup.
+  // Both deltas sit below the fold on a 390×844 viewport, so scroll the
+  // inner ScrollView to the bottom before snapshotting.
+  {
+    name: '09-me-tab',
+    path: '/me',
+    ready: /SHOWBOOK · v/i,
+    scrollToBottom: true,
+    trpcStubs: {
+      'preferences.get': {
+        regions: [],
+        notifications: { email: false, push: false },
+        emailDigest: { enabled: false },
+      },
+      'spotify.connectionStatus': { connected: false },
+    },
+  },
+  // First-run Gmail step — covers the "Connect Gmail → Got it" rewrite
+  // so the CTA no longer promises an OAuth flow we haven't built.
+  {
+    name: '10-first-run-gmail',
+    path: '/(auth)/first-run/gmail',
+    ready: /Pull in past tickets|Got it/i,
+    skipAuthSeed: true,
+  },
+  // Upload screen — covers the dual Camera / Photo-library chooser. The
+  // web shim returns `canceled: true` from the auto-pick on mount so the
+  // empty state renders.
+  {
+    name: '11-upload-chooser',
+    path: '/show/screenshot-show/upload',
+    ready: /Add a photo or video|Take photo/i,
   },
   // New feature: songs detail. Stub `songs.byId` with a representative
   // history so the hero + stat row + timeline all populate.
@@ -220,6 +257,28 @@ test.describe('pr screenshots — mobile', () => {
 
       // Settle for any Reanimated frames before snapshotting.
       await page.waitForTimeout(600);
+
+      if (route.scrollToBottom) {
+        // RN Web ScrollView renders as an overflow:scroll div. Find any
+        // descendant whose content overflows and scroll it to the
+        // bottom — covers both the window and the inner ScrollView.
+        await page.evaluate(() => {
+          window.scrollTo(0, document.body.scrollHeight);
+          const scrollables = Array.from(
+            document.querySelectorAll('*'),
+          ).filter((el) => {
+            const style = getComputedStyle(el);
+            return (
+              (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+              el.scrollHeight > el.clientHeight
+            );
+          });
+          for (const el of scrollables) {
+            (el as HTMLElement).scrollTop = el.scrollHeight;
+          }
+        });
+        await page.waitForTimeout(250);
+      }
 
       await page.screenshot({
         path: join(OUT_DIR, `${route.name}-${variant}.png`),

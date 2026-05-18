@@ -181,6 +181,21 @@ export default function HomeScreen(): React.JSX.Element {
           <View style={styles.skeletonWrap}>
             <ShowCardListSkeleton count={4} />
           </View>
+        ) : showsQuery.isError && !showsQuery.data ? (
+          <View style={styles.skeletonWrap}>
+            <EmptyState
+              title="Couldn't load your shows"
+              subtitle={
+                showsQuery.error instanceof Error
+                  ? showsQuery.error.message
+                  : 'Tap to try again.'
+              }
+              cta={{
+                label: 'Try again',
+                onPress: () => void showsQuery.refetch(),
+              }}
+            />
+          </View>
         ) : sections.total === 0 ? (
           <GetStartedHub variant="expanded" />
         ) : (

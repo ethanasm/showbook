@@ -2,7 +2,9 @@
  * expo-image-picker wrapper for the M4 upload flow.
  *
  * The pipeline only consumes a small subset of expo-image-picker's API:
- *  - multi-select (up to 12 per design)
+ *  - multi-select (up to 12 per design) from the photo library
+ *  - single-shot camera capture (`captureMediaFromCamera`) so users at a
+ *    venue can snap-and-add without round-tripping to Photos.app
  *  - photo + video MIME-type whitelist (delegated to the server's allow list)
  *  - normalised `SelectedFile` shape so `uploadFile` doesn't have to know
  *    about the picker's asset format.
@@ -78,6 +80,27 @@ export async function pickMediaFromLibrary(): Promise<PickResult> {
     const f = toSelectedFile(asset);
     if (f) files.push(f);
     if (files.length >= MAX_SELECTION) break;
+  }
+  return { files, cancelled: false, permissionDenied: false };
+}
+
+export async function captureMediaFromCamera(): Promise<PickResult> {
+  const permission = await ImagePicker.requestCameraPermissionsAsync();
+  if (!permission.granted) {
+    return { files: [], cancelled: false, permissionDenied: true };
+  }
+  const res = await ImagePicker.launchCameraAsync({
+    mediaTypes: ['images', 'videos'],
+    quality: 1,
+    exif: false,
+  });
+  if (res.canceled) {
+    return { files: [], cancelled: true, permissionDenied: false };
+  }
+  const files: SelectedFile[] = [];
+  for (const asset of res.assets ?? []) {
+    const f = toSelectedFile(asset);
+    if (f) files.push(f);
   }
   return { files, cancelled: false, permissionDenied: false };
 }

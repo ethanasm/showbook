@@ -19,6 +19,7 @@ import { useRouter } from 'expo-router';
 import { ChevronLeft, Search } from 'lucide-react-native';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
 import { EmptyStateHero } from '../../components/design-system';
+import { EmptyState } from '../../components/EmptyState';
 import { VenueCard, type VenueCardVenue } from '../../components/VenueCard';
 import { RowSkeleton } from '../../components/skeletons';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
@@ -80,6 +81,12 @@ export default function VenuesListScreen(): React.JSX.Element {
   }, [listQuery.data, followedQuery.data]);
 
   const isLoading = listQuery.isLoading && followedQuery.isLoading;
+  const isErrored =
+    !isLoading &&
+    listQuery.isError &&
+    followedQuery.isError &&
+    !listQuery.data &&
+    !followedQuery.data;
   const isFetching = listQuery.isFetching || followedQuery.isFetching;
   const refreshControl = useThemedRefreshControl(isFetching && !isLoading, () => {
     void Promise.all([listQuery.refetch(), followedQuery.refetch()]);
@@ -114,6 +121,22 @@ export default function VenuesListScreen(): React.JSX.Element {
           {Array.from({ length: 6 }).map((_, i) => (
             <RowSkeleton key={i} />
           ))}
+        </View>
+      ) : isErrored ? (
+        <View style={styles.emptyWrap}>
+          <EmptyState
+            title="Couldn't load venues"
+            subtitle="Tap to try again."
+            cta={{
+              label: 'Try again',
+              onPress: () => {
+                void Promise.all([
+                  listQuery.refetch(),
+                  followedQuery.refetch(),
+                ]);
+              },
+            }}
+          />
         </View>
       ) : merged.length === 0 ? (
         <View style={styles.emptyWrap}>

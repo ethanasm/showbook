@@ -11,6 +11,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../lib/theme';
 import { RADII } from '../lib/theme-utils';
+import { hapticSelection } from '../lib/haptics';
 
 export interface SegmentedControlOption<V extends string> {
   value: V;
@@ -42,7 +43,10 @@ export function SegmentedControl<V extends string>({
         return (
           <Pressable
             key={opt.value}
-            onPress={() => onChange(opt.value)}
+            onPress={() => {
+              if (!active) void hapticSelection();
+              onChange(opt.value);
+            }}
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
             accessibilityLabel={opt.label}

@@ -14,7 +14,7 @@
  */
 
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
@@ -138,12 +138,6 @@ function ShowDetailTabsViewInner({
     staleTime: 5 * 60_000,
   });
   const hypePlaylistEnabled = Boolean(hypeFeatureQuery.data?.enabled);
-
-  const musicLayerV2Query = trpc.setlistIntel.musicLayerV2Feature.useQuery(
-    undefined,
-    { staleTime: 5 * 60_000 },
-  );
-  const musicLayerV2Enabled = Boolean(musicLayerV2Query.data?.enabled);
 
   const badgeQuery = trpc.shows.songBadges.useQuery(
     { showId: show.id },
@@ -342,13 +336,10 @@ function ShowDetailTabsViewInner({
       ]}
       isPast={isPast}
       onOpenPerformer={(id) => router.push(`/artists/${id}`)}
-      musicLayerSlot={
-        // FanLoyaltyRing (Phase 7) plugs in here once it lands on
-        // mobile; for v1 we leave the slot empty unless the music-
-        // layer-v2 flag is on, in which case we render a tiny
-        // placeholder so the section header doesn't look unowned.
-        musicLayerV2Enabled && isPast ? <PlaceholderFanLoyalty /> : null
-      }
+      // FanLoyaltyRing (Phase 7) plugs in here once it ports to mobile.
+      // Until then the slot stays empty rather than teasing the feature
+      // with a placeholder card.
+      musicLayerSlot={null}
     />
   );
 
@@ -435,9 +426,36 @@ function ShowDetailTabsViewInner({
         approxMinutes={railHypeMeta.approxMinutes}
       />
     ) : null,
-    fanLoyaltyRing:
-      isPast && musicLayerV2Enabled ? <PlaceholderFanLoyalty /> : null,
+    // FanLoyaltyRing pending port from web (Phase 7 follow-up).
+    fanLoyaltyRing: null,
   };
+
+  // Pull-to-refresh: refetch the per-show queries that drive each tab
+  // plus the canonical shows.detail (so a stale state pill / setlist
+  // upstream change picks up). Cheap to over-refetch — every query
+  // here is per-show and React Query dedupes in-flight requests.
+  const [refreshing, setRefreshing] = React.useState(false);
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        utils.shows.detail.invalidate({ showId: show.id }),
+        predictionQuery.refetch(),
+        badgeQuery.refetch(),
+        previewsQuery.refetch(),
+        mediaQuery.refetch(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [
+    badgeQuery,
+    mediaQuery,
+    predictionQuery,
+    previewsQuery,
+    show.id,
+    utils,
+  ]);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
@@ -447,6 +465,13 @@ function ShowDetailTabsViewInner({
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scroll}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.muted}
+            />
+          }
         >
           {active === 'overview' ? overviewPanel : null}
           {active === 'setlist' ? setlistPanel : null}
@@ -457,33 +482,6 @@ function ShowDetailTabsViewInner({
       {showInlineRail ? (
         <ShowDetailRightRail isPast={isPast} slots={rightRailSlots} />
       ) : null}
-    </View>
-  );
-}
-
-// Internal placeholder until FanLoyaltyRing ports to mobile (P7 follow-up).
-function PlaceholderFanLoyalty(): React.JSX.Element {
-  const { tokens } = useTheme();
-  const { colors } = tokens;
-  return (
-    <View
-      style={{
-        padding: 16,
-        backgroundColor: colors.surface,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: colors.rule,
-      }}
-    >
-      <Text
-        style={{
-          fontFamily: 'Geist Mono',
-          fontSize: 11,
-          color: colors.muted,
-          letterSpacing: 0.3,
-        }}
-      >
-        Fan loyalty insight coming soon · syncs with your Spotify history.
-      </Text>
     </View>
   );
 }
