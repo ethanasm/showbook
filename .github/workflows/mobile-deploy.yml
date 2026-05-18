@@ -1,0 +1,116 @@
+name: Mobile deploy (preview channel)
+
+# Continuous mobile deployment. Every CI-green push to `main` runs
+# `eas update --branch preview`, which pushes a fresh JS bundle to
+# the preview channel. Installed preview IPAs pick it up on next
+# cold start.
+#
+# For changes that need a new native binary (added Expo plugin, new
+# native dep, new permission string), use the workflow_dispatch
+# button with mode=build to kick off a full `eas build` instead.
+# That produces a new IPA you have to install on the phone again.
+#
+# Runs on a GitHub-hosted runner — EAS Build/Update both execute in
+# Expo's cloud, so there's nothing to host locally. The prod box is
+# not involved.
+#
+# Required secret: EXPO_TOKEN (Settings → Secrets → Actions). Create
+# via `eas-cli token:create` or expo.dev → Account Settings → Access
+# Tokens.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "update (OTA JS) or build (new IPA)"
+        type: choice
+        options:
+          - update
+          - build
+        default: update
+      platform:
+        description: "Platform (only used in build mode)"
+        type: choice
+        options:
+          - ios
+          - android
+          - all
+        default: ios
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Push to preview channel
+    # workflow_run: only deploy if CI passed AND was on main AND wasn't a
+    #   fork PR.
+    # workflow_dispatch: always allowed (manual trigger from Actions tab).
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+          (github.event.workflow_run.conclusion == 'success' &&
+           github.event.workflow_run.head_branch == 'main' &&
+           github.event.workflow_run.event != 'pull_request') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Push OTA update
+        if: github.event_name == 'workflow_run' || inputs.mode == 'update'
+        working-directory: apps/mobile
+        run: |
+          MSG=$(git -C "$GITHUB_WORKSPACE" log -1 --pretty=%s)
+          pnpm dlx eas-cli update \
+            --branch preview \
+            --message "$MSG" \
+            --non-interactive
+
+      - name: Build native IPA / APK
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'build'
+        working-directory: apps/mobile
+        run: |
+          pnpm dlx eas-cli build \
+            --profile preview \
+            --platform ${{ inputs.platform }} \
+            --non-interactive \
+            --no-wait
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Mobile deploy"
+            echo ""
+            echo "- Trigger: ${{ github.event_name }}"
+            echo "- Mode: ${{ inputs.mode || 'update' }}"
+            echo "- Status: ${{ job.status }}"
+            echo "- Channel: preview"
+          } >> "$GITHUB_STEP_SUMMARY"

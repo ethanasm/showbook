@@ -71,7 +71,7 @@ Set locally via shell or `.env.local`. Mobile-side vars are prefixed
 | `EXPO_PUBLIC_API_URL` | - | tRPC target. Use `https://localhost:3001` for an iOS simulator pointed at the local web stack with the dev cert, or a LAN/tunnel URL for a physical device. |
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS` | - | iOS sign-in |
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID` | - | Android sign-in |
-| `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB` | - | Expo web preview sign-in |
+| `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB` | - | Sign-in on every platform. `expo-auth-session/providers/google` uses the web client ID as the ID-token audience even on native iOS/Android, so this is required not just for web preview. |
 | `EXPO_PUBLIC_E2E_MODE` | unset | Maestro Cloud only — bypasses Google OAuth and reads a pre-baked JWT from SecureStore. Production builds ship with this unset; the bypass is dead code there. |
 | `EXPO_PUBLIC_FORCE_OFFLINE` | unset | Set to `1` to pin `NetworkProvider` offline at module eval (skips the NetInfo subscription entirely). Used by the Playwright web harness + Maestro flows that need to exercise offline UX without flipping airplane mode. Production builds leave this unset. Runtime tests can also flip it via `__setForceOfflineForTest`. |
 
