@@ -304,7 +304,7 @@ function SetlistTabPast({
                 key={`main-${idx}-${song.title}`}
                 position={idx + 1}
                 title={song.title}
-                evidence={song.note ?? 'actual · setlist.fm'}
+                evidence={song.note ?? ''}
                 role={
                   song.isOpenerOrCloser
                     ? idx === 0
@@ -330,7 +330,7 @@ function SetlistTabPast({
                     key={`encore-${idx}-${song.title}`}
                     position={idx + 1}
                     title={song.title}
-                    evidence={song.note ?? 'actual · encore'}
+                    evidence={song.note ?? ''}
                     role={
                       idx === 0
                         ? 'encore_open'

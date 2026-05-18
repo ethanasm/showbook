@@ -28,7 +28,14 @@ const cspDirectives = [
   // requires the same nonce work as script-src.
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
-  "media-src 'self' https://*.scdn.co https://*.mzstatic.com",
+  // Audio sources: Spotify previews (`p.scdn.co`), Apple Music artwork
+  // CDN (`mzstatic.com`), and Apple's iTunes preview origin
+  // (`audio-ssl.itunes.apple.com`) — the latter is the fallback URL
+  // returned by `searchTrackPreview` for the ~all tracks Spotify
+  // stopped serving previews for in Nov 2024. Without this entry the
+  // browser silently rejects the `<audio>` load with a CSP violation
+  // and the row flips to "no preview available".
+  "media-src 'self' data: https://*.scdn.co https://*.mzstatic.com https://*.itunes.apple.com",
   "font-src 'self' data:",
   // tRPC + NextAuth talk to self; Spotify / setlist.fm / Ticketmaster /
   // Resend / Groq are addressed server-side, so the browser only needs

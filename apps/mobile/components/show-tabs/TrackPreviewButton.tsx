@@ -5,11 +5,11 @@
  * `PreviewPlayerController`.
  *
  * Audio playback driver: this component owns a single `PreviewPlayer`
- * provider per show-detail screen. The driver is loaded lazily so a
- * missing native audio module (sandbox / Playwright web bundle) falls
- * back to the no-op driver and the button degrades to "unavailable"
- * after the first failed play, but the contract still works (toggle,
- * stop-previous, etc.).
+ * provider per show-detail screen. The default driver wraps
+ * `expo-audio` so the 30-second preview plays through the device
+ * speaker on iOS / Android and through HTMLAudioElement on the Expo
+ * web bundle. Tests can pass a custom driver (typically the
+ * `NoopPlaybackDriver`) so the suite stays free of the native module.
  */
 
 import React from 'react';
@@ -18,11 +18,11 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useTheme } from '../../lib/theme';
 import {
   PreviewPlayerController,
-  NoopPlaybackDriver,
   type PlaybackDriver,
   type PreviewHandle,
   type PreviewPlayerState,
 } from '../../lib/setlist-intel';
+import { ExpoAudioDriver } from '../../lib/setlist-intel/expo-audio-driver';
 
 // ----------------------------------------------------------------------
 // Provider + hook
@@ -39,10 +39,11 @@ const PreviewPlayerContext = React.createContext<PreviewPlayerContextValue | nul
 
 export interface PreviewPlayerProviderProps {
   /**
-   * Inject a real audio driver. When omitted, the no-op driver is used
-   * — useful for the headless web Playwright loop and for unit tests.
-   * The native call site supplies an `expo-av`-backed driver once
-   * available; for now we degrade gracefully.
+   * Inject a custom playback driver — primarily for tests that want to
+   * assert against `NoopPlaybackDriver` without dragging the
+   * `expo-audio` native module into the unit-test loader. When omitted
+   * the provider builds an `ExpoAudioDriver` so iOS / Android / web
+   * bundles all get real audio playback.
    */
   driver?: PlaybackDriver;
   children: React.ReactNode;
@@ -59,10 +60,18 @@ export function PreviewPlayerProvider({
 
   // Build the controller once per provider; preserve identity across
   // re-renders so the underlying driver isn't torn down on every paint.
+  // The driver gets a callback hook so `didJustFinish` from the audio
+  // element flips the row glyph back to ▶ without forcing the user to
+  // tap stop.
   const controllerRef = React.useRef<PreviewPlayerController | null>(null);
   if (controllerRef.current === null) {
+    const resolved =
+      driver ??
+      new ExpoAudioDriver({
+        onEnded: () => controllerRef.current?.handleEnded(),
+      });
     controllerRef.current = new PreviewPlayerController({
-      driver: driver ?? new NoopPlaybackDriver(),
+      driver: resolved,
       onStateChange: (s) => setState(s),
     });
   }
