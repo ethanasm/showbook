@@ -68,12 +68,15 @@ jobs:
       DEVELOPER_DIR: /Library/Developer/CommandLineTools
     steps:
       - name: Verify prod tree
+        # Check only operator-managed state pre-reset. The compose file
+        # is tracked, so `git reset --hard` below produces it; checking
+        # the path here would block the first deploy across the
+        # docker-compose.prod.yml → infra/docker-compose.prod.yml move
+        # because the old tree at PROD_DIR hasn't been reset yet.
         run: |
           set -euo pipefail
-          test -d "$PROD_DIR/.git"          || { echo "PROD_DIR is not a git checkout: $PROD_DIR"; exit 1; }
-          test -f "$PROD_DIR/.env.prod"     || { echo ".env.prod missing in $PROD_DIR"; exit 1; }
-          test -f "$PROD_DIR/docker-compose.prod.yml" \
-                                            || { echo "docker-compose.prod.yml missing in $PROD_DIR"; exit 1; }
+          test -d "$PROD_DIR/.git"      || { echo "PROD_DIR is not a git checkout: $PROD_DIR"; exit 1; }
+          test -f "$PROD_DIR/.env.prod" || { echo ".env.prod missing in $PROD_DIR"; exit 1; }
 
       - name: Fetch latest main
         working-directory: ${{ env.PROD_DIR }}

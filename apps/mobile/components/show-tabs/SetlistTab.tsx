@@ -316,6 +316,7 @@ function SetlistTabPast({
                 previewUrl={preview.previewUrl}
                 spotifyTrackId={preview.spotifyTrackId}
                 badge={resolved.badge}
+                songId={resolved.songId}
               />
             );
           })}
@@ -342,6 +343,7 @@ function SetlistTabPast({
                     previewUrl={preview.previewUrl}
                     spotifyTrackId={preview.spotifyTrackId}
                     badge={resolved.badge}
+                    songId={resolved.songId}
                   />
                 );
               })}

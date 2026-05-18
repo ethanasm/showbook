@@ -122,7 +122,7 @@ R2_BUCKET_NAME=showbook
 R2_PUBLIC_URL=https://media.example.com
 ```
 
-Note: `DATABASE_URL` is set in `docker-compose.yml` under `environment`, not in `.env.local`, because the container needs the Docker-internal hostname (`postgres`) not `localhost`.
+Note: `DATABASE_URL` is set in `infra/docker-compose.yml` under `environment`, not in `.env.local`, because the container needs the Docker-internal hostname (`postgres`) not `localhost`.
 
 ### Port map (all projects, no conflicts)
 
@@ -284,7 +284,10 @@ showbook/
 │   ├── jobs/                   # pg-boss job handlers
 │   └── shared/                 # Types, constants, utils
 │
-├── docker-compose.yml
+├── infra/
+│   ├── docker-compose.yml
+│   ├── docker-compose.prod.yml
+│   └── certs/                  # gitignored local TLS for HTTPS dev
 ├── nx.json
 ├── package.json
 └── tsconfig.base.json

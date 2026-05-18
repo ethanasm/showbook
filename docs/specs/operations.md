@@ -14,8 +14,8 @@ simultaneously.
 
 | Stack | Compose file | Project | Web port | DB port | DB name / role |
 |-------|--------------|---------|----------|---------|----------------|
-| dev   | `docker-compose.yml`      | `showbook-dev`  | `127.0.0.1:3001` | `127.0.0.1:5433` | `showbook` / `showbook` |
-| prod  | `docker-compose.prod.yml` | `showbook-prod` | `127.0.0.1:3002` | `127.0.0.1:5434` | `showbook_prod` / `showbook_prod` |
+| dev   | `infra/docker-compose.yml`      | `showbook-dev`  | `127.0.0.1:3001` | `127.0.0.1:5433` | `showbook` / `showbook` |
+| prod  | `infra/docker-compose.prod.yml` | `showbook-prod` | `127.0.0.1:3002` | `127.0.0.1:5434` | `showbook_prod` / `showbook_prod` |
 
 Playwright's E2E dev server defaults to `3003` (override with
 `PLAYWRIGHT_PORT`) so it doesn't fight with either stack. The
@@ -155,7 +155,7 @@ tables above. Wire the endpoint up to it as a one-time post-migration step:
 # as NOLOGIN until you do this). Use a long random password — it never needs
 # to be typed by a human, only loaded from .env.prod.
 PASSWORD=$(openssl rand -hex 32)
-docker compose -f docker-compose.prod.yml -p showbook-prod exec -T db \
+docker compose -f infra/docker-compose.prod.yml -p showbook-prod exec -T db \
   psql -U showbook_prod -d showbook_prod \
     -c "ALTER ROLE showbook_query WITH LOGIN PASSWORD '$PASSWORD'"
 

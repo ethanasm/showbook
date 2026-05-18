@@ -4,10 +4,14 @@
  * position number · TrackPreview button · title · optional evidence
  * line · inline song badges (🆕 / 🎯). Past-show "actual · setlist.fm"
  * boilerplate is omitted upstream so rows for played songs look clean.
+ * When `songId` is supplied (past shows from `shows.songBadges`), the
+ * title/evidence area is wrapped in a Pressable that routes to
+ * `/songs/[id]`.
  */
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import { useTheme } from '../../lib/theme';
 import { TrackPreviewButton } from './TrackPreviewButton';
@@ -24,6 +28,10 @@ export interface PredictedSetlistRowProps {
   previewUrl: string | null;
   spotifyTrackId: string | null;
   badge?: SongBadge;
+  /** When provided, the title/evidence area becomes tappable and opens
+   *  the song-detail screen. Only past shows carry song IDs (from
+   *  `shows.songBadges`), so predicted rows leave this undefined. */
+  songId?: string | null;
 }
 
 export function PredictedSetlistRow({
@@ -34,9 +42,11 @@ export function PredictedSetlistRow({
   previewUrl,
   spotifyTrackId,
   badge,
+  songId,
 }: PredictedSetlistRowProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const router = useRouter();
   const showEvidence = evidence.length > 0;
   return (
     <View
@@ -52,7 +62,19 @@ export function PredictedSetlistRow({
         previewUrl={previewUrl}
         spotifyTrackId={spotifyTrackId}
       />
-      <View style={styles.body}>
+      <Pressable
+        onPress={songId ? () => router.push(`/songs/${songId}`) : undefined}
+        disabled={!songId}
+        accessibilityRole={songId ? 'link' : undefined}
+        accessibilityLabel={
+          songId ? `Open song history for ${title}` : undefined
+        }
+        testID={songId ? 'predicted-setlist-row-tap' : undefined}
+        style={({ pressed }) => [
+          styles.body,
+          songId && pressed ? { opacity: 0.7 } : null,
+        ]}
+      >
         <View style={styles.titleRow}>
           <Text
             style={[styles.title, { color: colors.ink }]}
@@ -85,7 +107,7 @@ export function PredictedSetlistRow({
             {evidence}
           </Text>
         ) : null}
-      </View>
+      </Pressable>
     </View>
   );
 }

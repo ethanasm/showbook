@@ -45,7 +45,13 @@ Thumbs.db
 .nx/
 
 # SSL certs — local-only, never committed.
+# `certs/` is the legacy pre-`infra/` location; keep it in the ignore
+# set so a habit-`mkcert -key-file certs/...` can't accidentally
+# commit a private key after the move. `scripts/migrate-local-certs.mjs`
+# walks any existing files into `infra/certs/` on the next `pnpm dev:up`.
 certs/
+infra/certs/*
+!infra/certs/README.md
 apps/web/certificates/
 # Defense-in-depth catch-all for stray TLS material anywhere in the tree.
 **/*.pem
