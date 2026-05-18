@@ -148,9 +148,6 @@ export function describeSignInError(err: unknown): string {
       default:
         if (err.message.startsWith('api_unreachable:')) {
           const detail = err.message.slice('api_unreachable:'.length);
-          if (/network request failed/i.test(detail)) {
-            return 'Showbook is not reachable. Native fetch failed: Network request failed. If the web app is running, trust the mkcert root CA in the iOS simulator.';
-          }
           return `Showbook is not reachable. Native fetch failed: ${detail}`;
         }
         if (err.message === 'server_error_500') {
