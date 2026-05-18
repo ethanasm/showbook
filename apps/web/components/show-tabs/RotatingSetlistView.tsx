@@ -8,7 +8,7 @@
  * server-side calibration release-gate passes.
  *
  * Top to bottom (matches the rotating-style spec in
- * specs/setlist-intelligence/ui-spec.md §4.1):
+ * docs/specs/setlist-intelligence/ui-spec.md §4.1):
  *
  *   - Confidence banner (same shell as stable; label "ROTATING")
  *   - MultiNightContextBanner (when same-venue consecutive run detected)

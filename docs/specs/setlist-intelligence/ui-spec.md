@@ -23,7 +23,7 @@
 > - §1 — Design system grounding → the new Marquee Gold +
 >   Space Grotesk + IBM Plex Mono token set replaces the
 >   Geist / Georgia / cream-on-near-black palette here. See
->   [`/design/show-page-tabs/hifi/sb-tokens.jsx`](../../design/show-page-tabs/hifi/sb-tokens.jsx).
+>   [`/docs/design/show-page-tabs/hifi/sb-tokens.jsx`](../../design/show-page-tabs/hifi/sb-tokens.jsx).
 > - §2 — Component table → additive; the listed components still
 >   ship but inside the new 4-tab system, not a `SegmentedControl`.
 > - §6 — Mobile/iPad/web variants → the responsive strategy in the

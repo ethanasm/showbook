@@ -50,7 +50,7 @@ post-M5 audit that hadn't been addressed at audit time) live in
 
 ## Why this supersedes the old T31 / T32 tasks
 
-`specs/TASKS.md` had two tasks for mobile:
+`docs/specs/TASKS.md` had two tasks for mobile:
 
 - T31 — Expo scaffold (depends on T14, T30): tab bar, OAuth, tRPC client, Home / Shows / Add (form only)
 - T32 — Offline caching (depends on T31): expo-sqlite, foreground sync, offline Add blocker

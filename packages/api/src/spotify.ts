@@ -8,7 +8,7 @@ const TOKEN_URL = 'https://accounts.spotify.com/api/token';
 /**
  * The complete set of scopes the setlist-intelligence feature needs,
  * batched into a single OAuth dialog so the user only consents once
- * (per `specs/setlist-intelligence/implementation.md` §2).
+ * (per `docs/specs/setlist-intelligence/implementation.md` §2).
  *
  *   user-follow-read           — Spotify-follow rail · Spotify artist import
  *   playlist-modify-private    — Hype + post-show + year-end playlists

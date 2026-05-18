@@ -2,7 +2,7 @@
  * Phase 6 unit suite — improvised-style prediction model.
  *
  * Worked example is King Gizzard & The Lizard Wizard
- * (`specs/setlist-intelligence/worked-examples.md` §4): the
+ * (`docs/specs/setlist-intelligence/worked-examples.md` §4): the
  * band shifts between Regular (~11 songs) and Marathon (~26 songs)
  * shows, with occasional Microtonal nights drawing from K.G. / L.W.
  * material. The model refuses to predict song-by-song; instead it

@@ -16,8 +16,8 @@
  * The classifier is pure — no DB access — so it composes the same way
  * inside the prediction-eval back-test and the nightly refresh cron.
  *
- * Spec: specs/setlist-intelligence/feature-plan.md §15b,
- *       specs/setlist-intelligence/phases/phase-05-style-classifier-rotating.md
+ * Spec: docs/specs/setlist-intelligence/feature-plan.md §15b,
+ *       docs/specs/setlist-intelligence/phases/phase-05-style-classifier-rotating.md
  */
 
 import type { PerformerSetlist } from '@showbook/shared';

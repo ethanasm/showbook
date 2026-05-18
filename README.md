@@ -5,7 +5,7 @@ Personal tracker for live shows — concerts, theatre, comedy, and festivals. Pr
 ## Tech Stack
 
 - **Web:** Next.js 15 (App Router) — see [`apps/web/CLAUDE.md`](apps/web/CLAUDE.md)
-- **Mobile:** Expo SDK 55 + Expo Router (React Native) — feature-complete; see [`apps/mobile/CLAUDE.md`](apps/mobile/CLAUDE.md) and [`specs/mobile-roadmap.md`](specs/mobile-roadmap.md)
+- **Mobile:** Expo SDK 55 + Expo Router (React Native) — feature-complete; see [`apps/mobile/CLAUDE.md`](apps/mobile/CLAUDE.md) and [`docs/specs/mobile-roadmap.md`](docs/specs/mobile-roadmap.md)
 - **Language:** TypeScript
 - **Database:** PostgreSQL + Drizzle ORM
 - **API:** tRPC
@@ -68,7 +68,7 @@ pnpm prod:down            # stop
 Operator runbook — self-hosted runner / continuous deployment, querying
 the prod DB from another machine via `/api/admin/sql`, and the dev/prod
 port + volume layout — lives in
-[`specs/operations.md`](specs/operations.md).
+[`docs/specs/operations.md`](docs/specs/operations.md).
 
 ## Environment Variables
 
@@ -81,7 +81,7 @@ defaults and inline notes. The required groups are:
 - **Email (Resend)** — `RESEND_API_KEY`, `EMAIL_FROM` (unset → digest job logs and skips delivery)
 - **Health-check cron (optional)** — `AXIOM_QUERY_TOKEN` (Axiom Personal Access Token with Query capability on `showbook-prod`; unset → axiom-backed checks report "unknown" instead of "ok"). The morning summary email is sent to every address in `ADMIN_EMAILS` (the same allowlist that gates the in-app Admin tab); empty/unset → cron still runs and logs to Axiom but no email is sent. Both are optional in dev — the cron no-ops the relevant pieces gracefully.
 - **Observability (optional)** — Langfuse and Axiom keys
-- **Per-user guardrails (optional overrides)** — `SHOWBOOK_LLM_CALLS_PER_DAY` (default 50), `SHOWBOOK_BULK_SCAN_PER_HOUR` (default 5), `SHOWBOOK_BULK_SCAN_MESSAGE_CAP` (default 200). See [`GUARDRAILS.md`](./GUARDRAILS.md) for the full list.
+- **Per-user guardrails (optional overrides)** — `SHOWBOOK_LLM_CALLS_PER_DAY` (default 50), `SHOWBOOK_BULK_SCAN_PER_HOUR` (default 5), `SHOWBOOK_BULK_SCAN_MESSAGE_CAP` (default 200). See [`docs/GUARDRAILS.md`](./docs/GUARDRAILS.md) for the full list.
 
 ## Project Structure
 
@@ -99,8 +99,11 @@ showbook/
 │   ├── observability/        # pino logger + Langfuse LLM-trace wrapper
 │   └── shared/               # Types, constants, utils
 ├── scripts/                  # verify.sh and other workspace scripts
-├── specs/           # Project specifications (see operations.md for runbook)
-├── design/                   # Hi-fi prototypes
+├── docs/                     # Project docs
+│   ├── specs/                #   Project specifications (see operations.md for runbook)
+│   ├── design/               #   Hi-fi prototypes
+│   ├── GUARDRAILS.md         #   Operational guardrails
+│   └── SECURITY.md           #   Security policy
 ├── docker-compose.yml
 └── nx.json
 ```
@@ -149,7 +152,7 @@ pnpm dev:db:studio      # Open Drizzle Studio
 ## CI workflows
 
 - [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — runs `pnpm verify:coverage` on every push and PR to `main`; merges are blocked below the 80% line/branch/function threshold (web scope + `apps/mobile/lib/**` scoped independently).
-- [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) — redeploys the prod box on a green `main` via a self-hosted runner. Setup in [`operations.md`](specs/operations.md).
+- [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) — redeploys the prod box on a green `main` via a self-hosted runner. Setup in [`operations.md`](docs/specs/operations.md).
 - [`.github/workflows/mobile-e2e.yml`](.github/workflows/mobile-e2e.yml) — Android Maestro smoke layer on `apps/mobile/**` changes (label-gated on PRs, scheduled on `main`).
 
 ## Email Notifications
@@ -193,14 +196,14 @@ simulator pointed at the local web stack with the dev cert, or to a
 LAN/tunnel URL for a physical device. Google sign-in requires the development client or a
 signed native build; Expo Go uses an `exp://...` redirect URI that
 Google rejects. Build / submit / push-notification follow-ups live in
-[`specs/mobile-deployment.md`](specs/mobile-deployment.md)
-and [`specs/planned-improvements.md`](./specs/planned-improvements.md).
+[`docs/specs/mobile-deployment.md`](docs/specs/mobile-deployment.md)
+and [`docs/specs/planned-improvements.md`](./docs/specs/planned-improvements.md).
 
 ## Security
 
-Found a vulnerability? Please report it privately — see [`SECURITY.md`](./SECURITY.md).
+Found a vulnerability? Please report it privately — see [`docs/SECURITY.md`](./docs/SECURITY.md).
 
-For the operational guardrails (rate limits, per-user LLM caps, auth allowlist, test-route gating), see [`GUARDRAILS.md`](./GUARDRAILS.md).
+For the operational guardrails (rate limits, per-user LLM caps, auth allowlist, test-route gating), see [`docs/GUARDRAILS.md`](./docs/GUARDRAILS.md).
 
 ## License
 

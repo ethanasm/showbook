@@ -11,7 +11,7 @@
  * Pure — accepts the corpus rows the caller already loaded and a
  * resolved venue match. No DB access.
  *
- * Spec: specs/setlist-intelligence/phases/phase-05-style-classifier-rotating.md
+ * Spec: docs/specs/setlist-intelligence/phases/phase-05-style-classifier-rotating.md
  */
 
 import type { PerformerSetlist } from '@showbook/shared';

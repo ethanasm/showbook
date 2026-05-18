@@ -68,7 +68,7 @@ playlists.
    drawer, the iPad three-pane landscape layout, Maestro Cloud E2E
    flows (`apps/mobile/e2e/flows/`), and the 80%-coverage gate scoped
    to `apps/mobile/lib/**`. Stack reference and per-milestone status
-   live in [`specs/mobile-roadmap.md`](specs/mobile-roadmap.md).)*
+   live in [`docs/specs/mobile-roadmap.md`](docs/specs/mobile-roadmap.md).)*
 
 ### Code Audit (rounds 1 + 2)
 1. ~~**Round-1 audit fixes.**~~ *(Done — broad audit identified ~150 findings across the api, web, jobs/scrapers, and db packages. Top eight shipped on `claude/analyze-showbook-codebase-HQrEp`: setlist enrichment now keys off the canonical `setlists` jsonb (not the legacy `setlist text[]`) and dedupes against the existing queue, so nightly no longer re-queues every past concert; `performers.rename` now requires the user to own a show with the performer or follow them; Gmail OAuth callback no longer interpolates Google's response into HTML; `AbortSignal.timeout` added to all 8 external `fetch()` calls (TM, Gmail, setlist.fm, Google Places, Nominatim, robots.txt, OAuth, venue-photo proxy); `console.*` replaced with the structured pino logger in both backfill scripts and the Gmail scan handler; migration `0017` adds 10 indexes on hot lookup columns (announcements headliner/show_date/venue+date, user_regions user+active, venues tm/google/name+city, performers tm/mbid/name); transactions now wrap `discover.watchlist`, `performers.delete`, the setlist-retry update + queue-delete, and the media completeUpload failure path; daily digest collapses N×2 per-show queries into 2 total via `getHeadlinersForShows(showIds)` with `inArray`.)*

@@ -61,7 +61,7 @@ infra pass can pick it up alongside `cloudflare-tunnel-setup.md`.
 
 `packages/api/src/rate-limit.ts` keeps buckets in an in-memory `Map`. Any
 container restart (deploy, crash, OOM) zeroes every quota, including the
-LLM/day budget. `GUARDRAILS.md` already calls this out. With a single
+LLM/day budget. `docs/GUARDRAILS.md` already calls this out. With a single
 container this is acceptable; if we ever scale horizontally or care about
 strict daily caps across deploys, move buckets to Postgres or Redis.
 
@@ -74,4 +74,4 @@ strict daily caps across deploys, move buckets to Postgres or Redis.
 | L1 | LOW | Fixed (encoded path ids in `ticketmaster.ts`, tests added) |
 | L2 | LOW | Fixed (dropped redundant `console.error`) |
 | L3 | LOW | Operational; documented above for follow-up |
-| L4 | LOW | Accepted; pre-existing documentation in `GUARDRAILS.md` |
+| L4 | LOW | Accepted; pre-existing documentation in `docs/GUARDRAILS.md` |
