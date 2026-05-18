@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import "./map.css";
+import "@/components/design-system/segmented-filter.css";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -292,12 +293,12 @@ function FilterBar({
         </div>
       </div>
 
-      <div className="map-filterbar__years">
+      <div className="segmented-filter">
         {years.map((y) => (
           <button
             key={y}
-            className={`map-filterbar__year-btn ${
-              y === year ? "map-filterbar__year-btn--active" : ""
+            className={`segmented-filter__btn ${
+              y === year ? "segmented-filter__btn--active" : ""
             }`}
             onClick={() => setYear(y)}
             type="button"
@@ -307,7 +308,7 @@ function FilterBar({
         ))}
       </div>
 
-      <div className="map-filterbar__kinds">
+      <div className="segmented-filter">
         {KINDS.map(({ k, label }) => {
           const active = k === kind;
           const KindIcon = k !== "all" ? KIND_ICONS[k] : null;
@@ -315,13 +316,13 @@ function FilterBar({
           if (active) {
             activeClass =
               k === "all"
-                ? "map-filterbar__kind-btn--active-all"
-                : `map-filterbar__kind-btn--active-${k}`;
+                ? "segmented-filter__btn--active"
+                : `segmented-filter__btn--active-${k}`;
           }
           return (
             <button
               key={k}
-              className={`map-filterbar__kind-btn ${activeClass}`}
+              className={`segmented-filter__btn segmented-filter__btn--kind ${activeClass}`}
               onClick={() => setKind(k)}
               type="button"
             >
@@ -676,14 +677,14 @@ export default function MapView() {
   const searchParams = useSearchParams();
   const deepLinkVenueId = searchParams.get("venue");
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(deepLinkVenueId);
-  const [yearFilter, setYearFilter] = useState("All-time");
+  const [yearFilter, setYearFilter] = useState("All time");
   const [kindFilter, setKindFilter] = useState("all");
   const [activeView, setActiveView] = useState<number | null>(null);
 
   const { data: shows, isLoading } = trpc.shows.listForMap.useQuery();
 
   const yearOptions = useMemo(() => {
-    if (!shows) return ["All-time"];
+    if (!shows) return ["All time"];
     const yearSet = new Set<number>();
     for (const show of shows) {
       if (show.date) {
@@ -691,7 +692,7 @@ export default function MapView() {
       }
     }
     const sorted = Array.from(yearSet).sort((a, b) => b - a);
-    return ["All-time", ...sorted.map(String)];
+    return ["All time", ...sorted.map(String)];
   }, [shows]);
 
   // Build venue groups from shows
@@ -749,7 +750,7 @@ export default function MapView() {
         let filtered = venue.shows;
 
         // Year filter
-        if (yearFilter !== "All-time") {
+        if (yearFilter !== "All time") {
           const yr = parseInt(yearFilter);
           filtered = filtered.filter((s) => {
             const showYear = new Date(s.date + "T00:00:00").getFullYear();
