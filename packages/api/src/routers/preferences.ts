@@ -184,6 +184,27 @@ export const preferencesRouter = router({
       return preferences;
     }),
 
+  /**
+   * Idempotent consent ack for the Gmail → Groq scan flow. The UI
+   * gates the scan on a non-null `acceptedGmailScanAt`; first scan
+   * shows a disclosure modal that fires this mutation on accept.
+   * Subsequent scans skip the modal because the column is already
+   * set. Repeat calls just refresh the timestamp.
+   */
+  acceptGmailScan: protectedProcedure.mutation(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const now = new Date();
+    const [preferences] = await ctx.db
+      .insert(userPreferences)
+      .values({ userId, acceptedGmailScanAt: now })
+      .onConflictDoUpdate({
+        target: userPreferences.userId,
+        set: { acceptedGmailScanAt: now },
+      })
+      .returning();
+    return preferences;
+  }),
+
   addRegion: protectedProcedure
     .input(addRegionSchema)
     .mutation(async ({ ctx, input }) => {

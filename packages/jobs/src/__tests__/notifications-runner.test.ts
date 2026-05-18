@@ -73,18 +73,28 @@ mock.module('@showbook/db', {
 // it transitively via ../health-check), so DI is the only reliable path.
 const resendMock: {
   calls: unknown[];
+  optionsCalls: Array<{ idempotencyKey?: string } | null>;
   response: {
     data: { id: string } | null;
     error: { name: string; message: string } | null;
   };
 } = {
   calls: [],
+  optionsCalls: [],
   response: { data: { id: 'email-1' }, error: null },
 };
 const fakeResend = {
   emails: {
-    send: async (payload: unknown) => {
+    // Resend's SDK exposes `send(payload, options?)`; the options object
+    // is where the idempotencyKey lives (cross-request dedup over a
+    // 24 h window). The runner used to mis-place it as a header field,
+    // which Resend ignored — covered by the assertion at line ~178.
+    send: async (
+      payload: unknown,
+      options?: { idempotencyKey?: string },
+    ) => {
       resendMock.calls.push(payload);
+      resendMock.optionsCalls.push(options ?? null);
       return resendMock.response;
     },
   },
@@ -93,6 +103,9 @@ const fakeResend = {
 mock.module('@showbook/api', {
   namedExports: {
     generateDigestPreamble: async () => 'Welcome back.',
+    // Deterministic HMAC-shaped token for assertions; the real
+    // signer is unit-tested in `packages/api/src/__tests__/unsubscribe-token.test.ts`.
+    signUnsubscribeToken: (userId: string) => `${userId}.test-hmac`,
   },
 });
 
@@ -105,11 +118,16 @@ mock.module('@showbook/emails', {
 let runDailyDigest: typeof import('../notifications').runDailyDigest;
 
 before(async () => {
+  // signUnsubscribeToken (called per-user inside the digest loop) requires
+  // AUTH_SECRET; set a fixed value so the HMAC is deterministic across
+  // the suite and the per-user try/catch doesn't silently skip everyone.
+  process.env.AUTH_SECRET ??= 'test-auth-secret-for-notifications-runner';
   ({ runDailyDigest } = await import('../notifications'));
 });
 
 beforeEach(() => {
   resendMock.calls = [];
+  resendMock.optionsCalls = [];
   resendMock.response = { data: { id: 'email-1' }, error: null };
   delete process.env.RESEND_API_KEY;
 });
@@ -167,6 +185,16 @@ describe('runDailyDigest', () => {
     assert.equal(result.sent, 1);
     assert.equal(SCRIPT.updateCalls, 1);
     assert.equal(resendMock.calls.length, 1);
+    // Locks in the Week-3+4 idempotency fix: the per-user key must
+    // land in the second-arg options object, not in the payload's
+    // `headers` field (which Resend ignores). A regression here
+    // would re-introduce double-sends on pg-boss retry.
+    assert.equal(resendMock.optionsCalls.length, 1);
+    assert.equal(
+      typeof resendMock.optionsCalls[0]?.idempotencyKey,
+      'string',
+      'idempotencyKey must be passed as the second-arg option, not a header',
+    );
     void todayStr;
   });
 

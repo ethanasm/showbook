@@ -18,6 +18,7 @@ import { renderDailyDigest } from '@showbook/emails';
 import {
   generateDigestPreamble,
   predictedSetlistCached,
+  signUnsubscribeToken,
 } from '@showbook/api';
 import { child } from '@showbook/observability';
 import {
@@ -27,10 +28,43 @@ import {
 
 const log = child({ component: 'notifications' });
 
+// Placeholder value — every prod deploy MUST override via EMAIL_FROM.
+// CAN-SPAM requires a valid sender address; shipping with this default
+// would put the digest in spam folders and trigger ESP rate-limits.
 const DEFAULT_FROM_ADDRESS = 'Showbook <digest@example.com>';
 
+// Regex anchored on `@example.com` followed by a word boundary or end-
+// of-address. Matches the placeholder forms (`digest@example.com`,
+// `Showbook <digest@example.com>`) without false-positiving on
+// otherwise-legitimate hostnames that happen to contain the string
+// "example.com" as a substring (CodeQL js/incomplete-url-substring-sanitization).
+const PLACEHOLDER_SENDER_RE = /@example\.com\b/i;
+
 function getFromAddress(): string {
-  return process.env.EMAIL_FROM ?? DEFAULT_FROM_ADDRESS;
+  const candidate = process.env.EMAIL_FROM ?? DEFAULT_FROM_ADDRESS;
+  // Fail loudly if a prod deploy was misconfigured with the placeholder.
+  // Dev / test (NODE_ENV !== 'production') keeps the placeholder so
+  // `pnpm email:smoke` and unit tests don't need the env var set.
+  if (
+    process.env.NODE_ENV === 'production' &&
+    PLACEHOLDER_SENDER_RE.test(candidate)
+  ) {
+    throw new Error(
+      'EMAIL_FROM is unset (or still points at example.com) — refusing to send daily digest with a non-routable sender. Set EMAIL_FROM in .env.prod (e.g. "Showbook <digest@showbook.app>").',
+    );
+  }
+  return candidate;
+}
+
+function getPhysicalAddress(): string {
+  // CAN-SPAM §7 requires a valid physical postal address in every
+  // commercial-shaped email (the digest qualifies). The default is
+  // deliberately obvious-looking so a misconfigured prod boot is
+  // caught in the first test send.
+  return (
+    process.env.EMAIL_PHYSICAL_ADDRESS ??
+    '123 Example St, City, State 00000 — set EMAIL_PHYSICAL_ADDRESS in .env.prod'
+  );
 }
 const FALLBACK_CUTOFF_DAYS = 7;
 const ANNOUNCEMENT_CAP = 50;
@@ -45,13 +79,16 @@ const ANNOUNCEMENT_CAP = 50;
  */
 export interface ResendDigestClient {
   emails: {
-    send(payload: {
-      from: string;
-      to: string;
-      subject: string;
-      html: string;
-      headers?: Record<string, string>;
-    }): Promise<{
+    send(
+      payload: {
+        from: string;
+        to: string;
+        subject: string;
+        html: string;
+        headers?: Record<string, string>;
+      },
+      options?: { idempotencyKey?: string },
+    ): Promise<{
       data: { id: string } | null;
       error: { name?: string; message: string } | null;
     }>;
@@ -549,6 +586,13 @@ export async function runDailyDigest(
         );
       }
 
+      // Pre-mint the signed token so both the in-body unsubscribe
+      // link and the List-Unsubscribe header point at the same URL.
+      // Token is an HMAC over userId (see packages/api/src/unsubscribe-token.ts).
+      const unsubscribeToken = signUnsubscribeToken(user.userId);
+      const unsubscribeUrl = `${appUrl}/api/unsubscribe?t=${encodeURIComponent(unsubscribeToken)}`;
+      const physicalAddress = getPhysicalAddress();
+
       const html = await renderDailyDigest({
         displayName,
         todayShows,
@@ -557,6 +601,8 @@ export async function runDailyDigest(
         preamble,
         appUrl,
         noRegionNudge: activeRegionRows.length === 0,
+        unsubscribeUrl,
+        physicalAddress,
       });
 
       const subject =
@@ -591,13 +637,30 @@ export async function runDailyDigest(
       // via `result.error`, not by throwing. Without this guard we'd count
       // rejects as sent, update lastDigestSentAt, and the per-user
       // idempotency check above would then block tomorrow's send too.
-      const sendResult = await resend.emails.send({
-        from: getFromAddress(),
-        to: user.email,
-        subject,
-        html,
-        headers: { 'X-Entity-Ref-ID': idempotencyKey },
-      });
+      //
+      // `idempotencyKey` is the second-arg option that Resend honours
+      // for cross-request dedup (the prior `X-Entity-Ref-ID` header
+      // was ignored — see `packages/jobs/src/health-check.ts:261` for
+      // the same pattern). With it placed correctly, Resend dedupes
+      // within a 24 h window even if pg-boss retries the digest job.
+      //
+      // List-Unsubscribe + List-Unsubscribe-Post is CAN-SPAM and
+      // RFC 8058 one-click: Gmail / Apple Mail / Outlook surface the
+      // "Unsubscribe" chip above the email body and POST the URL on
+      // tap. See `apps/web/app/api/unsubscribe/route.ts`.
+      const sendResult = await resend.emails.send(
+        {
+          from: getFromAddress(),
+          to: user.email,
+          subject,
+          html,
+          headers: {
+            'List-Unsubscribe': `<mailto:unsubscribe@${(getFromAddress().match(/@([^>]+)/) ?? [, 'showbook.app'])[1]}?subject=unsubscribe>, <${unsubscribeUrl}>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          },
+        },
+        { idempotencyKey },
+      );
 
       if (sendResult.error) {
         log.error(

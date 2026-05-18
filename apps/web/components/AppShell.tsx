@@ -5,6 +5,7 @@ import { Sidebar, NAV_ITEMS, BOTTOM_NAV_ITEMS } from "@/components/design-system
 import { ThemeProvider } from "@/components/design-system/ThemeProvider";
 import { PrefsServerSync } from "@/components/PrefsServerSync";
 import { GlobalSearch, openGlobalSearch } from "@/components/GlobalSearch";
+import { SiteFooter } from "@/components/SiteFooter";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "next-auth/react";
 import { isFeatureOn } from "@showbook/shared";
@@ -88,6 +89,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className="app-shell__content">
           <GlobalSearch />
           {children}
+          {/* SiteFooter hides on mobile (bottom nav fills its role) via
+              the `.app-shell .site-footer` rule in globals.css. */}
+          <SiteFooter />
         </main>
         <nav className="app-shell__bottom-bar">
           {BOTTOM_NAV_ITEMS.map((item) => {

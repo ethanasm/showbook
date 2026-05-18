@@ -156,6 +156,20 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
   // Gated OAuth: for gmail/eventbrite the consent disclaimer renders
   // first; the popup only opens once the user explicitly continues.
   const [oauthConsentStarted, setOauthConsentStarted] = useState(false);
+  // Groq disclosure gate (GDPR Art. 6 / Art. 28). The first time a
+  // user runs a Gmail scan we hold the OAuth access token in state
+  // and surface a disclosure modal explaining that email content
+  // will be sent to Groq. The modal's Accept button calls
+  // `preferences.acceptGmailScan` which sets the timestamp; we then
+  // proceed with the held token. On subsequent scans the timestamp
+  // is non-null and the modal is skipped.
+  const [pendingGmailToken, setPendingGmailToken] = useState<string | null>(
+    null,
+  );
+  const prefsQuery = trpc.preferences.get.useQuery(undefined, {
+    staleTime: 60_000,
+  });
+  const acceptGmailScanMutation = trpc.preferences.acceptGmailScan.useMutation();
   const [gmailBulkLoading, setGmailBulkLoading] = useState(false);
   const [gmailBulkResults, setGmailBulkResults] = useState<BulkResult[]>([]);
   const [gmailBulkSelected, setGmailBulkSelected] = useState<Set<number>>(new Set());
@@ -480,7 +494,14 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
         window.removeEventListener("message", handler);
         if (source === "gmail") {
           setGmailAccessToken(e.data.accessToken);
-          startGmailScan(e.data.accessToken);
+          // GDPR consent gate. If the user hasn't accepted the
+          // Groq-AI disclosure, hold the token in state and let
+          // the modal handle it; otherwise scan immediately.
+          if (prefsQuery.data?.preferences?.acceptedGmailScanAt) {
+            startGmailScan(e.data.accessToken);
+          } else {
+            setPendingGmailToken(e.data.accessToken);
+          }
         } else {
           setEventbriteAccessToken(e.data.accessToken);
           startEventbriteScan(e.data.accessToken);
@@ -501,7 +522,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
         }
       }, 500);
     }
-  }, [startGmailScan, startEventbriteScan]);
+  }, [startGmailScan, startEventbriteScan, prefsQuery.data?.preferences?.acceptedGmailScanAt]);
 
   // Back-compat: ?gmail=1 still opens Gmail. New: ?import=gmail|setlistfm|eventbrite.
   useEffect(() => {
@@ -1851,6 +1872,168 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
         </div>
       )}
 
+      {pendingGmailToken ? (
+        <GmailConsentModal
+          submitting={acceptGmailScanMutation.isPending}
+          onCancel={() => setPendingGmailToken(null)}
+          onAccept={async () => {
+            try {
+              await acceptGmailScanMutation.mutateAsync();
+              await utils.preferences.get.invalidate();
+              const tok = pendingGmailToken;
+              setPendingGmailToken(null);
+              if (tok) startGmailScan(tok);
+            } catch {
+              // The mutation surfaces its own toast via the global
+              // tRPC error wrapper; just keep the modal up so the
+              // user can retry without losing the held token.
+            }
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * One-time consent modal for the Gmail → Groq scan flow. Mirrors the
+ * `DeleteAccountModal` pattern in `apps/web/app/(app)/preferences/View.client.tsx`:
+ * hand-rolled fixed-position overlay, `role="dialog"`, click-outside
+ * to dismiss. Kept inline because it's only mounted from this file;
+ * if a second caller appears, extract to a shared primitive.
+ */
+function GmailConsentModal({
+  submitting,
+  onAccept,
+  onCancel,
+}: {
+  submitting: boolean;
+  onAccept: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="gmail-consent-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 100,
+        display: "grid",
+        placeItems: "center",
+        background: "rgba(0, 0, 0, 0.6)",
+        padding: 16,
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 460,
+          background: "var(--surface)",
+          border: "1px solid var(--rule-strong)",
+          borderRadius: 12,
+          padding: 24,
+          display: "grid",
+          gap: 16,
+        }}
+      >
+        <div style={{ display: "grid", gap: 6 }}>
+          <h2
+            id="gmail-consent-title"
+            style={{
+              margin: 0,
+              fontFamily: "var(--font-display)",
+              fontSize: 20,
+              fontWeight: 700,
+              color: "var(--ink)",
+            }}
+          >
+            Before we scan your email
+          </h2>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 13,
+              lineHeight: 1.5,
+              color: "var(--muted)",
+            }}
+          >
+            Showbook will send the matched email subject + body (first
+            8&nbsp;KB) to <strong style={{ color: "var(--ink)" }}>Groq</strong>, a
+            third-party AI provider, to extract ticket details. We
+            don&apos;t store the raw email content — only the
+            structured result. By accepting, you consent to this
+            processing under our{" "}
+            <a
+              href="/privacy"
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                color: "var(--accent)",
+                textDecoration: "underline",
+              }}
+            >
+              privacy policy
+            </a>
+            . You can change your mind anytime by disconnecting Gmail
+            and not running another scan.
+          </p>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            justifyContent: "flex-end",
+            marginTop: 4,
+          }}
+        >
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={submitting}
+            style={{
+              fontFamily: "var(--font-geist-mono)",
+              fontSize: 10.5,
+              fontWeight: 500,
+              color: "var(--ink)",
+              background: "transparent",
+              border: "1px solid var(--rule-strong)",
+              borderRadius: 0,
+              padding: "6px 12px",
+              cursor: submitting ? "not-allowed" : "pointer",
+              letterSpacing: ".06em",
+              textTransform: "uppercase",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onAccept}
+            disabled={submitting}
+            style={{
+              fontFamily: "var(--font-geist-mono)",
+              fontSize: 10.5,
+              fontWeight: 600,
+              color: "var(--accent-text)",
+              background: "var(--accent)",
+              border: "1px solid var(--accent)",
+              borderRadius: 0,
+              padding: "6px 12px",
+              cursor: submitting ? "not-allowed" : "pointer",
+              letterSpacing: ".06em",
+              textTransform: "uppercase",
+              opacity: submitting ? 0.6 : 1,
+            }}
+          >
+            {submitting ? "Saving…" : "Accept and scan"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

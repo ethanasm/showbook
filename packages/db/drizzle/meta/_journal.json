@@ -337,6 +337,13 @@
       "when": 1795968060000,
       "tag": "0047_collapse_misclassified_festivals",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1795968120000,
+      "tag": "0048_user_preferences_accepted_gmail_scan",
+      "breakpoints": true
     }
   ]
 }
