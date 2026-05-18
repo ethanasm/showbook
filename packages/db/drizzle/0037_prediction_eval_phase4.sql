@@ -1,5 +1,5 @@
 -- Phase 4 of setlist-intelligence — eval harness persistence.
--- See specs/setlist-intelligence/phases/phase-04-eval-harness.md.
+-- See docs/specs/setlist-intelligence/phases/phase-04-eval-harness.md.
 --
 -- Extends `prediction_eval_runs` with the rotating-style gate metric
 -- `recall_top15` (SI-14). The Phase-0 schema shipped `recall_top10`;

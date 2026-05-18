@@ -1,5 +1,5 @@
 -- Phase 11 of setlist-intelligence — polish (§15 shortlist items 4-10).
--- See specs/setlist-intelligence/phases/phase-11-polish.md.
+-- See docs/specs/setlist-intelligence/phases/phase-11-polish.md.
 --
 -- Adds:
 --   albums                  — canonical release-date catalog populated by

@@ -15,8 +15,8 @@
  *
  * Pure — accepts a loaded corpus + optional multi-night-run context.
  *
- * Spec: specs/setlist-intelligence/feature-plan.md §15c-§15e,
- *       specs/setlist-intelligence/phases/phase-05-style-classifier-rotating.md
+ * Spec: docs/specs/setlist-intelligence/feature-plan.md §15c-§15e,
+ *       docs/specs/setlist-intelligence/phases/phase-05-style-classifier-rotating.md
  */
 
 import type { PerformerSetlist } from '@showbook/shared';

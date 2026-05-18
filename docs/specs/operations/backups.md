@@ -76,7 +76,7 @@ the dump as compromised and re-run from the most recent durable copy.
 2. Confirm a dump landed in `/var/backups/showbook/` and the remote
    target last night.
 3. Run the restore drill above against the most recent dump.
-4. Record completion in `specs/operations/backup-log.md` (one line:
+4. Record completion in `docs/specs/operations/backup-log.md` (one line:
    date + tester + outcome).
 
 ## What's intentionally not done

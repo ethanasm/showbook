@@ -1,7 +1,7 @@
 /**
  * Home tab — M2.B real implementation.
  *
- * Composition (per `specs/mobile-cloud-claude-prompts.md` C-1):
+ * Composition (per `docs/specs/mobile-cloud-claude-prompts.md` C-1):
  *   - NOW PLAYING — a single ticketed show whose `date` is today
  *   - UPCOMING — next 3 ticketed shows after today
  *   - RECENTLY ADDED — last 3 past shows by date

@@ -2,7 +2,7 @@
 /**
  * Nightly Postgres dump for the prod Showbook database.
  *
- * Operator cron, not pg-boss — see `specs/operations/backups.md` for
+ * Operator cron, not pg-boss — see `docs/specs/operations/backups.md` for
  * why. Exit codes:
  *   0 — dump landed, prune succeeded (rclone optional)
  *   1 — pg_dump failed (no dump written)

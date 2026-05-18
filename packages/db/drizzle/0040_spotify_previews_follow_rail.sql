@@ -1,5 +1,5 @@
 -- Phase 9 of setlist-intelligence — 30s previews + Spotify-follow rail.
--- See specs/setlist-intelligence/phases/phase-09-follow-rail-previews.md.
+-- See docs/specs/setlist-intelligence/phases/phase-09-follow-rail-previews.md.
 --
 -- New column:
 --   songs.spotify_preview_url — cached 30-second preview clip URL we

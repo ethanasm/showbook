@@ -6,7 +6,7 @@
  *
  * The tab order is fixed across pre/post show so muscle memory survives
  * the lifecycle transition — only the badge content changes. See
- * `showbook-specs/setlist-intelligence/show-page-redesign-2026-05-16.md`
+ * `docs/specs/setlist-intelligence/show-page-redesign-2026-05-16.md`
  * for the canonical contract.
  */
 

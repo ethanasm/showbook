@@ -777,7 +777,7 @@ export default function MapView() {
     ).length;
   }, [shows]);
 
-  // Coordinate backfill is admin-only (see GUARDRAILS.md "Admin-only mutations").
+  // Coordinate backfill is admin-only (see docs/GUARDRAILS.md "Admin-only mutations").
   // Non-admins still see the count of unmapped venues elsewhere; only the
   // operator sees / can trigger the action button.
   const amIAdmin = trpc.admin.amIAdmin.useQuery(undefined, { staleTime: 5 * 60_000 });

@@ -1,7 +1,7 @@
 /**
  * Component-level test for the Phase 5 rotating-style display variant.
  * Mirrors the Phish worked example from
- * `specs/setlist-intelligence/worked-examples.md` §2 — gap
+ * `docs/specs/setlist-intelligence/worked-examples.md` §2 — gap
  * chart rows + position pools + multi-night banner all render against
  * a synthetic prediction payload.
  */

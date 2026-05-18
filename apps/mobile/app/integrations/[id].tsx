@@ -2,7 +2,7 @@
  * Integration manage stub — pushed from the Me tab integration rows.
  *
  * Connecting Gmail, Ticketmaster, or Google Places end-to-end on mobile is
- * a follow-up tracked in `specs/planned-improvements.md`. For now
+ * a follow-up tracked in `docs/specs/planned-improvements.md`. For now
  * this screen renders an EmptyState so the row tap has somewhere to go.
  */
 

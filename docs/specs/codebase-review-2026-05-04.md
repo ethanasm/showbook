@@ -43,7 +43,7 @@ CLAUDE.md guidance is mostly accurate; one note ("the pino err serializer curren
 
 **What was scanned but not deep-read:** the four 1k+ LOC UI files (`add/page.tsx`, `ShowsListView.tsx`, `discover/View.client.tsx`, `shows/[id]/page.tsx`), the remaining tRPC routers, the remaining 8 pg-boss handlers, schema-ts files for tables other than announcements.
 
-**What was not reviewed:** `design/` (per CLAUDE.md — reference-only); generated Drizzle migrations under `packages/db/drizzle/*.sql`; Playwright-bound scrapers in `packages/scrapers/{run,runtime,extract,cli}.ts`; the test-only `/api/test/*` routes; the lockfile.
+**What was not reviewed:** `docs/design/` (per CLAUDE.md — reference-only); generated Drizzle migrations under `packages/db/drizzle/*.sql`; Playwright-bound scrapers in `packages/scrapers/{run,runtime,extract,cli}.ts`; the test-only `/api/test/*` routes; the lockfile.
 
 **Verification commands run** (all read-only):
 
@@ -509,7 +509,7 @@ Concentrated in four files (**P2-10**), all UI. The package boundaries are clean
 
 ## Out of scope (explicit)
 
-- `design/` — hi-fi prototypes; CLAUDE.md says reference-only.
+- `docs/design/` — hi-fi prototypes; CLAUDE.md says reference-only.
 - `packages/db/drizzle/*.sql` — generated migrations; reviewed schema only.
 - `packages/scrapers/{run,runtime,extract,cli}.ts` — Playwright-bound, excluded from coverage by design.
 - `packages/jobs/{boss,registry,load-env-local}.ts` — orchestration wiring + dev-only; only `registry.ts` was read above and only for the `runJob` wrapper.

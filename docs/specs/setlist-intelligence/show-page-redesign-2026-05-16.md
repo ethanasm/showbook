@@ -2,14 +2,14 @@
 
 This document supersedes large parts of
 [`ui-spec.md`](ui-spec.md) for the show-detail page. It captures
-the design handoff in [`/design/show-page-tabs/`](../../design/show-page-tabs/)
+the design handoff in [`/docs/design/show-page-tabs/`](../../design/show-page-tabs/)
 and re-scopes the affected phases (1, 2, 3, 7, 8, 9, 10).
 
 **The handoff itself:** drop
-`/design/show-page-tabs/Show Page Tabs.html` into a browser. Pure
+`/docs/design/show-page-tabs/Show Page Tabs.html` into a browser. Pure
 CDN React + Babel-standalone, no build. JSX source under
-`/design/show-page-tabs/show-tabs/`. Tokens at
-`/design/show-page-tabs/hifi/sb-tokens.jsx`. The
+`/docs/design/show-page-tabs/show-tabs/`. Tokens at
+`/docs/design/show-page-tabs/hifi/sb-tokens.jsx`. The
 [handoff README](../../design/show-page-tabs/README.md) is the
 canonical reading order.
 
@@ -73,7 +73,7 @@ remaining atoms appear inline in the tabs instead.
 ## Tokens (Marquee palette, Space Grotesk + IBM Plex Mono)
 
 The handoff introduces a `window.SB` token set at
-[`/design/show-page-tabs/hifi/sb-tokens.jsx`](../../design/show-page-tabs/hifi/sb-tokens.jsx).
+[`/docs/design/show-page-tabs/hifi/sb-tokens.jsx`](../../design/show-page-tabs/hifi/sb-tokens.jsx).
 Highlights:
 
 - **Type** — `Space Grotesk` for sans, `IBM Plex Mono` for mono.
@@ -224,7 +224,7 @@ the spec for the inside of each tab**. The 4-tab system this doc
 introduces is the OUTER container. Treat:
 
 - `ui-spec.md` §1 (design system grounding) — **superseded** by the
-  Marquee-Gold tokens in `/design/show-page-tabs/hifi/sb-tokens.jsx`.
+  Marquee-Gold tokens in `/docs/design/show-page-tabs/hifi/sb-tokens.jsx`.
 - `ui-spec.md` §2 (component table) — additive; the components
   listed there still ship, but inside the new Setlist tab instead
   of a SegmentedControl.

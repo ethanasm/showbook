@@ -7,7 +7,7 @@
  * outputs. All helpers are deterministic and side-effect free so they can
  * be hand-tested against worked examples.
  *
- * Spec: specs/setlist-intelligence/phases/phase-04-eval-harness.md.
+ * Spec: docs/specs/setlist-intelligence/phases/phase-04-eval-harness.md.
  */
 
 export interface PredictedSongLike {

@@ -1,7 +1,7 @@
 /**
  * Me tab v2 — account, integrations, region, density/theme, activity, sign-out.
  *
- * Layout follows design/hifi/prefs.jsx (PrefsMobile) within the limits of
+ * Layout follows docs/design/hifi/prefs.jsx (PrefsMobile) within the limits of
  * what M2 actually exposes:
  *   - User card row (avatar circle + name + signed-in email)
  *   - INTEGRATIONS section: Gmail / Ticketmaster / Google Places — display

@@ -1,5 +1,5 @@
 -- Phase 5 of setlist-intelligence — style classifier persistence.
--- See specs/setlist-intelligence/phases/phase-05-style-classifier-rotating.md.
+-- See docs/specs/setlist-intelligence/phases/phase-05-style-classifier-rotating.md.
 --
 -- The Phase-0 schema added `setlist_style` + `setlist_style_inferred_at`
 -- to `performers`. Phase 5 extends with:

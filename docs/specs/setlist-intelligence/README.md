@@ -88,5 +88,5 @@ Re-open via implementation.md §11 if any need to change:
 - Repo-root `CLAUDE.md` — observability conventions, `<component>.<action>.<outcome>` event shape, the curated list of structured events. Phases add to this list.
 - `apps/web/CLAUDE.md` — web app conventions; affects every UI surface in the plan.
 - `apps/mobile/CLAUDE.md` — mobile conventions; affects every mobile surface in Phases 3, 7, 10.
-- `specs/schema.md` — entity reference. Phase 0 extends this.
-- `specs/data-sources.md` — sources reference. Phases 0/3/7/8/9 extend the Spotify entry.
+- `docs/specs/schema.md` — entity reference. Phase 0 extends this.
+- `docs/specs/data-sources.md` — sources reference. Phases 0/3/7/8/9 extend the Spotify entry.
