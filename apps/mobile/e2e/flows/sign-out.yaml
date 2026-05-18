@@ -33,15 +33,15 @@ tags:
       - tapOn: "Skip"   # location
       - tapOn: "Skip"   # gmail
 
+# Me is no longer in the bottom tab bar — it's a stack route reached
+# via the user-icon affordance in the top-right of each main screen
+# (see components/MeTopBarAction.tsx). Maestro can't see the icon's
+# visible text, so we match on testID instead.
 - assertVisible:
-    text: "Me"
+    id: "me-button"
 
 - tapOn:
-    text: "Me"
-
-# Me-tab navigation is enough proof we're on the right screen; the
-# old assertVisible for "ACCOUNT" against the eyebrow string
-# "ACCOUNT · SETTINGS" wasn't a useful gate.
+    id: "me-button"
 
 # The sign-out row scrolls into view at the bottom of the Me screen
 # below 5 sections (integrations, region, sync, appearance, recent
@@ -58,7 +58,7 @@ tags:
 
 # Native iOS / Android Alert. Maestro matches by visible text — the
 # destructive button label is also "Sign out" (see apps/mobile/app/
-# (tabs)/me.tsx onSignOut). Maestro picks the most-recently-shown
+# me.tsx onSignOut). Maestro picks the most-recently-shown
 # match, which is the alert button.
 - assertVisible:
     text: "Are you sure you want to sign out?"

@@ -99,7 +99,7 @@ export default function OverQuotaScreen(): React.JSX.Element {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Manage storage"
-          onPress={() => router.push('/(tabs)/me')}
+          onPress={() => router.push('/me')}
           style={({ pressed }) => [
             styles.primaryBtn,
             { backgroundColor: colors.accent },

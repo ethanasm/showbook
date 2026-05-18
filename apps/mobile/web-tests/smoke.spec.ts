@@ -45,15 +45,15 @@ test.describe('mobile web smoke', () => {
 
     // The signed-in shell renders the 5-tab bar. Scope to the tablist
     // and take `.first()` since some labels also appear as per-screen
-    // header text (e.g. the "Me" header on the Me tab). The presence
-    // of the tablist + tabs is enough to confirm the app routed past
-    // the auth gate.
+    // header text (e.g. the "Discover" header on the Discover tab).
+    // The presence of the tablist + tabs is enough to confirm the app
+    // routed past the auth gate.
     const tabs = page.getByRole('tablist').first();
     await expect(tabs).toBeVisible({ timeout: 15_000 });
     await expect(tabs.getByRole('tab', { name: 'Home' }).first()).toBeVisible();
     await expect(tabs.getByRole('tab', { name: 'Shows' }).first()).toBeVisible();
     await expect(tabs.getByRole('tab', { name: 'Map' }).first()).toBeVisible();
-    await expect(tabs.getByRole('tab', { name: 'Me' }).first()).toBeVisible();
+    await expect(tabs.getByRole('tab', { name: 'Discover' }).first()).toBeVisible();
 
     // And the sign-in screen should be gone.
     await expect(page.getByText('Sign in with Google')).toBeHidden();

@@ -35,6 +35,7 @@ import MapView, {
 } from 'react-native-maps';
 import type { Kind } from '@showbook/shared';
 import { TopBar } from '../../components/TopBar';
+import { MeTopBarAction } from '../../components/MeTopBarAction';
 import { EmptyState } from '../../components/EmptyState';
 import { Sheet } from '../../components/Sheet';
 import { useTheme } from '../../lib/theme';
@@ -356,6 +357,7 @@ export default function MapScreen(): React.JSX.Element {
       <TopBar
         title="Map"
         eyebrow={`VENUES · ${venues.length} · ${filteredShows.length} SHOWS`}
+        rightAction={<MeTopBarAction />}
         large
       />
 

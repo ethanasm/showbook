@@ -28,6 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Link, useRouter } from 'expo-router';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
+import { MeTopBarAction } from '../../components/MeTopBarAction';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { EmptyState } from '../../components/EmptyState';
@@ -227,7 +228,7 @@ export default function ShowsScreen(): React.JSX.Element {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
-      <TopBar title="Shows" eyebrow={eyebrow} large />
+      <TopBar title="Shows" eyebrow={eyebrow} rightAction={<MeTopBarAction />} large />
 
       <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
         <SegmentedControl<'upcoming' | 'past'>

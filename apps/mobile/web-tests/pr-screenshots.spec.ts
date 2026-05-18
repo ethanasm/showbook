@@ -50,7 +50,7 @@ const ROUTES: RouteSpec[] = [
   { name: '02-shows-empty', path: '/shows', ready: /Log your first show/i },
   { name: '03-artists-empty', path: '/artists', ready: /Build your lineup/i },
   { name: '04-venues-empty', path: '/venues', ready: /Map your stages/i },
-  { name: '05-discover-empty', path: '/discover', ready: /A queue of what's next/i },
+  { name: '05-discover-empty', path: '/discover', ready: /Follow a venue|A queue of what's next/i },
   // New feature: festival poster splash. Idle state pre-pick is enough to
   // demo the entry point — picking an image requires a real OS picker.
   {

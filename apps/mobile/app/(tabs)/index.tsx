@@ -19,11 +19,12 @@
  */
 
 import React from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Link, useRouter } from 'expo-router';
-import { Calendar, Compass } from 'lucide-react-native';
+import { Link } from 'expo-router';
+import { Calendar } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
+import { MeTopBarAction } from '../../components/MeTopBarAction';
 import { EmptyState } from '../../components/EmptyState';
 import { GetStartedHub } from '../../components/GetStartedHub';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
@@ -110,7 +111,6 @@ export default function HomeScreen(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { token } = useAuth();
   const utils = trpc.useUtils();
   const [actionSheetFor, setActionSheetFor] = React.useState<{
@@ -165,20 +165,9 @@ export default function HomeScreen(): React.JSX.Element {
 
   const eyebrow = sections.nowPlaying ? 'NOW PLAYING TODAY' : 'YOUR SHOWS';
 
-  const discoverAction = (
-    <Pressable
-      onPress={() => router.push('/discover')}
-      hitSlop={12}
-      accessibilityRole="button"
-      accessibilityLabel="Discover"
-    >
-      <Compass size={20} color={colors.ink} strokeWidth={2} />
-    </Pressable>
-  );
-
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
-      <TopBar title="Home" eyebrow={eyebrow} rightAction={discoverAction} large />
+      <TopBar title="Home" eyebrow={eyebrow} rightAction={<MeTopBarAction />} large />
 
       <ScrollView
         contentContainerStyle={

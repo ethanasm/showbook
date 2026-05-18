@@ -43,6 +43,7 @@ import {
   Mail,
   Ticket,
   MapPin,
+  ChevronLeft,
   ChevronRight,
   Inbox,
   CloudUpload,
@@ -50,19 +51,19 @@ import {
   RefreshCw,
 } from 'lucide-react-native';
 import { useQueryClient } from '@tanstack/react-query';
-import { ScreenWrapper } from '../../components/ScreenWrapper';
-import { SegmentedControl } from '../../components/SegmentedControl';
-import { EmptyState } from '../../components/EmptyState';
-import { useTheme, type ThemePreference, type Density } from '../../lib/theme';
-import { useAuth } from '../../lib/auth';
-import { trpc } from '../../lib/trpc';
-import { useNetwork, useOfflineSync } from '../../lib/network';
-import { useFeedback } from '../../lib/feedback';
-import { useSpotifyConnection } from '../../lib/spotify-connection';
+import { ScreenWrapper } from '../components/ScreenWrapper';
+import { SegmentedControl } from '../components/SegmentedControl';
+import { EmptyState } from '../components/EmptyState';
+import { useTheme, type ThemePreference, type Density } from '../lib/theme';
+import { useAuth } from '../lib/auth';
+import { trpc } from '../lib/trpc';
+import { useNetwork, useOfflineSync } from '../lib/network';
+import { useFeedback } from '../lib/feedback';
+import { useSpotifyConnection } from '../lib/spotify-connection';
 import {
   readLastWarmup,
   warmCacheForOfflineUse,
-} from '../../lib/cache/warmup';
+} from '../lib/cache/warmup';
 
 interface IntegrationRow {
   id: 'gmail' | 'ticketmaster' | 'google-places' | 'spotify';
@@ -168,8 +169,19 @@ export default function MeScreen(): React.JSX.Element {
   // matches the design's single-row "Default region" treatment.
   const defaultRegion = prefsQuery.data?.regions?.[0];
 
+  const back = (
+    <Pressable
+      onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+      hitSlop={12}
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+    >
+      <ChevronLeft size={24} color={colors.ink} strokeWidth={2} />
+    </Pressable>
+  );
+
   return (
-    <ScreenWrapper title="Me" eyebrow="ACCOUNT · SETTINGS" large>
+    <ScreenWrapper title="Me" eyebrow="ACCOUNT · SETTINGS" leading={back} large>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.userRow}>
           <View style={[styles.avatar, { backgroundColor: colors.accent }]}>
