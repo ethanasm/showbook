@@ -1193,6 +1193,29 @@ export default function PreferencesView() {
             ))}
           </div>
 
+          {/* ── Your data (export) ──────────────────────────────────── */}
+          <SectionHead label="Your data" sub="portable, in your hands" />
+          <div style={styles.card}>
+            <SettingRow
+              label="Download your data"
+              description="JSON export of every show, follow, region, preference, and media tag"
+              last
+            >
+              {/* Anchor + `download` attribute so the browser uses its
+                  native save flow against the REST endpoint's
+                  Content-Disposition. Open in same tab — the response
+                  triggers a download, not a navigation. */}
+              <a
+                href="/api/account/export"
+                download
+                style={styles.signOutButton}
+                aria-label="Download a JSON export of your account data"
+              >
+                <span>Download…</span>
+              </a>
+            </SettingRow>
+          </div>
+
           {/* ── Danger zone (account deletion) ───────────────────────── */}
           <SectionHead
             label="Danger zone"

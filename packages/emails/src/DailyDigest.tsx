@@ -65,6 +65,13 @@ export interface DailyDigestProps {
    *  nudge inviting them to add one so the digest can focus on their
    *  area instead of pulling shows from everywhere. */
   noRegionNudge?: boolean;
+  /** Pre-minted one-click unsubscribe URL (signed token). The same URL
+   *  is set on the List-Unsubscribe header in the SMTP envelope —
+   *  see `packages/jobs/src/notifications.ts`. Optional only to keep
+   *  back-compat with existing smoke fixtures; prod always provides it. */
+  unsubscribeUrl?: string;
+  /** Physical postal address required by CAN-SPAM §7. */
+  physicalAddress?: string;
 }
 
 // Brand palette mirrors apps/web/app/globals.css (dark default).
@@ -373,6 +380,8 @@ export function DailyDigest({
   preamble,
   appUrl,
   noRegionNudge,
+  unsubscribeUrl,
+  physicalAddress,
 }: DailyDigestProps) {
   const todayCount = todayShows.length;
   const upcomingCount = upcomingShows.length;
@@ -593,7 +602,28 @@ export function DailyDigest({
               >
                 Manage notifications
               </Link>
+              {unsubscribeUrl ? (
+                <>
+                  {' · '}
+                  <Link href={unsubscribeUrl} style={styles.footerLink}>
+                    Unsubscribe in one click
+                  </Link>
+                </>
+              ) : null}
             </Text>
+            {physicalAddress ? (
+              <Text
+                style={{
+                  margin: '14px 0 0',
+                  color: C.faint,
+                  fontSize: '10.5px',
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {physicalAddress}
+              </Text>
+            ) : null}
           </Section>
         </Container>
       </Body>

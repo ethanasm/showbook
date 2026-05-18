@@ -59,6 +59,14 @@ async function main() {
       'Bridgers date at Forest Hills just dropped — on sale soon.',
     appUrl,
     noRegionNudge: process.env.SMOKE_NO_REGION === '1',
+    // Smoke fixture sample for the CAN-SPAM footer additions. Real
+    // sends in `runDailyDigest` mint the unsubscribe URL via
+    // `signUnsubscribeToken` (HMAC-signed); the smoke just embeds a
+    // sentinel so the renderer's path is exercised.
+    unsubscribeUrl: `${appUrl}/api/unsubscribe?t=smoke-fixture-token`,
+    physicalAddress:
+      process.env.EMAIL_PHYSICAL_ADDRESS ??
+      '123 Example St, City, State 00000 — set EMAIL_PHYSICAL_ADDRESS in .env.prod',
   });
 
   writeFileSync(out, html);

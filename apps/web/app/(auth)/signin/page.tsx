@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import { signIn } from '@/auth';
 import { StackedCards } from '@/components/design-system';
+import { SiteFooter } from '@/components/SiteFooter';
 import { child } from '@showbook/observability';
 import './signin.css';
 
@@ -119,10 +120,7 @@ export default async function SignInPage({
           </div>
         </div>
 
-        <div className="signin__footer">
-          <span>Showbook</span>
-          <span>v1 · {year}</span>
-        </div>
+        <SiteFooter />
       </section>
     </main>
   );

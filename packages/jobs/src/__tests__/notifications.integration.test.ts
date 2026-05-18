@@ -248,6 +248,11 @@ async function seed(): Promise<void> {
 
 describe('runDailyDigest', () => {
   before(async () => {
+    // signUnsubscribeToken (per-user inside the digest loop) requires
+    // AUTH_SECRET. The integration test runs against the real
+    // @showbook/api, not a mock, so set a value if the environment
+    // hasn't already.
+    process.env.AUTH_SECRET ??= 'test-auth-secret-for-notifications-integration';
     await cleanup();
     await seed();
   });
