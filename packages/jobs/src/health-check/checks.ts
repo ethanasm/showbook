@@ -145,6 +145,14 @@ export async function checkMissedSchedules(
   );
   const sinceThreshold = new Date(now.getTime() - maxWindowHours * 60 * 60 * 1000);
 
+  // Drizzle's `sql` template expands a JS array as a parenthesised tuple
+  // (`($1, $2, …)`), which postgres reads as a record literal — `name = ANY((…))`
+  // then fails with "operator does not exist: text = record". Build an
+  // ARRAY[…] expression explicitly so each name binds as its own text param.
+  const queueNamesSql = sql`ARRAY[${sql.join(
+    queueNames.map((n) => sql`${n}`),
+    sql`, `,
+  )}]`;
   let rows: ScheduleLatestRow[];
   try {
     const result = await db.execute(sql`
@@ -152,11 +160,11 @@ export async function checkMissedSchedules(
       FROM (
         SELECT name, created_on
         FROM pgboss.job
-        WHERE name = ANY(${queueNames}) AND created_on > ${sinceThreshold}
+        WHERE name = ANY(${queueNamesSql}) AND created_on > ${sinceThreshold}
         UNION ALL
         SELECT name, created_on
         FROM pgboss.archive
-        WHERE name = ANY(${queueNames}) AND created_on > ${sinceThreshold}
+        WHERE name = ANY(${queueNamesSql}) AND created_on > ${sinceThreshold}
       ) j
       GROUP BY name
     `);
