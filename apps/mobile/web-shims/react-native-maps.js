@@ -5,7 +5,7 @@
 // search overlay, marker count, sheet) are still verifiable.
 
 const React = require('react');
-const { View, Text } = require('react-native');
+const { View, Text, Pressable } = require('react-native');
 
 function MapView(props) {
   const { style, children, testID } = props;
@@ -13,26 +13,29 @@ function MapView(props) {
     View,
     {
       style: [
-        { backgroundColor: '#1a1a1a', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+        { backgroundColor: '#1a1a1a', alignItems: 'flex-start', justifyContent: 'flex-start', overflow: 'hidden', flexDirection: 'row', flexWrap: 'wrap', padding: 8, gap: 8 },
         style,
       ],
       testID: testID || 'map-view',
       accessibilityLabel: 'Map (web placeholder)',
     },
-    React.createElement(
-      Text,
-      { style: { color: '#666', fontSize: 14 } },
-      'Map (web placeholder)',
-    ),
     children,
   );
 }
 
 function Marker(props) {
-  const { children, testID } = props;
+  const { children, testID, onPress, accessibilityLabel } = props;
+  // On web there's no native map canvas, so render markers as a flat
+  // wrap of tappable pressables. Lets headless Playwright drive the
+  // marker → sheet flow even though there's no real map underneath.
   return React.createElement(
-    View,
-    { testID: testID || 'map-marker', style: { display: 'none' } },
+    Pressable,
+    {
+      testID: testID || 'map-marker',
+      onPress,
+      accessibilityLabel: accessibilityLabel || 'map marker',
+      style: { padding: 2 },
+    },
     children,
   );
 }

@@ -57,6 +57,10 @@ const Dimensions = {
   addEventListener: () => ({ remove() {} }),
 };
 
+function useWindowDimensions() {
+  return { width: 375, height: 812, scale: 2, fontScale: 1 };
+}
+
 module.exports = {
   View,
   Text,
@@ -74,4 +78,5 @@ module.exports = {
   Platform,
   Appearance,
   Dimensions,
+  useWindowDimensions,
 };
