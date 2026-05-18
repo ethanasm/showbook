@@ -117,8 +117,12 @@ jobs:
         working-directory: ${{ env.PROD_DIR }}
         run: pnpm prod:db:migrate
 
-      - name: Prune dangling images
-        run: docker image prune -f
+      - name: Prune old images and build cache
+        run: |
+          set -euo pipefail
+          docker image prune -f
+          docker image prune -af --filter "until=720h"
+          docker buildx prune -af --filter "until=720h"
 
       - name: Summary
         if: always()
