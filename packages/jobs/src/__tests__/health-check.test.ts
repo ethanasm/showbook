@@ -11,13 +11,17 @@ import assert from 'node:assert/strict';
 interface ScriptedExecute {
   results: unknown[];
   shouldThrow: Error | null;
+  /** Every SQL object passed to db.execute, in order. Lets tests assert on
+   *  the rendered query rather than only the scripted result. */
+  captured: unknown[];
 }
-const EXECUTE: ScriptedExecute = { results: [], shouldThrow: null };
+const EXECUTE: ScriptedExecute = { results: [], shouldThrow: null, captured: [] };
 
 mock.module('@showbook/db', {
   namedExports: {
     db: {
-      execute: async () => {
+      execute: async (q: unknown) => {
+        EXECUTE.captured.push(q);
         if (EXECUTE.shouldThrow) throw EXECUTE.shouldThrow;
         return EXECUTE.results.shift() ?? [];
       },
@@ -107,6 +111,7 @@ beforeEach(() => {
     freshSchedulesRows(), // checkMissedSchedules pgboss.job / archive union
   ];
   EXECUTE.shouldThrow = null;
+  EXECUTE.captured = [];
   delete process.env.RESEND_API_KEY;
   delete process.env.ADMIN_EMAILS;
   delete process.env.AXIOM_QUERY_TOKEN;
@@ -280,6 +285,25 @@ describe('runHealthCheck', () => {
     });
     assert.equal(result.emailSent, true);
     assert.equal(fake.sendCalls.length, 1);
+  });
+});
+
+describe('checkMissedSchedules SQL', () => {
+  it('binds queue names via ARRAY[…], not a parenthesised tuple', async () => {
+    // Regression for the prod warn surfaced in the morning health email:
+    //   `name = ANY(($1, $2, $3, $4, $5))` — postgres reads the inner
+    // tuple as a record literal and the join fails with SQLSTATE 42883
+    // ("operator does not exist: text = record"). The fix renders an
+    // explicit `ARRAY[$1, $2, …]` so each name is bound as a text param.
+    const { PgDialect } = await import('drizzle-orm/pg-core');
+    await runHealthCheck({ pings: noopPings, resend: null, generatePreamble: noPreamble });
+    const dialect = new PgDialect();
+    // The 5th db.execute call is checkMissedSchedules (after db ping,
+    // pgboss queue, freshness, stalled).
+    const sqlObj = EXECUTE.captured[4] as Parameters<typeof dialect.sqlToQuery>[0];
+    const compiled = dialect.sqlToQuery(sqlObj);
+    assert.match(compiled.sql, /ARRAY\[\$\d+(, \$\d+)+\]/);
+    assert.doesNotMatch(compiled.sql, /ANY\(\(\$/);
   });
 });
 
