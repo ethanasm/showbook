@@ -19,7 +19,7 @@
 flows:
   - flows/
 
-appId: com.showbook.app
+appId: me.ethanasm.showbook
 
 # Increase the implicit waitFor budget — Showbook's first launch warms a
 # tRPC connection and restores the SecureStore session, both of which

@@ -17,7 +17,7 @@
 # `assertVisible: "Show added"` and `assertVisible: "Maestro Test
 # Headliner"` steps at the bottom of this file to verify the
 # server side too.
-appId: com.showbook.app
+appId: me.ethanasm.showbook
 name: add-show
 tags:
   - critical

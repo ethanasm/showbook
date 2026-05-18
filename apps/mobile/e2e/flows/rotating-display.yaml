@@ -14,7 +14,7 @@
 # short-circuits after sign-in rather than failing — the gate-blocked
 # / cold-state variants are also acceptable evidence the routing is
 # wired correctly.
-appId: com.showbook.app
+appId: me.ethanasm.showbook
 name: rotating-display
 tags:
   - phase-10

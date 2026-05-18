@@ -37,8 +37,8 @@ Before either dev or prod builds talk to your backend you need:
    Cloudflare Tunnel hostname documented in
    `specs/infrastructure.md`.
 2. Google OAuth client IDs created in Google Cloud Console:
-   - **iOS** client (type: iOS) with bundle ID `com.showbook.app`.
-   - **Android** client (type: Android) with package `com.showbook.app`
+   - **iOS** client (type: iOS) with bundle ID `me.ethanasm.showbook`.
+   - **Android** client (type: Android) with package `me.ethanasm.showbook`
      and the SHA-1 of the signing cert (EAS prints this after the first
      Android build).
 3. The backend's `GOOGLE_OAUTH_MOBILE_AUDIENCES` env var set to the
@@ -48,7 +48,7 @@ Before either dev or prod builds talk to your backend you need:
 
 **App identity (already set in `app.config.ts`)**
 
-- Bundle ID / package: `com.showbook.app`
+- Bundle ID / package: `me.ethanasm.showbook`
 - Slug: `showbook`
 - Display name: `Showbook`
 
@@ -159,7 +159,7 @@ match 1024×1024. Replace, in `apps/mobile/assets/`:
 ### 2.2 Create the App Store Connect record
 
 1. Go to <https://appstoreconnect.apple.com> → My Apps → +.
-2. Bundle ID: `com.showbook.app` (must match `app.config.ts`).
+2. Bundle ID: `me.ethanasm.showbook` (must match `app.config.ts`).
 3. SKU: `showbook-ios` (any unique string).
 4. Fill in: name, subtitle, primary category (suggest "Lifestyle" or
    "Entertainment"), age rating questionnaire, privacy policy URL,
@@ -297,5 +297,5 @@ auto-bumps `ios.buildNumber` and `android.versionCode` if you set
 - [ ] Privacy policy and support URLs published (link from the
       Showbook web app footer is fine).
 - [ ] App Store Connect + Play Console app records created with bundle
-      ID `com.showbook.app`.
+      ID `me.ethanasm.showbook`.
 - [ ] Demo Google account ready to hand to Apple's reviewer.
