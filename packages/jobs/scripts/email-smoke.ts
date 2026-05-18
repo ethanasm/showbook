@@ -51,6 +51,13 @@ async function main() {
         reason: 'venue',
         onSaleSoon: false,
       },
+      {
+        headliner: 'Charlotte Day Wilson',
+        venueName: 'Webster Hall',
+        whenLabel: 'Jun 21',
+        reason: 'region',
+        onSaleSoon: false,
+      },
     ],
     preamble:
       'Tonight you slip into Orch G 14 for Hadestown — that long descent again. ' +

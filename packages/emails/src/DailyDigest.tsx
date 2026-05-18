@@ -54,7 +54,10 @@ export interface DailyDigestProps {
     headliner: string;
     venueName: string;
     whenLabel: string;
-    reason: 'venue' | 'artist';
+    /** See `BucketedAnnouncement.reason` in
+     *  `packages/jobs/src/notifications.ts`. `region` is what backs the
+     *  "Near you" section for region-only opt-ins. */
+    reason: 'venue' | 'artist' | 'region';
     onSaleSoon: boolean;
   }>;
   /** Optional 1–2 paragraph LLM-generated opener. Falls back to a static
@@ -396,6 +399,7 @@ export function DailyDigest({
 
   const byVenue = newAnnouncements.filter((a) => a.reason === 'venue');
   const byArtist = newAnnouncements.filter((a) => a.reason === 'artist');
+  const byRegion = newAnnouncements.filter((a) => a.reason === 'region');
   const onSaleSoon = newAnnouncements.filter((a) => a.onSaleSoon);
 
   const eyebrow =
@@ -552,9 +556,28 @@ export function DailyDigest({
             </>
           ) : null}
 
+          {byRegion.length > 0 ? (
+            <>
+              <Hr style={styles.sectionDivider} />
+              <Section style={styles.section}>
+                <Text style={styles.sectionTitle}>Near you</Text>
+                {byRegion.map((a, i) => (
+                  <Row
+                    key={`region-${i}`}
+                    headliner={a.headliner}
+                    venueName={a.venueName}
+                    meta={a.whenLabel}
+                    chip={a.onSaleSoon ? 'On sale soon' : undefined}
+                  />
+                ))}
+              </Section>
+            </>
+          ) : null}
+
           {onSaleSoon.length > 0 &&
           byVenue.length === 0 &&
-          byArtist.length === 0 ? (
+          byArtist.length === 0 &&
+          byRegion.length === 0 ? (
             <>
               <Hr style={styles.sectionDivider} />
               <Section style={styles.section}>

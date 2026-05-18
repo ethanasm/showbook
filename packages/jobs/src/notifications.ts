@@ -223,7 +223,16 @@ export interface BucketedAnnouncement {
   headliner: string;
   venueName: string;
   whenLabel: string;
-  reason: 'venue' | 'artist';
+  /**
+   * Why this announcement made the digest:
+   *   - `venue`: headliner is playing a venue the user follows.
+   *   - `artist`: headliner is an artist the user follows (the venue
+   *     also has to fall inside an active region when one is set).
+   *   - `region`: neither follow matched, but the venue sits inside one
+   *     of the user's active regions — this is what surfaces "what's
+   *     happening near me" content for region-only opt-ins.
+   */
+  reason: 'venue' | 'artist' | 'region';
   onSaleSoon: boolean;
 }
 
@@ -234,15 +243,24 @@ export interface BucketCounts {
 
 /**
  * Bucket new announcements for a single user, given their follows.
- * - Drops announcements that match neither a followed venue nor a followed artist.
- * - Venue match wins over artist match (more specific to "where I'd see it").
- * - Region filter: when `activeRegions` is non-empty, artist-only matches
- *   are kept only if the venue lat/lng falls inside any active region's
- *   bbox. Explicit venue-follow matches are kept regardless of region —
- *   following a venue is itself a geographic signal we respect.
- * - Dedupes by (headliner, venue, when) so an announcement matching both
- *   follows isn't doubled.
- * - Sorts by show date ascending. Caller decides on the cap.
+ * Match precedence is `venue` > `artist` > `region` — the most specific
+ * follow wins so the dedupe keeps the right reason on the row.
+ * - Venue follow: always kept (an explicit venue follow is itself a
+ *   geographic signal we respect, so it overrides region filtering).
+ * - Artist follow: kept; when `activeRegions` is non-empty the venue
+ *   lat/lng must fall inside one of the bboxes, otherwise the row is
+ *   dropped and counted as `droppedArtistMatches`.
+ * - Region-only: when `activeRegions` is non-empty, any announcement at
+ *   a venue inside an active region is kept with reason `region`, even
+ *   if neither follow set matches. This is what lets region-only
+ *   opt-ins receive a digest — without it the empty-follows branch
+ *   above would skip them entirely.
+ * - Sort: by (reason priority, show date asc). Priority keeps venue /
+ *   artist rows above region rows, so when the caller applies a cap the
+ *   most specific matches survive.
+ * - Dedupe: by (headliner, venue, whenLabel) after the priority sort,
+ *   so an announcement that hit multiple buckets keeps its strongest
+ *   reason.
  */
 export function bucketAnnouncementsForUser(
   newAnnouncements: ReadonlyArray<AnnouncementInput>,
@@ -253,7 +271,7 @@ export function bucketAnnouncementsForUser(
   activeRegions: ReadonlyArray<RegionBbox> = [],
   counts?: BucketCounts,
 ): BucketedAnnouncement[] {
-  const matched: Array<BucketedAnnouncement & { showDateMs: number }> = [];
+  const matched: Array<BucketedAnnouncement & { showDateMs: number; priority: number }> = [];
   const filterByRegion = activeRegions.length > 0;
 
   function venueInAnyRegion(a: AnnouncementInput): boolean {
@@ -266,16 +284,24 @@ export function bucketAnnouncementsForUser(
     const matchArtist =
       a.headlinerPerformerId !== null &&
       followedPerformerIds.has(a.headlinerPerformerId);
-    if (!matchVenue && !matchArtist) continue;
+    const inRegion = filterByRegion && venueInAnyRegion(a);
 
-    // Region filter applies only to artist-only matches. Venue follows
-    // override geography because they're an explicit user signal.
-    if (filterByRegion && !matchVenue && matchArtist) {
-      if (!venueInAnyRegion(a)) {
-        if (counts) counts.droppedArtistMatches += 1;
-        continue;
-      }
+    // Artist-only matches still respect the region filter — without an
+    // active region the artist hit is kept verbatim, but with one set
+    // it must fall inside the user's geography.
+    if (filterByRegion && !matchVenue && matchArtist && !inRegion) {
+      if (counts) counts.droppedArtistMatches += 1;
+      continue;
     }
+
+    if (!matchVenue && !matchArtist && !inRegion) continue;
+
+    const reason: BucketedAnnouncement['reason'] = matchVenue
+      ? 'venue'
+      : matchArtist
+        ? 'artist'
+        : 'region';
+    const priority = reason === 'venue' ? 0 : reason === 'artist' ? 1 : 2;
 
     const showDateMs = new Date(a.showDate + 'T00:00:00').getTime();
     const onSaleSoon =
@@ -287,22 +313,23 @@ export function bucketAnnouncementsForUser(
       headliner: a.headliner,
       venueName: a.venueName,
       whenLabel: whenLabel(a),
-      reason: matchVenue ? 'venue' : 'artist',
+      reason,
       showDateMs,
       onSaleSoon,
+      priority,
     });
   }
 
   const seen = new Set<string>();
   return matched
-    .sort((a, b) => a.showDateMs - b.showDateMs)
+    .sort((a, b) => a.priority - b.priority || a.showDateMs - b.showDateMs)
     .filter((a) => {
       const key = `${a.headliner}::${a.venueName}::${a.whenLabel}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     })
-    .map(({ showDateMs: _, ...rest }) => rest);
+    .map(({ showDateMs: _, priority: __, ...rest }) => rest);
 }
 
 // ── Main runner ────────────────────────────────────────────────────────
@@ -533,18 +560,27 @@ export async function runDailyDigest(
         droppedArtistMatches: 0,
         droppedOnSale: 0,
       };
-      const newAnnouncements =
-        followedVenueIds.size === 0 && followedPerformerIds.size === 0
-          ? []
-          : bucketAnnouncementsForUser(
-              newSinceCutoff,
-              followedVenueIds,
-              followedPerformerIds,
-              todayStr,
-              nextWeekStr,
-              activeRegionRows,
-              filterCounts,
-            ).slice(0, ANNOUNCEMENT_CAP);
+      // Bucket if the user has at least one signal we can match against:
+      // a followed venue, a followed performer, or an active region. The
+      // region path is what lets users who've drawn a region but haven't
+      // followed anything yet still receive a "what's happening near
+      // you" digest — without it the empty-content skip below would
+      // silently drop them every day.
+      const hasFollowSignal =
+        followedVenueIds.size > 0 ||
+        followedPerformerIds.size > 0 ||
+        activeRegionRows.length > 0;
+      const newAnnouncements = hasFollowSignal
+        ? bucketAnnouncementsForUser(
+            newSinceCutoff,
+            followedVenueIds,
+            followedPerformerIds,
+            todayStr,
+            nextWeekStr,
+            activeRegionRows,
+            filterCounts,
+          ).slice(0, ANNOUNCEMENT_CAP)
+        : [];
 
       if (
         activeRegionRows.length > 0 &&
