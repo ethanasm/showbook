@@ -1,7 +1,12 @@
 name: showbook-dev
 
 # Dev compose: source bind-mounted, Next.js in dev mode.
-# For production deployments use `docker-compose.prod.yml`.
+# For production deployments use `infra/docker-compose.prod.yml`.
+#
+# Lives under `infra/`. All relative paths in this file (build
+# `context`, volume mounts, `env_file: path`) are resolved relative
+# to this directory, so anything that needs to reach repo-root code
+# walks up via `..`.
 
 services:
   db:
@@ -24,7 +29,7 @@ services:
 
   web:
     build:
-      context: .
+      context: ..
       dockerfile: apps/web/Dockerfile
       target: dev
     container_name: showbook-dev-web
@@ -45,7 +50,7 @@ services:
       retries: 3
       start_period: 60s
     env_file:
-      - path: .env.dev
+      - path: ../.env.dev
         required: false
     environment:
       DATABASE_URL: postgresql://showbook:showbook_dev@db:5432/showbook
@@ -55,13 +60,13 @@ services:
       # intelligence). Dev compose accepts a stub via $TOKEN_KEY in the
       # shell or .env.dev; falls through to a hardcoded dev value so
       # `pnpm dev:up` works on a clean machine. Don't reuse this in
-      # prod — see docker-compose.prod.yml.
+      # prod — see infra/docker-compose.prod.yml.
       TOKEN_KEY: "${TOKEN_KEY:-dev0000000000000000000000000000000000000000000000000000000000000}"
     ports:
       - "127.0.0.1:3001:3001"
     volumes:
-      - ./apps:/app/apps
-      - ./packages:/app/packages
+      - ../apps:/app/apps
+      - ../packages:/app/packages
       - ./certs:/app/certs:ro
       - /app/node_modules
       - /app/apps/web/node_modules
