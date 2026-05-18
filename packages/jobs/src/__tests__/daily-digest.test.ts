@@ -419,3 +419,154 @@ test('region filter: artist-only match with null venue coords is dropped when re
   );
   assert.equal(result.length, 0);
 });
+
+// ── region-only trigger ─────────────────────────────────────────────────
+
+test('region-only: announcement at venue in active region is kept with reason=region', () => {
+  const result = bucketAnnouncementsForUser(
+    [
+      makeAnnouncement({
+        venueId: 'unfollowed-venue',
+        headlinerPerformerId: 'unfollowed-perf',
+        venueLat: 37.78, // SF
+        venueLng: -122.42,
+        headliner: 'SF Show',
+      }),
+    ],
+    new Set(), // no venue follows
+    new Set(), // no performer follows
+    TODAY,
+    SEVEN_OUT,
+    [SF_REGION],
+  );
+  assert.equal(result.length, 1);
+  assert.equal(result[0]!.reason, 'region');
+  assert.equal(result[0]!.headliner, 'SF Show');
+});
+
+test('region-only: announcement outside any region with no follows is dropped', () => {
+  const result = bucketAnnouncementsForUser(
+    [
+      makeAnnouncement({
+        venueId: 'unfollowed-venue',
+        headlinerPerformerId: 'unfollowed-perf',
+        venueLat: 41.4993, // Cleveland
+        venueLng: -81.6944,
+        headliner: 'Cleveland Show',
+      }),
+    ],
+    new Set(),
+    new Set(),
+    TODAY,
+    SEVEN_OUT,
+    [SF_REGION],
+  );
+  assert.equal(result.length, 0);
+});
+
+test('region-only: null venue coords mean the announcement can\'t qualify by region alone', () => {
+  const result = bucketAnnouncementsForUser(
+    [
+      makeAnnouncement({
+        venueId: 'unfollowed-venue',
+        headlinerPerformerId: 'unfollowed-perf',
+        venueLat: null,
+        venueLng: null,
+      }),
+    ],
+    new Set(),
+    new Set(),
+    TODAY,
+    SEVEN_OUT,
+    [SF_REGION],
+  );
+  assert.equal(result.length, 0);
+});
+
+test('region-only: a venue match still wins precedence even when the venue sits inside an active region', () => {
+  const result = bucketAnnouncementsForUser(
+    [
+      makeAnnouncement({
+        venueId: 'venue-followed',
+        headlinerPerformerId: null,
+        venueLat: 37.78,
+        venueLng: -122.42,
+        headliner: 'Followed Venue Show',
+      }),
+    ],
+    new Set(['venue-followed']),
+    new Set(),
+    TODAY,
+    SEVEN_OUT,
+    [SF_REGION],
+  );
+  assert.equal(result.length, 1);
+  assert.equal(result[0]!.reason, 'venue');
+});
+
+test('region-only: an artist match wins precedence over a region-only label when both are true', () => {
+  const result = bucketAnnouncementsForUser(
+    [
+      makeAnnouncement({
+        venueId: 'unfollowed-venue',
+        headlinerPerformerId: 'perf-1',
+        venueLat: 37.78,
+        venueLng: -122.42,
+        headliner: 'Followed Artist Show',
+      }),
+    ],
+    new Set(),
+    new Set(['perf-1']),
+    TODAY,
+    SEVEN_OUT,
+    [SF_REGION],
+  );
+  assert.equal(result.length, 1);
+  assert.equal(result[0]!.reason, 'artist');
+});
+
+test('priority sort: venue / artist rows surface above region rows', () => {
+  // Region row earliest by date — without priority sort it would land
+  // first. With it, venue and artist hits come ahead regardless of date.
+  const result = bucketAnnouncementsForUser(
+    [
+      makeAnnouncement({
+        id: 'a-region',
+        venueId: 'unfollowed-venue',
+        headlinerPerformerId: 'unfollowed-perf',
+        venueLat: 37.78,
+        venueLng: -122.42,
+        headliner: 'Region Show',
+        showDate: '2026-06-01',
+      }),
+      makeAnnouncement({
+        id: 'a-artist',
+        venueId: 'unfollowed-venue-2',
+        headlinerPerformerId: 'perf-1',
+        venueLat: 37.78,
+        venueLng: -122.42,
+        headliner: 'Artist Show',
+        showDate: '2026-09-01',
+      }),
+      makeAnnouncement({
+        id: 'a-venue',
+        venueId: 'venue-1',
+        headlinerPerformerId: null,
+        venueLat: 37.78,
+        venueLng: -122.42,
+        headliner: 'Venue Show',
+        showDate: '2026-12-01',
+      }),
+    ],
+    new Set(['venue-1']),
+    new Set(['perf-1']),
+    TODAY,
+    SEVEN_OUT,
+    [SF_REGION],
+  );
+  assert.equal(result.length, 3);
+  assert.deepEqual(
+    result.map((r) => r.reason),
+    ['venue', 'artist', 'region'],
+  );
+});

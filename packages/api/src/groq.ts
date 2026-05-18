@@ -507,7 +507,7 @@ export interface DigestPreambleInput {
     headliner: string;
     venueName: string;
     whenLabel: string;
-    reason: 'venue' | 'artist';
+    reason: 'venue' | 'artist' | 'region';
     onSaleSoon: boolean;
   }>;
 }

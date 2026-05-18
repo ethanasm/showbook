@@ -16,6 +16,7 @@ import {
   db,
   users,
   userPreferences,
+  userRegions,
   shows,
   showPerformers,
   performers,
@@ -37,9 +38,14 @@ const USER_WITH_UPCOMING = `${PREFIX}-3333-4333-8333-333333333333`;
 const USER_NOTHING = `${PREFIX}-4444-4444-8444-444444444444`;
 const USER_DISABLED = `${PREFIX}-5555-4555-8555-555555555555`;
 const USER_NO_EMAIL = `${PREFIX}-6666-4666-8666-666666666666`;
+/** No venue / performer follows, but has one active region centered on
+ *  VENUE_REGION. Covers the "region-only opt-in still receives a digest"
+ *  path. */
+const USER_REGION_ONLY = `${PREFIX}-7777-4777-8777-777777777777`;
 
 const VENUE_A = `${PREFIX}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`;
 const VENUE_B = `${PREFIX}-bbbb-4bbb-8bbb-bbbbbbbbbbbb`;
+const VENUE_REGION = `${PREFIX}-bbbb-4bbb-8bbb-bbbbbbbbbbcc`;
 
 const PERFORMER_A = `${PREFIX}-cccc-4ccc-8ccc-cccccccccccc`;
 
@@ -49,6 +55,7 @@ const SHOW_UPCOMING = `${PREFIX}-eeee-4eee-8eee-eeeeeeeeeee1`;
 const ANN_NEW_VENUE = `${PREFIX}-f000-4f00-8f00-f00000000001`;
 const ANN_NEW_ARTIST = `${PREFIX}-f000-4f00-8f00-f00000000002`;
 const ANN_OLD = `${PREFIX}-f000-4f00-8f00-f00000000003`;
+const ANN_REGION = `${PREFIX}-f000-4f00-8f00-f00000000004`;
 
 const todayStr = (): string => {
   const now = new Date();
@@ -67,6 +74,7 @@ async function cleanup(): Promise<void> {
   await db.execute(sql`DELETE FROM show_performers WHERE show_id::text LIKE ${p}`);
   await db.delete(userVenueFollows).where(like(userVenueFollows.userId, p));
   await db.delete(userPerformerFollows).where(like(userPerformerFollows.userId, p));
+  await db.delete(userRegions).where(like(userRegions.userId, p));
   await db.delete(announcements).where(like(sql`${announcements.id}::text`, p));
   await db.delete(shows).where(like(sql`${shows.id}::text`, p));
   await db.delete(performers).where(like(sql`${performers.id}::text`, p));
@@ -82,12 +90,23 @@ async function seed(): Promise<void> {
   upcoming.setDate(upcoming.getDate() + 3);
   const upcomingStr = upcoming.toISOString().split('T')[0]!;
 
-  // Venues
+  // Venues. VENUE_REGION has coordinates so it can satisfy the
+  // region-only match path; the other two intentionally don't, so they
+  // exercise the "no coords → no region trigger" branch alongside the
+  // venue-follow path.
   await db
     .insert(venues)
     .values([
       { id: VENUE_A, name: 'Test Venue A', city: 'New York', country: 'US' },
       { id: VENUE_B, name: 'Test Venue B', city: 'Brooklyn', country: 'US' },
+      {
+        id: VENUE_REGION,
+        name: 'Test Venue Region',
+        city: 'San Francisco',
+        country: 'US',
+        latitude: 37.7749,
+        longitude: -122.4194,
+      },
     ])
     .onConflictDoNothing();
 
@@ -107,6 +126,7 @@ async function seed(): Promise<void> {
       { id: USER_NOTHING, name: 'Nothing User', email: 'nothing@test.local' },
       { id: USER_DISABLED, name: 'Disabled User', email: 'disabled@test.local' },
       { id: USER_NO_EMAIL, name: 'No-Email User', email: null },
+      { id: USER_REGION_ONLY, name: 'Region Only', email: 'region@test.local' },
     ])
     .onConflictDoNothing();
 
@@ -120,6 +140,24 @@ async function seed(): Promise<void> {
       { userId: USER_NOTHING, emailNotifications: true },
       { userId: USER_DISABLED, emailNotifications: false },
       { userId: USER_NO_EMAIL, emailNotifications: true },
+      { userId: USER_REGION_ONLY, emailNotifications: true },
+    ])
+    .onConflictDoNothing();
+
+  // Region-only user gets an active region centered on VENUE_REGION but
+  // no venue / performer follows, so anything they receive has to come
+  // through the region match path.
+  await db
+    .insert(userRegions)
+    .values([
+      {
+        userId: USER_REGION_ONLY,
+        cityName: 'San Francisco',
+        latitude: 37.7749,
+        longitude: -122.4194,
+        radiusMiles: 25,
+        active: true,
+      },
     ])
     .onConflictDoNothing();
 
@@ -231,6 +269,25 @@ async function seed(): Promise<void> {
         source: 'ticketmaster',
         sourceEventId: `${PREFIX}-ann-old`,
       },
+      {
+        // Region-only path: announcement at a venue with coords inside
+        // the USER_REGION_ONLY user's active region. No follow on the
+        // headliner or venue, so the only thing that can pull it into
+        // their digest is the region match.
+        id: ANN_REGION,
+        venueId: VENUE_REGION,
+        kind: 'concert',
+        headliner: 'Fresh Region Announcement',
+        headlinerPerformerId: null,
+        showDate: futureStr,
+        runStartDate: null,
+        runEndDate: null,
+        performanceDates: null,
+        onSaleDate: null,
+        onSaleStatus: 'on_sale',
+        source: 'ticketmaster',
+        sourceEventId: `${PREFIX}-ann-region`,
+      },
     ])
     .onConflictDoNothing();
 
@@ -316,6 +373,18 @@ describe('runDailyDigest', () => {
         .from(userPreferences)
         .where(eq(userPreferences.userId, USER_WITH_TODAY));
       assert.ok(pref?.ts, 'lastDigestSentAt should be set after a successful send');
+
+      // Region-only user has no venue / performer follows, but their
+      // active region overlaps VENUE_REGION — they should still get a
+      // digest via the region-trigger branch.
+      const [regionPref] = await db
+        .select({ ts: userPreferences.lastDigestSentAt })
+        .from(userPreferences)
+        .where(eq(userPreferences.userId, USER_REGION_ONLY));
+      assert.ok(
+        regionPref?.ts,
+        'region-only user should have received a digest via region match',
+      );
     } finally {
       globalThis.fetch = originalFetch;
     }

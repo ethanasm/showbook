@@ -134,4 +134,29 @@ describe('renderDailyDigest', () => {
     assert.match(html, /this week/);
     assert.match(html, /new for you/);
   });
+
+  it('renders a "Near you" section for region-reason announcements', async () => {
+    const html = await renderDailyDigest({
+      ...fullProps,
+      todayShows: [],
+      upcomingShows: [],
+      newAnnouncements: [
+        {
+          headliner: 'Region Only Artist',
+          venueName: 'Webster Hall',
+          whenLabel: 'Jun 21',
+          reason: 'region',
+          onSaleSoon: false,
+        },
+      ],
+    });
+    assert.match(html, /Near you/);
+    assert.match(html, /Region Only Artist/);
+    assert.match(html, /Webster Hall/);
+  });
+
+  it('does not render the "Near you" section when no region matches are present', async () => {
+    const html = await renderDailyDigest(fullProps);
+    assert.doesNotMatch(html, /Near you/);
+  });
 });

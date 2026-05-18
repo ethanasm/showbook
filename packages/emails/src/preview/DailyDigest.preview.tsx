@@ -40,6 +40,20 @@ export default function Preview() {
           reason: 'venue',
           onSaleSoon: false,
         },
+        {
+          headliner: 'Charlotte Day Wilson',
+          venueName: 'Webster Hall',
+          whenLabel: 'Jun 21',
+          reason: 'region',
+          onSaleSoon: false,
+        },
+        {
+          headliner: 'Beach House',
+          venueName: 'Brooklyn Paramount',
+          whenLabel: 'Jul 9',
+          reason: 'region',
+          onSaleSoon: true,
+        },
       ]}
       preamble={
         'Tonight you slip into Orch G 14 for Hadestown — that long descent again. ' +
