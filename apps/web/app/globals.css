@@ -96,6 +96,41 @@ a {
   text-decoration: none;
 }
 
+/* Inline-link treatment. Components that wrap text content in <a> can
+   opt into a persistent underline by adding `.inline-link` — the
+   default `a` reset keeps navigation chrome and card links
+   undecorated, which would be visually noisy if underlined. The
+   underline color is the same rule we use for table separators so
+   the link reads as part of the prose, not as a button. */
+.inline-link {
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 120ms ease, color 120ms ease;
+}
+.inline-link:hover,
+.inline-link:focus-visible {
+  text-decoration-color: var(--accent);
+  color: var(--ink);
+}
+
+/* Screen-reader-only utility. Renders content for assistive tech
+   without taking up visual space. Used by page-level <h1>s on screens
+   where the visual title is conveyed by another element (e.g. /home
+   uses an eyebrow + hero card instead of a literal H1). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Display title treatment — Geist 700 at title sizes, slightly tightened.
    Used for page H1s, headliner/show names, venue/artist hero,
    empty-state + modal headings. */

@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /signin
+Disallow: /api/
+Disallow: /home
+Disallow: /upcoming
+Disallow: /logbook
+Disallow: /shows
+Disallow: /discover
+Disallow: /artists
+Disallow: /venues
+Disallow: /preferences
+Disallow: /admin

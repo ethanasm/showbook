@@ -24,9 +24,37 @@ const monoFont = IBM_Plex_Mono({
   display: "swap",
 });
 
+const SITE_DESCRIPTION =
+  "Personal tracker for concerts, theatre, comedy & festivals — with setlist predictions, Gmail ticket import, and Spotify playlist generation.";
+
 export const metadata: Metadata = {
   title: "Showbook",
-  description: "Personal tracker for concerts, theatre, comedy & festivals — with setlist predictions, Gmail ticket import, and Spotify playlist generation.",
+  description: SITE_DESCRIPTION,
+  // Discord / Slack / Twitter link unfurls. The /og.svg file is a
+  // static 1200×630 vector served from /public so the asset stays
+  // sharp at every preview scale and doesn't require a build-time
+  // render hop. SVG is widely accepted by social unfurlers in 2026;
+  // if a specific platform rejects it, replace with a PNG export.
+  openGraph: {
+    title: "Showbook",
+    description: SITE_DESCRIPTION,
+    type: "website",
+    siteName: "Showbook",
+    images: [
+      {
+        url: "/og.svg",
+        width: 1200,
+        height: 630,
+        alt: "Showbook — track every show you've seen and every show you're going to.",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Showbook",
+    description: SITE_DESCRIPTION,
+    images: ["/og.svg"],
+  },
 };
 
 // Lock the viewport explicitly. iOS Safari renders pages at ~980 CSS-px

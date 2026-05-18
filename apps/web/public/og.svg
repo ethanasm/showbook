@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#0C0C0C"/>
+  <!-- Subtle accent glow top-left -->
+  <defs>
+    <radialGradient id="glow1" cx="0.2" cy="0.15" r="0.6">
+      <stop offset="0%" stop-color="#FFD166" stop-opacity="0.18"/>
+      <stop offset="60%" stop-color="#FFD166" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="0.85" cy="0.85" r="0.55">
+      <stop offset="0%" stop-color="#3A86FF" stop-opacity="0.14"/>
+      <stop offset="60%" stop-color="#3A86FF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#glow1)"/>
+  <rect width="1200" height="630" fill="url(#glow2)"/>
+
+  <!-- Brand mark (gold "S") — same proportions as the mobile icon -->
+  <g transform="translate(96 192)">
+    <rect x="0" y="0" width="180" height="32" fill="#FFD166"/>
+    <rect x="0" y="0" width="32" height="123" fill="#FFD166"/>
+    <rect x="0" y="91" width="180" height="32" fill="#FFD166"/>
+    <rect x="148" y="123" width="32" height="123" fill="#FFD166"/>
+    <rect x="0" y="214" width="180" height="32" fill="#FFD166"/>
+  </g>
+
+  <!-- Wordmark + tagline -->
+  <text x="340" y="290" font-family="-apple-system, 'Space Grotesk', 'Helvetica Neue', sans-serif" font-weight="700" font-size="120" fill="#F8F8F8">Showbook</text>
+  <text x="340" y="360" font-family="-apple-system, 'Space Grotesk', 'Helvetica Neue', sans-serif" font-weight="400" font-size="34" fill="#A8A8A8">
+    Every show you've seen. Every show you're going to.
+  </text>
+  <text x="340" y="408" font-family="'IBM Plex Mono', 'SF Mono', Menlo, monospace" font-weight="500" font-size="20" fill="#FFD166" letter-spacing="3">
+    CONCERTS · THEATRE · COMEDY · FESTIVALS
+  </text>
+</svg>

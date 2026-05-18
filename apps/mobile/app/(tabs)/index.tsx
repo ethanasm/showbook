@@ -31,6 +31,7 @@ import { ShowCardListSkeleton } from '../../components/skeletons';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
+import { useLiveCountdown } from '../../lib/useLiveCountdown';
 import { isNonWatchableKind } from '@showbook/shared';
 import { useAuth } from '../../lib/auth';
 import { trpc } from '../../lib/trpc';
@@ -197,6 +198,7 @@ export default function HomeScreen(): React.JSX.Element {
           <>
             {sections.nowPlaying ? (
               <Section title="Now playing">
+                <NowPlayingCountdown dateYmd={sections.nowPlaying.date} />
                 <ShowCardLink
                 show={sections.nowPlaying}
                 onLongPress={() =>
@@ -277,6 +279,36 @@ function Section({
   );
 }
 
+/**
+ * Above-the-card countdown line for the NOW PLAYING section. Reuses
+ * the shared `useLiveCountdown` so cadence + formatting match the web
+ * hero. Renders nothing when the show has no committed date so a
+ * watching-without-date show in this section (shouldn't happen, but
+ * the type allows null) doesn't show "date TBD".
+ */
+function NowPlayingCountdown({ dateYmd }: { dateYmd: string | null }): React.JSX.Element | null {
+  const { tokens } = useTheme();
+  const label = useLiveCountdown(dateYmd, { fallback: '' });
+  if (!dateYmd || !label) return null;
+  return (
+    <View style={styles.countdownRow}>
+      <View
+        style={[styles.countdownDot, { backgroundColor: tokens.colors.accent }]}
+        accessible={false}
+      />
+      <Text
+        style={[
+          styles.countdownText,
+          { color: tokens.colors.muted },
+        ]}
+      >
+        {label.toUpperCase()}
+        {'  ·  DOORS 7:00 PM'}
+      </Text>
+    </View>
+  );
+}
+
 function ShowCardLink({
   show,
   onLongPress,
@@ -319,5 +351,22 @@ const styles = StyleSheet.create({
   sectionList: {
     paddingHorizontal: 16,
     gap: 8,
+  },
+  countdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 4,
+    paddingBottom: 8,
+  },
+  countdownDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  countdownText: {
+    fontFamily: 'Geist Mono',
+    fontSize: 10.5,
+    letterSpacing: 0.6,
   },
 });

@@ -203,6 +203,10 @@ export default function HomeView() {
         minHeight: 0,
       }}
     >
+      {/* Visually hidden page heading. The visual title is conveyed by
+          the wordmark + hero card; assistive tech still needs a single
+          unambiguous H1 per page to navigate by. */}
+      <h1 className="sr-only">Home</h1>
       {/* ── Top bar ─────────────────────────────────────────── */}
       <div className="home-topbar">
         {/* Wordmark */}
@@ -348,6 +352,7 @@ export default function HomeView() {
                   dow: "",
                 }),
                 countdown: countdownText(heroShow.date),
+                dateYmd: heroShow.date,
                 hasTix: heroShow.state === "ticketed",
                 headlinerImageUrl: getHeadlinerImageUrl(heroShow),
               }}

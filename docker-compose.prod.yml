@@ -70,6 +70,24 @@ services:
       target: prod
     container_name: showbook-prod-web
     restart: unless-stopped
+    # Cap json-file log size so a stuck loop can't fill the prod disk.
+    # 10 MB × 3 rotations = ~30 MB max retained. Axiom remains the
+    # search target; this is purely the docker-captured stdout copy.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Container healthcheck pings the liveness endpoint. Readiness is
+    # not used here because it gates traffic via the Cloudflare Tunnel
+    # ingress, not container restart — a transient DB blip shouldn't
+    # restart the web container.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3001/api/health/live > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
     # Give pg-boss room to release in-flight jobs on SIGTERM before
     # docker escalates to SIGKILL. instrumentation.ts caps its own
     # stop at 8 s so flushObservability has time to drain after.
