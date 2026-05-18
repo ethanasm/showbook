@@ -352,9 +352,10 @@ describe('describeSignInError', () => {
     assert.match(msg, /certificate rejected/i);
   });
 
-  it('maps generic React Native network failures to a localhost cert hint', () => {
-    const msg = describeSignInError(new Error('api_unreachable:Network request failed'));
-    assert.match(msg, /mkcert root CA|iOS simulator/i);
+  it('surfaces the native fetch detail for generic network failures', () => {
+    const msg = describeSignInError(new Error('api_unreachable:Network request failed (https://example.com/api/auth/mobile-token)'));
+    assert.match(msg, /Network request failed/);
+    assert.match(msg, /https:\/\/example\.com\/api\/auth\/mobile-token/);
   });
 
   it('maps invalid_google_token to a retry message', () => {
