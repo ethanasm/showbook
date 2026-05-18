@@ -61,6 +61,13 @@ function useWindowDimensions() {
   return { width: 375, height: 812, scale: 2, fontScale: 1 };
 }
 
+// Tests can override `UIManager.hasViewManagerConfig` to simulate a native
+// binary that's missing a particular view manager (e.g. a stale dev client
+// without `RNCMaskedView` — see GradientEmphasis.test.cjs).
+const UIManager = {
+  hasViewManagerConfig: () => null,
+};
+
 module.exports = {
   View,
   Text,
@@ -78,5 +85,6 @@ module.exports = {
   Platform,
   Appearance,
   Dimensions,
+  UIManager,
   useWindowDimensions,
 };
