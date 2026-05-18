@@ -24,7 +24,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowRight, Sparkles, PenLine } from 'lucide-react-native';
+import { ArrowRight, Image as ImageIcon, Sparkles, PenLine } from 'lucide-react-native';
 
 import { TopBar } from '../../components/TopBar';
 import { useTheme } from '../../lib/theme';
@@ -133,6 +133,34 @@ export default function AddChatScreen(): React.JSX.Element {
               </Pressable>
             ))}
           </View>
+
+          {/* Festival poster door — read a lineup off an image and turn it
+              into a festival show in one tap. Sits below the chat suggestions
+              so it doesn't compete with the primary chat affordance, but
+              stays above the fold on a mobile viewport. */}
+          <Pressable
+            onPress={() => router.push('/add/festival-poster')}
+            accessibilityRole="button"
+            accessibilityLabel="Upload a festival poster"
+            testID="add-festival-poster"
+            style={({ pressed }) => [
+              styles.posterDoor,
+              { borderColor: colors.rule, backgroundColor: colors.surface, opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <View style={[styles.posterIcon, { backgroundColor: colors.surfaceRaised }]}>
+              <ImageIcon size={18} color={colors.accent} strokeWidth={1.8} />
+            </View>
+            <View style={styles.posterBody}>
+              <Text style={[styles.posterTitle, { color: colors.ink }]}>
+                Upload a festival poster
+              </Text>
+              <Text style={[styles.posterSub, { color: colors.muted }]}>
+                Reads the lineup, festival name, and dates — you trim the list.
+              </Text>
+            </View>
+            <ArrowRight size={16} color={colors.faint} strokeWidth={2} />
+          </Pressable>
         </ScrollView>
 
         <View
@@ -239,5 +267,36 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  posterDoor: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+  },
+  posterIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  posterBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  posterTitle: {
+    fontFamily: 'Geist Sans',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  posterSub: {
+    fontFamily: 'Geist Sans',
+    fontSize: 12,
+    lineHeight: 16,
   },
 });

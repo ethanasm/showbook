@@ -3,8 +3,8 @@
  *
  * Layout (top → bottom):
  *   - "Now playing · your shows" eyebrow with accent dot
- *   - 4 sample peek cards (concert/theatre/comedy/festival) to give a sense
- *     of what the app does without showing real data
+ *   - StackedCards (the same crooked-rows decoration used in empty states)
+ *     to give a sense of what the app does without showing real data
  *   - Brand block: small `S` accent square logo, eyebrow, hero title with
  *     accent-colored ", worth remembering.", subtitle, kind badges row,
  *     "Sign in with Google" button, and footer fine-print.
@@ -28,25 +28,7 @@ import { Redirect } from 'expo-router';
 import { useTheme } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { KindBadge } from '../../components/KindBadge';
-import type { Kind } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
-
-interface PeekCardData {
-  kind: Kind;
-  state: 'ticketed' | 'watching' | 'past';
-  d: string;
-  m: string;
-  h: string;
-  v: string;
-  tag?: string;
-}
-
-const SAMPLE_CARDS: PeekCardData[] = [
-  { kind: 'concert', state: 'ticketed', d: '14', m: 'MAY', h: 'Phoebe Bridgers', v: 'Forest Hills · Queens' },
-  { kind: 'theatre', state: 'watching', d: '02', m: 'JUN', h: 'Hamlet', v: 'Royal Shakespeare · Stratford' },
-  { kind: 'comedy', state: 'past', d: '21', m: 'MAR', h: 'John Mulaney', v: 'Beacon Theatre · NYC', tag: 'Seen' },
-  { kind: 'festival', state: 'watching', d: '11', m: 'JUL', h: 'Pitchfork Music Festival', v: 'Union Park · Chicago' },
-];
+import { StackedCards } from '../../components/design-system';
 
 export default function SignInScreen(): React.JSX.Element {
   const { tokens } = useTheme();
@@ -70,11 +52,9 @@ export default function SignInScreen(): React.JSX.Element {
           <Text style={[styles.eyebrow, { color: colors.muted }]}>NOW PLAYING · YOUR SHOWS</Text>
         </View>
 
-        {/* Sample cards block */}
+        {/* Crooked stacked sample tickets (matches empty-state treatment) */}
         <View style={styles.cardsBlock}>
-          {SAMPLE_CARDS.map((card) => (
-            <SamplePeekCard key={card.h} {...card} />
-          ))}
+          <StackedCards />
         </View>
 
         {/* Brand + sign-in block */}
@@ -142,53 +122,6 @@ export default function SignInScreen(): React.JSX.Element {
   );
 }
 
-function SamplePeekCard({ kind, state, d, m, h, v, tag }: PeekCardData): React.JSX.Element {
-  const { tokens } = useTheme();
-  const { colors } = tokens;
-  const kc = tokens.kindColor(kind);
-  const bar =
-    state === 'ticketed' ? colors.accent : state === 'watching' ? kc : colors.rule;
-  const isTicketed = state === 'ticketed';
-  const chipBg = isTicketed ? colors.accent : 'transparent';
-  const chipColor = isTicketed ? colors.accentText : colors.ink;
-  const chipBorder = isTicketed ? 'transparent' : colors.ruleStrong;
-  const chipLabel = tag ?? (state === 'ticketed' ? 'TICKETED' : 'WATCHING');
-
-  return (
-    <View
-      style={[
-        peekStyles.card,
-        { backgroundColor: colors.surface, borderLeftColor: bar },
-      ]}
-    >
-      <View style={peekStyles.dateBlock}>
-        <Text style={[peekStyles.day, { color: colors.ink }]}>{d}</Text>
-        <Text style={[peekStyles.month, { color: colors.muted }]}>{m}</Text>
-      </View>
-      <View style={peekStyles.body}>
-        <Text style={[peekStyles.headliner, { color: colors.ink }]} numberOfLines={1}>
-          {h}
-        </Text>
-        <Text style={[peekStyles.venue, { color: colors.muted }]} numberOfLines={1}>
-          {v}
-        </Text>
-      </View>
-      <View
-        style={[
-          peekStyles.chip,
-          {
-            backgroundColor: chipBg,
-            borderColor: chipBorder,
-            borderWidth: isTicketed ? 0 : 1,
-          },
-        ]}
-      >
-        <Text style={[peekStyles.chipLabel, { color: chipColor }]}>{chipLabel}</Text>
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -216,11 +149,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist Sans',
     fontSize: 10.5,
     fontWeight: '600',
-    letterSpacing: 1.05, // 0.1em on 10.5pt
+    letterSpacing: 1.05,
     textTransform: 'uppercase',
   },
   cardsBlock: {
-    gap: 12,
+    paddingVertical: 8,
   },
   brandBlock: {
     gap: 16,
@@ -307,57 +240,3 @@ const styles = StyleSheet.create({
   },
 });
 
-const peekStyles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderLeftWidth: 3,
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-  },
-  dateBlock: {
-    minWidth: 32,
-    alignItems: 'center',
-  },
-  day: {
-    fontFamily: 'Geist Sans',
-    fontSize: 18,
-    fontWeight: '700',
-    lineHeight: 18,
-  },
-  month: {
-    fontFamily: 'Geist Sans',
-    fontSize: 9,
-    fontWeight: '500',
-    letterSpacing: 0.45,
-    marginTop: 2,
-  },
-  body: {
-    flex: 1,
-    minWidth: 0,
-  },
-  headliner: {
-    fontFamily: 'Geist Sans',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  venue: {
-    fontFamily: 'Geist Sans',
-    fontSize: 11,
-    fontWeight: '400',
-    marginTop: 1,
-  },
-  chip: {
-    borderRadius: RADII.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  chipLabel: {
-    fontFamily: 'Geist Sans',
-    fontSize: 9,
-    fontWeight: '600',
-    letterSpacing: 0.54,
-  },
-});

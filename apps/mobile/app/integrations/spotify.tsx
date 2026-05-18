@@ -20,15 +20,18 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, Music } from 'lucide-react-native';
+import { ChevronLeft, Download, Music } from 'lucide-react-native';
 
 import { ExternalSourceDisclaimer } from '../../components/ExternalSourceDisclaimer';
 import { TopBar } from '../../components/TopBar';
 import { SpotifyConnectSheet } from '../../components/SpotifyConnectSheet';
 import { OfflineEmptyState } from '../../components/OfflineEmptyState';
+import { SpotifyImportPicker } from '../../components/spotify-import/SpotifyImportPicker';
 import { useTheme } from '../../lib/theme';
 import { useNetwork } from '../../lib/network';
 import { useSpotifyConnection } from '../../lib/spotify-connection';
+import { useSpotifyImport } from '../../lib/spotify-import/useSpotifyImport';
+import { useFeedback } from '../../lib/feedback';
 import { trpc } from '../../lib/trpc';
 
 export default function SpotifyIntegrationScreen(): React.JSX.Element {
@@ -48,8 +51,24 @@ export default function SpotifyIntegrationScreen(): React.JSX.Element {
     error,
     requireConnection,
   } = useSpotifyConnection();
+  const { showToast } = useFeedback();
+  const importFlow = useSpotifyImport({
+    onImported: ({ count }) => {
+      showToast({
+        kind: 'success',
+        text:
+          count > 0
+            ? `Imported ${count} artist${count === 1 ? '' : 's'}`
+            : 'Nothing new to import',
+      });
+      if (count > 0) router.push('/artists');
+    },
+  });
   const disconnect = trpc.spotify.disconnect.useMutation({
     onSuccess: async () => {
+      // Drop any in-flight import state so the picker doesn't stay open
+      // after the connection is gone.
+      importFlow.reset();
       await utils.spotify.connectionStatus.invalidate();
     },
   });
@@ -133,41 +152,126 @@ export default function SpotifyIntegrationScreen(): React.JSX.Element {
       );
     }
     return (
-      <View style={styles.body}>
-        <View
-          style={[
-            styles.card,
-            { backgroundColor: colors.surface, borderColor: colors.rule },
-          ]}
-        >
-          <Music size={20} color={colors.accent} />
-          <Text style={[styles.title, { color: colors.ink }]}>
-            Connected to{' '}
-            {connection.displayName ?? connection.spotifyUserId ?? 'Spotify'}
-          </Text>
-          {connection.product ? (
-            <Text style={[styles.body3, { color: colors.muted }]}>
-              Plan · {connection.product}
-            </Text>
-          ) : null}
-          <Pressable
-            accessibilityRole="button"
-            testID="spotify-disconnect-primary"
-            onPress={onDisconnect}
-            disabled={disconnect.isPending}
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              {
-                borderColor: '#E63946',
-                opacity: disconnect.isPending ? 0.5 : pressed ? 0.85 : 1,
-              },
+      <View style={[styles.body, { flex: 1, minHeight: 0 }]}>
+        {importFlow.phase === 'picking' || importFlow.phase === 'importing' ? (
+          <View style={[styles.pickerCard, { borderColor: colors.rule, backgroundColor: colors.surface }]}>
+            <View style={[styles.pickerHeader, { borderBottomColor: colors.rule }]}>
+              <Text style={[styles.pickerTitle, { color: colors.ink }]}>
+                Import followed artists
+              </Text>
+              <Pressable
+                onPress={importFlow.reset}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel import"
+              >
+                <Text style={[styles.pickerCancel, { color: colors.muted }]}>Cancel</Text>
+              </Pressable>
+            </View>
+            <SpotifyImportPicker flow={importFlow} />
+            <View style={[styles.pickerFooter, { borderTopColor: colors.rule }]}>
+              {importFlow.error ? (
+                <Text style={[styles.footerError, { color: '#E63946' }]} numberOfLines={2}>
+                  {importFlow.error}
+                </Text>
+              ) : null}
+              <Pressable
+                onPress={importFlow.submitImport}
+                disabled={importFlow.counts.selected === 0 || importFlow.phase === 'importing'}
+                accessibilityRole="button"
+                accessibilityLabel="Import selected"
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  {
+                    backgroundColor: colors.accent,
+                    opacity:
+                      importFlow.counts.selected === 0 || importFlow.phase === 'importing'
+                        ? 0.4
+                        : pressed
+                          ? 0.85
+                          : 1,
+                  },
+                ]}
+              >
+                {importFlow.phase === 'importing' ? (
+                  <ActivityIndicator size="small" color={colors.accentText} />
+                ) : (
+                  <Text style={[styles.primaryLabel, { color: colors.accentText }]}>
+                    IMPORT {importFlow.counts.selected}{' '}
+                    ARTIST{importFlow.counts.selected === 1 ? '' : 'S'}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: colors.surface, borderColor: colors.rule },
             ]}
           >
-            <Text style={[styles.secondaryLabel, { color: '#E63946' }]}>
-              {disconnect.isPending ? 'DISCONNECTING…' : 'DISCONNECT'}
+            <Music size={20} color={colors.accent} />
+            <Text style={[styles.title, { color: colors.ink }]}>
+              Connected to{' '}
+              {connection.displayName ?? connection.spotifyUserId ?? 'Spotify'}
             </Text>
-          </Pressable>
-        </View>
+            {connection.product ? (
+              <Text style={[styles.body3, { color: colors.muted }]}>
+                Plan · {connection.product}
+              </Text>
+            ) : null}
+            {importFlow.importedCount !== null ? (
+              <Text style={[styles.body3, { color: colors.accent }]}>
+                Imported {importFlow.importedCount} artist
+                {importFlow.importedCount === 1 ? '' : 's'}.
+              </Text>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              testID="spotify-import-artists"
+              onPress={importFlow.loadArtists}
+              disabled={importFlow.phase === 'loading'}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                {
+                  backgroundColor: colors.accent,
+                  opacity: importFlow.phase === 'loading' ? 0.5 : pressed ? 0.85 : 1,
+                  flexDirection: 'row',
+                  gap: 8,
+                },
+              ]}
+            >
+              {importFlow.phase === 'loading' ? (
+                <ActivityIndicator size="small" color={colors.accentText} />
+              ) : (
+                <>
+                  <Download size={14} color={colors.accentText} strokeWidth={2} />
+                  <Text style={[styles.primaryLabel, { color: colors.accentText }]}>
+                    IMPORT FOLLOWED ARTISTS
+                  </Text>
+                </>
+              )}
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              testID="spotify-disconnect-primary"
+              onPress={onDisconnect}
+              disabled={disconnect.isPending}
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                {
+                  borderColor: '#E63946',
+                  opacity: disconnect.isPending ? 0.5 : pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <Text style={[styles.secondaryLabel, { color: '#E63946' }]}>
+                {disconnect.isPending ? 'DISCONNECTING…' : 'DISCONNECT'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
       </View>
     );
   };
@@ -253,5 +357,42 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.7,
+  },
+  pickerCard: {
+    flex: 1,
+    minHeight: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  pickerTitle: {
+    fontFamily: 'Geist Sans',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  pickerCancel: {
+    fontFamily: 'Geist Mono',
+    fontSize: 10.5,
+    fontWeight: '500',
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+  },
+  pickerFooter: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+  },
+  footerError: {
+    fontFamily: 'Geist Mono',
+    fontSize: 11,
+    letterSpacing: 0.4,
   },
 });
