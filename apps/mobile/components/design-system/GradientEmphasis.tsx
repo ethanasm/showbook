@@ -4,20 +4,36 @@
  *
  * Native (iOS/Android): uses `@react-native-masked-view/masked-view` with
  * an `expo-linear-gradient` fill so the gradient clips to the glyph shape.
- *
- * Web: `MaskedView` is not reliably supported on react-native-web, so we
- * fall back to a solid accent color. The web bundle is only used for
- * headless Playwright smoke checks (see apps/mobile/CLAUDE.md), so this
- * lighter visual is acceptable — the native build still gets the gradient.
+ * Falls back to a solid accent color when the native view manager isn't
+ * registered (web bundle, or a stale dev client built before the
+ * dependency was added).
  */
 
 import React from 'react';
-import { Platform, Text, type TextStyle, type StyleProp } from 'react-native';
+import { Platform, Text, UIManager, type TextStyle, type StyleProp } from 'react-native';
 import { useTheme } from '../../lib/theme';
 
 interface GradientEmphasisProps {
   children: string;
   style?: StyleProp<TextStyle>;
+}
+
+// A native binary built before `@react-native-masked-view/masked-view` was
+// added (PR #250) ships the JS module via Metro but lacks the registered
+// native view manager, so rendering <MaskedView> throws "View config not
+// found for component RNCMaskedView" and breaks the screen that calls it
+// (e.g. show detail). Probe the registry up-front so older dev clients —
+// and any future architecture where the manager fails to register — fall
+// back to the solid accent fill instead of crashing.
+function isMaskedViewAvailable(): boolean {
+  if (Platform.OS === 'web') return false;
+  try {
+    const has = UIManager.hasViewManagerConfig;
+    if (typeof has !== 'function') return false;
+    return Boolean(has.call(UIManager, 'RNCMaskedView'));
+  } catch {
+    return false;
+  }
 }
 
 export function GradientEmphasis({
@@ -28,8 +44,7 @@ export function GradientEmphasis({
   const accent = tokens.colors.accent;
   const theatre = tokens.kindColor('theatre');
 
-  if (Platform.OS === 'web') {
-    // Solid accent fallback for the headless web bundle.
+  if (!isMaskedViewAvailable()) {
     return (
       <Text style={[style, { color: accent }]}>
         {children}
