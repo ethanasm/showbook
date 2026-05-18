@@ -28,6 +28,16 @@ export interface StablePredictionLike {
     evidence: string;
     role: 'opener' | 'closer' | 'encore_open' | 'encore_close' | 'core';
   }[];
+  /** Songs with 0.35 ≤ probability < 0.65. Rendered alongside `core`
+   *  so the "Likely setlist" shows a fuller set rather than only the
+   *  near-certain (≥0.65) songs — see SetlistTab notes on the web.
+   *  Optional so legacy cached payloads (or test fixtures that
+   *  pre-date this field) still render without throwing. */
+  likely?: {
+    title: string;
+    evidence: string;
+    role: 'opener' | 'closer' | 'encore_open' | 'encore_close' | 'core';
+  }[];
 }
 
 interface StableSetlistViewProps {
@@ -43,10 +53,17 @@ export function StableSetlistView({
 }: StableSetlistViewProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
-  const main = prediction.core.filter(
+  // Render core + likely together so the "Likely setlist" surfaces a
+  // full predicted set rather than only the ≥0.65 core. With a small
+  // corpus the Bayesian smoothing keeps most songs under 0.65; showing
+  // only `core` would clip the prediction to the few near-certain
+  // songs. The evidence string ("N of last M shows") already
+  // differentiates strength to the reader.
+  const allLikely = [...prediction.core, ...(prediction.likely ?? [])];
+  const main = allLikely.filter(
     (s) => s.role !== 'encore_open' && s.role !== 'encore_close',
   );
-  const encore = prediction.core.filter(
+  const encore = allLikely.filter(
     (s) => s.role === 'encore_open' || s.role === 'encore_close',
   );
   const total = main.length + encore.length;
