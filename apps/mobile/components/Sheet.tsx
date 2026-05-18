@@ -45,7 +45,7 @@ export function Sheet({
           style={[
             styles.sheet,
             {
-              maxHeight: sheetHeight,
+              height: sheetHeight,
               backgroundColor: colors.surfaceRaised,
             },
           ]}
