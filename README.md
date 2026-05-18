@@ -104,7 +104,10 @@ showbook/
 │   ├── design/               #   Hi-fi prototypes
 │   ├── GUARDRAILS.md         #   Operational guardrails
 │   └── SECURITY.md           #   Security policy
-├── docker-compose.yml
+├── infra/                    # Docker compose files + local TLS certs
+│   ├── docker-compose.yml
+│   ├── docker-compose.prod.yml
+│   └── certs/                #   gitignored mkcert TLS for HTTPS dev
 └── nx.json
 ```
 
@@ -126,7 +129,7 @@ pnpm build              # Production build of the web app (also runs inside the 
 pnpm lint               # Lint the web app
 
 # Production (Docker only)
-pnpm prod:up            # docker compose -f docker-compose.prod.yml up -d --build
+pnpm prod:up            # docker compose -f infra/docker-compose.prod.yml up -d --build
 pnpm prod:down          # Stop prod services
 pnpm prod:logs          # Tail prod web container logs
 pnpm prod:db:migrate    # Run drizzle migrations against the prod DB

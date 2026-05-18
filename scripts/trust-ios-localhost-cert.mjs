@@ -85,6 +85,12 @@ const candidates = [
   process.env.MKCERT_ROOT_CA,
   mkcertRootCandidate(),
   path.join(os.homedir(), 'Library/Application Support/mkcert/rootCA.pem'),
+  'infra/certs/localhost-cert.pem',
+  'infra/certs/localhost.pem',
+  'infra/certs/localhost.crt',
+  // Legacy pre-`infra/` locations — kept as fallback so an unmigrated
+  // local checkout still resolves before `pnpm dev:up` runs the
+  // auto-migration.
   'certs/localhost-cert.pem',
   'certs/localhost.pem',
   'certs/localhost.crt',

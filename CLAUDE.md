@@ -74,11 +74,11 @@ When you're running in the Claude Code web sandbox, this checkout is a **shallow
 Two compose files, two env files. Both bind to `127.0.0.1` only — the
 Cloudflare Tunnel reaches web via loopback.
 
-- **Dev** — `docker-compose.yml` (project `showbook-dev`), reads `.env.dev`,
+- **Dev** — `infra/docker-compose.yml` (project `showbook-dev`), reads `.env.dev`,
   source bind-mounted, Next.js in dev mode. Postgres on host port `5433`,
   web on `3001`, db `showbook`, role `showbook`. Start with `pnpm dev:up`.
   `apps/web/.env.local` is for `pnpm dev` outside Docker.
-- **Prod** — `docker-compose.prod.yml` (project `showbook-prod`), reads
+- **Prod** — `infra/docker-compose.prod.yml` (project `showbook-prod`), reads
   `.env.prod`, sealed image with `next build` baked in,
   `NODE_ENV=production`. Postgres on host port `5434`, web on `3002`,
   db `showbook_prod`, role `showbook_prod`. Start with `pnpm prod:up`,

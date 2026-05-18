@@ -19,10 +19,13 @@ name: showbook-prod
 # in .env.prod should be the tunnel hostname for real prod, or
 # https://localhost:3002 if testing prod auth locally.
 #
-#   docker compose -f docker-compose.prod.yml up -d  # start prod alongside dev
+# Lives under `infra/`. Relative paths in this file (build `context`,
+# `env_file: path`) walk up to repo root via `..`.
+#
+#   docker compose -f infra/docker-compose.prod.yml up -d  # start prod alongside dev
 #
 # Usage:
-#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f infra/docker-compose.prod.yml up -d --build
 #
 # Required env (in .env.prod):
 #   POSTGRES_PASSWORD       Strong unique password for the showbook_prod role.
@@ -65,7 +68,7 @@ services:
     # prod-mode smoke tests when the CI image isn't what you want.
     image: ghcr.io/ethanasm/showbook-web:${WEB_IMAGE_TAG:-latest}
     build:
-      context: .
+      context: ..
       dockerfile: apps/web/Dockerfile
       target: prod
     container_name: showbook-prod-web
@@ -93,7 +96,7 @@ services:
     # stop at 8 s so flushObservability has time to drain after.
     stop_grace_period: 30s
     env_file:
-      - path: .env.prod
+      - path: ../.env.prod
         required: true
     environment:
       NODE_ENV: production

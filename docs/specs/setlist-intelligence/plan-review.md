@@ -22,9 +22,9 @@ in dev/prod (not the unit/integration tests, which set it locally)
   reference) with generation instructions
   (`openssl rand -hex 32`) and rotation guidance.
 - Adding a stub key to `apps/web/.env.local` for native `pnpm dev`.
-- Setting a hardcoded dev default in `docker-compose.yml` so
+- Setting a hardcoded dev default in `infra/docker-compose.yml` so
   `pnpm dev:up` works on a clean machine without an `.env.dev`.
-- Making `TOKEN_KEY` REQUIRED in `docker-compose.prod.yml` via
+- Making `TOKEN_KEY` REQUIRED in `infra/docker-compose.prod.yml` via
   `${TOKEN_KEY:?...}` — boot fails fast if missing from `.env.prod`.
 - Setting a stub key in `.github/workflows/ci.yml` for both the
   verify-coverage and Playwright e2e jobs.

@@ -69,9 +69,9 @@ T04 Design ────┤                                                      
 - Configure `nx.json` with project graph
 - `apps/web`: scaffold Next.js 15 with App Router, **port 3001**
 - Create `apps/web/Dockerfile` — Node 20 base, install pnpm, copy workspace, `nx dev web --hostname 0.0.0.0`, expose 3001
-- Create `docker-compose.yml` from `infrastructure.md → Docker Setup` (two services: postgres on 5433, web on 3001 with volume mounts for hot reload)
+- Create `infra/docker-compose.yml` from `infrastructure.md → Docker Setup` (two services: postgres on 5433, web on 3001 with volume mounts for hot reload)
 - Create `.env.local` template with all required env vars (see infrastructure.md)
-- **Port check:** Verify 5433 and 3001 are free: `lsof -i :5433 -i :3001`. If taken, adjust ports in docker-compose.yml.
+- **Port check:** Verify 5433 and 3001 are free: `lsof -i :5433 -i :3001`. If taken, adjust ports in infra/docker-compose.yml.
 - `docker compose up -d`
 **Verify:** `docker compose ps` shows both containers healthy. `http://localhost:3001` loads the Next.js default page.
 
