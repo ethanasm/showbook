@@ -10,6 +10,7 @@ dist-web/
 ios/
 android/
 web-tests/.results/
+web-tests/.screenshots/
 playwright-report/
 
 # Local env files

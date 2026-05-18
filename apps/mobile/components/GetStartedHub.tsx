@@ -21,6 +21,7 @@ import { useRouter } from 'expo-router';
 import { ArrowRight, Compass, Mail, Music, Plus, X } from 'lucide-react-native';
 import { useTheme } from '../lib/theme';
 import { RADII } from '../lib/theme-utils';
+import { Eyebrow, GlowBackdrop, GradientEmphasis } from './design-system';
 
 const STORAGE_KEY = 'showbook.get-started.dismissed';
 
@@ -150,9 +151,15 @@ export function GetStartedHub({
 
   return (
     <View testID="get-started-hub" style={styles.expandedContainer}>
+      <GlowBackdrop />
       <View style={styles.expandedHeader}>
-        <Text style={[styles.expandedEyebrow, { color: colors.faint }]}>GET STARTED</Text>
-        <Text style={[styles.expandedTitle, { color: colors.ink }]}>Build your showbook</Text>
+        <Eyebrow>GET STARTED</Eyebrow>
+        <Text style={[styles.expandedTitle, { color: colors.ink }]}>
+          Build your{' '}
+          <GradientEmphasis style={[styles.expandedTitle, { color: colors.accent }]}>
+            showbook
+          </GradientEmphasis>
+        </Text>
         <Text style={[styles.expandedSubtitle, { color: colors.muted }]}>
           Pick a door. You can always come back to add more later.
         </Text>
@@ -195,20 +202,17 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 24,
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   expandedHeader: {
     alignItems: 'center',
     gap: 6,
   },
-  expandedEyebrow: {
-    fontSize: 10,
-    letterSpacing: 1.4,
-    fontFamily: 'Geist Sans',
-  },
   expandedTitle: {
-    fontSize: 24,
-    fontFamily: 'Geist Sans',
-    fontWeight: '600',
+    fontSize: 28,
+    fontFamily: 'Georgia',
+    fontWeight: '700',
+    letterSpacing: -0.4,
   },
   expandedSubtitle: {
     fontSize: 13,

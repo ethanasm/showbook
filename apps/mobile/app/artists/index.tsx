@@ -20,9 +20,9 @@ import {
   FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, Users, Search } from 'lucide-react-native';
+import { ChevronLeft, Search } from 'lucide-react-native';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
-import { EmptyState } from '../../components/EmptyState';
+import { EmptyStateHero } from '../../components/design-system';
 import { ArtistCard, type ArtistCardArtist } from '../../components/ArtistCard';
 import { RowSkeleton } from '../../components/skeletons';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
@@ -119,10 +119,12 @@ export default function ArtistsListScreen(): React.JSX.Element {
         </View>
       ) : merged.length === 0 ? (
         <View style={styles.emptyWrap}>
-          <EmptyState
-            icon={<Users size={40} color={colors.faint} strokeWidth={1.5} />}
-            title="No artists yet"
-            subtitle="Add a show or follow an artist from Discover and they'll show up here."
+          <EmptyStateHero
+            kind="artists"
+            title="Build your lineup"
+            body="Log a show or follow an artist from Discover and they'll appear here with the rest of your roster."
+            action={{ label: 'Open Discover', onPress: () => router.push('/discover') }}
+            secondaryAction={{ label: 'Add a show', onPress: () => router.push('/add') }}
           />
         </View>
       ) : (
@@ -156,6 +158,9 @@ const styles = StyleSheet.create({
   },
   emptyWrap: {
     flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 32,
   },
   listContent: {
     paddingHorizontal: 16,

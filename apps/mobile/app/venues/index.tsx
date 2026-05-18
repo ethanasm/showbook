@@ -16,9 +16,9 @@ import {
   FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, MapPin, Search } from 'lucide-react-native';
+import { ChevronLeft, Search } from 'lucide-react-native';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
-import { EmptyState } from '../../components/EmptyState';
+import { EmptyStateHero } from '../../components/design-system';
 import { VenueCard, type VenueCardVenue } from '../../components/VenueCard';
 import { RowSkeleton } from '../../components/skeletons';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
@@ -117,10 +117,12 @@ export default function VenuesListScreen(): React.JSX.Element {
         </View>
       ) : merged.length === 0 ? (
         <View style={styles.emptyWrap}>
-          <EmptyState
-            icon={<MapPin size={40} color={colors.faint} strokeWidth={1.5} />}
-            title="No venues yet"
-            subtitle="Add a show or follow a venue from Discover and it'll show up here."
+          <EmptyStateHero
+            kind="venues"
+            title="Map your stages"
+            body="Halls, theatres, dive bars, festival grounds — every venue you've played a part of joins the list as soon as you log a show."
+            action={{ label: 'Open Discover', onPress: () => router.push('/discover') }}
+            secondaryAction={{ label: 'Add a show', onPress: () => router.push('/add') }}
           />
         </View>
       ) : (
@@ -154,6 +156,9 @@ const styles = StyleSheet.create({
   },
   emptyWrap: {
     flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 32,
   },
   listContent: {
     paddingHorizontal: 16,

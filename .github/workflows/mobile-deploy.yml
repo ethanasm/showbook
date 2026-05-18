@@ -83,8 +83,34 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Native deps (anything that runs Expo autolinking on iOS/Android) can't
+      # be shipped via `eas update` — those updates only swap the JS bundle.
+      # If `apps/mobile/package.json` deps changed between this commit and its
+      # parent, we promote a workflow_run trigger from OTA to a full
+      # `eas build` so the preview channel actually ships the new binary.
+      - name: Detect native dep changes
+        id: detect-native
+        run: |
+          # Compare apps/mobile/package.json dependencies between HEAD and its
+          # parent commit. If any dependency line changed, force build mode.
+          # `git diff -U0` keeps the diff tight; we filter to the dependencies
+          # block by looking for the standard "  \"package-name\":" pattern.
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            DIFF=$(git diff HEAD~1 HEAD -- apps/mobile/package.json || true)
+          else
+            DIFF=""
+          fi
+          if echo "$DIFF" | grep -qE '^[-+]\s*"[^"]+":\s*"'; then
+            echo "needs_build=true" >> "$GITHUB_OUTPUT"
+            echo "Native deps changed in apps/mobile/package.json — forcing build." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "needs_build=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Push OTA update
-        if: github.event_name == 'workflow_run' || inputs.mode == 'update'
+        if: >-
+          (github.event_name == 'workflow_run' && steps.detect-native.outputs.needs_build != 'true')
+          || (github.event_name == 'workflow_dispatch' && inputs.mode == 'update')
         working-directory: apps/mobile
         env:
           # `eas update` does NOT read the eas.json build profile `env` block
@@ -105,12 +131,21 @@ jobs:
             --non-interactive
 
       - name: Build native IPA / APK
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'build'
+        # Two ways to land here:
+        #   1. Manual workflow_dispatch with mode=build (user chose the platform).
+        #   2. Auto-detected native dep change on a workflow_run trigger — we
+        #      can't pick a single platform safely in that case, so we build
+        #      both so neither phone falls behind.
+        if: >-
+          (github.event_name == 'workflow_dispatch' && inputs.mode == 'build')
+          || (github.event_name == 'workflow_run' && steps.detect-native.outputs.needs_build == 'true')
         working-directory: apps/mobile
+        env:
+          AUTO_PLATFORM: ${{ steps.detect-native.outputs.needs_build == 'true' && 'all' || inputs.platform }}
         run: |
           pnpm dlx eas-cli build \
             --profile preview \
-            --platform ${{ inputs.platform }} \
+            --platform "$AUTO_PLATFORM" \
             --non-interactive \
             --no-wait
 

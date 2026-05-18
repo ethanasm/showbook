@@ -29,14 +29,13 @@ import {
 import { useRouter } from 'expo-router';
 import {
   ChevronLeft,
-  Compass,
   Calendar,
   MapPin,
   Search,
   Users,
 } from 'lucide-react-native';
 import { ScreenWrapper } from '../components/ScreenWrapper';
-import { EmptyState } from '../components/EmptyState';
+import { EmptyStateHero } from '../components/design-system';
 import { OfflineEmptyState } from '../components/OfflineEmptyState';
 import { KindBadge } from '../components/KindBadge';
 import { useTheme } from '../lib/theme';
@@ -165,11 +164,15 @@ export default function DiscoverScreen(): React.JSX.Element {
             <ActivityIndicator color={colors.muted} />
           </View>
         ) : allEmpty ? (
-          <EmptyState
-            icon={<Compass size={40} color={colors.faint} strokeWidth={1.5} />}
-            title="Nothing to discover yet"
-            subtitle="Follow a venue or an artist to see upcoming announcements here, or add a region from the Me tab."
-          />
+          <View style={styles.heroWrap}>
+            <EmptyStateHero
+              kind="discover"
+              title="A queue of what's next"
+              body="Follow a venue or an artist to see their announcements here, or save a region from the Me tab to surface nearby shows."
+              action={{ label: 'Open Artists', onPress: () => router.push('/artists') }}
+              secondaryAction={{ label: 'Open Venues', onPress: () => router.push('/venues') }}
+            />
+          </View>
         ) : (
           <>
             <Rail
@@ -293,6 +296,10 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingTop: 8,
     paddingBottom: 48,
+  },
+  heroWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
   center: {
     flex: 1,
