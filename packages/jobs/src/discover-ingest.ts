@@ -399,6 +399,14 @@ async function upsertRun(
 async function pruneDuplicateFestivalSinglesForRun(run: EventRun): Promise<void> {
   if (run.kind !== 'festival') return;
 
+  // Only target true single-night rows. A row whose `performance_dates`
+  // already spans multiple days is a run — possibly the very row
+  // `upsertRun` just extended. The legacy convention (run rows have
+  // `source_event_id = NULL`) wasn't always honoured: rows that started
+  // life as singles and later had additional dates merged in by
+  // `upsertRun`'s extend path still carry a `source_event_id`, which used
+  // to make them eligible for prune and risked wiping the canonical run
+  // alongside the duplicate singles.
   await db.execute(
     sql`DELETE FROM announcements a
         WHERE a.source = 'ticketmaster'
@@ -408,11 +416,110 @@ async function pruneDuplicateFestivalSinglesForRun(run: EventRun): Promise<void>
           AND lower(a.headliner) = lower(${run.headliner})
           AND a.show_date >= ${run.runStartDate}
           AND a.show_date <= ${run.runEndDate}
+          AND coalesce(array_length(a.performance_dates, 1), 1) = 1
           AND NOT EXISTS (
             SELECT 1
             FROM show_announcement_links sal
             WHERE sal.announcement_id = a.id
           )`,
+  );
+}
+
+/**
+ * Merge duplicate festival rows at the same (venueId, productionName) into
+ * one canonical row. Handles the state where `refreshExistingFromTmEvent`
+ * healed several singles' `headliner`/`productionName` to the same value
+ * after a `kind='unknown'` → `kind='festival'` reclassification, leaving
+ * Discover with three "Outside Lands" rows where one belongs (a multi-day
+ * run plus two leftover singles for the days that were ingested before
+ * inferKind learned the festival's name).
+ *
+ * Canonical row = the one with the most `performance_dates`, breaking ties
+ * by the earliest `discovered_at` so we keep the row a user may already be
+ * watching. Duplicates' dates and source IDs are folded into the canonical
+ * row's `performance_dates` / `extra_source_event_ids`; the duplicates are
+ * then deleted, but only if no `show_announcement_links` row points at them
+ * (mirrors the existing `pruneDuplicateFestivalSinglesForRun` guard so we
+ * never drop an announcement a user has linked to a watched show).
+ */
+export async function consolidateFestivalDuplicates(
+  venueId: string,
+  productionName: string,
+): Promise<void> {
+  const rows = await db
+    .select()
+    .from(announcements)
+    .where(
+      and(
+        eq(announcements.venueId, venueId),
+        eq(announcements.kind, 'festival'),
+        eq(announcements.productionName, productionName),
+      ),
+    );
+
+  if (rows.length <= 1) return;
+
+  rows.sort((a, b) => {
+    const aDates = (a.performanceDates ?? []).length;
+    const bDates = (b.performanceDates ?? []).length;
+    if (aDates !== bDates) return bDates - aDates;
+    const aDiscovered = a.discoveredAt?.getTime() ?? 0;
+    const bDiscovered = b.discoveredAt?.getTime() ?? 0;
+    return aDiscovered - bDiscovered;
+  });
+
+  const canonical = rows[0]!;
+  const duplicates = rows.slice(1);
+
+  const mergedDateSet = new Set<string>(canonical.performanceDates ?? []);
+  const mergedExtras = new Set<string>(canonical.extraSourceEventIds ?? []);
+  for (const dup of duplicates) {
+    for (const d of dup.performanceDates ?? []) mergedDateSet.add(d);
+    if (dup.sourceEventId) mergedExtras.add(dup.sourceEventId);
+    for (const id of dup.extraSourceEventIds ?? []) mergedExtras.add(id);
+  }
+  // The canonical row's own sourceEventId shouldn't appear in its own
+  // extras (it's still the primary id for that row), so drop it if a
+  // duplicate happened to carry it.
+  if (canonical.sourceEventId) mergedExtras.delete(canonical.sourceEventId);
+
+  const mergedDates = Array.from(mergedDateSet).sort();
+  const mergedExtraIds = Array.from(mergedExtras);
+
+  await db
+    .update(announcements)
+    .set({
+      runStartDate: mergedDates[0]!,
+      runEndDate: mergedDates[mergedDates.length - 1]!,
+      performanceDates: mergedDates,
+      showDate: mergedDates[0]!,
+      extraSourceEventIds: mergedExtraIds.length > 0 ? mergedExtraIds : null,
+    })
+    .where(eq(announcements.id, canonical.id));
+
+  const dupIds = duplicates.map((d) => d.id);
+  const deleted = await db.execute(
+    sql`DELETE FROM announcements a
+        WHERE a.id = ANY(${dupIds}::uuid[])
+          AND NOT EXISTS (
+            SELECT 1
+            FROM show_announcement_links sal
+            WHERE sal.announcement_id = a.id
+          )
+        RETURNING a.id`,
+  );
+
+  log.info(
+    {
+      event: 'discover.ingest.festival_consolidated',
+      venueId,
+      productionName,
+      canonicalId: canonical.id,
+      mergedRows: duplicates.length,
+      deletedRows: Array.isArray(deleted) ? deleted.length : 0,
+      finalDateCount: mergedDates.length,
+    },
+    'Consolidated duplicate festival rows',
   );
 }
 
@@ -432,15 +539,23 @@ async function pruneDuplicateFestivalSinglesForRun(run: EventRun): Promise<void>
  * Only fields derivable from the TMEvent alone are touched — venue/performer
  * resolution is intentionally skipped to avoid extra external calls on every
  * re-ingest of an existing row.
+ *
+ * Returns the `(venueId, productionName)` of any festival row touched by
+ * this refresh so the caller can consolidate duplicates after all events
+ * have been processed. Refreshes that don't touch a festival row return
+ * null. The healed row IDs aren't enough — two singles healed in the same
+ * ingest both need their venue and production name to be consolidated.
  */
-async function refreshExistingFromTmEvent(event: TMEvent): Promise<void> {
+async function refreshExistingFromTmEvent(
+  event: TMEvent,
+): Promise<{ venueId: string; productionName: string } | null> {
   const onSaleStatus = determineOnSaleStatus(event);
   const onSaleDate = parseOnSaleDate(event);
   const ticketUrl = event.url ?? null;
   const kind = inferKind(event.classifications, { eventName: event.name });
   const headliner = kind === 'festival' ? extractFestivalName(event.name) : null;
 
-  await db
+  const updated = await db
     .update(announcements)
     .set({
       onSaleStatus,
@@ -456,7 +571,17 @@ async function refreshExistingFromTmEvent(event: TMEvent): Promise<void> {
         eq(announcements.source, 'ticketmaster'),
         sql`(${announcements.sourceEventId} = ${event.id} OR ${event.id} = ANY(${announcements.extraSourceEventIds}))`,
       ),
-    );
+    )
+    .returning({
+      venueId: announcements.venueId,
+      productionName: announcements.productionName,
+      kind: announcements.kind,
+    });
+
+  if (kind !== 'festival' || !headliner) return null;
+  const row = updated[0];
+  if (!row || row.kind !== 'festival' || !row.productionName) return null;
+  return { venueId: row.venueId, productionName: row.productionName };
 }
 
 /**
@@ -470,10 +595,24 @@ async function ingestTmEvents(
   resolvedVenueId?: string,
 ): Promise<number> {
   const normalized: NormalizedEvent[] = [];
+  // (venueId, productionName) pairs for every festival row touched by this
+  // ingest — written to by both the refresh path and the run/single insert
+  // paths so a single consolidation pass at the end can merge any
+  // duplicates that surfaced (re-classification of an old kind='unknown'
+  // single, or a fresh ingest of a previously-missed pass tier).
+  const touchedFestivals = new Map<string, { venueId: string; productionName: string }>();
+  const touchFestival = (venueId: string, productionName: string) => {
+    const key = `${venueId}::${productionName}`;
+    if (!touchedFestivals.has(key)) {
+      touchedFestivals.set(key, { venueId, productionName });
+    }
+  };
+
   for (const event of events) {
     if (existingSourceIds.has(event.id)) {
       try {
-        await refreshExistingFromTmEvent(event);
+        const touched = await refreshExistingFromTmEvent(event);
+        if (touched) touchFestival(touched.venueId, touched.productionName);
       } catch (err) {
         log.error(
           { err, event: 'tm.refresh.failed', tmEventId: event.id, name: event.name },
@@ -501,6 +640,9 @@ async function ingestTmEvents(
     try {
       count += await upsertRun(run, existingSourceIds);
       await pruneDuplicateFestivalSinglesForRun(run);
+      if (run.kind === 'festival') {
+        touchFestival(run.venueId, run.productionName);
+      }
     } catch (err) {
       log.error(
         { err, event: 'run.upsert.failed', productionName: run.productionName, venueId: run.venueId },
@@ -512,6 +654,9 @@ async function ingestTmEvents(
     try {
       const created = await insertSingleEvent(event, existingSourceIds);
       if (created) count++;
+      if (event.kind === 'festival') {
+        touchFestival(event.venueId, event.headliner);
+      }
     } catch (err) {
       log.error(
         { err, event: 'event.insert.failed', sourceEventId: event.sourceEventId },
@@ -519,6 +664,18 @@ async function ingestTmEvents(
       );
     }
   }
+
+  for (const { venueId, productionName } of touchedFestivals.values()) {
+    try {
+      await consolidateFestivalDuplicates(venueId, productionName);
+    } catch (err) {
+      log.error(
+        { err, event: 'festival.consolidate.failed', venueId, productionName },
+        'Failed to consolidate festival duplicates',
+      );
+    }
+  }
+
   return count;
 }
 

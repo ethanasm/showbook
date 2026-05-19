@@ -315,20 +315,33 @@ export function normalizeFestivalText(value: string): string {
  * regardless of which artist tops the per-day bill.
  *
  * Strategy: take the prefix before the first separator (`-`, `–`, `|`),
- * strip year tokens (`2026`, `'26`) and day-of-week tokens, then collapse
- * whitespace. Falls back to the original string when stripping leaves
- * nothing usable.
+ * strip year tokens (`2026`, `'26`) and day-of-week tokens, then iteratively
+ * peel trailing festival-noise tokens (`Festival`, `Music & Arts`, etc.) so
+ * TM's three names for Outside Lands — `"Outside Lands"`,
+ * `"Outside Lands Festival - FRIDAY Platinum"`, and
+ * `"Outside Lands Music & Arts Festival"` — all canonicalize to the same
+ * `"Outside Lands"` cluster key. Falls back to the original string when
+ * stripping leaves nothing usable.
  */
 export function extractFestivalName(eventName: string): string {
   // Split on the separator alone and trim each side, rather than baking
   // `\s*` into the separator regex — `\s*[-–|]\s*` is polynomial-ReDoS-
   // ambiguous on inputs full of whitespace and no separator.
   const prefix = eventName.split(/[-–|]/)[0]?.trim() ?? eventName;
-  const stripped = prefix
+  let stripped = prefix
     .replace(/\b(20\d{2}|'\d{2})\b/g, "")
     .replace(/\b(mon|tue|wed|thu|fri|sat|sun)(day)?\b/gi, "")
     .replace(/\s+/g, " ")
     .trim();
+  // Strip a trailing "[Music & Arts | Music | Arts] Festival" / "Fest" tail
+  // in one match so the engine doesn't pick the shortest leftmost
+  // alternative ("Arts Festival" inside "Music & Arts Festival") and leave
+  // the qualifier behind. The optional inner group eats the qualifier word
+  // when present, then `festival` / `fest` anchors the end.
+  const TRAILING_NOISE =
+    /\s+(?:music\s*(?:&|and)\s*arts\s+|music\s+|arts\s+)?(?:festival|fest)$/i;
+  const next = stripped.replace(TRAILING_NOISE, "").trim();
+  if (next.length > 0) stripped = next;
   return stripped.length > 0 ? stripped : eventName.trim();
 }
 
