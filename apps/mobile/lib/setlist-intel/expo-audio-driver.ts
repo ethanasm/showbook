@@ -11,11 +11,59 @@
  * Lives outside `preview-player.ts` so the pure-node unit tests can
  * exercise the controller without dragging in the `expo-audio` native
  * module via a transitive import.
+ *
+ * `expo-audio` is loaded lazily via `require()` inside `ensurePlayer()`
+ * instead of a top-level `import` so this file's module evaluation
+ * never reaches `requireNativeModule('ExpoAudio')`. A dev client built
+ * before #254 added the dep ships JS that references `expo-audio` but
+ * has no registered native module, so the eager-import path threw
+ * `Cannot find native module 'ExpoAudio'` while loading the show-detail
+ * route — which `app/(tabs)/_layout.tsx` pulls in eagerly for the iPad
+ * three-pane layout. Expo Router's route loader then saw an undefined
+ * module and surfaced the failure as `Cannot read property
+ * 'ErrorBoundary' of undefined` at the root error boundary, taking the
+ * whole app down at cold start. Deferring the require keeps app boot
+ * working on stale binaries; the preview button silently no-ops on the
+ * old build until the user installs a fresh native build. Mirrors the
+ * runtime probe pattern #256 used for `RNCMaskedView`.
  */
 
-import { createAudioPlayer, type AudioPlayer, type AudioStatus } from 'expo-audio';
-
 import type { PlaybackDriver } from './preview-player';
+
+interface ExpoAudioModule {
+  createAudioPlayer: (source: unknown) => ExpoAudioPlayer;
+}
+
+interface ExpoAudioPlayer {
+  currentTime: number;
+  replace: (source: { uri: string }) => void;
+  play: () => void;
+  pause: () => void;
+  seekTo: (seconds: number) => Promise<void>;
+  remove: () => void;
+  addListener: (
+    event: 'playbackStatusUpdate',
+    cb: (status: { didJustFinish?: boolean }) => void,
+  ) => { remove: () => void };
+}
+
+let _expoAudioCache: ExpoAudioModule | null | undefined = undefined;
+
+function loadExpoAudio(): ExpoAudioModule | null {
+  if (_expoAudioCache !== undefined) return _expoAudioCache;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    _expoAudioCache = require('expo-audio') as ExpoAudioModule;
+  } catch {
+    _expoAudioCache = null;
+  }
+  return _expoAudioCache;
+}
+
+/** Test hook: reset the cached `expo-audio` reference between cases. */
+export function __resetExpoAudioCacheForTest(): void {
+  _expoAudioCache = undefined;
+}
 
 export interface ExpoAudioDriverOptions {
   /** Fires when the clip finishes playing on its own. */
@@ -23,7 +71,7 @@ export interface ExpoAudioDriverOptions {
 }
 
 export class ExpoAudioDriver implements PlaybackDriver {
-  private player: AudioPlayer | null = null;
+  private player: ExpoAudioPlayer | null = null;
   private subscription: { remove: () => void } | null = null;
   private currentSrc: string | null = null;
   private readonly onEnded?: () => void;
@@ -34,6 +82,7 @@ export class ExpoAudioDriver implements PlaybackDriver {
 
   async play(url: string): Promise<void> {
     const player = this.ensurePlayer();
+    if (!player) return;
     if (this.currentSrc !== url) {
       player.replace({ uri: url });
       this.currentSrc = url;
@@ -75,12 +124,14 @@ export class ExpoAudioDriver implements PlaybackDriver {
     this.currentSrc = null;
   }
 
-  private ensurePlayer(): AudioPlayer {
+  private ensurePlayer(): ExpoAudioPlayer | null {
     if (this.player) return this.player;
-    const player = createAudioPlayer(null);
+    const audio = loadExpoAudio();
+    if (!audio) return null;
+    const player = audio.createAudioPlayer(null);
     this.subscription = player.addListener(
       'playbackStatusUpdate',
-      (status: AudioStatus) => {
+      (status) => {
         if (status.didJustFinish) {
           this.onEnded?.();
         }
