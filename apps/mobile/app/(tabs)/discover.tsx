@@ -21,14 +21,14 @@
  * render `OfflineEmptyState`; otherwise cached rows from a prior online
  * session render so the user gets value when their connection drops.
  *
- * Empty-state note: this screen used to call `EmptyStateHero` (full-bleed
- * editorial card with GlowBackdrop + StackedCards + GradientEmphasis). That
- * stack repeatedly hit native-view registration issues on iOS (#263 dropped
- * SVG <Pattern>/<Mask>; the user still saw an "Unimplemented component:
- * <ViewManagerAdapter…>" red placeholder afterwards). Discover's empty
- * messages are informational, not editorial — the simple `EmptyState`
- * (plain View + Text + Pressable, no native plug-ins) is robust against the
- * same class of bugs and reads cleaner alongside the chip rail.
+ * Empty-state note: uses `EmptyStateHero` (full-bleed editorial card with
+ * GlowBackdrop + StackedCards + accent-coloured tail title) so the queue
+ * matches the home / shows / venues / artists screens visually. The earlier
+ * "Unimplemented component: <ViewManagerAdapter_ExpoLinearGradient>" red
+ * placeholder + the show-detail crash were both stale-binary / nested-
+ * MaskedView regressions fixed in their own packages (#263 dropped fragile
+ * SVG passes; the GradientEmphasis rewrite stopped mounting MaskedView
+ * inside a `<Text>` parent); Discover no longer has to dodge them.
  */
 
 import React from 'react';
@@ -45,6 +45,7 @@ import { Calendar, MapPin, Search, Users } from 'lucide-react-native';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { EmptyState } from '../../components/EmptyState';
+import { EmptyStateHero } from '../../components/design-system';
 import { OfflineEmptyState } from '../../components/OfflineEmptyState';
 import { KindBadge } from '../../components/KindBadge';
 import { useTheme, type Kind } from '../../lib/theme';
@@ -141,11 +142,25 @@ export default function DiscoverScreen(): React.JSX.Element {
   const utils = trpc.useUtils();
   const [tab, setTab] = React.useState<DiscoverTab>('venues');
   const [selectedGroupId, setSelectedGroupId] = React.useState<string | null>(null);
+  // Regions tab only: second-level filter by venue id (across the selected
+  // region — or across every region when no region chip is active). null =
+  // "All venues" within whatever region scope the top row picked.
+  const [selectedRegionVenueId, setSelectedRegionVenueId] = React.useState<
+    string | null
+  >(null);
 
   // Clear filter when switching tabs — chips reset per-tab.
   React.useEffect(() => {
     setSelectedGroupId(null);
+    setSelectedRegionVenueId(null);
   }, [tab]);
+
+  // Reset the venue sub-filter whenever the region scope changes; the venue
+  // list itself is region-dependent so a stale id would silently filter to
+  // nothing.
+  React.useEffect(() => {
+    setSelectedRegionVenueId(null);
+  }, [selectedGroupId]);
 
   const followedVenuesQuery = useCachedQuery<FollowedFeed>({
     queryKey: ['mobile', 'discover', 'followedFeed'],
@@ -298,11 +313,50 @@ export default function DiscoverScreen(): React.JSX.Element {
   ]);
 
   const filteredItems = React.useMemo(() => {
-    if (!selectedGroupId) return items;
-    return items.filter((item) =>
-      getGroupKeys(item, tab, followedArtistIdSet).includes(selectedGroupId),
-    );
-  }, [items, selectedGroupId, tab, followedArtistIdSet]);
+    let next = items;
+    if (selectedGroupId) {
+      next = next.filter((item) =>
+        getGroupKeys(item, tab, followedArtistIdSet).includes(selectedGroupId),
+      );
+    }
+    // Regions tab: second-level venue filter narrows the set further. Empty
+    // when no region or no venue is picked.
+    if (tab === 'regions' && selectedRegionVenueId) {
+      next = next.filter((item) => item.venue.id === selectedRegionVenueId);
+    }
+    return next;
+  }, [items, selectedGroupId, selectedRegionVenueId, tab, followedArtistIdSet]);
+
+  // Regions tab only: venue chips for the venues that surfaced in the
+  // currently-scoped region (or across all followed regions when "All"
+  // regions is selected). Counts are derived from the *region-filtered*
+  // items so the chip number always matches what shows below.
+  const regionVenueChips = React.useMemo<FilterGroup[]>(() => {
+    if (tab !== 'regions') return [];
+    const scoped = selectedGroupId
+      ? items.filter((item) =>
+          getGroupKeys(item, 'regions', null).includes(selectedGroupId),
+        )
+      : items;
+    const seen = new Map<string, FilterGroup>();
+    for (const item of scoped) {
+      const venueId = item.venue.id;
+      if (!venueId) continue;
+      if (!seen.has(venueId)) {
+        seen.set(venueId, {
+          id: venueId,
+          name: item.venue.name,
+          sublabel: item.venue.city,
+          count: 0,
+        });
+      }
+      seen.get(venueId)!.count++;
+    }
+    return Array.from(seen.values()).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.name.localeCompare(b.name);
+    });
+  }, [items, selectedGroupId, tab]);
 
   const showOfflineEmpty = !network.online && !activeQuery.data;
   const isLoading = activeQuery.isLoading;
@@ -337,6 +391,24 @@ export default function DiscoverScreen(): React.JSX.Element {
           totalCount={items.length}
         />
       )}
+
+      {/* Regions tab — second-level filter: venues within the scoped region
+          (or across all regions when "All" is active above). Hidden until
+          we actually have venue announcements to filter to. */}
+      {!showOfflineEmpty &&
+        !isLoading &&
+        !isEmpty &&
+        tab === 'regions' &&
+        regionVenueChips.length > 0 && (
+          <FilterChipsRow
+            groups={regionVenueChips}
+            selected={selectedRegionVenueId}
+            onSelect={setSelectedRegionVenueId}
+            totalCount={regionVenueChips.reduce((sum, g) => sum + g.count, 0)}
+            allLabel="All venues"
+            variant="sub"
+          />
+        )}
 
       <ScrollView
         contentContainerStyle={
@@ -386,7 +458,7 @@ export default function DiscoverScreen(): React.JSX.Element {
                 {filterCount} upcoming · pull to refresh
               </Text>
             </View>
-            {tab === 'regions' && !selectedGroupId ? (
+            {tab === 'regions' && !selectedGroupId && !selectedRegionVenueId ? (
               <RegionGroupedList
                 items={filteredItems as NearbyAnnouncementItem[]}
                 groups={groupList}
@@ -410,11 +482,18 @@ function FilterChipsRow({
   selected,
   onSelect,
   totalCount,
+  allLabel = 'All',
+  variant = 'primary',
 }: {
   groups: FilterGroup[];
   selected: string | null;
   onSelect: (id: string | null) => void;
   totalCount: number;
+  /** Label for the "no-filter" chip. Defaults to "All". */
+  allLabel?: string;
+  /** Visual style. `sub` renders a slightly tighter row used as a second-
+   *  level filter under a primary row (Regions tab venue chips). */
+  variant?: 'primary' | 'sub';
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -422,11 +501,11 @@ function FilterChipsRow({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.chipsRow}
+      contentContainerStyle={[styles.chipsRow, variant === 'sub' && styles.chipsRowSub]}
       style={styles.chipsScroll}
     >
       <FilterChip
-        label="All"
+        label={allLabel}
         count={totalCount}
         active={selected === null}
         onPress={() => onSelect(null)}
@@ -582,36 +661,48 @@ function EmptyForTab({
 }): React.JSX.Element {
   if (tab === 'venues') {
     return (
-      <EmptyState
-        title="Follow a venue"
-        subtitle="Follow a venue from its detail screen to see its upcoming announcements here."
-        cta={{ label: 'Open Venues', onPress: onOpenVenues }}
-      />
+      <View style={styles.heroWrap}>
+        <EmptyStateHero
+          kind="discover"
+          title="Follow a venue"
+          body="Follow a venue from its detail screen to see its upcoming announcements here."
+          action={{ label: 'Open Venues', onPress: onOpenVenues }}
+        />
+      </View>
     );
   }
   if (tab === 'artists') {
     return (
-      <EmptyState
-        title="Follow an artist"
-        subtitle="Follow an artist to see their tour announcements as soon as they go on sale."
-        cta={{ label: 'Open Artists', onPress: onOpenArtists }}
-      />
+      <View style={styles.heroWrap}>
+        <EmptyStateHero
+          kind="discover"
+          title="Follow an artist"
+          body="Follow an artist to see their tour announcements as soon as they go on sale."
+          action={{ label: 'Open Artists', onPress: onOpenArtists }}
+        />
+      </View>
     );
   }
   if (hasRegions === false) {
     return (
-      <EmptyState
-        title="Set your region"
-        subtitle="Add a region to surface nearby announcements and power your daily email digest."
-        cta={{ label: 'Open Settings', onPress: onOpenMe }}
-      />
+      <View style={styles.heroWrap}>
+        <EmptyStateHero
+          kind="discover"
+          title="Set your region"
+          body="Add a region to surface nearby announcements and power your daily email digest."
+          action={{ label: 'Open Settings', onPress: onOpenMe }}
+        />
+      </View>
     );
   }
   return (
-    <EmptyState
-      title="Quiet week"
-      subtitle="No new announcements in your saved regions yet. Check back after the next ingest."
-    />
+    <View style={styles.heroWrap}>
+      <EmptyStateHero
+        kind="discover"
+        title="Quiet week"
+        body="No new announcements in your saved regions yet. Check back after the next ingest."
+      />
+    </View>
   );
 }
 
@@ -729,6 +820,14 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 16,
     paddingBottom: 10,
+  },
+  chipsRowSub: {
+    paddingTop: 0,
+    paddingBottom: 8,
+  },
+  heroWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
   chip: {
     flexDirection: 'row',
