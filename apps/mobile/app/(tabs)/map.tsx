@@ -8,7 +8,7 @@
  *
  * Data source: trpc.shows.listForMap (already returns the headliner name
  * and venue lat/lng). We do NOT call a region-scoped procedure — the
- * "Search this area" affordance is a pan-detection re-cluster only.
+ * "Refresh map" affordance is a pan-detection re-cluster only.
  *
  * Clustering is hand-rolled grid bucketing — no external cluster lib.
  * Cell size scales with the visible longitude delta so clusters break
@@ -26,7 +26,7 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MapPin, Search, X } from 'lucide-react-native';
+import { MapPin, RefreshCw, X } from 'lucide-react-native';
 import MapView, {
   Marker,
   PROVIDER_GOOGLE,
@@ -333,9 +333,12 @@ export default function MapScreen(): React.JSX.Element {
   );
   const selectedVenue = selectedCluster?.venues[0] ?? null;
 
-  // "Search this area" appears once the user has panned far enough away
-  // from the last region we re-clustered against. Tapping it just commits
-  // the current region as the new baseline (clusters already update live).
+  // "Refresh map" appears once the user has panned far enough away from
+  // the last region we acknowledged. Tapping it refetches the user's
+  // shows and commits the current region as the new baseline so the
+  // indicator hides until the next pan. (Server-side bbox filtering
+  // isn't wired — shows.listForMap returns the user's full set and
+  // clusters update live as the camera moves.)
   const panDelta = regionDelta(region, loadedRegion);
   const shouldShowSearchArea =
     didFitOnce &&
@@ -508,9 +511,9 @@ export default function MapScreen(): React.JSX.Element {
                   },
                 ]}
               >
-                <Search size={14} color={colors.ink} />
+                <RefreshCw size={14} color={colors.ink} />
                 <Text style={[styles.searchAreaLabel, { color: colors.ink }]}>
-                  Search this area
+                  Refresh map
                 </Text>
               </Pressable>
             )}

@@ -16,11 +16,8 @@
  *   - APPEARANCE section: Theme (Light / Dark / System) + Density
  *     (Comfortable / Compact). Density is persisted locally via
  *     useTheme().setDensity (see lib/theme.ts).
- *   - ACTIVITY section: stubbed with EmptyState. There is no `activity.list`
- *     procedure on AppRouter today — see the ACTIVITY comment below for the
- *     missing API contract.
  *   - ACCOUNT section: Sign out (destructive).
- *   - SHOWBOOK · vX footer.
+ *   - SHOWBOOK · vX footer (version read from expoConfig).
  *
  * Sign-out: confirmation Alert before clearing the SecureStore session.
  * After signOut(), `useAuth().user` is null, which makes app/index.tsx
@@ -39,13 +36,13 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import {
   Mail,
   Ticket,
   MapPin,
   ChevronLeft,
   ChevronRight,
-  Inbox,
   CloudUpload,
   Music,
   RefreshCw,
@@ -53,7 +50,6 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { ScreenWrapper } from '../components/ScreenWrapper';
 import { SegmentedControl } from '../components/SegmentedControl';
-import { EmptyState } from '../components/EmptyState';
 import { useTheme, type ThemePreference, type Density } from '../lib/theme';
 import { useAuth } from '../lib/auth';
 import { trpc } from '../lib/trpc';
@@ -83,6 +79,8 @@ const INTEGRATIONS: readonly IntegrationRow[] = [
   { id: 'ticketmaster', label: 'Ticketmaster', icon: Ticket },
   { id: 'google-places', label: 'Google Places', icon: MapPin },
 ] as const;
+
+const APP_VERSION = `v${Constants.expoConfig?.version ?? '0.1.0'}`;
 
 export default function MeScreen(): React.JSX.Element {
   const { tokens } = useTheme();
@@ -323,30 +321,6 @@ export default function MeScreen(): React.JSX.Element {
           <DensitySelector />
         </View>
 
-        {/* ACTIVITY */}
-        <Text style={[styles.sectionLabel, { color: colors.muted }]}>RECENT ACTIVITY</Text>
-        <View
-          style={[
-            styles.card,
-            styles.activityCard,
-            { backgroundColor: colors.surface, borderColor: colors.rule },
-          ]}
-        >
-          {/*
-           * ACTIVITY: there is no `activity.list` procedure on AppRouter yet.
-           * The intended contract (per the C-5 spec) is a paginated read
-           * returning the 5 most recent user-facing events — adds, edits,
-           * media tags, follows. When the API lands, replace this stub with
-           * a small list view bound to `trpc.activity.list.useQuery({
-           * limit: 5 })`.
-           */}
-          <EmptyState
-            icon={<Inbox size={40} color={colors.muted} />}
-            title="No activity yet"
-            subtitle="Recent adds, edits, and tagged media will show up here."
-          />
-        </View>
-
         {/* ACCOUNT */}
         <Text style={[styles.sectionLabel, { color: colors.muted }]}>ACCOUNT</Text>
         <View
@@ -365,7 +339,7 @@ export default function MeScreen(): React.JSX.Element {
         </View>
 
         <Text style={[styles.footer, { color: colors.faint }]}>
-          SHOWBOOK · v0.1 · M5
+          SHOWBOOK · {APP_VERSION}
         </Text>
       </ScrollView>
     </ScreenWrapper>
@@ -536,10 +510,6 @@ const styles = StyleSheet.create({
   },
   cardSpacer: {
     height: 16,
-  },
-  activityCard: {
-    padding: 0,
-    minHeight: 160,
   },
   row: {
     flexDirection: 'row',

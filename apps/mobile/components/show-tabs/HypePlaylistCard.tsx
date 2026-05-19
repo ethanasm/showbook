@@ -20,6 +20,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Music } from 'lucide-react-native';
 
 import { useTheme } from '../../lib/theme';
+import { hapticSuccess } from '../../lib/haptics';
 import { trpc } from '../../lib/trpc';
 import { useNetwork } from '../../lib/network';
 import { useSpotifyConnection } from '../../lib/spotify-connection';
@@ -144,6 +145,7 @@ export function HypePlaylistCard({
       });
       const missing = result.missing.length;
       const made = result.trackCount;
+      void hapticSuccess();
       setStatusMsg(
         missing > 0
           ? `Created — ${made} of ${result.requested} resolved`

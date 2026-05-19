@@ -22,7 +22,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft } from 'lucide-react-native';
+import { Camera, ChevronLeft, Image as ImageIcon } from 'lucide-react-native';
 
 import { TopBar } from '../../../components/TopBar';
 import { EmptyState } from '../../../components/EmptyState';
@@ -33,6 +33,7 @@ import { trpc } from '../../../lib/trpc';
 import { useFeedback } from '../../../lib/feedback';
 import {
   pickMediaFromLibrary,
+  captureMediaFromCamera,
   uploadFile,
   OverQuotaError,
   UploadCancelledError,
@@ -94,6 +95,24 @@ export default function UploadScreen(): React.JSX.Element {
         showToast({
           kind: 'error',
           text: 'Showbook needs photo library access to upload.',
+        });
+        return;
+      }
+      if (res.cancelled) return;
+      setRows((prev) => mergeFiles(prev, res.files));
+    } finally {
+      setPicking(false);
+    }
+  }, [showToast]);
+
+  const runCamera = useCallback(async () => {
+    setPicking(true);
+    try {
+      const res = await captureMediaFromCamera();
+      if (res.permissionDenied) {
+        showToast({
+          kind: 'error',
+          text: 'Showbook needs camera access to capture media.',
         });
         return;
       }
@@ -238,20 +257,91 @@ export default function UploadScreen(): React.JSX.Element {
           ) : (
             <View style={styles.center}>
               <EmptyState
-                title="Nothing selected"
-                subtitle={`Pick up to ${MAX_SELECTION} photos or videos to add to this show.`}
-                cta={{ label: 'Open library', onPress: () => void runPicker() }}
+                title="Add a photo or video"
+                subtitle={`Snap a new one or pick up to ${MAX_SELECTION} from your library.`}
               />
+              <View style={styles.chooserRow}>
+                <Pressable
+                  onPress={() => void runCamera()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Take photo with camera"
+                  style={({ pressed }) => [
+                    styles.chooserBtn,
+                    {
+                      backgroundColor: colors.accent,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <Camera size={16} color={colors.accentText} strokeWidth={2} />
+                  <Text style={[styles.chooserLabel, { color: colors.accentText }]}>
+                    Take photo
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void runPicker()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Pick photos from library"
+                  style={({ pressed }) => [
+                    styles.chooserBtn,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.rule,
+                      borderWidth: StyleSheet.hairlineWidth,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <ImageIcon size={16} color={colors.ink} strokeWidth={2} />
+                  <Text style={[styles.chooserLabel, { color: colors.ink }]}>
+                    Photo library
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           )
         ) : (
-          <Uploader
-            rows={rows}
-            onCaptionChange={onCaptionChange}
-            onRemove={onRemove}
-            onRetry={onRetry}
-            captionsEditable={!uploading}
-          />
+          <>
+            <Uploader
+              rows={rows}
+              onCaptionChange={onCaptionChange}
+              onRemove={onRemove}
+              onRetry={onRetry}
+              captionsEditable={!uploading}
+            />
+            {!uploading && rows.length < MAX_SELECTION ? (
+              <View style={styles.addMoreRow}>
+                <Pressable
+                  onPress={() => void runCamera()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Take another photo"
+                  style={({ pressed }) => [
+                    styles.addMoreBtn,
+                    { borderColor: colors.rule, opacity: pressed ? 0.7 : 1 },
+                  ]}
+                >
+                  <Camera size={14} color={colors.ink} strokeWidth={2} />
+                  <Text style={[styles.addMoreLabel, { color: colors.ink }]}>
+                    Take photo
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void runPicker()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add from photo library"
+                  style={({ pressed }) => [
+                    styles.addMoreBtn,
+                    { borderColor: colors.rule, opacity: pressed ? 0.7 : 1 },
+                  ]}
+                >
+                  <ImageIcon size={14} color={colors.ink} strokeWidth={2} />
+                  <Text style={[styles.addMoreLabel, { color: colors.ink }]}>
+                    From library
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </>
         )}
       </ScrollView>
 
@@ -333,5 +423,43 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist Sans',
     fontSize: 15,
     fontWeight: '600',
+  },
+  chooserRow: {
+    marginTop: 16,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  chooserBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: RADII.pill,
+  },
+  chooserLabel: {
+    fontFamily: 'Geist Sans',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  addMoreRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+  },
+  addMoreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: RADII.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  addMoreLabel: {
+    fontFamily: 'Geist Sans',
+    fontSize: 12,
+    fontWeight: '500',
   },
 });

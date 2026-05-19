@@ -45,6 +45,7 @@ import { TopBar } from '../../../components/TopBar';
 import { SetlistRow } from '../../../components/SetlistRow';
 import { EmptyState } from '../../../components/EmptyState';
 import { useTheme } from '../../../lib/theme';
+import { hapticSelection } from '../../../lib/haptics';
 import { trpc } from '../../../lib/trpc';
 import { useFeedback } from '../../../lib/feedback';
 import { runOptimisticMutation } from '../../../lib/mutations';
@@ -404,7 +405,10 @@ export default function SetlistComposerScreen(): React.JSX.Element {
               </View>
             );
           }}
-          onDragEnd={({ data }) => setTracks(data)}
+          onDragEnd={({ data }) => {
+            void hapticSelection();
+            setTracks(data);
+          }}
           ListFooterComponent={
             <View style={styles.footer}>
               <Pressable

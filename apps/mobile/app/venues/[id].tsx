@@ -40,6 +40,7 @@ import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
+import { hapticSelection } from '../../lib/haptics';
 import { isNonWatchableKind } from '@showbook/shared';
 import { useAuth } from '../../lib/auth';
 import { trpc, type RouterOutput } from '../../lib/trpc';
@@ -298,6 +299,7 @@ function FollowVenueButton({
   const toggle = React.useCallback(async () => {
     if (pending) return;
     setPending(true);
+    void hapticSelection();
     const wasFollowed = isFollowed;
     type DetailCache = { isFollowed?: boolean } | undefined;
     type FollowedCache = { id: string }[] | undefined;

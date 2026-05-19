@@ -1,10 +1,11 @@
 /**
- * First-run step 5 of 5 — Gmail import (informational for M1).
+ * First-run step 5 of 5 — Gmail import (informational).
  *
- * Real Gmail OAuth scope-elevation lands in M3. For now both buttons mark
- * first-run complete and route into the main app. The "Connect Gmail"
- * button shows a "Coming soon" inline note instead of triggering an OAuth
- * flow we haven't built yet.
+ * Mobile Gmail OAuth scope-elevation isn't built yet (tracked in
+ * docs/specs/planned-improvements.md). To avoid teasing a feature
+ * the user can't actually use, both CTAs simply mark first-run
+ * complete and route into the main app — the illustration + body
+ * still teach what the Gmail scan does on the web.
  */
 
 import React from 'react';
@@ -35,7 +36,6 @@ export default function FirstRunGmail(): React.JSX.Element {
   const router = useRouter();
   const { markFirstRunComplete } = useAuth();
   const [pending, setPending] = React.useState(false);
-  const [showComingSoon, setShowComingSoon] = React.useState(false);
 
   const finish = React.useCallback(async () => {
     if (pending) return;
@@ -47,15 +47,6 @@ export default function FirstRunGmail(): React.JSX.Element {
       setPending(false);
     }
   }, [markFirstRunComplete, pending, router]);
-
-  const onPrimary = React.useCallback(() => {
-    // Real Gmail OAuth flow lands in M3. For M1 just surface a brief
-    // "Coming soon" then continue.
-    setShowComingSoon(true);
-    setTimeout(() => {
-      void finish();
-    }, 600);
-  }, [finish]);
 
   const illustration = (
     <View style={styles.emailList}>
@@ -93,9 +84,6 @@ export default function FirstRunGmail(): React.JSX.Element {
           </View>
         );
       })}
-      {showComingSoon ? (
-        <Text style={[styles.comingSoon, { color: colors.accent }]}>Coming soon — finishing setup…</Text>
-      ) : null}
     </View>
   );
 
@@ -109,15 +97,15 @@ export default function FirstRunGmail(): React.JSX.Element {
           Pull in <Text style={{ color: colors.accent }}>past tickets.</Text>
         </Text>
       }
-      body="Showbook can scan your inbox for ticket confirmations from Ticketmaster, AXS, See Tickets, and Eventbrite — and pre-build your archive in seconds."
+      body="On the web, Showbook can scan your inbox for ticket confirmations from Ticketmaster, AXS, See Tickets, and Eventbrite — and pre-build your archive in seconds. Mobile Gmail import is coming."
       illustration={illustration}
       footer={
         <View style={styles.disclaimerFooter}>
           <ExternalSourceDisclaimer source="gmail" />
         </View>
       }
-      primaryLabel="Connect Gmail"
-      onPrimary={onPrimary}
+      primaryLabel="Got it"
+      onPrimary={() => void finish()}
       secondaryLabel="Start with an empty showbook"
       onSecondary={() => void finish()}
       pending={pending}
@@ -169,12 +157,5 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 320,
     alignSelf: 'center',
-  },
-  comingSoon: {
-    fontFamily: 'Geist Sans',
-    fontSize: 11,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginTop: 4,
   },
 });
