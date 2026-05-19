@@ -2,41 +2,58 @@
  * GlowBackdrop — absolute-positioned decorative backdrop used behind hero
  * sections and the editorial empty state. Mirrors the web `.glow-backdrop`
  * rule: a vertical surface→bg fade with two soft gold/blue blobs at the
- * top-left and bottom-right, and a faint grid overlay masked to a centre
- * ellipse so it fades at the edges.
+ * top-left and bottom-right.
  *
- * React Native can't render true CSS radial gradients, so we approximate
- * the blobs with circular `LinearGradient`s (centre → transparent) inside
- * overflow-hidden parents. The result is visually close: a gold wash in
- * one corner and a blue wash in the opposite corner.
+ * Implementation note: the first cut used `react-native-svg`'s
+ * `<Pattern>` / `<Mask>` / `<RadialGradient>` to mirror the web treatment
+ * pixel-for-pixel. On iOS that produced two visible bugs in the
+ * 2026-05-19 dev client:
+ *
+ *   1. "Unimplemented component: <ViewManagerAdapter_RNSVGPattern>"
+ *      (and same for `Mask`) — those view managers aren't registered
+ *      by react-native-svg on iOS, so the SVG layer painted a debug
+ *      placeholder over the screen.
+ *   2. `<Stop stopOpacity="0" />` was ignored by the RadialGradient,
+ *      so the two blobs rendered as solid-coloured squares with no
+ *      fade-out. Stacked over the empty-state hero, they merged into
+ *      a flat pink wash that drowned the title and body text.
+ *
+ * The visual is decorative, so the simplest fix is the right one:
+ * drop the SVG path entirely and build the wash from
+ * `expo-linear-gradient` only (which IS registered in the binary —
+ * #250 added the dep and shipped a fresh native build). Two diagonal
+ * gradients in opposite corners approximate the corner blobs, and the
+ * base surface→bg gradient stays as-is. The grid overlay is dropped
+ * with it; reviewers shouldn't fight legibility for a polish flourish.
  */
 
 import React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Defs, Pattern, Rect, RadialGradient, Stop, Mask } from 'react-native-svg';
 import { useTheme } from '../../lib/theme';
 
 interface GlowBackdropProps {
-  /** When true, overlay the 48px grid pattern. Default true. */
+  /**
+   * Kept for API compatibility with the previous SVG-grid version.
+   * Currently a no-op — the grid overlay was the source of the iOS
+   * "Unimplemented component" error and added little visual value at
+   * the empty-state size.
+   */
   grid?: boolean;
 }
 
-export function GlowBackdrop({ grid = true }: GlowBackdropProps): React.JSX.Element {
+export function GlowBackdrop(_props: GlowBackdropProps = {}): React.JSX.Element {
   const { tokens, mode } = useTheme();
   const { colors } = tokens;
 
-  // Pull the rule color into a hex-ish form the SVG can use. The token
-  // is already an rgba string in DARK_COLORS / LIGHT_COLORS, so we can
-  // just hand it to SVG which accepts it directly.
-  const ruleColor = colors.rule;
-
-  // Approximate the gold + blue blobs. Web uses
-  //   radial-gradient(1200x600 at 20% 10%, rgba(255,209,102,0.10), transparent 60%)
-  //   radial-gradient(900x500 at 80% 90%, rgba(58,134,255,0.10), transparent 60%)
-  // We render the same colours at lower opacity to keep the effect subtle.
-  const goldRgba = mode === 'dark' ? 'rgba(255,209,102,0.16)' : 'rgba(229,168,0,0.14)';
-  const blueRgba = mode === 'dark' ? 'rgba(58,134,255,0.14)' : 'rgba(58,134,255,0.12)';
+  // Same colour intent as the web treatment: warm gold accent in the
+  // top-left, cool blue accent in the bottom-right. Keep alpha low so
+  // body text stays legible — the previous build ran at 0.14/0.16 which
+  // looked fine in mockups but stacked into a saturated pink in
+  // practice. 0.08 reads as a soft tint behind the title.
+  const goldEdge = mode === 'dark' ? 'rgba(255,209,102,0.10)' : 'rgba(229,168,0,0.08)';
+  const blueEdge = mode === 'dark' ? 'rgba(58,134,255,0.10)' : 'rgba(58,134,255,0.08)';
+  const transparent = 'rgba(0,0,0,0)';
 
   return (
     <View style={styles.container} pointerEvents="none">
@@ -48,65 +65,24 @@ export function GlowBackdrop({ grid = true }: GlowBackdropProps): React.JSX.Elem
         style={StyleSheet.absoluteFillObject}
       />
 
-      {/* Gold blob, top-left. */}
-      <View style={[styles.blob, styles.blobTopLeft]} pointerEvents="none">
-        <Svg width="100%" height="100%">
-          <Defs>
-            <RadialGradient id="goldBlob" cx="50%" cy="50%" rx="50%" ry="50%">
-              <Stop offset="0%" stopColor={goldRgba} stopOpacity="1" />
-              <Stop offset="60%" stopColor={goldRgba} stopOpacity="0" />
-            </RadialGradient>
-          </Defs>
-          <Rect width="100%" height="100%" fill="url(#goldBlob)" />
-        </Svg>
-      </View>
+      {/* Gold blob, top-left. Diagonal LinearGradient at low alpha
+          mimics a soft radial fade without needing SVG. */}
+      <LinearGradient
+        colors={[goldEdge, transparent]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0.7 }}
+        style={StyleSheet.absoluteFillObject}
+        pointerEvents="none"
+      />
 
-      {/* Blue blob, bottom-right. */}
-      <View style={[styles.blob, styles.blobBottomRight]} pointerEvents="none">
-        <Svg width="100%" height="100%">
-          <Defs>
-            <RadialGradient id="blueBlob" cx="50%" cy="50%" rx="50%" ry="50%">
-              <Stop offset="0%" stopColor={blueRgba} stopOpacity="1" />
-              <Stop offset="60%" stopColor={blueRgba} stopOpacity="0" />
-            </RadialGradient>
-          </Defs>
-          <Rect width="100%" height="100%" fill="url(#blueBlob)" />
-        </Svg>
-      </View>
-
-      {/* 48px grid overlay masked to a centre ellipse — only render on
-          native. Web has flaky SVG mask support on some browsers, and the
-          grid is a "polish" element rather than a functional one. */}
-      {grid && Platform.OS !== 'web' ? (
-        <Svg
-          style={StyleSheet.absoluteFillObject}
-          // The SVG box is fluid because we're inside an absolute View.
-          // Use preserveAspectRatio="none" so the pattern tiles cleanly.
-          preserveAspectRatio="none"
-        >
-          <Defs>
-            <Pattern id="grid48" x="0" y="0" width="48" height="48" patternUnits="userSpaceOnUse">
-              <Rect x="0" y="0" width="48" height="48" fill="transparent" />
-              <Rect x="0" y="0" width="48" height="1" fill={ruleColor} />
-              <Rect x="0" y="0" width="1" height="48" fill={ruleColor} />
-            </Pattern>
-            <RadialGradient id="gridMask" cx="50%" cy="40%" rx="50%" ry="50%">
-              <Stop offset="30%" stopColor="white" stopOpacity="1" />
-              <Stop offset="75%" stopColor="white" stopOpacity="0" />
-            </RadialGradient>
-            <Mask id="gridMaskClip" maskUnits="userSpaceOnUse">
-              <Rect width="100%" height="100%" fill="url(#gridMask)" />
-            </Mask>
-          </Defs>
-          <Rect
-            width="100%"
-            height="100%"
-            fill="url(#grid48)"
-            mask="url(#gridMaskClip)"
-            opacity={0.35}
-          />
-        </Svg>
-      ) : null}
+      {/* Blue blob, bottom-right. Mirror of the gold pass. */}
+      <LinearGradient
+        colors={[transparent, blueEdge]}
+        start={{ x: 0.3, y: 0.5 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+        pointerEvents="none"
+      />
     </View>
   );
 }
@@ -115,18 +91,5 @@ const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
-  },
-  blob: {
-    position: 'absolute',
-    width: '120%',
-    height: '70%',
-  },
-  blobTopLeft: {
-    top: '-25%',
-    left: '-25%',
-  },
-  blobBottomRight: {
-    bottom: '-25%',
-    right: '-25%',
   },
 });
