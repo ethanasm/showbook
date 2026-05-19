@@ -16,7 +16,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../lib/theme';
-import { hapticSelection } from '../lib/haptics';
+import { hapticImpactMedium } from '../lib/haptics';
 import { KindBadge } from './KindBadge';
 import { StateChip } from './StateChip';
 import type { Kind, ShowState } from '../lib/theme';
@@ -65,7 +65,7 @@ export function ShowCard({
       onLongPress={
         onLongPress
           ? () => {
-              void hapticSelection();
+              void hapticImpactMedium();
               onLongPress();
             }
           : undefined
