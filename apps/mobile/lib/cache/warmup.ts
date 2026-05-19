@@ -308,7 +308,13 @@ export async function warmCacheForOfflineUse(
   // ──────────────── Phase 1: roots (serial) ────────────────
 
   const showsList = await step('shows.list', async () => {
-    const data = await c.shows.list.query();
+    // `shows.list` accepts an optional filter object — pass an empty one
+    // so the Zod input validator (`z.object({...}).optional()` fields)
+    // accepts the call. Calling `.query()` with no argument sends the
+    // bare `null` superjson envelope, which the server rejects as
+    // `expected: object, code: invalid_type` and floods Axiom with
+    // `trpc.error` log lines.
+    const data = await c.shows.list.query({});
     // `shows.list` is read under two keys today (Home + Shows tab). Write
     // both from the single network call. If the two screens consolidate
     // later, dropping the second `setQueryData` here is a one-line change.

@@ -46,6 +46,11 @@ import {
 import { FestivalLineupPicker } from '../../components/festival-lineup/FestivalLineupPicker';
 import { Eyebrow, GlowBackdrop } from '../../components/design-system';
 
+// Hoisted so the `options` reference passed to `<Stack.Screen>` is
+// stable across renders. See the same constant in `apps/mobile/app/add/form.tsx`
+// for the iOS re-mount cascade this prevents.
+const SCREEN_OPTIONS = { presentation: 'modal', gestureEnabled: true } as const;
+
 export default function FestivalPosterScreen(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -159,7 +164,7 @@ export default function FestivalPosterScreen(): React.JSX.Element {
 
   return (
     <>
-      <Stack.Screen options={{ presentation: 'modal', gestureEnabled: true }} />
+      <Stack.Screen options={SCREEN_OPTIONS} />
       <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
         <TopBar
           title={flow.meta?.festivalName ?? 'Festival poster'}
