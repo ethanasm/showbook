@@ -171,7 +171,7 @@ The stdout copy in the prod web container (`docker logs showbook-prod-web`) is a
 
 **Structured event names worth knowing (curated list, prefix-grouped):**
 - `auth.user_created`, `auth.signin` — NextAuth lifecycle.
-- `tm.request.*`, `tm.normalize.failed` — Ticketmaster client + ingest normalizer.
+- `tm.request.*`, `tm.normalize.failed`, `tm.normalize.skipped`, `tm.normalize.support_performer_failed`, `tm.normalize.attraction_dropped` — Ticketmaster client + ingest normalizer. `tm.normalize.skipped` carries a `reason` field (`missing_venue_name` | `missing_venue_city`) for TM events the normalizer refuses to ingest. `tm.normalize.attraction_dropped` (added 2026-05-19, reason `missing_name`) fires when the resale-marketplace listings ship an attraction object with only an `id`; pre-filter those leaked through as the literal string "undefined" in `announcement.support` and crashed `matchOrCreatePerformer`.
 - `setlistfm.request.*` — setlist.fm client (rate-limit retries, errors).
 - `venue_matcher.tm_lookup.failed`, `venue_matcher.geocode.failed`, `venue_matcher.geocode_update.failed` — `matchOrCreateVenue` external-call boundaries.
 - `geocode.google.failed`, `geocode.google.no_lat_lng`, `geocode.nominatim.http_error`, `geocode.nominatim.failed` — `geocodeVenue` provider boundaries; were silent until 2026-04-30.

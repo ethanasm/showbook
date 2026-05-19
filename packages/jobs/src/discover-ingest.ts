@@ -147,6 +147,28 @@ async function normalizeTmEvent(
     return null;
   }
 
+  // TM also returns events with a venue name but no city — these are
+  // overwhelmingly Ticketmaster Resale Marketplace listings (event ids like
+  // `ZkDnngzZDdAjbJpUFAGnI9l-Lv9oEss`, 2026-05-17) where the "venue" is the
+  // reseller's business address (a notary, a UPS Store, …) rather than the
+  // actual concert venue. They also tend to ship malformed `_embedded.attractions`
+  // (missing `name` on the support attraction), which then leaks through to
+  // Discover as "+ undefined". Skip rather than create a venue with city
+  // "Unknown" that the UI surfaces verbatim.
+  if (!tmVenue.city?.name || tmVenue.city.name.trim().length === 0) {
+    log.warn(
+      {
+        event: 'tm.normalize.skipped',
+        reason: 'missing_venue_city',
+        tmEventId: event.id,
+        name: event.name,
+        venueName: tmVenue.name,
+      },
+      'Skipping TM event with no venue city',
+    );
+    return null;
+  }
+
   let venueId: string;
   if (resolvedVenueId) {
     venueId = resolvedVenueId;
@@ -168,7 +190,27 @@ async function normalizeTmEvent(
   }
 
   const kind = inferKind(event.classifications, { eventName: event.name });
-  const attractions = event._embedded?.attractions ?? [];
+  // Defensively drop attractions with a missing/blank `name`. TM occasionally
+  // returns attraction objects with only an `id`, which used to leak through
+  // as the literal string "undefined" in `announcement.support` (postgres-js
+  // stringifies JS undefined when serializing a text[]) and crash
+  // matchOrCreatePerformer in `name.trim().toLowerCase()`. See the Lizzo
+  // resale-marketplace event ZkDnngzZDdAjbJpUFAGnI9l-Lv9oEss, 2026-05-17.
+  const rawAttractions = event._embedded?.attractions ?? [];
+  const attractions = rawAttractions.filter(
+    (a) => typeof a.name === 'string' && a.name.trim().length > 0,
+  );
+  if (attractions.length < rawAttractions.length) {
+    log.warn(
+      {
+        event: 'tm.normalize.attraction_dropped',
+        reason: 'missing_name',
+        tmEventId: event.id,
+        dropped: rawAttractions.length - attractions.length,
+      },
+      'Dropped TM attraction(s) with missing name',
+    );
+  }
 
   // For festivals, "headliner" is the festival itself, not the day's top
   // billed act. Real TM data lists a different attraction[0] per day-pass
