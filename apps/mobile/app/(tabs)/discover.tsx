@@ -45,6 +45,7 @@ import { Calendar, MapPin, Search, Users } from 'lucide-react-native';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { EmptyState } from '../../components/EmptyState';
+import { EmptyStateHero } from '../../components/design-system';
 import { OfflineEmptyState } from '../../components/OfflineEmptyState';
 import { KindBadge } from '../../components/KindBadge';
 import { useTheme, type Kind } from '../../lib/theme';
@@ -141,11 +142,25 @@ export default function DiscoverScreen(): React.JSX.Element {
   const utils = trpc.useUtils();
   const [tab, setTab] = React.useState<DiscoverTab>('venues');
   const [selectedGroupId, setSelectedGroupId] = React.useState<string | null>(null);
+  // Secondary venue filter for the Regions tab — mirrors the web rail's
+  // region → venue drill-down. Always reset when switching tabs or
+  // regions so the chip row stays predictable.
+  const [selectedRegionVenueId, setSelectedRegionVenueId] = React.useState<
+    string | null
+  >(null);
 
   // Clear filter when switching tabs — chips reset per-tab.
   React.useEffect(() => {
     setSelectedGroupId(null);
+    setSelectedRegionVenueId(null);
   }, [tab]);
+
+  // Clear the venue sub-filter whenever the user changes the region
+  // selection above it; otherwise a stale venue id could leave the
+  // result list empty after the user thought they had widened it.
+  React.useEffect(() => {
+    setSelectedRegionVenueId(null);
+  }, [selectedGroupId]);
 
   const followedVenuesQuery = useCachedQuery<FollowedFeed>({
     queryKey: ['mobile', 'discover', 'followedFeed'],
@@ -297,12 +312,60 @@ export default function DiscoverScreen(): React.JSX.Element {
     followedArtistIdSet,
   ]);
 
+  // Region-scoped venue chip list. Only meaningful on the Regions tab —
+  // when a region is selected we scope to that region's venues; with no
+  // region selected the chip row reflects every venue surfaced in the
+  // nearby feed so the user can still drill down without picking a
+  // region first. Mirrors the web `VenueRail` rail-under-region
+  // behaviour.
+  const regionVenueList = React.useMemo<FilterGroup[]>(() => {
+    if (tab !== 'regions') return [];
+    const nearbyItems = items as NearbyAnnouncementItem[];
+    const inScope = selectedGroupId
+      ? nearbyItems.filter((item) => item.regionId === selectedGroupId)
+      : nearbyItems;
+    const byVenue = new Map<string, FilterGroup>();
+    for (const item of inScope) {
+      const id = item.venue.id;
+      if (!id) continue;
+      const existing = byVenue.get(id);
+      if (existing) {
+        existing.count++;
+      } else {
+        byVenue.set(id, {
+          id,
+          name: item.venue.name,
+          sublabel: item.venue.city ?? undefined,
+          count: 1,
+        });
+      }
+    }
+    return Array.from(byVenue.values()).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.name.localeCompare(b.name);
+    });
+  }, [items, selectedGroupId, tab]);
+
   const filteredItems = React.useMemo(() => {
-    if (!selectedGroupId) return items;
-    return items.filter((item) =>
-      getGroupKeys(item, tab, followedArtistIdSet).includes(selectedGroupId),
-    );
-  }, [items, selectedGroupId, tab, followedArtistIdSet]);
+    let result = items;
+    if (selectedGroupId) {
+      result = result.filter((item) =>
+        getGroupKeys(item, tab, followedArtistIdSet).includes(selectedGroupId),
+      );
+    }
+    if (tab === 'regions' && selectedRegionVenueId) {
+      result = result.filter(
+        (item) => item.venue.id === selectedRegionVenueId,
+      );
+    }
+    return result;
+  }, [
+    items,
+    selectedGroupId,
+    selectedRegionVenueId,
+    tab,
+    followedArtistIdSet,
+  ]);
 
   const showOfflineEmpty = !network.online && !activeQuery.data;
   const isLoading = activeQuery.isLoading;
@@ -337,6 +400,27 @@ export default function DiscoverScreen(): React.JSX.Element {
           totalCount={items.length}
         />
       )}
+
+      {/* Regions tab gets a second-tier venue chip row under the region
+          row so the user can drill region → venue without leaving the
+          tab. Matches web's `VenueRail` rail-under-region behaviour;
+          the "All venues" chip clears the venue sub-filter. Suppressed
+          when fewer than two venues exist (a single-venue chip row
+          adds clutter for no filter value). */}
+      {!showOfflineEmpty &&
+        !isLoading &&
+        !isEmpty &&
+        tab === 'regions' &&
+        regionVenueList.length > 1 && (
+          <FilterChipsRow
+            groups={regionVenueList}
+            selected={selectedRegionVenueId}
+            onSelect={setSelectedRegionVenueId}
+            totalCount={regionVenueList.reduce((n, g) => n + g.count, 0)}
+            allLabel="All venues"
+            testIdPrefix="discover-venue-chip"
+          />
+        )}
 
       <ScrollView
         contentContainerStyle={
@@ -410,11 +494,15 @@ function FilterChipsRow({
   selected,
   onSelect,
   totalCount,
+  allLabel = 'All',
+  testIdPrefix,
 }: {
   groups: FilterGroup[];
   selected: string | null;
   onSelect: (id: string | null) => void;
   totalCount: number;
+  allLabel?: string;
+  testIdPrefix?: string;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -424,13 +512,15 @@ function FilterChipsRow({
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.chipsRow}
       style={styles.chipsScroll}
+      testID={testIdPrefix ? `${testIdPrefix}-row` : undefined}
     >
       <FilterChip
-        label="All"
+        label={allLabel}
         count={totalCount}
         active={selected === null}
         onPress={() => onSelect(null)}
         colors={colors}
+        testID={testIdPrefix ? `${testIdPrefix}-all` : undefined}
       />
       {groups.map((g) => (
         <FilterChip
@@ -441,6 +531,7 @@ function FilterChipsRow({
           active={selected === g.id}
           onPress={() => onSelect(selected === g.id ? null : g.id)}
           colors={colors}
+          testID={testIdPrefix ? `${testIdPrefix}-${g.id}` : undefined}
         />
       ))}
     </ScrollView>
@@ -454,6 +545,7 @@ function FilterChip({
   active,
   onPress,
   colors,
+  testID,
 }: {
   label: string;
   sublabel?: string;
@@ -461,6 +553,7 @@ function FilterChip({
   active: boolean;
   onPress: () => void;
   colors: ReturnType<typeof useTheme>['tokens']['colors'];
+  testID?: string;
 }): React.JSX.Element {
   return (
     <Pressable
@@ -468,6 +561,7 @@ function FilterChip({
       accessibilityState={{ selected: active }}
       accessibilityLabel={`${label}${sublabel ? ` ${sublabel}` : ''}`}
       onPress={onPress}
+      testID={testID}
       style={({ pressed }) => [
         styles.chip,
         {
@@ -567,6 +661,17 @@ function SummaryIcon({
   return <Calendar size={13} color={color} strokeWidth={2} />;
 }
 
+/**
+ * Editorial empty state for the Discover tabs — mirrors the hero that
+ * Home / Shows / Venues / Artists already use. EmptyStateHero is safe
+ * to mount under iOS now that its title no longer hosts a `MaskedView`
+ * inside a parent `<Text>` (see `EmptyStateHero.tsx` docblock).
+ *
+ * Falls back to the compact `EmptyState` for the "Quiet week" copy —
+ * that one fires when the user already has regions configured but the
+ * nearby feed is empty, so the editorial-onboarding visual would be
+ * out of place (no setup action to drive towards).
+ */
 function EmptyForTab({
   tab,
   hasRegions,
@@ -582,29 +687,38 @@ function EmptyForTab({
 }): React.JSX.Element {
   if (tab === 'venues') {
     return (
-      <EmptyState
-        title="Follow a venue"
-        subtitle="Follow a venue from its detail screen to see its upcoming announcements here."
-        cta={{ label: 'Open Venues', onPress: onOpenVenues }}
-      />
+      <View style={styles.emptyHeroWrap}>
+        <EmptyStateHero
+          kind="venues"
+          title="Follow a venue"
+          body="Follow a hall, theatre, or dive bar from its detail screen and its upcoming announcements land here as soon as they go on sale."
+          action={{ label: 'Open Venues', onPress: onOpenVenues }}
+        />
+      </View>
     );
   }
   if (tab === 'artists') {
     return (
-      <EmptyState
-        title="Follow an artist"
-        subtitle="Follow an artist to see their tour announcements as soon as they go on sale."
-        cta={{ label: 'Open Artists', onPress: onOpenArtists }}
-      />
+      <View style={styles.emptyHeroWrap}>
+        <EmptyStateHero
+          kind="artists"
+          title="Follow an artist"
+          body="Follow an artist to see their tour announcements the moment they go on sale — Spotify import is the fastest way to seed your follow list."
+          action={{ label: 'Open Artists', onPress: onOpenArtists }}
+        />
+      </View>
     );
   }
   if (hasRegions === false) {
     return (
-      <EmptyState
-        title="Set your region"
-        subtitle="Add a region to surface nearby announcements and power your daily email digest."
-        cta={{ label: 'Open Settings', onPress: onOpenMe }}
-      />
+      <View style={styles.emptyHeroWrap}>
+        <EmptyStateHero
+          kind="discover"
+          title="Set your region"
+          body="Add a region to surface nearby announcements and power your daily email digest. Up to five fit; start with the city you live in."
+          action={{ label: 'Open Settings', onPress: onOpenMe }}
+        />
+      </View>
     );
   }
   return (
@@ -763,6 +877,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingTop: 4,
     paddingBottom: 48,
+  },
+  emptyHeroWrap: {
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 24,
   },
   center: {
     flex: 1,

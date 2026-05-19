@@ -1,12 +1,21 @@
 /**
  * EmptyStateHero — full-bleed editorial empty state with a glow backdrop,
- * gradient-emphasis title, kind chips, and the breathing StackedCards
- * decoration. Mirrors the web `apps/web/components/design-system/
- * EmptyState.tsx`.
+ * an accent-coloured tail-word title, kind chips, and the breathing
+ * StackedCards decoration. Mirrors the web `apps/web/components/
+ * design-system/EmptyState.tsx`.
  *
  * Use this on whole-screen empty states (no shows yet, no artists yet,
  * no discover queue). For inline empties (no results inside a section),
  * keep the compact `components/EmptyState.tsx` — it stays as-is.
+ *
+ * iOS-safety note: the title's tail word was previously wrapped in
+ * `<GradientEmphasis>`, which renders a `MaskedView` UIView when the
+ * native module is registered. iOS text layout refuses to compose a
+ * UIView inline as a child of `<Text>`, so the hero crashed on mount
+ * the moment `RNCMaskedView` was linked into the dev client (see
+ * the post-mortem behind PR #269). Render the tail as plain accent
+ * `<Text>` instead — Eyebrow + StackedCards + KindChips carry plenty
+ * of editorial weight without the gradient flourish.
  */
 
 import React from 'react';
@@ -15,7 +24,6 @@ import { useTheme } from '../../lib/theme';
 import { RADII } from '../../lib/theme-utils';
 import { Eyebrow } from './Eyebrow';
 import { GlowBackdrop } from './GlowBackdrop';
-import { GradientEmphasis } from './GradientEmphasis';
 import { KindChip } from './KindChip';
 import { StackedCards, type StackedCardItem } from './StackedCards';
 
@@ -79,9 +87,7 @@ export function EmptyStateHero({
         <View style={styles.titleRow}>
           <Text style={[styles.title, { color: colors.ink }]}>
             {head ? <Text>{head}</Text> : null}
-            <GradientEmphasis style={[styles.title, { color: colors.accent }]}>
-              {tail}
-            </GradientEmphasis>
+            <Text style={[styles.title, { color: colors.accent }]}>{tail}</Text>
           </Text>
         </View>
 
