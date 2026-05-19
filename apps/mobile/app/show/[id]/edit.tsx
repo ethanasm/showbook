@@ -44,6 +44,11 @@ const KIND_OPTIONS: { value: Kind; label: string }[] = [
   { value: 'festival', label: 'Festival' },
 ];
 
+// Hoisted so the `options` reference passed to `<Stack.Screen>` is
+// stable across renders. See the same constant in `apps/mobile/app/add/form.tsx`
+// for the iOS re-mount cascade this prevents.
+const SCREEN_OPTIONS = { presentation: 'modal', gestureEnabled: true } as const;
+
 interface FormValues {
   kind: Kind;
   headliner: string;
@@ -269,10 +274,11 @@ export default function EditShowScreen(): React.JSX.Element {
   // route boots as a push and then flips to `modal` once detail
   // resolves, and react-native-screens reacts to the presentation
   // change by re-mounting the screen, which resets local state and
-  // re-enters the loading branch in a tight loop.
-  const stackOptions = (
-    <Stack.Screen options={{ presentation: 'modal', gestureEnabled: true }} />
-  );
+  // re-enters the loading branch in a tight loop. The `options`
+  // reference is hoisted to module scope (`SCREEN_OPTIONS`) so
+  // Expo Router's `Screen` useLayoutEffect doesn't re-fire
+  // `navigation.setOptions` on every parent render.
+  const stackOptions = <Stack.Screen options={SCREEN_OPTIONS} />;
 
   if (!detail || !values) {
     return (

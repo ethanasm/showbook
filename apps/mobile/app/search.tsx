@@ -56,6 +56,11 @@ import {
 
 const SEARCH_DEBOUNCE_MS = 250;
 
+// Hoisted so the `options` reference passed to `<Stack.Screen>` is
+// stable across renders. See the same constant in `apps/mobile/app/add/form.tsx`
+// for the iOS re-mount cascade this prevents.
+const SCREEN_OPTIONS = { presentation: 'modal', gestureEnabled: true } as const;
+
 export default function SearchScreen(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -96,16 +101,7 @@ export default function SearchScreen(): React.JSX.Element {
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          // Present as a sheet so iOS native swipe-down dismisses
-          // without a back-tap. `fullScreenModal` keeps the screen
-          // full-height; switch to `'modal'` if a partial sheet is
-          // preferred.
-          presentation: 'modal',
-          gestureEnabled: true,
-        }}
-      />
+      <Stack.Screen options={SCREEN_OPTIONS} />
     <ScreenWrapper title="Search" eyebrow="SHOWS · ARTISTS · VENUES" leading={back}>
       <View
         style={[

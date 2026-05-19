@@ -49,6 +49,18 @@ const KIND_OPTIONS: { value: Kind; label: string }[] = [
   { value: 'festival', label: 'Festival' },
 ];
 
+// Hoisted so the `options` reference passed to `<Stack.Screen>` is
+// stable across renders. Without this, Expo Router's `Screen`
+// useLayoutEffect re-fires `navigation.setOptions(options)` on every
+// parent render — and on iOS that propagates into a `stackPresentation`
+// thrash inside react-native-screens, which swaps the wrapper
+// component type (`AnimatedNativeScreen` ↔ `AnimatedNativeModalScreen`),
+// unmounting and remounting the form subtree. Combined with the
+// auto-fired venue search when chat hands over a non-empty `venueHint`,
+// the cascade tripped React's "Maximum update depth exceeded" bailout
+// on the chat → form push path.
+const SCREEN_OPTIONS = { presentation: 'modal', gestureEnabled: true } as const;
+
 interface FormValues {
   kind: Kind;
   headliner: string;
@@ -209,7 +221,7 @@ export default function AddFormScreen(): React.JSX.Element {
 
   return (
     <>
-      <Stack.Screen options={{ presentation: 'modal', gestureEnabled: true }} />
+      <Stack.Screen options={SCREEN_OPTIONS} />
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
       <TopBar
         title="New show"
