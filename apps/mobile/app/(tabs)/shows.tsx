@@ -388,6 +388,14 @@ function TimelineView({
   // SectionList virtualises rows, so a power user with hundreds of past
   // shows doesn't pay a per-row mount on first render. Sticky headers
   // keep the year / "Upcoming" label visible while scrolling.
+  //
+  // Perf props: initial render covers the typical first screen (a
+  // section header + the upcoming/recent rail's first eight rows on a
+  // 390×844 viewport). windowSize=11 means ~5 viewports above + 5
+  // below stay mounted — generous enough to avoid white flashes
+  // mid-fling, tight enough to bound memory on heavy logs. The
+  // batch-render cap keeps each JS frame under ~16ms on mid-tier
+  // Android by feeding rows in waves rather than one giant pass.
   return (
     <SectionList<ShowRow, TimelineSection>
       sections={sections.map((s) => ({ ...s, data: s.rows }))}
@@ -395,6 +403,10 @@ function TimelineView({
       stickySectionHeadersEnabled
       contentContainerStyle={{ paddingBottom: 32 }}
       refreshControl={refreshControl}
+      initialNumToRender={12}
+      maxToRenderPerBatch={8}
+      windowSize={11}
+      removeClippedSubviews
       renderSectionHeader={({ section }) => (
         <View
           style={[

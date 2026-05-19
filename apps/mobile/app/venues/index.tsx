@@ -132,6 +132,12 @@ export default function VenuesListScreen(): React.JSX.Element {
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           refreshControl={refreshControl}
+          // Virtualisation tuning for power users with deep stages —
+          // see comment in `app/(tabs)/shows.tsx` for the rationale.
+          initialNumToRender={14}
+          maxToRenderPerBatch={10}
+          windowSize={11}
+          removeClippedSubviews
           renderItem={({ item }) => (
             <VenueCard
               venue={item}

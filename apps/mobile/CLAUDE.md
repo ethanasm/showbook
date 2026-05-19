@@ -199,15 +199,18 @@ The app is offline-first for the personal logbook. Three pieces:
   in `OfflineBridge` swallows 404 / 409 on idempotent paths (follow /
   unfollow / removeRegion) so a queued change that's already in target
   state on the server doesn't stick forever.
-- **Offline placeholders** — Discover / Search / Spotify integrations
-  render `components/OfflineEmptyState.tsx` when `useNetwork().online`
-  is false (no cached payload to fall back on for those routes).
-  Everything else (Home / Shows / Venues / Artists / Show detail) reads
-  from the persisted cache, so it renders offline once warm-up has run.
+- **Offline placeholders** — Search / Spotify integrations render
+  `components/OfflineEmptyState.tsx` when `useNetwork().online` is
+  false (no cached payload to fall back on for those routes).
+  Everything else (Home / Shows / Venues / Artists / Show detail /
+  Discover) reads from the persisted cache, so it renders offline
+  once warm-up has run.
 
-Discover feeds and search are **not** in the warm-up scope — they
-update only when online. The map screen uses cached `shows.listForMap`
-+ the native map provider's tile cache.
+Search is **not** in the warm-up scope — query-shaped results update
+only when online. Discover feeds joined the warm-up walker on
+2026-05-19 so the daily-digest deep-link into `/discover` renders
+meaningfully on a cold offline open. The map screen uses cached
+`shows.listForMap` + the native map provider's tile cache.
 
 ## When changing the app
 

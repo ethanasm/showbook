@@ -73,6 +73,11 @@ function buildClient(): WarmupClientSurface {
       hypePlaylistFeature: { query: make({ enabled: false }) },
       connectionStatus: { query: make({ connected: false }) },
     },
+    discover: {
+      followedFeed: { query: make({ items: [] }) },
+      followedArtistsFeed: { query: make({ items: [] }) },
+      nearbyFeed: { query: make({ items: [] }) },
+    },
   };
 }
 

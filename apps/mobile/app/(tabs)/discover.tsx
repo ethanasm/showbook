@@ -12,10 +12,13 @@
  * web shell calls — `discover.followedFeed`, `discover.followedArtistsFeed`,
  * `discover.nearbyFeed`. Pull-to-refresh re-syncs whichever tab is active.
  *
- * Discover feeds are not in the offline warm-up scope (see
- * `apps/mobile/CLAUDE.md` "Offline mode"). When offline with no cached
- * rows we render `OfflineEmptyState`; cached rows from a prior online
- * session still render so the user gets value when their connection drops.
+ * Discover feeds joined the offline warm-up scope on 2026-05-19 (see
+ * `apps/mobile/CLAUDE.md` "Offline mode" + `lib/cache/warmup.ts`). The
+ * screen-level offline gate stays as a safety net: when offline with
+ * truly no cached rows (first-launch-before-online or a failed initial
+ * warmup) we render `OfflineEmptyState`; otherwise cached rows from a
+ * prior online session render so the user gets value when their
+ * connection drops.
  */
 
 import React from 'react';
