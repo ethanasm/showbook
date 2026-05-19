@@ -11,16 +11,19 @@ interface Script {
   selectResults: unknown[][];
   insertCount: number;
   insertOrUpdate: unknown[][];
+  insertedValues: Record<string, unknown>[];
 }
 const SCRIPT: Script = {
   selectResults: [],
   insertCount: 0,
   insertOrUpdate: [],
+  insertedValues: [],
 };
 function reset(opts: Partial<Script> = {}) {
   SCRIPT.selectResults = opts.selectResults ?? [];
   SCRIPT.insertCount = 0;
   SCRIPT.insertOrUpdate = opts.insertOrUpdate ?? [];
+  SCRIPT.insertedValues = [];
 }
 
 function mkChain(getResult: () => unknown) {
@@ -37,11 +40,33 @@ function mkChain(getResult: () => unknown) {
   return proxy;
 }
 
+// Insert chain: captures the .values(...) argument so tests can assert on the
+// payload, then otherwise behaves like the generic chain proxy.
+function mkInsertChain(getResult: () => unknown) {
+  const handler: ProxyHandler<object> = {
+    get(_t, prop) {
+      if (prop === 'then') {
+        const value = getResult();
+        return (resolve: (v: unknown) => unknown) => Promise.resolve(value).then(resolve);
+      }
+      if (prop === 'values') {
+        return (v: Record<string, unknown>) => {
+          SCRIPT.insertedValues.push(v);
+          return proxy;
+        };
+      }
+      return () => proxy;
+    },
+  };
+  const proxy: object = new Proxy({}, handler);
+  return proxy;
+}
+
 const fakeDb = {
   select: () => mkChain(() => SCRIPT.selectResults.shift() ?? []),
   selectDistinct: () => mkChain(() => SCRIPT.selectResults.shift() ?? []),
   selectDistinctOn: () => mkChain(() => SCRIPT.selectResults.shift() ?? []),
-  insert: () => mkChain(() => {
+  insert: () => mkInsertChain(() => {
     SCRIPT.insertCount += 1;
     return SCRIPT.insertOrUpdate.shift() ?? [];
   }),
@@ -62,7 +87,36 @@ mock.module('@showbook/db', {
   },
 });
 
-function makeTmEvent(id: string, opts: Partial<{ name: string; date: string }> = {}) {
+interface TestTmEvent {
+  id: string;
+  name: string;
+  url: string;
+  dates: { start: { localDate: string }; status: { code: string } };
+  classifications: unknown[];
+  sales: unknown;
+  images: unknown[];
+  _embedded: {
+    venues: Array<{
+      id: string;
+      name: string;
+      city?: { name: string };
+      state?: { name: string };
+      country?: { countryCode: string };
+      location?: { latitude: string; longitude: string };
+    }>;
+    attractions: Array<{ id: string; name?: string; images: unknown[] }>;
+  };
+}
+
+function makeTmEvent(
+  id: string,
+  opts: Partial<{
+    name: string;
+    date: string;
+    venue: Partial<TestTmEvent['_embedded']['venues'][number]>;
+    attractions: TestTmEvent['_embedded']['attractions'];
+  }> = {},
+): TestTmEvent {
   return {
     id,
     name: opts.name ?? `Event ${id}`,
@@ -83,18 +137,26 @@ function makeTmEvent(id: string, opts: Partial<{ name: string; date: string }> =
           state: { name: 'California' },
           country: { countryCode: 'US' },
           location: { latitude: '37.8', longitude: '-122.2' },
+          ...(opts.venue ?? {}),
         },
       ],
-      attractions: [{ id: 'tm-a-1', name: 'Phoebe', images: [] }],
+      attractions: opts.attractions ?? [{ id: 'tm-a-1', name: 'Phoebe', images: [] }],
     },
   };
+}
+
+// Mutable so individual tests can swap in a custom TM payload. Defaults to a
+// single well-formed event so existing tests continue to pass.
+let nextSearchEvents: TestTmEvent[] = [makeTmEvent('e-1')];
+function setSearchEvents(events: TestTmEvent[]) {
+  nextSearchEvents = events;
 }
 
 mock.module('@showbook/api', {
   namedExports: {
     searchEvents: async () => ({
-      events: [makeTmEvent('e-1')],
-      totalElements: 1,
+      events: nextSearchEvents,
+      totalElements: nextSearchEvents.length,
       page: 0,
       size: 200,
     }),
@@ -119,7 +181,10 @@ before(async () => {
   mod = await import('../discover-ingest');
 });
 
-beforeEach(() => reset());
+beforeEach(() => {
+  reset();
+  setSearchEvents([makeTmEvent('e-1')]);
+});
 
 describe('ingestVenue (with events)', () => {
   it('inserts a new announcement for a single-night event', async () => {
@@ -214,5 +279,56 @@ describe('ingestRegion (with events)', () => {
     });
     const result = await mod.ingestRegion('r1');
     assert.equal(result.events, 0);
+  });
+});
+
+describe('normalizeTmEvent — TM data quality skips', () => {
+  it('drops support attractions whose name is missing, leaving support=null', async () => {
+    // Mirrors the prod TM resale-marketplace event
+    // ZkDnngzZDdAjbJpUFAGnI9l-Lv9oEss (Lizzo, 2026-05-17): a valid headliner
+    // attraction followed by a support attraction with only an `id`. Pre-fix
+    // we stored support=["undefined"] and Discover rendered "+ undefined".
+    setSearchEvents([
+      makeTmEvent('e-bad-support', {
+        attractions: [
+          { id: 'tm-a-h', name: 'Lizzo', images: [] },
+          { id: 'tm-a-s', images: [] }, // no name field
+        ],
+      }),
+    ]);
+    reset({
+      selectResults: [
+        [{ id: 'v1', tmVenueId: 'tm-v-1' }],
+        [], // existingSourceIds
+      ],
+    });
+    const result = await mod.ingestVenue('v1');
+    assert.equal(result.events, 1);
+    assert.equal(SCRIPT.insertedValues.length, 1);
+    const inserted = SCRIPT.insertedValues[0]!;
+    assert.equal(inserted.headliner, 'Lizzo');
+    assert.equal(inserted.support, null);
+    assert.equal(inserted.supportPerformerIds, null);
+  });
+
+  it('skips events whose venue has no city', async () => {
+    // TM resale-marketplace listings ship a venue with a `name` but no
+    // `city` (the address is the reseller's business). Pre-fix we created a
+    // venue row with city='Unknown' and Discover rendered "Friendly Notary
+    // · Unknown".
+    setSearchEvents([
+      makeTmEvent('e-no-city', {
+        venue: { name: 'Friendly Notary', city: undefined },
+      }),
+    ]);
+    reset({
+      selectResults: [
+        [{ id: 'v1', tmVenueId: 'tm-v-1' }],
+        [], // existingSourceIds
+      ],
+    });
+    const result = await mod.ingestVenue('v1');
+    assert.equal(result.events, 0);
+    assert.equal(SCRIPT.insertedValues.length, 0);
   });
 });
