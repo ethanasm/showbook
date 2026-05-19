@@ -31,7 +31,10 @@ import {
   sql,
 } from '@showbook/db';
 import { eq, like } from 'drizzle-orm';
-import { runDiscoverIngest } from '../discover-ingest';
+import {
+  consolidateFestivalDuplicates,
+  runDiscoverIngest,
+} from '../discover-ingest';
 
 const PREFIX = 'ee117117';
 
@@ -42,6 +45,12 @@ const ANN_ONGOING_RUN = `${PREFIX}-f000-4f00-8f00-f00000000001`;
 const ANN_FINISHED_RUN = `${PREFIX}-f000-4f00-8f00-f00000000002`;
 const ANN_OLD_SINGLE = `${PREFIX}-f000-4f00-8f00-f00000000003`;
 const ANN_FUTURE_SINGLE = `${PREFIX}-f000-4f00-8f00-f00000000004`;
+
+const FEST_PREFIX = 'ee117118';
+const FEST_VENUE = `${FEST_PREFIX}-aaaa-4aaa-8aaa-aaaaaaaaaaa1`;
+const FEST_CANONICAL = `${FEST_PREFIX}-f000-4f00-8f00-f00000000001`;
+const FEST_DUPE_DAY2 = `${FEST_PREFIX}-f000-4f00-8f00-f00000000002`;
+const FEST_DUPE_DAY3 = `${FEST_PREFIX}-f000-4f00-8f00-f00000000003`;
 
 function dateOffset(days: number): string {
   const d = new Date();
@@ -187,5 +196,114 @@ describe('runDiscoverIngest Phase 4 prune', () => {
       .from(announcements)
       .where(eq(announcements.id, ANN_FUTURE_SINGLE));
     assert.equal(future.length, 1, 'future single-night event should survive');
+  });
+});
+
+describe('consolidateFestivalDuplicates', () => {
+  async function cleanupFestival(): Promise<void> {
+    const p = `${FEST_PREFIX}%`;
+    await db.delete(announcements).where(like(sql`${announcements.id}::text`, p));
+    await db.delete(venues).where(like(sql`${venues.id}::text`, p));
+  }
+
+  before(async () => {
+    await cleanupFestival();
+    await db.insert(venues).values([
+      { id: FEST_VENUE, name: 'Golden Gate Park', city: 'San Francisco', country: 'US' },
+    ]);
+    // Seed the exact prod state from
+    // https://github.com/.../claude/fix-duplicate-festivals-5TwNc:
+    // a canonical run row for Outside Lands 8/7–8/9 plus two zombie
+    // singles for 8/8 and 8/9 that survived an earlier kind='unknown'
+    // → kind='festival' reclassification.
+    await db.insert(announcements).values([
+      {
+        id: FEST_CANONICAL,
+        venueId: FEST_VENUE,
+        kind: 'festival',
+        headliner: 'Outside Lands',
+        productionName: 'Outside Lands',
+        showDate: '2026-08-07',
+        runStartDate: '2026-08-07',
+        runEndDate: '2026-08-09',
+        performanceDates: ['2026-08-07', '2026-08-08', '2026-08-09'],
+        onSaleStatus: 'on_sale',
+        source: 'ticketmaster',
+        sourceEventId: 'G5vYZ_kCsWXli',
+        extraSourceEventIds: ['Z7r9jZ1A7-_f-', 'Z7r9jZ1A7-_fE', 'Z7r9jZ1A7-_fp'],
+      },
+      {
+        id: FEST_DUPE_DAY2,
+        venueId: FEST_VENUE,
+        kind: 'festival',
+        headliner: 'Outside Lands',
+        productionName: 'Outside Lands',
+        showDate: '2026-08-08',
+        runStartDate: '2026-08-08',
+        runEndDate: '2026-08-08',
+        performanceDates: ['2026-08-08'],
+        onSaleStatus: 'on_sale',
+        source: 'ticketmaster',
+        sourceEventId: 'G5vYZ_kCwGXme',
+      },
+      {
+        id: FEST_DUPE_DAY3,
+        venueId: FEST_VENUE,
+        kind: 'festival',
+        headliner: 'Outside Lands',
+        productionName: 'Outside Lands',
+        showDate: '2026-08-09',
+        runStartDate: '2026-08-09',
+        runEndDate: '2026-08-09',
+        performanceDates: ['2026-08-09'],
+        onSaleStatus: 'on_sale',
+        source: 'ticketmaster',
+        sourceEventId: 'G5vYZ_kCwhCY8',
+      },
+    ]);
+  });
+
+  after(cleanupFestival);
+
+  it('merges duplicate festival rows at the same (venueId, productionName) into one row', async () => {
+    await consolidateFestivalDuplicates(FEST_VENUE, 'Outside Lands');
+
+    const remaining = await db
+      .select()
+      .from(announcements)
+      .where(eq(announcements.venueId, FEST_VENUE));
+
+    assert.equal(remaining.length, 1, 'expected exactly one festival row after consolidation');
+
+    const row = remaining[0]!;
+    assert.equal(row.id, FEST_CANONICAL, 'expected the row with the most dates to win');
+    const dates = (row.performanceDates ?? []).map((d) => String(d).slice(0, 10));
+    assert.deepEqual(
+      dates.sort(),
+      ['2026-08-07', '2026-08-08', '2026-08-09'],
+      'canonical row should span the full festival',
+    );
+    const extras = new Set(row.extraSourceEventIds ?? []);
+    assert.ok(
+      extras.has('G5vYZ_kCwGXme'),
+      'day-2 zombie single source id should be folded into extra_source_event_ids',
+    );
+    assert.ok(
+      extras.has('G5vYZ_kCwhCY8'),
+      'day-3 zombie single source id should be folded into extra_source_event_ids',
+    );
+  });
+
+  it('is a no-op when no duplicates exist', async () => {
+    const before = await db
+      .select()
+      .from(announcements)
+      .where(eq(announcements.venueId, FEST_VENUE));
+    await consolidateFestivalDuplicates(FEST_VENUE, 'Outside Lands');
+    const after = await db
+      .select()
+      .from(announcements)
+      .where(eq(announcements.venueId, FEST_VENUE));
+    assert.equal(after.length, before.length);
   });
 });

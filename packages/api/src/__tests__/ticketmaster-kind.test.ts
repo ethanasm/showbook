@@ -250,3 +250,42 @@ test('extractFestivalName: falls back to original name when stripping empties it
   assert.equal(extractFestivalName('Outside Lands'), 'Outside Lands');
   assert.equal(extractFestivalName('Lollapalooza'), 'Lollapalooza');
 });
+
+test('extractFestivalName: collapses Outside Lands name variants to one cluster key', () => {
+  // TM returns the same festival under three different name patterns:
+  // the canonical daily-lineup form, the per-day "Platinum" ticket-tier
+  // listings (split on `-` first), and the long-form promoter listing
+  // ("Music & Arts Festival"). All three must land on the same headliner
+  // string so groupEventsIntoRuns produces one cluster instead of three.
+  assert.equal(
+    extractFestivalName('Outside Lands Festival - FRIDAY Platinum'),
+    'Outside Lands',
+  );
+  assert.equal(
+    extractFestivalName('Outside Lands Festival - 3-DAY Platinum'),
+    'Outside Lands',
+  );
+  assert.equal(
+    extractFestivalName('Outside Lands Music & Arts Festival'),
+    'Outside Lands',
+  );
+  assert.equal(
+    extractFestivalName('Outside Lands Music and Arts Festival'),
+    'Outside Lands',
+  );
+});
+
+test('extractFestivalName: strips a lone "Festival" suffix from a single-word prefix', () => {
+  // Real festivals are often single-word ("Lollapalooza", "Coachella");
+  // when TM dresses them with a "Festival" suffix we still want them to
+  // cluster against the bare name.
+  assert.equal(extractFestivalName('Lollapalooza Festival'), 'Lollapalooza');
+  assert.equal(extractFestivalName('Coachella Fest'), 'Coachella');
+});
+
+test('extractFestivalName: bare "Festival" / "Fest" returns the original (no leading word to anchor to)', () => {
+  // No leading whitespace → the suffix-strip regex doesn't fire, so we
+  // keep the original instead of returning an empty string.
+  assert.equal(extractFestivalName('Festival'), 'Festival');
+  assert.equal(extractFestivalName('Fest'), 'Fest');
+});
