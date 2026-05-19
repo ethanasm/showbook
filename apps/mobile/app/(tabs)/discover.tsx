@@ -418,6 +418,7 @@ export default function DiscoverScreen(): React.JSX.Element {
             onSelect={setSelectedRegionVenueId}
             totalCount={regionVenueList.reduce((n, g) => n + g.count, 0)}
             allLabel="All venues"
+            variant="sub"
             testIdPrefix="discover-venue-chip"
           />
         )}
@@ -495,6 +496,7 @@ function FilterChipsRow({
   onSelect,
   totalCount,
   allLabel = 'All',
+  variant = 'primary',
   testIdPrefix,
 }: {
   groups: FilterGroup[];
@@ -502,6 +504,9 @@ function FilterChipsRow({
   onSelect: (id: string | null) => void;
   totalCount: number;
   allLabel?: string;
+  /** `sub` renders a slightly tighter row used as a second-level filter
+   *  under a primary chip row (Regions tab venue chips). */
+  variant?: 'primary' | 'sub';
   testIdPrefix?: string;
 }): React.JSX.Element {
   const { tokens } = useTheme();
@@ -510,7 +515,10 @@ function FilterChipsRow({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.chipsRow}
+      contentContainerStyle={[
+        styles.chipsRow,
+        variant === 'sub' && styles.chipsRowSub,
+      ]}
       style={styles.chipsScroll}
       testID={testIdPrefix ? `${testIdPrefix}-row` : undefined}
     >
@@ -843,6 +851,10 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 16,
     paddingBottom: 10,
+  },
+  chipsRowSub: {
+    paddingTop: 0,
+    paddingBottom: 8,
   },
   chip: {
     flexDirection: 'row',
