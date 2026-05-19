@@ -498,16 +498,23 @@ export async function consolidateFestivalDuplicates(
     .where(eq(announcements.id, canonical.id));
 
   const dupIds = duplicates.map((d) => d.id);
-  const deleted = await db.execute(
-    sql`DELETE FROM announcements a
-        WHERE a.id = ANY(${dupIds}::uuid[])
-          AND NOT EXISTS (
-            SELECT 1
-            FROM show_announcement_links sal
-            WHERE sal.announcement_id = a.id
-          )
-        RETURNING a.id`,
-  );
+  // Use drizzle's `inArray` for the id list. Interpolating a JS array into
+  // a raw sql template (`ANY(${dupIds}::uuid[])`) expands as a parameter
+  // tuple `($1, $2, ...)` which Postgres can't cast to uuid[] — same
+  // SQLSTATE 42846 footgun that bit `routers/discover.ts`.
+  const deleted = await db
+    .delete(announcements)
+    .where(
+      and(
+        inArray(announcements.id, dupIds),
+        sql`NOT EXISTS (
+          SELECT 1
+          FROM show_announcement_links sal
+          WHERE sal.announcement_id = ${announcements.id}
+        )`,
+      ),
+    )
+    .returning({ id: announcements.id });
 
   log.info(
     {
@@ -516,7 +523,7 @@ export async function consolidateFestivalDuplicates(
       productionName,
       canonicalId: canonical.id,
       mergedRows: duplicates.length,
-      deletedRows: Array.isArray(deleted) ? deleted.length : 0,
+      deletedRows: deleted.length,
       finalDateCount: mergedDates.length,
     },
     'Consolidated duplicate festival rows',
