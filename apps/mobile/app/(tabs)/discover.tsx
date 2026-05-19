@@ -2,23 +2,33 @@
  * Discover — bottom-nav tab.
  *
  * Mirrors the web Discover page (apps/web/app/(app)/discover/View.client.tsx):
- * a SegmentedControl across three feeds (Venues / Artists / Regions),
- * and a vertical list of full-width announcement rows underneath. The
- * earlier rail-based layout proved illegible on a phone (every card
- * truncated headliner and venue) — vertical rows trade horizontal
- * density for readable, scannable rows.
+ * a SegmentedControl across three feeds (Venues / Artists / Regions) plus a
+ * horizontal chip rail with "All" + one chip per followed venue / artist /
+ * region (the mobile-web parity that was missing pre-2026-05-19). Clicking a
+ * chip filters the announcement list to that group; the active chip clears
+ * on second tap.
  *
- * Data: each tab uses `useCachedQuery` against the same procedures the
- * web shell calls — `discover.followedFeed`, `discover.followedArtistsFeed`,
- * `discover.nearbyFeed`. Pull-to-refresh re-syncs whichever tab is active.
+ * Data: each tab uses `useCachedQuery` against the same procedures the web
+ * shell calls — `discover.followedFeed`, `discover.followedArtistsFeed`,
+ * `discover.nearbyFeed` — plus the followed-list / preferences queries so
+ * the chip row is seeded with freshly-followed entries (count 0) the same
+ * way the web rail is. Pull-to-refresh re-syncs whichever tab is active.
  *
  * Discover feeds joined the offline warm-up scope on 2026-05-19 (see
  * `apps/mobile/CLAUDE.md` "Offline mode" + `lib/cache/warmup.ts`). The
- * screen-level offline gate stays as a safety net: when offline with
- * truly no cached rows (first-launch-before-online or a failed initial
- * warmup) we render `OfflineEmptyState`; otherwise cached rows from a
- * prior online session render so the user gets value when their
- * connection drops.
+ * screen-level offline gate stays as a safety net: when offline with truly
+ * no cached rows (first-launch-before-online or a failed initial warmup) we
+ * render `OfflineEmptyState`; otherwise cached rows from a prior online
+ * session render so the user gets value when their connection drops.
+ *
+ * Empty-state note: this screen used to call `EmptyStateHero` (full-bleed
+ * editorial card with GlowBackdrop + StackedCards + GradientEmphasis). That
+ * stack repeatedly hit native-view registration issues on iOS (#263 dropped
+ * SVG <Pattern>/<Mask>; the user still saw an "Unimplemented component:
+ * <ViewManagerAdapter…>" red placeholder afterwards). Discover's empty
+ * messages are informational, not editorial — the simple `EmptyState`
+ * (plain View + Text + Pressable, no native plug-ins) is robust against the
+ * same class of bugs and reads cleaner alongside the chip rail.
  */
 
 import React from 'react';
@@ -34,7 +44,6 @@ import { useRouter } from 'expo-router';
 import { Calendar, MapPin, Search, Users } from 'lucide-react-native';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
 import { SegmentedControl } from '../../components/SegmentedControl';
-import { EmptyStateHero } from '../../components/design-system';
 import { EmptyState } from '../../components/EmptyState';
 import { OfflineEmptyState } from '../../components/OfflineEmptyState';
 import { KindBadge } from '../../components/KindBadge';
@@ -49,9 +58,20 @@ import { MeTopBarAction } from '../../components/MeTopBarAction';
 type UtilsClient = ReturnType<typeof trpc.useUtils>['client'];
 type FollowedFeed = RouterOutput<UtilsClient['discover']['followedFeed']['query']>;
 type NearbyFeed = RouterOutput<UtilsClient['discover']['nearbyFeed']['query']>;
+type FollowedVenues = RouterOutput<UtilsClient['venues']['followed']['query']>;
+type FollowedPerformers = RouterOutput<UtilsClient['performers']['followed']['query']>;
+type PreferencesPayload = RouterOutput<UtilsClient['preferences']['get']['query']>;
 type AnnouncementItem = FollowedFeed['items'][number];
+type NearbyAnnouncementItem = NearbyFeed['items'][number];
 
 type DiscoverTab = 'venues' | 'artists' | 'regions';
+
+interface FilterGroup {
+  id: string;
+  name: string;
+  sublabel?: string;
+  count: number;
+}
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const DOWS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -82,6 +102,36 @@ const ON_SALE_LABEL: Record<AnnouncementItem['onSaleStatus'], string> = {
   sold_out: 'Sold out',
 };
 
+/**
+ * Group-key resolver, mirroring `apps/web/app/(app)/discover/grouping.ts`.
+ * A single announcement may belong to multiple followed-artist groups (the
+ * headliner plus any followed support acts); venue / region tabs have one
+ * group key per item.
+ */
+function getGroupKeys(
+  item: AnnouncementItem | NearbyAnnouncementItem,
+  tab: DiscoverTab,
+  followedArtistIds: Set<string> | null,
+): string[] {
+  if (tab === 'venues') {
+    return item.venue.id ? [item.venue.id] : [];
+  }
+  if (tab === 'regions') {
+    const nearby = item as NearbyAnnouncementItem;
+    return nearby.regionId ? [nearby.regionId] : [];
+  }
+  // artists
+  const ids = new Set<string>();
+  if (item.headlinerPerformerId) ids.add(item.headlinerPerformerId);
+  if (item.supportPerformerIds) {
+    for (const id of item.supportPerformerIds) ids.add(id);
+  }
+  if (followedArtistIds) {
+    return [...ids].filter((id) => followedArtistIds.has(id));
+  }
+  return [...ids];
+}
+
 export default function DiscoverScreen(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -90,6 +140,12 @@ export default function DiscoverScreen(): React.JSX.Element {
   const network = useNetwork();
   const utils = trpc.useUtils();
   const [tab, setTab] = React.useState<DiscoverTab>('venues');
+  const [selectedGroupId, setSelectedGroupId] = React.useState<string | null>(null);
+
+  // Clear filter when switching tabs — chips reset per-tab.
+  React.useEffect(() => {
+    setSelectedGroupId(null);
+  }, [tab]);
 
   const followedVenuesQuery = useCachedQuery<FollowedFeed>({
     queryKey: ['mobile', 'discover', 'followedFeed'],
@@ -106,6 +162,26 @@ export default function DiscoverScreen(): React.JSX.Element {
   const nearbyQuery = useCachedQuery<NearbyFeed>({
     queryKey: ['mobile', 'discover', 'nearbyFeed'],
     queryFn: () => utils.client.discover.nearbyFeed.query({ perRegionLimit: 25 }),
+    enabled: Boolean(token),
+  });
+
+  // Followed-list queries seed chips with count=0 so a freshly-followed
+  // venue / artist / region shows up before its first ingest lands.
+  const followedVenuesList = useCachedQuery<FollowedVenues>({
+    queryKey: ['mobile', 'venues', 'followed'],
+    queryFn: () => utils.client.venues.followed.query(),
+    enabled: Boolean(token),
+  });
+
+  const followedArtistsList = useCachedQuery<FollowedPerformers>({
+    queryKey: ['mobile', 'artists', 'followed'],
+    queryFn: () => utils.client.performers.followed.query(),
+    enabled: Boolean(token),
+  });
+
+  const preferencesQuery = useCachedQuery<PreferencesPayload>({
+    queryKey: ['mobile', 'preferences', 'get'],
+    queryFn: () => utils.client.preferences.get.query(),
     enabled: Boolean(token),
   });
 
@@ -138,16 +214,101 @@ export default function DiscoverScreen(): React.JSX.Element {
     </View>
   );
 
-  const items = activeQuery.data?.items ?? [];
+  const items = React.useMemo(
+    () => activeQuery.data?.items ?? [],
+    [activeQuery.data?.items],
+  );
   const nearbyHasRegions =
     tab === 'regions'
       ? (nearbyQuery.data as NearbyFeed | undefined)?.hasRegions ?? null
       : null;
 
+  const followedArtistIdSet = React.useMemo(() => {
+    if (!followedArtistsList.data) return null;
+    return new Set(followedArtistsList.data.map((a) => a.id));
+  }, [followedArtistsList.data]);
+
+  // Build the chip list. Seed from the followed-list so unannounced entries
+  // still get a chip with count=0, then add any announcement-only groups
+  // (e.g. a Spotify-imported artist whose follow row hasn't synced yet).
+  const groupList = React.useMemo<FilterGroup[]>(() => {
+    const seen = new Map<string, FilterGroup>();
+
+    if (tab === 'venues' && followedVenuesList.data) {
+      for (const v of followedVenuesList.data) {
+        seen.set(v.id, { id: v.id, name: v.name, sublabel: v.city, count: 0 });
+      }
+    }
+    if (tab === 'artists' && followedArtistsList.data) {
+      for (const a of followedArtistsList.data) {
+        seen.set(a.id, { id: a.id, name: a.name, count: 0 });
+      }
+    }
+    if (tab === 'regions') {
+      const regions = preferencesQuery.data?.regions ?? [];
+      for (const r of regions) {
+        if (r.active === false) continue;
+        seen.set(r.id, {
+          id: r.id,
+          name: r.cityName,
+          sublabel: `${r.radiusMiles}mi`,
+          count: 0,
+        });
+      }
+    }
+
+    for (const item of items) {
+      const keys = getGroupKeys(item, tab, followedArtistIdSet);
+      for (const key of keys) {
+        if (!seen.has(key)) {
+          const fallbackName =
+            tab === 'artists'
+              ? item.headliner
+              : tab === 'regions'
+                ? (item as NearbyAnnouncementItem).regionCityName ?? 'Region'
+                : item.venue.name;
+          const fallbackSub =
+            tab === 'venues'
+              ? item.venue.city
+              : tab === 'regions'
+                ? `${(item as NearbyAnnouncementItem).regionRadiusMiles ?? '?'}mi`
+                : undefined;
+          seen.set(key, {
+            id: key,
+            name: fallbackName,
+            sublabel: fallbackSub ?? undefined,
+            count: 0,
+          });
+        }
+        seen.get(key)!.count++;
+      }
+    }
+
+    return Array.from(seen.values()).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.name.localeCompare(b.name);
+    });
+  }, [
+    items,
+    tab,
+    followedVenuesList.data,
+    followedArtistsList.data,
+    preferencesQuery.data,
+    followedArtistIdSet,
+  ]);
+
+  const filteredItems = React.useMemo(() => {
+    if (!selectedGroupId) return items;
+    return items.filter((item) =>
+      getGroupKeys(item, tab, followedArtistIdSet).includes(selectedGroupId),
+    );
+  }, [items, selectedGroupId, tab, followedArtistIdSet]);
+
   const showOfflineEmpty = !network.online && !activeQuery.data;
   const isLoading = activeQuery.isLoading;
   const isErrored = !isLoading && activeQuery.isError && !activeQuery.data;
   const isEmpty = !isLoading && !isErrored && items.length === 0;
+  const filterCount = filteredItems.length;
 
   return (
     <ScreenWrapper
@@ -167,6 +328,15 @@ export default function DiscoverScreen(): React.JSX.Element {
           ]}
         />
       </View>
+
+      {!showOfflineEmpty && !isLoading && !isEmpty && groupList.length > 0 && (
+        <FilterChipsRow
+          groups={groupList}
+          selected={selectedGroupId}
+          onSelect={setSelectedGroupId}
+          totalCount={items.length}
+        />
+      )}
 
       <ScrollView
         contentContainerStyle={
@@ -213,18 +383,175 @@ export default function DiscoverScreen(): React.JSX.Element {
             <View style={styles.summaryRow}>
               <SummaryIcon tab={tab} color={colors.muted} />
               <Text style={[styles.summaryText, { color: colors.muted }]}>
-                {items.length} upcoming · pull to refresh
+                {filterCount} upcoming · pull to refresh
               </Text>
             </View>
-            <View style={styles.list}>
-              {items.map((item) => (
-                <AnnouncementRow key={item.id} item={item} />
-              ))}
-            </View>
+            {tab === 'regions' && !selectedGroupId ? (
+              <RegionGroupedList
+                items={filteredItems as NearbyAnnouncementItem[]}
+                groups={groupList}
+              />
+            ) : (
+              <View style={styles.list}>
+                {filteredItems.map((item) => (
+                  <AnnouncementRow key={item.id} item={item} />
+                ))}
+              </View>
+            )}
           </>
         )}
       </ScrollView>
     </ScreenWrapper>
+  );
+}
+
+function FilterChipsRow({
+  groups,
+  selected,
+  onSelect,
+  totalCount,
+}: {
+  groups: FilterGroup[];
+  selected: string | null;
+  onSelect: (id: string | null) => void;
+  totalCount: number;
+}): React.JSX.Element {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.chipsRow}
+      style={styles.chipsScroll}
+    >
+      <FilterChip
+        label="All"
+        count={totalCount}
+        active={selected === null}
+        onPress={() => onSelect(null)}
+        colors={colors}
+      />
+      {groups.map((g) => (
+        <FilterChip
+          key={g.id}
+          label={g.name}
+          sublabel={g.sublabel}
+          count={g.count}
+          active={selected === g.id}
+          onPress={() => onSelect(selected === g.id ? null : g.id)}
+          colors={colors}
+        />
+      ))}
+    </ScrollView>
+  );
+}
+
+function FilterChip({
+  label,
+  sublabel,
+  count,
+  active,
+  onPress,
+  colors,
+}: {
+  label: string;
+  sublabel?: string;
+  count: number;
+  active: boolean;
+  onPress: () => void;
+  colors: ReturnType<typeof useTheme>['tokens']['colors'];
+}): React.JSX.Element {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={`${label}${sublabel ? ` ${sublabel}` : ''}`}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.chip,
+        {
+          backgroundColor: active ? colors.ink : 'transparent',
+          borderColor: active ? colors.ink : colors.ruleStrong,
+          opacity: pressed ? 0.7 : 1,
+        },
+      ]}
+    >
+      <Text
+        numberOfLines={1}
+        style={[
+          styles.chipLabel,
+          {
+            color: active ? colors.bg : colors.ink,
+            fontWeight: active ? '600' : '500',
+          },
+        ]}
+      >
+        {label}
+        {sublabel ? (
+          <Text style={[styles.chipSublabel, { color: active ? colors.bg : colors.muted }]}>
+            {' '}
+            · {sublabel}
+          </Text>
+        ) : null}
+      </Text>
+      <Text
+        style={[
+          styles.chipCount,
+          { color: active ? colors.bg : colors.muted, opacity: active ? 0.7 : 1 },
+        ]}
+      >
+        {count}
+      </Text>
+    </Pressable>
+  );
+}
+
+function RegionGroupedList({
+  items,
+  groups,
+}: {
+  items: NearbyAnnouncementItem[];
+  groups: FilterGroup[];
+}): React.JSX.Element {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+  // Bucket items by region id; preserve the group order from the chip list
+  // (which is count-desc) so the densest region floats to the top.
+  const buckets = React.useMemo(() => {
+    const map = new Map<string, NearbyAnnouncementItem[]>();
+    for (const item of items) {
+      const key = item.regionId ?? '__unknown';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(item);
+    }
+    return map;
+  }, [items]);
+
+  const orderedGroups = groups.filter((g) => buckets.has(g.id));
+
+  return (
+    <View style={styles.list}>
+      {orderedGroups.map((g) => {
+        const groupItems = buckets.get(g.id) ?? [];
+        return (
+          <View key={g.id} style={styles.regionGroup}>
+            <View style={styles.regionHeader}>
+              <Text style={[styles.regionHeaderName, { color: colors.ink }]}>
+                {g.name}
+              </Text>
+              <Text style={[styles.regionHeaderMeta, { color: colors.muted }]}>
+                {g.sublabel ? `${g.sublabel} · ` : ''}
+                {groupItems.length} upcoming
+              </Text>
+            </View>
+            {groupItems.map((item) => (
+              <AnnouncementRow key={item.id} item={item} />
+            ))}
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
@@ -255,48 +582,36 @@ function EmptyForTab({
 }): React.JSX.Element {
   if (tab === 'venues') {
     return (
-      <View style={styles.heroWrap}>
-        <EmptyStateHero
-          kind="discover"
-          title="Follow a venue"
-          body="Follow a venue from its detail screen to see its announcements here."
-          action={{ label: 'Open Venues', onPress: onOpenVenues }}
-        />
-      </View>
+      <EmptyState
+        title="Follow a venue"
+        subtitle="Follow a venue from its detail screen to see its upcoming announcements here."
+        cta={{ label: 'Open Venues', onPress: onOpenVenues }}
+      />
     );
   }
   if (tab === 'artists') {
     return (
-      <View style={styles.heroWrap}>
-        <EmptyStateHero
-          kind="discover"
-          title="Follow an artist"
-          body="Follow an artist to see their tour announcements as soon as they go on sale."
-          action={{ label: 'Open Artists', onPress: onOpenArtists }}
-        />
-      </View>
+      <EmptyState
+        title="Follow an artist"
+        subtitle="Follow an artist to see their tour announcements as soon as they go on sale."
+        cta={{ label: 'Open Artists', onPress: onOpenArtists }}
+      />
     );
   }
   if (hasRegions === false) {
     return (
-      <View style={styles.heroWrap}>
-        <EmptyStateHero
-          kind="discover"
-          title="Set your region"
-          body="Add a region to surface nearby announcements and power your daily email digest."
-          action={{ label: 'Open Settings', onPress: onOpenMe }}
-        />
-      </View>
+      <EmptyState
+        title="Set your region"
+        subtitle="Add a region to surface nearby announcements and power your daily email digest."
+        cta={{ label: 'Open Settings', onPress: onOpenMe }}
+      />
     );
   }
   return (
-    <View style={styles.heroWrap}>
-      <EmptyStateHero
-        kind="discover"
-        title="Quiet week"
-        body="No new announcements in your saved regions yet. Check back after the next ingest."
-      />
-    </View>
+    <EmptyState
+      title="Quiet week"
+      subtitle="No new announcements in your saved regions yet. Check back after the next ingest."
+    />
   );
 }
 
@@ -405,6 +720,41 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 12,
   },
+  chipsScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    maxWidth: 220,
+  },
+  chipLabel: {
+    fontFamily: 'Geist Sans',
+    fontSize: 12,
+    letterSpacing: -0.1,
+  },
+  chipSublabel: {
+    fontFamily: 'Geist Sans',
+    fontSize: 11,
+    fontWeight: '400',
+  },
+  chipCount: {
+    fontFamily: 'Geist Mono',
+    fontSize: 10,
+    fontWeight: '400',
+  },
   scrollContent: {
     paddingTop: 4,
     paddingBottom: 48,
@@ -413,10 +763,6 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingTop: 4,
     paddingBottom: 48,
-  },
-  heroWrap: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
   },
   center: {
     flex: 1,
@@ -440,6 +786,28 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: 16,
     gap: 10,
+  },
+  regionGroup: {
+    gap: 10,
+  },
+  regionHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingTop: 6,
+    paddingBottom: 2,
+  },
+  regionHeaderName: {
+    fontFamily: 'Geist Sans',
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: -0.1,
+  },
+  regionHeaderMeta: {
+    fontFamily: 'Geist Mono',
+    fontSize: 10.5,
+    letterSpacing: 0.4,
+    textTransform: 'lowercase',
   },
   card: {
     padding: 14,
