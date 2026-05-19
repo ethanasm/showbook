@@ -53,3 +53,17 @@ export async function hapticSelection(): Promise<void> {
     // best-effort
   }
 }
+
+/**
+ * Medium impact "thump". Matches the iOS-native context-menu reveal feel
+ * for long-press → action-sheet flows. Stronger than `hapticSelection` so
+ * the user actually notices the menu has popped.
+ */
+export async function hapticImpactMedium(): Promise<void> {
+  if (!isHapticPlatform()) return;
+  try {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  } catch {
+    // best-effort
+  }
+}
