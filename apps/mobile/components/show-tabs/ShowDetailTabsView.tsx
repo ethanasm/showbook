@@ -44,6 +44,7 @@ import {
   type ShowTabKey,
 } from '../../lib/setlist-intel';
 import { useBreakpoint } from '../../lib/responsive';
+import { getHeadliner } from '@showbook/shared';
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
@@ -123,7 +124,8 @@ function ShowDetailTabsViewInner({
   );
 
   const headliner = show.showPerformers.find((sp) => sp.role === 'headliner');
-  const headlinerName = headliner?.performer.name ?? show.productionName ?? 'Show';
+  const resolvedHeadliner = getHeadliner(show);
+  const headlinerName = resolvedHeadliner === 'Unknown Artist' ? 'Show' : resolvedHeadliner;
 
   // ──────────────────────────── tRPC queries ────────────────────────────
   const predictionQuery = trpc.setlistIntel.predictedSetlist.useQuery(
@@ -489,11 +491,8 @@ function ShowDetailTabsViewInner({
 function HeaderStrip({ show }: { show: ShowDetail }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
-  const headliner = show.showPerformers.find((sp) => sp.role === 'headliner');
-  const title =
-    show.kind === 'theatre'
-      ? show.productionName ?? headliner?.performer.name ?? 'Untitled'
-      : headliner?.performer.name ?? show.productionName ?? 'Untitled';
+  const resolvedHeadliner = getHeadliner(show);
+  const title = resolvedHeadliner === 'Unknown Artist' ? 'Untitled' : resolvedHeadliner;
   const date = parseDate(show.date);
 
   // Gradient-emphasis the last word of the title for a touch of editorial flair.

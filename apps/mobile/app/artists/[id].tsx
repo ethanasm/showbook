@@ -36,6 +36,7 @@ import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { hapticSelection } from '../../lib/haptics';
 import { isNonWatchableKind } from '@showbook/shared';
 import { useAuth } from '../../lib/auth';
+import { headlinerDisplayName } from '../../lib/show-display';
 import { trpc, type RouterOutput } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
 import { useQueryClient } from '@tanstack/react-query';
@@ -67,11 +68,16 @@ function toShowCard(s: UserShow): ShowCardShow {
       dow = DOWS[d.getDay()] ?? '—';
     }
   }
-  const headliner =
-    s.showPerformers.find((sp) => sp.role === 'headliner')?.performer.name ??
-    s.productionName ??
-    s.showPerformers[0]?.performer.name ??
-    'Untitled show';
+  const headliner = headlinerDisplayName({
+    kind: s.kind,
+    productionName: s.productionName,
+    performers: s.showPerformers.map((sp) => ({
+      name: sp.performer.name,
+      role: sp.role,
+      sortOrder: sp.sortOrder,
+    })),
+    fallback: s.showPerformers[0]?.performer.name ?? 'Untitled show',
+  });
   const kind: Kind = isNonWatchableKind(s.kind) ? 'concert' : (s.kind as Kind);
   return {
     id: s.id,

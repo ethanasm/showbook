@@ -42,6 +42,7 @@ import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
 import { useAuth } from '../../lib/auth';
+import { headlinerDisplayName } from '../../lib/show-display';
 
 type Mode = 'timeline' | 'month' | 'stats';
 
@@ -74,12 +75,12 @@ function todayISO(): string {
 }
 
 function headlinerOf(row: ShowRow): string {
-  const headliners = row.performers
-    .filter((p) => p.role === 'headliner')
-    .sort((a, b) => a.sortOrder - b.sortOrder);
-  if (headliners.length > 0) return headliners[0].name;
-  if (row.productionName) return row.productionName;
-  return 'Untitled show';
+  return headlinerDisplayName({
+    kind: row.kind,
+    productionName: row.productionName,
+    performers: row.performers,
+    fallback: 'Untitled show',
+  });
 }
 
 function priceCents(row: ShowRow): number {
