@@ -38,7 +38,7 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 import type { PerformerSetlist } from '@showbook/shared';
-import { isFeatureOn } from '@showbook/shared';
+import { getHeadliner, isFeatureOn } from '@showbook/shared';
 
 import { TopBar } from '../../components/TopBar';
 import { KindBadge } from '../../components/KindBadge';
@@ -286,9 +286,8 @@ export default function ShowDetailScreen(
 // ---------------------------------------------------------------------------
 
 function formatTitle(show: ShowDetail): string {
-  if (show.kind === 'theatre' && show.productionName) return show.productionName;
-  const headliner = show.showPerformers.find((sp) => sp.role === 'headliner');
-  return headliner?.performer.name ?? show.productionName ?? 'Show';
+  const label = getHeadliner(show);
+  return label === 'Unknown Artist' ? 'Show' : label;
 }
 
 function Hero({ show }: { show: ShowDetail }): React.JSX.Element {
