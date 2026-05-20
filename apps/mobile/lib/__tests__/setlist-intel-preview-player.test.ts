@@ -22,7 +22,9 @@ describe('PreviewPlayerController', () => {
     const { controller } = makeController();
     assert.deepEqual(controller.getState(), {
       currentTrackKey: null,
+      loadingKey: null,
       isPlaying: false,
+      currentLabel: null,
     });
   });
 
@@ -30,26 +32,31 @@ describe('PreviewPlayerController', () => {
     const { driver, controller, states } = makeController();
     await controller.play({
       key: 'show-1:hot stuff',
+      label: 'Hot Stuff',
       previewUrl: 'https://p.scdn.co/clip.mp3',
       spotifyTrackId: null,
     });
     assert.deepEqual(driver.playedUrls, ['https://p.scdn.co/clip.mp3']);
     assert.equal(controller.getState().currentTrackKey, 'show-1:hot stuff');
     assert.equal(controller.getState().isPlaying, true);
+    assert.equal(controller.getState().currentLabel, 'Hot Stuff');
     assert.equal(states[states.length - 1]?.isPlaying, true);
   });
 
-  it('fires onUnavailable when the URL is missing', async () => {
+  it('fires onUnavailable when the URL is missing and no resolver is provided', async () => {
     const { driver, controller } = makeController();
     let fired = false;
     await controller.play(
       { key: 'row-no-preview', previewUrl: null, spotifyTrackId: null },
-      () => {
-        fired = true;
+      {
+        onUnavailable: () => {
+          fired = true;
+        },
       },
     );
     assert.equal(fired, true);
     assert.equal(controller.getState().currentTrackKey, null);
+    assert.equal(controller.getState().loadingKey, null);
     // Driver.stop is still invoked once at the top of play for cleanup.
     assert.equal(driver.stops, 1);
     assert.deepEqual(driver.playedUrls, []);
@@ -70,6 +77,7 @@ describe('PreviewPlayerController', () => {
     });
     assert.equal(controller.getState().currentTrackKey, null);
     assert.equal(controller.getState().isPlaying, false);
+    assert.equal(controller.getState().currentLabel, null);
     // Stop fires twice: once at the start of the toggle-stop branch,
     // plus the original play's initial cleanup.
     assert.ok(driver.stops >= 2);
@@ -91,8 +99,6 @@ describe('PreviewPlayerController', () => {
       'https://p.scdn.co/a.mp3',
       'https://p.scdn.co/b.mp3',
     ]);
-    // First play stops once (idle cleanup); second play stops once again
-    // before swapping the source.
     assert.ok(driver.stops >= 2);
     assert.equal(controller.getState().currentTrackKey, 'row-b');
   });
@@ -101,13 +107,16 @@ describe('PreviewPlayerController', () => {
     const { controller } = makeController();
     await controller.play({
       key: 'row-c',
+      label: 'Track C',
       previewUrl: 'https://p.scdn.co/c.mp3',
       spotifyTrackId: null,
     });
     controller.handleEnded();
     assert.deepEqual(controller.getState(), {
       currentTrackKey: null,
+      loadingKey: null,
       isPlaying: false,
+      currentLabel: null,
     });
   });
 
@@ -115,6 +124,90 @@ describe('PreviewPlayerController', () => {
     const { driver, controller } = makeController();
     await controller.dispose();
     assert.equal(driver.disposed, true);
+  });
+
+  it('invokes resolver when previewUrl is null, then plays the resolved URL', async () => {
+    const { driver, controller, states } = makeController();
+    let resolverCalled = 0;
+    await controller.play(
+      { key: 'row-lazy', label: 'Lazy', previewUrl: null, spotifyTrackId: null },
+      {
+        resolve: async () => {
+          resolverCalled += 1;
+          return {
+            previewUrl: 'https://p.scdn.co/resolved.mp3',
+            spotifyTrackId: 'spotify-123',
+          };
+        },
+      },
+    );
+    assert.equal(resolverCalled, 1);
+    assert.deepEqual(driver.playedUrls, ['https://p.scdn.co/resolved.mp3']);
+    assert.equal(controller.getState().currentTrackKey, 'row-lazy');
+    assert.equal(controller.getState().isPlaying, true);
+    assert.equal(controller.getState().loadingKey, null);
+
+    // Mid-flight there should be a loadingKey state.
+    const loadingState = states.find((s) => s.loadingKey === 'row-lazy');
+    assert.ok(loadingState, 'expected a loading state emission');
+    assert.equal(loadingState.isPlaying, false);
+  });
+
+  it('marks unavailable when resolver returns no preview URL', async () => {
+    const { driver, controller } = makeController();
+    let unavailable = 0;
+    await controller.play(
+      { key: 'row-empty', previewUrl: null, spotifyTrackId: null },
+      {
+        resolve: async () => ({ previewUrl: null, spotifyTrackId: null }),
+        onUnavailable: () => {
+          unavailable += 1;
+        },
+      },
+    );
+    assert.equal(unavailable, 1);
+    assert.equal(driver.playedUrls.length, 0);
+    assert.equal(controller.getState().currentTrackKey, null);
+    assert.equal(controller.getState().loadingKey, null);
+  });
+
+  it('marks unavailable when the resolver throws', async () => {
+    const { driver, controller } = makeController();
+    let unavailable = 0;
+    await controller.play(
+      { key: 'row-throws', previewUrl: null, spotifyTrackId: null },
+      {
+        resolve: async () => {
+          throw new Error('boom');
+        },
+        onUnavailable: () => {
+          unavailable += 1;
+        },
+      },
+    );
+    assert.equal(unavailable, 1);
+    assert.equal(driver.playedUrls.length, 0);
+    assert.equal(controller.getState().loadingKey, null);
+  });
+
+  it('skips the resolver when a cached previewUrl is present', async () => {
+    const { driver, controller } = makeController();
+    let resolverCalled = 0;
+    await controller.play(
+      {
+        key: 'row-cached',
+        previewUrl: 'https://p.scdn.co/cached.mp3',
+        spotifyTrackId: null,
+      },
+      {
+        resolve: async () => {
+          resolverCalled += 1;
+          return { previewUrl: 'should-not-use', spotifyTrackId: null };
+        },
+      },
+    );
+    assert.equal(resolverCalled, 0);
+    assert.deepEqual(driver.playedUrls, ['https://p.scdn.co/cached.mp3']);
   });
 });
 

@@ -35,9 +35,6 @@ import { CACHE_DEFAULTS } from '../../lib/cache';
 import { useQueryClient } from '@tanstack/react-query';
 import { runOptimisticMutation } from '../../lib/mutations';
 import { getCacheOutbox } from '../../lib/cache/db';
-import {
-  PreviewPlayerProvider,
-} from './TrackPreviewButton';
 import { ShowTabBar } from './ShowTabBar';
 import { OverviewTab, type OverviewLineupEntry } from './OverviewTab';
 import { SetlistTab, type ActualSong, type AnyPrediction } from './SetlistTab';
@@ -109,17 +106,7 @@ export interface ShowDetailTabsViewProps {
   initialTab?: ShowTabKey;
 }
 
-export function ShowDetailTabsView(
-  props: ShowDetailTabsViewProps,
-): React.JSX.Element {
-  return (
-    <PreviewPlayerProvider>
-      <ShowDetailTabsViewInner {...props} />
-    </PreviewPlayerProvider>
-  );
-}
-
-function ShowDetailTabsViewInner({
+export function ShowDetailTabsView({
   show,
   embeddedInThreePane = false,
   initialTab,
