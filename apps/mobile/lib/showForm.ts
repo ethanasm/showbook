@@ -211,10 +211,13 @@ export function serializeShowFormForKind(
 
   const headliner: SerializedShowHeadliner = { name: title, ...headlinerEnrichment };
 
-  // For festival, lineup rows whose name matches the festival name are
-  // dropped from the performer list so we don't violate the
-  // (showId, performerId, role) PK when the synthetic festival-name
-  // headliner already covers that performer. Web does the same.
+  // For festival, drop any lineup row whose name matches the festival
+  // name. The backend treats festivals like theatre (no headliner
+  // performer is created from `headliner.name`; the festival name lives
+  // on shows.production_name only), but a row whose name matches the
+  // festival is still a confusing duplicate to show in the lineup card,
+  // so we strip it here for the same reason theatre strips a cast row
+  // matching the play title.
   const performers = rowsForKind(
     values.performers,
     kind,
@@ -314,8 +317,11 @@ export function buildShowFormFromDetail(
     title = detail.productionName ?? performers.find((p) => p.role === 'headliner')?.performer.name ?? '';
     lineup = performers.filter((p) => p.role === 'cast');
   } else if (detail.kind === 'festival') {
-    // Festival headliner-as-festival-name is filtered out of the lineup
-    // (it's the synthetic row that mirrors productionName).
+    // Festival shows store the festival name on production_name; the
+    // lineup is the union of real headliner artists + support. Defensive
+    // filter: drop any row whose name matches the festival name (legacy
+    // data from before migration 0052 may still ship a phantom
+    // "festival-name" headliner row).
     title = detail.productionName ?? performers.find((p) => p.role === 'headliner')?.performer.name ?? '';
     const titleNorm = title.trim().toLowerCase();
     lineup = performers.filter((p) => {

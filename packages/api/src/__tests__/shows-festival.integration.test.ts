@@ -61,36 +61,48 @@ describe('shows.create festival setlist enrichment', () => {
   it('past festival enqueues one setlist row per lineup performer', async () => {
     const created = await callerFor(USER).shows.create({
       kind: 'festival',
-      headliner: { name: `${PREFIX} Festival Top Artist` },
+      headliner: { name: `${PREFIX} Some Big Festival` },
       venue: { name: `${PREFIX} Venue`, city: 'NYC' },
       date: '2022-08-15',
       ticketCount: 1,
       productionName: `${PREFIX} Some Big Festival`,
       performers: [
         {
+          name: `${PREFIX} Festival Top Artist`,
+          role: 'headliner',
+          sortOrder: 1,
+        },
+        {
           name: `${PREFIX} Festival Second Artist`,
           role: 'support',
-          sortOrder: 1,
+          sortOrder: 2,
         },
         {
           name: `${PREFIX} Festival Third Artist`,
           role: 'support',
-          sortOrder: 2,
+          sortOrder: 3,
         },
       ],
     });
     assert.ok(created);
     assert.equal(created!.kind, 'festival');
     assert.equal(created!.state, 'past');
+    // Festivals do NOT mint a synthetic performer for the festival
+    // name — only the three lineup artists are persisted.
     assert.equal(created!.showPerformers.length, 3);
+    assert.ok(
+      !created!.showPerformers.some(
+        (sp) => sp.performer.name === `${PREFIX} Some Big Festival`,
+      ),
+      'festival name must not appear as a performer',
+    );
 
     const queueRows = await db
       .select()
       .from(enrichmentQueue)
       .where(eq(enrichmentQueue.showId, created!.id));
-    // 3 queue rows — one per artist. Headliner inline lookup misses
-    // against setlist.fm (test name has no match), so even the headliner
-    // ends up queued.
+    // One queue row per lineup artist (no synthetic festival-name
+    // headliner row anymore).
     assert.equal(queueRows.length, 3, 'one queue row per festival artist');
     const queuedPerformerIds = new Set(queueRows.map((r) => r.performerId));
     for (const sp of created!.showPerformers) {
@@ -109,20 +121,24 @@ describe('shows.create festival setlist enrichment', () => {
   it('past festival skips queueing performers that arrive with inline setlists', async () => {
     const created = await callerFor(USER).shows.create({
       kind: 'festival',
-      headliner: {
-        name: `${PREFIX} Festival Inline Headliner`,
-        setlist: {
-          sections: [{ kind: 'set', songs: [{ title: 'Opener' }] }],
-        },
-      },
+      headliner: { name: `${PREFIX} Inline Festival` },
       venue: { name: `${PREFIX} Venue`, city: 'NYC' },
       date: '2022-08-16',
       ticketCount: 1,
+      productionName: `${PREFIX} Inline Festival`,
       performers: [
+        {
+          name: `${PREFIX} Festival Inline Top`,
+          role: 'headliner',
+          sortOrder: 1,
+          setlist: {
+            sections: [{ kind: 'set', songs: [{ title: 'Opener' }] }],
+          },
+        },
         {
           name: `${PREFIX} Festival Inline Support`,
           role: 'support',
-          sortOrder: 1,
+          sortOrder: 2,
         },
       ],
     });
@@ -131,8 +147,8 @@ describe('shows.create festival setlist enrichment', () => {
       .select()
       .from(enrichmentQueue)
       .where(eq(enrichmentQueue.showId, created!.id));
-    // Headliner came with a setlist → skipped. Support artist has no
-    // inline setlist → enqueued.
+    // The lineup artist with an inline setlist is skipped; the other
+    // lineup artist is queued.
     assert.equal(queueRows.length, 1, 'only the artist without an inline setlist is queued');
     const supportSp = created!.showPerformers.find((sp) => sp.role === 'support');
     assert.ok(supportSp);

@@ -464,13 +464,111 @@ describe('shows router', () => {
       ],
     });
     assert.ok(reordered);
-    // Synthetic festival-name headliner + four lineup rows.
-    assert.equal(reordered!.showPerformers.length, 5);
+    // Festivals carry their name on shows.production_name only; the
+    // four lineup rows are the only show_performers we expect.
+    assert.equal(reordered!.showPerformers.length, 4);
+    assert.ok(
+      !reordered!.showPerformers.some(
+        (sp) => sp.performer.name === `${PREFIX} Edit Festival`,
+      ),
+      'editing a festival should not spawn a performer named after the festival',
+    );
     const promoted = reordered!.showPerformers.find(
       (sp) => sp.performer.name === `${PREFIX} Edit Artist A`,
     );
     assert.ok(promoted);
     assert.equal(promoted!.role, 'headliner');
+  });
+
+  it('update does not create a synthetic festival-name headliner when editing only the venue', async () => {
+    // Regression for the Bottlerock bug: a user edits just the venue
+    // of a festival and the round-trip used to insert a phantom
+    // headliner performer whose name was the festival name, which
+    // then showed up at the top of the lineup card on the show
+    // detail screen. The fix skips the headliner-performer insert
+    // for festivals entirely (the festival name lives on
+    // shows.production_name).
+    const festivalId = fakeUuid(PREFIX, 'fest-venue-only');
+    await createTestShow({
+      id: festivalId,
+      userId: USER,
+      venueId: VENUE,
+      kind: 'festival',
+      state: 'watching',
+      date: '2099-05-22',
+    });
+    // Seed a clean lineup (no synthetic headliner) via shows.update.
+    await callerFor(USER).shows.update({
+      showId: festivalId,
+      kind: 'festival',
+      headliner: { name: `${PREFIX} Bottlerock` },
+      venue: { name: `${PREFIX} Venue`, city: 'NYC' },
+      date: '2099-05-22',
+      ticketCount: 1,
+      productionName: `${PREFIX} Bottlerock`,
+      performers: [
+        { name: `${PREFIX} Lorde`, role: 'headliner', sortOrder: 1 },
+        { name: `${PREFIX} Teddy Swims`, role: 'support', sortOrder: 2 },
+      ],
+    });
+    // Now edit the venue (everything else stays the same — mirrors
+    // what the mobile edit screen sends when the user only changed
+    // the venue field).
+    const updated = await callerFor(USER).shows.update({
+      showId: festivalId,
+      kind: 'festival',
+      headliner: { name: `${PREFIX} Bottlerock` },
+      venue: { name: `${PREFIX} Different Venue`, city: 'Napa' },
+      date: '2099-05-22',
+      ticketCount: 1,
+      productionName: `${PREFIX} Bottlerock`,
+      performers: [
+        { name: `${PREFIX} Lorde`, role: 'headliner', sortOrder: 1 },
+        { name: `${PREFIX} Teddy Swims`, role: 'support', sortOrder: 2 },
+      ],
+    });
+    assert.ok(updated);
+    assert.equal(updated!.productionName, `${PREFIX} Bottlerock`);
+    assert.equal(updated!.showPerformers.length, 2);
+    assert.ok(
+      !updated!.showPerformers.some(
+        (sp) => sp.performer.name === `${PREFIX} Bottlerock`,
+      ),
+      'venue edit must not spawn a festival-name headliner performer',
+    );
+    const lorde = updated!.showPerformers.find(
+      (sp) => sp.performer.name === `${PREFIX} Lorde`,
+    );
+    assert.ok(lorde);
+    assert.equal(lorde!.role, 'headliner');
+  });
+
+  it('create does not create a synthetic festival-name headliner', async () => {
+    // Bookend to the update regression above: the bug also fired on
+    // the initial create path. shows.create must skip the headliner
+    // performer insert for kind='festival' so production_name is the
+    // sole carrier of the festival name.
+    const created = await callerFor(USER).shows.create({
+      kind: 'festival',
+      headliner: { name: `${PREFIX} Bottlerock Create` },
+      venue: { name: `${PREFIX} Venue`, city: 'NYC' },
+      date: '2099-05-23',
+      ticketCount: 1,
+      productionName: `${PREFIX} Bottlerock Create`,
+      performers: [
+        { name: `${PREFIX} Lorde Create`, role: 'headliner', sortOrder: 1 },
+        { name: `${PREFIX} Teddy Create`, role: 'support', sortOrder: 2 },
+      ],
+    });
+    assert.ok(created);
+    assert.equal(created!.productionName, `${PREFIX} Bottlerock Create`);
+    assert.equal(created!.showPerformers.length, 2);
+    assert.ok(
+      !created!.showPerformers.some(
+        (sp) => sp.performer.name === `${PREFIX} Bottlerock Create`,
+      ),
+      'shows.create must not spawn a festival-name headliner performer',
+    );
   });
 
   it('update rejects unknown showId', async () => {
