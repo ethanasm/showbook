@@ -55,7 +55,11 @@ import {
   type ShowTabKey,
 } from '../../lib/setlist-intel';
 import { useBreakpoint } from '../../lib/responsive';
-import { getHeadliner } from '@showbook/shared';
+import {
+  formatVenueLocation,
+  getHeadliner,
+  isVenuePlaceholder,
+} from '@showbook/shared';
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
@@ -255,9 +259,7 @@ export function ShowDetailTabsView({
   // ──────────────────────────── Panels ────────────────────────────
   const overviewCells = React.useMemo(() => {
     const venueLabel = show.venue.name;
-    const venueSub = [show.venue.city, show.venue.stateRegion]
-      .filter(Boolean)
-      .join(', ');
+    const venueSub = formatVenueLocation(show.venue);
     const seatLabel = show.seat ?? '—';
     const seatSub = show.ticketCount > 1 ? `${show.ticketCount} tix` : '1 tix';
     const priceLabel = show.pricePaid
@@ -516,7 +518,9 @@ function HeaderStrip({ show }: { show: ShowDetail }): React.JSX.Element {
   const parts = title.trim().split(/\s+/);
   const head = parts.length > 1 ? parts.slice(0, -1).join(' ') + ' ' : '';
   const tail = parts.length > 1 ? (parts[parts.length - 1] as string) : title;
-  const venueLine = [show.venue.name, show.venue.city].filter(Boolean).join(' · ');
+  const venueLine = [show.venue.name, show.venue.city]
+    .filter((p) => !isVenuePlaceholder(p))
+    .join(' · ');
 
   // Top-right image renders the venue for solo-artist kinds (concert /
   // comedy). The headliner already appears in the LINEUP row below, so
