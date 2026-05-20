@@ -39,6 +39,7 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -50,6 +51,7 @@ import {
   Ticket,
   Users,
 } from 'lucide-react-native';
+import { useFeedback } from '../../lib/feedback';
 import { isNonWatchableKind } from '@showbook/shared';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
 import { SegmentedControl } from '../../components/SegmentedControl';
@@ -818,10 +820,12 @@ function AnnouncementRow({
   const { tokens } = useTheme();
   const { colors } = tokens;
   const router = useRouter();
+  const { showToast } = useFeedback();
   const { month, day, year, dow } = parseDate(item.showDate);
   const accent = tokens.kindColor(item.kind as Kind);
   const onSale = formatOnSale(item.onSaleDate);
   const onSaleLabel = ON_SALE_LABEL[item.onSaleStatus];
+  const ticketUrl = item.ticketUrl;
   const title = item.productionName ?? item.headliner;
   const venueLabel = [item.venue.name, item.venue.city].filter(Boolean).join(' · ');
   const support =
@@ -867,6 +871,29 @@ function AnnouncementRow({
         </View>
         <View style={styles.cardBadge}>
           <KindBadge kind={item.kind as Kind} size="sm" />
+          {ticketUrl ? (
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                void hapticSelection();
+                Linking.openURL(ticketUrl).catch(() => {
+                  showToast({ kind: 'error', text: "Couldn't open Ticketmaster." });
+                });
+              }}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Open tickets on Ticketmaster"
+              testID={`discover-row-tix-${item.id}`}
+              style={({ pressed }) => [
+                styles.tixPill,
+                { borderColor: colors.ruleStrong, backgroundColor: colors.surface },
+                pressed && { opacity: 0.6 },
+              ]}
+            >
+              <Ticket size={11} color={colors.muted} strokeWidth={2} />
+              <Text style={[styles.tixLabel, { color: colors.muted }]}>TIX</Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
 
@@ -1210,6 +1237,23 @@ const styles = StyleSheet.create({
   },
   cardBadge: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tixPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  tixLabel: {
+    fontFamily: 'Geist Mono',
+    fontSize: 9.5,
+    fontWeight: '600',
+    letterSpacing: 0.8,
   },
   cardTitle: {
     fontFamily: 'Geist Sans',

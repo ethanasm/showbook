@@ -131,7 +131,11 @@ function ShowDetailTabsViewInner({
   const breakpoint = useBreakpoint();
   const utils = trpc.useUtils();
   const queryClient = useQueryClient();
+  const { showToast } = useFeedback();
   const isPast = show.state === 'past';
+  const showTicketAction =
+    Boolean(show.ticketUrl) &&
+    (show.state === 'watching' || show.state === 'ticketed');
 
   const [active, setActive] = React.useState<ShowTabKey>(
     parseShowTab(initialTab ?? null),
@@ -342,6 +346,24 @@ function ShowDetailTabsViewInner({
               },
             ]
           : []),
+        ...(showTicketAction && show.ticketUrl
+          ? [
+              {
+                label: 'Tickets',
+                testID: 'action-open-tickets',
+                icon: <Ticket size={14} color={colors.ink} strokeWidth={2} />,
+                onPress: () => {
+                  void hapticSelection();
+                  Linking.openURL(show.ticketUrl as string).catch(() => {
+                    showToast({
+                      kind: 'error',
+                      text: "Couldn't open Ticketmaster.",
+                    });
+                  });
+                },
+              },
+            ]
+          : []),
         {
           label: 'Edit show',
           testID: 'action-edit-show',
@@ -512,13 +534,9 @@ function HeaderStrip({ show }: { show: ShowDetail }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const router = useRouter();
-  const { showToast } = useFeedback();
   const resolvedHeadliner = getHeadliner(show);
   const title = resolvedHeadliner === 'Unknown Artist' ? 'Untitled' : resolvedHeadliner;
   const date = parseDate(show.date);
-  const showTicketAction =
-    Boolean(show.ticketUrl) &&
-    (show.state === 'watching' || show.state === 'ticketed');
 
   // Gradient-emphasis the last word of the title for a touch of editorial flair.
   const parts = title.trim().split(/\s+/);
@@ -565,30 +583,6 @@ function HeaderStrip({ show }: { show: ShowDetail }): React.JSX.Element {
                   </Text>
                 </View>
               )}
-              {showTicketAction && show.ticketUrl ? (
-                <Pressable
-                  onPress={() => {
-                    void hapticSelection();
-                    Linking.openURL(show.ticketUrl as string).catch(() => {
-                      showToast({
-                        kind: 'error',
-                        text: "Couldn't open Ticketmaster.",
-                      });
-                    });
-                  }}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel="Open tickets on Ticketmaster"
-                  testID="show-header-tickets"
-                  style={({ pressed }) => [
-                    styles.ticketAction,
-                    { borderColor: colors.rule, backgroundColor: colors.surface },
-                    pressed && { opacity: 0.6 },
-                  ]}
-                >
-                  <Ticket size={14} color={colors.muted} strokeWidth={2} />
-                </Pressable>
-              ) : null}
             </View>
             <Text
               style={[styles.headerTitle, { color: colors.ink }]}
@@ -736,13 +730,5 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     letterSpacing: 1.4,
-  },
-  ticketAction: {
-    width: 28,
-    height: 28,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });

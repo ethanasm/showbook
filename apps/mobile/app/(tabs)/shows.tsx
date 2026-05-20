@@ -67,6 +67,7 @@ interface ShowRow {
   seat: string | null;
   pricePaid: string | null;
   productionName: string | null;
+  ticketUrl: string | null;
   venue: { name: string; city: string | null };
   performers: {
     name: string;
@@ -140,6 +141,7 @@ function toShowCard(row: ShowRow): ShowCardShow {
       seat: row.seat,
       price: row.pricePaid ? `$${row.pricePaid}` : null,
       avatarUrl,
+      ticketUrl: row.ticketUrl,
     };
   }
   return {
@@ -156,6 +158,7 @@ function toShowCard(row: ShowRow): ShowCardShow {
     seat: row.seat,
     price: row.pricePaid ? `$${row.pricePaid}` : null,
     avatarUrl,
+    ticketUrl: row.ticketUrl,
   };
 }
 
@@ -204,6 +207,7 @@ export default function ShowsScreen(): React.JSX.Element {
       seat: s.seat,
       pricePaid: s.pricePaid,
       productionName: s.productionName,
+      ticketUrl: s.ticketUrl,
       venue: { name: s.venue.name, city: s.venue.city },
       performers: s.showPerformers.map((sp) => ({
         name: sp.performer.name,
