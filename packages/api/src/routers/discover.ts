@@ -91,7 +91,10 @@ export const discoverRouter = router({
       }
 
       // Build conditions
-      const conditions = [inArray(announcements.venueId, venueIds)];
+      const conditions: SQL[] = [
+        inArray(announcements.venueId, venueIds),
+        sql`${announcements.showDate} >= CURRENT_DATE`,
+      ];
       const decoded = decodeCursor(cursor);
       if (decoded) {
         conditions.push(cursorCondition(decoded));
@@ -161,7 +164,10 @@ export const discoverRouter = router({
         inArray(announcements.headlinerPerformerId, performerIds),
         arrayOverlaps(announcements.supportPerformerIds, performerIds),
       )!;
-      const conditions = [followedMatch];
+      const conditions: SQL[] = [
+        followedMatch,
+        sql`${announcements.showDate} >= CURRENT_DATE`,
+      ];
       const decoded = decodeCursor(cursor);
       if (decoded) {
         conditions.push(cursorCondition(decoded));

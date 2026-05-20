@@ -44,11 +44,16 @@ const EXTRA_B = fakeUuid(PREFIX, 'eb');
 
 const ANN_HEADLINER = fakeUuid(PREFIX, 'ah');
 const ANN_SUPPORT = fakeUuid(PREFIX, 'as');
+const ANN_PAST = fakeUuid(PREFIX, 'apast');
 
 function dateInFuture(daysFromNow: number): string {
   const d = new Date();
   d.setDate(d.getDate() + daysFromNow);
   return d.toISOString().slice(0, 10);
+}
+
+function dateInPast(daysAgo: number): string {
+  return dateInFuture(-daysAgo);
 }
 
 async function seedPerformer(id: string, name: string) {
@@ -109,6 +114,23 @@ describe('discover.followedArtistsFeed', () => {
         source: 'ticketmaster',
       })
       .onConflictDoNothing();
+
+    // Past announcement for a followed headliner. The feed must filter
+    // it out — there is no pg-boss prune job for announcements; the
+    // discover query is the only thing keeping past dates off-screen.
+    await db
+      .insert(announcements)
+      .values({
+        id: ANN_PAST,
+        venueId: VENUE,
+        kind: 'concert',
+        headliner: 'Headliner',
+        headlinerPerformerId: HEADLINER,
+        showDate: dateInPast(7),
+        onSaleStatus: 'on_sale',
+        source: 'ticketmaster',
+      })
+      .onConflictDoNothing();
   });
 
   after(async () => {
@@ -121,6 +143,12 @@ describe('discover.followedArtistsFeed', () => {
     // Both branches matched: headliner OR support overlap.
     assert.ok(ids.includes(ANN_HEADLINER), 'headliner-branch announcement missing');
     assert.ok(ids.includes(ANN_SUPPORT), 'support-overlap-branch announcement missing');
+  });
+
+  it('filters out announcements whose showDate is in the past', async () => {
+    const result = await callerFor(USER_ID).discover.followedArtistsFeed({});
+    const ids = result.items.map((i) => i.id).filter((id) => id.startsWith(PREFIX));
+    assert.ok(!ids.includes(ANN_PAST), 'past-dated announcement leaked into Discover');
   });
 
   it('returns empty when the user follows no performers', async () => {
