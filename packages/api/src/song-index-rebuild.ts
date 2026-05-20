@@ -233,6 +233,17 @@ function rowsForSetlist(source: Source): {
 }
 
 async function loadAttendedSources(scope: SongIndexRebuildScope): Promise<AttendedSource[]> {
+  // Symmetric to `loadCorpusSources`'s showIds-only short-circuit: a
+  // `{ tourSetlistIds }`-only scope targets corpus rows, so walking
+  // every show in the database for attended sources would be runaway.
+  if (
+    scope.tourSetlistIds &&
+    scope.tourSetlistIds.length > 0 &&
+    !scope.performerId &&
+    !scope.showIds
+  ) {
+    return [];
+  }
   const conditions = [isNotNull(shows.setlists)];
   if (scope.performerId) {
     conditions.push(
@@ -280,6 +291,20 @@ async function loadAttendedSources(scope: SongIndexRebuildScope): Promise<Attend
 }
 
 async function loadCorpusSources(scope: SongIndexRebuildScope): Promise<CorpusSource[]> {
+  // A `{ showIds }`-only scope is targeting attended rows — the caller
+  // is reacting to a `shows.setlists` write and wants only those
+  // shows' appearances refreshed. Loading every `tour_setlists` row in
+  // the database in that case was a runaway: the inline indexer in
+  // `shows.create` would walk the entire corpus on every show write,
+  // which is what blew the 60s integration test budget in CI.
+  if (
+    scope.showIds &&
+    scope.showIds.length > 0 &&
+    !scope.performerId &&
+    !scope.tourSetlistIds
+  ) {
+    return [];
+  }
   const conditions = [] as ReturnType<typeof eq>[];
   if (scope.performerId) {
     conditions.push(eq(tourSetlists.performerId, scope.performerId));
