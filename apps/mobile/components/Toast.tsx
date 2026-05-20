@@ -42,6 +42,8 @@ export function ToastHost(): React.JSX.Element | null {
           ]}
         >
           <Text
+            numberOfLines={4}
+            ellipsizeMode="tail"
             style={{
               color: textFor(t.kind, tokens.colors),
               fontFamily: 'Geist Sans',

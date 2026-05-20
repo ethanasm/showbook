@@ -33,6 +33,7 @@ import type { VenueSuggestion } from '../../../components/VenueTypeahead';
 import { useTheme } from '../../../lib/theme';
 import { trpc } from '../../../lib/trpc';
 import { useFeedback } from '../../../lib/feedback';
+import { toUserMessage } from '../../../lib/errors';
 import { runOptimisticMutation } from '../../../lib/mutations';
 import { getCacheOutbox } from '../../../lib/cache';
 import {
@@ -222,8 +223,7 @@ export default function EditShowScreen(): React.JSX.Element {
       showToast({ kind: 'success', text: 'Saved' });
       router.back();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Could not save';
-      showToast({ kind: 'error', text: message });
+      showToast({ kind: 'error', text: toUserMessage(err, 'Could not save changes') });
     } finally {
       setSaving(false);
     }

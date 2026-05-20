@@ -37,6 +37,7 @@ import { useTheme } from '../../lib/theme';
 import { useFormState } from '../../lib/useFormState';
 import { trpc } from '../../lib/trpc';
 import { useFeedback } from '../../lib/feedback';
+import { toUserMessage } from '../../lib/errors';
 import { runOptimisticMutation } from '../../lib/mutations';
 import { getCacheOutbox } from '../../lib/cache';
 import {
@@ -197,8 +198,7 @@ export default function AddFormScreen(): React.JSX.Element {
         router.back();
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Could not save';
-      showToast({ kind: 'error', text: message });
+      showToast({ kind: 'error', text: toUserMessage(err, 'Could not save show') });
     } finally {
       setSubmitting(false);
     }

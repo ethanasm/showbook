@@ -344,6 +344,13 @@
       "when": 1795968120000,
       "tag": "0048_user_preferences_accepted_gmail_scan",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1795968180000,
+      "tag": "0049_defer_show_performers_orphan_cleanup",
+      "breakpoints": true
     }
   ]
 }
