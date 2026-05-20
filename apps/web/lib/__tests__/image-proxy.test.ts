@@ -72,6 +72,15 @@ describe('image-proxy: allowlists', () => {
     assert.ok(ALLOWED_PROXY_HOSTS.has('s1.ticketm.net'));
   });
 
+  it('ALLOWED_PROXY_HOSTS contains Spotify CDN hosts (performers.imageUrl from SpotifyFollowRail)', () => {
+    // The Phase-9 Spotify-follow-rail forwards `match.imageUrl` (the
+    // Spotify-side artist photo) into `spotifyImport.importSelected`,
+    // so `i.scdn.co` URLs end up persisted to `performers.imageUrl`
+    // and must be proxyable. Mirrors `next.config.ts` remotePatterns.
+    assert.ok(ALLOWED_PROXY_HOSTS.has('i.scdn.co'));
+    assert.ok(ALLOWED_PROXY_HOSTS.has('mosaic.scdn.co'));
+  });
+
   it('ALLOWED_REDIRECT_HOSTS contains the Google Places photo CDN hosts', () => {
     for (const host of [
       'lh3.googleusercontent.com',
@@ -88,6 +97,17 @@ describe('image-proxy: allowlists', () => {
 
   it('isProxyableUrl accepts TM CDN', () => {
     assert.equal(isProxyableUrl('https://s1.ticketm.net/foo/bar.jpg'), true);
+  });
+
+  it('isProxyableUrl accepts Spotify CDN hosts', () => {
+    assert.equal(
+      isProxyableUrl('https://i.scdn.co/image/ab6761610000e5eb0aa1f0e0e0e0e0e0e0e0e0e0'),
+      true,
+    );
+    assert.equal(
+      isProxyableUrl('https://mosaic.scdn.co/640/ab123'),
+      true,
+    );
   });
 
   it('isProxyableUrl rejects internal / unknown hosts', () => {

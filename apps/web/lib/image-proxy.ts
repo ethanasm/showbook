@@ -7,14 +7,27 @@
 
 // Initial-URL allowlist for absolute image URLs persisted to
 // `venues.photoUrl`, `shows.coverImageUrl`, and `performers.imageUrl`.
-// The only legitimate http(s)-prefixed value in any of these columns is
-// Ticketmaster's CDN (`selectBestImage` returns `s1.ticketm.net` URLs);
+// The legitimate http(s)-prefixed values across all three columns are:
+//   - Ticketmaster CDN (`selectBestImage` → `s1.ticketm.net`) — the
+//     overwhelming majority; covers venue.photoUrl when no Google
+//     Place ID exists, shows.coverImageUrl, and performer.imageUrl
+//     populated via the Add flow + spotifyImport/appleMusicImport bulk
+//     paths (which use `tmMatch.imageUrl`).
+//   - Spotify CDN (`i.scdn.co`, `mosaic.scdn.co`) — written to
+//     performers.imageUrl by the Phase-9 Spotify-follow-rail in
+//     `apps/web/components/discover/SpotifyFollowRail.tsx`, which
+//     forwards the Spotify artist's own `match.imageUrl` (rather than
+//     the TM match's image) into `spotifyImport.importSelected`.
+//     Mirrors the `i.scdn.co` / `mosaic.scdn.co` entries in
+//     `next.config.ts` `images.remotePatterns`.
 // Google Places resolves through `getPlacePhotoMediaUrl` and never
 // lands here as a raw URL. Adding a host here without a security
 // review re-opens the SSRF vector previously closed by tightening the
 // input schemas and the proxy fetches.
 export const ALLOWED_PROXY_HOSTS: ReadonlySet<string> = new Set([
   's1.ticketm.net',
+  'i.scdn.co',
+  'mosaic.scdn.co',
 ]);
 
 // Redirect-target allowlist for the one hop `fetchUpstream` will follow.
@@ -31,6 +44,11 @@ export const ALLOWED_REDIRECT_HOSTS: ReadonlySet<string> = new Set([
   'lh6.googleusercontent.com',
   // TM CDN may redirect within its own domain.
   's1.ticketm.net',
+  // Spotify's CDN serves bytes directly today but the redirect-allow
+  // list mirrors the proxy-host list so an in-domain hop wouldn't 502
+  // a legitimate artist photo.
+  'i.scdn.co',
+  'mosaic.scdn.co',
 ]);
 
 // Allowlist of content-types we'll proxy back to the client. SVG is
