@@ -133,10 +133,10 @@ describe('light color tokens', () => {
 // ---------------------------------------------------------------------------
 
 describe('type ramp', () => {
-  it('heroTitle: 32pt Georgia 700', () => {
+  it('heroTitle: 32pt Fraunces 700', () => {
     assert.equal(TYPE_RAMP.heroTitle.fontSize, 32);
     assert.equal(TYPE_RAMP.heroTitle.fontWeight, '700');
-    assert.equal(TYPE_RAMP.heroTitle.fontFamily, 'Georgia');
+    assert.equal(TYPE_RAMP.heroTitle.fontFamily, 'Fraunces');
   });
 
   it('heroTitle lineHeight = round(32 × 1.1) = 35', () => {
@@ -160,9 +160,9 @@ describe('type ramp', () => {
     assert.equal(TYPE_RAMP.caption.letterSpacing, 0.9);
   });
 
-  it('headliner: 22pt Georgia', () => {
+  it('headliner: 22pt Fraunces', () => {
     assert.equal(TYPE_RAMP.headliner.fontSize, 22);
-    assert.equal(TYPE_RAMP.headliner.fontFamily, 'Georgia');
+    assert.equal(TYPE_RAMP.headliner.fontFamily, 'Fraunces');
   });
 
   it('stat: 28pt Geist Sans, lineHeight 31', () => {

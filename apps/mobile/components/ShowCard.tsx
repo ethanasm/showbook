@@ -2,8 +2,8 @@
  * ShowCard — primary list-row component for showing a show entry.
  *
  * Design notes:
- * - Headliner uses Geist Sans (sans-serif), NOT Georgia. Confirmed in design
- *   source: fontFamily "'Geist', system-ui, sans-serif". Georgia is reserved
+ * - Headliner uses Geist Sans (sans-serif), NOT Fraunces. Confirmed in design
+ *   source: fontFamily "'Geist', system-ui, sans-serif". Fraunces is reserved
  *   for heroTitle/headliner type on detail screens.
  * - 3px left edge bar encodes state:
  *     ticketed → accent (gold)
@@ -134,7 +134,7 @@ export function ShowCard({
           {show.state !== 'past' && <StateChip state={show.state} />}
         </View>
 
-        {/* Headliner — Geist Sans (sans), NOT Georgia */}
+        {/* Headliner — Geist Sans (sans), NOT Fraunces */}
         <Text
           style={[styles.headliner, { color: colors.ink }]}
           numberOfLines={1}
@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
     flexWrap: 'nowrap',
   },
   headliner: {
-    fontFamily: 'Geist Sans', // sans-serif per design source — NOT Georgia
+    fontFamily: 'Geist Sans', // sans-serif per design source — NOT Fraunces
     fontSize: 16,
     fontWeight: '700',
     lineHeight: 21,

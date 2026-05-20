@@ -15,10 +15,10 @@
  * sees the latest token after sign-in/sign-out without being recreated.
  *
  * Font loading: loadAppFonts() is called during mount with the splash
- * screen kept visible until fonts are ready. Today loadAppFonts is a no-op
- * (system font fallbacks), so this gates the UI for one tick. When Geist
- * is wired up later, the gate will hold the splash until the .ttf files
- * are loaded — no other code change required.
+ * screen kept visible until fonts are ready. Fraunces 700 is loaded via
+ * `@expo-google-fonts/fraunces` and registered under the 'Fraunces' family
+ * for heroTitle / headliner usage; Geist Sans still falls back to the
+ * system sans (polish pass).
  */
 
 import React from 'react';

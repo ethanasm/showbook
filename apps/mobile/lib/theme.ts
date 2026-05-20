@@ -4,10 +4,13 @@
  * Persists user preference via expo-secure-store (overkill for a theme pref,
  * but it's the only persistent K/V installed in M1 — documented choice).
  *
- * Font loading: fontFamily values ('Geist Sans', 'Georgia') are declared here
- * as logical names. Actual font loading via expo-font happens in Task 5/6
- * root layout. React Native falls back to system sans/serif if the font isn't
- * loaded yet.
+ * Font loading: fontFamily values ('Geist Sans', 'Fraunces') are declared here
+ * as logical names. Actual font loading via expo-font happens in `lib/fonts.ts`
+ * and is awaited by the root layout's splash-screen gate. Fraunces 700 is
+ * bundled via `@expo-google-fonts/fraunces` and registered under the family
+ * name 'Fraunces' so the type ramp's `fontWeight: '700'` style picks up the
+ * real bold cut. Geist Sans is still a no-op — RN falls back to the system
+ * sans on iOS / Android until that polish pass lands.
  *
  * KIND_COLORS is imported from @showbook/shared to avoid duplication.
  * The shared type is `Kind = 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports'`

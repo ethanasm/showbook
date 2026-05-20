@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   introTitle: {
-    fontFamily: 'Georgia',
+    fontFamily: 'Fraunces',
     fontSize: 22,
     fontWeight: '600',
     lineHeight: 26,

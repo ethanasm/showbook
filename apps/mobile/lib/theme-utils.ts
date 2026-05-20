@@ -58,7 +58,7 @@ export const RADII = { none: 0, sm: 4, md: 8, lg: 12, xl: 16, pill: 999 } as con
  * letterSpacing in pixels (RN); caption = 0.08em × 11.5px ≈ 0.9px.
  */
 export const TYPE_RAMP = {
-  heroTitle: { fontSize: 32, fontWeight: '700' as const, fontFamily: 'Georgia', lineHeight: 35 },
+  heroTitle: { fontSize: 32, fontWeight: '700' as const, fontFamily: 'Fraunces', lineHeight: 35 },
   screenTitle: { fontSize: 24, fontWeight: '700' as const, fontFamily: 'Geist Sans', lineHeight: 29 },
   sectionTitle: { fontSize: 18, fontWeight: '600' as const, fontFamily: 'Geist Sans', lineHeight: 23 },
   body: { fontSize: 15, fontWeight: '400' as const, fontFamily: 'Geist Sans', lineHeight: 23 },
@@ -71,6 +71,6 @@ export const TYPE_RAMP = {
     letterSpacing: 0.9,
     textTransform: 'uppercase' as const,
   },
-  headliner: { fontSize: 22, fontWeight: '700' as const, fontFamily: 'Georgia', lineHeight: 25 },
+  headliner: { fontSize: 22, fontWeight: '700' as const, fontFamily: 'Fraunces', lineHeight: 25 },
   stat: { fontSize: 28, fontWeight: '700' as const, fontFamily: 'Geist Sans', lineHeight: 31 },
 } as const;

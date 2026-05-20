@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   heroTitle: {
-    fontFamily: 'Georgia',
+    fontFamily: 'Fraunces',
     fontSize: 30,
     fontWeight: '700',
     lineHeight: 34,

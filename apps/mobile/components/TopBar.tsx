@@ -6,7 +6,7 @@
  * via react-native-safe-area-context. If used outside a Stack, wrap the parent
  * in <SafeAreaView edges={['top']}.
  *
- * Large variant: 28/700 Georgia title, no bottom border, bottom padding 16.
+ * Large variant: 28/700 Geist title, no bottom border, bottom padding 16.
  * Regular variant: 17/600 Geist title, 1px rule bottom border, bottom padding 12.
  */
 
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
   titleLarge: {
     // Same Geist Sans family as the regular variant — just larger/bolder.
     // Matches the design source (showbook-appheader.jsx) where AppHeader's
-    // large variant uses 'Geist', not Georgia. Georgia is reserved for
+    // large variant uses 'Geist', not Fraunces. Fraunces is reserved for
     // serif headlines on detail screens (heroTitle / headliner type ramp).
     fontFamily: 'Geist Sans',
     fontSize: 28,
