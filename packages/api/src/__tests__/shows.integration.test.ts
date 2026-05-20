@@ -405,6 +405,74 @@ describe('shows router', () => {
     assert.equal(updated!.seat, 'A1');
   });
 
+  it('update reorders festival lineup and promotes a support artist to headliner', async () => {
+    // Regression: editing a festival to reorder the lineup AND change a
+    // performer's tier simultaneously used to fail with an FK violation
+    // on show_performers.performer_id. shows.update DELETE-then-INSERTs
+    // the lineup inside a single transaction; the orphan-cleanup AFTER
+    // DELETE trigger fired between the two statements and removed any
+    // performers that had no other references (typical for festival
+    // support acts that nobody follows), so the subsequent INSERT
+    // referenced rows that had just been deleted. The 0049 migration
+    // defers that trigger to COMMIT to fix the race.
+    const festivalId = fakeUuid(PREFIX, 'fest-edit');
+    await createTestShow({
+      id: festivalId,
+      userId: USER,
+      venueId: VENUE,
+      kind: 'festival',
+      state: 'past',
+      date: '2024-09-20',
+    });
+    // Seed an initial lineup with several support performers that
+    // nothing else references (no follows, no announcements, no media
+    // tags). This is the exact shape that previously triggered the
+    // orphan cleanup mid-transaction.
+    const initial = await callerFor(USER).shows.update({
+      showId: festivalId,
+      kind: 'festival',
+      headliner: { name: `${PREFIX} Edit Festival` },
+      venue: { name: `${PREFIX} Venue`, city: 'NYC' },
+      date: '2024-09-20',
+      ticketCount: 1,
+      productionName: `${PREFIX} Edit Festival`,
+      performers: [
+        { name: `${PREFIX} Edit Artist A`, role: 'support', sortOrder: 1 },
+        { name: `${PREFIX} Edit Artist B`, role: 'support', sortOrder: 2 },
+        { name: `${PREFIX} Edit Artist C`, role: 'support', sortOrder: 3 },
+        { name: `${PREFIX} Edit Artist D`, role: 'support', sortOrder: 4 },
+      ],
+    });
+    assert.ok(initial);
+
+    // Now do what the mobile edit screen does on save: promote one
+    // support artist to headliner AND reorder the rest. Every row's
+    // role/sortOrder shifts, so every show_performers row is rewritten.
+    const reordered = await callerFor(USER).shows.update({
+      showId: festivalId,
+      kind: 'festival',
+      headliner: { name: `${PREFIX} Edit Festival` },
+      venue: { name: `${PREFIX} Venue`, city: 'NYC' },
+      date: '2024-09-20',
+      ticketCount: 1,
+      productionName: `${PREFIX} Edit Festival`,
+      performers: [
+        { name: `${PREFIX} Edit Artist A`, role: 'headliner', sortOrder: 1 },
+        { name: `${PREFIX} Edit Artist C`, role: 'support', sortOrder: 2 },
+        { name: `${PREFIX} Edit Artist B`, role: 'support', sortOrder: 3 },
+        { name: `${PREFIX} Edit Artist D`, role: 'support', sortOrder: 4 },
+      ],
+    });
+    assert.ok(reordered);
+    // Synthetic festival-name headliner + four lineup rows.
+    assert.equal(reordered!.showPerformers.length, 5);
+    const promoted = reordered!.showPerformers.find(
+      (sp) => sp.performer.name === `${PREFIX} Edit Artist A`,
+    );
+    assert.ok(promoted);
+    assert.equal(promoted!.role, 'headliner');
+  });
+
   it('update rejects unknown showId', async () => {
     await assert.rejects(
       () => callerFor(USER).shows.update({
