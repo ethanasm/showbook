@@ -18,13 +18,20 @@ import * as WebBrowser from 'expo-web-browser';
 
 import { API_URL } from './env';
 import {
+  buildGmailOAuthStartUrl,
   describeGmailRedirectError,
   MOBILE_REDIRECT_SCHEME,
   parseGmailRedirect,
 } from './gmail-import/redirect';
 
 export interface UseGmailConnectionResult {
-  connect: () => Promise<string | null>;
+  /**
+   * Open the OAuth in-app browser. `bearerToken` is the Showbook mobile
+   * JWT — required because the auth-session browser has no Showbook
+   * cookie jar; without it the server has no way to identify the
+   * caller and returns `session_missing`.
+   */
+  connect: (bearerToken: string | null) => Promise<string | null>;
   busy: boolean;
   error: string | null;
   /** Clear the surfaced error without re-running connect. */
@@ -35,9 +42,16 @@ export function useGmailConnection(): UseGmailConnectionResult {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const connect = useCallback(async (): Promise<string | null> => {
+  const connect = useCallback(async (
+    bearerToken: string | null,
+  ): Promise<string | null> => {
     if (!API_URL) {
       const msg = 'API URL not configured. Reinstall the app and try again.';
+      setError(msg);
+      return null;
+    }
+    if (!bearerToken) {
+      const msg = 'Sign in to Showbook first, then retry.';
       setError(msg);
       return null;
     }
@@ -45,7 +59,7 @@ export function useGmailConnection(): UseGmailConnectionResult {
     setBusy(true);
     try {
       const result = await WebBrowser.openAuthSessionAsync(
-        `${API_URL}/api/gmail?mode=mobile`,
+        buildGmailOAuthStartUrl(API_URL, bearerToken),
         MOBILE_REDIRECT_SCHEME,
       );
       if (result.type === 'cancel' || result.type === 'dismiss') {

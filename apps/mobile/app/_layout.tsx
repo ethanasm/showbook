@@ -284,15 +284,18 @@ function TrpcProviders({ children }: { children: React.ReactNode }): React.JSX.E
 
   // Wire the mobile telemetry sink to the tRPC client so any failed
   // procedure (or out-of-band failure like an R2 PUT 403) round-trips to
-  // Axiom via `telemetry.logClientError`. Reset on unmount so a torn-down
+  // Axiom via `telemetry.logEvent`. Reset on unmount so a torn-down
   // client doesn't keep getting hit.
+  //
+  // Auth-gating was the original sin of PR #301: we only fired reports
+  // when `tokenRef.current` was set, so the most useful class of failure
+  // (sign-in itself failing, expired tokens, 401s in a stale session)
+  // never reached Axiom. The procedure is `publicProcedure` server-side
+  // now, so the call works whether or not the bearer is present — the
+  // server attributes the report to a userId if it can, null otherwise.
   React.useEffect(() => {
     setMobileTelemetryLogger((payload) => {
-      // Auth required — silently drop reports before sign-in. The user
-      // hasn't acted yet, so anything failing is environmental, and we
-      // don't have a session to attribute it to.
-      if (!tokenRef.current) return;
-      void trpcClient.telemetry.logClientError
+      void trpcClient.telemetry.logEvent
         .mutate({
           event: payload.event,
           message: payload.message,

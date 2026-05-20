@@ -11,6 +11,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  buildGmailOAuthStartUrl,
   describeGmailRedirectError,
   parseGmailRedirect,
 } from '../gmail-import/redirect';
@@ -63,6 +64,34 @@ describe('parseGmailRedirect', () => {
     assert.equal(
       parseGmailRedirect('showbook://gmail/connected?status=wat'),
       null,
+    );
+  });
+});
+
+describe('buildGmailOAuthStartUrl', () => {
+  it('appends the bearer token so the server can identify the caller', () => {
+    const url = buildGmailOAuthStartUrl('https://api.example.com', 'jwt.abc');
+    assert.equal(
+      url,
+      'https://api.example.com/api/gmail?mode=mobile&token=jwt.abc',
+    );
+  });
+
+  it('URL-encodes the bearer token', () => {
+    const url = buildGmailOAuthStartUrl('https://api.example.com', 'a+b/c=d');
+    assert.match(url, /token=a%2Bb%2Fc%3Dd/);
+  });
+
+  it('omits the token param when no bearer is provided', () => {
+    const url = buildGmailOAuthStartUrl('https://api.example.com', null);
+    assert.equal(url, 'https://api.example.com/api/gmail?mode=mobile');
+  });
+
+  it('strips trailing slashes from the API URL', () => {
+    const url = buildGmailOAuthStartUrl('https://api.example.com//', 'jwt.abc');
+    assert.equal(
+      url,
+      'https://api.example.com/api/gmail?mode=mobile&token=jwt.abc',
     );
   });
 });

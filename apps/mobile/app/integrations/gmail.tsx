@@ -28,6 +28,7 @@ import { GmailConsentSheet } from '../../components/GmailConsentSheet';
 import { GmailImportPicker } from '../../components/gmail-import/GmailImportPicker';
 import { OfflineEmptyState } from '../../components/OfflineEmptyState';
 import { TopBar } from '../../components/TopBar';
+import { useAuth } from '../../lib/auth';
 import { useFeedback } from '../../lib/feedback';
 import { useGmailConnection } from '../../lib/gmail-connection';
 import { useGmailImport } from '../../lib/gmail-import/useGmailImport';
@@ -69,6 +70,7 @@ export default function GmailIntegrationScreen(): React.JSX.Element {
   });
 
   const gmailConn = useGmailConnection();
+  const { token: bearerToken } = useAuth();
   const [pendingToken, setPendingToken] = React.useState<string | null>(null);
   const [consentOpen, setConsentOpen] = React.useState(false);
 
@@ -77,7 +79,7 @@ export default function GmailIntegrationScreen(): React.JSX.Element {
   );
 
   const handleConnect = React.useCallback(async () => {
-    const token = await gmailConn.connect();
+    const token = await gmailConn.connect(bearerToken);
     if (!token) return;
     if (hasAcceptedGroq) {
       void importFlow.runScan(token);
@@ -85,7 +87,7 @@ export default function GmailIntegrationScreen(): React.JSX.Element {
       setPendingToken(token);
       setConsentOpen(true);
     }
-  }, [gmailConn, hasAcceptedGroq, importFlow]);
+  }, [bearerToken, gmailConn, hasAcceptedGroq, importFlow]);
 
   const handleAcceptConsent = React.useCallback(async () => {
     try {

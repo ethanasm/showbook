@@ -17,7 +17,7 @@
  * `over-quota` screen instead of showing a generic toast.
  */
 
-import { reportClientError, describeError } from '../telemetry';
+import { reportClientEvent, describeError } from '../telemetry';
 import {
   OverQuotaError,
   UploadCancelledError,
@@ -214,7 +214,7 @@ async function putToS3(
     });
   } catch (err) {
     if (isAbortError(err)) throw new UploadCancelledError();
-    reportClientError({
+    reportClientEvent({
       event: 'upload.put.network_error',
       level: 'error',
       message: describeError(err),
@@ -233,7 +233,7 @@ async function putToS3(
     // ops can distinguish auth vs. signature vs. routing failures
     // without needing the user to dump logs from their phone.
     const bodyPreview = await readResponseBodyPreview(res);
-    reportClientError({
+    reportClientEvent({
       event: 'upload.put.failed',
       level: 'error',
       message: `R2 PUT ${res.status}`,
@@ -341,29 +341,148 @@ export async function uploadFile(
   ensureNotAborted(opts.signal);
   reportProgress(0);
 
-  const intent = await withRetry(
-    () => callIntent(opts.server, buildIntentInput(file, opts.showId, opts.performerIds)),
-    retryDeps,
-  );
+  // Lifecycle markers — every upload fires `upload.start`, and exactly one
+  // terminal `upload.success` / `upload.failed_at` (with a `stage` field).
+  // The 10 stuck-pending media_assets rows in prod had no telemetry trail
+  // before this — we knew the intent step succeeded (DB row created) and
+  // the row never reached `ready`, but couldn't see where in the pipeline
+  // the failure was. These markers let us locate the exact failing stage
+  // in Axiom without rebuilding the app.
+  const t0 = Date.now();
+  reportClientEvent({
+    event: 'upload.start',
+    level: 'warn',
+    message: 'upload started',
+    context: {
+      showId: opts.showId,
+      mediaType: file.mediaType,
+      mimeType: file.mimeType,
+      bytes: file.bytes,
+    },
+  });
+
+  let intent: UploadIntentResult;
+  try {
+    intent = await withRetry(
+      () => callIntent(opts.server, buildIntentInput(file, opts.showId, opts.performerIds)),
+      retryDeps,
+    );
+  } catch (err) {
+    if (!isUserCancellation(err)) {
+      reportClientEvent({
+        event: 'upload.failed_at',
+        level: 'error',
+        message: describeError(err),
+        context: { stage: 'intent', showId: opts.showId, elapsedMs: Date.now() - t0 },
+      });
+    }
+    throw err;
+  }
 
   const totalSteps = intent.targets.length + 1; // +1 for the confirm step
-  const blob = await readFileAsBlob(file.uri, file.mimeType, fetchImpl);
+
+  let blob: Blob;
+  try {
+    blob = await readFileAsBlob(file.uri, file.mimeType, fetchImpl);
+  } catch (err) {
+    if (!isUserCancellation(err)) {
+      reportClientEvent({
+        event: 'upload.failed_at',
+        level: 'error',
+        message: describeError(err),
+        context: {
+          stage: 'read_file',
+          uri: redactedUri(file.uri),
+          mimeType: file.mimeType,
+          bytes: file.bytes,
+          elapsedMs: Date.now() - t0,
+        },
+      });
+    }
+    throw err;
+  }
+
+  reportClientEvent({
+    event: 'upload.read_ok',
+    level: 'warn',
+    message: 'source file read',
+    context: { blobSize: (blob as { size?: number }).size ?? null, blobType: blob.type || null },
+  });
 
   for (let i = 0; i < intent.targets.length; i++) {
     const target = intent.targets[i]!;
-    await withRetry(
-      () => putToS3(target, blob, fetchImpl, opts.signal),
-      retryDeps,
-    );
+    try {
+      await withRetry(
+        () => putToS3(target, blob, fetchImpl, opts.signal),
+        retryDeps,
+      );
+    } catch (err) {
+      // The PUT step's own error reporters already fired
+      // (upload.put.failed / upload.put.network_error). Add a terminal
+      // marker so Axiom can group failures by stage. Skip on user-cancel.
+      if (!isUserCancellation(err)) {
+        reportClientEvent({
+          event: 'upload.failed_at',
+          level: 'error',
+          message: describeError(err),
+          context: { stage: 'put', targetIndex: i, elapsedMs: Date.now() - t0 },
+        });
+      }
+      throw err;
+    }
     reportProgress((i + 1) / totalSteps);
   }
 
-  const result = await withRetry(
-    () => callComplete(opts.server, intent.assetId),
-    retryDeps,
-  );
+  let result: MediaAssetDto;
+  try {
+    result = await withRetry(
+      () => callComplete(opts.server, intent.assetId),
+      retryDeps,
+    );
+  } catch (err) {
+    if (!isUserCancellation(err)) {
+      reportClientEvent({
+        event: 'upload.failed_at',
+        level: 'error',
+        message: describeError(err),
+        context: { stage: 'complete', assetId: intent.assetId, elapsedMs: Date.now() - t0 },
+      });
+    }
+    throw err;
+  }
   reportProgress(1);
+
+  reportClientEvent({
+    event: 'upload.success',
+    level: 'warn',
+    message: 'upload complete',
+    context: { assetId: result.id, elapsedMs: Date.now() - t0 },
+  });
+
   return result;
+}
+
+/**
+ * Strip query strings off `file://` URIs before logging. Photo-picker URIs
+ * are local paths and don't contain secrets, but on Android they sometimes
+ * carry session-scoped query params we don't need in Axiom.
+ */
+function redactedUri(uri: string): string {
+  const q = uri.indexOf('?');
+  return q === -1 ? uri : `${uri.slice(0, q)}?…`;
+}
+
+/**
+ * Cancellation is not a failure — when the user taps cancel or backgrounds
+ * the app, the abort signal fires and we surface UploadCancelledError.
+ * Don't log either UploadCancelledError or a bare AbortError as a failure
+ * marker; the UI already knows to drop it silently.
+ */
+function isUserCancellation(err: unknown): boolean {
+  if (err instanceof UploadCancelledError) return true;
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { name?: string; code?: string };
+  return e.name === 'AbortError' || e.code === 'ABORT_ERR';
 }
 
 /**

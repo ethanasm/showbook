@@ -1,19 +1,24 @@
 /**
- * Mobile error sink.
+ * Mobile telemetry sink.
  *
  * The mobile app can't ship logs directly to Axiom — RN has no pino
  * transport, no service-account credentials, and the user JWT couldn't
- * write to ingest anyway. Instead we round-trip through the existing
- * tRPC `telemetry.logClientError` procedure, which logs to Axiom under
- * the `mobile.*` event namespace on the server side.
+ * write to ingest anyway. Instead we round-trip through the tRPC
+ * `telemetry.logEvent` procedure, which logs to Axiom under the
+ * `mobile.*` event namespace on the server side.
+ *
+ * The sink is for events of any kind, not just errors — lifecycle
+ * markers (`upload.start`, `upload.success`) flow through the same
+ * pipe as failure events (`upload.put.failed`, `trpc.error`) and are
+ * distinguished by `level` (`warn` for informational markers, `error`
+ * for actual failures).
  *
  * Two things sit on top of this module:
- *   1. The `OnError` link in `lib/trpc.ts` reports every failed tRPC
- *      query/mutation (except telemetry itself — never recurse).
+ *   1. The `errorReporterLink` in `lib/trpc.ts` reports every failed
+ *      tRPC query/mutation (except telemetry itself — never recurse).
  *   2. Domain code (upload pipeline, auth bridge, etc.) calls
- *      `reportClientError` directly when it catches a non-tRPC error
- *      (R2 PUT 403, file-read failure, etc.). These need explicit
- *      hook-points because they don't go through tRPC.
+ *      `reportClientEvent` directly for failures and lifecycle markers
+ *      that don't go through tRPC.
  *
  * Design notes:
  *   - The logger is injected at app boot via `setMobileTelemetryLogger`
@@ -26,22 +31,22 @@
  *     once the tRPC client is constructed.
  */
 
-export interface ClientErrorPayload {
+export interface ClientEventPayload {
   event: string;
   message: string;
   level?: 'warn' | 'error';
   context?: Record<string, unknown>;
 }
 
-export type ClientErrorLogger = (payload: ClientErrorPayload) => void;
+export type ClientEventLogger = (payload: ClientEventPayload) => void;
 
-let logger: ClientErrorLogger | null = null;
+let logger: ClientEventLogger | null = null;
 
-export function setMobileTelemetryLogger(fn: ClientErrorLogger | null): void {
+export function setMobileTelemetryLogger(fn: ClientEventLogger | null): void {
   logger = fn;
 }
 
-export function reportClientError(payload: ClientErrorPayload): void {
+export function reportClientEvent(payload: ClientEventPayload): void {
   try {
     logger?.(payload);
   } catch {
