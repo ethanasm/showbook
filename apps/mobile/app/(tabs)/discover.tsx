@@ -162,21 +162,25 @@ export default function DiscoverScreen(): React.JSX.Element {
     setSelectedRegionVenueId(null);
   }, [selectedGroupId]);
 
+  // Limits match the web Discover queries (apps/web/app/(app)/discover):
+  // followedFeed / followedArtistsFeed page at 100, nearbyFeed takes the
+  // server default. Mobile previously capped these much tighter (50 / 50 / 25)
+  // which made Regions in particular look thin against the web equivalent.
   const followedVenuesQuery = useCachedQuery<FollowedFeed>({
     queryKey: ['mobile', 'discover', 'followedFeed'],
-    queryFn: () => utils.client.discover.followedFeed.query({ limit: 50 }),
+    queryFn: () => utils.client.discover.followedFeed.query({ limit: 100 }),
     enabled: Boolean(token),
   });
 
   const followedArtistsQuery = useCachedQuery<FollowedFeed>({
     queryKey: ['mobile', 'discover', 'followedArtistsFeed'],
-    queryFn: () => utils.client.discover.followedArtistsFeed.query({ limit: 50 }),
+    queryFn: () => utils.client.discover.followedArtistsFeed.query({ limit: 100 }),
     enabled: Boolean(token),
   });
 
   const nearbyQuery = useCachedQuery<NearbyFeed>({
     queryKey: ['mobile', 'discover', 'nearbyFeed'],
-    queryFn: () => utils.client.discover.nearbyFeed.query({ perRegionLimit: 25 }),
+    queryFn: () => utils.client.discover.nearbyFeed.query({}),
     enabled: Boolean(token),
   });
 
@@ -332,10 +336,13 @@ export default function DiscoverScreen(): React.JSX.Element {
       if (existing) {
         existing.count++;
       } else {
+        // Region-scoped venue chips: omit the city sublabel — it's redundant
+        // under a region chip that already names the city, and the
+        // "Cobb's Comedy Club · San Francis…" truncation looked worse than
+        // the bare venue name does.
         byVenue.set(id, {
           id,
           name: item.venue.name,
-          sublabel: item.venue.city ?? undefined,
           count: 1,
         });
       }

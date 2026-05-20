@@ -49,6 +49,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { runOptimisticMutation } from '../../lib/mutations';
 import { getCacheOutbox } from '../../lib/cache/db';
 import { useFeedback } from '../../lib/feedback';
+import { venueImageSource } from '../../lib/images';
 
 // Derive screen types from the tRPC vanilla client so drift in the server
 // contract is caught at the call site instead of papered over with casts.
@@ -232,6 +233,8 @@ function Hero({
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const { token } = useAuth();
+  const source = venueImageSource(venue, token);
   const location = [venue.city, venue.stateRegion, venue.country]
     .filter((p): p is string => Boolean(p))
     .join(', ');
@@ -253,7 +256,8 @@ function Hero({
   return (
     <View style={styles.heroWrap}>
       <RemoteImage
-        uri={venue.photoUrl}
+        uri={source?.uri}
+        headers={source?.headers}
         name={venue.name}
         kind="concert"
         size="hero"

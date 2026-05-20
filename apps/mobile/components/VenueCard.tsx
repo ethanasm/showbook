@@ -10,6 +10,8 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../lib/theme';
+import { useAuth } from '../lib/auth';
+import { venueImageSource } from '../lib/images';
 import { RemoteImage } from './design-system/RemoteImage';
 
 export interface VenueCardVenue {
@@ -18,6 +20,7 @@ export interface VenueCardVenue {
   city?: string | null;
   stateRegion?: string | null;
   photoUrl?: string | null;
+  googlePlaceId?: string | null;
   showCount?: number | null;
   isFollowed?: boolean | null;
 }
@@ -30,6 +33,8 @@ export interface VenueCardProps {
 export function VenueCard({ venue, onPress }: VenueCardProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const { token } = useAuth();
+  const source = venueImageSource(venue, token);
 
   const location = [venue.city, venue.stateRegion].filter(Boolean).join(', ');
   const subtitleParts: string[] = [];
@@ -49,7 +54,8 @@ export function VenueCard({ venue, onPress }: VenueCardProps): React.JSX.Element
       ]}
     >
       <RemoteImage
-        uri={venue.photoUrl}
+        uri={source?.uri}
+        headers={source?.headers}
         name={venue.name}
         kind="concert"
         size="custom"
