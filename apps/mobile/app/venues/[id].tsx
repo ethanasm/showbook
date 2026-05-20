@@ -73,9 +73,9 @@ type VenueMedia = RouterOutput<UtilsClient['media']['listForVenue']['query']>[nu
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const DOWS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
-function parseDate(iso: string): { month: string; day: string; dow: string } {
+function parseDate(iso: string): { month: string; day: string; dow: string; year: string } {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  if (!m) return { month: '—', day: '—', dow: '—' };
+  if (!m) return { month: '—', day: '—', dow: '—', year: '' };
   const y = Number(m[1]);
   const monthIdx = Number(m[2]) - 1;
   const d = Number(m[3]);
@@ -84,11 +84,12 @@ function parseDate(iso: string): { month: string; day: string; dow: string } {
     month: MONTHS[monthIdx] ?? '—',
     day: String(d),
     dow: DOWS[dt.getDay()] ?? '—',
+    year: String(y),
   };
 }
 
 function toShowCard(s: VenueShow, venueName: string, venueCity: string | null): ShowCardShow {
-  const date = s.date ? parseDate(s.date) : { month: '—', day: '—', dow: '—' };
+  const date = s.date ? parseDate(s.date) : { month: '—', day: '—', dow: '—', year: '' };
   const headliner =
     s.showPerformers.find((sp) => sp.role === 'headliner')?.performer.name ??
     s.productionName ??
@@ -105,6 +106,7 @@ function toShowCard(s: VenueShow, venueName: string, venueCity: string | null): 
     month: date.month,
     day: date.day,
     dow: date.dow,
+    year: date.year,
     seat: s.seat,
     price: s.pricePaid,
   };

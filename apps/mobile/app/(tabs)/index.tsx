@@ -68,6 +68,7 @@ function toShowCardShow(row: ShowsListItem): ShowCardShow {
   let month = '—';
   let day = '—';
   let dow = '—';
+  let year = '';
   if (row.date) {
     const [yStr, mStr, dStr] = row.date.split('-');
     const y = Number(yStr);
@@ -78,6 +79,7 @@ function toShowCardShow(row: ShowsListItem): ShowCardShow {
       month = MONTHS[m - 1] ?? '—';
       day = String(d);
       dow = DOWS[local.getDay()] ?? '—';
+      year = String(y);
     }
   }
 
@@ -109,6 +111,7 @@ function toShowCardShow(row: ShowsListItem): ShowCardShow {
     month,
     day,
     dow,
+    year,
     seat: row.seat ?? null,
     price: row.pricePaid ?? null,
     avatarUrl,

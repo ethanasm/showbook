@@ -59,6 +59,7 @@ function toShowCard(s: UserShow): ShowCardShow {
   let month = '—';
   let day = '—';
   let dow = '—';
+  let year = '';
   if (s.date) {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s.date);
     if (m) {
@@ -67,6 +68,7 @@ function toShowCard(s: UserShow): ShowCardShow {
       month = MONTHS[monthIdx] ?? '—';
       day = String(Number(m[3]));
       dow = DOWS[d.getDay()] ?? '—';
+      year = m[1];
     }
   }
   const headliner = headlinerDisplayName({
@@ -90,6 +92,7 @@ function toShowCard(s: UserShow): ShowCardShow {
     month,
     day,
     dow,
+    year,
     seat: s.seat,
     price: s.pricePaid,
   };

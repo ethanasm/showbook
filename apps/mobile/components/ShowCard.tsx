@@ -32,6 +32,7 @@ export interface ShowCardShow {
   month: string; // e.g. 'AUG'
   day: string; // e.g. '15'
   dow: string; // e.g. 'FRI'
+  year: string; // e.g. '2025'
   seat?: string | null;
   price?: string | null;
   /**
@@ -95,6 +96,9 @@ export function ShowCard({
         <Text style={[styles.dateMonth, { color: colors.muted }]}>{show.month}</Text>
         <Text style={[styles.dateDay, { color: colors.ink }]}>{show.day}</Text>
         <Text style={[styles.dateDow, { color: colors.faint }]}>{show.dow}</Text>
+        {show.year ? (
+          <Text style={[styles.dateYear, { color: colors.faint }]}>{show.year}</Text>
+        ) : null}
       </View>
 
       {/* Optional headliner avatar — opt-in via `show.avatarUrl`. When the
@@ -200,6 +204,13 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '400',
     textTransform: 'uppercase',
+  },
+  dateYear: {
+    fontFamily: 'Geist Sans',
+    fontSize: 9,
+    fontWeight: '400',
+    letterSpacing: 0.3,
+    marginTop: 1,
   },
   content: {
     flex: 1,
