@@ -262,6 +262,8 @@ describe('PendingWritesDrawer MUTATION_LABEL', () => {
       'preferences.toggleRegion',
       'spotify.createHypePlaylist',
       'spotify.createHeardPlaylist',
+      'discover.watchlist',
+      'discover.unwatchlist',
     ];
     // Sanity: every key is a non-empty string. This is intentionally a
     // change-detector test — any addition to the PendingMutation union

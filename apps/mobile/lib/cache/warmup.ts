@@ -100,6 +100,7 @@ export interface WarmupClientSurface {
     followedFeed: AnyInputQuery;
     followedArtistsFeed: AnyInputQuery;
     nearbyFeed: AnyInputQuery;
+    watchedAnnouncementIds: AnyInputQuery;
   };
 }
 
@@ -394,6 +395,15 @@ export async function warmCacheForOfflineUse(
   await step('discover.nearbyFeed', async () => {
     const data = await c.discover.nearbyFeed.query({ perRegionLimit: 8 });
     qc.setQueryData(['mobile', 'discover', 'nearbyFeed'], data);
+    return data;
+  });
+
+  // Seed the watched-event set so the per-row watch icon renders the
+  // right state on a cold offline open — without it the icon flickers
+  // from "Follow" to "Watching" once the query refetches online.
+  await step('discover.watchedAnnouncementIds', async () => {
+    const data = await c.discover.watchedAnnouncementIds.query();
+    qc.setQueryData(['mobile', 'discover', 'watchedAnnouncementIds'], data);
     return data;
   });
 

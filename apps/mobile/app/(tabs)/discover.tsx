@@ -39,9 +39,19 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Calendar, MapPin, Search, Users } from 'lucide-react-native';
+import {
+  BookmarkCheck,
+  BookmarkPlus,
+  Calendar,
+  MapPin,
+  Search,
+  Ticket,
+  Users,
+} from 'lucide-react-native';
+import { isNonWatchableKind } from '@showbook/shared';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { EmptyState } from '../../components/EmptyState';
@@ -51,8 +61,15 @@ import { KindBadge } from '../../components/KindBadge';
 import { useTheme, type Kind } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { useNetwork } from '../../lib/network';
+import { useFeedback } from '../../lib/feedback';
+import { hapticSelection } from '../../lib/haptics';
 import { trpc, type RouterOutput } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
+import {
+  WATCHED_IDS_CACHE_KEY,
+  useToggleWatch,
+  type WatchToggle,
+} from '../../lib/discover-watch';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
 
@@ -62,6 +79,7 @@ type NearbyFeed = RouterOutput<UtilsClient['discover']['nearbyFeed']['query']>;
 type FollowedVenues = RouterOutput<UtilsClient['venues']['followed']['query']>;
 type FollowedPerformers = RouterOutput<UtilsClient['performers']['followed']['query']>;
 type PreferencesPayload = RouterOutput<UtilsClient['preferences']['get']['query']>;
+type WatchedIds = RouterOutput<UtilsClient['discover']['watchedAnnouncementIds']['query']>;
 type AnnouncementItem = FollowedFeed['items'][number];
 type NearbyAnnouncementItem = NearbyFeed['items'][number];
 
@@ -203,6 +221,21 @@ export default function DiscoverScreen(): React.JSX.Element {
     queryFn: () => utils.client.preferences.get.query(),
     enabled: Boolean(token),
   });
+
+  // Watched-event set drives the per-row "Watching" indicator. Cached so a
+  // cold offline open renders the correct state instead of flashing every
+  // row back to "Follow" until the network round-trip lands.
+  const watchedQuery = useCachedQuery<WatchedIds>({
+    queryKey: WATCHED_IDS_CACHE_KEY,
+    queryFn: () => utils.client.discover.watchedAnnouncementIds.query(),
+    enabled: Boolean(token),
+  });
+  const watchedSet = React.useMemo(
+    () => new Set(watchedQuery.data ?? []),
+    [watchedQuery.data],
+  );
+
+  const onToggleWatch = useToggleWatch();
 
   const activeQuery =
     tab === 'venues'
@@ -482,11 +515,18 @@ export default function DiscoverScreen(): React.JSX.Element {
               <RegionGroupedList
                 items={filteredItems as NearbyAnnouncementItem[]}
                 groups={groupList}
+                watchedSet={watchedSet}
+                onToggleWatch={onToggleWatch}
               />
             ) : (
               <View style={styles.list}>
                 {filteredItems.map((item) => (
-                  <AnnouncementRow key={item.id} item={item} />
+                  <AnnouncementRow
+                    key={item.id}
+                    item={item}
+                    isWatching={watchedSet.has(item.id)}
+                    onToggleWatch={onToggleWatch}
+                  />
                 ))}
               </View>
             )}
@@ -619,9 +659,13 @@ function FilterChip({
 function RegionGroupedList({
   items,
   groups,
+  watchedSet,
+  onToggleWatch,
 }: {
   items: NearbyAnnouncementItem[];
   groups: FilterGroup[];
+  watchedSet: Set<string>;
+  onToggleWatch: WatchToggle;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -655,7 +699,12 @@ function RegionGroupedList({
               </Text>
             </View>
             {groupItems.map((item) => (
-              <AnnouncementRow key={item.id} item={item} />
+              <AnnouncementRow
+                key={item.id}
+                item={item}
+                isWatching={watchedSet.has(item.id)}
+                onToggleWatch={onToggleWatch}
+              />
             ))}
           </View>
         );
@@ -744,10 +793,19 @@ function EmptyForTab({
   );
 }
 
-function AnnouncementRow({ item }: { item: AnnouncementItem }): React.JSX.Element {
+function AnnouncementRow({
+  item,
+  isWatching,
+  onToggleWatch,
+}: {
+  item: AnnouncementItem;
+  isWatching: boolean;
+  onToggleWatch: WatchToggle;
+}): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const router = useRouter();
+  const { showToast } = useFeedback();
   const { month, day, year, dow } = parseDate(item.showDate);
   const accent = tokens.kindColor(item.kind as Kind);
   const onSale = formatOnSale(item.onSaleDate);
@@ -771,6 +829,9 @@ function AnnouncementRow({ item }: { item: AnnouncementItem }): React.JSX.Elemen
     // a tap is a no-op (the row is informational). Long-press could later
     // open a sheet with Add-to-Watchlist + Tickets actions.
   };
+
+  const canWatch = !isNonWatchableKind(item.kind);
+  const ticketUrl = item.ticketUrl;
 
   return (
     <Pressable
@@ -849,25 +910,116 @@ function AnnouncementRow({ item }: { item: AnnouncementItem }): React.JSX.Elemen
       )}
 
       <View style={styles.metaRow}>
-        <View
-          style={[
-            styles.statusBadge,
-            {
-              backgroundColor: accent + '22',
-            },
-          ]}
-        >
-          <Text style={[styles.statusLabel, { color: accent }]}>
-            {onSaleLabel}
-          </Text>
+        <View style={styles.metaLeft}>
+          <View
+            style={[
+              styles.statusBadge,
+              {
+                backgroundColor: accent + '22',
+              },
+            ]}
+          >
+            <Text style={[styles.statusLabel, { color: accent }]}>
+              {onSaleLabel}
+            </Text>
+          </View>
+          {onSale && (
+            <Text
+              style={[styles.onSaleText, { color: colors.muted }]}
+              numberOfLines={1}
+            >
+              {item.onSaleStatus === 'on_sale' ? 'Since ' : 'On sale '}
+              {onSale}
+            </Text>
+          )}
         </View>
-        {onSale && (
-          <Text style={[styles.onSaleText, { color: colors.muted }]}>
-            {item.onSaleStatus === 'on_sale' ? 'Since ' : 'On sale '}
-            {onSale}
-          </Text>
+        {(canWatch || ticketUrl) && (
+          <View style={styles.actionsRow}>
+            {canWatch && (
+              <IconAction
+                onPress={() => {
+                  void hapticSelection();
+                  void onToggleWatch(item.id, isWatching);
+                }}
+                accessibilityLabel={
+                  isWatching ? 'Stop watching this event' : 'Watch this event'
+                }
+                testID={`discover-row-watch-${item.id}`}
+                active={isWatching}
+                accent={accent}
+                colors={colors}
+              >
+                {isWatching ? (
+                  <BookmarkCheck size={14} color={accent} strokeWidth={2} />
+                ) : (
+                  <BookmarkPlus size={14} color={colors.muted} strokeWidth={2} />
+                )}
+              </IconAction>
+            )}
+            {ticketUrl && (
+              <IconAction
+                onPress={() => {
+                  void hapticSelection();
+                  Linking.openURL(ticketUrl).catch(() => {
+                    showToast({
+                      kind: 'error',
+                      text: "Couldn't open Ticketmaster.",
+                    });
+                  });
+                }}
+                accessibilityLabel="Open tickets on Ticketmaster"
+                testID={`discover-row-tickets-${item.id}`}
+                colors={colors}
+              >
+                <Ticket size={14} color={colors.muted} strokeWidth={2} />
+              </IconAction>
+            )}
+          </View>
         )}
       </View>
+    </Pressable>
+  );
+}
+
+function IconAction({
+  onPress,
+  accessibilityLabel,
+  testID,
+  active,
+  accent,
+  colors,
+  children,
+}: {
+  onPress: () => void;
+  accessibilityLabel: string;
+  testID?: string;
+  active?: boolean;
+  accent?: string;
+  colors: ReturnType<typeof useTheme>['tokens']['colors'];
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <Pressable
+      onPress={(e) => {
+        e.stopPropagation();
+        onPress();
+      }}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      testID={testID}
+      style={({ pressed }) => [
+        styles.iconAction,
+        {
+          backgroundColor:
+            active && accent ? `${accent}1f` : colors.surface,
+          borderColor:
+            active && accent ? `${accent}55` : colors.rule,
+          opacity: pressed ? 0.6 : 1,
+        },
+      ]}
+    >
+      {children}
     </Pressable>
   );
 }
@@ -1044,8 +1196,29 @@ const styles = StyleSheet.create({
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 10,
     marginTop: 4,
+  },
+  metaLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minWidth: 0,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  iconAction: {
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
   },
   statusBadge: {
     paddingVertical: 2,

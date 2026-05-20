@@ -190,6 +190,13 @@ function OfflineBridge({ children }: { children: React.ReactNode }): React.JSX.E
           return c.spotify.createHypePlaylist.mutate(payload);
         case 'spotify.createHeardPlaylist':
           return c.spotify.createHeardPlaylist.mutate(payload);
+        case 'discover.watchlist':
+          // The server 409s when a show + link already exist; swallow so
+          // a queued tap from a different device doesn't stick forever.
+          return swallowAlreadyInState(() => c.discover.watchlist.mutate(payload));
+        case 'discover.unwatchlist':
+          // 404 fires when the show has already been removed.
+          return swallowAlreadyInState(() => c.discover.unwatchlist.mutate(payload));
         default: {
           const _exhaustive: never = m;
           throw new Error(`Unknown pending mutation: ${String(_exhaustive)}`);
