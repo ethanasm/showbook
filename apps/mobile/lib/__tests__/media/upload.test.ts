@@ -14,7 +14,7 @@
  *  - cancel during upload aborts the in-flight PUT
  */
 
-import { describe, it } from 'node:test';
+import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
@@ -28,6 +28,13 @@ import {
   type UploadIntentResult,
   type MediaAssetDto,
 } from '../../media/upload';
+import {
+  setMobileTelemetryLogger,
+  __resetTelemetryForTests,
+  type ClientErrorPayload,
+} from '../../telemetry';
+
+beforeEach(() => __resetTelemetryForTests());
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -372,6 +379,115 @@ describe('uploadFile — over-quota signal', () => {
         sleepImpl: async () => undefined,
       }),
       (err) => err instanceof OverQuotaError && /storage is full/i.test(err.message),
+    );
+  });
+});
+
+describe('uploadFile — telemetry on PUT failure', () => {
+  it('captures R2 status + response body preview when PUT returns non-2xx', async () => {
+    const reports: ClientErrorPayload[] = [];
+    setMobileTelemetryLogger((p) => reports.push(p));
+
+    const server = stubServer();
+    const r2ErrorBody =
+      '<?xml version="1.0" encoding="UTF-8"?><Error><Code>SignatureDoesNotMatch</Code><Message>The request signature we calculated does not match the signature you provided.</Message></Error>';
+    const { fetchImpl } = makeFetch([
+      async () => okResponse(emptyBlob()),
+      async () => new Response(r2ErrorBody, { status: 403 }),
+    ]);
+
+    await assert.rejects(
+      uploadFile(fakePhoto(), {
+        server,
+        showId: 'show-1',
+        fetchImpl,
+        maxRetries: 0,
+        sleepImpl: async () => undefined,
+      }),
+      (err) => err instanceof UploadHttpError && err.status === 403 && err.step === 'put',
+    );
+
+    // Telemetry payload includes the status, the host (so ops know which
+    // R2 endpoint is failing), the storage key, and a body preview so the
+    // actual error code (SignatureDoesNotMatch vs AccessDenied vs …) is
+    // visible in Axiom without round-tripping back to the user.
+    assert.equal(reports.length, 1);
+    const report = reports[0]!;
+    assert.equal(report.event, 'upload.put.failed');
+    assert.equal(report.level, 'error');
+    assert.equal(report.message, 'R2 PUT 403');
+    const ctx = report.context as Record<string, unknown>;
+    assert.equal(ctx.status, 403);
+    assert.equal(ctx.host, 's3.example.com');
+    assert.equal(ctx.key, 'showbook/u/shows/s/photos/asset-1/source.webp');
+    assert.equal(ctx.mimeType, 'image/jpeg');
+    assert.ok(
+      typeof ctx.bodyPreview === 'string' && ctx.bodyPreview.includes('SignatureDoesNotMatch'),
+      `expected bodyPreview to include the R2 error code, got: ${ctx.bodyPreview}`,
+    );
+  });
+
+  it('reports a network error on PUT with the underlying error message', async () => {
+    const reports: ClientErrorPayload[] = [];
+    setMobileTelemetryLogger((p) => reports.push(p));
+
+    const server = stubServer();
+    const { fetchImpl } = makeFetch([
+      async () => okResponse(emptyBlob()),
+      async () => {
+        throw new TypeError('Network request failed');
+      },
+    ]);
+
+    await assert.rejects(
+      uploadFile(fakePhoto(), {
+        server,
+        showId: 'show-1',
+        fetchImpl,
+        maxRetries: 0,
+        baseBackoffMs: 1,
+        sleepImpl: async () => undefined,
+      }),
+    );
+
+    const networkReport = reports.find((r) => r.event === 'upload.put.network_error');
+    assert.ok(networkReport, 'expected an upload.put.network_error report');
+    assert.equal(networkReport?.message, 'Network request failed');
+  });
+
+  it('does NOT report when the user cancels the upload (AbortError is not a failure)', async () => {
+    const reports: ClientErrorPayload[] = [];
+    setMobileTelemetryLogger((p) => reports.push(p));
+
+    const server = stubServer();
+    const controller = new AbortController();
+    const { fetchImpl } = makeFetch([
+      async () => okResponse(emptyBlob()),
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            const err = new Error('Aborted') as Error & { name: string };
+            err.name = 'AbortError';
+            reject(err);
+          });
+        }),
+    ]);
+
+    const p = uploadFile(fakePhoto(), {
+      server,
+      showId: 'show-1',
+      fetchImpl,
+      signal: controller.signal,
+      sleepImpl: async () => undefined,
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    controller.abort();
+    await assert.rejects(p, UploadCancelledError);
+
+    assert.equal(
+      reports.length,
+      0,
+      'cancellation should not generate a telemetry event',
     );
   });
 });

@@ -32,6 +32,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider, useTheme } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { trpc, createQueryClient, createTrpcClient } from '../lib/trpc';
+import { setMobileTelemetryLogger } from '../lib/telemetry';
 import { CacheBridge } from '../lib/cache/CacheBridge';
 import { deleteCacheDatabase } from '../lib/cache';
 import { warmCacheForOfflineUse } from '../lib/cache/warmup';
@@ -268,6 +269,28 @@ function TrpcProviders({ children }: { children: React.ReactNode }): React.JSX.E
   const [trpcClient] = React.useState(() =>
     createTrpcClient(() => tokenRef.current),
   );
+
+  // Wire the mobile telemetry sink to the tRPC client so any failed
+  // procedure (or out-of-band failure like an R2 PUT 403) round-trips to
+  // Axiom via `telemetry.logClientError`. Reset on unmount so a torn-down
+  // client doesn't keep getting hit.
+  React.useEffect(() => {
+    setMobileTelemetryLogger((payload) => {
+      // Auth required — silently drop reports before sign-in. The user
+      // hasn't acted yet, so anything failing is environmental, and we
+      // don't have a session to attribute it to.
+      if (!tokenRef.current) return;
+      void trpcClient.telemetry.logClientError
+        .mutate({
+          event: payload.event,
+          message: payload.message,
+          level: payload.level ?? 'error',
+          context: payload.context,
+        })
+        .catch(() => undefined);
+    });
+    return () => setMobileTelemetryLogger(null);
+  }, [trpcClient]);
 
   useSignOutCleanup(queryClient, user?.id ?? null);
   usePostSignInWarmup(trpcClient, queryClient, user?.id ?? null);
