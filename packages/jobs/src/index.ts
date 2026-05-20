@@ -10,7 +10,11 @@ export { runDailyDigest } from './notifications';
 export { runPruneOrphanCatalog } from './prune-orphan-catalog';
 export { runBackfillShowCoverImages } from './backfill-show-cover-images';
 export { runHealthCheck, type HealthCheckSummary } from './health-check';
-export { runSongIndexRebuild } from './song-index-rebuild';
+// Re-export from @showbook/api — the indexer lives in api so the tRPC
+// routers can call it inline on setlist writes without a circular
+// dependency. Kept as a re-export here so existing `@showbook/jobs`
+// importers don't break.
+export { runSongIndexRebuild } from '@showbook/api';
 export {
   runDailyBacktest,
   rerunEvalForShow,

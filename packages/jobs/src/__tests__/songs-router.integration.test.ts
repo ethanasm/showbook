@@ -23,8 +23,7 @@ import {
   users,
   venues,
 } from '@showbook/db';
-import { appRouter, createContext } from '@showbook/api';
-import { runSongIndexRebuild } from '../song-index-rebuild';
+import { appRouter, createContext, runSongIndexRebuild } from '@showbook/api';
 
 function callerFor(userId: string) {
   return appRouter.createCaller(

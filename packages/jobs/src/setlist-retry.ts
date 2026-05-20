@@ -1,6 +1,9 @@
 import { and, eq, lte, sql } from 'drizzle-orm';
 import { db, enrichmentQueue, shows, performers } from '@showbook/db';
-import { fetchSetlistForPerformer } from '@showbook/api';
+import { fetchSetlistForPerformer, runSongIndexRebuild } from '@showbook/api';
+import { child } from '@showbook/observability';
+
+const log = child({ component: 'jobs.setlist-retry' });
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -141,6 +144,25 @@ export async function runSetlistRetry(): Promise<{
             .where(eq(shows.id, item.showId));
           await tx.delete(enrichmentQueue).where(eq(enrichmentQueue.id, item.id));
         });
+        // Index the freshly-fetched setlist so `songBadges` for this show
+        // (and any of the user's other past shows for this performer) sees
+        // the new appearance rows on the next read. Best-effort.
+        try {
+          await runSongIndexRebuild({
+            showIds: [item.showId],
+            skipMatviewRefresh: true,
+          });
+        } catch (err) {
+          log.warn(
+            {
+              event: 'setlist.retry.song_index_failed',
+              err,
+              showId: item.showId,
+              performerId: item.performerId,
+            },
+            'inline song-index rebuild failed after setlist enrichment',
+          );
+        }
         counts.enriched++;
       } else {
         // 2h. Not found — increment attempts

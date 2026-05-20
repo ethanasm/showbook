@@ -19,8 +19,7 @@ import {
   users,
   venues,
 } from '@showbook/db';
-import { runSongIndexRebuild } from '../song-index-rebuild';
-import { predictedSetlistCached } from '@showbook/api';
+import { runSongIndexRebuild, predictedSetlistCached } from '@showbook/api';
 import { synthesizeTourId } from '../setlist-corpus-fill';
 
 const PREFIX = 'ff666666';

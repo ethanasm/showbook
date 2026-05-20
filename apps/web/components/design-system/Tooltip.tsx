@@ -26,6 +26,12 @@ export function Tooltip({
 }) {
   const [mounted, setMounted] = useState(false);
   const [position, setPosition] = useState<TooltipPosition | null>(null);
+  // Touch devices don't fire hover — we open on tap and keep the tooltip
+  // "stuck" open until the next tap on the trigger or anywhere outside.
+  // On desktop the hover path keeps `sticky` false, so mouseLeave still
+  // closes immediately. Click while hover-open promotes to sticky so the
+  // user can move the cursor away to read the tip without it vanishing.
+  const [sticky, setSticky] = useState(false);
   const triggerRef = useRef<HTMLSpanElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const showTimer = useRef<number | null>(null);
@@ -80,7 +86,30 @@ export function Tooltip({
       showTimer.current = null;
     }
     setPosition(null);
+    setSticky(false);
   }, []);
+
+  // Hover-close: only honour mouseLeave/blur when the tooltip is NOT
+  // stuck open from a tap/click.
+  const closeOnHoverLeave = useCallback(() => {
+    if (sticky) return;
+    close();
+  }, [close, sticky]);
+
+  const onTriggerClick = useCallback(() => {
+    if (sticky) {
+      close();
+      return;
+    }
+    // Skip the hover delay when the user explicitly tapped — they want
+    // the tooltip immediately.
+    if (showTimer.current !== null) {
+      window.clearTimeout(showTimer.current);
+      showTimer.current = null;
+    }
+    setSticky(true);
+    computePosition();
+  }, [sticky, close, computePosition]);
 
   useEffect(() => {
     if (!position) return;
@@ -91,12 +120,26 @@ export function Tooltip({
       if (e.key === "Escape") close();
     };
     window.addEventListener("keydown", onKey);
+    // While tap-opened, close on any pointer interaction outside the
+    // trigger so the tooltip behaves like a popover on mobile.
+    let onPointerDown: ((e: PointerEvent) => void) | null = null;
+    if (sticky) {
+      onPointerDown = (e: PointerEvent) => {
+        const target = e.target as Node | null;
+        if (target && triggerRef.current?.contains(target)) return;
+        close();
+      };
+      document.addEventListener("pointerdown", onPointerDown);
+    }
     return () => {
       window.removeEventListener("scroll", handler, true);
       window.removeEventListener("resize", handler);
       window.removeEventListener("keydown", onKey);
+      if (onPointerDown) {
+        document.removeEventListener("pointerdown", onPointerDown);
+      }
     };
-  }, [position, computePosition, close]);
+  }, [position, computePosition, close, sticky]);
 
   useEffect(() => {
     return () => {
@@ -119,9 +162,22 @@ export function Tooltip({
         ref={triggerRef}
         aria-label={label}
         onMouseEnter={open}
-        onMouseLeave={close}
+        onMouseLeave={closeOnHoverLeave}
         onFocus={open}
-        onBlur={close}
+        onBlur={closeOnHoverLeave}
+        onClick={onTriggerClick}
+        // Touch devices won't fire onClick if a parent intercepts —
+        // explicit `role="button"` + tabIndex make the trigger a real
+        // focusable target so keyboard users hit the same Enter/Space
+        // open path.
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onTriggerClick();
+          }
+        }}
         style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
       >
         {children}
@@ -142,7 +198,13 @@ export function Tooltip({
                 fontSize: 10.5,
                 letterSpacing: ".04em",
                 padding: "4px 8px",
-                whiteSpace: "nowrap",
+                // Wrap long labels (e.g. badge tooltips on narrow mobile
+                // viewports) instead of clipping off-screen. The
+                // viewport-margin clamp on `x` still keeps the box
+                // inside the visible area.
+                maxWidth: `min(280px, calc(100vw - ${VIEWPORT_MARGIN * 2}px))`,
+                whiteSpace: "normal",
+                wordBreak: "break-word",
                 pointerEvents: "none",
                 zIndex: 50,
               }}

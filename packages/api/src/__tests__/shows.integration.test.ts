@@ -343,6 +343,235 @@ describe('shows router', () => {
     assert.equal(inlineQueueRows.length, 0, 'inline-setlist past concerts should not be queued');
   });
 
+  it('inline setlist on shows.create gets indexed into setlist_song_appearances so songBadges reads MIN(date) immediately, and adding an EARLIER show flips firstTime off on the later show', async () => {
+    // Regression: the prod bug was "added Bon Iver 2018 → songs marked 🆕
+    // 'Your first'; added Bon Iver 2016 (same songs) → 2018 still showed
+    // 🆕." Root cause: shows.create wrote shows.setlists but never
+    // populated setlist_song_appearances, so the read-time MIN query
+    // never saw the earlier date. This test pins the fix in place: both
+    // shows.create calls run the inline song-index rebuild, and the
+    // song-badges resolver naturally picks up the earlier date.
+    const performerName = `${PREFIX} Bon Iver Regression`;
+    const caller = callerFor(USER);
+
+    // Step 1 — add the LATER show first. Songs A + B + C all played.
+    const laterShow = await caller.shows.create({
+      kind: 'concert',
+      headliner: {
+        name: performerName,
+        setlist: {
+          sections: [
+            {
+              kind: 'set',
+              songs: [
+                { title: 'Skinny Love' },
+                { title: 'Holocene' },
+                { title: '666 ʇ' }, // 2018-only song
+              ],
+            },
+          ],
+        },
+      },
+      venue: { name: `${PREFIX} Venue`, city: 'NYC' },
+      date: '2018-09-10',
+      ticketCount: 1,
+    });
+    assert.ok(laterShow);
+
+    // The 2018 show, in isolation, should show 🆕 "Your first" for every
+    // song — they're all first-time-heard at this point in the user's
+    // history. This is the baseline that the prod bug also showed.
+    const laterBadgesBefore = await caller.shows.songBadges({
+      showId: laterShow!.id,
+    });
+    const skinnyId = laterBadgesBefore.titleToSongId['skinny love'];
+    const holoceneId = laterBadgesBefore.titleToSongId['holocene'];
+    const sixId = laterBadgesBefore.titleToSongId['666 ʇ'];
+    assert.ok(skinnyId, 'song-index rebuild should have created the song row');
+    assert.ok(holoceneId);
+    assert.ok(sixId);
+    assert.equal(
+      laterBadgesBefore.badges[skinnyId]?.firstTime,
+      true,
+      'skinny love is first-time before the 2016 show is added',
+    );
+    assert.equal(laterBadgesBefore.badges[holoceneId]?.firstTime, true);
+    assert.equal(laterBadgesBefore.badges[sixId]?.firstTime, true);
+
+    // Step 2 — add the EARLIER show. Shared songs A + B, plus a 2016-
+    // only song D. The performer is resolved by name match so this
+    // attaches to the same performer row.
+    const earlierShow = await caller.shows.create({
+      kind: 'concert',
+      headliner: {
+        name: performerName,
+        setlist: {
+          sections: [
+            {
+              kind: 'set',
+              songs: [
+                { title: 'Skinny Love' },
+                { title: 'Holocene' },
+                { title: 'Flume' }, // 2016-only song
+              ],
+            },
+          ],
+        },
+      },
+      venue: { name: `${PREFIX} Venue`, city: 'NYC' },
+      date: '2016-06-04',
+      ticketCount: 1,
+    });
+    assert.ok(earlierShow);
+
+    // Step 3 — re-read badges for the LATER show. The songs shared with
+    // 2016 should NO LONGER be marked firstTime; the 2018-only song
+    // still is.
+    const laterBadgesAfter = await caller.shows.songBadges({
+      showId: laterShow!.id,
+    });
+    assert.equal(
+      laterBadgesAfter.badges[skinnyId]?.firstTime ?? false,
+      false,
+      'BUG REGRESSION: adding the 2016 show must flip 2018 firstTime OFF for shared songs',
+    );
+    assert.equal(
+      laterBadgesAfter.badges[holoceneId]?.firstTime ?? false,
+      false,
+      'BUG REGRESSION: shared song should not stay flagged on the later show',
+    );
+    // The 2018-only song retains its first-time flag because nothing
+    // earlier in the user's history has it.
+    assert.equal(
+      laterBadgesAfter.badges[sixId]?.firstTime,
+      true,
+      'the song that only appears in 2018 should still be firstTime',
+    );
+
+    // Step 4 — the EARLIER show should itself report firstTime for all
+    // three songs (it's the earliest occurrence the user has of each).
+    const earlierBadges = await caller.shows.songBadges({
+      showId: earlierShow!.id,
+    });
+    const flumeId = earlierBadges.titleToSongId['flume'];
+    assert.ok(flumeId);
+    assert.equal(earlierBadges.badges[skinnyId]?.firstTime, true);
+    assert.equal(earlierBadges.badges[holoceneId]?.firstTime, true);
+    assert.equal(earlierBadges.badges[flumeId]?.firstTime, true);
+  });
+
+  it('shows.update writing a new setlist re-indexes immediately so songBadges reflects the change without waiting for the nightly corpus refresh', async () => {
+    // The update path used to leak the same bug as create: it overwrote
+    // shows.setlists but didn't touch setlist_song_appearances, so the
+    // newly-edited setlist's songs would render plain until the next
+    // corpus-fill cron. This test exercises the bare update path.
+    const performerName = `${PREFIX} Update Index Performer`;
+    const caller = callerFor(USER);
+    const initial = await caller.shows.create({
+      kind: 'concert',
+      headliner: { name: performerName, setlist: { sections: [
+        { kind: 'set', songs: [{ title: 'Old Song A' }] },
+      ] } },
+      venue: { name: `${PREFIX} Venue`, city: 'NYC' },
+      date: '2024-02-02',
+      ticketCount: 1,
+    });
+    assert.ok(initial);
+
+    // Look up the headliner id so we can write a setlist via update.
+    const headlinerSp = initial!.showPerformers.find(
+      (sp) => sp.role === 'headliner',
+    );
+    assert.ok(headlinerSp, 'expected a headliner row');
+    const performerId = headlinerSp!.performerId;
+
+    // Replace the setlist via setSetlist (the dedicated mutation that
+    // the Setlist tab's edit flow uses).
+    await caller.shows.setSetlist({
+      showId: initial!.id,
+      performerId,
+      setlist: {
+        sections: [
+          {
+            kind: 'set',
+            songs: [{ title: 'Brand New Song X' }],
+          },
+        ],
+      },
+    });
+
+    // The fresh setlist should be indexed; songBadges resolves the song
+    // and flags it as firstTime (this user has never heard Song X
+    // anywhere else). Without the inline indexer, the badge query
+    // would return empty.
+    const badges = await caller.shows.songBadges({ showId: initial!.id });
+    const songXId = badges.titleToSongId['brand new song x'];
+    assert.ok(
+      songXId,
+      'setSetlist must trigger the indexer so the new song is discoverable',
+    );
+    assert.equal(badges.badges[songXId]?.firstTime, true);
+    // The old song should NOT appear (it was replaced; its appearance
+    // row was deleted by the rebuild's idempotent DELETE-then-INSERT).
+    const oldId = badges.titleToSongId['old song a'];
+    if (oldId !== undefined) {
+      // The songs row stays around (it's an upsert), but the appearance
+      // row for this show should be gone — so the title→songId map for
+      // the show must not contain it.
+      assert.fail(
+        'replaced song still indexed for this show; rebuild did not clean up',
+      );
+    }
+  });
+
+  it('clearing a setlist via setSetlist({ sections: [] }) wipes the appearance index so old songs disappear from songBadges (edge case: shows.setlists becomes null)', async () => {
+    // Edge case: when the only performer's setlist is cleared, the
+    // show's `setlists` JSONB becomes null. The indexer's
+    // `loadAttendedSources` filters by `isNotNull(shows.setlists)`, so
+    // the wipe wouldn't reach the DELETE step without the
+    // showIds-scoped union (see song-index-rebuild.ts:347). This test
+    // pins that union in place.
+    const performerName = `${PREFIX} Wipe Index Performer`;
+    const caller = callerFor(USER);
+    const created = await caller.shows.create({
+      kind: 'concert',
+      headliner: {
+        name: performerName,
+        setlist: { sections: [
+          { kind: 'set', songs: [{ title: 'Will Be Cleared' }] },
+        ] },
+      },
+      venue: { name: `${PREFIX} Venue`, city: 'NYC' },
+      date: '2024-03-03',
+      ticketCount: 1,
+    });
+    assert.ok(created);
+
+    // Sanity: the song is indexed and discoverable.
+    const before = await caller.shows.songBadges({ showId: created!.id });
+    const willBeClearedId = before.titleToSongId['will be cleared'];
+    assert.ok(willBeClearedId, 'precondition: song should be indexed first');
+
+    // Wipe the setlist (no sections). cleanSetlist returns null →
+    // setSetlist removes the performer key → setlists becomes null
+    // (single-headliner show).
+    const headlinerSp = created!.showPerformers.find(
+      (sp) => sp.role === 'headliner',
+    );
+    assert.ok(headlinerSp);
+    await caller.shows.setSetlist({
+      showId: created!.id,
+      performerId: headlinerSp!.performerId,
+      setlist: { sections: [] },
+    });
+
+    // The badges resolver should return an empty map — there are no
+    // appearance rows for this show after the wipe.
+    const after = await caller.shows.songBadges({ showId: created!.id });
+    assert.deepEqual(after.badges, {});
+    assert.deepEqual(after.titleToSongId, {});
+  });
+
   it('create falls back to setlist enrichment queue when inline setlist.fm lookup misses', async () => {
     // The inline lookup runs against setlist.fm with a fake performer name —
     // setlist.fm returns no matching artist (or the call throws when

@@ -1,9 +1,14 @@
 /**
- * Song-index-rebuild job — walks `shows.setlists` (attended) plus
+ * Song-index-rebuild — walks `shows.setlists` (attended) plus
  * `tour_setlists` (corpus) for a scope, upserts into `songs`, and rebuilds
  * the rows in `setlist_song_appearances` so the §4c algorithm and
  * Phase 2's "songs you've heard most" can read denormalized appearances
  * without re-parsing the setlist JSON.
+ *
+ * Lives in `@showbook/api` (not `@showbook/jobs`) so the tRPC routers
+ * can call it inline on every attended-setlist write without a
+ * circular dependency. `@showbook/jobs` re-exports `runSongIndexRebuild`
+ * for back-compat with callers that imported it from there.
  *
  * Idempotent by construction: for each source setlist we DELETE the
  * appearances tied to that source and re-INSERT from scratch. Running
@@ -329,7 +334,19 @@ export async function runSongIndexRebuild(
     // exactly which appearances we should delete first. The DELETE step
     // is what guarantees idempotency without a unique constraint on
     // `setlist_song_appearances`.
+    //
+    // For `{ showIds }`-scoped rebuilds we deliberately union the
+    // caller's show ids with the observed-attended ids: if a show's
+    // `setlists` JSONB was wiped (the user removed the last performer
+    // setlist), `loadAttendedSources` skips the row (the
+    // `isNotNull(shows.setlists)` filter) and a delete-by-observed
+    // strategy would leak stale appearances. The union deletes by the
+    // caller's intent — "make this show's appearances reflect its
+    // current setlists, even if that's nothing".
     const attendedShowIds = new Set(attendedSources.map((s) => s.showId));
+    if (scope.showIds) {
+      for (const id of scope.showIds) attendedShowIds.add(id);
+    }
     const corpusSetlistIds = new Set(corpusSources.map((s) => s.tourSetlistId));
 
     // A `performerId`-scoped rebuild needs to also clear any attendees-
