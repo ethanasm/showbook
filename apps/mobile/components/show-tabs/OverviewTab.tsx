@@ -1,6 +1,6 @@
 /**
- * OverviewTab (mobile) — stat row · lineup · history · actions, plus
- * an optional music-layer slot for the FanLoyaltyRing (Phase 7) when
+ * OverviewTab (mobile) — stat row · lineup · actions, plus an
+ * optional music-layer slot for the FanLoyaltyRing (Phase 7) when
  * SetlistIntelMusicLayerV2 lands. Mirror of the web `OverviewTab`.
  */
 
@@ -43,8 +43,6 @@ export interface OverviewTabProps {
   musicLayerSlot?: React.ReactNode;
   isPast: boolean;
   onOpenPerformer?: (performerId: string) => void;
-  artistHistorySummary?: string | null;
-  venueHistorySummary?: string | null;
 }
 
 export function OverviewTab({
@@ -54,8 +52,6 @@ export function OverviewTab({
   musicLayerSlot,
   isPast,
   onOpenPerformer,
-  artistHistorySummary,
-  venueHistorySummary,
 }: OverviewTabProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -169,40 +165,6 @@ export function OverviewTab({
               No performers listed yet.
             </Text>
           ) : null}
-        </View>
-      </SectionFrame>
-
-      <SectionFrame title="Your history">
-        <View style={styles.historyRow}>
-          {[
-            {
-              label: 'Artist',
-              value:
-                artistHistorySummary ?? 'First show with this lineup',
-            },
-            {
-              label: 'Venue',
-              value: venueHistorySummary ?? 'First time at this venue',
-            },
-          ].map((row) => (
-            <View
-              key={row.label}
-              style={[
-                styles.historyCell,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.rule,
-                },
-              ]}
-            >
-              <Text style={[styles.historyLabel, { color: colors.faint }]}>
-                {row.label.toUpperCase()}
-              </Text>
-              <Text style={[styles.historyValue, { color: colors.ink }]}>
-                {row.value}
-              </Text>
-            </View>
-          ))}
         </View>
       </SectionFrame>
 
@@ -324,27 +286,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist Mono',
     fontSize: 11,
     letterSpacing: 0.3,
-  },
-  historyRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  historyCell: {
-    flex: 1,
-    padding: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  historyLabel: {
-    fontFamily: 'Geist Mono',
-    fontSize: 9.5,
-    letterSpacing: 1.2,
-  },
-  historyValue: {
-    fontFamily: 'Geist Sans',
-    fontSize: 14,
-    fontWeight: '500',
-    marginTop: 4,
-    letterSpacing: -0.2,
   },
   actionRow: {
     flexDirection: 'row',

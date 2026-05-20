@@ -15,25 +15,12 @@ export interface OverviewLineupEntry {
   sortOrder: number;
 }
 
-type ShowKind =
-  | "concert"
-  | "theatre"
-  | "comedy"
-  | "festival"
-  | "sports"
-  | "film"
-  | "unknown";
-
 interface OverviewTabProps {
   showId: string;
   isPast: boolean;
   state: "past" | "ticketed" | "watching";
-  /** Drives kind-specific copy in the "Your history" placeholders. */
-  kind?: ShowKind;
   cells: StatCell[];
   lineup: OverviewLineupEntry[];
-  artistHistorySummary?: string | null;
-  venueHistorySummary?: string | null;
   onMarkAttended?: () => void;
   onEdit: () => void;
   onAddToCalendarHref: string;
@@ -46,36 +33,18 @@ interface OverviewTabProps {
   musicLayerPlaceholder?: React.ReactNode;
 }
 
-function defaultArtistHistoryCopy(kind: ShowKind | undefined): string {
-  switch (kind) {
-    case "comedy":
-      return "First time seeing this comedian";
-    case "theatre":
-      return "First time seeing this production";
-    case "sports":
-      return "First time seeing this team";
-    case "film":
-      return "First time seeing this film";
-    default:
-      return "First show with this lineup";
-  }
-}
-
 /**
  * Overview tab — the canonical "what is this show" landing surface.
  * Shows the stat row, music-layer placeholder block (when supplied),
- * lineup, history, and actions. Past shows get the "went" badge in
- * the title block (handled by the parent's `ShowTitleBlock`); this
- * component only handles the tab body.
+ * lineup, and actions. Past shows get the "went" badge in the title
+ * block (handled by the parent's `ShowTitleBlock`); this component
+ * only handles the tab body.
  */
 export function OverviewTab({
   isPast,
   state,
-  kind,
   cells,
   lineup,
-  artistHistorySummary,
-  venueHistorySummary,
   onMarkAttended,
   onEdit,
   onAddToCalendarHref,
@@ -186,54 +155,6 @@ export function OverviewTab({
               No performers listed yet.
             </div>
           )}
-        </div>
-      </SectionFrame>
-
-      <SectionFrame title="Your history">
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 10,
-          }}
-        >
-          {[
-            { label: "Artist", value: artistHistorySummary ?? defaultArtistHistoryCopy(kind) },
-            { label: "Venue", value: venueHistorySummary ?? "First time at this venue" },
-          ].map((row) => (
-            <div
-              key={row.label}
-              style={{
-                padding: "14px 16px",
-                background: "var(--surface)",
-                border: "1px solid var(--rule)",
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 9.5,
-                  color: "var(--faint)",
-                  letterSpacing: ".14em",
-                  textTransform: "uppercase",
-                }}
-              >
-                {row.label}
-              </div>
-              <div
-                style={{
-                  fontFamily: "var(--font-geist-sans), sans-serif",
-                  fontSize: 15,
-                  color: "var(--ink)",
-                  fontWeight: 500,
-                  marginTop: 4,
-                  letterSpacing: -0.2,
-                }}
-              >
-                {row.value}
-              </div>
-            </div>
-          ))}
         </div>
       </SectionFrame>
 
