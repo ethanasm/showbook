@@ -8,6 +8,9 @@
  * The form body lives in `components/ShowFormFields` so it's shared
  * with the Edit screen. Submission goes through the optimistic
  * mutation runner so a failed Create survives in the SQLite outbox.
+ * On success the screen routes back to the Add tab with a
+ * `savedShowId` param so the chat screen can render a Groq-summarized
+ * confirmation and the user can keep going.
  */
 
 import React from 'react';
@@ -25,7 +28,10 @@ import { ChevronLeft, Check } from 'lucide-react-native';
 import { NestableScrollContainer } from 'react-native-draggable-flatlist';
 
 import { TopBar } from '../../components/TopBar';
-import { ShowFormFields } from '../../components/ShowFormFields';
+import {
+  ShowFormFields,
+  type ShowFormErrors,
+} from '../../components/ShowFormFields';
 import type { VenueSuggestion } from '../../components/VenueTypeahead';
 import { useTheme } from '../../lib/theme';
 import { useFormState } from '../../lib/useFormState';
@@ -39,11 +45,8 @@ import {
   type ShowFormKind,
   type ShowFormValues,
 } from '../../lib/showForm';
+import { isYmd, normalizeDateInput } from '../../lib/dateInput';
 
-// Hoisted so the `options` reference passed to `<Stack.Screen>` is
-// stable across renders. See the inline rationale on `SCREEN_OPTIONS`
-// in `show/[id]/edit.tsx` — the same iOS stackPresentation thrash
-// surfaced on the chat → form push path.
 const SCREEN_OPTIONS = { presentation: 'modal', gestureEnabled: true } as const;
 
 function paramString(value: string | string[] | undefined): string {
@@ -71,10 +74,23 @@ export default function AddFormScreen(): React.JSX.Element {
       kind: paramKind(params.kindHint),
       title: paramString(params.headliner),
       venueQuery: paramString(params.venueHint),
-      date: paramString(params.dateHint),
+      // Chat hands over a free-form date hint (Groq is asked for ISO
+      // but doesn't always comply); normalize on the way in so the
+      // field starts in a valid state.
+      date: normalizeDateInput(paramString(params.dateHint)),
       seat: paramString(params.seatHint),
     }),
   );
+
+  const [errors, setErrors] = React.useState<ShowFormErrors>({});
+  const clearError = React.useCallback((key: keyof ShowFormErrors) => {
+    setErrors((prev) => {
+      if (prev[key] === undefined) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, []);
 
   const [venueResults, setVenueResults] = React.useState<VenueSuggestion[]>([]);
   const [venueLoading, setVenueLoading] = React.useState(false);
@@ -104,6 +120,17 @@ export default function AddFormScreen(): React.JSX.Element {
   const [submitting, setSubmitting] = React.useState(false);
 
   const submit = React.useCallback(async () => {
+    // Try to canonicalize the date field one more time at submit
+    // time — covers free-text input like "Aug 5, 2018" that the user
+    // never explicitly converted. If we can parse it, we write the
+    // ISO form back into the field so the user sees what we're
+    // sending.
+    const normalizedDate = normalizeDateInput(values.date);
+    if (normalizedDate !== values.date) set('date', normalizedDate);
+    const normalizedEndDate = normalizeDateInput(values.endDate);
+    if (normalizedEndDate !== values.endDate) set('endDate', normalizedEndDate);
+
+    const fieldErrors: ShowFormErrors = {};
     if (!values.title.trim()) {
       const label =
         values.kind === 'theatre'
@@ -111,23 +138,32 @@ export default function AddFormScreen(): React.JSX.Element {
           : values.kind === 'festival'
             ? 'festival name'
             : 'headliner';
-      showToast({ kind: 'error', text: `Add a ${label}` });
-      return;
+      fieldErrors.title = `Add a ${label}`;
     }
     if (!values.venue && !values.venueQuery.trim()) {
-      showToast({ kind: 'error', text: 'Pick or enter a venue' });
+      fieldErrors.venue = 'Pick or enter a venue';
+    }
+    if (!isYmd(normalizedDate)) {
+      fieldErrors.date = 'Use YYYY-MM-DD (or “Aug 5, 2018”)';
+    }
+    if (
+      values.kind === 'festival' &&
+      values.endDate.trim() &&
+      !isYmd(normalizedEndDate)
+    ) {
+      fieldErrors.endDate = 'Use YYYY-MM-DD (or “Aug 5, 2018”)';
+    }
+    if (Object.keys(fieldErrors).length > 0) {
+      setErrors(fieldErrors);
       return;
     }
-    if (!isYmd(values.date)) {
-      showToast({ kind: 'error', text: 'Date must be YYYY-MM-DD' });
-      return;
-    }
-    if (values.kind === 'festival' && values.endDate.trim() && !isYmd(values.endDate)) {
-      showToast({ kind: 'error', text: 'End date must be YYYY-MM-DD' });
-      return;
-    }
+    setErrors({});
 
-    const payload = serializeShowFormForKind(values);
+    const payload = serializeShowFormForKind({
+      ...values,
+      date: normalizedDate,
+      endDate: normalizedEndDate,
+    });
 
     setSubmitting(true);
     try {
@@ -145,10 +181,19 @@ export default function AddFormScreen(): React.JSX.Element {
         },
       });
       const newId = result?.id;
-      showToast({ kind: 'success', text: 'Show added' });
       if (newId) {
-        router.replace(`/show/${newId}`);
+        // Back to the chat tab with the saved show id; the chat
+        // screen renders an inline confirmation and offers a deep
+        // link into the new show. Routing this way (instead of
+        // replacing with /show/<id>) keeps the conversational flow
+        // unbroken so the user can dictate another show without
+        // navigating back.
+        router.replace({ pathname: '/add', params: { savedShowId: newId } });
       } else {
+        // Offline save — show landed in the outbox, no id yet. Toast
+        // remains useful here because we don't have a chat-side
+        // context to land in.
+        showToast({ kind: 'success', text: 'Saved offline — will sync' });
         router.back();
       }
     } catch (err) {
@@ -157,7 +202,7 @@ export default function AddFormScreen(): React.JSX.Element {
     } finally {
       setSubmitting(false);
     }
-  }, [values, utils, router, showToast]);
+  }, [values, set, utils, router, showToast]);
 
   return (
     <>
@@ -207,16 +252,14 @@ export default function AddFormScreen(): React.JSX.Element {
               venueSuggestions={venueResults}
               venueLoading={venueLoading}
               onVenueSearch={runVenueSearch}
+              errors={errors}
+              clearError={clearError}
             />
           </NestableScrollContainer>
         </KeyboardAvoidingView>
       </View>
     </>
   );
-}
-
-function isYmd(s: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(s.trim());
 }
 
 const styles = StyleSheet.create({

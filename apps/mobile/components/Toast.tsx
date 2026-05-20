@@ -21,7 +21,12 @@ export function ToastHost(): React.JSX.Element | null {
 
   return (
     <View
-      style={[styles.host, { top: insets.top + 8 }]}
+      // Sit below the standard TopBar (~50 px tall) so the toast never
+      // overlaps the screen title. Without this offset a field-level
+      // error showed up across "New show" / "Edit show" titles on the
+      // add/edit form because the host was anchored at insets.top + 8,
+      // which is *inside* the topbar's vertical span.
+      style={[styles.host, { top: insets.top + 56 }]}
       pointerEvents="box-none"
     >
       {toasts.map((t) => (

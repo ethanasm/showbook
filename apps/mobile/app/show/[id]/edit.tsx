@@ -25,7 +25,10 @@ import { NestableScrollContainer } from 'react-native-draggable-flatlist';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { TopBar } from '../../../components/TopBar';
-import { ShowFormFields } from '../../../components/ShowFormFields';
+import {
+  ShowFormFields,
+  type ShowFormErrors,
+} from '../../../components/ShowFormFields';
 import type { VenueSuggestion } from '../../../components/VenueTypeahead';
 import { useTheme } from '../../../lib/theme';
 import { trpc } from '../../../lib/trpc';
@@ -38,6 +41,7 @@ import {
   type ShowDetailLite,
   type ShowFormValues,
 } from '../../../lib/showForm';
+import { isYmd, normalizeDateInput } from '../../../lib/dateInput';
 import { newPerformerRowId } from '../../../components/LineupEditor';
 
 const SCREEN_OPTIONS = { presentation: 'modal', gestureEnabled: true } as const;
@@ -129,27 +133,49 @@ export default function EditShowScreen(): React.JSX.Element {
   );
 
   const [saving, setSaving] = React.useState(false);
+  const [errors, setErrors] = React.useState<ShowFormErrors>({});
+  const clearError = React.useCallback((key: keyof ShowFormErrors) => {
+    setErrors((prev) => {
+      if (prev[key] === undefined) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, []);
 
   const submit = React.useCallback(async () => {
     if (!values || !detail) return;
+
+    const normalizedDate = normalizeDateInput(values.date);
+    if (normalizedDate !== values.date) set('date', normalizedDate);
+    const normalizedEndDate = normalizeDateInput(values.endDate);
+    if (normalizedEndDate !== values.endDate) set('endDate', normalizedEndDate);
+
+    const fieldErrors: ShowFormErrors = {};
     if (!values.title.trim()) {
-      showToast({ kind: 'error', text: 'Title can’t be empty' });
-      return;
+      fieldErrors.title = 'Title can’t be empty';
     }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(values.date)) {
-      showToast({ kind: 'error', text: 'Date must be YYYY-MM-DD' });
-      return;
+    if (!isYmd(normalizedDate)) {
+      fieldErrors.date = 'Use YYYY-MM-DD (or “Aug 5, 2018”)';
     }
     if (
       values.kind === 'festival' &&
       values.endDate.trim() &&
-      !/^\d{4}-\d{2}-\d{2}$/.test(values.endDate)
+      !isYmd(normalizedEndDate)
     ) {
-      showToast({ kind: 'error', text: 'End date must be YYYY-MM-DD' });
+      fieldErrors.endDate = 'Use YYYY-MM-DD (or “Aug 5, 2018”)';
+    }
+    if (Object.keys(fieldErrors).length > 0) {
+      setErrors(fieldErrors);
       return;
     }
+    setErrors({});
 
-    const serialized = serializeShowFormForKind(values);
+    const serialized = serializeShowFormForKind({
+      ...values,
+      date: normalizedDate,
+      endDate: normalizedEndDate,
+    });
     const input = { showId, ...serialized };
 
     setSaving(true);
@@ -201,7 +227,7 @@ export default function EditShowScreen(): React.JSX.Element {
     } finally {
       setSaving(false);
     }
-  }, [values, detail, queryClient, utils, showId, router, showToast]);
+  }, [values, detail, set, queryClient, utils, showId, router, showToast]);
 
   const stackOptions = <Stack.Screen options={SCREEN_OPTIONS} />;
 
@@ -271,6 +297,8 @@ export default function EditShowScreen(): React.JSX.Element {
               venueSuggestions={venueResults}
               venueLoading={venueLoading}
               onVenueSearch={runVenueSearch}
+              errors={errors}
+              clearError={clearError}
             />
           </NestableScrollContainer>
         </KeyboardAvoidingView>

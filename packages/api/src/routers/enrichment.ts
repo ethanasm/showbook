@@ -25,7 +25,10 @@ import {
   extractShowFromPdfText,
   extractFestivalLineupFromImage,
   extractFestivalLineupFromPdfText,
+  summarizeShowSaved,
 } from '../groq';
+import { eq, and } from 'drizzle-orm';
+import { shows } from '@showbook/db';
 import { searchAttractions, extractMusicbrainzId } from '../ticketmaster';
 import {
   autocomplete as placesAutocomplete,
@@ -38,6 +41,46 @@ import {
   buildBulkScanQueries,
 } from '../gmail';
 import { geocodeVenue } from '../geocode';
+
+/**
+ * Deterministic confirmation copy assembled from show fields, used
+ * when Groq isn't available (no API key, transient failure, etc).
+ * Voice matches the chat-style summary so reviewers / readers can't
+ * tell which path produced it.
+ */
+export function buildShowSavedFallback(args: {
+  kind: 'concert' | 'theatre' | 'comedy' | 'festival';
+  title: string;
+  venueName: string;
+  date: string | null;
+}): string {
+  const noun =
+    args.kind === 'festival'
+      ? 'festival'
+      : args.kind === 'theatre'
+        ? 'production'
+        : 'show';
+  const dateFragment = args.date ? `on ${formatShowDateForChat(args.date)} ` : '';
+  return `Added ${args.title} ${dateFragment}at ${args.venueName} to your ${noun}s. Anything else?`;
+}
+
+function formatShowDateForChat(iso: string): string {
+  // Local-midnight parsing avoids the "off by one day" timezone bug
+  // bare `new Date('YYYY-MM-DD')` causes (UTC midnight) when the
+  // server runs west of UTC.
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  const d = new Date(
+    Number(m[1]),
+    Number(m[2]) - 1,
+    Number(m[3]),
+  );
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
 export function correctExtractedYear(
   extractedDate: string | null,
@@ -207,6 +250,73 @@ export const enrichmentRouter = router({
         () => parseShowInput(input.freeText),
         { userId: ctx.session.user.id, tags: ['enrichment', 'llm'] },
       );
+    }),
+
+  // ---------------------------------------------------------------------------
+  // summarizeShowSaved — short chat-style confirmation after a save
+  // ---------------------------------------------------------------------------
+  //
+  // The mobile add-form routes back to the chat screen with a saved
+  // show id; the chat surface calls this to render a one-line
+  // confirmation ("Got it — Bon Iver at the Hollywood Bowl is in the
+  // books. Anything else?") so the user can keep going without
+  // navigating to the detail page.
+  //
+  // The Groq round-trip is best-effort. If `GROQ_API_KEY` is missing
+  // or the call fails, the procedure returns a deterministic fallback
+  // assembled from the show fields. The client never has to know
+  // which path was taken.
+  summarizeShowSaved: protectedProcedure
+    .input(z.object({ showId: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+      const show = await ctx.db.query.shows.findFirst({
+        where: and(eq(shows.id, input.showId), eq(shows.userId, userId)),
+        with: {
+          venue: true,
+          showPerformers: {
+            with: { performer: true },
+          },
+        },
+      });
+      if (!show) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+      }
+      const sorted = [...show.showPerformers].sort((a, b) => a.sortOrder - b.sortOrder);
+      const headlinerRow = sorted.find((p) => p.role === 'headliner');
+      const supportingActs = sorted
+        .filter((p) => p.role !== 'headliner')
+        .map((p) => p.performer.name);
+      const titleFromHeadliner = headlinerRow?.performer.name ?? '';
+      const title =
+        show.kind === 'theatre' || show.kind === 'festival'
+          ? show.productionName ?? titleFromHeadliner
+          : titleFromHeadliner;
+
+      const fallback = buildShowSavedFallback({
+        kind: show.kind as 'concert' | 'theatre' | 'comedy' | 'festival',
+        title,
+        venueName: show.venue.name,
+        date: show.date ?? null,
+      });
+
+      const message = await withTrace(
+        'trpc.enrichment.summarizeShowSaved',
+        () =>
+          summarizeShowSaved({
+            kind: show.kind as 'concert' | 'theatre' | 'comedy' | 'festival',
+            title,
+            venueName: show.venue.name,
+            venueCity: show.venue.city,
+            date: show.date ?? null,
+            endDate: show.endDate ?? null,
+            state: show.state as 'past' | 'ticketed' | 'watching',
+            supportingActs: supportingActs.slice(0, 6),
+          }),
+        { userId, tags: ['enrichment', 'llm'] },
+      );
+
+      return { message: message ?? fallback, fallback };
     }),
 
   // ---------------------------------------------------------------------------
