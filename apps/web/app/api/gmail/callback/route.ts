@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { child } from '@showbook/observability';
 import { auth } from '@/auth';
+import {
+  mobileRedirectResponse,
+  OAUTH_MODE_COOKIE,
+  OAUTH_MODE_MOBILE,
+} from '@/lib/gmail-popup-response';
 
 const logger = child({ component: 'web.gmail.callback' });
 const STATE_COOKIE = 'gmail_oauth_state';
@@ -12,24 +17,36 @@ function escapeForScript(value: string): string {
 }
 
 function clearStateCookie(response: NextResponse, isSecure: boolean): NextResponse {
-  response.cookies.set(STATE_COOKIE, '', {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: isSecure,
-    path: '/api/gmail',
-    maxAge: 0,
-  });
+  for (const name of [STATE_COOKIE, OAUTH_MODE_COOKIE]) {
+    response.cookies.set(name, '', {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: isSecure,
+      path: '/api/gmail',
+      maxAge: 0,
+    });
+  }
   return response;
 }
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
-
   const baseUrl = process.env.NEXTAUTH_URL ?? '';
   const isSecure = baseUrl.startsWith('https');
+
+  // Read the mode cookie first so error responses match the caller's
+  // expected shape (web popup HTML vs mobile custom-scheme redirect).
+  const isMobile = req.cookies.get(OAUTH_MODE_COOKIE)?.value === OAUTH_MODE_MOBILE;
+
+  const session = await auth();
+  if (!session?.user?.id) {
+    if (isMobile) {
+      return mobileRedirectResponse({
+        payload: { type: 'error', reason: 'session_missing' },
+        isSecure,
+      });
+    }
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
 
   const code = req.nextUrl.searchParams.get('code');
   const state = req.nextUrl.searchParams.get('state');
@@ -46,6 +63,12 @@ export async function GET(req: NextRequest) {
       },
       'Gmail callback rejected: state mismatch',
     );
+    if (isMobile) {
+      return mobileRedirectResponse({
+        payload: { type: 'error', reason: 'state_mismatch' },
+        isSecure,
+      });
+    }
     return clearStateCookie(
       new NextResponse(
         '<html><body><script>window.close();</script></body></html>',
@@ -78,6 +101,12 @@ export async function GET(req: NextRequest) {
       { event: 'gmail.callback.token_exchange_failed', status: tokenRes.status, body: errBody.slice(0, 500) },
       'Gmail token exchange failed',
     );
+    if (isMobile) {
+      return mobileRedirectResponse({
+        payload: { type: 'error', reason: 'token_exchange_failed' },
+        isSecure,
+      });
+    }
     return clearStateCookie(
       new NextResponse(
         `<html><body><p>Token exchange failed.</p><script>
@@ -93,6 +122,14 @@ export async function GET(req: NextRequest) {
   }
 
   const tokens = (await tokenRes.json()) as { access_token: string };
+
+  if (isMobile) {
+    return mobileRedirectResponse({
+      payload: { type: 'success', accessToken: tokens.access_token },
+      isSecure,
+    });
+  }
+
   const accessToken = escapeForScript(tokens.access_token);
 
   return clearStateCookie(
