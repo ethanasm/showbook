@@ -19,6 +19,7 @@ import {
   TextInput,
   Image,
   Pressable,
+  ScrollView,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
@@ -100,8 +101,16 @@ export function ArtistTypeahead({
       </View>
 
       {showResults ? (
-        <View
+        // ScrollView (not View) so the dropdown is bounded + internally
+        // scrollable even when the row sits at the bottom of a long
+        // LineupEditor — NestableDraggableFlatList does not recompute
+        // its content height when a row grows mid-render, so the outer
+        // NestableScrollContainer can't reach a tall dropdown otherwise.
+        <ScrollView
           style={[styles.list, { borderColor: colors.rule, backgroundColor: colors.surface }]}
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator
         >
           {suggestions.map((artist, i) => (
             <Pressable
@@ -151,7 +160,7 @@ export function ArtistTypeahead({
               </View>
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
       ) : null}
     </View>
   );
@@ -180,7 +189,10 @@ const styles = StyleSheet.create({
   list: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 8,
-    overflow: 'hidden',
+    // Cap the dropdown so it never extends past the screen edge when
+    // the active row sits near the bottom of the lineup. ~5 rows fit
+    // before the user has to scroll within the dropdown.
+    maxHeight: 240,
   },
   row: {
     flexDirection: 'row',
