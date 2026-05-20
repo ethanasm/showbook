@@ -2,11 +2,11 @@ import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  reportClientError,
+  reportClientEvent,
   setMobileTelemetryLogger,
   describeError,
   __resetTelemetryForTests,
-  type ClientErrorPayload,
+  type ClientEventPayload,
 } from '../telemetry';
 
 beforeEach(() => __resetTelemetryForTests());
@@ -39,19 +39,19 @@ describe('telemetry — describeError', () => {
   });
 });
 
-describe('telemetry — reportClientError', () => {
+describe('telemetry — reportClientEvent', () => {
   it('is a no-op before the logger is wired up (no throw, no crash)', () => {
     // Logger is null after the beforeEach reset.
     assert.doesNotThrow(() =>
-      reportClientError({ event: 'x', message: 'y' }),
+      reportClientEvent({ event: 'x', message: 'y' }),
     );
   });
 
   it('forwards the payload to the registered logger', () => {
-    const received: ClientErrorPayload[] = [];
+    const received: ClientEventPayload[] = [];
     setMobileTelemetryLogger((p) => received.push(p));
 
-    reportClientError({
+    reportClientEvent({
       event: 'upload.put.failed',
       message: 'R2 PUT 403',
       level: 'error',
@@ -72,16 +72,16 @@ describe('telemetry — reportClientError', () => {
       throw new Error('logger blew up');
     });
     assert.doesNotThrow(() =>
-      reportClientError({ event: 'x', message: 'y' }),
+      reportClientEvent({ event: 'x', message: 'y' }),
     );
   });
 
   it('unregistering with null drops subsequent reports silently', () => {
-    const received: ClientErrorPayload[] = [];
+    const received: ClientEventPayload[] = [];
     setMobileTelemetryLogger((p) => received.push(p));
-    reportClientError({ event: 'a', message: 'b' });
+    reportClientEvent({ event: 'a', message: 'b' });
     setMobileTelemetryLogger(null);
-    reportClientError({ event: 'c', message: 'd' });
+    reportClientEvent({ event: 'c', message: 'd' });
     assert.equal(received.length, 1);
     assert.equal(received[0]?.event, 'a');
   });

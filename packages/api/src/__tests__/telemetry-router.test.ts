@@ -51,10 +51,10 @@ function caller(db: FakeDb, userId = 'user-1') {
   return telemetryRouter!.createCaller(fakeCtx(db, userId) as never);
 }
 
-describe('telemetryRouter.logClientError', () => {
+describe('telemetryRouter.logEvent', () => {
   it('emits a structured error log under the mobile.* namespace', async () => {
     const db = makeFakeDb({ authUserId: 'user-42' });
-    await caller(db, 'user-42').logClientError({
+    await caller(db, 'user-42').logEvent({
       event: 'upload.put.failed',
       message: 'R2 PUT 403',
       level: 'error',
@@ -72,7 +72,7 @@ describe('telemetryRouter.logClientError', () => {
   });
 
   it('emits at warn level when the caller asks for it', async () => {
-    await caller(makeFakeDb()).logClientError({
+    await caller(makeFakeDb()).logEvent({
       event: 'spotify.token.refresh',
       message: 'refreshing took longer than expected',
       level: 'warn',
@@ -82,7 +82,7 @@ describe('telemetryRouter.logClientError', () => {
   });
 
   it('defaults to error level when level is omitted', async () => {
-    await caller(makeFakeDb()).logClientError({
+    await caller(makeFakeDb()).logEvent({
       event: 'screen.render.failed',
       message: 'ShowDetail crashed',
     });
@@ -92,7 +92,7 @@ describe('telemetryRouter.logClientError', () => {
 
   it('clips oversized context payloads so a chatty client cannot blow up Axiom', async () => {
     const big = 'x'.repeat(12 * 1024);
-    await caller(makeFakeDb()).logClientError({
+    await caller(makeFakeDb()).logEvent({
       event: 'upload.put.failed',
       message: 'huge',
       context: { bigBlob: big },
@@ -110,10 +110,32 @@ describe('telemetryRouter.logClientError', () => {
   });
 
   it('returns ok:true so the caller can await + ignore', async () => {
-    const res = await caller(makeFakeDb()).logClientError({
+    const res = await caller(makeFakeDb()).logEvent({
       event: 'noop',
       message: 'noop',
     });
     assert.deepEqual(res, { ok: true });
+  });
+
+  it('accepts unauthenticated callers and logs userId as null', async () => {
+    // publicProcedure: no auth middleware, so a context without a session
+    // is valid. This is the entire point of switching off
+    // protectedProcedure — pre-sign-in / expired-token reports must still
+    // reach Axiom.
+    const ctx = { db: makeFakeDb(), session: null };
+    const unauthCaller = telemetryRouter!.createCaller(ctx as never);
+    await unauthCaller.logEvent({
+      event: 'trpc.error',
+      message: 'UNAUTHORIZED',
+      level: 'error',
+      context: { path: 'shows.list', code: 'UNAUTHORIZED', httpStatus: 401 },
+    });
+
+    assert.equal(captured.length, 1);
+    const log = captured[0]!;
+    assert.equal(log.payload.event, 'mobile.trpc.error');
+    assert.equal(log.payload.userId, null);
+    assert.equal(log.payload.path, 'shows.list');
+    assert.equal(log.payload.httpStatus, 401);
   });
 });
