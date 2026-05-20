@@ -453,6 +453,32 @@ export const showsRouter = router({
   }),
 
   /**
+   * Dedup lookup for the iOS wallet share-sheet import flow. The mobile
+   * client calls this before navigating into the Add Show form so that
+   * re-sharing the same `.pkpass` surfaces "Already in your library"
+   * instead of opening a duplicate form. Server-side dedup in
+   * `shows.create` (same user / venue / date / headliner) still catches
+   * any case the client check misses — this is a UX nicety, not a
+   * correctness gate.
+   */
+  findByWalletSerial: protectedProcedure
+    .input(z.object({ serialNumber: z.string().min(1).max(256) }))
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const [row] = await ctx.db
+        .select({ id: shows.id })
+        .from(shows)
+        .where(
+          and(
+            eq(shows.userId, userId),
+            sql`${shows.sourceRefs}->'wallet'->>'serialNumber' = ${input.serialNumber}`,
+          ),
+        )
+        .limit(1);
+      return row ?? null;
+    }),
+
+  /**
    * Per-mode counts used by the sidebar to badge Upcoming and Logbook
    * independently. Single round-trip aggregate so we don't fan out into
    * three separate count queries from <AppShell>.
