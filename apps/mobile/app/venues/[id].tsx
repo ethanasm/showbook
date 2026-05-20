@@ -71,10 +71,6 @@ type VenueMedia = RouterOutput<UtilsClient['media']['listForVenue']['query']>[nu
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const DOWS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
-function makeShowDedupKey(date: string, name: string): string {
-  return `${date}|${name.trim().toLowerCase().replace(/\s+/g, ' ')}`;
-}
-
 function parseDate(iso: string): { month: string; day: string; dow: string; year: string } {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   if (!m) return { month: '—', day: '—', dow: '—', year: '' };
@@ -150,19 +146,17 @@ export default function VenueDetailScreen(): React.JSX.Element {
     enabled: Boolean(token) && venueId.length > 0,
   });
 
-  // Watched-event id set filters watched rows out of the Upcoming
-  // list — once the user follows an event it should move down to
-  // Your Shows on the same screen instead of staying in two places at
-  // once.
-  const watchedQuery = useCachedQuery<readonly string[]>({
+  // The watched-id set is no longer used to filter this screen — the server
+  // dedup in `venues.upcomingAnnouncements` already drops announcements that
+  // map to a show the user owns (via `show_announcement_links` for explicit
+  // watches and a fuzzy date+name match for poster-uploaded festivals). We
+  // still prime the watched-id cache so other screens that read this key
+  // (Discover) don't pay the round-trip on first paint.
+  useCachedQuery<readonly string[]>({
     queryKey: [...WATCHED_IDS_CACHE_KEY],
     queryFn: () => utils.client.discover.watchedAnnouncementIds.query(),
     enabled: Boolean(token),
   });
-  const watchedSet = React.useMemo(
-    () => new Set(watchedQuery.data ?? []),
-    [watchedQuery.data],
-  );
 
   const queryClient = useQueryClient();
   const onToggleWatch = useToggleWatch({
@@ -207,32 +201,6 @@ export default function VenueDetailScreen(): React.JSX.Element {
     [showsQuery.data],
   );
 
-  // De-dup the Upcoming list against shows the user already owns at
-  // this venue (not just announcement-linked watches): if a row in
-  // YOUR SHOWS matches the announcement by date + headliner, drop it
-  // from Upcoming so the same show never appears in two places.
-  const userShowDedupKeys = React.useMemo(() => {
-    const keys = new Set<string>();
-    for (const s of shows) {
-      if (!s.date) continue;
-      const headliner =
-        s.productionName ??
-        s.showPerformers.find((sp) => sp.role === 'headliner')?.performer.name ??
-        null;
-      if (headliner) keys.add(makeShowDedupKey(s.date, headliner));
-    }
-    return keys;
-  }, [shows]);
-
-  const filteredUpcoming = React.useMemo(
-    () =>
-      upcoming.filter((a) => {
-        if (watchedSet.has(a.id)) return false;
-        const key = makeShowDedupKey(a.showDate, a.productionName ?? a.headliner);
-        return !userShowDedupKeys.has(key);
-      }),
-    [upcoming, watchedSet, userShowDedupKeys],
-  );
   const refreshControl = useThemedRefreshControl(
     (detailQuery.isFetching ||
       upcomingQuery.isFetching ||
@@ -290,7 +258,7 @@ export default function VenueDetailScreen(): React.JSX.Element {
           >
             <Hero venue={venue} venueId={venueId} />
             <Upcoming
-              items={filteredUpcoming}
+              items={upcoming}
               loading={upcomingQuery.isLoading}
               onToggleWatch={onToggleWatch}
               venueName={venue.name}
