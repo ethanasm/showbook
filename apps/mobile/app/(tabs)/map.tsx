@@ -26,6 +26,7 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { MapPin, RefreshCw, X } from 'lucide-react-native';
 import MapView, {
   Marker,
@@ -550,6 +551,7 @@ function VenueSheetContents({
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const router = useRouter();
 
   const totalSpent = venue.shows.reduce((acc, s) => {
     const n = toNumber(s.pricePaid);
@@ -582,9 +584,20 @@ function VenueSheetContents({
               Selected
             </Text>
           </View>
-          <Text style={[styles.venueTitle, { color: colors.ink }]} numberOfLines={2}>
-            {venue.name}
-          </Text>
+          <Pressable
+            onPress={() => {
+              onClose();
+              router.push(`/venues/${venue.venueId}`);
+            }}
+            accessibilityRole="link"
+            accessibilityLabel={`Open ${venue.name}`}
+            hitSlop={4}
+            style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+          >
+            <Text style={[styles.venueTitle, { color: colors.ink }]} numberOfLines={2}>
+              {venue.name}
+            </Text>
+          </Pressable>
           {locationLine.length > 0 && (
             <Text style={[styles.venueLocation, { color: colors.muted }]}>
               {locationLine}
@@ -622,10 +635,27 @@ function VenueSheetContents({
         {sortedShows.map((show) => {
           const price = formatPrice(show.pricePaid);
           const date = formatDate(show.date ?? null);
+          const goToShow = () => {
+            onClose();
+            router.push(`/show/${show.id}`);
+          };
+          const goToArtist = show.headlinerId
+            ? () => {
+                onClose();
+                router.push(`/artists/${show.headlinerId}`);
+              }
+            : null;
           return (
-            <View
+            <Pressable
               key={show.id}
-              style={[styles.visitRow, { borderTopColor: colors.rule }]}
+              onPress={goToShow}
+              accessibilityRole="link"
+              accessibilityLabel={`Open show on ${date || 'unknown date'}`}
+              style={({ pressed }) => [
+                styles.visitRow,
+                { borderTopColor: colors.rule },
+                pressed && { opacity: 0.7 },
+              ]}
             >
               <View style={{ width: 64 }}>
                 <Text style={[styles.visitDate, { color: colors.ink }]}>
@@ -639,12 +669,24 @@ function VenueSheetContents({
                 />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text
-                  style={[styles.visitArtist, { color: colors.ink }]}
-                  numberOfLines={1}
-                >
-                  {show.headlinerName ?? 'Untitled show'}
-                </Text>
+                {goToArtist ? (
+                  <Text
+                    onPress={goToArtist}
+                    accessibilityRole="link"
+                    accessibilityLabel={`Open ${show.headlinerName ?? 'artist'}`}
+                    style={[styles.visitArtist, { color: colors.ink }]}
+                    numberOfLines={1}
+                  >
+                    {show.headlinerName ?? 'Untitled show'}
+                  </Text>
+                ) : (
+                  <Text
+                    style={[styles.visitArtist, { color: colors.ink }]}
+                    numberOfLines={1}
+                  >
+                    {show.headlinerName ?? 'Untitled show'}
+                  </Text>
+                )}
                 {show.seat && (
                   <Text
                     style={[styles.visitSeat, { color: colors.muted }]}
@@ -659,7 +701,7 @@ function VenueSheetContents({
                   {price}
                 </Text>
               )}
-            </View>
+            </Pressable>
           );
         })}
       </ScrollView>

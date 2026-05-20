@@ -14,7 +14,14 @@
  */
 
 import React from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
@@ -264,12 +271,17 @@ function ShowDetailTabsViewInner({
         ? 'Have tickets'
         : 'Watching';
     return [
-      { label: 'VENUE', value: venueLabel, sub: venueSub || undefined },
+      {
+        label: 'VENUE',
+        value: venueLabel,
+        sub: venueSub || undefined,
+        onPress: () => router.push(`/venues/${show.venue.id}`),
+      },
       { label: 'SEAT', value: seatLabel, sub: seatSub },
       { label: 'PAID', value: priceLabel },
       { label: 'STATE', value: stateLabel },
     ];
-  }, [isPast, show]);
+  }, [isPast, router, show]);
 
   const lineupEntries: OverviewLineupEntry[] = React.useMemo(() => {
     return [...show.showPerformers]
@@ -491,6 +503,7 @@ function ShowDetailTabsViewInner({
 function HeaderStrip({ show }: { show: ShowDetail }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const router = useRouter();
   const resolvedHeadliner = getHeadliner(show);
   const title = resolvedHeadliner === 'Unknown Artist' ? 'Untitled' : resolvedHeadliner;
   const date = parseDate(show.date);
@@ -545,9 +558,17 @@ function HeaderStrip({ show }: { show: ShowDetail }): React.JSX.Element {
           </Text>
         ) : null}
         {venueLine ? (
-          <Text style={[styles.headerVenue, { color: colors.muted }]} numberOfLines={1}>
-            {venueLine}
-          </Text>
+          <Pressable
+            onPress={() => router.push(`/venues/${show.venue.id}`)}
+            accessibilityRole="link"
+            accessibilityLabel={`Open ${show.venue.name}`}
+            hitSlop={6}
+            style={({ pressed }) => [styles.headerVenueLink, pressed && { opacity: 0.6 }]}
+          >
+            <Text style={[styles.headerVenue, { color: colors.muted }]} numberOfLines={1}>
+              {venueLine}
+            </Text>
+          </Pressable>
         ) : null}
       </View>
     </View>
@@ -604,10 +625,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist Sans',
     fontSize: 14,
   },
+  headerVenueLink: {
+    alignSelf: 'flex-start',
+    marginTop: 2,
+  },
   headerVenue: {
     fontFamily: 'Geist Sans',
     fontSize: 13,
-    marginTop: 2,
   },
   wentBadge: {
     paddingHorizontal: 8,
