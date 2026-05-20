@@ -443,7 +443,7 @@ function DensitySelector(): React.JSX.Element {
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 48,
   },
   userRow: {
     flexDirection: 'row',

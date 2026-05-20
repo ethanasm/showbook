@@ -397,11 +397,11 @@ function ShowCardLink({
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 32,
   },
   scrollFlex: {
     flexGrow: 1,
-    paddingBottom: 100,
+    paddingBottom: 32,
   },
   skeletonWrap: {
     paddingTop: 12,
