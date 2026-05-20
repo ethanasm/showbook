@@ -59,6 +59,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { EmptyStateHero } from '../../components/design-system';
 import { OfflineEmptyState } from '../../components/OfflineEmptyState';
 import { KindBadge } from '../../components/KindBadge';
+import { FilterChipsRow, type FilterGroup } from '../../components/FilterChipsRow';
 import { useTheme, type Kind } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { useNetwork } from '../../lib/network';
@@ -85,13 +86,6 @@ type AnnouncementItem = FollowedFeed['items'][number];
 type NearbyAnnouncementItem = NearbyFeed['items'][number];
 
 type DiscoverTab = 'venues' | 'artists' | 'regions';
-
-interface FilterGroup {
-  id: string;
-  name: string;
-  sublabel?: string;
-  count: number;
-}
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const DOWS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -550,125 +544,6 @@ export default function DiscoverScreen(): React.JSX.Element {
         )}
       </ScrollView>
     </ScreenWrapper>
-  );
-}
-
-function FilterChipsRow({
-  groups,
-  selected,
-  onSelect,
-  totalCount,
-  allLabel = 'All',
-  variant = 'primary',
-  testIdPrefix,
-}: {
-  groups: FilterGroup[];
-  selected: string | null;
-  onSelect: (id: string | null) => void;
-  totalCount: number;
-  allLabel?: string;
-  /** `sub` renders a slightly tighter row used as a second-level filter
-   *  under a primary chip row (Regions tab venue chips). */
-  variant?: 'primary' | 'sub';
-  testIdPrefix?: string;
-}): React.JSX.Element {
-  const { tokens } = useTheme();
-  const { colors } = tokens;
-  return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={[
-        styles.chipsRow,
-        variant === 'sub' && styles.chipsRowSub,
-      ]}
-      style={styles.chipsScroll}
-      testID={testIdPrefix ? `${testIdPrefix}-row` : undefined}
-    >
-      <FilterChip
-        label={allLabel}
-        count={totalCount}
-        active={selected === null}
-        onPress={() => onSelect(null)}
-        colors={colors}
-        testID={testIdPrefix ? `${testIdPrefix}-all` : undefined}
-      />
-      {groups.map((g) => (
-        <FilterChip
-          key={g.id}
-          label={g.name}
-          sublabel={g.sublabel}
-          count={g.count}
-          active={selected === g.id}
-          onPress={() => onSelect(selected === g.id ? null : g.id)}
-          colors={colors}
-          testID={testIdPrefix ? `${testIdPrefix}-${g.id}` : undefined}
-        />
-      ))}
-    </ScrollView>
-  );
-}
-
-function FilterChip({
-  label,
-  sublabel,
-  count,
-  active,
-  onPress,
-  colors,
-  testID,
-}: {
-  label: string;
-  sublabel?: string;
-  count: number;
-  active: boolean;
-  onPress: () => void;
-  colors: ReturnType<typeof useTheme>['tokens']['colors'];
-  testID?: string;
-}): React.JSX.Element {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      accessibilityLabel={`${label}${sublabel ? ` ${sublabel}` : ''}`}
-      onPress={onPress}
-      testID={testID}
-      style={({ pressed }) => [
-        styles.chip,
-        {
-          backgroundColor: active ? colors.ink : 'transparent',
-          borderColor: active ? colors.ink : colors.ruleStrong,
-          opacity: pressed ? 0.7 : 1,
-        },
-      ]}
-    >
-      <Text
-        numberOfLines={1}
-        style={[
-          styles.chipLabel,
-          {
-            color: active ? colors.bg : colors.ink,
-            fontWeight: active ? '600' : '500',
-          },
-        ]}
-      >
-        {label}
-        {sublabel ? (
-          <Text style={[styles.chipSublabel, { color: active ? colors.bg : colors.muted }]}>
-            {' '}
-            · {sublabel}
-          </Text>
-        ) : null}
-      </Text>
-      <Text
-        style={[
-          styles.chipCount,
-          { color: active ? colors.bg : colors.muted, opacity: active ? 0.7 : 1 },
-        ]}
-      >
-        {count}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -1139,45 +1014,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 4,
     paddingBottom: 12,
-  },
-  chipsScroll: {
-    flexGrow: 0,
-    flexShrink: 0,
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-  },
-  chipsRowSub: {
-    paddingTop: 0,
-    paddingBottom: 8,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 999,
-    maxWidth: 220,
-  },
-  chipLabel: {
-    fontFamily: 'Geist Sans',
-    fontSize: 12,
-    letterSpacing: -0.1,
-  },
-  chipSublabel: {
-    fontFamily: 'Geist Sans',
-    fontSize: 11,
-    fontWeight: '400',
-  },
-  chipCount: {
-    fontFamily: 'Geist Mono',
-    fontSize: 10,
-    fontWeight: '400',
   },
   scrollContent: {
     paddingTop: 4,

@@ -13,6 +13,7 @@ import {
   getHeadliner,
   getHeadlinerId,
   getSupportPerformers,
+  hasProductionLabel,
   isProductionShow,
   pickHeadliner,
   type ShowLike,
@@ -97,7 +98,7 @@ describe('show-accessors (api re-export)', () => {
     );
   });
 
-  it('isProductionShow requires both kind and productionName', () => {
+  it('isProductionShow is theatre-only (festivals are multi-artist, not scripted)', () => {
     assert.equal(
       isProductionShow(makeShow({ kind: 'theatre', productionName: 'X' })),
       true,
@@ -110,6 +111,53 @@ describe('show-accessors (api re-export)', () => {
       isProductionShow(makeShow({ kind: 'concert', productionName: 'X' })),
       false,
     );
+    assert.equal(
+      isProductionShow(makeShow({ kind: 'festival', productionName: 'Bottlerock' })),
+      false,
+      'festivals are not production shows even with a productionName',
+    );
+  });
+
+  it('hasProductionLabel covers theatre and festival rows with a productionName', () => {
+    assert.equal(
+      hasProductionLabel(makeShow({ kind: 'theatre', productionName: 'X' })),
+      true,
+    );
+    assert.equal(
+      hasProductionLabel(makeShow({ kind: 'festival', productionName: 'Bottlerock' })),
+      true,
+    );
+    assert.equal(
+      hasProductionLabel(makeShow({ kind: 'festival', productionName: null })),
+      false,
+    );
+    assert.equal(
+      hasProductionLabel(makeShow({ kind: 'concert', productionName: 'X' })),
+      false,
+    );
+  });
+
+  it('getHeadlinerId returns the headliner for festivals with a productionName', () => {
+    const show = makeShow({
+      kind: 'festival',
+      productionName: 'Bottlerock',
+      showPerformers: [
+        { role: 'headliner', sortOrder: 0, performer: { id: 'lorde', name: 'Lorde' } },
+        { role: 'support', sortOrder: 1, performer: { id: 'tash', name: 'Tash Sultana' } },
+      ],
+    });
+    assert.equal(getHeadlinerId(show), 'lorde');
+  });
+
+  it('getHeadliner still surfaces the productionName label for festivals', () => {
+    const show = makeShow({
+      kind: 'festival',
+      productionName: 'Bottlerock',
+      showPerformers: [
+        { role: 'headliner', sortOrder: 0, performer: { id: 'lorde', name: 'Lorde' } },
+      ],
+    });
+    assert.equal(getHeadliner(show), 'Bottlerock');
   });
 
   it('getSupportPerformers returns ids sorted by sortOrder', () => {

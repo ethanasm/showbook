@@ -25,6 +25,10 @@ import { MediaSection } from "@/components/media";
 import { ShowTabs } from "./ShowTabs";
 import { OverviewTab, type OverviewLineupEntry } from "./OverviewTab";
 import { SetlistTab, SetlistTabComingSoon, type ActualSong } from "./SetlistTab";
+import {
+  FestivalSetlistTab,
+  type FestivalLineupSetlistEntry,
+} from "./FestivalSetlistTab";
 import { MediaTab } from "./MediaTab";
 import { NotesTab } from "./NotesTab";
 import { FanLoyaltyRing } from "./FanLoyaltyRing";
@@ -83,17 +87,30 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
   const router = useRouter();
   const utils = trpc.useUtils();
   const isPast = show.state === "past";
+  const isFestival = show.kind === "festival";
 
   // Predicted-setlist query. Eligibility gate lives server-side; the
   // procedure returns the cold empty state for non-concert/festival
   // shows automatically.
+  //
+  // Festivals use the multi-artist procedure; everything else uses
+  // the headliner-only one. Mutually exclusive `enabled` keeps the
+  // pair from double-fetching.
   const predictionQuery = trpc.setlistIntel.predictedSetlist.useQuery(
     { showId: show.id },
     {
-      enabled: !isPast,
+      enabled: !isPast && !isFestival,
       staleTime: 1000 * 60 * 5,
     },
   );
+  const festivalPredictionsQuery =
+    trpc.setlistIntel.predictedFestivalSetlists.useQuery(
+      { showId: show.id },
+      {
+        enabled: !isPast && isFestival,
+        staleTime: 1000 * 60 * 5,
+      },
+    );
 
   // Phase 5 — rotating-display flag. Single-user prod: we render the
   // rotating UI whenever the dev flag is ON, regardless of the
@@ -195,32 +212,88 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
     return {};
   }, [show]);
 
+  const buildActualSongs = useCallback(
+    (performerId: string): ActualSong[] => {
+      const sl = setlistsMap[performerId];
+      if (!sl) return [];
+      const out: ActualSong[] = [];
+      sl.sections.forEach((section, sIdx) => {
+        const isEncore = section.kind === "encore";
+        section.songs.forEach((song, songIdx) => {
+          out.push({
+            title: song.title,
+            sectionIndex: sIdx,
+            songIndex: songIdx,
+            isEncore,
+            isOpenerOrCloser:
+              (!isEncore && sIdx === 0 && songIdx === 0) ||
+              (!isEncore && songIdx === section.songs.length - 1),
+            note: song.note ?? null,
+          });
+        });
+      });
+      return out;
+    },
+    [setlistsMap],
+  );
+
   const actualSongs: ActualSong[] = useMemo(() => {
     if (!isPast) return [];
     const headlinerId = getHeadlinerId(show);
     if (!headlinerId) return [];
-    const headlinerSetlist = setlistsMap[headlinerId];
-    if (!headlinerSetlist) return [];
-    const out: ActualSong[] = [];
-    headlinerSetlist.sections.forEach((section, sIdx) => {
-      const isEncore = section.kind === "encore";
-      section.songs.forEach((song, songIdx) => {
-        out.push({
-          title: song.title,
-          sectionIndex: sIdx,
-          songIndex: songIdx,
-          isEncore,
-          isOpenerOrCloser:
-            (!isEncore && sIdx === 0 && songIdx === 0) ||
-            (!isEncore && songIdx === section.songs.length - 1),
-          note: song.note ?? null,
-        });
-      });
-    });
-    return out;
-  }, [isPast, setlistsMap, show]);
+    return buildActualSongs(headlinerId);
+  }, [buildActualSongs, isPast, show]);
 
   const actualSongCount = actualSongs.length;
+
+  // Festivals: one entry per lineup artist. Past shows pull each
+  // performer's setlist from the per-performer map; upcoming shows
+  // pull each artist's prediction from the festival procedure.
+  const festivalLineupSetlists: FestivalLineupSetlistEntry[] = useMemo(() => {
+    if (!isFestival) return [];
+    const predictionsByPerformer = new Map<
+      string,
+      FestivalLineupSetlistEntry["prediction"]
+    >();
+    if (!isPast) {
+      const data = festivalPredictionsQuery.data;
+      if (data?.entries) {
+        for (const e of data.entries) {
+          predictionsByPerformer.set(
+            e.performerId,
+            e.prediction as FestivalLineupSetlistEntry["prediction"],
+          );
+        }
+      }
+    }
+    return show.showPerformers
+      .filter((sp) => sp.role === "headliner" || sp.role === "support")
+      .map((sp) => ({
+        performerId: sp.performer.id,
+        performerName: sp.performer.name,
+        role: sp.role as "headliner" | "support",
+        sortOrder: sp.sortOrder,
+        prediction: predictionsByPerformer.get(sp.performer.id) ?? null,
+        actualSongs: isPast ? buildActualSongs(sp.performer.id) : [],
+      }));
+  }, [
+    buildActualSongs,
+    festivalPredictionsQuery.data,
+    isFestival,
+    isPast,
+    show.showPerformers,
+  ]);
+
+  const festivalActualSongCount = useMemo(
+    () =>
+      isFestival && isPast
+        ? festivalLineupSetlists.reduce(
+            (acc, e) => acc + e.actualSongs.length,
+            0,
+          )
+        : 0,
+    [festivalLineupSetlists, isFestival, isPast],
+  );
 
   // Stat row cells. Order mirrors the design handoff: VENUE / SEAT /
   // (PAID | ON STAGE) / (DOORS | DROVE).
@@ -261,6 +334,27 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
       }));
   }, [show.showPerformers]);
 
+  // For festivals, reduce the lineup predictions to the headliner's
+  // confidence (single number for the tab-bar badge). Falls back to
+  // null when the headliner entry didn't produce a hot prediction.
+  const festivalHeadlinerConfidence: number | null = useMemo(() => {
+    if (!isFestival || isPast) return null;
+    const entries = festivalPredictionsQuery.data?.entries;
+    if (!entries || entries.length === 0) return null;
+    const headlinerEntry = entries.find((e) => e.role === "headliner");
+    const p = headlinerEntry?.prediction;
+    if (!p) return null;
+    if (
+      p.style === "stable" ||
+      p.style === "rotating" ||
+      p.style === "theatrical" ||
+      p.style === "improvised"
+    ) {
+      return (p as { confidence: number }).confidence;
+    }
+    return null;
+  }, [festivalPredictionsQuery.data, isFestival, isPast]);
+
   const badges = useMemo(
     () =>
       computeShowTabBadges({
@@ -271,19 +365,28 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
         // really mean "no prediction available yet". Phase 6 adds
         // theatrical + improvised — both report confidence as a
         // calibrated number so we surface them too.
-        predictionConfidence:
-          predictionQuery.data &&
-          (predictionQuery.data.style === "stable" ||
-            predictionQuery.data.style === "rotating" ||
-            predictionQuery.data.style === "theatrical" ||
-            predictionQuery.data.style === "improvised")
+        predictionConfidence: isFestival
+          ? festivalHeadlinerConfidence
+          : predictionQuery.data &&
+              (predictionQuery.data.style === "stable" ||
+                predictionQuery.data.style === "rotating" ||
+                predictionQuery.data.style === "theatrical" ||
+                predictionQuery.data.style === "improvised")
             ? predictionQuery.data.confidence
             : null,
-        actualSongCount,
+        actualSongCount: isFestival ? festivalActualSongCount : actualSongCount,
         mediaCount: 0, // photos query is owned by <MediaSection>; we don't double-fetch
         notesTrimmedLength: (show.notes ?? "").trim().length,
       }),
-    [actualSongCount, isPast, predictionQuery.data, show.notes],
+    [
+      actualSongCount,
+      festivalActualSongCount,
+      festivalHeadlinerConfidence,
+      isFestival,
+      isPast,
+      predictionQuery.data,
+      show.notes,
+    ],
   );
 
   const headlinerName = getHeadliner(show);
@@ -325,8 +428,12 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
   const isUnsupportedKind =
     show.kind !== "concert" && show.kind !== "festival";
   const isProduction = isProductionShow(showLikeForGate);
+  // Festivals route to the multi-artist FestivalSetlistTab regardless
+  // of an individual artist's prediction style, so the
+  // setlist-style-gate logic below only consults the (single-artist)
+  // predictionQuery for non-festival shows.
   const setlistStyle =
-    predictionQuery.data && "style" in predictionQuery.data
+    !isFestival && predictionQuery.data && "style" in predictionQuery.data
       ? predictionQuery.data.style
       : "stable";
 
@@ -352,37 +459,57 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
     setlistStyle === "rotating" ||
     setlistStyle === "theatrical" ||
     setlistStyle === "improvised";
-  const showSetlistTab =
-    !isPast && (isUnsupportedKind || isProduction)
+  // Festivals always show the setlist tab (per-artist predictions are
+  // populated independently). For non-festivals, the gate-blocked
+  // styles still route to the SetlistTabComingSoon placeholder.
+  const showSetlistTab = isFestival
+    ? true
+    : !isPast && (isUnsupportedKind || isProduction)
       ? false
       : !isPast && !setlistStylePassesGate
         ? false
         : true;
-  const setlistPanel =
-    !isPast && (isUnsupportedKind || isProduction) ? (
-      <SetlistTabComingSoon style={show.kind} />
-    ) : !showSetlistTab ? (
-      <SetlistTabComingSoon style={setlistStyle} />
-    ) : (
-      <SetlistTab
-        showId={show.id}
-        isPast={isPast}
-        artistName={headlinerName}
-        prediction={predictionQuery.data ?? null}
-        predictionLoading={predictionQuery.isLoading}
-        actualSongs={actualSongs}
-        hypePlaylistEnabled={hypePlaylistEnabled}
-        musicLayerV2Enabled={musicLayerV2Enabled}
-        badgePayload={badgeQuery.data ?? null}
-        trackPreviews={previewsQuery.data?.previews ?? null}
-        rotatingDisplayEnabled={rotatingDisplayEnabled}
-        rotatingGateBlocked={rotatingGateBlocked}
-        theatricalDisplayEnabled={theatricalDisplayEnabled}
-        theatricalGateBlocked={theatricalGateBlocked}
-        improvisedDisplayEnabled={improvisedDisplayEnabled}
-        improvisedGateBlocked={improvisedGateBlocked}
-      />
-    );
+  const setlistPanel = isFestival ? (
+    <FestivalSetlistTab
+      showId={show.id}
+      isPast={isPast}
+      entries={festivalLineupSetlists}
+      predictionsLoading={festivalPredictionsQuery.isLoading}
+      hypePlaylistEnabled={hypePlaylistEnabled}
+      musicLayerV2Enabled={musicLayerV2Enabled}
+      badgePayload={badgeQuery.data ?? null}
+      trackPreviews={previewsQuery.data?.previews ?? null}
+      rotatingDisplayEnabled={rotatingDisplayEnabled}
+      rotatingGateBlocked={rotatingGateBlocked}
+      theatricalDisplayEnabled={theatricalDisplayEnabled}
+      theatricalGateBlocked={theatricalGateBlocked}
+      improvisedDisplayEnabled={improvisedDisplayEnabled}
+      improvisedGateBlocked={improvisedGateBlocked}
+    />
+  ) : !isPast && (isUnsupportedKind || isProduction) ? (
+    <SetlistTabComingSoon style={show.kind} />
+  ) : !showSetlistTab ? (
+    <SetlistTabComingSoon style={setlistStyle} />
+  ) : (
+    <SetlistTab
+      showId={show.id}
+      isPast={isPast}
+      artistName={headlinerName}
+      prediction={predictionQuery.data ?? null}
+      predictionLoading={predictionQuery.isLoading}
+      actualSongs={actualSongs}
+      hypePlaylistEnabled={hypePlaylistEnabled}
+      musicLayerV2Enabled={musicLayerV2Enabled}
+      badgePayload={badgeQuery.data ?? null}
+      trackPreviews={previewsQuery.data?.previews ?? null}
+      rotatingDisplayEnabled={rotatingDisplayEnabled}
+      rotatingGateBlocked={rotatingGateBlocked}
+      theatricalDisplayEnabled={theatricalDisplayEnabled}
+      theatricalGateBlocked={theatricalGateBlocked}
+      improvisedDisplayEnabled={improvisedDisplayEnabled}
+      improvisedGateBlocked={improvisedGateBlocked}
+    />
+  );
 
   const overviewPanel = (
     <OverviewTab

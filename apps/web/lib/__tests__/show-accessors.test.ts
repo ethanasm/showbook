@@ -152,7 +152,43 @@ test("getHeadlinerId: returns the picked performer's id", () => {
   );
 });
 
+test("getHeadlinerId: festival with a productionName still returns the headliner (per-artist prediction)", () => {
+  assert.equal(
+    getHeadlinerId(
+      show({
+        kind: "festival",
+        productionName: "Bottlerock",
+        showPerformers: [
+          { role: "headliner", sortOrder: 0, performer: { id: "lorde", name: "Lorde" } },
+        ],
+      }),
+    ),
+    "lorde",
+  );
+});
+
 // ── getHeadlinerImageUrl ─────────────────────────────────────────────────
+
+test("getHeadlinerImageUrl: festival with a productionName still routes through the cover proxy", () => {
+  assert.equal(
+    getHeadlinerImageUrl(
+      show({
+        id: "show-fest",
+        kind: "festival",
+        productionName: "Bottlerock",
+        coverImageUrl: "http://poster.png",
+        showPerformers: [
+          {
+            role: "headliner",
+            sortOrder: 0,
+            performer: { id: "lorde", name: "Lorde", imageUrl: "http://lorde.png" },
+          },
+        ],
+      }),
+    ),
+    "/api/show-cover/show-fest",
+  );
+});
 
 test("getHeadlinerImageUrl: production show with id routes through self-heal proxy", () => {
   assert.equal(

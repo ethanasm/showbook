@@ -9,6 +9,7 @@ import {
   getHeadliner,
   getHeadlinerId,
   getSupportPerformers,
+  hasProductionLabel,
   isProductionShow,
   pickHeadliner,
   type ShowLike,
@@ -19,18 +20,21 @@ export {
   getHeadliner,
   getHeadlinerId,
   getSupportPerformers,
+  hasProductionLabel,
+  isProductionShow,
   pickHeadliner,
 };
 export type { ShowLike, ShowPerformerLike };
 
 /**
- * Web-only headliner image accessor. Theatre/festival productions
- * route through `/api/show-cover/<id>` so the cover lazy-resolves on
- * first request (matches the `/api/performer-photo/<id>` pattern).
- * Stays in the web app because it returns a route-relative URL.
+ * Web-only headliner image accessor. Theatre productions AND festivals
+ * with a productionName route through `/api/show-cover/<id>` so the
+ * cover lazy-resolves on first request (matches the
+ * `/api/performer-photo/<id>` pattern). Stays in the web app because
+ * it returns a route-relative URL.
  */
 export function getHeadlinerImageUrl(show: ShowLike): string | null {
-  if (isProductionShow(show)) {
+  if (hasProductionLabel(show)) {
     return show.id
       ? `/api/show-cover/${show.id}`
       : (show.coverImageUrl ?? null);

@@ -45,7 +45,25 @@ export function pickHeadliner(show: ShowLike): ShowPerformerLike | undefined {
   );
 }
 
+/**
+ * "No setlist concept" gate. Theatre productions follow a script;
+ * predictions and per-performer setlists don't apply. Festivals are
+ * NOT production shows even when `productionName` is set ("Bottlerock"
+ * is a label, but the festival still has a multi-artist lineup where
+ * each artist has its own setlist) — for that display behavior see
+ * `hasProductionLabel`.
+ */
 export function isProductionShow(show: ShowLike): boolean {
+  return show.kind === 'theatre' && Boolean(show.productionName);
+}
+
+/**
+ * "Display the productionName as the title and route the cover image
+ * through the show-cover proxy" — covers theatre productions AND
+ * festivals with a productionName. Distinct from `isProductionShow`,
+ * which is the no-setlist gate (theatre-only).
+ */
+export function hasProductionLabel(show: ShowLike): boolean {
   return (
     (show.kind === 'theatre' || show.kind === 'festival') &&
     Boolean(show.productionName)
@@ -53,23 +71,21 @@ export function isProductionShow(show: ShowLike): boolean {
 }
 
 /**
- * Display label for the show's headliner. For theatre/festival rows
- * with a production name, that name is the label (no performer record
- * is canonical). For everything else, falls through the 3-tier
- * headliner fallback and returns the performer name.
+ * Display label for the show's headliner. Theatre productions AND
+ * festivals with a productionName ("Bottlerock") use that name as the
+ * title. For everything else, falls through the 3-tier headliner
+ * fallback and returns the performer name.
  */
 export function getHeadliner(show: ShowLike): string {
-  if (isProductionShow(show)) return show.productionName!;
+  if (hasProductionLabel(show)) return show.productionName!;
   return pickHeadliner(show)?.performer.name ?? 'Unknown Artist';
 }
 
 /**
- * The headliner's performer UUID — or `undefined` for production shows
- * (theatre/festival with a `productionName`, where no performer record
- * is the canonical "headliner"). Setlist-intelligence consumers that
- * need a `performerId` should defensively check for `undefined` and
- * route the request to the cold-empty-state branch when missing,
- * because a production show can't have a predicted setlist anyway.
+ * The headliner's performer UUID — `undefined` only for theatre
+ * productions (where no performer record is canonical). Festivals
+ * return their headliner's id even when a `productionName` is set,
+ * so per-performer prediction works for the festival headliner.
  */
 export function getHeadlinerId(show: ShowLike): string | undefined {
   if (isProductionShow(show)) return undefined;
