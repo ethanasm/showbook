@@ -127,6 +127,10 @@ function toShowCard(row: ShowRow): ShowCardShow {
       month: MONTH_SHORT[d.getMonth()],
       day: String(d.getDate()),
       dow: DOW_SHORT[d.getDay()],
+      // Shows tab provides year context via the sticky section header
+      // (timeline view) and the cursor-year header (month view), so we
+      // skip the per-row year to avoid redundant chrome.
+      year: '',
       seat: row.seat,
       price: row.pricePaid ? `$${row.pricePaid}` : null,
       avatarUrl,
@@ -142,6 +146,7 @@ function toShowCard(row: ShowRow): ShowCardShow {
     month: 'TBD',
     day: '—',
     dow: '',
+    year: '',
     seat: row.seat,
     price: row.pricePaid ? `$${row.pricePaid}` : null,
     avatarUrl,

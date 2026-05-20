@@ -1665,3 +1665,76 @@ describe('far-future show (regression — was returning confidence=0)', () => {
     assert.equal(r.style, 'cold');
   });
 });
+
+describe('untagged-corpus show (regression — Foster the People 0% bug)', () => {
+  // Mirrors the Foster the People case: a far-future show with ~20
+  // real setlists, high consistency ("13 of last 19 shows"), but
+  // setlist.fm coverage doesn't carry a `tourId` on the rows — common
+  // for festival-circuit artists and artists between named tours. The
+  // old code took the empty `tierA` path through computeConfidence and
+  // returned 0%, even though the corpus was clearly informative.
+  const target = '2026-09-11';
+  const now = new Date('2026-05-20T12:00:00Z');
+  const core = [
+    'Helena Beat',
+    'Lost in Space',
+    'Houdini',
+    'Pseudologia Fantastica',
+    'Call It What You Want',
+    "Lamb's Wool",
+  ];
+
+  function buildCorpus(): CorpusRow[] {
+    const corpus: CorpusRow[] = [];
+    // 19 real setlists, none tagged with a tour, spread across the
+    // last ~3 months. Each plays the full core (high Jaccard).
+    for (let i = 0; i < 19; i++) {
+      corpus.push(
+        corpusRow({
+          id: `ftp-${i}`,
+          date: offsetDate('2026-05-18', -(2 * (i + 1))),
+          tourId: null,
+          tourName: null,
+          songs: core,
+        }),
+      );
+    }
+    return corpus;
+  }
+
+  test('produces non-zero confidence despite no tour tag', () => {
+    const r = predictSetlist({ performerId: 'p', targetDate: target, corpus: buildCorpus(), now });
+    if (r.style !== 'stable') throw new Error('expected stable');
+    assert.ok(r.confidence > 0, `expected > 0, got ${r.confidence}`);
+  });
+
+  test('hits the last_year confidence cap (≈0.5) for a coherent untagged corpus', () => {
+    const r = predictSetlist({ performerId: 'p', targetDate: target, corpus: buildCorpus(), now });
+    if (r.style !== 'stable') throw new Error('expected stable');
+    // Density saturates (6+ recent setlists), consistency saturates
+    // (identical setlists), recency hits 0 because target is ~115d
+    // from the latest setlist → raw confidence ~0.8, then capped to
+    // 0.5 by the `last_year` coverage rule.
+    assert.ok(
+      Math.abs(r.confidence - 0.5) < 0.01,
+      `expected ~0.5 (last_year cap), got ${r.confidence}`,
+    );
+  });
+
+  test('coverage stays last_year (no active tour was detected)', () => {
+    const r = predictSetlist({ performerId: 'p', targetDate: target, corpus: buildCorpus(), now });
+    if (r.style !== 'stable') throw new Error('expected stable');
+    assert.equal(r.tourCoverage, 'last_year');
+    assert.equal(r.tourId, null);
+    assert.equal(r.tourName, null);
+  });
+
+  test('core songs still surface in the core bucket', () => {
+    const r = predictSetlist({ performerId: 'p', targetDate: target, corpus: buildCorpus(), now });
+    if (r.style !== 'stable') throw new Error('expected stable');
+    const coreSet = new Set(r.core.map((s) => s.title.toLowerCase()));
+    for (const title of core) {
+      assert.ok(coreSet.has(title.toLowerCase()), `expected ${title} in core`);
+    }
+  });
+});
