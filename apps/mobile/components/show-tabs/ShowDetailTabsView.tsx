@@ -560,14 +560,19 @@ function HeaderStrip({ show }: { show: ShowDetail }): React.JSX.Element {
     .filter((p) => !isVenuePlaceholder(p))
     .join(' · ');
 
-  // Top-right image renders the venue for solo-artist kinds (concert /
-  // comedy). The headliner already appears in the LINEUP row below, so
-  // showing it again here doubles up; the venue photo carries new
-  // information and reinforces the "where" alongside the "who" in the
-  // title. Festivals span many artists and theatre titles are
-  // productions, so we keep the image hidden for those.
-  const showVenueImage = show.kind === 'concert' || show.kind === 'comedy';
-  const venueImage = showVenueImage ? venueImageSource(show.venue, token) : null;
+  // Top-right image renders the venue across kinds. For concerts /
+  // comedy the headliner already appears in the LINEUP row below, so
+  // doubling up the artist photo here adds nothing; the venue photo
+  // reinforces "where" alongside the "who" in the title and falls back
+  // to a kind-coloured monogram. Festivals span many artists and
+  // theatre titles are productions — both are venue-anchored, so the
+  // venue photo carries the same "where" signal, but a monogram would
+  // just repeat the title text. For those two kinds we render the
+  // photo only when one is actually linked and otherwise leave the
+  // top-right blank.
+  const venueImage = venueImageSource(show.venue, token);
+  const monogramOk = show.kind === 'concert' || show.kind === 'comedy';
+  const showVenueImage = monogramOk || venueImage !== null;
 
   return (
     <View

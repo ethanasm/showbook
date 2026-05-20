@@ -139,10 +139,12 @@ function heroImageSource(
   row: ShowsListItem,
   token: string | null,
 ): { uri: string; headers?: Record<string, string> } | null {
-  // Festivals get the kind-coloured monogram treatment — using a lineup
-  // member's photo on the full-bleed hero misrepresents the event.
+  // Festivals span many artists — borrowing a lineup member's photo
+  // misrepresents the event. The venue itself carries the right "where"
+  // signal (Napa Valley Expo, Golden Gate Park, etc.); fall through to
+  // the kind-coloured monogram when no venue photo is linked.
   if (row.kind === 'festival') {
-    return null;
+    return venueImageSource(row.venue, token);
   }
   const headlinerSp = [...row.showPerformers]
     .filter((sp) => sp.role === 'headliner')
