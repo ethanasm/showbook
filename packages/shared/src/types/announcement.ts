@@ -9,7 +9,7 @@ export interface Announcement {
   support?: string[] | null;
   showDate: string;
   onSaleDate?: Date | null;
-  onSaleStatus: 'announced' | 'on_sale' | 'sold_out';
+  onSaleStatus: 'announced' | 'presale' | 'on_sale' | 'sold_out';
   source: 'ticketmaster' | 'manual';
   sourceEventId?: string | null;
   discoveredAt: Date;

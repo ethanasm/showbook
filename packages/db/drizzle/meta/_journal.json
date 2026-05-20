@@ -358,6 +358,13 @@
       "when": 1795968240000,
       "tag": "0050_prune_past_announcements",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1795968300000,
+      "tag": "0051_presale_on_sale_status",
+      "breakpoints": true
     }
   ]
 }
