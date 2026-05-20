@@ -8,7 +8,7 @@
  *   - UPCOMING — the remaining dated upcoming shows after the hero,
  *     sorted by date regardless of ticketed/watching state. Matches the
  *     "N on deck" count in the header.
- *   - RECENTLY ADDED — last 3 past shows by date
+ *   - RECENTLY ATTENDED — last 3 past shows by date
  *   - WISHLIST — watching shows without a date (TBD entries) only;
  *     dated watching shows already appear in Upcoming.
  *
@@ -335,7 +335,7 @@ export default function HomeScreen(): React.JSX.Element {
             ) : null}
 
             {sections.recent.length > 0 ? (
-              <Section title="Recently added">
+              <Section title="Recently attended">
                 {sections.recent.map((s) => (
                   <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
                 ))}
