@@ -882,7 +882,26 @@ export function predictSetlist(opts: {
   const buckets = bucketByProbability({ songs, latestTierADate: latestTierA, aggregates: totals });
 
   const realTierA = tierA.filter((s) => !s.isSynthetic);
-  const confidence = computeConfidence({ tierA: realTierA, targetDate: opts.targetDate });
+  // When no active tour was detected, `bucketTiers` parks every real
+  // setlist in Tier-E (only synthetic album-drop rows get Tier-A), so
+  // `realTierA` is empty and `computeConfidence` collapses to 0% even
+  // when the corpus is rich and consistent. This is common for
+  // festival-circuit artists (no `tourId` on setlist.fm), one-off
+  // appearances, or sparse coverage. Fall back to a date-based sample:
+  // real setlists within ±30d of the bucketing date. Coverage stays
+  // `last_year` (still capped at 0.5) because we still couldn't label
+  // an active tour, so this only fixes the floor — it can't
+  // accidentally promote a band to `active_tour` confidence.
+  let confidenceSample = realTierA;
+  if (confidenceSample.length === 0) {
+    const bucketingTs = new Date(bucketingDate).getTime();
+    confidenceSample = tier.filter((s) => {
+      if (s.isSynthetic) return false;
+      const distance = Math.abs(new Date(s.performanceDate).getTime() - bucketingTs) / MS_PER_DAY;
+      return distance <= TIER_A_DAYS;
+    });
+  }
+  const confidence = computeConfidence({ tierA: confidenceSample, targetDate: opts.targetDate });
   const coverage = resolveCoverage({
     activeTourId,
     tierACount: realTierA.length,
