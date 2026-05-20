@@ -27,7 +27,29 @@ screenshots) and triggers the `pr-screenshots` skill if so.
 
 ## Loop
 
-### 1. Push the branch
+### 1. Merge latest `main` into the branch
+
+Before pushing, fetch and merge the current `origin/main` into the
+working branch so the PR is reviewed against (and CI runs against) an
+up-to-date base — and so we catch interaction conflicts locally
+instead of in CI:
+
+```
+git fetch origin main
+git merge origin/main --no-edit
+```
+
+If `git merge` reports conflicts, resolve them, re-stage, and commit
+the merge before continuing. If the merge pulls in meaningful changes
+(non-trivial diff outside the branch's own files), re-run
+`pnpm verify` so the local gate still reflects what's about to ship.
+
+The web sandbox checkout is a shallow clone — `git fetch origin main`
+brings in just the commits needed for the merge base. Don't
+`git fetch --unshallow`; don't rebase onto main; don't merge from a
+non-`origin` remote.
+
+### 2. Push the branch
 
 ```
 git push -u origin <branch>
@@ -37,7 +59,7 @@ If the push fails on a network error, retry up to 4× with exponential
 backoff (2s, 4s, 8s, 16s). Don't retry on non-network failures — debug
 those first.
 
-### 2. Open the PR
+### 3. Open the PR
 
 Use `mcp__github__create_pull_request`. Constraints:
 
@@ -49,7 +71,7 @@ Use `mcp__github__create_pull_request`. Constraints:
 
 Tell the user the PR URL as soon as it's created.
 
-### 3. Attach visual review material if the diff touches UI
+### 4. Attach visual review material if the diff touches UI
 
 Run `git diff --name-only main...HEAD` (or against the PR base) and
 match against:
@@ -62,7 +84,7 @@ If anything matches, invoke the `pr-screenshots` skill and pass it the
 PR number and the matched scope (`web`, `mobile`, or both). It handles
 capture + hosting + PR-body update. If nothing matches, skip.
 
-### 4. Subscribe to CI activity
+### 5. Subscribe to CI activity
 
 ```
 mcp__github__subscribe_pr_activity { owner: "ethanasm", repo: "showbook", pullNumber: <n> }
@@ -71,7 +93,7 @@ mcp__github__subscribe_pr_activity { owner: "ethanasm", repo: "showbook", pullNu
 Events arrive wrapped in `<github-webhook-activity>` tags. While CI
 runs you can move on to other work.
 
-### 5. React to events
+### 6. React to events
 
 When a failure event arrives:
 

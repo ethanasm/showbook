@@ -10,24 +10,24 @@ test.describe('Map improvements', () => {
     await loginAndSeed(page);
   });
 
-  test('map shows the five new view preset buttons', async ({ page }) => {
+  test('map shows the user’s followed-region preset buttons', async ({ page }) => {
     await page.goto('/map');
     // The map view is dynamically imported with ssr:false; first hit on a
     // fresh dev server takes longer to compile + hydrate. Wait for one of
     // the preset buttons to actually show up rather than a fixed sleep.
-    await expect(page.getByRole('button', { name: 'Bay Area' })).toBeVisible({ timeout: 30000 });
-
-    await expect(page.getByRole('button', { name: 'LA' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Oregon' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'NYC' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'World' })).toBeVisible();
+    // The worker fixture seeds two active regions: New York + Brooklyn.
+    await expect(page.getByRole('button', { name: 'New York' })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole('button', { name: 'Brooklyn' })).toBeVisible();
   });
 
-  test('old Northeast preset is gone', async ({ page }) => {
+  test('old hardcoded view presets are gone', async ({ page }) => {
     await page.goto('/map');
-    // Wait for the preset row to be present, then verify Northeast is absent.
-    await expect(page.getByRole('button', { name: 'NYC' })).toBeVisible({ timeout: 10000 });
-    await expect(page.getByRole('button', { name: 'Northeast' })).not.toBeVisible();
+    // Wait for the followed-regions toggle to mount, then verify none of
+    // the pre-2026-05-20 hardcoded labels leaked through.
+    await expect(page.getByRole('button', { name: 'New York' })).toBeVisible({ timeout: 10000 });
+    for (const label of ['Bay Area', 'LA', 'Oregon', 'NYC', 'World', 'Northeast']) {
+      await expect(page.getByRole('button', { name: label })).not.toBeVisible();
+    }
   });
 
   test('"Watch upcoming" button is absent from venue side panel', async ({ page }) => {
