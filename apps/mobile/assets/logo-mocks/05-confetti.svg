@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="sgrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFE08A"/>
+      <stop offset="100%" stop-color="#E5A800"/>
+    </linearGradient>
+    <!-- Four-point sparkle, scaled when used -->
+    <symbol id="sparkle" viewBox="-50 -50 100 100">
+      <path d="M 0 -50 C 6 -16 16 -6 50 0 C 16 6 6 16 0 50 C -6 16 -16 6 -50 0 C -16 -6 -6 -16 0 -50 Z"/>
+    </symbol>
+  </defs>
+  <rect width="1024" height="1024" fill="#0C0C0C"/>
+  <!-- Confetti scattered around the S, varying sizes / rotations -->
+  <g fill="#FFD166">
+    <use href="#sparkle" x="200" y="240" width="80"  height="80"  transform="rotate(15 240 280)"/>
+    <use href="#sparkle" x="780" y="220" width="56"  height="56"  transform="rotate(-10 808 248)"/>
+    <use href="#sparkle" x="820" y="540" width="44"  height="44"/>
+    <use href="#sparkle" x="160" y="640" width="64"  height="64"  transform="rotate(20 192 672)"/>
+    <use href="#sparkle" x="740" y="800" width="72"  height="72"  transform="rotate(-18 776 836)"/>
+    <use href="#sparkle" x="380" y="170" width="36"  height="36"/>
+    <use href="#sparkle" x="600" y="860" width="40"  height="40"  transform="rotate(25 620 880)"/>
+  </g>
+  <!-- Little dot confetti -->
+  <g fill="#FFD166">
+    <circle cx="340" cy="800" r="12"/>
+    <circle cx="700" cy="160" r="10"/>
+    <circle cx="880" cy="420" r="9"/>
+    <circle cx="120" cy="480" r="11"/>
+    <circle cx="500" cy="120" r="8"/>
+    <circle cx="500" cy="920" r="9"/>
+  </g>
+  <!-- Short tilted bars -->
+  <g fill="#FFD166" opacity="0.85">
+    <rect x="270" y="370" width="32" height="10" rx="5" transform="rotate(35 286 375)"/>
+    <rect x="720" y="380" width="32" height="10" rx="5" transform="rotate(-30 736 385)"/>
+    <rect x="280" y="610" width="32" height="10" rx="5" transform="rotate(-25 296 615)"/>
+    <rect x="720" y="620" width="32" height="10" rx="5" transform="rotate(40 736 625)"/>
+  </g>
+  <!-- The S, bold and centered -->
+  <text x="512" y="668" font-family="Liberation Sans, DejaVu Sans, Arial, sans-serif"
+        font-weight="900" font-size="560" fill="#FFD166" text-anchor="middle"
+        letter-spacing="-20">S</text>
+</svg>

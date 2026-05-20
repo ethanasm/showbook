@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="bulb" cx="0.35" cy="0.32" r="0.75">
+      <stop offset="0%" stop-color="#FFF1B8"/>
+      <stop offset="55%" stop-color="#FFD166"/>
+      <stop offset="100%" stop-color="#C99127"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#FFD166" stop-opacity="0.35"/>
+      <stop offset="60%" stop-color="#FFD166" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#FFD166" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="#0C0C0C"/>
+  <!-- Glow halos behind each bulb position. The bulbs trace an S along a
+       parametric path; positions hand-tuned for a smooth, readable curve. -->
+  <g>
+    <g transform="translate(720 280)"><circle r="120" fill="url(#glow)"/></g>
+    <g transform="translate(564 264)"><circle r="120" fill="url(#glow)"/></g>
+    <g transform="translate(408 296)"><circle r="120" fill="url(#glow)"/></g>
+    <g transform="translate(296 376)"><circle r="120" fill="url(#glow)"/></g>
+    <g transform="translate(284 488)"><circle r="120" fill="url(#glow)"/></g>
+    <g transform="translate(376 552)"><circle r="120" fill="url(#glow)"/></g>
+    <g transform="translate(516 600)"><circle r="120" fill="url(#glow)"/></g>
+    <g transform="translate(652 656)"><circle r="120" fill="url(#glow)"/></g>
+    <g transform="translate(740 736)"><circle r="120" fill="url(#glow)"/></g>
+    <g transform="translate(728 832)"><circle r="120" fill="url(#glow)"/></g>
+    <g transform="translate(612 856)"><circle r="120" fill="url(#glow)"/></g>
+    <g transform="translate(464 832)"><circle r="120" fill="url(#glow)"/></g>
+    <g transform="translate(328 776)"><circle r="120" fill="url(#glow)"/></g>
+  </g>
+  <!-- Bulbs themselves -->
+  <g>
+    <circle cx="720" cy="280" r="42" fill="url(#bulb)"/>
+    <circle cx="564" cy="264" r="42" fill="url(#bulb)"/>
+    <circle cx="408" cy="296" r="42" fill="url(#bulb)"/>
+    <circle cx="296" cy="376" r="42" fill="url(#bulb)"/>
+    <circle cx="284" cy="488" r="42" fill="url(#bulb)"/>
+    <circle cx="376" cy="552" r="42" fill="url(#bulb)"/>
+    <circle cx="516" cy="600" r="42" fill="url(#bulb)"/>
+    <circle cx="652" cy="656" r="42" fill="url(#bulb)"/>
+    <circle cx="740" cy="736" r="42" fill="url(#bulb)"/>
+    <circle cx="728" cy="832" r="42" fill="url(#bulb)"/>
+    <circle cx="612" cy="856" r="42" fill="url(#bulb)"/>
+    <circle cx="464" cy="832" r="42" fill="url(#bulb)"/>
+    <circle cx="328" cy="776" r="42" fill="url(#bulb)"/>
+  </g>
+</svg>

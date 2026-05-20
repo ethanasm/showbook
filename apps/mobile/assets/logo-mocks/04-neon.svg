@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="22" result="blur1"/>
+      <feMerge>
+        <feMergeNode in="blur1"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="halo" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="40"/>
+    </filter>
+  </defs>
+  <rect width="1024" height="1024" fill="#0C0C0C"/>
+  <!-- Soft warm wash behind the neon -->
+  <g opacity="0.45" filter="url(#halo)">
+    <path d="
+      M 760 320
+      C 760 220, 600 200, 512 250
+      C 380 320, 380 460, 512 512
+      C 644 564, 644 704, 512 774
+      C 424 824, 264 804, 264 704"
+      stroke="#FFD166" stroke-width="120" fill="none" stroke-linecap="round"/>
+  </g>
+  <!-- Outer warm halo stroke -->
+  <path d="
+    M 760 320
+    C 760 220, 600 200, 512 250
+    C 380 320, 380 460, 512 512
+    C 644 564, 644 704, 512 774
+    C 424 824, 264 804, 264 704"
+    stroke="#FFD166" stroke-width="98" fill="none" stroke-linecap="round" opacity="0.45" filter="url(#glow)"/>
+  <!-- Bright inner neon tube -->
+  <path d="
+    M 760 320
+    C 760 220, 600 200, 512 250
+    C 380 320, 380 460, 512 512
+    C 644 564, 644 704, 512 774
+    C 424 824, 264 804, 264 704"
+    stroke="#FFE08A" stroke-width="44" fill="none" stroke-linecap="round"/>
+  <!-- Hot core highlight -->
+  <path d="
+    M 760 320
+    C 760 220, 600 200, 512 250
+    C 380 320, 380 460, 512 512
+    C 644 564, 644 704, 512 774
+    C 424 824, 264 804, 264 704"
+    stroke="#FFFBE6" stroke-width="14" fill="none" stroke-linecap="round"/>
+  <!-- Endpoint "caps" suggesting neon connectors -->
+  <circle cx="760" cy="320" r="22" fill="#0C0C0C" stroke="#FFD166" stroke-width="6"/>
+  <circle cx="264" cy="704" r="22" fill="#0C0C0C" stroke="#FFD166" stroke-width="6"/>
+</svg>

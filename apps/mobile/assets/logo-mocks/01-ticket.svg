@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="tg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFE08A"/>
+      <stop offset="100%" stop-color="#E5A800"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="#0C0C0C"/>
+  <g transform="rotate(-8 512 512)">
+    <!-- Ticket: rounded rect with two half-circle notches on the LEFT and RIGHT
+         edges (vertical centers). Body is the gold gradient. -->
+    <path fill="url(#tg)" fill-rule="evenodd" d="
+      M 192 248
+      H 832
+      A 60 60 0 0 1 892 308
+      V 460
+      A 56 56 0 0 0 836 516
+      A 56 56 0 0 0 892 572
+      V 716
+      A 60 60 0 0 1 832 776
+      H 192
+      A 60 60 0 0 1 132 716
+      V 572
+      A 56 56 0 0 0 188 516
+      A 56 56 0 0 0 132 460
+      V 308
+      A 60 60 0 0 1 192 248
+      Z"/>
+    <!-- Bold cut-out "S" centered in the ticket body -->
+    <text x="512" y="610" font-family="Liberation Sans, DejaVu Sans, Arial, sans-serif"
+          font-weight="900" font-size="440" fill="#0C0C0C" text-anchor="middle"
+          letter-spacing="-14">S</text>
+    <!-- "ADMIT ONE" detail strip on the right of the ticket stub -->
+    <g transform="translate(800 512) rotate(-90)" fill="#0C0C0C" opacity="0.55">
+      <text x="0" y="6" font-family="Liberation Sans, DejaVu Sans, Arial, sans-serif"
+            font-weight="700" font-size="36" text-anchor="middle"
+            letter-spacing="6">ADMIT ONE</text>
+    </g>
+  </g>
+</svg>
