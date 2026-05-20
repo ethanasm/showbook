@@ -24,6 +24,7 @@ import {
   UploadHttpError,
   looksLikeQuotaMessage,
 } from './errors';
+import { normalizeForUpload, type NormalizerDeps } from './heic';
 import type {
   MediaAssetDto,
   SelectedFile,
@@ -50,6 +51,8 @@ export interface UploadOptions {
   baseBackoffMs?: number;
   /** Sleep impl override — used by tests to skip the wall clock. */
   sleepImpl?: (ms: number) => Promise<void>;
+  /** Image-manipulator override — used by tests to skip native modules. */
+  normalizerDeps?: NormalizerDeps;
 }
 
 const DEFAULT_MAX_RETRIES = 3;
@@ -297,11 +300,13 @@ async function readFileAsBlob(
   const res = await fetchImpl(uri);
   if (!res.ok) throw new Error(`Failed to read source file: ${res.status}`);
   const blob = await res.blob();
-  // Some platforms return a blob with type=''; ensure mimeType for S3.
-  if (!blob.type) {
-    return new Blob([blob], { type: mimeType });
-  }
-  return blob;
+  // Always re-wrap with the intended mimeType, even when `blob.type` is set.
+  // On iOS, `fetch('file://…HEIC')` returns a blob whose `type` is
+  // `application/octet-stream` (no system MIME mapping for HEIC), and when
+  // a Blob body is passed to `fetch` RN can use `blob.type` in place of the
+  // explicit `Content-Type` header — which mismatches the value the
+  // presigned R2 URL was signed for and produces a 403 SignatureDoesNotMatch.
+  return new Blob([blob], { type: mimeType });
 }
 
 /**
@@ -349,6 +354,7 @@ export async function uploadFile(
   // the failure was. These markers let us locate the exact failing stage
   // in Axiom without rebuilding the app.
   const t0 = Date.now();
+  const originalMimeType = file.mimeType;
   reportClientEvent({
     event: 'upload.start',
     level: 'warn',
@@ -360,6 +366,42 @@ export async function uploadFile(
       bytes: file.bytes,
     },
   });
+
+  // HEIC normalization. iPhone photos arrive as HEIC; we re-encode to JPEG
+  // so (a) the presigned-URL Content-Type matches what RN actually PUTs
+  // (HEIC blobs come back from `fetch(file://)` as application/octet-stream
+  // on iOS, breaking the signature), and (b) the web client can render the
+  // photo at all (Chrome / Firefox don't support HEIC). Non-HEIC files
+  // pass through unchanged.
+  try {
+    file = await normalizeForUpload(file, opts.normalizerDeps);
+  } catch (err) {
+    if (!isUserCancellation(err)) {
+      reportClientEvent({
+        event: 'upload.failed_at',
+        level: 'error',
+        message: describeError(err),
+        context: {
+          stage: 'normalize',
+          mimeType: originalMimeType,
+          elapsedMs: Date.now() - t0,
+        },
+      });
+    }
+    throw err;
+  }
+  if (file.mimeType !== originalMimeType) {
+    reportClientEvent({
+      event: 'upload.normalized',
+      level: 'warn',
+      message: 'source re-encoded for upload',
+      context: {
+        from: originalMimeType,
+        to: file.mimeType,
+        bytes: file.bytes,
+      },
+    });
+  }
 
   let intent: UploadIntentResult;
   try {

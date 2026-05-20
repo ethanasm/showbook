@@ -44,6 +44,7 @@ const WEB_SHIMS = {
     'web-shims/expo-auth-session-google.js',
   ),
   'expo-image-picker': path.resolve(projectRoot, 'web-shims/expo-image-picker.js'),
+  'expo-image-manipulator': path.resolve(projectRoot, 'web-shims/expo-image-manipulator.js'),
   'expo-media-library': path.resolve(projectRoot, 'web-shims/expo-media-library.js'),
   'expo-location': path.resolve(projectRoot, 'web-shims/expo-location.js'),
   'expo-notifications': path.resolve(projectRoot, 'web-shims/expo-notifications.js'),
