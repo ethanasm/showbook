@@ -25,11 +25,7 @@ if (!packageDir) {
 }
 
 const PER_TEST_TIMEOUT_MS = Number(process.env.INTEGRATION_PER_TEST_TIMEOUT_MS ?? 60_000);
-// Bumped from 5 → 10 min once `--test-concurrency=1` started serializing
-// the files inside each package. The api package alone has ~16 files;
-// at ~20-30s each the serial wall clock now lives in the 5-7 min band
-// and was occasionally tripping the old 5-min batch kill.
-const BATCH_TIMEOUT_MS = Number(process.env.INTEGRATION_BATCH_TIMEOUT_MS ?? 600_000);
+const BATCH_TIMEOUT_MS = Number(process.env.INTEGRATION_BATCH_TIMEOUT_MS ?? 300_000);
 
 const testsDir = join(REPO_ROOT, packageDir, 'src/__tests__');
 if (!existsSync(testsDir)) {
@@ -53,19 +49,11 @@ console.log(
 );
 
 const lcovOut = process.env.LCOV_OUT;
-// Integration test files share a single Postgres database (we don't
-// spin up a per-file schema), so any file that calls a job function
-// with an UNQUALIFIED delete (`runPruneOrphanCatalog`,
-// `runPrunePastAnnouncements`, etc.) can wipe rows seeded by a sibling
-// file running concurrently. `--test-concurrency=1` runs files in
-// sequence within the same node:test process so the within-file
-// `beforeEach(cleanup)` is the only writer at any moment.
 const nodeArgs = [
   '--import',
   'tsx',
   '--test',
   `--test-timeout=${PER_TEST_TIMEOUT_MS}`,
-  '--test-concurrency=1',
   '--test-reporter=spec',
   '--test-reporter-destination=stdout',
 ];
