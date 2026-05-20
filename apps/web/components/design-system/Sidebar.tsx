@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { type ComponentType, useEffect, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
+import { ShowbookMark } from "./ShowbookMark";
 
 export interface NavItem {
   id: string;
@@ -122,14 +123,16 @@ export function Sidebar({
 
   return (
     <aside className="sidebar">
-      {/* Logo */}
+      {/* Brand */}
       <div className="sidebar__header">
         <button
           className="sidebar__logo"
           type="button"
           onClick={() => onNavigate?.("home")}
+          aria-label="Showbook home"
         >
-          showbook
+          <ShowbookMark size={26} className="sidebar__logo-mark" />
+          <span className="sidebar__logo-text">showbook</span>
         </button>
         <span className="sidebar__version">v2 &middot; 2026.04</span>
       </div>

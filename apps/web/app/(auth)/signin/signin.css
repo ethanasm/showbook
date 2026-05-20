@@ -188,12 +188,21 @@
 .signin__brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 12px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--muted);
+  gap: 12px;
+  color: var(--ink);
+}
+
+.signin__brand-mark {
+  display: block;
+  flex-shrink: 0;
+}
+
+.signin__brand-text {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.6px;
+  line-height: 1;
 }
 
 .signin__hero {

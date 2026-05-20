@@ -1,11 +1,12 @@
 import type { ExpoConfig } from 'expo/config';
 
-// Asset files in ./assets are 1x1 PNG placeholders for development. Before
-// shipping to TestFlight / App Store / Play Store, replace icon.png with
-// 1024x1024, splash.png + splash-dark.png at proper resolution, and
-// adaptive-icon.png with 432x432 foreground per platform guidelines. The
-// expo-splash-screen plugin below picks up the dark variant automatically
-// when the device is in dark mode.
+// Asset files in ./assets are the production brand assets — the gold
+// ticket BrandMark. icon.png is 1024×1024 with the #0C0C0C background
+// baked in; adaptive-icon.png is the same foreground on transparent so
+// Android can composite it over the bg color below; splash.png is
+// 1284×2778 (iPhone 14 Pro Max) and resizeMode 'cover' trims it on
+// smaller devices. The source SVG + render script live under
+// `assets/logo-mocks/` so the masters stay revisable.
 //
 // Google Maps API key (used by react-native-maps on the Map tab):
 //   EXPO_PUBLIC_GOOGLE_MAPS_API_KEY  — single key sourced from the user's

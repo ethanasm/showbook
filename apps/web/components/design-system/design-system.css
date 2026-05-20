@@ -151,19 +151,6 @@ button:active:not(:disabled) {
   color: transparent;
 }
 
-.brand-mark {
-  width: 22px;
-  height: 22px;
-  border-radius: 5px;
-  background: var(--accent);
-  display: grid;
-  place-items: center;
-  color: var(--accent-text);
-  font-weight: 800;
-  font-size: 13px;
-  font-family: var(--font-geist-sans), sans-serif;
-}
-
 .kind-chip {
   display: inline-flex;
   align-items: center;
@@ -912,6 +899,9 @@ a.show-row__support-link:hover {
 }
 
 .sidebar__logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-family: var(--font-geist-sans), sans-serif;
   font-size: 19px;
   font-weight: 600;
@@ -922,10 +912,29 @@ a.show-row__support-link:hover {
   padding: 0;
   cursor: pointer;
   text-align: left;
+  line-height: 1;
+}
+
+.sidebar__logo-mark {
+  display: block;
+  /* The mark already has a 6deg tilt baked in; the wordmark sits on the
+     true baseline, so nudge the icon down ~1px for visual alignment. */
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
+.sidebar__logo-text {
+  display: inline-block;
 }
 
 .sidebar__logo:hover {
-  opacity: 0.7;
+  opacity: 0.75;
+}
+
+.sidebar__logo:hover .sidebar__logo-mark {
+  /* Subtle wiggle on hover — the only place the ticket gets to move. */
+  transform: rotate(-3deg);
+  transition: transform 200ms ease-out;
 }
 
 .sidebar__version {

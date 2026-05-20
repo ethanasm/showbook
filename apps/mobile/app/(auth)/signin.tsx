@@ -5,9 +5,9 @@
  *   - "Now playing · your shows" eyebrow with accent dot
  *   - StackedCards (the same crooked-rows decoration used in empty states)
  *     to give a sense of what the app does without showing real data
- *   - Brand block: small `S` accent square logo, eyebrow, hero title with
- *     accent-colored ", worth remembering.", subtitle, kind badges row,
- *     "Sign in with Google" button, and footer fine-print.
+ *   - Brand block: gold-ticket BrandMark + `showbook` wordmark, eyebrow,
+ *     hero title with accent-colored ", worth remembering.", subtitle,
+ *     kind badges row, "Sign in with Google" button, and footer fine-print.
  *
  * The Google logo: the design uses a CSS conic-gradient which RN doesn't
  * support. We render a simple grey square with a "G" mark instead — close
@@ -27,6 +27,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Redirect } from 'expo-router';
 import { useTheme } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
+import { BrandMark } from '../../components/BrandMark';
 import { KindBadge } from '../../components/KindBadge';
 import { StackedCards } from '../../components/design-system';
 
@@ -59,8 +60,9 @@ export default function SignInScreen(): React.JSX.Element {
 
         {/* Brand + sign-in block */}
         <View style={styles.brandBlock}>
-          <View style={[styles.logo, { backgroundColor: colors.accent }]}>
-            <Text style={[styles.logoText, { color: colors.accentText }]}>S</Text>
+          <View style={styles.brandRow}>
+            <BrandMark size={36} />
+            <Text style={[styles.wordmark, { color: colors.ink }]}>showbook</Text>
           </View>
 
           <Text style={[styles.eyebrow, { color: colors.muted }]}>PERSONAL LIVE-SHOW TRACKER</Text>
@@ -159,17 +161,16 @@ const styles = StyleSheet.create({
     gap: 16,
     marginTop: 8,
   },
-  logo: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
+  brandRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 10,
   },
-  logoText: {
+  wordmark: {
     fontFamily: 'Geist Sans',
-    fontSize: 16,
+    fontSize: 22,
     fontWeight: '700',
+    letterSpacing: -0.5,
   },
   heroLine: {
     fontFamily: 'Geist Sans',
