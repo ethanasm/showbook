@@ -1,4 +1,4 @@
-name: Deploy (prod)
+name: Web Deploy (prod)
 
 # Continuous deployment for the self-hosted prod box.
 #

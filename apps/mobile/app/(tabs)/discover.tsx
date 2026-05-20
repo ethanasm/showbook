@@ -76,6 +76,7 @@ import {
 } from '../../lib/discover-watch';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
+import { PickPerformanceDateSheet } from '../../components/PickPerformanceDateSheet';
 
 type UtilsClient = ReturnType<typeof trpc.useUtils>['client'];
 type FollowedFeed = RouterOutput<UtilsClient['discover']['followedFeed']['query']>;
@@ -109,6 +110,32 @@ function parseDate(iso: string): { month: string; day: string; year: string; dow
   const month = MONTHS[mo - 1] ?? '—';
   const dow = DOWS[local.getDay()] ?? '';
   return { month, day: String(d), year: String(y), dow };
+}
+
+/**
+ * Multi-night runs (e.g. Phantom of the Opera at the Orpheum) carry a
+ * `runStartDate` / `runEndDate` window and a full `performanceDates`
+ * array. Single-night events have start === end. Mirrors the web
+ * `isRun` predicate in `apps/web/app/(app)/discover/types.ts`.
+ */
+function isRun(item: AnnouncementItem | NearbyAnnouncementItem): boolean {
+  return (
+    !!item.runStartDate &&
+    !!item.runEndDate &&
+    item.runStartDate !== item.runEndDate
+  );
+}
+
+function formatRunRange(start: string, end: string): string {
+  const fmt = (iso: string): string => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    if (!m) return iso;
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    const month = MONTHS[mo - 1] ?? '';
+    return `${month} ${d}`;
+  };
+  return `${fmt(start)} – ${fmt(end)}`;
 }
 
 function formatOnSale(value: string | Date | null): string | null {
@@ -819,6 +846,19 @@ function AnnouncementRow({
   const onSaleLabel = ON_SALE_LABEL[item.onSaleStatus];
   const ticketUrl = item.ticketUrl;
   const isSoldOut = item.onSaleStatus === 'sold_out';
+  const runMode = isRun(item);
+  const runRangeLabel =
+    runMode && item.runStartDate && item.runEndDate
+      ? formatRunRange(item.runStartDate, item.runEndDate)
+      : null;
+  // Festivals are a single experience over a date range; multi-night
+  // theatre / comedy / concert runs are N separate performances and
+  // need a date pick. Mirrors `discover.watchlist`'s `isDatePickingRun`
+  // server-side check.
+  const isDatePickingRun = runMode && item.kind !== 'festival';
+  const performanceDates = item.performanceDates ?? [];
+  const performanceCount = performanceDates.length;
+  const [pickDateOpen, setPickDateOpen] = React.useState(false);
   const [cardSize, setCardSize] = React.useState<{ w: number; h: number }>({
     w: 0,
     h: 0,
@@ -830,6 +870,21 @@ function AnnouncementRow({
     );
   }, []);
   const title = item.productionName ?? item.headliner;
+
+  const navigateToAddForm = React.useCallback(
+    (dateHint: string): void => {
+      router.push({
+        pathname: '/add/form',
+        params: {
+          kindHint: item.kind,
+          headliner: item.productionName ?? item.headliner,
+          venueHint: item.venue.name,
+          dateHint,
+        },
+      });
+    },
+    [router, item.kind, item.productionName, item.headliner, item.venue.name],
+  );
   const venueLabel = [item.venue.name, item.venue.city].filter(Boolean).join(' · ');
   const support =
     item.support && item.support.length > 0
@@ -852,6 +907,7 @@ function AnnouncementRow({
   const canWatch = !isNonWatchableKind(item.kind);
 
   return (
+    <>
     <Pressable
       onPress={onPress}
       onLayout={isSoldOut ? onCardLayout : undefined}
@@ -874,13 +930,29 @@ function AnnouncementRow({
         />
       )}
       <View style={styles.cardHeaderRow}>
-        <View style={styles.dateBlock}>
-          <Text style={[styles.dateMonth, { color: colors.muted }]}>{month}</Text>
-          <Text style={[styles.dateDay, { color: colors.ink }]}>{day}</Text>
-          <Text style={[styles.dateYear, { color: colors.muted }]}>
-            {dow ? `${dow} · ${year}` : year}
-          </Text>
-        </View>
+        {runMode && runRangeLabel ? (
+          <View
+            style={styles.dateBlockRun}
+            testID={`discover-row-run-${item.id}`}
+          >
+            <Text style={[styles.dateRunRange, { color: colors.ink }]}>
+              {runRangeLabel}
+            </Text>
+            <Text style={[styles.dateRunSub, { color: colors.muted }]}>
+              {performanceCount > 0
+                ? `${performanceCount} dates · ${year}`
+                : year}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.dateBlock}>
+            <Text style={[styles.dateMonth, { color: colors.muted }]}>{month}</Text>
+            <Text style={[styles.dateDay, { color: colors.ink }]}>{day}</Text>
+            <Text style={[styles.dateYear, { color: colors.muted }]}>
+              {dow ? `${dow} · ${year}` : year}
+            </Text>
+          </View>
+        )}
         <View style={styles.cardBadge}>
           <KindBadge kind={item.kind as Kind} size="sm" />
           {ticketUrl ? (
@@ -1009,15 +1081,17 @@ function AnnouncementRow({
               label="Got ticket"
               onPress={() => {
                 void hapticSelection();
-                router.push({
-                  pathname: '/add/form',
-                  params: {
-                    kindHint: item.kind,
-                    headliner: item.productionName ?? item.headliner,
-                    venueHint: item.venue.name,
-                    dateHint: item.showDate,
-                  },
-                });
+                // Multi-night runs (theatre / comedy / concert) need
+                // the user to pick which night they have tickets for
+                // before we open the form — otherwise we'd silently
+                // default to runStartDate. Festivals are one
+                // experience over a date range, so they skip the
+                // picker and pre-fill the start date as before.
+                if (isDatePickingRun && performanceDates.length > 1) {
+                  setPickDateOpen(true);
+                  return;
+                }
+                navigateToAddForm(item.showDate);
               }}
               accessibilityLabel="Add as ticketed show"
               testID={`discover-row-ticketed-${item.id}`}
@@ -1029,6 +1103,16 @@ function AnnouncementRow({
         </View>
       )}
     </Pressable>
+    {isDatePickingRun && (
+      <PickPerformanceDateSheet
+        open={pickDateOpen}
+        onClose={() => setPickDateOpen(false)}
+        title={title}
+        performanceDates={performanceDates}
+        onPick={(date) => navigateToAddForm(date)}
+      />
+    )}
+    </>
   );
 }
 
@@ -1208,6 +1292,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 6,
+  },
+  dateBlockRun: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 2,
+  },
+  dateRunRange: {
+    fontFamily: 'Geist Sans',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: -0.1,
+  },
+  dateRunSub: {
+    fontFamily: 'Geist Sans',
+    fontSize: 10.5,
+    fontWeight: '600',
+    letterSpacing: 1.05,
+    textTransform: 'uppercase',
   },
   dateMonth: {
     fontFamily: 'Geist Sans',
