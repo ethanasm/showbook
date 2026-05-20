@@ -63,6 +63,7 @@ export default function VenuesListScreen(): React.JSX.Element {
         city: r.city,
         stateRegion: r.stateRegion,
         photoUrl: r.photoUrl,
+        googlePlaceId: r.googlePlaceId,
         showCount: 0,
         isFollowed: true,
       }));
@@ -73,6 +74,7 @@ export default function VenuesListScreen(): React.JSX.Element {
         city: r.city,
         stateRegion: r.stateRegion,
         photoUrl: r.photoUrl,
+        googlePlaceId: r.googlePlaceId,
         showCount: r.pastShowsCount + r.futureShowsCount,
         isFollowed: r.isFollowed,
       }))

@@ -38,6 +38,12 @@ export interface RemoteImageProps {
   style?: StyleProp<ViewStyle>;
   /** Accessible label, defaults to the name. */
   accessibilityLabel?: string;
+  /**
+   * Optional HTTP headers forwarded to expo-image for the upstream fetch.
+   * Used to attach `Authorization: Bearer <jwt>` when proxying through
+   * session-gated routes like /api/venue-photo/<id>.
+   */
+  headers?: Record<string, string>;
 }
 
 function aspectRatio(aspect: Aspect): number {
@@ -61,6 +67,7 @@ export function RemoteImage({
   height,
   style,
   accessibilityLabel,
+  headers,
 }: RemoteImageProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -152,7 +159,7 @@ export function RemoteImage({
 
       {uri && !failed ? (
         <Image
-          source={{ uri }}
+          source={{ uri, headers }}
           style={StyleSheet.absoluteFillObject}
           contentFit="cover"
           contentPosition={contentPosition}
