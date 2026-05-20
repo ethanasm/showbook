@@ -8,8 +8,17 @@ import {
   selectBestImage,
 } from '@showbook/api';
 import { fetchUpstream, isProxyableUrl } from '@/lib/image-proxy';
+import { decodeMobileToken } from '@/lib/mobile-token';
+import { isEmailAllowed, readAllowlistFromEnv } from '@/lib/auth-allowlist';
+import { resolveTrpcSession } from '../../trpc/[trpc]/resolve-session';
 
 const log = child({ component: 'web.api.performer-photo' });
+
+// Mirrors the tRPC handler so the mobile app — which authenticates with a
+// Bearer JWT minted via /api/auth/mobile-token rather than a NextAuth cookie
+// — can load performer photos through the same lazy-resolving proxy the
+// web uses.
+const AUTH_SECRET = process.env.AUTH_SECRET;
 
 function normalizeName(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -72,10 +81,23 @@ async function persistImage(
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ performerId: string }> },
 ) {
-  const session = await auth();
+  const session = await resolveTrpcSession({
+    authHeader: req.headers.get('authorization'),
+    secret: AUTH_SECRET,
+    decode: decodeMobileToken,
+    allowlist: readAllowlistFromEnv(),
+    isEmailAllowed,
+    getCookieSession: async () => {
+      const cookieSession = await auth();
+      return cookieSession?.user?.id
+        ? { user: { id: cookieSession.user.id } }
+        : null;
+    },
+    log,
+  });
   if (!session?.user?.id) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
