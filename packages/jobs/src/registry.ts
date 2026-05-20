@@ -15,6 +15,7 @@ import { runBackfillPerformerTicketmasterIds } from './backfill-performer-ticket
 import { runBackfillVenuePhotos } from './backfill-venue-photos';
 import { runBackfillShowCoverImages } from './backfill-show-cover-images';
 import { runPruneOrphanCatalog } from './prune-orphan-catalog';
+import { runPrunePastAnnouncements } from './prune-past-announcements';
 import { runHealthCheck } from './health-check';
 import {
   performersWithUpcomingWatchingShows,
@@ -49,6 +50,7 @@ export const JOBS = {
   BACKFILL_VENUE_PHOTOS: 'backfill/venue-photos',
   BACKFILL_SHOW_COVER_IMAGES: 'backfill/show-cover-images',
   PRUNE_ORPHAN_CATALOG: 'prune/orphan-catalog',
+  PRUNE_PAST_ANNOUNCEMENTS: 'prune/past-announcements',
   HEALTH_CHECK: 'health/morning-check',
   SETLIST_CORPUS_FILL: 'enrichment/setlist-corpus-fill',
   SETLIST_CORPUS_FILL_REFRESH: 'enrichment/setlist-corpus-fill-refresh',
@@ -132,6 +134,7 @@ const QUEUE_OPTIONS: Record<string, QueueOptions> = {
   'backfill/venue-photos': LONG_BATCH_CRON,
   'backfill/show-cover-images': LONG_BATCH_CRON,
   'prune/orphan-catalog': LONG_BATCH_CRON,
+  'prune/past-announcements': LONG_BATCH_CRON,
   'health/morning-check': LONG_BATCH_CRON,
   // Per-performer corpus fill is user-triggered (follow / show-detail
   // open) so fast turnaround matters and parallel runs across different
@@ -442,6 +445,22 @@ async function pruneOrphanCatalogHandler(jobs: PgBoss.Job[]) {
   }
 }
 
+async function prunePastAnnouncementsHandler(jobs: PgBoss.Job[]) {
+  for (const job of jobs) {
+    await runJob(JOBS.PRUNE_PAST_ANNOUNCEMENTS, job, async () => {
+      const result = await runPrunePastAnnouncements();
+      log.info(
+        {
+          event: 'prune.past_announcements.summary',
+          announcements: result.announcements,
+        },
+        'Past announcements prune complete',
+      );
+      return result;
+    });
+  }
+}
+
 async function healthCheckHandler(jobs: PgBoss.Job[]) {
   for (const job of jobs) {
     await runJob(JOBS.HEALTH_CHECK, job, async () => {
@@ -744,6 +763,7 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   await boss.work(JOBS.BACKFILL_VENUE_PHOTOS, backfillVenuePhotosHandler);
   await boss.work(JOBS.BACKFILL_SHOW_COVER_IMAGES, backfillShowCoverImagesHandler);
   await boss.work(JOBS.PRUNE_ORPHAN_CATALOG, pruneOrphanCatalogHandler);
+  await boss.work(JOBS.PRUNE_PAST_ANNOUNCEMENTS, prunePastAnnouncementsHandler);
   await boss.work(JOBS.HEALTH_CHECK, healthCheckHandler);
   await boss.work(JOBS.SETLIST_CORPUS_FILL, setlistCorpusFillHandler);
   await boss.work(JOBS.SETLIST_CORPUS_FILL_REFRESH, setlistCorpusFillRefreshHandler);
@@ -756,6 +776,10 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   await boss.work(JOBS.SETLIST_TOUR_WATCH, setlistTourWatchHandler);
   await boss.work(JOBS.SPOTIFY_PURGE_REVOKED_TOKENS, spotifyPurgeRevokedTokensHandler);
 
+  // Drop past-dated announcements before the orphan sweep so the
+  // orphan-prune sees a freshly-pruned set (a past announcement whose
+  // performer is followed would otherwise be "preserved" forever).
+  await boss.schedule(JOBS.PRUNE_PAST_ANNOUNCEMENTS, '0 2 * * *', {}, { tz: 'America/New_York' });
   // Backstop sweep for the orphan-cleanup triggers (0002 / 0014 / 0023 /
   // 0025). Runs before shows-nightly so the nightly transition operates on
   // the freshly pruned catalog.

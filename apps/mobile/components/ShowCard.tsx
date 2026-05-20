@@ -13,10 +13,11 @@
  */
 
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { ChevronRight } from 'lucide-react-native';
+import { View, Text, Pressable, StyleSheet, Linking } from 'react-native';
+import { ChevronRight, Ticket } from 'lucide-react-native';
 import { useTheme } from '../lib/theme';
-import { hapticImpactMedium } from '../lib/haptics';
+import { hapticImpactMedium, hapticSelection } from '../lib/haptics';
+import { useFeedback } from '../lib/feedback';
 import { KindBadge } from './KindBadge';
 import { StateChip } from './StateChip';
 import { RemoteImage } from './design-system/RemoteImage';
@@ -42,6 +43,12 @@ export interface ShowCardShow {
    * (Shows tab, artist/venue detail) leave it unset and look the same.
    */
   avatarUrl?: string | null;
+  /**
+   * When set on a watching/ticketed row, a Ticket icon button renders
+   * before the chevron so the user can jump straight to the listing
+   * (Ticketmaster, etc.) without opening the show detail first.
+   */
+  ticketUrl?: string | null;
 }
 
 export interface ShowCardProps {
@@ -59,6 +66,7 @@ export function ShowCard({
 }: ShowCardProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const { showToast } = useFeedback();
 
   // Left edge bar color
   const barColor =
@@ -67,6 +75,10 @@ export function ShowCard({
       : show.state === 'watching'
         ? tokens.kindColor(show.kind)
         : colors.rule;
+
+  const showTicketAction =
+    Boolean(show.ticketUrl) &&
+    (show.state === 'watching' || show.state === 'ticketed');
 
   return (
     <Pressable
@@ -141,6 +153,29 @@ export function ShowCard({
           {show.city ? ` · ${show.city}` : ''}
         </Text>
       </View>
+
+      {/* Ticketmaster jump — watching/ticketed shows with a ticket URL */}
+      {showTicketAction && show.ticketUrl ? (
+        <Pressable
+          onPress={() => {
+            void hapticSelection();
+            Linking.openURL(show.ticketUrl as string).catch(() => {
+              showToast({ kind: 'error', text: "Couldn't open Ticketmaster." });
+            });
+          }}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Open tickets on Ticketmaster"
+          testID={`show-card-tickets-${show.id}`}
+          style={({ pressed }) => [
+            styles.ticketAction,
+            { borderColor: colors.rule, backgroundColor: colors.surface },
+            pressed && { opacity: 0.6 },
+          ]}
+        >
+          <Ticket size={14} color={colors.muted} strokeWidth={2} />
+        </Pressable>
+      ) : null}
 
       {/* Chevron */}
       <View style={styles.chevronContainer}>
@@ -238,5 +273,15 @@ const styles = StyleSheet.create({
   chevronContainer: {
     justifyContent: 'center',
     paddingLeft: 8,
+  },
+  ticketAction: {
+    alignSelf: 'center',
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
   },
 });

@@ -82,6 +82,7 @@ interface ShowDetail {
   tourName: string | null;
   productionName: string | null;
   notes: string | null;
+  ticketUrl: string | null;
   venue: ShowDetailVenue;
   showPerformers: ShowDetailShowPerformer[];
   setlists: Record<string, PerformerSetlist> | null;

@@ -20,7 +20,6 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
-  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Link } from 'expo-router';
@@ -31,7 +30,6 @@ import {
   Calendar,
   Music,
   Image as ImageIcon,
-  BookmarkCheck,
   BookmarkPlus,
   Ticket,
 } from 'lucide-react-native';
@@ -73,6 +71,10 @@ type VenueMedia = RouterOutput<UtilsClient['media']['listForVenue']['query']>[nu
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const DOWS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
+function makeShowDedupKey(date: string, name: string): string {
+  return `${date}|${name.trim().toLowerCase().replace(/\s+/g, ' ')}`;
+}
+
 function parseDate(iso: string): { month: string; day: string; dow: string; year: string } {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   if (!m) return { month: '—', day: '—', dow: '—', year: '' };
@@ -109,6 +111,7 @@ function toShowCard(s: VenueShow, venueName: string, venueCity: string | null): 
     year: date.year,
     seat: s.seat,
     price: s.pricePaid,
+    ticketUrl: s.ticketUrl,
   };
 }
 
@@ -147,10 +150,10 @@ export default function VenueDetailScreen(): React.JSX.Element {
     enabled: Boolean(token) && venueId.length > 0,
   });
 
-  // Watched-event id set drives the per-row "Watching" indicator AND
-  // filters watched rows out of the Upcoming list — once the user
-  // follows an event it should move down to Your Shows on the same
-  // screen instead of staying in two places at once.
+  // Watched-event id set filters watched rows out of the Upcoming
+  // list — once the user follows an event it should move down to
+  // Your Shows on the same screen instead of staying in two places at
+  // once.
   const watchedQuery = useCachedQuery<readonly string[]>({
     queryKey: [...WATCHED_IDS_CACHE_KEY],
     queryFn: () => utils.client.discover.watchedAnnouncementIds.query(),
@@ -161,11 +164,25 @@ export default function VenueDetailScreen(): React.JSX.Element {
     [watchedQuery.data],
   );
 
+  const queryClient = useQueryClient();
   const onToggleWatch = useToggleWatch({
     onReconcile: () => {
       void utils.venues.detail.invalidate({ venueId });
       void utils.venues.userShows.invalidate({ venueId });
       void utils.venues.upcomingAnnouncements.invalidate({ venueId });
+      // useCachedQuery uses mobile-specific keys that don't match the
+      // tRPC invalidation namespace — refetch them explicitly so Your
+      // Shows below picks up the newly-created watching row without a
+      // pull-to-refresh.
+      void queryClient.invalidateQueries({
+        queryKey: ['mobile', 'venue', venueId, 'detail'],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['mobile', 'venue', venueId, 'upcoming'],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['mobile', 'venue', venueId, 'shows'],
+      });
     },
   });
 
@@ -181,8 +198,41 @@ export default function VenueDetailScreen(): React.JSX.Element {
   );
 
   const venue = detailQuery.data;
-  const upcoming = upcomingQuery.data ?? [];
-  const shows = showsQuery.data ?? [];
+  const upcoming = React.useMemo(
+    () => upcomingQuery.data ?? [],
+    [upcomingQuery.data],
+  );
+  const shows = React.useMemo(
+    () => showsQuery.data ?? [],
+    [showsQuery.data],
+  );
+
+  // De-dup the Upcoming list against shows the user already owns at
+  // this venue (not just announcement-linked watches): if a row in
+  // YOUR SHOWS matches the announcement by date + headliner, drop it
+  // from Upcoming so the same show never appears in two places.
+  const userShowDedupKeys = React.useMemo(() => {
+    const keys = new Set<string>();
+    for (const s of shows) {
+      if (!s.date) continue;
+      const headliner =
+        s.productionName ??
+        s.showPerformers.find((sp) => sp.role === 'headliner')?.performer.name ??
+        null;
+      if (headliner) keys.add(makeShowDedupKey(s.date, headliner));
+    }
+    return keys;
+  }, [shows]);
+
+  const filteredUpcoming = React.useMemo(
+    () =>
+      upcoming.filter((a) => {
+        if (watchedSet.has(a.id)) return false;
+        const key = makeShowDedupKey(a.showDate, a.productionName ?? a.headliner);
+        return !userShowDedupKeys.has(key);
+      }),
+    [upcoming, watchedSet, userShowDedupKeys],
+  );
   const refreshControl = useThemedRefreshControl(
     (detailQuery.isFetching ||
       upcomingQuery.isFetching ||
@@ -240,10 +290,10 @@ export default function VenueDetailScreen(): React.JSX.Element {
           >
             <Hero venue={venue} venueId={venueId} />
             <Upcoming
-              items={upcoming.filter((a) => !watchedSet.has(a.id))}
+              items={filteredUpcoming}
               loading={upcomingQuery.isLoading}
-              watchedSet={watchedSet}
               onToggleWatch={onToggleWatch}
+              venueName={venue.name}
             />
             <YourShows
               shows={shows}
@@ -440,13 +490,13 @@ function FollowVenueButton({
 function Upcoming({
   items,
   loading,
-  watchedSet,
   onToggleWatch,
+  venueName,
 }: {
   items: UpcomingAnnouncement[];
   loading: boolean;
-  watchedSet: Set<string>;
   onToggleWatch: WatchToggle;
+  venueName: string;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -470,8 +520,8 @@ function Upcoming({
             <UpcomingRow
               key={a.id}
               item={a}
-              isWatching={watchedSet.has(a.id)}
               onToggleWatch={onToggleWatch}
+              venueName={venueName}
             />
           ))}
         </View>
@@ -482,29 +532,20 @@ function Upcoming({
 
 function UpcomingRow({
   item,
-  isWatching,
   onToggleWatch,
+  venueName,
 }: {
   item: UpcomingAnnouncement;
-  isWatching: boolean;
   onToggleWatch: WatchToggle;
+  venueName: string;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
-  const { showToast } = useFeedback();
+  const router = useRouter();
   const { month, day, dow } = parseDate(item.showDate);
   const accent = tokens.kindColor(item.kind);
   const title = item.productionName ?? item.headliner;
   const canWatch = !isNonWatchableKind(item.kind);
-  // The `venues.upcomingAnnouncements` procedure returns raw rows and
-  // doesn't synthesize a Ticketmaster URL from `sourceEventId` the way
-  // `discover.followedFeed` does — fall back here so the Ticket icon
-  // appears whenever we have any way to deep-link.
-  const ticketUrl =
-    item.ticketUrl ??
-    (item.sourceEventId
-      ? `https://www.ticketmaster.com/event/${item.sourceEventId}`
-      : null);
 
   return (
     <View
@@ -530,47 +571,40 @@ function UpcomingRow({
           {title}
         </Text>
       </View>
-      {(canWatch || ticketUrl) && (
+      {canWatch && (
         <View style={styles.upcomingActions}>
-          {canWatch && (
-            <RowIconAction
-              onPress={() => {
-                void hapticSelection();
-                void onToggleWatch(item.id, isWatching);
-              }}
-              accessibilityLabel={
-                isWatching ? 'Stop watching this event' : 'Watch this event'
-              }
-              testID={`venue-upcoming-watch-${item.id}`}
-              active={isWatching}
-              accent={accent}
-              colors={colors}
-            >
-              {isWatching ? (
-                <BookmarkCheck size={14} color={accent} strokeWidth={2} />
-              ) : (
-                <BookmarkPlus size={14} color={colors.muted} strokeWidth={2} />
-              )}
-            </RowIconAction>
-          )}
-          {ticketUrl && (
-            <RowIconAction
-              onPress={() => {
-                void hapticSelection();
-                Linking.openURL(ticketUrl).catch(() => {
-                  showToast({
-                    kind: 'error',
-                    text: "Couldn't open Ticketmaster.",
-                  });
-                });
-              }}
-              accessibilityLabel="Open tickets on Ticketmaster"
-              testID={`venue-upcoming-tickets-${item.id}`}
-              colors={colors}
-            >
-              <Ticket size={14} color={colors.muted} strokeWidth={2} />
-            </RowIconAction>
-          )}
+          <LabeledIconAction
+            label="Watch"
+            onPress={() => {
+              void hapticSelection();
+              void onToggleWatch(item.id, false);
+            }}
+            accessibilityLabel="Add to watching"
+            testID={`venue-upcoming-watch-${item.id}`}
+            colors={colors}
+          >
+            <BookmarkPlus size={14} color={colors.muted} strokeWidth={2} />
+          </LabeledIconAction>
+          <LabeledIconAction
+            label="Got ticket"
+            onPress={() => {
+              void hapticSelection();
+              router.push({
+                pathname: '/add/form',
+                params: {
+                  kindHint: item.kind,
+                  headliner: item.productionName ?? item.headliner,
+                  venueHint: venueName,
+                  dateHint: item.showDate,
+                },
+              });
+            }}
+            accessibilityLabel="Add as ticketed show"
+            testID={`venue-upcoming-ticketed-${item.id}`}
+            colors={colors}
+          >
+            <Ticket size={14} color={colors.muted} strokeWidth={2} />
+          </LabeledIconAction>
         </View>
       )}
     </View>
@@ -578,24 +612,23 @@ function UpcomingRow({
 }
 
 /**
- * Small pill-shaped icon button used by the Upcoming row. Matches the
- * Discover tab's row actions so the affordance stays consistent across
- * the two surfaces.
+ * Stacked icon + caption used by the Upcoming row. The text label
+ * disambiguates the bookmark / ticket affordances — without it, the
+ * two circular icons looked interchangeable and the ticket icon was
+ * easy to mistake for "open external ticket page".
  */
-function RowIconAction({
+function LabeledIconAction({
+  label,
   onPress,
   accessibilityLabel,
   testID,
-  active,
-  accent,
   colors,
   children,
 }: {
+  label: string;
   onPress: () => void;
   accessibilityLabel: string;
   testID?: string;
-  active?: boolean;
-  accent?: string;
   colors: ReturnType<typeof useTheme>['tokens']['colors'];
   children: React.ReactNode;
 }): React.JSX.Element {
@@ -608,14 +641,20 @@ function RowIconAction({
       testID={testID}
       style={({ pressed }) => [
         styles.upcomingIconAction,
-        {
-          backgroundColor: active && accent ? `${accent}1f` : colors.surface,
-          borderColor: active && accent ? `${accent}55` : colors.rule,
-          opacity: pressed ? 0.6 : 1,
-        },
+        { opacity: pressed ? 0.6 : 1 },
       ]}
     >
-      {children}
+      <View
+        style={[
+          styles.upcomingIconCircle,
+          { backgroundColor: colors.surface, borderColor: colors.rule },
+        ]}
+      >
+        {children}
+      </View>
+      <Text style={[styles.upcomingIconLabel, { color: colors.muted }]}>
+        {label.toUpperCase()}
+      </Text>
     </Pressable>
   );
 }
@@ -875,17 +914,29 @@ const styles = StyleSheet.create({
   },
   upcomingActions: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     alignSelf: 'center',
-    gap: 8,
+    gap: 10,
   },
   upcomingIconAction: {
-    width: 30,
-    height: 30,
+    alignItems: 'center',
+    gap: 4,
+    minWidth: 40,
+  },
+  upcomingIconCircle: {
+    width: 32,
+    height: 32,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  upcomingIconLabel: {
+    fontFamily: 'Geist Mono',
+    fontSize: 8.5,
+    fontWeight: '600',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   showsList: {
     gap: 8,
