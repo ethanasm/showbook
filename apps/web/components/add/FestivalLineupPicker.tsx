@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Check, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, GripVertical, Pencil, Search } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 import type {
   FestivalArtistTier,
   FestivalLineupFlow,
   FestivalLineupRow,
+  FestivalLineupTmMatch,
 } from "./useFestivalLineup";
 
 const mono = "var(--font-geist-mono)";
@@ -24,6 +26,7 @@ export function FestivalLineupPicker({
   compact,
 }: FestivalLineupPickerProps) {
   const [query, setQuery] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
   const trimmed = query.trim().toLowerCase();
   const filtered = useMemo(() => {
     if (!trimmed) return flow.rows;
@@ -31,6 +34,34 @@ export function FestivalLineupPicker({
   }, [flow.rows, trimmed]);
 
   const isSubmitting = flow.phase === "submitting";
+  const filtering = trimmed.length > 0;
+
+  // Native HTML5 drag-and-drop state. We only enable drag when no filter
+  // is active — reordering a filtered list to a hidden position would
+  // confuse users.
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  const handleDrop = (targetId: string) => {
+    if (!dragId || dragId === targetId) {
+      setDragId(null);
+      setDragOverId(null);
+      return;
+    }
+    const fromIdx = flow.rows.findIndex((r) => r.id === dragId);
+    const toIdx = flow.rows.findIndex((r) => r.id === targetId);
+    if (fromIdx < 0 || toIdx < 0) {
+      setDragId(null);
+      setDragOverId(null);
+      return;
+    }
+    const next = flow.rows.slice();
+    const [moved] = next.splice(fromIdx, 1);
+    if (moved) next.splice(toIdx, 0, moved);
+    flow.reorder(next);
+    setDragId(null);
+    setDragOverId(null);
+  };
 
   return (
     <>
@@ -122,12 +153,29 @@ export function FestivalLineupPicker({
         )}
         {filtered.map((row) => (
           <LineupRow
-            key={row.name}
+            key={row.id}
             row={row}
-            checked={flow.selected.has(row.name)}
+            checked={flow.selected.has(row.id)}
             tier={flow.tierFor(row)}
-            onToggle={() => flow.toggle(row.name)}
-            onSetTier={(t) => flow.setTier(row.name, t)}
+            onToggle={() => flow.toggle(row.id)}
+            onSetTier={(t) => flow.setTier(row.id, t)}
+            editing={editingId === row.id}
+            onStartEdit={() => setEditingId(row.id)}
+            onCancelEdit={() => setEditingId(null)}
+            onPickArtist={(name, tmMatch) => {
+              flow.setRowName(row.id, name, tmMatch ?? null);
+              setEditingId(null);
+            }}
+            draggable={!filtering}
+            isDragging={dragId === row.id}
+            isDragTarget={dragOverId === row.id && dragId !== row.id}
+            onDragStart={() => setDragId(row.id)}
+            onDragEnd={() => {
+              setDragId(null);
+              setDragOverId(null);
+            }}
+            onDragOver={() => setDragOverId(row.id)}
+            onDrop={() => handleDrop(row.id)}
           />
         ))}
       </div>
@@ -181,60 +229,330 @@ function LineupRow({
   tier,
   onToggle,
   onSetTier,
+  editing,
+  onStartEdit,
+  onCancelEdit,
+  onPickArtist,
+  draggable,
+  isDragging,
+  isDragTarget,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
 }: {
   row: FestivalLineupRow;
   checked: boolean;
   tier: FestivalArtistTier;
   onToggle: () => void;
   onSetTier: (tier: FestivalArtistTier) => void;
+  editing: boolean;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onPickArtist: (name: string, tmMatch: FestivalLineupTmMatch | null) => void;
+  draggable: boolean;
+  isDragging: boolean;
+  isDragTarget: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDragOver: () => void;
+  onDrop: () => void;
 }) {
   return (
     <div
+      draggable={draggable && !editing}
+      onDragStart={(e) => {
+        // Required for Firefox to actually start the drag.
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", row.id);
+        onDragStart();
+      }}
+      onDragEnd={onDragEnd}
+      onDragOver={(e) => {
+        if (!draggable) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        onDragOver();
+      }}
+      onDrop={(e) => {
+        if (!draggable) return;
+        e.preventDefault();
+        onDrop();
+      }}
       style={{
         display: "flex",
-        alignItems: "center",
-        gap: 12,
+        flexDirection: "column",
+        gap: 6,
         padding: "11px 20px",
         borderBottom: "1px solid var(--rule)",
-        cursor: "pointer",
-        opacity: checked ? 1 : 0.55,
+        opacity: isDragging ? 0.4 : checked ? 1 : 0.55,
+        background: isDragTarget ? "var(--surface2)" : "transparent",
         transition: "background 0.12s",
+        cursor: editing ? "default" : "pointer",
       }}
-      onClick={onToggle}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = "var(--surface2)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = "transparent";
+      onClick={(e) => {
+        // Don't toggle when interacting with the edit panel.
+        if (editing) return;
+        const target = e.target as HTMLElement;
+        if (target.closest('[data-no-toggle="1"]')) return;
+        onToggle();
       }}
     >
-      <Checkbox checked={checked} />
-      {row.tmMatch?.imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={row.tmMatch.imageUrl}
-          alt=""
-          width={36}
-          height={36}
-          style={artistThumbStyle}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {draggable ? (
+          <span
+            data-no-toggle="1"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              color: "var(--faint)",
+              cursor: "grab",
+              userSelect: "none",
+            }}
+            aria-label="Drag to reorder"
+            title="Drag to reorder"
+          >
+            <GripVertical size={14} />
+          </span>
+        ) : (
+          <span style={{ width: 14 }} />
+        )}
+        <Checkbox checked={checked} />
+        {row.tmMatch?.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={row.tmMatch.imageUrl}
+            alt=""
+            width={36}
+            height={36}
+            style={artistThumbStyle}
+          />
+        ) : (
+          <div style={artistThumbPlaceholderStyle} />
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={artistNameStyle}>{row.name}</div>
+          {row.tmMatch === null && (
+            <div style={artistSubStyle}>no tm match</div>
+          )}
+        </div>
+        <button
+          type="button"
+          data-no-toggle="1"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (editing) onCancelEdit();
+            else onStartEdit();
+          }}
+          style={{
+            background: "transparent",
+            border: "1px solid var(--rule)",
+            borderRadius: 4,
+            color: "var(--muted)",
+            cursor: "pointer",
+            padding: "4px 6px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            fontFamily: mono,
+            fontSize: 9.5,
+            letterSpacing: ".08em",
+            textTransform: "uppercase",
+            flexShrink: 0,
+          }}
+          aria-label={editing ? "Cancel edit" : `Edit ${row.name}`}
+          title={editing ? "Cancel edit" : "Edit name"}
+        >
+          <Pencil size={10} />
+          {editing ? "Close" : "Edit"}
+        </button>
+        <TierToggle
+          tier={tier}
+          disabled={!checked}
+          onChange={(t) => {
+            // Don't propagate to the row's onToggle.
+            onSetTier(t);
+          }}
         />
-      ) : (
-        <div style={artistThumbPlaceholderStyle} />
+      </div>
+      {editing && (
+        <div data-no-toggle="1" onClick={(e) => e.stopPropagation()}>
+          <ArtistSearchInline
+            initialQuery={row.name}
+            onPick={onPickArtist}
+            onCancel={onCancelEdit}
+          />
+        </div>
       )}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={artistNameStyle}>{row.name}</div>
-        {row.tmMatch === null && (
-          <div style={artistSubStyle}>no tm match</div>
+    </div>
+  );
+}
+
+function ArtistSearchInline({
+  initialQuery,
+  onPick,
+  onCancel,
+}: {
+  initialQuery: string;
+  onPick: (name: string, tmMatch: FestivalLineupTmMatch | null) => void;
+  onCancel: () => void;
+}) {
+  const [query, setQuery] = useState(initialQuery);
+  const [debounced, setDebounced] = useState(initialQuery);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(query), 250);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const enabled = debounced.trim().length >= 2;
+  const localQuery = trpc.performers.search.useQuery(
+    { query: debounced },
+    { enabled, staleTime: 60_000 },
+  );
+  const tmQuery = trpc.performers.searchExternal.useQuery(
+    { query: debounced },
+    { enabled, staleTime: 60_000 },
+  );
+
+  type Suggestion = {
+    key: string;
+    name: string;
+    imageUrl: string | null;
+    tmAttractionId: string | null;
+    musicbrainzId: string | null;
+    source: "local" | "tm";
+  };
+  const suggestions: Suggestion[] = useMemo(() => {
+    if (!enabled) return [];
+    const out: Suggestion[] = [];
+    const seen = new Set<string>();
+    const dedupKey = (name: string, tmId?: string | null) =>
+      `${(tmId ?? "").toLowerCase()}|${name.toLowerCase()}`;
+    for (const l of localQuery.data ?? []) {
+      const key = dedupKey(l.name, l.ticketmasterAttractionId);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        key: `local:${l.id}`,
+        name: l.name,
+        imageUrl: l.imageUrl ?? null,
+        tmAttractionId: l.ticketmasterAttractionId ?? null,
+        musicbrainzId: l.musicbrainzId ?? null,
+        source: "local",
+      });
+    }
+    for (const t of tmQuery.data ?? []) {
+      const key = dedupKey(t.name, t.tmAttractionId);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        key: `tm:${t.tmAttractionId}`,
+        name: t.name,
+        imageUrl: t.imageUrl ?? null,
+        tmAttractionId: t.tmAttractionId,
+        musicbrainzId: t.musicbrainzId,
+        source: "tm",
+      });
+    }
+    return out.slice(0, 8);
+  }, [enabled, localQuery.data, tmQuery.data]);
+
+  const loading = localQuery.isFetching || tmQuery.isFetching;
+
+  const pick = (s: Suggestion) => {
+    const tmMatch: FestivalLineupTmMatch | null = s.tmAttractionId
+      ? {
+          tmAttractionId: s.tmAttractionId,
+          name: s.name,
+          imageUrl: s.imageUrl,
+          musicbrainzId: s.musicbrainzId,
+        }
+      : null;
+    onPick(s.name, tmMatch);
+  };
+
+  return (
+    <div style={searchPanelStyle}>
+      <div style={searchPanelInputRow}>
+        <Search size={12} color="var(--muted)" />
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") onCancel();
+            if (e.key === "Enter") {
+              const first = suggestions[0];
+              if (first) pick(first);
+              else if (query.trim()) onPick(query.trim(), null);
+            }
+          }}
+          placeholder="Search artist name…"
+          style={searchPanelInput}
+        />
+        {query.trim().length > 0 && (
+          <button
+            type="button"
+            onClick={() => onPick(query.trim(), null)}
+            style={useTypedNameStyle}
+            aria-label="Use typed name as-is"
+            title="Use typed name as-is"
+          >
+            Use “{query.trim().length > 22 ? query.trim().slice(0, 22) + "…" : query.trim()}”
+          </button>
         )}
       </div>
-      <TierToggle
-        tier={tier}
-        disabled={!checked}
-        onChange={(t) => {
-          // Don't propagate to the row's onToggle.
-          onSetTier(t);
-        }}
-      />
+      <div style={searchResultsStyle}>
+        {!enabled && (
+          <div style={searchHintStyle}>Type at least 2 characters…</div>
+        )}
+        {enabled && loading && suggestions.length === 0 && (
+          <div style={searchHintStyle}>Searching…</div>
+        )}
+        {enabled && !loading && suggestions.length === 0 && (
+          <div style={searchHintStyle}>
+            No matches. Press Enter to keep the typed name.
+          </div>
+        )}
+        {suggestions.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => pick(s)}
+            style={searchResultRow}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--surface2)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+            }}
+          >
+            {s.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={s.imageUrl}
+                alt=""
+                width={26}
+                height={26}
+                style={searchResultThumb}
+              />
+            ) : (
+              <div style={searchResultThumbPlaceholder} />
+            )}
+            <span style={searchResultName}>{s.name}</span>
+            <span style={searchResultSource}>
+              {s.source === "tm" ? "TM" : "LIBRARY"}
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -251,6 +569,7 @@ function TierToggle({
   const opacity = disabled ? 0.4 : 1;
   return (
     <div
+      data-no-toggle="1"
       onClick={(e) => e.stopPropagation()}
       style={{
         display: "inline-flex",
@@ -516,6 +835,100 @@ const submitButtonStyle: React.CSSProperties = {
   padding: "9px 16px",
   letterSpacing: ".08em",
   textTransform: "uppercase",
-  transition: "opacity 0.12s",
   whiteSpace: "nowrap",
+};
+const searchPanelStyle: React.CSSProperties = {
+  marginLeft: 56,
+  border: "1px solid var(--rule)",
+  borderRadius: 6,
+  background: "var(--surface)",
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+};
+const searchPanelInputRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "8px 10px",
+  borderBottom: "1px solid var(--rule)",
+};
+const searchPanelInput: React.CSSProperties = {
+  flex: 1,
+  border: "none",
+  background: "transparent",
+  color: "var(--ink)",
+  fontFamily: "var(--font-geist-sans)",
+  fontSize: 13,
+  outline: "none",
+};
+const useTypedNameStyle: React.CSSProperties = {
+  fontFamily: mono,
+  fontSize: 9.5,
+  color: "var(--muted)",
+  background: "transparent",
+  border: "1px solid var(--rule)",
+  borderRadius: 4,
+  padding: "3px 6px",
+  cursor: "pointer",
+  letterSpacing: ".06em",
+  textTransform: "uppercase",
+  whiteSpace: "nowrap",
+};
+const searchResultsStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  maxHeight: 240,
+  overflow: "auto",
+};
+const searchHintStyle: React.CSSProperties = {
+  fontFamily: mono,
+  fontSize: 10.5,
+  color: "var(--muted)",
+  padding: "10px 12px",
+  letterSpacing: ".04em",
+};
+const searchResultRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  padding: "8px 10px",
+  border: "none",
+  borderTop: "1px solid var(--rule)",
+  background: "transparent",
+  cursor: "pointer",
+  textAlign: "left",
+  width: "100%",
+};
+const searchResultThumb: React.CSSProperties = {
+  width: 26,
+  height: 26,
+  borderRadius: 3,
+  objectFit: "cover",
+  border: "1px solid var(--rule)",
+  flexShrink: 0,
+};
+const searchResultThumbPlaceholder: React.CSSProperties = {
+  width: 26,
+  height: 26,
+  borderRadius: 3,
+  background: "var(--surface2)",
+  border: "1px solid var(--rule)",
+  flexShrink: 0,
+};
+const searchResultName: React.CSSProperties = {
+  flex: 1,
+  fontFamily: "var(--font-geist-sans)",
+  fontSize: 13,
+  color: "var(--ink)",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+const searchResultSource: React.CSSProperties = {
+  fontFamily: mono,
+  fontSize: 9,
+  color: "var(--faint)",
+  letterSpacing: ".08em",
+  flexShrink: 0,
 };

@@ -5,6 +5,10 @@
  * `expo-image-picker` / `expo-document-picker` and passes in directly
  * (the hook doesn't reach for File / FileReader so it works on RN).
  *
+ * Rows are keyed by a stable client id (not name), so the user can
+ * rename a row or reorder rows without losing selection or tier
+ * overrides.
+ *
  * Phases:
  *   idle → extracting → picking → submitting → done
  *                                          ↘ error (recoverable: phase reverts
@@ -25,6 +29,8 @@ export interface FestivalLineupTmMatch {
 }
 
 export interface FestivalLineupRow {
+  /** Stable client-generated id used as React key + drag target. */
+  id: string;
   name: string;
   tier: FestivalArtistTier;
   tmMatch: FestivalLineupTmMatch | null;
@@ -66,6 +72,12 @@ export interface FestivalSource {
   kind: 'image' | 'pdf';
 }
 
+let _rowIdCounter = 0;
+function newRowId(): string {
+  _rowIdCounter += 1;
+  return `flr-${Date.now().toString(36)}-${_rowIdCounter}`;
+}
+
 export function useFestivalLineup(opts: UseFestivalLineupOptions) {
   const [phase, setPhase] = useState<FestivalLineupPhase>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -91,18 +103,26 @@ export function useFestivalLineup(opts: UseFestivalLineupOptions) {
   }, []);
 
   const runTmMatching = useCallback(
-    async (names: string[]) => {
-      if (names.length === 0) return;
+    async (entries: Array<{ id: string; name: string }>) => {
+      if (entries.length === 0) return;
       setIsMatching(true);
       try {
         // Server caps at 50 per call.
-        const capped = names.slice(0, 50);
-        const result = await matchArtists.mutateAsync({ names: capped });
+        const capped = entries.slice(0, 50);
+        const result = await matchArtists.mutateAsync({
+          names: capped.map((e) => e.name),
+        });
         const byName = new Map(result.matches.map((m) => [m.name, m]));
+        const idByName = new Map<string, string>();
+        for (const e of capped) idByName.set(e.name, e.id);
         setRows((prev) =>
           prev.map((row) => {
             const match = byName.get(row.name);
             if (!match || !match.tmAttractionId) return row;
+            // Only update rows whose id we matched against — if the user
+            // edited the name mid-match, the matched name no longer
+            // belongs to that id.
+            if (idByName.get(row.name) !== row.id) return row;
             return {
               ...row,
               tmMatch: {
@@ -136,6 +156,7 @@ export function useFestivalLineup(opts: UseFestivalLineupOptions) {
         );
 
         const initialRows: FestivalLineupRow[] = lineup.artists.map((a) => ({
+          id: newRowId(),
           name: a.name,
           tier: a.tier,
           tmMatch: null,
@@ -150,13 +171,15 @@ export function useFestivalLineup(opts: UseFestivalLineupOptions) {
         // Default to all selected — on a 30-artist poster, the user usually
         // unchecks the ~few they didn't see rather than checking the ones
         // they did.
-        setSelected(new Set(initialRows.map((r) => r.name)));
+        setSelected(new Set(initialRows.map((r) => r.id)));
         setTierOverrides(new Map());
         setPhase('picking');
 
         // Fire-and-forget TM matching in the background; images stream in
         // when matches resolve, picker renders immediately with names.
-        void runTmMatching(initialRows.map((r) => r.name));
+        void runTmMatching(
+          initialRows.map((r) => ({ id: r.id, name: r.name })),
+        );
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Extraction failed');
         setPhase('error');
@@ -165,36 +188,59 @@ export function useFestivalLineup(opts: UseFestivalLineupOptions) {
     [extract, runTmMatching],
   );
 
-  const toggle = useCallback((name: string) => {
+  const toggle = useCallback((id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }, []);
 
   const setTier = useCallback(
-    (name: string, tier: FestivalArtistTier) => {
+    (id: string, tier: FestivalArtistTier) => {
       setTierOverrides((prev) => {
         const next = new Map(prev);
-        next.set(name, tier);
+        next.set(id, tier);
         return next;
       });
     },
     [],
   );
 
+  const setRowName = useCallback(
+    (
+      id: string,
+      name: string,
+      tmMatch?: FestivalLineupTmMatch | null,
+    ) => {
+      setRows((prev) =>
+        prev.map((row) => {
+          if (row.id !== id) return row;
+          // When tmMatch is explicitly passed (including null to clear),
+          // honor it. Otherwise dropping a previously-matched id is the
+          // right call: an edited name no longer matches that attraction.
+          const nextMatch =
+            tmMatch === undefined ? null : tmMatch;
+          return { ...row, name, tmMatch: nextMatch };
+        }),
+      );
+    },
+    [],
+  );
+
+  const reorder = useCallback((next: FestivalLineupRow[]) => {
+    setRows(next);
+  }, []);
+
   const toggleAll = useCallback(() => {
     setSelected((prev) =>
-      prev.size === rows.length
-        ? new Set()
-        : new Set(rows.map((r) => r.name)),
+      prev.size === rows.length ? new Set() : new Set(rows.map((r) => r.id)),
     );
   }, [rows]);
 
   const selectAll = useCallback(() => {
-    setSelected(new Set(rows.map((r) => r.name)));
+    setSelected(new Set(rows.map((r) => r.id)));
   }, [rows]);
 
   const deselectAll = useCallback(() => {
@@ -203,7 +249,7 @@ export function useFestivalLineup(opts: UseFestivalLineupOptions) {
 
   const tierFor = useCallback(
     (row: FestivalLineupRow): FestivalArtistTier =>
-      tierOverrides.get(row.name) ?? row.tier,
+      tierOverrides.get(row.id) ?? row.tier,
     [tierOverrides],
   );
 
@@ -211,8 +257,8 @@ export function useFestivalLineup(opts: UseFestivalLineupOptions) {
     let headliners = 0;
     let support = 0;
     for (const row of rows) {
-      if (!selected.has(row.name)) continue;
-      const t = tierOverrides.get(row.name) ?? row.tier;
+      if (!selected.has(row.id)) continue;
+      const t = tierOverrides.get(row.id) ?? row.tier;
       if (t === 'headliner') headliners += 1;
       else support += 1;
     }
@@ -227,9 +273,9 @@ export function useFestivalLineup(opts: UseFestivalLineupOptions) {
   const submit = useCallback(async () => {
     if (selected.size === 0 || !meta) return;
     const ordered = rows
-      .filter((r) => selected.has(r.name))
+      .filter((r) => selected.has(r.id))
       .map<SelectedFestivalArtist>((r, i) => {
-        const tier = tierOverrides.get(r.name) ?? r.tier;
+        const tier = tierOverrides.get(r.id) ?? r.tier;
         return {
           name: r.tmMatch?.name ?? r.name,
           role: tier,
@@ -261,6 +307,8 @@ export function useFestivalLineup(opts: UseFestivalLineupOptions) {
     extractFromSource,
     toggle,
     setTier,
+    setRowName,
+    reorder,
     tierFor,
     toggleAll,
     selectAll,

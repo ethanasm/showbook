@@ -1,17 +1,18 @@
 /**
  * Festival poster — pick an image, OCR the lineup via the Groq-backed
- * `enrichment.extractFestivalLineup` mutation, let the user trim the
- * lineup, then create a festival show via `shows.create`. Mirrors the
- * web `FestivalLineupModal` flow but lives as its own modal route on
- * mobile so each phase gets the full screen.
+ * `enrichment.extractFestivalLineup` mutation, let the user trim /
+ * reorder / rename the lineup, then hand off to `/add/form` with all
+ * the extracted data pre-populated so the user can edit the festival
+ * name and venue before the actual `shows.create` call.
  *
  * Phases (driven by `useFestivalLineup`):
  *   idle       — splash with "Pick a poster" CTA + a hint about what
  *                gets extracted
  *   extracting — spinner + progress copy
  *   picking    — `FestivalLineupPicker` with the artists list
- *   submitting — disabled UI while shows.create runs
- *   done       — handled inline (navigates to the new show detail)
+ *   submitting — disabled UI while we serialize + navigate
+ *   done       — handled inline (we've already replaced into the form
+ *                route)
  *   error      — extraction error banner + "Try again" CTA
  */
 
@@ -27,15 +28,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
 import { ChevronLeft, Image as ImageIcon, RefreshCcw } from 'lucide-react-native';
-import { useQueryClient } from '@tanstack/react-query';
 
 import { TopBar } from '../../components/TopBar';
 import { useTheme } from '../../lib/theme';
 import { useFeedback } from '../../lib/feedback';
-import { trpc } from '../../lib/trpc';
-import { runOptimisticMutation } from '../../lib/mutations';
-import { getCacheOutbox } from '../../lib/cache/db';
-import { invalidateShowsList } from '../../lib/cache/invalidate';
 import {
   useFestivalLineup,
   type FestivalLineupMeta,
@@ -59,8 +55,6 @@ export default function FestivalPosterScreen(): React.JSX.Element {
   const { colors } = tokens;
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const utils = trpc.useUtils();
-  const queryClient = useQueryClient();
   const { showToast } = useFeedback();
   const [poster, setPoster] = React.useState<PickedFestivalImage | null>(null);
 
@@ -69,68 +63,37 @@ export default function FestivalPosterScreen(): React.JSX.Element {
       if (artists.length === 0) {
         throw new Error('Select at least one artist');
       }
-      // shows.create expects exactly one headliner + a performers array.
-      // Promote the first selected (which respects user-chosen order) to
-      // headliner; everyone else becomes a support row with their own
-      // tier. This matches how the web flow handles festival rows where
-      // every act gets equal billing.
-      const [first, ...rest] = artists;
-      if (!first) throw new Error('Select at least one artist');
 
-      const supports = rest.map((a, i) => ({
-        name: a.name,
-        role: 'support' as const,
-        sortOrder: i + 1,
-      }));
-
-      // Posters rarely carry a fully-resolved "Venue Name, City, State". The
-      // Groq extractor returns whatever blob it could read into `venueHint` —
-      // sometimes "Citi Field, NYC" (split into name + city) and sometimes
-      // just a location like "Napa Valley" (better used as the city while the
-      // festival name doubles as the venue name). The user can always edit
-      // the show afterwards; the goal here is to avoid persisting the literal
-      // string "Unknown" as a city.
+      // Don't create the show here — hand off to /add/form with
+      // everything pre-populated so the user can edit the festival
+      // name + venue before saving. The form route knows how to
+      // hydrate from these params (see paramPerformers there).
+      const productionName = meta.festivalName?.trim() ?? '';
       const venuePayload = parseFestivalVenue(meta);
 
-      const date = meta.startDate ?? '';
-      if (!date) {
-        throw new Error("Couldn't read a date from the poster — add it manually first");
-      }
+      const performersJson = JSON.stringify(
+        artists.map((a) => ({
+          name: a.name,
+          role: a.role,
+          tmAttractionId: a.tmAttractionId,
+          musicbrainzId: a.musicbrainzId,
+          imageUrl: a.imageUrl,
+        })),
+      );
 
-      const productionName = meta.festivalName?.trim() || undefined;
-
-      const { result } = await runOptimisticMutation<
-        Parameters<typeof utils.client.shows.create.mutate>[0],
-        void,
-        Awaited<ReturnType<typeof utils.client.shows.create.mutate>>
-      >({
-        mutation: 'shows.create',
-        input: {
-          kind: 'festival',
-          headliner: { name: first.name },
-          venue: venuePayload,
-          date,
-          ticketCount: 1,
-          productionName,
-          performers: supports.length > 0 ? supports : undefined,
-        },
-        outbox: getCacheOutbox(),
-        call: (input) => utils.client.shows.create.mutate(input),
-        reconcile: () => {
-          void utils.shows.list.invalidate();
-          invalidateShowsList(queryClient);
+      router.replace({
+        pathname: '/add/form',
+        params: {
+          kindHint: 'festival',
+          headliner: productionName,
+          venueHint: venuePayload.name,
+          dateHint: meta.startDate ?? '',
+          endDateHint: meta.endDate ?? '',
+          performersJson,
         },
       });
-
-      const newId = result?.id;
-      showToast({ kind: 'success', text: 'Festival added' });
-      if (newId) {
-        router.replace(`/show/${newId}`);
-      } else {
-        router.back();
-      }
     },
-    [router, showToast, utils, queryClient],
+    [router],
   );
 
   const flow = useFestivalLineup({ onSubmit: handleSubmit });
@@ -233,7 +196,7 @@ export default function FestivalPosterScreen(): React.JSX.Element {
               onPress={() => void flow.submit()}
               disabled={submitDisabled}
               accessibilityRole="button"
-              accessibilityLabel="Save festival"
+              accessibilityLabel="Review and save festival"
               style={({ pressed }) => [
                 styles.saveBtn,
                 {
@@ -246,7 +209,7 @@ export default function FestivalPosterScreen(): React.JSX.Element {
                 <ActivityIndicator size="small" color={colors.accentText} />
               ) : (
                 <Text style={[styles.saveLabel, { color: colors.accentText }]}>
-                  Save festival
+                  Review & save
                 </Text>
               )}
             </Pressable>

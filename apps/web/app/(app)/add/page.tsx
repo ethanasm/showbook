@@ -626,42 +626,11 @@ export default function AddPage() {
 
   const handleFestivalSubmit = useCallback(
     async (artists: SelectedFestivalArtist[], meta: FestivalLineupMeta) => {
-      // Chat mode submits the show directly. Form mode writes back to local
-      // state and lets the user keep editing before the form-save click.
-      if (mode === "Chat") {
-        const today = new Date().toISOString().split("T")[0]!;
-        // For festivals the show "headliner" is the festival itself — pass
-        // the extracted festival name (fallback to first artist or a generic
-        // placeholder). Drop any matching artist from `performers` so the
-        // (showId, performerId, role) primary key on show_performers can't
-        // collide when the same name lands as both the show headliner and
-        // a lineup headliner.
-        const headlinerName =
-          meta.festivalName ?? artists[0]?.name ?? "Festival";
-        const performersDeduped = artists.filter(
-          (a) => a.name !== headlinerName,
-        );
-        const created = await createShow.mutateAsync({
-          kind: "festival",
-          headliner: { name: headlinerName },
-          productionName: meta.festivalName ?? undefined,
-          venue: {
-            name: meta.venueHint ?? "Unknown Venue",
-            city: "Unknown",
-          },
-          date: meta.startDate ?? today,
-          endDate: meta.endDate ?? undefined,
-          performers: performersDeduped,
-        });
-        setFestivalModalOpen(false);
-        if (created?.id) {
-          router.push(`/shows/${created.id}`);
-        }
-        return;
-      }
-
-      // Form mode: write back to form state. Don't clobber values the user
-      // has already typed.
+      // Write back to form state so the user lands on the structured
+      // form with festival name, date(s), venue hint, and lineup
+      // pre-populated — they can edit the name and venue before the
+      // actual save click. Chat mode flips to Form so the user sees
+      // what's about to be created.
       if (kind !== "festival") setKind("festival");
       if (meta.festivalName) {
         setProductionName((prev) => prev || meta.festivalName!);
@@ -691,8 +660,9 @@ export default function AddPage() {
         })),
       );
       setFestivalModalOpen(false);
+      if (mode === "Chat") setMode("Form");
     },
-    [mode, kind, createShow, router],
+    [mode, kind],
   );
 
   const festivalFlow = useFestivalLineup({ onSubmit: handleFestivalSubmit });
@@ -3068,7 +3038,7 @@ export default function AddPage() {
       open={festivalModalOpen}
       onClose={() => setFestivalModalOpen(false)}
       flow={festivalFlow}
-      submitLabel={mode === "Chat" ? "Save festival" : "Add to show"}
+      submitLabel="Add to show"
     />
     </>
   );
