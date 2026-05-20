@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { SiteFooter } from "@/components/SiteFooter";
+import { ShowbookMark } from "@/components/design-system";
 
 /**
  * Public-pages shell. Used by `/privacy` and `/terms`, both of which
@@ -17,8 +18,8 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
     <div className="public-shell">
       <header className="public-shell__header">
         <Link href="/" className="public-shell__brand" aria-label="Showbook home">
-          <span className="brand-mark">S</span>
-          <span>Showbook</span>
+          <ShowbookMark size={28} />
+          <span>showbook</span>
         </Link>
       </header>
       <main className="public-shell__main">{children}</main>

@@ -1,0 +1,89 @@
+<!--
+  Showbook brand mark — polished ticket stub.
+
+  Geometry constants (1024×1024 canvas):
+    - Ticket bounding box: x=144..880, y=256..768 (736×512)
+    - Side notches: 60px radius, centered at y=524 (slightly below visual center
+      to compensate for the rotation — optically reads as centered)
+    - Corner radius: 56px (matches the notch language)
+    - Tilt: -6° around canvas center for movement without feeling tipsy
+    - S: DejaVu Sans Bold at 360px, baseline y=648, optically centered
+
+  The base PNG (icon.png) bakes the #0C0C0C background. The transparent
+  foreground for Android adaptive icons is produced from the same source
+  with the background rect removed at render time.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Premium gold gradient: warmer than the flat brand accent, with a
+         subtle vertical falloff that reads as "physical paper, gold-foil". -->
+    <linearGradient id="goldFace" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%"   stop-color="#FFE08F"/>
+      <stop offset="50%"  stop-color="#F4B939"/>
+      <stop offset="100%" stop-color="#C5871A"/>
+    </linearGradient>
+    <!-- Thin top-edge highlight: 1% of the height; gives a hint of "lit
+         paper edge" without being skeuomorphic. -->
+    <linearGradient id="goldEdge" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%"   stop-color="#FFF8DF" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#FFF8DF" stop-opacity="0"/>
+    </linearGradient>
+    <!-- Soft bottom shadow inside the ticket: the inverse of the highlight.
+         Anchors the ticket optically; without it the gradient alone reads flat. -->
+    <linearGradient id="goldShade" x1="0.5" y1="1" x2="0.5" y2="0.85">
+      <stop offset="0%"   stop-color="#7A4F0A" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#7A4F0A" stop-opacity="0"/>
+    </linearGradient>
+    <!-- Soft outer drop shadow so the ticket sits above the canvas. Kept
+         narrow + low-opacity; we never want the icon to read as "elevated card". -->
+    <filter id="lift" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="12" in="SourceAlpha"/>
+      <feOffset dx="0" dy="14"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.35"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <!-- Reusable ticket silhouette: rounded rect with two facing notches on
+         the left + right edges. Used as both the body fill and a clipPath. -->
+    <symbol id="ticketShape" overflow="visible">
+      <path d="
+        M 200 256
+        H 824
+        A 56 56 0 0 1 880 312
+        V 464
+        A 60 60 0 0 0 820 524
+        A 60 60 0 0 0 880 584
+        V 712
+        A 56 56 0 0 1 824 768
+        H 200
+        A 56 56 0 0 1 144 712
+        V 584
+        A 60 60 0 0 0 204 524
+        A 60 60 0 0 0 144 464
+        V 312
+        A 56 56 0 0 1 200 256
+        Z"/>
+    </symbol>
+    <clipPath id="ticketClip">
+      <use href="#ticketShape"/>
+    </clipPath>
+  </defs>
+
+  <rect id="bg" width="1024" height="1024" fill="#0C0C0C"/>
+
+  <g transform="rotate(-6 512 512)" filter="url(#lift)">
+    <!-- Body fill -->
+    <use href="#ticketShape" fill="url(#goldFace)"/>
+    <!-- Inner highlight + shade strips, clipped so they hug the ticket edge -->
+    <g clip-path="url(#ticketClip)">
+      <rect x="140" y="256" width="744" height="120" fill="url(#goldEdge)"/>
+      <rect x="140" y="640" width="744" height="128" fill="url(#goldShade)"/>
+    </g>
+    <!-- The S, cut out (rendered as the BG color so it punches through visually).
+         baseline y=664 + size 420 → glyph center ≈ y=506, ~6px above the
+         geometric ticket center (512) — the optical-centering offset that
+         bold letters need to stop looking bottom-heavy. -->
+    <text x="512" y="664" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif"
+          font-weight="bold" font-size="420" fill="#0C0C0C" text-anchor="middle"
+          letter-spacing="-16">S</text>
+  </g>
+</svg>

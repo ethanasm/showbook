@@ -32,6 +32,8 @@ apps/web/playwright-report/
 apps/web/public/media-uploads/
 apps/web/tests/.pr-screenshots.json
 apps/web/tests/screenshots/
+apps/web/tests/.brand-results/
+apps/web/brand-screenshots/
 walkthrough-screenshots/
 
 # Docker

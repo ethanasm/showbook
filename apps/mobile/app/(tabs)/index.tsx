@@ -185,7 +185,7 @@ export default function HomeScreen(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const insets = useSafeAreaInsets();
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const utils = trpc.useUtils();
   const router = useRouter();
   const [actionSheetFor, setActionSheetFor] = React.useState<{
@@ -264,7 +264,6 @@ export default function HomeScreen(): React.JSX.Element {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
       <HomeHeader
-        userName={user?.name ?? null}
         upcomingCount={headerCounts.upcoming}
         thisYearCount={headerCounts.thisYear}
         rightAction={<MeTopBarAction />}

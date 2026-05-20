@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import { signIn } from '@/auth';
-import { StackedCards } from '@/components/design-system';
+import { ShowbookMark, StackedCards } from '@/components/design-system';
 import { SiteFooter } from '@/components/SiteFooter';
 import { child } from '@showbook/observability';
 import './signin.css';
@@ -64,8 +64,8 @@ export default async function SignInPage({
 
       <section className="signin__panel">
         <div className="signin__brand">
-          <span className="brand-mark">S</span>
-          <span>Showbook</span>
+          <ShowbookMark size={36} className="signin__brand-mark" />
+          <span className="signin__brand-text">showbook</span>
         </div>
 
         <div className="signin__hero">
