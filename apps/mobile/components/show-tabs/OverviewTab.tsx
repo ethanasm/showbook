@@ -33,6 +33,7 @@ export interface OverviewAction {
   href?: string;
   primary?: boolean;
   danger?: boolean;
+  icon?: React.ReactNode;
 }
 
 export interface OverviewTabProps {
@@ -227,6 +228,9 @@ export function OverviewTab({
                 },
               ]}
             >
+              {action.icon ? (
+                <View style={styles.actionIcon}>{action.icon}</View>
+              ) : null}
               <Text
                 style={[
                   styles.actionLabel,
@@ -348,9 +352,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  actionIcon: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actionLabel: {
     fontFamily: 'Geist Sans',
