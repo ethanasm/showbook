@@ -901,6 +901,17 @@ export function predictSetlist(opts: {
       return distance <= TIER_A_DAYS;
     });
   }
+  // Second fallback: target is near-term (no slide) but the artist has
+  // no setlists within ±30d of either the original target or the
+  // bucketing date — common when a festival booked an artist who isn't
+  // currently touring (the Tash Sultana 0% bug). Use the entire
+  // non-synthetic corpus so density + pairwise consistency can still
+  // reflect the evidence we have. Recency naturally decays to 0 inside
+  // `computeConfidence`, and the `last_year` cap at 0.5 still bounds
+  // the headline.
+  if (confidenceSample.length === 0) {
+    confidenceSample = tier.filter((s) => !s.isSynthetic);
+  }
   const confidence = computeConfidence({ tierA: confidenceSample, targetDate: opts.targetDate });
   const coverage = resolveCoverage({
     activeTourId,

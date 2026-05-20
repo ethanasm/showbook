@@ -16,6 +16,10 @@ export interface FilterGroup {
   name: string;
   sublabel?: string;
   count: number;
+  /** Overrides the rendered count with arbitrary text. Used by the
+   *  festival setlist tab to show per-artist prediction confidence
+   *  ("82%") instead of the numeric song count. */
+  badgeText?: string;
 }
 
 export function FilterChipsRow({
@@ -71,6 +75,7 @@ export function FilterChipsRow({
           label={g.name}
           sublabel={g.sublabel}
           count={g.count}
+          badgeText={g.badgeText}
           active={selected === g.id}
           // When `showAll` is false the chip rail is required-selection:
           // tapping the active chip is a no-op rather than clearing back
@@ -90,6 +95,7 @@ function FilterChip({
   label,
   sublabel,
   count,
+  badgeText,
   active,
   onPress,
   colors,
@@ -98,11 +104,14 @@ function FilterChip({
   label: string;
   sublabel?: string;
   count: number;
+  badgeText?: string;
   active: boolean;
   onPress: () => void;
   colors: ReturnType<typeof useTheme>['tokens']['colors'];
   testID?: string;
 }): React.JSX.Element {
+  const renderedBadge =
+    badgeText !== undefined ? badgeText : String(count);
   return (
     <Pressable
       accessibilityRole="button"
@@ -137,14 +146,14 @@ function FilterChip({
           </Text>
         ) : null}
       </Text>
-      {count > 0 || count === 0 ? (
+      {renderedBadge.length > 0 ? (
         <Text
           style={[
             styles.chipCount,
             { color: active ? colors.bg : colors.muted, opacity: active ? 0.7 : 1 },
           ]}
         >
-          {count}
+          {renderedBadge}
         </Text>
       ) : null}
     </Pressable>

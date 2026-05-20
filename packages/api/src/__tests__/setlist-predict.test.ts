@@ -1666,6 +1666,59 @@ describe('far-future show (regression — was returning confidence=0)', () => {
   });
 });
 
+describe('near-term festival, no recent corpus (regression — Tash Sultana 0% bug)', () => {
+  // Mirrors the Tash Sultana case: a festival show 2 days out, the
+  // artist hasn't toured recently (latest setlist ~6 months ago), but
+  // the corpus carries ~10 historical rows worth of evidence. The old
+  // code took the empty-tier-A → empty-±30d-fallback path through
+  // `computeConfidence` and returned 0% even though "Unleash the Rage
+  // — 8 of last 10 shows" is clearly an informative prediction.
+  const target = '2026-05-22';
+  const now = new Date('2026-05-20T12:00:00Z');
+  const core = [
+    'Unleash the Rage',
+    'Hazard to Myself',
+    'Greed',
+    'Milk & Honey',
+    'Notion',
+  ];
+
+  function buildCorpus(): CorpusRow[] {
+    // 10 setlists spread across a late-2025 run — no active tour in
+    // 2026, no setlists within ±30d of either the target or `now`,
+    // but still inside the 365-day corpus window so `bucketTiers`
+    // keeps them in tier-E rather than dropping the whole corpus.
+    const dates = [
+      '2025-09-02', '2025-09-05', '2025-09-09', '2025-09-13', '2025-09-16',
+      '2025-09-20', '2025-09-23', '2025-09-27', '2025-10-01', '2025-10-04',
+    ];
+    return dates.map((d, i) =>
+      corpusRow({ id: `tash-${i}`, date: d, tourId: null, tourName: null, songs: core }),
+    );
+  }
+
+  test('produces non-zero confidence when corpus exists but no recent activity', () => {
+    const r = predictSetlist({ performerId: 'p', targetDate: target, corpus: buildCorpus(), now });
+    if (r.style !== 'stable') throw new Error('expected stable');
+    assert.ok(r.confidence > 0, `expected > 0, got ${r.confidence}`);
+  });
+
+  test('confidence sits at the last_year cap (≤0.5) for the historical-only corpus', () => {
+    const r = predictSetlist({ performerId: 'p', targetDate: target, corpus: buildCorpus(), now });
+    if (r.style !== 'stable') throw new Error('expected stable');
+    assert.ok(r.confidence <= 0.5, `expected ≤0.5 (last_year cap), got ${r.confidence}`);
+  });
+
+  test('core songs still surface in the core bucket', () => {
+    const r = predictSetlist({ performerId: 'p', targetDate: target, corpus: buildCorpus(), now });
+    if (r.style !== 'stable') throw new Error('expected stable');
+    const coreSet = new Set(r.core.map((s) => s.title.toLowerCase()));
+    for (const title of core) {
+      assert.ok(coreSet.has(title.toLowerCase()), `expected ${title} in core`);
+    }
+  });
+});
+
 describe('untagged-corpus show (regression — Foster the People 0% bug)', () => {
   // Mirrors the Foster the People case: a far-future show with ~20
   // real setlists, high consistency ("13 of last 19 shows"), but

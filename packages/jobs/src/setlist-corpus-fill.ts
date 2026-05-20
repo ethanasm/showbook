@@ -355,6 +355,14 @@ export async function topFollowedPerformers(
  * `daysAhead` days. shows-nightly chains a `predict` corpus-fill for each
  * one so the predicted-setlist tab is warm by the time the user opens
  * the show.
+ *
+ * Includes festival supports (not just headliners) so the per-artist
+ * predicted setlists rendered by `predictedFestivalSetlists` have a
+ * corpus to draw on by the time the user opens the festival's Setlist
+ * tab. Without supports in this pool, the only corpus-fill triggers
+ * for them were "user follows the artist" or "admin runs the backfill
+ * manually" — both rare for festival lineup acts a user hasn't
+ * specifically opted into.
  */
 export async function performersWithUpcomingWatchingShows(
   daysAhead: number,
@@ -371,7 +379,7 @@ export async function performersWithUpcomingWatchingShows(
       AND s.date IS NOT NULL
       AND s.date <= ${cutoff}
       AND s.date >= CURRENT_DATE
-      AND sp.role = 'headliner'
+      AND sp.role IN ('headliner', 'support')
   `);
   const list = Array.isArray(rows) ? rows : (rows as { rows?: unknown }).rows;
   if (!Array.isArray(list)) return [];
