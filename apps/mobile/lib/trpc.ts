@@ -18,7 +18,7 @@ import superjson from 'superjson';
 import type { AppRouter } from '@showbook/api';
 import { API_URL } from './env';
 import { hapticSuccess, hapticWarning } from './haptics';
-import { reportClientError, describeError } from './telemetry';
+import { reportClientEvent, describeError } from './telemetry';
 
 export const trpc = createTRPCReact<AppRouter>();
 
@@ -83,7 +83,7 @@ export function createQueryClient(): QueryClient {
  * but ops have no record of the procedure that blew up).
  *
  * Two important guards:
- *   1. Skip the `telemetry.logClientError` op itself — otherwise a logging
+ *   1. Skip the `telemetry.logEvent` op itself — otherwise a logging
  *      failure would trigger another logging call and so on.
  *   2. Swallow any reporting error so the original procedure error still
  *      surfaces to the UI exactly as it did before.
@@ -95,10 +95,10 @@ function errorReporterLink(): TRPCLink<AppRouter> {
         const sub = next(op).subscribe({
           next: (value) => observer.next(value),
           error: (err) => {
-            if (op.path !== 'telemetry.logClientError') {
+            if (op.path !== 'telemetry.logEvent') {
               try {
                 const data = (err as { data?: { httpStatus?: number; code?: string } })?.data;
-                reportClientError({
+                reportClientEvent({
                   event: 'trpc.error',
                   message: describeError(err),
                   level: 'error',

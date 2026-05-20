@@ -5,13 +5,15 @@ import { router, publicProcedure } from '../trpc';
 const log = child({ component: 'mobile.telemetry' });
 
 /**
- * Mobile client-side error sink.
+ * Mobile client-side telemetry sink.
  *
  * The mobile app has no direct path to Axiom — RN can't ship pino logs.
- * Whenever the client catches an error that the user would otherwise see
- * as a toast (tRPC procedure failures, R2 PUT non-2xx, unhandled
- * exceptions in screens), it fires `logClientError` so the failure shows
- * up alongside the server logs under the `mobile.<event>` namespace.
+ * Whenever the client catches an event worth recording — lifecycle
+ * markers (`upload.start`, `upload.success`), failures (`upload.put.failed`,
+ * `trpc.error`), unhandled screen exceptions, etc. — it fires `logEvent`
+ * so the entry shows up alongside the server logs under the
+ * `mobile.<event>` namespace. `level` (`warn`/`error`) distinguishes
+ * informational markers from actual failures.
  *
  * `publicProcedure`, **not** protected — the original PR #301 gated this
  * on auth, which silently dropped the most useful class of failure:
@@ -37,7 +39,7 @@ function clipContext(context: Record<string, unknown> | undefined): Record<strin
 }
 
 export const telemetryRouter = router({
-  logClientError: publicProcedure
+  logEvent: publicProcedure
     .input(
       z.object({
         event: z.string().min(1).max(80),

@@ -17,7 +17,7 @@
  * `over-quota` screen instead of showing a generic toast.
  */
 
-import { reportClientError, describeError } from '../telemetry';
+import { reportClientEvent, describeError } from '../telemetry';
 import {
   OverQuotaError,
   UploadCancelledError,
@@ -214,7 +214,7 @@ async function putToS3(
     });
   } catch (err) {
     if (isAbortError(err)) throw new UploadCancelledError();
-    reportClientError({
+    reportClientEvent({
       event: 'upload.put.network_error',
       level: 'error',
       message: describeError(err),
@@ -233,7 +233,7 @@ async function putToS3(
     // ops can distinguish auth vs. signature vs. routing failures
     // without needing the user to dump logs from their phone.
     const bodyPreview = await readResponseBodyPreview(res);
-    reportClientError({
+    reportClientEvent({
       event: 'upload.put.failed',
       level: 'error',
       message: `R2 PUT ${res.status}`,
@@ -349,7 +349,7 @@ export async function uploadFile(
   // the failure was. These markers let us locate the exact failing stage
   // in Axiom without rebuilding the app.
   const t0 = Date.now();
-  reportClientError({
+  reportClientEvent({
     event: 'upload.start',
     level: 'warn',
     message: 'upload started',
@@ -369,7 +369,7 @@ export async function uploadFile(
     );
   } catch (err) {
     if (!isUserCancellation(err)) {
-      reportClientError({
+      reportClientEvent({
         event: 'upload.failed_at',
         level: 'error',
         message: describeError(err),
@@ -386,7 +386,7 @@ export async function uploadFile(
     blob = await readFileAsBlob(file.uri, file.mimeType, fetchImpl);
   } catch (err) {
     if (!isUserCancellation(err)) {
-      reportClientError({
+      reportClientEvent({
         event: 'upload.failed_at',
         level: 'error',
         message: describeError(err),
@@ -402,7 +402,7 @@ export async function uploadFile(
     throw err;
   }
 
-  reportClientError({
+  reportClientEvent({
     event: 'upload.read_ok',
     level: 'warn',
     message: 'source file read',
@@ -421,7 +421,7 @@ export async function uploadFile(
       // (upload.put.failed / upload.put.network_error). Add a terminal
       // marker so Axiom can group failures by stage. Skip on user-cancel.
       if (!isUserCancellation(err)) {
-        reportClientError({
+        reportClientEvent({
           event: 'upload.failed_at',
           level: 'error',
           message: describeError(err),
@@ -441,7 +441,7 @@ export async function uploadFile(
     );
   } catch (err) {
     if (!isUserCancellation(err)) {
-      reportClientError({
+      reportClientEvent({
         event: 'upload.failed_at',
         level: 'error',
         message: describeError(err),
@@ -452,7 +452,7 @@ export async function uploadFile(
   }
   reportProgress(1);
 
-  reportClientError({
+  reportClientEvent({
     event: 'upload.success',
     level: 'warn',
     message: 'upload complete',

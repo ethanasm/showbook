@@ -31,7 +31,7 @@ import {
 import {
   setMobileTelemetryLogger,
   __resetTelemetryForTests,
-  type ClientErrorPayload,
+  type ClientEventPayload,
 } from '../../telemetry';
 
 beforeEach(() => __resetTelemetryForTests());
@@ -385,7 +385,7 @@ describe('uploadFile — over-quota signal', () => {
 
 describe('uploadFile — telemetry on PUT failure', () => {
   it('captures R2 status + response body preview when PUT returns non-2xx', async () => {
-    const reports: ClientErrorPayload[] = [];
+    const reports: ClientEventPayload[] = [];
     setMobileTelemetryLogger((p) => reports.push(p));
 
     const server = stubServer();
@@ -431,7 +431,7 @@ describe('uploadFile — telemetry on PUT failure', () => {
   });
 
   it('reports a network error on PUT with the underlying error message', async () => {
-    const reports: ClientErrorPayload[] = [];
+    const reports: ClientEventPayload[] = [];
     setMobileTelemetryLogger((p) => reports.push(p));
 
     const server = stubServer();
@@ -459,7 +459,7 @@ describe('uploadFile — telemetry on PUT failure', () => {
   });
 
   it('does NOT report when the user cancels the upload (AbortError is not a failure)', async () => {
-    const reports: ClientErrorPayload[] = [];
+    const reports: ClientEventPayload[] = [];
     setMobileTelemetryLogger((p) => reports.push(p));
 
     const server = stubServer();
@@ -507,7 +507,7 @@ describe('uploadFile — telemetry on PUT failure', () => {
 
 describe('uploadFile — lifecycle telemetry', () => {
   it('emits start → read_ok → success markers on the happy path so Axiom can locate stuck uploads', async () => {
-    const reports: ClientErrorPayload[] = [];
+    const reports: ClientEventPayload[] = [];
     setMobileTelemetryLogger((p) => reports.push(p));
 
     const server = stubServer();
@@ -538,7 +538,7 @@ describe('uploadFile — lifecycle telemetry', () => {
     // This is the gap that caused 10 stuck-pending media_assets in prod
     // to log NOTHING: readFileAsBlob threw between the (successful)
     // intent step and the never-attempted PUT, and no telemetry fired.
-    const reports: ClientErrorPayload[] = [];
+    const reports: ClientEventPayload[] = [];
     setMobileTelemetryLogger((p) => reports.push(p));
 
     const server = stubServer();
@@ -565,7 +565,7 @@ describe('uploadFile — lifecycle telemetry', () => {
   });
 
   it('fires upload.failed_at with stage=intent when the server rejects the intent', async () => {
-    const reports: ClientErrorPayload[] = [];
+    const reports: ClientEventPayload[] = [];
     setMobileTelemetryLogger((p) => reports.push(p));
 
     const server: UploadServer = {
