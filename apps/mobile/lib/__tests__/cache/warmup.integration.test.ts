@@ -67,6 +67,7 @@ function buildClient(): WarmupClientSurface {
     setlistIntel: {
       musicLayerV2Feature: { query: make({ enabled: false }) },
       predictedSetlist: { query: make({ style: 'cold' }) },
+      predictedFestivalSetlists: { query: make({ entries: [] }) },
       trackPreviewsForShow: { query: make({ previews: {} }) },
     },
     spotify: {

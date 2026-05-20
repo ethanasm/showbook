@@ -109,6 +109,9 @@ function buildClient(opts: BuildClientOptions = {}): {
         query: make('setlistIntel.musicLayerV2Feature', { enabled: false }),
       },
       predictedSetlist: { query: make('setlistIntel.predictedSetlist', { style: 'cold' }) },
+      predictedFestivalSetlists: {
+        query: make('setlistIntel.predictedFestivalSetlists', { entries: [] }),
+      },
       trackPreviewsForShow: {
         query: make('setlistIntel.trackPreviewsForShow', { previews: {} }),
       },

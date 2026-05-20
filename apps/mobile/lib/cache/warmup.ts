@@ -90,6 +90,7 @@ export interface WarmupClientSurface {
   setlistIntel: {
     musicLayerV2Feature: AnyInputQuery;
     predictedSetlist: AnyInputQuery;
+    predictedFestivalSetlists: AnyInputQuery;
     trackPreviewsForShow: AnyInputQuery;
   };
   spotify: {
@@ -109,6 +110,7 @@ export interface WarmupClientSurface {
 interface ShowsListRow {
   id: string;
   state?: string;
+  kind?: string;
   venue?: { id?: string | null } | null;
   showPerformers?: ReadonlyArray<{ performer?: { id?: string | null } | null }> | null;
 }
@@ -428,13 +430,28 @@ export async function warmCacheForOfflineUse(
         return data;
       }),
     );
-    showTasks.push(() =>
-      step(`setlistIntel.predictedSetlist:${showId}`, async () => {
-        const data = await c.setlistIntel.predictedSetlist.query({ showId });
-        qc.setQueryData(trpcKey(['setlistIntel', 'predictedSetlist'], { showId }), data);
-        return data;
-      }),
-    );
+    if (show.kind === 'festival') {
+      showTasks.push(() =>
+        step(`setlistIntel.predictedFestivalSetlists:${showId}`, async () => {
+          const data = await c.setlistIntel.predictedFestivalSetlists.query({
+            showId,
+          });
+          qc.setQueryData(
+            trpcKey(['setlistIntel', 'predictedFestivalSetlists'], { showId }),
+            data,
+          );
+          return data;
+        }),
+      );
+    } else {
+      showTasks.push(() =>
+        step(`setlistIntel.predictedSetlist:${showId}`, async () => {
+          const data = await c.setlistIntel.predictedSetlist.query({ showId });
+          qc.setQueryData(trpcKey(['setlistIntel', 'predictedSetlist'], { showId }), data);
+          return data;
+        }),
+      );
+    }
     if (show.state === 'past') {
       showTasks.push(() =>
         step(`shows.songBadges:${showId}`, async () => {

@@ -884,3 +884,101 @@
 .priming-stat--compact {
   font-size: 11.5px;
 }
+
+/* ── Festival Setlist Tab — lineup chip rail ──────────────────── */
+
+.festival-setlist-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid var(--rule);
+  flex-shrink: 0;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.festival-setlist-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.festival-setlist-chip {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.1px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  transition: all 0.12s;
+}
+
+.festival-setlist-chip:hover {
+  border-color: var(--ink);
+}
+
+.festival-setlist-chip--active {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+  font-weight: 600;
+}
+
+.festival-setlist-chip__sublabel {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 11px;
+}
+
+.festival-setlist-chip--active .festival-setlist-chip__sublabel {
+  color: var(--bg);
+  opacity: 0.7;
+}
+
+.festival-setlist-chip__count {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--faint);
+}
+
+.festival-setlist-chip--active .festival-setlist-chip__count {
+  color: var(--bg);
+  opacity: 0.7;
+}
+
+.festival-setlist-empty {
+  padding: 48px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface);
+}
+
+.festival-setlist-empty__title {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+
+.festival-setlist-empty__body {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+  max-width: 360px;
+  margin: 0;
+}

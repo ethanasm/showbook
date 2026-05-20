@@ -11,6 +11,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { formatSetlistNote } from '@showbook/shared';
 import { useTheme } from '../../lib/theme';
 import { SectionFrame } from './SectionFrame';
 import { HypePlaylistCard } from './HypePlaylistCard';
@@ -304,7 +305,7 @@ function SetlistTabPast({
                 key={`main-${idx}-${song.title}`}
                 position={idx + 1}
                 title={song.title}
-                evidence={song.note ?? ''}
+                evidence={formatSetlistNote(song.note)}
                 role={
                   song.isOpenerOrCloser
                     ? idx === 0
@@ -331,7 +332,7 @@ function SetlistTabPast({
                     key={`encore-${idx}-${song.title}`}
                     position={idx + 1}
                     title={song.title}
-                    evidence={song.note ?? ''}
+                    evidence={formatSetlistNote(song.note)}
                     role={
                       idx === 0
                         ? 'encore_open'

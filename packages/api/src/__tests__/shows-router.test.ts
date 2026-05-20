@@ -182,6 +182,31 @@ describe('showsRouter (unit)', () => {
     });
   });
 
+  describe('findByWalletSerial', () => {
+    it('returns the matching show id', async () => {
+      const db = makeFakeDb({ selectResults: [[{ id: SHOW_ID }]] });
+      const result = await caller(db).findByWalletSerial({
+        serialNumber: 'tm-abc-123',
+      });
+      assert.deepEqual(result, { id: SHOW_ID });
+    });
+
+    it('returns null when no row matches the serial', async () => {
+      const db = makeFakeDb({ selectResults: [[]] });
+      const result = await caller(db).findByWalletSerial({
+        serialNumber: 'never-seen',
+      });
+      assert.equal(result, null);
+    });
+
+    it('rejects an empty serial number at the input boundary', async () => {
+      const db = makeFakeDb({ selectResults: [] });
+      await assert.rejects(() =>
+        caller(db).findByWalletSerial({ serialNumber: '' }),
+      );
+    });
+  });
+
   describe('detail', () => {
     it('throws NOT_FOUND when not found', async () => {
       // ctx.db.query.shows.findFirst — fake-db returns undefined on chain.

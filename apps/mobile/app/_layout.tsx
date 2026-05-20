@@ -26,8 +26,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Linking from 'expo-linking';
 
 import { ThemeProvider, useTheme } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/auth';
@@ -38,11 +39,12 @@ import { deleteCacheDatabase } from '../lib/cache';
 import { warmCacheForOfflineUse } from '../lib/cache/warmup';
 import { useForegroundWarmup } from '../lib/cache/useForegroundWarmup';
 import { loadAppFonts } from '../lib/fonts';
-import { FeedbackProvider } from '../lib/feedback';
+import { FeedbackProvider, useFeedback } from '../lib/feedback';
 import {
   NetworkProvider,
   OfflineSyncProvider,
   useOfflineSync,
+  useNetwork,
   type OutboxDispatch,
   type PendingMutation,
 } from '../lib/network';
@@ -53,7 +55,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { PendingWritesDrawer } from '../components/PendingWritesDrawer';
 import { PreviewMiniPlayer } from '../components/PreviewMiniPlayer';
 import { PreviewPlayerProvider } from '../lib/preview-player-provider';
-import { useNetwork } from '../lib/network';
+import { readAndParsePkpassUri } from '../lib/wallet/read-pkpass-uri';
 
 // Keep the splash screen up until fonts are ready. Errors here are
 // non-fatal — if preventAutoHideAsync rejects, the splash hides on its
@@ -93,6 +95,7 @@ export default function RootLayout(): React.JSX.Element {
                         <PreviewPlayerProvider>
                           <BannerHost />
                           <OfflineBanner />
+                          <WalletShareBridge />
                           {/*
                            * Root <Stack> exposes per-screen `presentation`
                            * options (modal + native swipe-down) to leaf
@@ -240,6 +243,89 @@ async function swallowAlreadyInState<T>(call: () => Promise<T>): Promise<T | { s
     if (status === 404 || status === 409) return { success: true };
     throw err;
   }
+}
+
+/**
+ * Listens for `.pkpass` share-sheet intents and routes parsed passes
+ * into the Add Show form with fields pre-filled. iOS-only in practice —
+ * Android Google Wallet doesn't expose pass JSON through share intents,
+ * so the handler short-circuits on non-`.pkpass` URIs and is dead code
+ * on Android until a separate path lands there.
+ *
+ * Lives inside the auth/tRPC/network provider chain so future
+ * extensions (e.g. duplicate-check via `shows.findByWalletSerial`)
+ * have access to a usable tRPC client and an active session.
+ */
+function WalletShareBridge(): null {
+  const router = useRouter();
+  const { showToast } = useFeedback();
+  const utils = trpc.useUtils();
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    const handle = async (uri: string | null | undefined) => {
+      if (cancelled || !uri) return;
+      // Loose pathname check — share-sheet URIs are file://… ending in
+      // .pkpass; URL-encoded variants and query strings can sneak in
+      // depending on the originating app.
+      if (!/\.pkpass(\?|$)/i.test(uri)) return;
+
+      const parsed = await readAndParsePkpassUri(uri);
+      if (cancelled) return;
+      if (!parsed) {
+        showToast({ kind: 'error', text: "Couldn't read that ticket" });
+        return;
+      }
+
+      // Best-effort duplicate check. Server-side dedup catches it too,
+      // so failures here (offline, transient 500) fall through to the
+      // form push instead of blocking the import.
+      try {
+        const existing = await utils.client.shows.findByWalletSerial.query({
+          serialNumber: parsed.serialNumber,
+        });
+        if (existing?.id) {
+          showToast({
+            kind: 'info',
+            text: 'Already in your library',
+            action: {
+              label: 'Open',
+              onPress: () => router.push(`/show/${existing.id}`),
+            },
+          });
+          return;
+        }
+      } catch {
+        // ignore — proceed to form
+      }
+
+      router.push({
+        pathname: '/add/form',
+        params: {
+          headliner: parsed.headliner ?? '',
+          venueHint: parsed.venueName ?? '',
+          dateHint: parsed.showDate ?? '',
+          seatHint: parsed.seat ?? '',
+          kindHint: parsed.kindHint ?? 'concert',
+          source: 'wallet',
+          walletSerial: parsed.serialNumber,
+          walletPassType: parsed.passTypeIdentifier,
+        },
+      });
+    };
+
+    Linking.getInitialURL().then(handle).catch(() => undefined);
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      void handle(url);
+    });
+    return () => {
+      cancelled = true;
+      sub.remove();
+    };
+  }, [router, showToast, utils]);
+
+  return null;
 }
 
 /**

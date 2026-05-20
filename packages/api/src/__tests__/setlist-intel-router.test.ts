@@ -110,15 +110,42 @@ describe('predictedSetlist — eligibility gate', () => {
     assert.equal(result.style, 'cold');
   });
 
-  test('returns "production_show" for a festival with a productionName', async () => {
-    const db = makeRouterDb(
+  test('"production_show" cold state is now theatre-only (festivals fall through)', async () => {
+    // Theatre with a productionName: still cold(production_show).
+    const theatreDb = makeRouterDb(
+      showFixture({ kind: 'theatre', productionName: 'Hamilton' }),
+      'mbid-123',
+    );
+    const theatreCaller = setlistIntelRouter.createCaller(
+      fakeCtx(theatreDb, USER_ID) as any,
+    );
+    const theatreResult = await theatreCaller.predictedSetlist({
+      showId: fakeUuid('s', '1'),
+    });
+    // Theatre is gated by `wrong_kind` (SUPPORTED_KINDS doesn't include
+    // theatre) before the production_show branch fires.
+    assert.equal(theatreResult.style, 'cold');
+
+    // Festival with a productionName: falls through to the headliner
+    // prediction path. Per-artist breakdown is served by the
+    // predictedFestivalSetlists procedure below.
+    const festivalDb = makeRouterDb(
       showFixture({ kind: 'festival', productionName: 'Glastonbury 2026' }),
       'mbid-123',
     );
-    const caller = setlistIntelRouter.createCaller(fakeCtx(db, USER_ID) as any);
-    const result = await caller.predictedSetlist({ showId: fakeUuid('s', '1') });
-    assert.equal(result.style, 'cold');
-    if (result.style === 'cold') assert.equal(result.reason, 'production_show');
+    const festivalCaller = setlistIntelRouter.createCaller(
+      fakeCtx(festivalDb, USER_ID) as any,
+    );
+    const festivalResult = await festivalCaller.predictedSetlist({
+      showId: fakeUuid('s', '1'),
+    });
+    // The fake db can't actually run the algorithm path, so the catch
+    // surfaces no_corpus — but the key assertion is it's NOT
+    // production_show anymore.
+    assert.equal(festivalResult.style, 'cold');
+    if (festivalResult.style === 'cold') {
+      assert.notEqual(festivalResult.reason, 'production_show');
+    }
   });
 
   test('returns "date_not_set" for a concert with no date (residency case)', async () => {
@@ -172,6 +199,132 @@ describe('predictedSetlist — eligibility gate', () => {
         `unexpected fallback reason ${result.reason}`,
       );
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// predictedFestivalSetlists — multi-artist fan-out
+// ─────────────────────────────────────────────────────────────────────
+
+interface FestivalShowFixture {
+  kind: string;
+  date: string | null;
+  productionName: string | null;
+  showPerformers: Array<{
+    role: string;
+    sortOrder: number;
+    performer: { id: string; name: string };
+  }>;
+}
+
+function makeFestivalDb(show: FestivalShowFixture) {
+  const db = makeFakeDb({ selectResults: [] });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (db.query as any).shows = {
+    findFirst: async () => show,
+  };
+  // Per-artist performer lookup: the fluent `where` clause isn't visible
+  // to the proxy, so we override `select` to return a null-mbid row no
+  // matter which performer the procedure asks about. That keeps every
+  // artist on the cold(no_mbid) fan-out branch — letting any artist
+  // through to the algorithm path would also consume select calls
+  // from the same proxy for the corpus loader, racing the other
+  // artists' lookups.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (db as any).select = () => ({
+    from: () => ({
+      where: () => ({
+        limit: async () => [
+          {
+            id: 'unused',
+            name: 'unused',
+            musicbrainzId: null,
+            setlistStyle: null,
+            setlistStyleOverride: null,
+          },
+        ],
+      }),
+    }),
+  });
+  return db;
+}
+
+describe('predictedFestivalSetlists — per-artist fan-out', () => {
+  test('returns one entry per lineup artist in headliner→support sortOrder', async () => {
+    const lordeId = fakeUuid('p', 'lorde');
+    const teddyId = fakeUuid('p', 'teddy');
+    const tashId = fakeUuid('p', 'tash');
+    const db = makeFestivalDb({
+      kind: 'festival',
+      date: '2026-05-22',
+      productionName: 'Bottlerock',
+      showPerformers: [
+        // Intentionally out of order on input — the procedure sorts.
+        { role: 'support', sortOrder: 2, performer: { id: tashId, name: 'Tash Sultana' } },
+        { role: 'headliner', sortOrder: 0, performer: { id: lordeId, name: 'Lorde' } },
+        { role: 'support', sortOrder: 1, performer: { id: teddyId, name: 'Teddy Swims' } },
+      ],
+    });
+    const caller = setlistIntelRouter.createCaller(fakeCtx(db, USER_ID) as any);
+    const result = await caller.predictedFestivalSetlists({
+      showId: fakeUuid('s', 'fest'),
+    });
+
+    assert.equal(result.entries.length, 3);
+    // Headliner first (sortOrder 0), then supports by ascending sortOrder.
+    assert.equal(result.entries[0].role, 'headliner');
+    assert.equal(result.entries[0].performerName, 'Lorde');
+    assert.equal(result.entries[1].role, 'support');
+    assert.equal(result.entries[1].performerName, 'Teddy Swims');
+    assert.equal(result.entries[2].performerName, 'Tash Sultana');
+    // Every artist returns a prediction (cold(no_mbid) for all three
+    // since the fake performer rows have null musicbrainzId).
+    for (const e of result.entries) {
+      assert.equal(e.prediction.style, 'cold');
+      if (e.prediction.style === 'cold') {
+        assert.equal(e.prediction.reason, 'no_mbid');
+      }
+    }
+  });
+
+  test('returns an empty entries array for non-festival kinds', async () => {
+    const db = makeFestivalDb({
+      kind: 'concert',
+      date: '2026-05-22',
+      productionName: null,
+      showPerformers: [
+        {
+          role: 'headliner',
+          sortOrder: 0,
+          performer: { id: fakeUuid('p', '1'), name: 'X' },
+        },
+      ],
+    });
+    const caller = setlistIntelRouter.createCaller(fakeCtx(db, USER_ID) as any);
+    const result = await caller.predictedFestivalSetlists({
+      showId: fakeUuid('s', '1'),
+    });
+    assert.deepEqual(result.entries, []);
+  });
+
+  test('returns empty entries when the festival has no date', async () => {
+    const db = makeFestivalDb({
+      kind: 'festival',
+      date: null,
+      productionName: 'Tbd Fest',
+      showPerformers: [
+        {
+          role: 'headliner',
+          sortOrder: 0,
+          performer: { id: fakeUuid('p', '1'), name: 'X' },
+        },
+      ],
+    });
+    const caller = setlistIntelRouter.createCaller(fakeCtx(db, USER_ID) as any);
+    const result = await caller.predictedFestivalSetlists({
+      showId: fakeUuid('s', '1'),
+    });
+    assert.deepEqual(result.entries, []);
   });
 });
 

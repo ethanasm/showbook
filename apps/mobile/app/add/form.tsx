@@ -30,6 +30,10 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { TopBar } from '../../components/TopBar';
 import {
+  ImportSourceBanner,
+  type ImportSourceVariant,
+} from '../../components/ImportSourceBanner';
+import {
   ShowFormFields,
   type ShowFormErrors,
 } from '../../components/ShowFormFields';
@@ -100,6 +104,12 @@ function paramPerformers(value: string | string[] | undefined): PerformerRow[] {
   }
 }
 
+function paramImportSource(
+  value: string | string[] | undefined,
+): ImportSourceVariant | null {
+  return paramString(value) === 'wallet' ? 'wallet' : null;
+}
+
 export default function AddFormScreen(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -126,6 +136,10 @@ export default function AddFormScreen(): React.JSX.Element {
       performers: paramPerformers(params.performersJson),
     }),
   );
+
+  const importSource = paramImportSource(params.source);
+  const walletSerial = paramString(params.walletSerial);
+  const walletPassType = paramString(params.walletPassType);
 
   const [errors, setErrors] = React.useState<ShowFormErrors>({});
   const clearError = React.useCallback((key: keyof ShowFormErrors) => {
@@ -210,6 +224,17 @@ export default function AddFormScreen(): React.JSX.Element {
       endDate: normalizedEndDate,
     });
 
+    const sourceRefs =
+      importSource === 'wallet' && walletSerial
+        ? {
+            wallet: {
+              passTypeIdentifier: walletPassType || null,
+              serialNumber: walletSerial,
+              importedAt: new Date().toISOString(),
+            },
+          }
+        : undefined;
+
     setSubmitting(true);
     try {
       const { result } = await runOptimisticMutation<
@@ -218,7 +243,7 @@ export default function AddFormScreen(): React.JSX.Element {
         Awaited<ReturnType<typeof utils.client.shows.create.mutate>>
       >({
         mutation: 'shows.create',
-        input: payload,
+        input: { ...payload, sourceRefs },
         outbox: getCacheOutbox(),
         call: (input) => utils.client.shows.create.mutate(input),
         reconcile: () => {
@@ -247,7 +272,17 @@ export default function AddFormScreen(): React.JSX.Element {
     } finally {
       setSubmitting(false);
     }
-  }, [values, set, utils, router, showToast, queryClient]);
+  }, [
+    values,
+    set,
+    utils,
+    router,
+    showToast,
+    queryClient,
+    importSource,
+    walletSerial,
+    walletPassType,
+  ]);
 
   return (
     <>
@@ -291,6 +326,7 @@ export default function AddFormScreen(): React.JSX.Element {
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
           >
+            {importSource ? <ImportSourceBanner variant={importSource} /> : null}
             <ShowFormFields
               values={values}
               set={set}

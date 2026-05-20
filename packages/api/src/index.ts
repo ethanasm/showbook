@@ -160,6 +160,7 @@ export {
 export {
   pickHeadliner,
   isProductionShow,
+  hasProductionLabel,
   getHeadliner,
   getHeadlinerId,
   getSupportPerformers,

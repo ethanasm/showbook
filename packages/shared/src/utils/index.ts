@@ -22,6 +22,12 @@ export {
 } from './format';
 export { buildIcs, defaultShowTime, slugifyForFilename, type IcsEvent } from './ical';
 export {
+  normalizeShowName,
+  showMatchesAnnouncement,
+  type ShowForDedup,
+  type AnnouncementForDedup,
+} from './show-dedup';
+export {
   regionBbox,
   isPointInBbox,
   isPointInRegion,

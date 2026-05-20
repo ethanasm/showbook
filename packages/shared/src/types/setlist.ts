@@ -78,6 +78,22 @@ export function flattenSetlistTitles(setlist: PerformerSetlist): string[] {
 }
 
 /**
+ * Format a per-song note for display. setlist.fm's API returns its `info`
+ * field as the inner content of parenthetical annotations — their UI wraps
+ * it in `(...)`. We store `note` as that raw inner content, so for setlist.fm
+ * rows with multi-annotation info like `"without band) (>"` (which their UI
+ * renders as `(without band) (>)`) the unwrapped form looks broken. Wrap
+ * here so the display matches setlist.fm's convention. User-typed notes via
+ * the editor read fine wrapped too (e.g. `(extended intro)`).
+ */
+export function formatSetlistNote(note: string | null | undefined): string {
+  if (!note) return '';
+  const trimmed = note.trim();
+  if (trimmed.length === 0) return '';
+  return `(${trimmed})`;
+}
+
+/**
  * Coerce arbitrary persisted JSON into a `PerformerSetlist`. Tolerates the
  * legacy `string[]` shape (wraps it as a single main set) so callers that
  * read directly from the DB don't crash on un-migrated rows during a deploy.

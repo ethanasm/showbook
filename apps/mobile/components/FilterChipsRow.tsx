@@ -1,0 +1,194 @@
+/**
+ * Horizontal chip rail with an "All" chip plus one chip per group.
+ * Picks a single id from a flat list. Tap the active chip to clear.
+ *
+ * Originally inlined in `app/(tabs)/discover.tsx`; lifted into a
+ * shared component so the Setlist tab on festival shows can mirror
+ * the Discover filter pattern.
+ */
+
+import React from 'react';
+import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { useTheme } from '../lib/theme';
+
+export interface FilterGroup {
+  id: string;
+  name: string;
+  sublabel?: string;
+  count: number;
+}
+
+export function FilterChipsRow({
+  groups,
+  selected,
+  onSelect,
+  totalCount,
+  allLabel = 'All',
+  showAll = true,
+  variant = 'primary',
+  testIdPrefix,
+}: {
+  groups: FilterGroup[];
+  selected: string | null;
+  onSelect: (id: string | null) => void;
+  /** Count rendered in the "All" chip; ignored when `showAll` is false. */
+  totalCount?: number;
+  allLabel?: string;
+  /** Render the leading "All" chip. Some surfaces (the festival
+   *  setlist tab) default-select an artist and don't want an "All"
+   *  option that flattens every lineup setlist into one scroll. */
+  showAll?: boolean;
+  /** `sub` renders a slightly tighter row used as a second-level filter. */
+  variant?: 'primary' | 'sub';
+  testIdPrefix?: string;
+}): React.JSX.Element {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={[
+        styles.chipsRow,
+        variant === 'sub' && styles.chipsRowSub,
+      ]}
+      style={styles.chipsScroll}
+      testID={testIdPrefix ? `${testIdPrefix}-row` : undefined}
+    >
+      {showAll ? (
+        <FilterChip
+          label={allLabel}
+          count={totalCount ?? 0}
+          active={selected === null}
+          onPress={() => onSelect(null)}
+          colors={colors}
+          testID={testIdPrefix ? `${testIdPrefix}-all` : undefined}
+        />
+      ) : null}
+      {groups.map((g) => (
+        <FilterChip
+          key={g.id}
+          label={g.name}
+          sublabel={g.sublabel}
+          count={g.count}
+          active={selected === g.id}
+          // When `showAll` is false the chip rail is required-selection:
+          // tapping the active chip is a no-op rather than clearing back
+          // to "All". Mirrors how a SegmentedControl behaves.
+          onPress={() =>
+            onSelect(selected === g.id ? (showAll ? null : g.id) : g.id)
+          }
+          colors={colors}
+          testID={testIdPrefix ? `${testIdPrefix}-${g.id}` : undefined}
+        />
+      ))}
+    </ScrollView>
+  );
+}
+
+function FilterChip({
+  label,
+  sublabel,
+  count,
+  active,
+  onPress,
+  colors,
+  testID,
+}: {
+  label: string;
+  sublabel?: string;
+  count: number;
+  active: boolean;
+  onPress: () => void;
+  colors: ReturnType<typeof useTheme>['tokens']['colors'];
+  testID?: string;
+}): React.JSX.Element {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={`${label}${sublabel ? ` ${sublabel}` : ''}`}
+      onPress={onPress}
+      testID={testID}
+      style={({ pressed }) => [
+        styles.chip,
+        {
+          backgroundColor: active ? colors.ink : 'transparent',
+          borderColor: active ? colors.ink : colors.ruleStrong,
+          opacity: pressed ? 0.7 : 1,
+        },
+      ]}
+    >
+      <Text
+        numberOfLines={1}
+        style={[
+          styles.chipLabel,
+          {
+            color: active ? colors.bg : colors.ink,
+            fontWeight: active ? '600' : '500',
+          },
+        ]}
+      >
+        {label}
+        {sublabel ? (
+          <Text style={[styles.chipSublabel, { color: active ? colors.bg : colors.muted }]}>
+            {' '}
+            · {sublabel}
+          </Text>
+        ) : null}
+      </Text>
+      {count > 0 || count === 0 ? (
+        <Text
+          style={[
+            styles.chipCount,
+            { color: active ? colors.bg : colors.muted, opacity: active ? 0.7 : 1 },
+          ]}
+        >
+          {count}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  chipsScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  chipsRowSub: {
+    paddingTop: 0,
+    paddingBottom: 8,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    maxWidth: 220,
+  },
+  chipLabel: {
+    fontFamily: 'Geist Sans',
+    fontSize: 12,
+    letterSpacing: -0.1,
+  },
+  chipSublabel: {
+    fontFamily: 'Geist Sans',
+    fontSize: 11,
+    fontWeight: '400',
+  },
+  chipCount: {
+    fontFamily: 'Geist Mono',
+    fontSize: 10,
+    fontWeight: '400',
+  },
+});
