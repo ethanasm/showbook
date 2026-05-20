@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildActualSongsFromSetlist,
+  buildFestivalLineupEntries,
+  countFestivalActualSongs,
   getHeadliner,
   getHeadlinerId,
   getHeadlinerImageUrl,
@@ -375,6 +377,140 @@ test("buildActualSongsFromSetlist: missing section.kind treats the section as no
     sections: [{ songs: [{ title: "X" }] }],
   });
   assert.equal(out[0].isEncore, false);
+});
+
+// ── buildFestivalLineupEntries ───────────────────────────────────────────
+
+test("buildFestivalLineupEntries: filters out non-headliner/support and preserves DB order", () => {
+  const entries = buildFestivalLineupEntries({
+    showPerformers: [
+      { role: "support", sortOrder: 1, performer: { id: "s1", name: "S One" } },
+      { role: "headliner", sortOrder: 0, performer: { id: "h", name: "Head" } },
+      { role: "guest", sortOrder: 2, performer: { id: "g", name: "Guest" } },
+    ],
+    isPast: false,
+    predictions: null,
+    setlistsByPerformer: {},
+  });
+  assert.equal(entries.length, 2);
+  // Order matches showPerformers — the consumer sorts/filters later.
+  assert.equal(entries[0].performerId, "s1");
+  assert.equal(entries[1].performerId, "h");
+});
+
+test("buildFestivalLineupEntries: upcoming attaches predictions by performerId, leaves actualSongs []", () => {
+  const entries = buildFestivalLineupEntries({
+    showPerformers: [
+      { role: "headliner", sortOrder: 0, performer: { id: "h", name: "Head" } },
+      { role: "support", sortOrder: 1, performer: { id: "s", name: "Sup" } },
+    ],
+    isPast: false,
+    predictions: [
+      { performerId: "h", prediction: { kind: "hot" } as { kind: string } },
+    ],
+    setlistsByPerformer: {
+      // Even if present, isPast=false means actualSongs stays [].
+      h: { sections: [{ kind: "set", songs: [{ title: "X" }] }] },
+    },
+  });
+  assert.deepEqual(entries[0].prediction, { kind: "hot" });
+  assert.equal(entries[0].actualSongs.length, 0);
+  assert.equal(entries[1].prediction, null);
+});
+
+test("buildFestivalLineupEntries: past fans out per-performer setlists, ignores any predictions", () => {
+  const entries = buildFestivalLineupEntries({
+    showPerformers: [
+      { role: "headliner", sortOrder: 0, performer: { id: "h", name: "Head" } },
+      { role: "support", sortOrder: 1, performer: { id: "s", name: "Sup" } },
+    ],
+    isPast: true,
+    predictions: [
+      // Predictions ignored on past shows.
+      { performerId: "h", prediction: { kind: "hot" } as { kind: string } },
+    ],
+    setlistsByPerformer: {
+      h: { sections: [{ kind: "set", songs: [{ title: "Hit" }] }] },
+      // s has no setlist — should produce actualSongs: [].
+    },
+  });
+  assert.equal(entries[0].prediction, null, "past: predictions ignored");
+  assert.equal(entries[0].actualSongs.length, 1);
+  assert.equal(entries[0].actualSongs[0].title, "Hit");
+  assert.equal(entries[1].actualSongs.length, 0);
+});
+
+test("buildFestivalLineupEntries: empty showPerformers returns []", () => {
+  assert.deepEqual(
+    buildFestivalLineupEntries({
+      showPerformers: [],
+      isPast: false,
+      predictions: null,
+      setlistsByPerformer: {},
+    }),
+    [],
+  );
+});
+
+test("buildFestivalLineupEntries: null predictions on upcoming still produces entries with prediction=null", () => {
+  const entries = buildFestivalLineupEntries({
+    showPerformers: [
+      { role: "headliner", sortOrder: 0, performer: { id: "h", name: "H" } },
+    ],
+    isPast: false,
+    predictions: null,
+    setlistsByPerformer: {},
+  });
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].prediction, null);
+});
+
+// ── countFestivalActualSongs ─────────────────────────────────────────────
+
+test("countFestivalActualSongs: returns 0 when not a festival", () => {
+  assert.equal(
+    countFestivalActualSongs({
+      isFestival: false,
+      isPast: true,
+      entries: [
+        { actualSongs: [{ title: "x", sectionIndex: 0, songIndex: 0, isEncore: false }] },
+      ],
+    }),
+    0,
+  );
+});
+
+test("countFestivalActualSongs: returns 0 when not past (no totals on upcoming festivals)", () => {
+  assert.equal(
+    countFestivalActualSongs({
+      isFestival: true,
+      isPast: false,
+      entries: [
+        { actualSongs: [{ title: "x", sectionIndex: 0, songIndex: 0, isEncore: false }] },
+      ],
+    }),
+    0,
+  );
+});
+
+test("countFestivalActualSongs: sums actualSongs across every entry for past festivals", () => {
+  assert.equal(
+    countFestivalActualSongs({
+      isFestival: true,
+      isPast: true,
+      entries: [
+        { actualSongs: [
+          { title: "a", sectionIndex: 0, songIndex: 0, isEncore: false },
+          { title: "b", sectionIndex: 0, songIndex: 1, isEncore: false },
+        ] },
+        { actualSongs: [] },
+        { actualSongs: [
+          { title: "c", sectionIndex: 0, songIndex: 0, isEncore: false },
+        ] },
+      ],
+    }),
+    3,
+  );
 });
 
 // ── getSupportPerformers ─────────────────────────────────────────────────

@@ -21,7 +21,11 @@ import {
   type ShowLike,
 } from "@showbook/shared";
 import { isFeatureOn, isVenuePlaceholder } from "@showbook/shared";
-import { buildActualSongsFromSetlist } from "@/lib/show-accessors";
+import {
+  buildActualSongsFromSetlist,
+  buildFestivalLineupEntries,
+  countFestivalActualSongs,
+} from "@/lib/show-accessors";
 import { MediaSection } from "@/components/media";
 import { ShowTabs } from "./ShowTabs";
 import { OverviewTab, type OverviewLineupEntry } from "./OverviewTab";
@@ -233,47 +237,32 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
   // pull each artist's prediction from the festival procedure.
   const festivalLineupSetlists: FestivalLineupSetlistEntry[] = useMemo(() => {
     if (!isFestival) return [];
-    const predictionsByPerformer = new Map<
-      string,
-      FestivalLineupSetlistEntry["prediction"]
-    >();
-    if (!isPast) {
-      const data = festivalPredictionsQuery.data;
-      if (data?.entries) {
-        for (const e of data.entries) {
-          predictionsByPerformer.set(
-            e.performerId,
-            e.prediction as FestivalLineupSetlistEntry["prediction"],
-          );
-        }
-      }
-    }
-    return show.showPerformers
-      .filter((sp) => sp.role === "headliner" || sp.role === "support")
-      .map((sp) => ({
-        performerId: sp.performer.id,
-        performerName: sp.performer.name,
-        role: sp.role as "headliner" | "support",
-        sortOrder: sp.sortOrder,
-        prediction: predictionsByPerformer.get(sp.performer.id) ?? null,
-        actualSongs: isPast ? buildActualSongs(sp.performer.id) : [],
-      }));
+    return buildFestivalLineupEntries({
+      showPerformers: show.showPerformers,
+      isPast,
+      predictions: (festivalPredictionsQuery.data?.entries ?? null) as
+        | Array<{
+            performerId: string;
+            prediction: FestivalLineupSetlistEntry["prediction"];
+          }>
+        | null,
+      setlistsByPerformer: setlistsMap,
+    });
   }, [
-    buildActualSongs,
     festivalPredictionsQuery.data,
     isFestival,
     isPast,
+    setlistsMap,
     show.showPerformers,
   ]);
 
   const festivalActualSongCount = useMemo(
     () =>
-      isFestival && isPast
-        ? festivalLineupSetlists.reduce(
-            (acc, e) => acc + e.actualSongs.length,
-            0,
-          )
-        : 0,
+      countFestivalActualSongs({
+        isFestival,
+        isPast,
+        entries: festivalLineupSetlists,
+      }),
     [festivalLineupSetlists, isFestival, isPast],
   );
 
