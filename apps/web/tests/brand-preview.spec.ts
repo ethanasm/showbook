@@ -40,7 +40,9 @@ async function loadMark(): Promise<string> {
 test.describe('web brand placement', () => {
   test.skip(!RUN, 'set RUN_BRAND_SCREENSHOTS=1 to capture');
 
-  test('sidebar header (dark)', async ({ page }) => {
+  // ---- AFTER ----------------------------------------------------------
+
+  test('sidebar header (after)', async ({ page }) => {
     const css = await loadCss();
     const mark = await loadMark();
     const sidebarMark = mark
@@ -64,13 +66,12 @@ test.describe('web brand placement', () => {
     await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('.sidebar__logo-text')).toBeVisible();
     await page.screenshot({
-      path: path.join(__dirname, '..', 'brand-screenshots', 'web-sidebar-dark.png'),
-      omitBackground: false,
+      path: path.join(__dirname, '..', 'brand-screenshots', 'web-sidebar-after.png'),
       fullPage: false,
     });
   });
 
-  test('signin panel (dark)', async ({ page }) => {
+  test('signin panel (after)', async ({ page }) => {
     const css = await loadCss();
     const mark = await loadMark();
     const brandMark = mark
@@ -95,7 +96,87 @@ test.describe('web brand placement', () => {
     await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('.signin__brand-text')).toBeVisible();
     await page.screenshot({
-      path: path.join(__dirname, '..', 'brand-screenshots', 'web-signin-dark.png'),
+      path: path.join(__dirname, '..', 'brand-screenshots', 'web-signin-after.png'),
+      fullPage: false,
+    });
+  });
+
+  // ---- BEFORE ---------------------------------------------------------
+  //
+  // The pre-PR sidebar was a bare text button; the pre-PR sign-in had a
+  // tiny accent square with an "S" letterform beside an uppercase "Showbook"
+  // mono caption. Both are inlined here with their previous CSS so the
+  // before/after pair renders without checking out the parent commit.
+
+  const BEFORE_BRAND_MARK_CSS = `
+    .brand-mark--before {
+      width: 22px; height: 22px;
+      border-radius: 5px;
+      background: var(--accent);
+      display: grid; place-items: center;
+      color: var(--accent-text);
+      font-weight: 800; font-size: 13px;
+      font-family: var(--font-geist-sans), sans-serif;
+    }
+    .signin__brand--before {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--font-geist-mono), monospace;
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .sidebar__logo--before {
+      font-family: var(--font-geist-sans), sans-serif;
+      font-size: 19px; font-weight: 600; letter-spacing: -0.5px;
+      color: var(--ink);
+      background: none; border: none; padding: 0;
+      cursor: pointer; text-align: left;
+    }
+  `;
+
+  test('sidebar header (before)', async ({ page }) => {
+    const css = await loadCss();
+    await page.setViewportSize({ width: 320, height: 200 });
+    await page.setContent(
+      `<!doctype html><html data-theme="dark"><head><style>${css}${BEFORE_BRAND_MARK_CSS}
+       body { margin: 0; background: var(--bg); padding: 24px; }
+       .frame { width: 260px; }
+       </style></head><body><div class="frame">
+         <div class="sidebar__header">
+           <button class="sidebar__logo--before" type="button">showbook</button>
+           <span class="sidebar__version">v2 · 2026.04</span>
+         </div>
+       </div></body></html>`,
+    );
+    await page.waitForLoadState('domcontentloaded');
+    await page.screenshot({
+      path: path.join(__dirname, '..', 'brand-screenshots', 'web-sidebar-before.png'),
+      fullPage: false,
+    });
+  });
+
+  test('signin panel (before)', async ({ page }) => {
+    const css = await loadCss();
+    await page.setViewportSize({ width: 600, height: 540 });
+    await page.setContent(
+      `<!doctype html><html data-theme="dark"><head><style>${css}${BEFORE_BRAND_MARK_CSS}
+       body { margin: 0; background: var(--bg); padding: 56px 64px; }
+       </style></head><body>
+         <div class="signin__brand--before">
+           <span class="brand-mark--before">S</span>
+           <span>Showbook</span>
+         </div>
+         <div class="signin__hero" style="margin-top:28px;max-width:460px;">
+           <span class="eyebrow">Personal Live-Show Tracker</span>
+           <h1 class="signin__title">Every show, <em class="gradient-emphasis">worth&nbsp;remembering.</em></h1>
+           <p class="signin__subtitle">A private logbook for the concerts, plays, sets, and festivals you've seen — and the ones still ahead.</p>
+         </div>
+       </body></html>`,
+    );
+    await page.waitForLoadState('domcontentloaded');
+    await page.screenshot({
+      path: path.join(__dirname, '..', 'brand-screenshots', 'web-signin-before.png'),
       fullPage: false,
     });
   });

@@ -60,11 +60,12 @@ for (const scheme of SCHEMES) {
 
       await page.goto('/');
       // Wait for the tab shell to mount — the brand header is the first
-      // thing on the Home tab.
+      // thing on the Home tab. Use the tablist rather than the "showbook"
+      // wordmark as the readiness anchor so the same spec can capture
+      // pre-PR baselines (where the wordmark didn't exist yet).
       await expect(page.getByRole('tablist').first()).toBeVisible({
         timeout: 15_000,
       });
-      await expect(page.getByText('showbook').first()).toBeVisible();
       await page.waitForTimeout(400);
       await page.screenshot({
         path: path.join(OUT_DIR, `mobile-home-${scheme}.png`),
