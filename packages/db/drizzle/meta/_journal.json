@@ -351,6 +351,13 @@
       "when": 1795968180000,
       "tag": "0049_defer_show_performers_orphan_cleanup",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1795968240000,
+      "tag": "0050_prune_past_announcements",
+      "breakpoints": true
     }
   ]
 }
