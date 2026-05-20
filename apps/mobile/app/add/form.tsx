@@ -44,9 +44,11 @@ import { getCacheOutbox, invalidateShowsList } from '../../lib/cache';
 import {
   emptyShowFormValues,
   serializeShowFormForKind,
+  type PerformerRow,
   type ShowFormKind,
   type ShowFormValues,
 } from '../../lib/showForm';
+import { newPerformerRowId } from '../../components/LineupEditor';
 import { isYmd, normalizeDateInput } from '../../lib/dateInput';
 
 const SCREEN_OPTIONS = { presentation: 'modal', gestureEnabled: true } as const;
@@ -60,6 +62,42 @@ function paramKind(value: string | string[] | undefined): ShowFormKind {
   const raw = paramString(value);
   if (raw === 'theatre' || raw === 'comedy' || raw === 'festival') return raw;
   return 'concert';
+}
+
+/**
+ * Decode the `performersJson` URL param the festival-poster flow uses
+ * to hand off its confirmed lineup. Defensive — a malformed payload
+ * just yields an empty lineup so the form still opens.
+ */
+function paramPerformers(value: string | string[] | undefined): PerformerRow[] {
+  const raw = paramString(value);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const out: PerformerRow[] = [];
+    for (const entry of parsed) {
+      if (!entry || typeof entry !== 'object') continue;
+      const e = entry as Record<string, unknown>;
+      const name = typeof e.name === 'string' ? e.name : '';
+      if (!name) continue;
+      const tier =
+        e.role === 'headliner' || e.tier === 'headliner' ? 'headliner' : 'support';
+      out.push({
+        id: newPerformerRowId(),
+        name,
+        tier,
+        tmAttractionId:
+          typeof e.tmAttractionId === 'string' ? e.tmAttractionId : undefined,
+        musicbrainzId:
+          typeof e.musicbrainzId === 'string' ? e.musicbrainzId : undefined,
+        imageUrl: typeof e.imageUrl === 'string' ? e.imageUrl : undefined,
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
 }
 
 export default function AddFormScreen(): React.JSX.Element {
@@ -81,7 +119,11 @@ export default function AddFormScreen(): React.JSX.Element {
       // but doesn't always comply); normalize on the way in so the
       // field starts in a valid state.
       date: normalizeDateInput(paramString(params.dateHint)),
+      // Festival poster passes endDate + performersJson; chat / direct
+      // entry leave these blank.
+      endDate: normalizeDateInput(paramString(params.endDateHint)),
       seat: paramString(params.seatHint),
+      performers: paramPerformers(params.performersJson),
     }),
   );
 
