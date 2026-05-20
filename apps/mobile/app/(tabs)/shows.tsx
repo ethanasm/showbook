@@ -43,6 +43,12 @@ import { trpc } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
 import { useAuth } from '../../lib/auth';
 import { headlinerDisplayName } from '../../lib/show-display';
+import {
+  atMaxCursor,
+  atMinCursor,
+  computeMonthBounds,
+  stepCursor,
+} from '../../lib/calendarBounds';
 
 type Mode = 'timeline' | 'month' | 'stats';
 
@@ -327,6 +333,7 @@ export default function ShowsScreen(): React.JSX.Element {
       ) : mode === 'month' ? (
         <MonthView
           rows={rows}
+          stateBucket={stateBucket}
           refreshControl={refreshControl}
           onLongPressShow={onLongPressShow}
           isThreePane={isThreePane}
@@ -510,6 +517,7 @@ function RowCard({
 
 function MonthView({
   rows,
+  stateBucket,
   refreshControl,
   onLongPressShow,
   isThreePane,
@@ -517,6 +525,7 @@ function MonthView({
   onSelect,
 }: {
   rows: ShowRow[];
+  stateBucket: 'upcoming' | 'past';
   refreshControl: React.ReactElement<import('react-native').RefreshControlProps>;
   onLongPressShow: (row: ShowRow) => void;
   isThreePane: boolean;
@@ -527,7 +536,11 @@ function MonthView({
   const { colors } = tokens;
   const today = todayISO();
   const todayDate = parseLocalDate(today);
-  const [cursor, setCursor] = React.useState({ year: todayDate.getFullYear(), month: todayDate.getMonth() });
+  const todayCursor = React.useMemo(
+    () => ({ year: todayDate.getFullYear(), month: todayDate.getMonth() }),
+    [todayDate],
+  );
+  const [cursor, setCursor] = React.useState(todayCursor);
   const [selected, setSelected] = React.useState<string | null>(null);
 
   const eventsByDay = React.useMemo(() => {
@@ -562,42 +575,45 @@ function MonthView({
   }, [rowsInMonth]);
 
   // Bounds: Jan of earliest show year through Dec of latest show year,
-  // always including the current year so "Today" is reachable even with
-  // no shows yet. Date-TBD watching rows have a null date and are
-  // excluded from the bounds calculation.
-  const { minYear, maxYear } = React.useMemo(() => {
-    const years = rows
-      .map((r) => (r.date ? Number(r.date.slice(0, 4)) : NaN))
-      .filter((y) => Number.isFinite(y));
-    const todayYear = todayDate.getFullYear();
-    return {
-      minYear: Math.min(todayYear, ...years),
-      maxYear: Math.max(todayYear, ...years),
-    };
-  }, [rows, todayDate]);
+  // clamped so navigation can't cross the "today" boundary in the
+  // wrong direction — Upcoming stops at the current month going back,
+  // Past stops at the current month going forward.
+  const bounds = React.useMemo(
+    () =>
+      computeMonthBounds({
+        showDates: rows.map((r) => r.date),
+        stateBucket,
+        today: todayCursor,
+      }),
+    [rows, stateBucket, todayCursor],
+  );
 
-  const atMin = cursor.year === minYear && cursor.month === 0;
-  const atMax = cursor.year === maxYear && cursor.month === 11;
+  // Snap the cursor back inside bounds when the bucket flips (e.g. user
+  // is viewing Aug 2027 in Upcoming, switches to Past — that month is
+  // now beyond the Past max).
+  React.useEffect(() => {
+    setCursor((c) => {
+      if (c.year < bounds.min.year || (c.year === bounds.min.year && c.month < bounds.min.month)) {
+        return bounds.min;
+      }
+      if (c.year > bounds.max.year || (c.year === bounds.max.year && c.month > bounds.max.month)) {
+        return bounds.max;
+      }
+      return c;
+    });
+  }, [bounds]);
+
+  const atMin = atMinCursor(cursor, bounds);
+  const atMax = atMaxCursor(cursor, bounds);
 
   const step = (delta: number) => {
     setSelected(null);
-    setCursor((c) => {
-      const m = c.month + delta;
-      if (m < 0) {
-        if (c.year <= minYear) return c;
-        return { year: c.year - 1, month: 11 };
-      }
-      if (m > 11) {
-        if (c.year >= maxYear) return c;
-        return { year: c.year + 1, month: 0 };
-      }
-      return { year: c.year, month: m };
-    });
+    setCursor((c) => stepCursor(c, delta, bounds));
   };
 
   const goToday = () => {
     setSelected(null);
-    setCursor({ year: todayDate.getFullYear(), month: todayDate.getMonth() });
+    setCursor(todayCursor);
   };
 
   return (
