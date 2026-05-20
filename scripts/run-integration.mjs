@@ -49,11 +49,19 @@ console.log(
 );
 
 const lcovOut = process.env.LCOV_OUT;
+// Integration test files share a single Postgres database (we don't
+// spin up a per-file schema), so any file that calls a job function
+// with an UNQUALIFIED delete (`runPruneOrphanCatalog`,
+// `runPrunePastAnnouncements`, etc.) can wipe rows seeded by a sibling
+// file running concurrently. `--test-concurrency=1` runs files in
+// sequence within the same node:test process so the within-file
+// `beforeEach(cleanup)` is the only writer at any moment.
 const nodeArgs = [
   '--import',
   'tsx',
   '--test',
   `--test-timeout=${PER_TEST_TIMEOUT_MS}`,
+  '--test-concurrency=1',
   '--test-reporter=spec',
   '--test-reporter-destination=stdout',
 ];
