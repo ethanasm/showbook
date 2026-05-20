@@ -12,8 +12,6 @@
 import React from 'react';
 import {
   View,
-  Text,
-  ScrollView,
   Pressable,
   StyleSheet,
   KeyboardAvoidingView,
@@ -22,94 +20,27 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { ChevronLeft, X, Check, Circle } from 'lucide-react-native';
+import { ChevronLeft, Check, Circle } from 'lucide-react-native';
+import { NestableScrollContainer } from 'react-native-draggable-flatlist';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { TopBar } from '../../../components/TopBar';
-import { SegmentedControl } from '../../../components/SegmentedControl';
-import { VenueTypeahead, type VenueSuggestion } from '../../../components/VenueTypeahead';
-import { FormField, FormRow } from '../../../components/FormField';
+import { ShowFormFields } from '../../../components/ShowFormFields';
+import type { VenueSuggestion } from '../../../components/VenueTypeahead';
 import { useTheme } from '../../../lib/theme';
 import { trpc } from '../../../lib/trpc';
 import { useFeedback } from '../../../lib/feedback';
 import { runOptimisticMutation } from '../../../lib/mutations';
 import { getCacheOutbox } from '../../../lib/cache';
+import {
+  buildShowFormFromDetail,
+  serializeShowFormForKind,
+  type ShowDetailLite,
+  type ShowFormValues,
+} from '../../../lib/showForm';
+import { newPerformerRowId } from '../../../components/LineupEditor';
 
-type Kind = 'concert' | 'theatre' | 'comedy' | 'festival';
-
-const KIND_OPTIONS: { value: Kind; label: string }[] = [
-  { value: 'concert', label: 'Concert' },
-  { value: 'theatre', label: 'Theatre' },
-  { value: 'comedy', label: 'Comedy' },
-  { value: 'festival', label: 'Festival' },
-];
-
-// Hoisted so the `options` reference passed to `<Stack.Screen>` is
-// stable across renders. See the same constant in `apps/mobile/app/add/form.tsx`
-// for the iOS re-mount cascade this prevents.
 const SCREEN_OPTIONS = { presentation: 'modal', gestureEnabled: true } as const;
-
-interface FormValues {
-  kind: Kind;
-  headliner: string;
-  venueQuery: string;
-  venue: VenueSuggestion | null;
-  date: string;
-  seat: string;
-  pricePaid: string;
-  ticketCount: string;
-  productionName: string;
-  tourName: string;
-  notes: string;
-  supportActs: string;
-}
-
-interface ShowDetailLike {
-  id: string;
-  kind: Kind;
-  date: string | null;
-  seat: string | null;
-  pricePaid: string | null;
-  ticketCount: number;
-  tourName: string | null;
-  productionName: string | null;
-  notes: string | null;
-  venue: { id: string; name: string; city: string; stateRegion: string | null };
-  showPerformers: {
-    role: 'headliner' | 'support' | 'cast';
-    sortOrder: number;
-    performer: { id: string; name: string };
-  }[];
-}
-
-function buildInitialValues(detail: ShowDetailLike): FormValues {
-  const performers = [...detail.showPerformers].sort((a, b) => a.sortOrder - b.sortOrder);
-  const headliner = performers.find((p) => p.role === 'headliner');
-  const supports = performers.filter((p) => p.role === 'support').map((p) => p.performer.name);
-  const headlinerName =
-    detail.kind === 'theatre'
-      ? detail.productionName ?? headliner?.performer.name ?? ''
-      : headliner?.performer.name ?? '';
-  return {
-    kind: detail.kind,
-    headliner: headlinerName,
-    venueQuery: detail.venue.name,
-    venue: {
-      id: detail.venue.id,
-      name: detail.venue.name,
-      city: detail.venue.city,
-      stateRegion: detail.venue.stateRegion,
-    },
-    date: detail.date ?? '',
-    seat: detail.seat ?? '',
-    pricePaid: detail.pricePaid ?? '',
-    ticketCount: String(detail.ticketCount ?? 1),
-    productionName: detail.kind === 'theatre' ? '' : detail.productionName ?? '',
-    tourName: detail.tourName ?? '',
-    notes: detail.notes ?? '',
-    supportActs: supports.join(', '),
-  };
-}
 
 export default function EditShowScreen(): React.JSX.Element {
   const { tokens } = useTheme();
@@ -122,31 +53,52 @@ export default function EditShowScreen(): React.JSX.Element {
   const queryClient = useQueryClient();
   const { showToast } = useFeedback();
 
-  const detailQuery = trpc.shows.detail.useQuery({ showId }, { enabled: showId.length > 0 });
-  const detail = detailQuery.data as ShowDetailLike | undefined;
+  const detailQuery = trpc.shows.detail.useQuery(
+    { showId },
+    { enabled: showId.length > 0 },
+  );
+  const detail = detailQuery.data as ShowDetailLite | undefined;
 
-  const [initial, setInitial] = React.useState<FormValues | null>(null);
-  const [values, setValues] = React.useState<FormValues | null>(null);
+  const [initial, setInitial] = React.useState<ShowFormValues | null>(null);
+  const [values, setValues] = React.useState<ShowFormValues | null>(null);
 
   React.useEffect(() => {
     if (detail && initial === null) {
-      const next = buildInitialValues(detail);
+      const next = buildShowFormFromDetail(detail, newPerformerRowId);
       setInitial(next);
       setValues(next);
     }
   }, [detail, initial]);
 
   const set = React.useCallback(
-    <K extends keyof FormValues>(key: K, next: FormValues[K]) =>
+    <K extends keyof ShowFormValues>(key: K, next: ShowFormValues[K]) =>
       setValues((prev) => (prev ? { ...prev, [key]: next } : prev)),
     [],
   );
 
   const dirty = React.useMemo(() => {
     if (!initial || !values) return false;
-    const keys = Object.keys(initial) as (keyof FormValues)[];
+    const keys = Object.keys(initial) as (keyof ShowFormValues)[];
     return keys.some((k) => {
-      if (k === 'venue') return (initial.venue?.id ?? null) !== (values.venue?.id ?? null);
+      if (k === 'venue') {
+        return (initial.venue?.id ?? null) !== (values.venue?.id ?? null);
+      }
+      if (k === 'performers') {
+        // Shallow structural compare keyed by name/role/character/tier —
+        // the row `id` is client-generated so two equivalent rows from
+        // the same load won't show false dirty after they survive a
+        // round-trip.
+        if (initial.performers.length !== values.performers.length) return true;
+        return initial.performers.some((row, i) => {
+          const next = values.performers[i];
+          return (
+            row.name !== next.name ||
+            (row.characterName ?? '') !== (next.characterName ?? '') ||
+            (row.tier ?? 'support') !== (next.tier ?? 'support') ||
+            (row.tmAttractionId ?? '') !== (next.tmAttractionId ?? '')
+          );
+        });
+      }
       return initial[k] !== values[k];
     });
   }, [initial, values]);
@@ -180,48 +132,25 @@ export default function EditShowScreen(): React.JSX.Element {
 
   const submit = React.useCallback(async () => {
     if (!values || !detail) return;
-    if (!values.headliner.trim()) {
-      showToast({ kind: 'error', text: 'Headliner can’t be empty' });
+    if (!values.title.trim()) {
+      showToast({ kind: 'error', text: 'Title can’t be empty' });
       return;
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(values.date)) {
       showToast({ kind: 'error', text: 'Date must be YYYY-MM-DD' });
       return;
     }
+    if (
+      values.kind === 'festival' &&
+      values.endDate.trim() &&
+      !/^\d{4}-\d{2}-\d{2}$/.test(values.endDate)
+    ) {
+      showToast({ kind: 'error', text: 'End date must be YYYY-MM-DD' });
+      return;
+    }
 
-    const venuePayload = values.venue
-      ? {
-          name: values.venue.name,
-          city: values.venue.city ?? 'Unknown',
-          stateRegion: values.venue.stateRegion ?? undefined,
-          country: values.venue.country ?? undefined,
-        }
-      : { name: values.venueQuery.trim() || detail.venue.name, city: detail.venue.city };
-
-    const supports = values.supportActs
-      .split(/[,\n]/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map((name, i) => ({
-        name,
-        role: 'support' as const,
-        sortOrder: i + 1,
-      }));
-
-    const input = {
-      showId,
-      kind: values.kind,
-      headliner: { name: values.headliner.trim() },
-      venue: venuePayload,
-      date: values.date,
-      seat: values.seat.trim() || undefined,
-      pricePaid: values.pricePaid.trim() || undefined,
-      ticketCount: Math.max(1, Number(values.ticketCount) || 1),
-      tourName: values.tourName.trim() || undefined,
-      productionName: values.productionName.trim() || undefined,
-      notes: values.notes.trim() || undefined,
-      performers: supports.length > 0 ? supports : undefined,
-    };
+    const serialized = serializeShowFormForKind(values);
+    const input = { showId, ...serialized };
 
     setSaving(true);
     // Mirror what tRPC's useQuery uses internally so optimistic
@@ -242,11 +171,15 @@ export default function EditShowScreen(): React.JSX.Element {
                 ...prev,
                 kind: input.kind,
                 date: input.date,
+                endDate: input.endDate ?? null,
                 seat: input.seat ?? null,
                 pricePaid: input.pricePaid ?? null,
                 ticketCount: input.ticketCount,
                 tourName: input.tourName ?? null,
-                productionName: input.productionName ?? (prev as { productionName?: string | null }).productionName ?? null,
+                productionName:
+                  input.productionName ??
+                  (prev as { productionName?: string | null }).productionName ??
+                  null,
                 notes: input.notes ?? null,
               };
             });
@@ -270,14 +203,6 @@ export default function EditShowScreen(): React.JSX.Element {
     }
   }, [values, detail, queryClient, utils, showId, router, showToast]);
 
-  // Render on every branch — if the loading branch omits it, the
-  // route boots as a push and then flips to `modal` once detail
-  // resolves, and react-native-screens reacts to the presentation
-  // change by re-mounting the screen, which resets local state and
-  // re-enters the loading branch in a tight loop. The `options`
-  // reference is hoisted to module scope (`SCREEN_OPTIONS`) so
-  // Expo Router's `Screen` useLayoutEffect doesn't re-fire
-  // `navigation.setOptions` on every parent render.
   const stackOptions = <Stack.Screen options={SCREEN_OPTIONS} />;
 
   if (!detail || !values) {
@@ -304,142 +229,52 @@ export default function EditShowScreen(): React.JSX.Element {
   return (
     <>
       {stackOptions}
-    <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
-      <TopBar
-        title="Edit show"
-        eyebrow={dirty ? 'UNSAVED CHANGES' : undefined}
-        leading={
-          <Pressable onPress={() => router.back()} hitSlop={10} accessibilityLabel="Back">
-            <ChevronLeft size={22} color={colors.ink} strokeWidth={2} />
-          </Pressable>
-        }
-        rightAction={
-          <Pressable
-            onPress={() => void submit()}
-            hitSlop={10}
-            disabled={saving || !dirty}
-            accessibilityRole="button"
-            accessibilityLabel="Save"
-          >
-            {saving ? (
-              <ActivityIndicator size="small" color={colors.accent} />
-            ) : dirty ? (
-              <Check size={22} color={colors.accent} strokeWidth={2.4} />
-            ) : (
-              <Circle size={18} color={colors.faint} strokeWidth={2} />
-            )}
-          </Pressable>
-        }
-      />
+      <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
+        <TopBar
+          title="Edit show"
+          eyebrow={dirty ? 'UNSAVED CHANGES' : undefined}
+          leading={
+            <Pressable onPress={() => router.back()} hitSlop={10} accessibilityLabel="Back">
+              <ChevronLeft size={22} color={colors.ink} strokeWidth={2} />
+            </Pressable>
+          }
+          rightAction={
+            <Pressable
+              onPress={() => void submit()}
+              hitSlop={10}
+              disabled={saving || !dirty}
+              accessibilityRole="button"
+              accessibilityLabel="Save"
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : dirty ? (
+                <Check size={22} color={colors.accent} strokeWidth={2.4} />
+              ) : (
+                <Circle size={18} color={colors.faint} strokeWidth={2} />
+              )}
+            </Pressable>
+          }
+        />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
         >
-          <FormField label="Kind">
-            <SegmentedControl
-              options={KIND_OPTIONS}
-              value={values.kind}
-              onChange={(k) => set('kind', k)}
+          <NestableScrollContainer
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+          >
+            <ShowFormFields
+              values={values}
+              set={set}
+              venueSuggestions={venueResults}
+              venueLoading={venueLoading}
+              onVenueSearch={runVenueSearch}
             />
-          </FormField>
-
-          <FormField
-            label={values.kind === 'theatre' ? 'Production' : 'Headliner'}
-            value={values.headliner}
-            onChangeText={(v) => set('headliner', v)}
-            placeholder="Required"
-            autoCapitalize="words"
-          />
-
-          <FormField label="Venue">
-            <VenueTypeahead
-              value={values.venueQuery}
-              onChange={(v) => {
-                set('venueQuery', v);
-                if (values.venue && v !== values.venue.name) set('venue', null);
-              }}
-              onSelect={(venue) => {
-                set('venue', venue);
-                set('venueQuery', venue.name);
-                setVenueResults([]);
-              }}
-              onSearch={runVenueSearch}
-              suggestions={venueResults}
-              loading={venueLoading}
-              testID="venue-typeahead"
-            />
-            {values.venue ? (
-              <Pressable
-                onPress={() => set('venue', null)}
-                style={[styles.venuePill, { backgroundColor: colors.accent }]}
-              >
-                <Text style={[styles.venuePillText, { color: colors.accentText }]}>
-                  {values.venue.name}
-                </Text>
-                <X size={12} color={colors.accentText} strokeWidth={2.4} />
-              </Pressable>
-            ) : null}
-          </FormField>
-
-          <FormField
-            label="Date"
-            value={values.date}
-            onChangeText={(v) => set('date', v)}
-            placeholder="YYYY-MM-DD"
-            autoCapitalize="none"
-          />
-
-          <FormField
-            label="Support / lineup"
-            value={values.supportActs}
-            onChangeText={(v) => set('supportActs', v)}
-            placeholder="Comma-separated"
-            multiline
-            numberOfLines={2}
-          />
-
-          <FormRow>
-            <FormField
-              label="Seat"
-              flex={2}
-              value={values.seat}
-              onChangeText={(v) => set('seat', v)}
-              placeholder="Section, row, seat"
-            />
-            <FormField
-              label="Tickets"
-              flex={1}
-              value={values.ticketCount}
-              onChangeText={(v) => set('ticketCount', v.replace(/[^0-9]/g, ''))}
-              placeholder="1"
-              keyboardType="numeric"
-            />
-          </FormRow>
-
-          <FormField
-            label="Price paid"
-            value={values.pricePaid}
-            onChangeText={(v) => set('pricePaid', v.replace(/[^0-9.]/g, ''))}
-            placeholder="0.00"
-            keyboardType="decimal-pad"
-          />
-
-          <FormField
-            label="Notes"
-            value={values.notes}
-            onChangeText={(v) => set('notes', v)}
-            placeholder="Anything to remember"
-            multiline
-            numberOfLines={4}
-          />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+          </NestableScrollContainer>
+        </KeyboardAvoidingView>
+      </View>
     </>
   );
 }
@@ -455,20 +290,5 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingBottom: 64,
     gap: 16,
-  },
-  venuePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 6,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    marginTop: 4,
-  },
-  venuePillText: {
-    fontFamily: 'Geist Sans',
-    fontSize: 12,
-    fontWeight: '600',
   },
 });

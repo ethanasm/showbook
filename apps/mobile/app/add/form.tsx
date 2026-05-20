@@ -5,16 +5,14 @@
  * search params, or directly from the "form" affordance on the chat
  * screen with no params (blank form).
  *
- * Submits via `shows.create`. On success we invalidate `shows.list`
- * and pop back. The screen also routes to the same form (with mode
- * `edit`) — see `app/show/[id]/edit.tsx`.
+ * The form body lives in `components/ShowFormFields` so it's shared
+ * with the Edit screen. Submission goes through the optimistic
+ * mutation runner so a failed Create survives in the SQLite outbox.
  */
 
 import React from 'react';
 import {
   View,
-  Text,
-  ScrollView,
   Pressable,
   StyleSheet,
   KeyboardAvoidingView,
@@ -23,66 +21,37 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { ChevronLeft, X, Check } from 'lucide-react-native';
+import { ChevronLeft, Check } from 'lucide-react-native';
+import { NestableScrollContainer } from 'react-native-draggable-flatlist';
 
 import { TopBar } from '../../components/TopBar';
-import { SegmentedControl } from '../../components/SegmentedControl';
-import { VenueTypeahead, type VenueSuggestion } from '../../components/VenueTypeahead';
-import { FormField, FormRow } from '../../components/FormField';
+import { ShowFormFields } from '../../components/ShowFormFields';
+import type { VenueSuggestion } from '../../components/VenueTypeahead';
 import { useTheme } from '../../lib/theme';
 import { useFormState } from '../../lib/useFormState';
 import { trpc } from '../../lib/trpc';
 import { useFeedback } from '../../lib/feedback';
 import { runOptimisticMutation } from '../../lib/mutations';
 import { getCacheOutbox } from '../../lib/cache';
-
-// Local kind union; the theme's Kind includes the non-watchable kinds
-// (sports, film, unknown) which can't be manually added — see
-// NON_WATCHABLE_KINDS in @showbook/shared. The segmented control limits
-// choices to the watchable subset.
-type Kind = 'concert' | 'theatre' | 'comedy' | 'festival';
-
-const KIND_OPTIONS: { value: Kind; label: string }[] = [
-  { value: 'concert', label: 'Concert' },
-  { value: 'theatre', label: 'Theatre' },
-  { value: 'comedy', label: 'Comedy' },
-  { value: 'festival', label: 'Festival' },
-];
+import {
+  emptyShowFormValues,
+  serializeShowFormForKind,
+  type ShowFormKind,
+  type ShowFormValues,
+} from '../../lib/showForm';
 
 // Hoisted so the `options` reference passed to `<Stack.Screen>` is
-// stable across renders. Without this, Expo Router's `Screen`
-// useLayoutEffect re-fires `navigation.setOptions(options)` on every
-// parent render — and on iOS that propagates into a `stackPresentation`
-// thrash inside react-native-screens, which swaps the wrapper
-// component type (`AnimatedNativeScreen` ↔ `AnimatedNativeModalScreen`),
-// unmounting and remounting the form subtree. Combined with the
-// auto-fired venue search when chat hands over a non-empty `venueHint`,
-// the cascade tripped React's "Maximum update depth exceeded" bailout
-// on the chat → form push path.
+// stable across renders. See the inline rationale on `SCREEN_OPTIONS`
+// in `show/[id]/edit.tsx` — the same iOS stackPresentation thrash
+// surfaced on the chat → form push path.
 const SCREEN_OPTIONS = { presentation: 'modal', gestureEnabled: true } as const;
-
-interface FormValues {
-  kind: Kind;
-  headliner: string;
-  venueQuery: string;
-  venue: VenueSuggestion | null;
-  date: string;
-  time: string;
-  seat: string;
-  pricePaid: string;
-  ticketCount: string;
-  productionName: string;
-  tourName: string;
-  notes: string;
-  supportActs: string;
-}
 
 function paramString(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0] ?? '';
   return value ?? '';
 }
 
-function paramKind(value: string | string[] | undefined): Kind {
+function paramKind(value: string | string[] | undefined): ShowFormKind {
   const raw = paramString(value);
   if (raw === 'theatre' || raw === 'comedy' || raw === 'festival') return raw;
   return 'concert';
@@ -97,21 +66,15 @@ export default function AddFormScreen(): React.JSX.Element {
   const utils = trpc.useUtils();
   const { showToast } = useFeedback();
 
-  const { values, set } = useFormState<FormValues>({
-    kind: paramKind(params.kindHint),
-    headliner: paramString(params.headliner),
-    venueQuery: paramString(params.venueHint),
-    venue: null,
-    date: paramString(params.dateHint),
-    time: '',
-    seat: paramString(params.seatHint),
-    pricePaid: '',
-    ticketCount: '1',
-    productionName: '',
-    tourName: '',
-    notes: '',
-    supportActs: '',
-  });
+  const { values, set } = useFormState<ShowFormValues>(
+    emptyShowFormValues({
+      kind: paramKind(params.kindHint),
+      title: paramString(params.headliner),
+      venueQuery: paramString(params.venueHint),
+      date: paramString(params.dateHint),
+      seat: paramString(params.seatHint),
+    }),
+  );
 
   const [venueResults, setVenueResults] = React.useState<VenueSuggestion[]>([]);
   const [venueLoading, setVenueLoading] = React.useState(false);
@@ -141,8 +104,14 @@ export default function AddFormScreen(): React.JSX.Element {
   const [submitting, setSubmitting] = React.useState(false);
 
   const submit = React.useCallback(async () => {
-    if (!values.headliner.trim()) {
-      showToast({ kind: 'error', text: 'Add a headliner' });
+    if (!values.title.trim()) {
+      const label =
+        values.kind === 'theatre'
+          ? 'production name'
+          : values.kind === 'festival'
+            ? 'festival name'
+            : 'headliner';
+      showToast({ kind: 'error', text: `Add a ${label}` });
       return;
     }
     if (!values.venue && !values.venueQuery.trim()) {
@@ -153,51 +122,22 @@ export default function AddFormScreen(): React.JSX.Element {
       showToast({ kind: 'error', text: 'Date must be YYYY-MM-DD' });
       return;
     }
+    if (values.kind === 'festival' && values.endDate.trim() && !isYmd(values.endDate)) {
+      showToast({ kind: 'error', text: 'End date must be YYYY-MM-DD' });
+      return;
+    }
 
-    const venuePayload = values.venue
-      ? {
-          name: values.venue.name,
-          city: values.venue.city ?? 'Unknown',
-          stateRegion: values.venue.stateRegion ?? undefined,
-          country: values.venue.country ?? undefined,
-        }
-      : { name: values.venueQuery.trim(), city: 'Unknown' };
-
-    const supports = values.supportActs
-      .split(/[,\n]/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map((name, i) => ({
-        name,
-        role: 'support' as const,
-        sortOrder: i + 1,
-      }));
+    const payload = serializeShowFormForKind(values);
 
     setSubmitting(true);
     try {
-      // Route through the optimistic runner so a failed Create persists
-      // in the SQLite outbox instead of vanishing with the form. The
-      // shows.list cache slot is invalidated on success in `reconcile`,
-      // matching the previous useMutation onSuccess behavior.
       const { result } = await runOptimisticMutation<
         Parameters<typeof utils.client.shows.create.mutate>[0],
         void,
         Awaited<ReturnType<typeof utils.client.shows.create.mutate>>
       >({
         mutation: 'shows.create',
-        input: {
-          kind: values.kind,
-          headliner: { name: values.headliner.trim() },
-          venue: venuePayload,
-          date: values.date,
-          seat: values.seat.trim() || undefined,
-          pricePaid: values.pricePaid.trim() || undefined,
-          ticketCount: Math.max(1, Number(values.ticketCount) || 1),
-          tourName: values.tourName.trim() || undefined,
-          productionName: values.productionName.trim() || undefined,
-          notes: values.notes.trim() || undefined,
-          performers: supports.length > 0 ? supports : undefined,
-        },
+        input: payload,
         outbox: getCacheOutbox(),
         call: (input) => utils.client.shows.create.mutate(input),
         reconcile: () => {
@@ -222,191 +162,58 @@ export default function AddFormScreen(): React.JSX.Element {
   return (
     <>
       <Stack.Screen options={SCREEN_OPTIONS} />
-    <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
-      <TopBar
-        title="New show"
-        leading={
-          <Pressable
-            onPress={() => router.back()}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel"
-          >
-            <ChevronLeft size={22} color={colors.ink} strokeWidth={2} />
-          </Pressable>
-        }
-        rightAction={
-          <Pressable
-            onPress={() => void submit()}
-            hitSlop={10}
-            disabled={submitting}
-            accessibilityRole="button"
-            accessibilityLabel="Save"
-            testID="save-show"
-          >
-            {submitting ? (
-              <ActivityIndicator size="small" color={colors.accent} />
-            ) : (
-              <Check size={22} color={colors.accent} strokeWidth={2.4} />
-            )}
-          </Pressable>
-        }
-      />
+      <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
+        <TopBar
+          title="New show"
+          leading={
+            <Pressable
+              onPress={() => router.back()}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+            >
+              <ChevronLeft size={22} color={colors.ink} strokeWidth={2} />
+            </Pressable>
+          }
+          rightAction={
+            <Pressable
+              onPress={() => void submit()}
+              hitSlop={10}
+              disabled={submitting}
+              accessibilityRole="button"
+              accessibilityLabel="Save"
+              testID="save-show"
+            >
+              {submitting ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : (
+                <Check size={22} color={colors.accent} strokeWidth={2.4} />
+              )}
+            </Pressable>
+          }
+        />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
         >
-          <FormField label="Kind">
-            <SegmentedControl
-              options={KIND_OPTIONS}
-              value={values.kind}
-              onChange={(k) => set('kind', k)}
+          <NestableScrollContainer
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+          >
+            <ShowFormFields
+              values={values}
+              set={set}
+              venueSuggestions={venueResults}
+              venueLoading={venueLoading}
+              onVenueSearch={runVenueSearch}
             />
-          </FormField>
-
-          <FormField
-            label={values.kind === 'theatre' ? 'Production' : 'Headliner'}
-            value={values.headliner}
-            onChangeText={(v) => set('headliner', v)}
-            placeholder={
-              values.kind === 'theatre' ? 'Production name' : 'Artist or comedian'
-            }
-            autoCapitalize="words"
-            testID="headliner-input"
-          />
-
-          <FormField label="Venue">
-            <VenueTypeahead
-              value={values.venueQuery}
-              onChange={(v) => {
-                set('venueQuery', v);
-                if (values.venue && v !== values.venue.name) {
-                  set('venue', null);
-                }
-              }}
-              onSelect={(venue) => {
-                set('venue', venue);
-                set('venueQuery', venue.name);
-                setVenueResults([]);
-              }}
-              onSearch={runVenueSearch}
-              suggestions={venueResults}
-              loading={venueLoading}
-              placeholder={
-                values.kind === 'festival' ? 'Festival grounds' : 'Search venues'
-              }
-              testID="venue-typeahead"
-            />
-            {values.venue ? (
-              <Pressable
-                onPress={() => set('venue', null)}
-                style={[styles.venuePill, { backgroundColor: colors.accent }]}
-                accessibilityRole="button"
-                accessibilityLabel="Clear venue"
-              >
-                <Text style={[styles.venuePillText, { color: colors.accentText }]}>
-                  {values.venue.name}
-                </Text>
-                <X size={12} color={colors.accentText} strokeWidth={2.4} />
-              </Pressable>
-            ) : null}
-          </FormField>
-
-          <FormRow>
-            <FormField
-              label="Date"
-              flex={1}
-              value={values.date}
-              onChangeText={(v) => set('date', v)}
-              placeholder="YYYY-MM-DD"
-              autoCapitalize="none"
-            />
-            <FormField
-              label="Time"
-              flex={1}
-              value={values.time}
-              onChangeText={(v) => set('time', v)}
-              placeholder="HH:MM"
-              autoCapitalize="none"
-            />
-          </FormRow>
-
-          {values.kind !== 'theatre' && values.kind !== 'festival' ? (
-            <FormField
-              label="Tour name (optional)"
-              value={values.tourName}
-              onChangeText={(v) => set('tourName', v)}
-              placeholder="World tour, residency, …"
-            />
-          ) : null}
-
-          {values.kind === 'theatre' ? (
-            <FormField
-              label="Production name (optional override)"
-              value={values.productionName}
-              onChangeText={(v) => set('productionName', v)}
-              placeholder="Defaults to the headliner field"
-            />
-          ) : null}
-
-          <FormField
-            label="Support / lineup"
-            value={values.supportActs}
-            onChangeText={(v) => set('supportActs', v)}
-            placeholder="Comma-separated"
-            multiline
-            numberOfLines={2}
-          />
-
-          <FormRow>
-            <FormField
-              label="Seat"
-              flex={2}
-              value={values.seat}
-              onChangeText={(v) => set('seat', v)}
-              placeholder="Section, row, seat"
-            />
-            <FormField
-              label="Tickets"
-              flex={1}
-              value={values.ticketCount}
-              onChangeText={(v) => set('ticketCount', v.replace(/[^0-9]/g, ''))}
-              placeholder="1"
-              keyboardType="numeric"
-            />
-          </FormRow>
-
-          <FormField
-            label="Price paid"
-            value={values.pricePaid}
-            onChangeText={(v) => set('pricePaid', v.replace(/[^0-9.]/g, ''))}
-            placeholder="0.00"
-            keyboardType="decimal-pad"
-          />
-
-          <FormField
-            label="Notes"
-            value={values.notes}
-            onChangeText={(v) => set('notes', v)}
-            placeholder="Anything you want to remember"
-            multiline
-            numberOfLines={4}
-          />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+          </NestableScrollContainer>
+        </KeyboardAvoidingView>
+      </View>
     </>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Local helpers
-// ---------------------------------------------------------------------------
 
 function isYmd(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s.trim());
@@ -418,20 +225,5 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingBottom: 64,
     gap: 16,
-  },
-  venuePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 6,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    marginTop: 4,
-  },
-  venuePillText: {
-    fontFamily: 'Geist Sans',
-    fontSize: 12,
-    fontWeight: '600',
   },
 });

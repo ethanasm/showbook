@@ -1,0 +1,230 @@
+/**
+ * ShowFormFields — shared form body for the mobile add/edit show
+ * screens. Owns the kind segmented control, the title field (whose
+ * label flips by kind), the venue typeahead, the date pair, the
+ * kind-specific fields (tour / production / end date), the
+ * `LineupEditor`, the collapsible "More details" section, and the
+ * notes field.
+ *
+ * State lives on the parent — this component is a stateless renderer
+ * that calls back into `set` for every field change.
+ */
+
+import React from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { X as XIcon } from 'lucide-react-native';
+
+import { SegmentedControl } from './SegmentedControl';
+import { FormField, FormRow } from './FormField';
+import { VenueTypeahead, type VenueSuggestion } from './VenueTypeahead';
+import { LineupEditor } from './LineupEditor';
+import { Collapsible } from './Collapsible';
+import { useTheme } from '../lib/theme';
+import type {
+  PerformerRow,
+  ShowFormKind,
+  ShowFormValues,
+} from '../lib/showForm';
+
+const KIND_OPTIONS: { value: ShowFormKind; label: string }[] = [
+  { value: 'concert', label: 'Concert' },
+  { value: 'theatre', label: 'Theatre' },
+  { value: 'comedy', label: 'Comedy' },
+  { value: 'festival', label: 'Festival' },
+];
+
+const TITLE_LABEL: Record<ShowFormKind, string> = {
+  concert: 'Headliner',
+  theatre: 'Production',
+  comedy: 'Headliner',
+  festival: 'Festival name',
+};
+
+const TITLE_PLACEHOLDER: Record<ShowFormKind, string> = {
+  concert: 'Artist',
+  theatre: 'Production name',
+  comedy: 'Comedian',
+  festival: 'Festival name',
+};
+
+export interface ShowFormFieldsProps {
+  values: ShowFormValues;
+  set: <K extends keyof ShowFormValues>(key: K, next: ShowFormValues[K]) => void;
+  venueSuggestions: VenueSuggestion[];
+  venueLoading: boolean;
+  onVenueSearch: (q: string) => void;
+}
+
+export function ShowFormFields({
+  values,
+  set,
+  venueSuggestions,
+  venueLoading,
+  onVenueSearch,
+}: ShowFormFieldsProps): React.JSX.Element {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+
+  const isFestival = values.kind === 'festival';
+
+  return (
+    <View style={styles.wrap}>
+      <FormField label="Kind">
+        <SegmentedControl
+          options={KIND_OPTIONS}
+          value={values.kind}
+          onChange={(k) => set('kind', k)}
+        />
+      </FormField>
+
+      <FormField
+        label={TITLE_LABEL[values.kind]}
+        value={values.title}
+        onChangeText={(v) => set('title', v)}
+        placeholder={TITLE_PLACEHOLDER[values.kind]}
+        autoCapitalize="words"
+        testID="title-input"
+      />
+
+      <FormField label="Venue">
+        <VenueTypeahead
+          value={values.venueQuery}
+          onChange={(v) => {
+            set('venueQuery', v);
+            if (values.venue && v !== values.venue.name) {
+              set('venue', null);
+            }
+          }}
+          onSelect={(venue) => {
+            set('venue', {
+              id: venue.id,
+              name: venue.name,
+              city: venue.city ?? null,
+              stateRegion: venue.stateRegion ?? null,
+              country: venue.country ?? null,
+            });
+            set('venueQuery', venue.name);
+          }}
+          onSearch={onVenueSearch}
+          suggestions={venueSuggestions}
+          loading={venueLoading}
+          placeholder={isFestival ? 'Festival grounds' : 'Search venues'}
+          testID="venue-typeahead"
+        />
+        {values.venue ? (
+          <Pressable
+            onPress={() => set('venue', null)}
+            style={[styles.venuePill, { backgroundColor: colors.accent }]}
+            accessibilityRole="button"
+            accessibilityLabel="Clear venue"
+          >
+            <Text style={[styles.venuePillText, { color: colors.accentText }]}>
+              {values.venue.name}
+            </Text>
+            <XIcon size={12} color={colors.accentText} strokeWidth={2.4} />
+          </Pressable>
+        ) : null}
+      </FormField>
+
+      <FormRow>
+        <FormField
+          label={isFestival ? 'Start date' : 'Date'}
+          flex={1}
+          value={values.date}
+          onChangeText={(v) => set('date', v)}
+          placeholder="YYYY-MM-DD"
+          autoCapitalize="none"
+        />
+        {isFestival ? (
+          <FormField
+            label="End date"
+            flex={1}
+            value={values.endDate}
+            onChangeText={(v) => set('endDate', v)}
+            placeholder="YYYY-MM-DD"
+            autoCapitalize="none"
+          />
+        ) : null}
+      </FormRow>
+
+      {values.kind === 'concert' ? (
+        <FormField
+          label="Tour name (optional)"
+          value={values.tourName}
+          onChangeText={(v) => set('tourName', v)}
+          placeholder="World tour, residency, …"
+        />
+      ) : null}
+
+      <LineupEditor
+        rows={values.performers}
+        onChange={(rows: PerformerRow[]) => set('performers', rows)}
+        kind={values.kind}
+        testID="lineup-editor"
+      />
+
+      <Collapsible label="More details" testID="more-details">
+        {!isFestival ? (
+          <FormField
+            label="Seat"
+            value={values.seat}
+            onChangeText={(v) => set('seat', v)}
+            placeholder="Section, row, seat"
+          />
+        ) : null}
+        <FormRow>
+          <FormField
+            label="Tickets"
+            flex={1}
+            value={values.ticketCount}
+            onChangeText={(v) =>
+              set('ticketCount', v.replace(/[^0-9]/g, ''))
+            }
+            placeholder="1"
+            keyboardType="numeric"
+          />
+          <FormField
+            label="Price paid"
+            flex={1}
+            value={values.pricePaid}
+            onChangeText={(v) =>
+              set('pricePaid', v.replace(/[^0-9.]/g, ''))
+            }
+            placeholder="0.00"
+            keyboardType="decimal-pad"
+          />
+        </FormRow>
+      </Collapsible>
+
+      <FormField
+        label="Notes"
+        value={values.notes}
+        onChangeText={(v) => set('notes', v)}
+        placeholder="Anything you want to remember"
+        multiline
+        numberOfLines={4}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: {
+    gap: 16,
+  },
+  venuePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    marginTop: 4,
+  },
+  venuePillText: {
+    fontFamily: 'Geist Sans',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+});
