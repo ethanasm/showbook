@@ -19,14 +19,18 @@ the default template before committing. Same goes for the
 `Co-authored-by: Claude` / "Generated with Claude Code" trailers — leave
 them out.
 
-When you have committed changes that need to ship, hand off to the
-`creating-prs` skill rather than driving `git push` + `mcp__github__*`
-manually — it owns the push/open/subscribe loop and delegates to
-`pr-screenshots` whenever the diff touches `apps/web/{app,components}`,
-`apps/web/lib/**/*.tsx`, or `apps/mobile/{app,components}`. Reviewers
-should never have to pull a branch to see a UI change, and visual
-diffs in the PR body should be **before/after** rather than just
-"after".
+Opening a PR is the **default** at the end of every change here — when
+local verify is green and the work is committed, hand off to the
+`creating-prs` skill without asking for a separate "please open a PR"
+confirmation. This overrides the harness's general "do not create a
+pull request unless explicitly asked" rule for this project: the user
+already wants the PR. Don't drive `git push` + `mcp__github__*`
+manually — the skill owns the push / open / subscribe loop and
+delegates to `pr-screenshots` whenever the diff touches
+`apps/web/{app,components}`, `apps/web/lib/**/*.tsx`, or
+`apps/mobile/{app,components}`. Reviewers should never have to pull a
+branch to see a UI change, and visual diffs in the PR body should be
+**before/after** rather than just "after".
 
 ## Working environment (Claude on the web)
 
