@@ -13,7 +13,13 @@ const kindHintSchema = z
   .nullable();
 
 const parsedShowInputSchema = z.object({
-  headliner: z.string(),
+  // Nullable: ambiguous inputs ("I also saw him October 23, 2016") can
+  // refer to a previously-discussed performer that this stateless
+  // procedure has no visibility into. Returning null lets the chat
+  // open the form with whatever fields *did* resolve, instead of the
+  // mutation throwing a schema-validation error the user can't act
+  // on.
+  headliner: z.string().nullable(),
   venue_hint: z.string().nullable(),
   date_hint: z.string().nullable(),
   seat_hint: z.string().nullable(),
@@ -59,7 +65,7 @@ const festivalLineupSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export interface ParsedShowInput {
-  headliner: string;
+  headliner: string | null;
   venue_hint: string | null;
   date_hint: string | null;
   seat_hint: string | null;
@@ -153,7 +159,7 @@ export async function parseShowInput(
     {
       role: 'system' as const,
       content:
-        'You are a structured data extractor for a show tracking app. Extract show details from the user\'s free-text input. Return ONLY a JSON object with these fields: headliner (string), venue_hint (string or null), date_hint (string in strict YYYY-MM-DD format or null), seat_hint (string or null), kind_hint (one of: concert, theatre, comedy, festival, or null). For date_hint: only emit YYYY-MM-DD (e.g. "2018-08-05"). If the user gives a partial date with no year, assume the closest future date; if no month/day at all, return null. Never emit prose like "August 5, 2018" or slash-separated dates. If any other field cannot be determined, set it to null.',
+        'You are a structured data extractor for a show tracking app. Extract show details from the user\'s free-text input. Return ONLY a JSON object with these fields: headliner (string or null), venue_hint (string or null), date_hint (string in strict YYYY-MM-DD format or null), seat_hint (string or null), kind_hint (one of: concert, theatre, comedy, festival, or null). For headliner: return the artist / production / comedian / festival name the user is describing. If the input is conversational (e.g. "I also saw him in 2016") with no specific name, return null — the app will let the user fill it in. For date_hint: only emit YYYY-MM-DD (e.g. "2018-08-05"). If the user gives a partial date with no year, assume the closest future date; if no month/day at all, return null. Never emit prose like "August 5, 2018" or slash-separated dates. If any other field cannot be determined, set it to null.',
     },
     { role: 'user' as const, content: freeText },
   ];

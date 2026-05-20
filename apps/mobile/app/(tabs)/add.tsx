@@ -43,6 +43,7 @@ import { TopBar } from '../../components/TopBar';
 import { useTheme } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
 import { useFeedback } from '../../lib/feedback';
+import { toUserMessage } from '../../lib/errors';
 
 const SUGGESTIONS = [
   'Phoebe Bridgers at the Greek 8/15 GA',
@@ -130,7 +131,13 @@ export default function AddChatScreen(): React.JSX.Element {
           },
         });
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Couldn’t parse';
+        // toUserMessage swallows internal blobs (Zod / SQL / Groq schema
+        // failures) and falls back to a clean message so the toast can't
+        // overflow the screen with a JSON dump.
+        const message = toUserMessage(
+          err,
+          'Couldn’t make sense of that — open the form to enter it manually.',
+        );
         showToast({
           kind: 'error',
           text: message,

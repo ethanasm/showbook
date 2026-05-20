@@ -10,7 +10,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import { useTheme } from '../lib/theme';
-import { useFeedback, type ToastKind } from '../lib/feedback';
+import { useFeedback } from '../lib/feedback';
+import { feedbackVariantColors } from '../lib/toast-colors';
 
 export function BannerHost(): React.JSX.Element | null {
   const { banners, dismissBanner } = useFeedback();
@@ -30,65 +31,63 @@ export function BannerHost(): React.JSX.Element | null {
       pointerEvents="box-none"
       style={[styles.host, { top: insets.top }]}
     >
-      {banners.map((b) => (
-        <View
-          key={b.id}
-          style={[
-            styles.banner,
-            {
-              backgroundColor: bgFor(b.kind, colors),
-              borderBottomColor: colors.ruleStrong,
-            },
-          ]}
-        >
-          <Text
-            style={{
-              color: colors.ink,
-              fontFamily: 'Geist Sans',
-              fontSize: 13,
-              flex: 1,
-            }}
+      {banners.map((b) => {
+        const variant = feedbackVariantColors(b.kind, colors);
+        // The dismiss "X" needs to sit on the same solid background as
+        // the body text; use the variant foreground so it stays
+        // readable on every kind.
+        const iconColor = variant.text;
+        const actionColor = b.kind === 'info' ? colors.accent : variant.text;
+        return (
+          <View
+            key={b.id}
+            style={[
+              styles.banner,
+              {
+                backgroundColor: variant.background,
+                borderBottomColor: colors.ruleStrong,
+              },
+            ]}
           >
-            {b.text}
-          </Text>
-          {b.action ? (
-            <Pressable onPress={b.action.onPress} hitSlop={8}>
-              <Text
-                style={{
-                  color: colors.accent,
-                  fontFamily: 'Geist Sans',
-                  fontSize: 13,
-                  fontWeight: '600',
-                  marginLeft: 12,
-                }}
-              >
-                {b.action.label}
-              </Text>
+            <Text
+              style={{
+                color: variant.text,
+                fontFamily: 'Geist Sans',
+                fontSize: 13,
+                fontWeight: '500',
+                flex: 1,
+              }}
+            >
+              {b.text}
+            </Text>
+            {b.action ? (
+              <Pressable onPress={b.action.onPress} hitSlop={8}>
+                <Text
+                  style={{
+                    color: actionColor,
+                    fontFamily: 'Geist Sans',
+                    fontSize: 13,
+                    fontWeight: '700',
+                    marginLeft: 12,
+                  }}
+                >
+                  {b.action.label}
+                </Text>
+              </Pressable>
+            ) : null}
+            <Pressable
+              onPress={() => dismissBanner(b.id)}
+              hitSlop={8}
+              style={{ marginLeft: 12 }}
+              accessibilityLabel="Dismiss"
+            >
+              <X size={16} color={iconColor} />
             </Pressable>
-          ) : null}
-          <Pressable
-            onPress={() => dismissBanner(b.id)}
-            hitSlop={8}
-            style={{ marginLeft: 12 }}
-            accessibilityLabel="Dismiss"
-          >
-            <X size={16} color={colors.muted} />
-          </Pressable>
-        </View>
-      ))}
+          </View>
+        );
+      })}
     </View>
   );
-}
-
-function bgFor(kind: ToastKind, colors: { surface: string; accentFaded: string; danger: string }): string {
-  switch (kind) {
-    case 'success':
-      return colors.accentFaded;
-    case 'error':
-      return colors.danger + '22';
-    default:
-      return colors.surface;
-  }
 }
 
 const styles = StyleSheet.create({
