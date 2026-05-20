@@ -2,6 +2,14 @@
  * Integration tests for runPrunePastAnnouncements: the daily cron at
  * 02:00 ET that drops announcements whose showDate is before today.
  *
+ * Concurrency note: node:test runs integration test FILES in parallel,
+ * so `runPruneOrphanCatalog()` from a sibling test file can fire mid-
+ * test and wipe any announcement whose `announcement_has_preserver()`
+ * predicate returns false. Each seeded announcement here therefore
+ * gets a preserver (venue follow, headliner follow, or linked show)
+ * so it survives the concurrent sweep — see the equivalent anchor
+ * pattern in `discover-ingest.integration.test.ts`.
+ *
  * Run with:
  *   pnpm --filter @showbook/jobs test:integration
  */
@@ -16,6 +24,7 @@ import {
   announcements,
   showAnnouncementLinks,
   userPerformerFollows,
+  userVenueFollows,
   performers,
   sql,
 } from '@showbook/db';
@@ -46,6 +55,7 @@ async function cleanup(): Promise<void> {
   await db.execute(
     sql`DELETE FROM show_announcement_links WHERE show_id::text LIKE ${p} OR announcement_id::text LIKE ${p}`,
   );
+  await db.delete(userVenueFollows).where(like(userVenueFollows.userId, p));
   await db.delete(userPerformerFollows).where(like(userPerformerFollows.userId, p));
   await db.delete(announcements).where(like(sql`${announcements.id}::text`, p));
   await db.delete(shows).where(like(sql`${shows.id}::text`, p));
@@ -60,8 +70,21 @@ describe('runPrunePastAnnouncements', () => {
   beforeEach(cleanup);
 
   it('deletes past-dated announcements and keeps today / future ones', async () => {
+    // Seed a venue + user-venue follow so all three announcements are
+    // preserved against a concurrent `runPruneOrphanCatalog()` sweep
+    // from a sibling test file. The `runPrunePastAnnouncements()` we
+    // exercise here ignores preservers (that's the whole point of the
+    // job), so this anchor doesn't affect what the test measures —
+    // only the cross-file race that would otherwise wipe the today /
+    // future rows out from under us.
+    await db.insert(users).values([
+      { id: USER_A, name: 'A', email: 'a@test.local' },
+    ]);
     await db.insert(venues).values([
       { id: VENUE, name: 'Hall', city: 'NYC', country: 'US' },
+    ]);
+    await db.insert(userVenueFollows).values([
+      { userId: USER_A, venueId: VENUE },
     ]);
     await db.insert(announcements).values([
       {

@@ -485,6 +485,214 @@ export const setlistIntelRouter = router({
     }),
 
   /**
+   * Per-artist predicted setlists for a festival lineup. Walks every
+   * `showPerformer` (headliner + supports), runs the same Phase-5
+   * style dispatch as the headliner-only `predictedSetlist`, and
+   * returns one `AnyPrediction` per artist. Per-artist failures bubble
+   * up as cold-state entries so one missing artist doesn't blank the
+   * tab.
+   *
+   * The corpus loader always runs with `prefer: 'festival'` (≤16-song
+   * filter, falls back to full corpus when fewer than 3 festival-shaped
+   * rows exist) so each artist's prediction reflects their typical
+   * festival set length rather than a headlining run.
+   *
+   * Special-event lookup and multi-night-run detection are skipped:
+   * festival appearances are one-off slots, not residencies, and the
+   * special-event rules table targets (performer, date, venue) tuples
+   * that wouldn't apply to a festival circuit.
+   */
+  predictedFestivalSetlists: protectedProcedure
+    .input(predictedSetlistInput)
+    .query(async ({ ctx, input }): Promise<{
+      entries: Array<{
+        performerId: string;
+        performerName: string;
+        role: string;
+        sortOrder: number;
+        prediction:
+          | HotPrediction
+          | ColdPrediction
+          | RotatingPrediction
+          | TheatricalPrediction
+          | ImprovisedPrediction;
+      }>;
+    }> => {
+      const userId = ctx.session.user.id;
+      const show = await ctx.db.query.shows.findFirst({
+        where: and(eq(shows.id, input.showId), eq(shows.userId, userId)),
+        with: {
+          showPerformers: { with: { performer: true } },
+        },
+      });
+      if (!show) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+      }
+      if (show.kind !== 'festival') {
+        // Caller mis-routing — non-festivals belong to predictedSetlist.
+        return { entries: [] };
+      }
+      if (!show.date) {
+        return { entries: [] };
+      }
+
+      const lineup = [...show.showPerformers]
+        .filter((sp) => sp.role === 'headliner' || sp.role === 'support')
+        .sort((a, b) => {
+          // Headliner first (sortOrder 0), then supports by sortOrder.
+          if (a.role !== b.role) {
+            return a.role === 'headliner' ? -1 : 1;
+          }
+          return a.sortOrder - b.sortOrder;
+        });
+      if (lineup.length === 0) {
+        return { entries: [] };
+      }
+
+      const styleClassifierOn = isFeatureOn('SetlistIntelStyleClassifier');
+      const targetDate = show.date;
+      const showId = input.showId;
+
+      const entries = await Promise.all(
+        lineup.map(async (sp) => {
+          const baseEntry = {
+            performerId: sp.performer.id,
+            performerName: sp.performer.name,
+            role: sp.role,
+            sortOrder: sp.sortOrder,
+          };
+
+          try {
+            const [perf] = await ctx.db
+              .select({
+                id: performers.id,
+                name: performers.name,
+                musicbrainzId: performers.musicbrainzId,
+                setlistStyle: performers.setlistStyle,
+                setlistStyleOverride: performers.setlistStyleOverride,
+              })
+              .from(performers)
+              .where(eq(performers.id, sp.performer.id))
+              .limit(1);
+
+            if (!perf) {
+              return {
+                ...baseEntry,
+                prediction: coldPrediction('no_headliner'),
+              };
+            }
+            if (!perf.musicbrainzId) {
+              return {
+                ...baseEntry,
+                prediction: coldPrediction('no_mbid', perf.name),
+              };
+            }
+
+            const effectiveStyle = styleClassifierOn
+              ? (perf.setlistStyleOverride ?? perf.setlistStyle ?? 'stable')
+              : 'stable';
+
+            if (effectiveStyle === 'rotating') {
+              const { setlists } = await loadCorpusForPrediction({
+                performerId: perf.id,
+                targetDate,
+                prefer: 'festival',
+              });
+              if (setlists.length === 0) {
+                return {
+                  ...baseEntry,
+                  prediction: coldPrediction('no_corpus', perf.name),
+                };
+              }
+              const prediction = predictRotating({
+                performerId: perf.id,
+                targetDate,
+                corpus: setlists,
+                multiNightRun: null,
+              });
+              return { ...baseEntry, prediction };
+            }
+
+            if (effectiveStyle === 'theatrical') {
+              const { setlists } = await loadCorpusForPrediction({
+                performerId: perf.id,
+                targetDate,
+                prefer: 'festival',
+              });
+              if (setlists.length === 0) {
+                return {
+                  ...baseEntry,
+                  prediction: coldPrediction('no_corpus', perf.name),
+                };
+              }
+              const prediction = predictTheatrical({
+                performerId: perf.id,
+                targetDate,
+                corpus: setlists,
+              });
+              return { ...baseEntry, prediction };
+            }
+
+            if (effectiveStyle === 'improvised') {
+              const { setlists } = await loadCorpusForPrediction({
+                performerId: perf.id,
+                targetDate,
+                prefer: 'festival',
+              });
+              if (setlists.length === 0) {
+                return {
+                  ...baseEntry,
+                  prediction: coldPrediction('no_corpus', perf.name),
+                };
+              }
+              const prediction = predictImprovised({
+                performerId: perf.id,
+                targetDate,
+                corpus: setlists,
+              });
+              return { ...baseEntry, prediction };
+            }
+
+            const prediction = await predictedSetlistCached({
+              performerId: perf.id,
+              targetDate,
+              snapshotContext: { userId, showId },
+              prefer: 'festival',
+            });
+            return { ...baseEntry, prediction };
+          } catch (err) {
+            log.error(
+              {
+                event: 'setlist.predict.failed',
+                err,
+                showId,
+                performerId: sp.performer.id,
+                style: 'festival',
+              },
+              'festival per-artist prediction failed',
+            );
+            return {
+              ...baseEntry,
+              prediction: coldPrediction('no_corpus', sp.performer.name),
+            };
+          }
+        }),
+      );
+
+      log.info(
+        {
+          event: 'setlist.predict_festival.served',
+          showId,
+          lineupSize: lineup.length,
+          coldCount: entries.filter((e) => e.prediction.style === 'cold').length,
+        },
+        'festival per-artist predictions served',
+      );
+
+      return { entries };
+    }),
+
+  /**
    * Phase 11 §15j — personal-weight chip data for a predicted setlist.
    * Returns three lower-cased title sets: songs the user has 💛 saved,
    * 🎯 never heard live before, and ⭐ in their Spotify top 50.
@@ -852,8 +1060,22 @@ export const setlistIntelRouter = router({
       if (!show) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
       }
-      const headlinerId = getHeadlinerId(show as ShowLike);
-      if (!headlinerId) return { previews: {} };
+
+      // Festivals expose per-artist setlists, so the row UI needs
+      // preview data for every lineup artist's songs — not just the
+      // headliner. For everything else, fall back to the headliner.
+      const performerIds: string[] =
+        show.kind === 'festival'
+          ? show.showPerformers
+              .filter(
+                (sp) => sp.role === 'headliner' || sp.role === 'support',
+              )
+              .map((sp) => sp.performer.id)
+          : (() => {
+              const headlinerId = getHeadlinerId(show as ShowLike);
+              return headlinerId ? [headlinerId] : [];
+            })();
+      if (performerIds.length === 0) return { previews: {} };
 
       const rows = await ctx.db
         .select({
@@ -862,7 +1084,7 @@ export const setlistIntelRouter = router({
           spotifyTrackId: songs.spotifyTrackId,
         })
         .from(songs)
-        .where(eq(songs.performerId, headlinerId));
+        .where(inArray(songs.performerId, performerIds));
 
       const previews: Record<
         string,

@@ -3,3 +3,4 @@ export * from './style-switcher';
 export * from './badge-resolver';
 export * from './spotify-deep-link';
 export * from './preview-player';
+export * from './festival-lineup-order';

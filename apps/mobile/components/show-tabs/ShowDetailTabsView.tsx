@@ -41,6 +41,10 @@ import { ShowTabBar } from './ShowTabBar';
 import { MarkTicketedSheet } from '../MarkTicketedSheet';
 import { OverviewTab, type OverviewLineupEntry } from './OverviewTab';
 import { SetlistTab, type ActualSong, type AnyPrediction } from './SetlistTab';
+import {
+  FestivalSetlistTab,
+  type FestivalLineupSetlistEntry,
+} from './FestivalSetlistTab';
 import { MediaTab } from './MediaTab';
 import { NotesTab } from './NotesTab';
 import { ShowDetailRightRail } from './ShowDetailRightRail';
@@ -129,6 +133,7 @@ export function ShowDetailTabsView({
   const queryClient = useQueryClient();
   const { showToast } = useFeedback();
   const isPast = show.state === 'past';
+  const isFestival = show.kind === 'festival';
   const showTicketAction =
     Boolean(show.ticketUrl) &&
     (show.state === 'watching' || show.state === 'ticketed');
@@ -143,13 +148,24 @@ export function ShowDetailTabsView({
   const headlinerName = resolvedHeadliner === 'Unknown Artist' ? 'Show' : resolvedHeadliner;
 
   // ──────────────────────────── tRPC queries ────────────────────────────
+  // Festivals use the multi-artist procedure; everything else uses the
+  // headliner-only one. Mutually-exclusive `enabled` keeps the query
+  // pair from double-fetching.
   const predictionQuery = trpc.setlistIntel.predictedSetlist.useQuery(
     { showId: show.id },
     {
-      enabled: !isPast,
+      enabled: !isPast && !isFestival,
       staleTime: CACHE_DEFAULTS.staleTime,
     },
   );
+  const festivalPredictionsQuery =
+    trpc.setlistIntel.predictedFestivalSetlists.useQuery(
+      { showId: show.id },
+      {
+        enabled: !isPast && isFestival,
+        staleTime: CACHE_DEFAULTS.staleTime,
+      },
+    );
 
   const hypeFeatureQuery = trpc.spotify.hypePlaylistFeature.useQuery(undefined, {
     staleTime: 5 * 60_000,
@@ -172,43 +188,110 @@ export function ShowDetailTabsView({
   );
 
   // ──────────────────────────── Derived state ────────────────────────────
-  const actualSongs: ActualSong[] = React.useMemo(() => {
-    if (!isPast) return [];
-    if (!headliner) return [];
-    const sl = show.setlists?.[headliner.performer.id];
-    if (!sl) return [];
-    const out: ActualSong[] = [];
-    sl.sections.forEach((section, sIdx) => {
-      const isEncore = section.kind === 'encore';
-      section.songs.forEach((song, songIdx) => {
-        out.push({
-          title: song.title,
-          isEncore,
-          isOpenerOrCloser:
-            (!isEncore && sIdx === 0 && songIdx === 0) ||
-            (!isEncore && songIdx === section.songs.length - 1),
-          note: song.note ?? null,
+  const buildActualSongs = React.useCallback(
+    (performerId: string): ActualSong[] => {
+      const sl = show.setlists?.[performerId];
+      if (!sl) return [];
+      const out: ActualSong[] = [];
+      sl.sections.forEach((section, sIdx) => {
+        const isEncore = section.kind === 'encore';
+        section.songs.forEach((song, songIdx) => {
+          out.push({
+            title: song.title,
+            isEncore,
+            isOpenerOrCloser:
+              (!isEncore && sIdx === 0 && songIdx === 0) ||
+              (!isEncore && songIdx === section.songs.length - 1),
+            note: song.note ?? null,
+          });
         });
       });
-    });
-    return out;
-  }, [headliner, isPast, show.setlists]);
+      return out;
+    },
+    [show.setlists],
+  );
+
+  const actualSongs: ActualSong[] = React.useMemo(() => {
+    if (!isPast || !headliner) return [];
+    return buildActualSongs(headliner.performer.id);
+  }, [buildActualSongs, headliner, isPast]);
   const actualSongCount = actualSongs.length;
+
+  // For festivals, build one entry per lineup artist. Past = pull
+  // each performer's setlist from the per-performer map. Upcoming =
+  // pull each artist's prediction from the festival procedure's
+  // entries (keyed by performerId).
+  const festivalLineupSetlists: FestivalLineupSetlistEntry[] = React.useMemo(() => {
+    if (!isFestival) return [];
+    const predictions = new Map<string, AnyPrediction>();
+    if (!isPast) {
+      const data = festivalPredictionsQuery.data;
+      if (data?.entries) {
+        for (const e of data.entries) {
+          predictions.set(e.performerId, e.prediction as AnyPrediction);
+        }
+      }
+    }
+    return show.showPerformers
+      .filter(
+        (sp) => sp.role === 'headliner' || sp.role === 'support',
+      )
+      .map((sp) => ({
+        performerId: sp.performer.id,
+        performerName: sp.performer.name,
+        role: sp.role as 'headliner' | 'support',
+        sortOrder: sp.sortOrder,
+        prediction: predictions.get(sp.performer.id) ?? null,
+        actualSongs: isPast ? buildActualSongs(sp.performer.id) : [],
+      }));
+  }, [
+    buildActualSongs,
+    festivalPredictionsQuery.data,
+    isFestival,
+    isPast,
+    show.showPerformers,
+  ]);
+
+  const festivalActualSongCount = React.useMemo(() => {
+    if (!isFestival || !isPast) return 0;
+    return festivalLineupSetlists.reduce(
+      (acc, e) => acc + e.actualSongs.length,
+      0,
+    );
+  }, [festivalLineupSetlists, isFestival, isPast]);
+
+  // Festival predictions are an array. The tab-bar badge is a single
+  // confidence number, so reduce to the headliner's confidence when
+  // the headliner entry produced a hot prediction; otherwise drop the
+  // badge for upcoming festivals.
+  const festivalHeadlinerConfidence: number | null = React.useMemo(() => {
+    if (!isFestival || isPast) return null;
+    const entries = festivalPredictionsQuery.data?.entries;
+    if (!entries || entries.length === 0) return null;
+    const headlinerEntry = entries.find((e) => e.role === 'headliner');
+    const p = headlinerEntry?.prediction;
+    if (!p || p.style === 'cold') return null;
+    return (p as { confidence?: number }).confidence ?? null;
+  }, [festivalPredictionsQuery.data, isFestival, isPast]);
 
   const badges = React.useMemo(
     () =>
       computeShowTabBadges({
         isPast,
-        predictionConfidence:
-          predictionQuery.data && predictionQuery.data.style !== 'cold'
+        predictionConfidence: isFestival
+          ? festivalHeadlinerConfidence
+          : predictionQuery.data && predictionQuery.data.style !== 'cold'
             ? (predictionQuery.data as { confidence: number }).confidence
             : null,
-        actualSongCount,
+        actualSongCount: isFestival ? festivalActualSongCount : actualSongCount,
         mediaCount: mediaQuery.data?.length ?? 0,
         notesTrimmedLength: (show.notes ?? '').trim().length,
       }),
     [
       actualSongCount,
+      festivalActualSongCount,
+      festivalHeadlinerConfidence,
+      isFestival,
       isPast,
       mediaQuery.data?.length,
       predictionQuery.data,
@@ -392,7 +475,20 @@ export function ShowDetailTabsView({
     />
   );
 
-  const setlistPanel = (
+  const setlistPanel = isFestival ? (
+    <FestivalSetlistTab
+      showId={show.id}
+      isPast={isPast}
+      entries={festivalLineupSetlists}
+      predictionsLoading={festivalPredictionsQuery.isLoading}
+      badgePayload={badgeQuery.data ?? null}
+      trackPreviews={previewsQuery.data?.previews ?? null}
+      hypePlaylistEnabled={hypePlaylistEnabled}
+      rotatingDisplayEnabled
+      theatricalDisplayEnabled
+      improvisedDisplayEnabled
+    />
+  ) : (
     <SetlistTab
       showId={show.id}
       artistName={headlinerName}
