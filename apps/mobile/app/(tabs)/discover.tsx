@@ -65,6 +65,7 @@ import { useFeedback } from '../../lib/feedback';
 import { hapticSelection } from '../../lib/haptics';
 import { trpc, type RouterOutput } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
+import { useIngestPolling } from '../../lib/discover/useIngestPolling';
 import {
   WATCHED_IDS_CACHE_KEY,
   useToggleWatch,
@@ -180,6 +181,17 @@ export default function DiscoverScreen(): React.JSX.Element {
     setSelectedRegionVenueId(null);
   }, [selectedGroupId]);
 
+  // While a background ingest job is in flight (new region just added, a
+  // venue/artist follow whose first sync hasn't finished), poll
+  // `discover.ingestStatus` and refetch the affected feed every few
+  // seconds so the count grows as rows land in the DB. Without this the
+  // user sees "8 venues" on cold launch and has to pull-to-refresh to
+  // discover the real "800 venues" number. Mirrors the web
+  // `IngestStatusPoller`.
+  const ingestPolling = useIngestPolling({
+    enabled: Boolean(token) && network.online,
+  });
+
   // Limits match the web Discover queries (apps/web/app/(app)/discover):
   // followedFeed / followedArtistsFeed page at 100, nearbyFeed takes the
   // server default. Mobile previously capped these much tighter (50 / 50 / 25)
@@ -188,18 +200,21 @@ export default function DiscoverScreen(): React.JSX.Element {
     queryKey: ['mobile', 'discover', 'followedFeed'],
     queryFn: () => utils.client.discover.followedFeed.query({ limit: 100 }),
     enabled: Boolean(token),
+    refetchInterval: ingestPolling.intervals.venues,
   });
 
   const followedArtistsQuery = useCachedQuery<FollowedFeed>({
     queryKey: ['mobile', 'discover', 'followedArtistsFeed'],
     queryFn: () => utils.client.discover.followedArtistsFeed.query({ limit: 100 }),
     enabled: Boolean(token),
+    refetchInterval: ingestPolling.intervals.artists,
   });
 
   const nearbyQuery = useCachedQuery<NearbyFeed>({
     queryKey: ['mobile', 'discover', 'nearbyFeed'],
     queryFn: () => utils.client.discover.nearbyFeed.query({}),
     enabled: Boolean(token),
+    refetchInterval: ingestPolling.intervals.nearby,
   });
 
   // Followed-list queries seed chips with count=0 so a freshly-followed
@@ -508,7 +523,7 @@ export default function DiscoverScreen(): React.JSX.Element {
             <View style={styles.summaryRow}>
               <SummaryIcon tab={tab} color={colors.muted} />
               <Text style={[styles.summaryText, { color: colors.muted }]}>
-                {filterCount} upcoming · pull to refresh
+                {filterCount} upcoming · {ingestPolling.isAnyPending ? 'discovering more shows…' : 'pull to refresh'}
               </Text>
             </View>
             {tab === 'regions' && !selectedGroupId ? (
