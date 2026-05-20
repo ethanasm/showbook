@@ -1,4 +1,4 @@
-name: Mobile deploy (preview channel)
+name: Mobile Deploy (preview)
 
 # Continuous mobile deployment. Every CI-green push to `main` runs
 # `eas update --branch preview`, which pushes a fresh JS bundle to

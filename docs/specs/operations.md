@@ -58,7 +58,7 @@ request workflows from outside collaborators* to *Require approval for
 all outside collaborators*.
 
 After that, every push to `main` that turns CI green will redeploy. To
-deploy a specific SHA on demand, use *Actions → Deploy (prod) → Run
+deploy a specific SHA on demand, use *Actions → Web Deploy (prod) → Run
 workflow* and pass the SHA.
 
 ## Scheduled jobs (pg-boss crons)
