@@ -1032,78 +1032,76 @@ function AnnouncementRow({
       )}
 
       <View style={styles.metaRow}>
-        <View style={styles.metaLeft}>
-          <View
-            style={[
-              styles.statusBadge,
-              {
-                backgroundColor: accent + '22',
-              },
-            ]}
-          >
-            <Text style={[styles.statusLabel, { color: accent }]}>
-              {onSaleLabel}
-            </Text>
-          </View>
-          {onSale && (
-            <Text
-              style={[styles.onSaleText, { color: colors.muted }]}
-              numberOfLines={1}
-            >
-              {item.onSaleStatus === 'on_sale' ? 'Since ' : 'On sale '}
-              {onSale}
-            </Text>
-          )}
+        <View
+          style={[
+            styles.statusBadge,
+            {
+              backgroundColor: accent + '22',
+            },
+          ]}
+        >
+          <Text style={[styles.statusLabel, { color: accent }]}>
+            {onSaleLabel}
+          </Text>
         </View>
-        {canWatch && (
-          <View style={styles.actionsRow}>
-            <LabeledIconAction
-              label={isWatching ? 'Watching' : 'Watch'}
-              onPress={() => {
-                void hapticSelection();
-                void onToggleWatch(item.id, isWatching);
-              }}
-              accessibilityLabel={
-                isWatching ? 'Stop watching this event' : 'Add to watching'
-              }
-              testID={`discover-row-watch-${item.id}`}
-              active={isWatching}
-              accent={accent}
-              colors={colors}
-            >
-              {isWatching ? (
-                <BookmarkCheck size={14} color={accent} strokeWidth={2} />
-              ) : (
-                <BookmarkPlus size={14} color={colors.muted} strokeWidth={2} />
-              )}
-            </LabeledIconAction>
-            {!isWatching && (
-              <LabeledIconAction
-                label="Got ticket"
-                onPress={() => {
-                  void hapticSelection();
-                  // Multi-night runs (theatre / comedy / concert) need
-                  // the user to pick which night they have tickets for
-                  // before we open the form — otherwise we'd silently
-                  // default to runStartDate. Festivals are one
-                  // experience over a date range, so they skip the
-                  // picker and pre-fill the start date as before.
-                  if (isDatePickingRun && performanceDates.length > 1) {
-                    setPickDateOpen(true);
-                    return;
-                  }
-                  navigateToAddForm(item.showDate);
-                }}
-                accessibilityLabel="Add as ticketed show"
-                testID={`discover-row-ticketed-${item.id}`}
-                colors={colors}
-              >
-                <Ticket size={14} color={colors.muted} strokeWidth={2} />
-              </LabeledIconAction>
-            )}
-          </View>
+        {onSale && (
+          <Text
+            style={[styles.onSaleText, { color: colors.muted }]}
+            numberOfLines={1}
+          >
+            {item.onSaleStatus === 'on_sale' ? 'Since ' : 'On sale '}
+            {onSale}
+          </Text>
         )}
       </View>
+      {canWatch && (
+        <View style={styles.actionsRow}>
+          <LabeledIconAction
+            label={isWatching ? 'Watching' : 'Watch'}
+            onPress={() => {
+              void hapticSelection();
+              void onToggleWatch(item.id, isWatching);
+            }}
+            accessibilityLabel={
+              isWatching ? 'Stop watching this event' : 'Add to watching'
+            }
+            testID={`discover-row-watch-${item.id}`}
+            active={isWatching}
+            accent={accent}
+            colors={colors}
+          >
+            {isWatching ? (
+              <BookmarkCheck size={15} color={accent} strokeWidth={2} />
+            ) : (
+              <BookmarkPlus size={15} color={colors.muted} strokeWidth={2} />
+            )}
+          </LabeledIconAction>
+          {!isWatching && (
+            <LabeledIconAction
+              label="Got ticket"
+              onPress={() => {
+                void hapticSelection();
+                // Multi-night runs (theatre / comedy / concert) need
+                // the user to pick which night they have tickets for
+                // before we open the form — otherwise we'd silently
+                // default to runStartDate. Festivals are one
+                // experience over a date range, so they skip the
+                // picker and pre-fill the start date as before.
+                if (isDatePickingRun && performanceDates.length > 1) {
+                  setPickDateOpen(true);
+                  return;
+                }
+                navigateToAddForm(item.showDate);
+              }}
+              accessibilityLabel="Add as ticketed show"
+              testID={`discover-row-ticketed-${item.id}`}
+              colors={colors}
+            >
+              <Ticket size={15} color={colors.muted} strokeWidth={2} />
+            </LabeledIconAction>
+          )}
+        </View>
+      )}
     </Pressable>
     {isDatePickingRun && (
       <PickPerformanceDateSheet
@@ -1119,11 +1117,12 @@ function AnnouncementRow({
 }
 
 /**
- * Stacked icon + caption used by each announcement row. The visible
+ * Inline icon + caption pill used by each announcement row. The visible
  * caption (WATCH / WATCHING / GOT TICKET) disambiguates what the two
  * affordances do — without it the bookmark / ticket icons read as
  * interchangeable and the ticket icon was easy to mistake for "open
- * external ticket page".
+ * external ticket page". Horizontal pill (vs. stacked icon-circle +
+ * caption) keeps the affordance compact alongside the on-sale chip.
  */
 function LabeledIconAction({
   label,
@@ -1156,22 +1155,16 @@ function LabeledIconAction({
       testID={testID}
       style={({ pressed }) => [
         styles.iconAction,
-        { opacity: pressed ? 0.6 : 1 },
+        {
+          backgroundColor:
+            active && accent ? `${accent}1f` : 'transparent',
+          borderColor:
+            active && accent ? `${accent}55` : colors.ruleStrong,
+          opacity: pressed ? 0.6 : 1,
+        },
       ]}
     >
-      <View
-        style={[
-          styles.iconCircle,
-          {
-            backgroundColor:
-              active && accent ? `${accent}1f` : colors.surface,
-            borderColor:
-              active && accent ? `${accent}55` : colors.rule,
-          },
-        ]}
-      >
-        {children}
-      </View>
+      {children}
       <Text
         style={[
           styles.iconLabel,
@@ -1243,7 +1236,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
   },
   loadMoreLabel: {
@@ -1281,7 +1274,7 @@ const styles = StyleSheet.create({
   },
   card: {
     padding: 14,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderLeftWidth: 3,
     gap: 6,
@@ -1380,40 +1373,29 @@ const styles = StyleSheet.create({
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: 10,
     marginTop: 4,
   },
-  metaLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    minWidth: 0,
-  },
   actionsRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
   },
   iconAction: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    minWidth: 44,
-  },
-  iconCircle: {
-    width: 32,
-    height: 32,
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
     borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
   },
   iconLabel: {
     fontFamily: 'Geist Mono',
-    fontSize: 8.5,
+    fontSize: 10.5,
     fontWeight: '600',
-    letterSpacing: 0.6,
+    letterSpacing: 0.7,
     textTransform: 'uppercase',
   },
   statusBadge: {

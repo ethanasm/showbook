@@ -4,6 +4,7 @@
  * for the matching web counterpart.
  */
 
+export { Button, type ButtonProps, type ButtonVariant, type ButtonSize } from './Button';
 export { Eyebrow } from './Eyebrow';
 export { EmptyStateHero, type EmptyHeroKind } from './EmptyStateHero';
 export { GlowBackdrop } from './GlowBackdrop';

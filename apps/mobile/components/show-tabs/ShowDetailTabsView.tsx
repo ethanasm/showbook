@@ -837,6 +837,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
   },
   wentBadgeText: {
     fontFamily: 'Geist Mono',

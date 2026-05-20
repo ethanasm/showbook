@@ -140,8 +140,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderRadius: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
   },
   input: {
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
   },
   list: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
+    borderRadius: 12,
     overflow: 'hidden',
   },
   row: {

@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
   },
   signInButton: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 999,
     paddingVertical: 14,
     paddingHorizontal: 16,
     flexDirection: 'row',

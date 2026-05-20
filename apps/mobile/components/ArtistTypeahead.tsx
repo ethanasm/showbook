@@ -175,8 +175,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
-    paddingHorizontal: 10,
+    borderRadius: 12,
+    paddingHorizontal: 12,
     paddingVertical: 8,
   },
   input: {
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
   },
   list: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
+    borderRadius: 12,
     // Cap the dropdown so it never extends past the screen edge when
     // the active row sits near the bottom of the lineup. ~5 rows fit
     // before the user has to scroll within the dropdown.

@@ -77,13 +77,13 @@ export function SegmentedControl<V extends string>({
 const styles = StyleSheet.create({
   track: {
     flexDirection: 'row',
-    borderRadius: 8,
-    padding: 2,
+    borderRadius: RADII.pill,
+    padding: 3,
   },
   segment: {
     flex: 1,
     paddingVertical: 6,
-    borderRadius: RADII.sm + 2, // 6 — slightly inset from the 8 track
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
