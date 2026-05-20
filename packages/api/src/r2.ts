@@ -26,6 +26,15 @@ export function getR2Client(): S3Client {
       accessKeyId: process.env.R2_ACCESS_KEY_ID!,
       secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
     },
+    // AWS SDK v3 ≥ 3.729 injects `x-amz-checksum-crc32` / `x-amz-sdk-checksum-algorithm`
+    // into every PUT — including presigned URLs — as "default integrity protections".
+    // The checksum is computed against an empty body when the URL is signed, so a
+    // browser/RN client PUT-ing real bytes against the URL trips R2's checksum
+    // validator and gets a 403. WHEN_REQUIRED + forcePathStyle is the supported
+    // R2 configuration; see https://developers.cloudflare.com/r2/api/s3/api/.
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
+    forcePathStyle: true,
   });
 
   return client;
