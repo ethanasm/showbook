@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { child } from '@showbook/observability';
-import { router, protectedProcedure } from '../trpc';
+import { router, publicProcedure } from '../trpc';
 
 const log = child({ component: 'mobile.telemetry' });
 
@@ -12,6 +12,13 @@ const log = child({ component: 'mobile.telemetry' });
  * as a toast (tRPC procedure failures, R2 PUT non-2xx, unhandled
  * exceptions in screens), it fires `logClientError` so the failure shows
  * up alongside the server logs under the `mobile.<event>` namespace.
+ *
+ * `publicProcedure`, **not** protected — the original PR #301 gated this
+ * on auth, which silently dropped the most useful class of failure:
+ * anything that happens before the bearer token is valid (sign-in
+ * failures, expired tokens, the very 401s we'd most want to know about).
+ * Without auth here, telemetry works in those windows too. We log the
+ * caller's session if one exists, so authed reports still carry a userId.
  *
  * Keep the input narrow: a short event name, a short message, and a
  * bounded context bag. Big payloads (raw response bodies, stack traces)
@@ -30,7 +37,7 @@ function clipContext(context: Record<string, unknown> | undefined): Record<strin
 }
 
 export const telemetryRouter = router({
-  logClientError: protectedProcedure
+  logClientError: publicProcedure
     .input(
       z.object({
         event: z.string().min(1).max(80),
@@ -40,7 +47,7 @@ export const telemetryRouter = router({
       }),
     )
     .mutation(({ ctx, input }) => {
-      const userId = ctx.session.user.id;
+      const userId = ctx.session?.user.id ?? null;
       const clipped = clipContext(input.context);
       const payload = {
         event: `mobile.${input.event}`,

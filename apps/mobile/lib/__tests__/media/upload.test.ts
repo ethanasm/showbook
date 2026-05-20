@@ -407,12 +407,15 @@ describe('uploadFile — telemetry on PUT failure', () => {
       (err) => err instanceof UploadHttpError && err.status === 403 && err.step === 'put',
     );
 
+    // Lifecycle markers (upload.start, upload.read_ok, upload.failed_at)
+    // also fire, so filter to the specific failure event we care about.
     // Telemetry payload includes the status, the host (so ops know which
     // R2 endpoint is failing), the storage key, and a body preview so the
     // actual error code (SignatureDoesNotMatch vs AccessDenied vs …) is
     // visible in Axiom without round-tripping back to the user.
-    assert.equal(reports.length, 1);
-    const report = reports[0]!;
+    const putReports = reports.filter((r) => r.event === 'upload.put.failed');
+    assert.equal(putReports.length, 1);
+    const report = putReports[0]!;
     assert.equal(report.event, 'upload.put.failed');
     assert.equal(report.level, 'error');
     assert.equal(report.message, 'R2 PUT 403');
@@ -484,11 +487,106 @@ describe('uploadFile — telemetry on PUT failure', () => {
     controller.abort();
     await assert.rejects(p, UploadCancelledError);
 
-    assert.equal(
-      reports.length,
-      0,
-      'cancellation should not generate a telemetry event',
+    // The lifecycle markers `upload.start` and `upload.read_ok` may fire
+    // before the abort signal hits, but neither `upload.put.failed`,
+    // `upload.put.network_error`, nor `upload.failed_at` should — a user
+    // cancel isn't a failure.
+    const failureEvents = reports.filter(
+      (r) =>
+        r.event === 'upload.put.failed' ||
+        r.event === 'upload.put.network_error' ||
+        r.event === 'upload.failed_at',
     );
+    assert.equal(
+      failureEvents.length,
+      0,
+      `cancellation should not generate a failure event, got: ${failureEvents.map((r) => r.event).join(', ')}`,
+    );
+  });
+});
+
+describe('uploadFile — lifecycle telemetry', () => {
+  it('emits start → read_ok → success markers on the happy path so Axiom can locate stuck uploads', async () => {
+    const reports: ClientErrorPayload[] = [];
+    setMobileTelemetryLogger((p) => reports.push(p));
+
+    const server = stubServer();
+    const { fetchImpl } = makeFetch([
+      async () => okResponse(emptyBlob()),
+      async () => okResponse(null, { status: 200 }),
+    ]);
+
+    await uploadFile(fakePhoto(), {
+      server,
+      showId: 'show-1',
+      fetchImpl,
+      sleepImpl: async () => undefined,
+    });
+
+    const events = reports.map((r) => r.event);
+    assert.ok(events.includes('upload.start'), `missing upload.start, got: ${events.join(', ')}`);
+    assert.ok(events.includes('upload.read_ok'), `missing upload.read_ok, got: ${events.join(', ')}`);
+    assert.ok(events.includes('upload.success'), `missing upload.success, got: ${events.join(', ')}`);
+
+    const success = reports.find((r) => r.event === 'upload.success')!;
+    const ctx = success.context as Record<string, unknown>;
+    assert.equal(ctx.assetId, 'asset-1');
+    assert.equal(typeof ctx.elapsedMs, 'number');
+  });
+
+  it('fires a terminal upload.failed_at with stage=read_file when the source blob cannot be read', async () => {
+    // This is the gap that caused 10 stuck-pending media_assets in prod
+    // to log NOTHING: readFileAsBlob threw between the (successful)
+    // intent step and the never-attempted PUT, and no telemetry fired.
+    const reports: ClientErrorPayload[] = [];
+    setMobileTelemetryLogger((p) => reports.push(p));
+
+    const server = stubServer();
+    const { fetchImpl } = makeFetch([
+      // Step A: file:// read returns 404 — simulates a stale/expired
+      // photo URI from the picker (common on Android).
+      async () => new Response(null, { status: 404 }),
+    ]);
+
+    await assert.rejects(
+      uploadFile(fakePhoto(), {
+        server,
+        showId: 'show-1',
+        fetchImpl,
+        sleepImpl: async () => undefined,
+      }),
+    );
+
+    const failed = reports.find((r) => r.event === 'upload.failed_at');
+    assert.ok(failed, 'expected a terminal upload.failed_at event');
+    const ctx = failed!.context as Record<string, unknown>;
+    assert.equal(ctx.stage, 'read_file');
+    assert.equal(typeof ctx.elapsedMs, 'number');
+  });
+
+  it('fires upload.failed_at with stage=intent when the server rejects the intent', async () => {
+    const reports: ClientErrorPayload[] = [];
+    setMobileTelemetryLogger((p) => reports.push(p));
+
+    const server: UploadServer = {
+      createUploadIntent: async () => {
+        throw new Error('Internal Server Error');
+      },
+      completeUpload: async () => fakeAsset(),
+    };
+
+    await assert.rejects(
+      uploadFile(fakePhoto(), {
+        server,
+        showId: 'show-1',
+        maxRetries: 0,
+        sleepImpl: async () => undefined,
+      }),
+    );
+
+    const failed = reports.find((r) => r.event === 'upload.failed_at');
+    assert.ok(failed, 'expected a terminal upload.failed_at event');
+    assert.equal((failed!.context as Record<string, unknown>).stage, 'intent');
   });
 });
 

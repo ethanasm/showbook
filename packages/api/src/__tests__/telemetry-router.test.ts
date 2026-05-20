@@ -116,4 +116,26 @@ describe('telemetryRouter.logClientError', () => {
     });
     assert.deepEqual(res, { ok: true });
   });
+
+  it('accepts unauthenticated callers and logs userId as null', async () => {
+    // publicProcedure: no auth middleware, so a context without a session
+    // is valid. This is the entire point of switching off
+    // protectedProcedure — pre-sign-in / expired-token reports must still
+    // reach Axiom.
+    const ctx = { db: makeFakeDb(), session: null };
+    const unauthCaller = telemetryRouter!.createCaller(ctx as never);
+    await unauthCaller.logClientError({
+      event: 'trpc.error',
+      message: 'UNAUTHORIZED',
+      level: 'error',
+      context: { path: 'shows.list', code: 'UNAUTHORIZED', httpStatus: 401 },
+    });
+
+    assert.equal(captured.length, 1);
+    const log = captured[0]!;
+    assert.equal(log.payload.event, 'mobile.trpc.error');
+    assert.equal(log.payload.userId, null);
+    assert.equal(log.payload.path, 'shows.list');
+    assert.equal(log.payload.httpStatus, 401);
+  });
 });
