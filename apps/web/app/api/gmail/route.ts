@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { randomBytes } from 'node:crypto';
+import { encode } from 'next-auth/jwt';
 import { auth } from '@/auth';
+import { decodeMobileToken } from '@/lib/mobile-token';
 import {
   mobileRedirectResponse,
   OAUTH_MODE_COOKIE,
@@ -23,11 +25,31 @@ export async function GET(req: NextRequest) {
   const modeParam = req.nextUrl.searchParams.get('mode');
   const mode: OAuthMode = modeParam === OAUTH_MODE_MOBILE ? OAUTH_MODE_MOBILE : 'web';
 
-  // Require an authenticated Showbook session before kicking off the OAuth
-  // flow, and bind the flow to that session via a `state` cookie verified in
-  // /api/gmail/callback (RFC 6749 §10.12).
+  // Resolve identity. Web flow uses the NextAuth session cookie (mounted at
+  // /). The mobile flow's `WebBrowser.openAuthSessionAsync` runs in a
+  // sandboxed browser session with no Showbook cookie jar, so the bearer
+  // JWT is passed in the URL — same JWT that already authenticates every
+  // mobile tRPC call. The token is only ever transmitted to our own origin
+  // over HTTPS within the auth-session sandbox; it isn't forwarded to
+  // Google in the subsequent redirect.
   const session = await auth();
-  if (!session?.user?.id) {
+  let userId = session?.user?.id ?? null;
+  let mintedSessionEmail: string | null = null;
+  let mintedFromMobileToken = false;
+  if (!userId && mode === OAUTH_MODE_MOBILE) {
+    const mobileToken = req.nextUrl.searchParams.get('token');
+    const authSecret = process.env.AUTH_SECRET;
+    if (mobileToken && authSecret) {
+      const decoded = await decodeMobileToken({ token: mobileToken, secret: authSecret });
+      if (decoded?.id) {
+        userId = decoded.id;
+        mintedSessionEmail = decoded.email;
+        mintedFromMobileToken = true;
+      }
+    }
+  }
+
+  if (!userId) {
     if (mode === OAUTH_MODE_MOBILE) {
       return mobileRedirectResponse({
         payload: { type: 'error', reason: 'session_missing' },
@@ -74,6 +96,34 @@ export async function GET(req: NextRequest) {
       path: '/api/gmail',
       maxAge: STATE_TTL_SECONDS,
     });
+
+    // Mobile authenticated via the bearer-JWT query param. Mint a real
+    // NextAuth-compatible session cookie so `/api/gmail/callback`'s
+    // `auth()` call resolves the session naturally. Path-scoped to
+    // `/api/gmail` and TTL-matched to the OAuth state so this cookie
+    // can't accidentally become a long-lived web session.
+    if (mintedFromMobileToken) {
+      const sessionCookieName = isSecure
+        ? '__Secure-authjs.session-token'
+        : 'authjs.session-token';
+      const sessionJwt = await encode({
+        token: {
+          sub: userId,
+          id: userId,
+          email: mintedSessionEmail,
+        },
+        secret: process.env.AUTH_SECRET!,
+        salt: sessionCookieName,
+        maxAge: STATE_TTL_SECONDS,
+      });
+      response.cookies.set(sessionCookieName, sessionJwt, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: isSecure,
+        path: '/api/gmail',
+        maxAge: STATE_TTL_SECONDS,
+      });
+    }
   }
 
   return response;

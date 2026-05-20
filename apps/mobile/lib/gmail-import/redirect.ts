@@ -7,6 +7,24 @@
 
 export const MOBILE_REDIRECT_SCHEME = 'showbook://gmail/connected';
 
+/**
+ * Build the OAuth start URL the mobile app hands to
+ * `WebBrowser.openAuthSessionAsync`. The bearer JWT is passed via query
+ * param because the auth-session browser sandbox has no Showbook cookie
+ * jar and `openAuthSessionAsync` cannot set custom headers. The token
+ * only travels to our own origin over HTTPS within that sandbox; the
+ * subsequent Google redirect doesn't include it.
+ */
+export function buildGmailOAuthStartUrl(
+  apiUrl: string,
+  bearerToken: string | null,
+): string {
+  const base = `${apiUrl.replace(/\/+$/, '')}/api/gmail`;
+  const params = new URLSearchParams({ mode: 'mobile' });
+  if (bearerToken) params.set('token', bearerToken);
+  return `${base}?${params.toString()}`;
+}
+
 export type GmailRedirectResult =
   | { status: 'ok'; accessToken: string }
   | { status: 'error'; reason: string };
