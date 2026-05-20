@@ -91,6 +91,12 @@ interface Cluster {
   venues: VenueGroup[]; // single-venue cluster ⇒ length 1
 }
 
+interface FocusRegion {
+  id: string;
+  label: string;
+  region: Region;
+}
+
 // ---------------------------------------------------------------------------
 // Defaults
 // ---------------------------------------------------------------------------
@@ -251,6 +257,27 @@ function pinRadius(count: number): number {
   return Math.max(8, Math.min(22, 7 + count * 1.4));
 }
 
+/**
+ * Convert a saved region (lat/lng + radius in miles) into a react-native-maps
+ * `Region` framed so the radius fits horizontally with a little padding.
+ * 1° latitude ≈ 69mi, longitude is widened to stay roughly square across
+ * mid-latitude US viewports.
+ */
+function regionFromFocus(
+  latitude: number,
+  longitude: number,
+  radiusMiles: number,
+): Region {
+  const safe = Math.max(radiusMiles, 1);
+  const latDelta = Math.max((safe * 2 * 1.4) / 69, 0.05);
+  return {
+    latitude,
+    longitude,
+    latitudeDelta: latDelta,
+    longitudeDelta: latDelta,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -274,6 +301,40 @@ export default function MapScreen(): React.JSX.Element {
   const [loadedRegion, setLoadedRegion] = React.useState<Region>(DEFAULT_REGION);
   const [selectedClusterId, setSelectedClusterId] = React.useState<string | null>(null);
   const [didFitOnce, setDidFitOnce] = React.useState(false);
+  const [activeFocusId, setActiveFocusId] = React.useState<string | null>(null);
+
+  // Bottom-right focus toggle is driven by the user's active followed
+  // regions (max 5, enforced by `preferences.addRegion`). Inactive regions
+  // stay out so the toggle matches what the discover feed and daily digest
+  // already respect. `preferences.get` is in the offline warm-up walker, so
+  // these read from the persisted cache on a cold offline open.
+  const prefsQuery = trpc.preferences.get.useQuery(undefined, {
+    enabled: Boolean(token),
+    staleTime: 60_000,
+  });
+  const focusRegions = React.useMemo<FocusRegion[]>(() => {
+    const regions = prefsQuery.data?.regions ?? [];
+    return regions
+      .filter((r) => r.active)
+      .map((r) => ({
+        id: r.id,
+        label: r.cityName,
+        region: regionFromFocus(r.latitude, r.longitude, r.radiusMiles),
+      }));
+  }, [prefsQuery.data?.regions]);
+
+  // Drop the active highlight if the user removes/deactivates the focused
+  // region while the toggle is open.
+  React.useEffect(() => {
+    if (activeFocusId && !focusRegions.some((f) => f.id === activeFocusId)) {
+      setActiveFocusId(null);
+    }
+  }, [activeFocusId, focusRegions]);
+
+  const onFocusPress = React.useCallback((focus: FocusRegion) => {
+    setActiveFocusId(focus.id);
+    mapRef.current?.animateToRegion(focus.region, 400);
+  }, []);
 
   const allShows = React.useMemo(
     () => (showsQuery.data ?? []) as MapShow[],
@@ -517,6 +578,48 @@ export default function MapScreen(): React.JSX.Element {
                   Refresh map
                 </Text>
               </Pressable>
+            )}
+
+            {focusRegions.length > 0 && (
+              <View
+                style={[
+                  styles.focusToggle,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.rule,
+                  },
+                ]}
+              >
+                {focusRegions.map((focus, i) => {
+                  const active = focus.id === activeFocusId;
+                  return (
+                    <Pressable
+                      key={focus.id}
+                      onPress={() => onFocusPress(focus)}
+                      style={[
+                        styles.focusToggleBtn,
+                        i > 0 && {
+                          borderLeftColor: colors.ruleStrong,
+                          borderLeftWidth: 1,
+                        },
+                        active && { backgroundColor: colors.ink },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Focus map on ${focus.label}`}
+                    >
+                      <Text
+                        style={[
+                          styles.focusToggleLabel,
+                          { color: active ? colors.bg : colors.muted },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {focus.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             )}
           </>
         )}
@@ -772,6 +875,26 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist Sans',
     fontSize: 12,
     fontWeight: '600',
+  },
+  focusToggle: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    maxWidth: '85%',
+    flexDirection: 'row',
+    borderWidth: 1,
+  },
+  focusToggleBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexShrink: 1,
+  },
+  focusToggleLabel: {
+    fontFamily: 'Geist Mono',
+    fontSize: 10.5,
+    fontWeight: '500',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   sheetContainer: { flex: 1, paddingTop: 4 },
   sheetHeader: {

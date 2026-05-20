@@ -46,13 +46,21 @@ const KINDS = [
   { k: "festival", label: "Festival" },
 ] as const;
 
-const VIEW_PRESETS: { label: string; center: [number, number]; zoom: number }[] = [
-  { label: "Bay Area", center: [37.7749, -122.4194], zoom: 9 },
-  { label: "LA", center: [34.0522, -118.2437], zoom: 9 },
-  { label: "Oregon", center: [44.0, -120.5], zoom: 7 },
-  { label: "NYC", center: [40.7128, -74.006], zoom: 12 },
-  { label: "World", center: [30.0, -20.0], zoom: 3 },
-];
+interface ViewPreset {
+  label: string;
+  center: [number, number];
+  zoom: number;
+}
+
+/**
+ * Map a saved region's radius (miles) to a Leaflet zoom level so the focus
+ * button frames the followed area at the same scale a user would expect:
+ * radius 10mi → zoom 11 (city), 25mi → 10, 50mi → 9, 100mi → 8.
+ */
+function zoomForRadius(miles: number): number {
+  const safe = Math.max(miles, 1);
+  return Math.max(3, Math.min(13, Math.round(11 - Math.log2(safe / 10))));
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -357,15 +365,18 @@ function MapLegend() {
 }
 
 function ViewToggle({
+  presets,
   activeView,
   setActiveView,
 }: {
+  presets: ViewPreset[];
   activeView: number;
   setActiveView: (i: number) => void;
 }) {
+  if (presets.length === 0) return null;
   return (
     <div className="map-overlay-viewtoggle">
-      {VIEW_PRESETS.map((v, i) => (
+      {presets.map((v, i) => (
         <button
           key={v.label}
           className={`map-overlay-viewtoggle__btn ${
@@ -664,6 +675,22 @@ export default function MapView() {
   const [activeView, setActiveView] = useState<number | null>(null);
 
   const { data: shows, isLoading } = trpc.shows.listForMap.useQuery();
+  const { data: prefs } = trpc.preferences.get.useQuery();
+
+  // Bottom-right focus toggle is driven by the user's active followed
+  // regions (max 5, enforced by `preferences.addRegion`). Inactive
+  // regions stay out so the toggle matches what the discover feed and
+  // daily digest already respect.
+  const viewPresets = useMemo<ViewPreset[]>(() => {
+    const regions = prefs?.regions ?? [];
+    return regions
+      .filter((r) => r.active)
+      .map((r) => ({
+        label: r.cityName,
+        center: [r.latitude, r.longitude] as [number, number],
+        zoom: zoomForRadius(r.radiusMiles),
+      }));
+  }, [prefs?.regions]);
 
   const yearOptions = useMemo(() => {
     if (!shows) return ["All time"];
@@ -898,10 +925,10 @@ export default function MapView() {
               attribution="&copy; OpenStreetMap contributors &copy; CARTO"
               url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
             />
-            {activeView !== null ? (
+            {activeView !== null && viewPresets[activeView] ? (
               <MapViewChanger
-                center={VIEW_PRESETS[activeView].center}
-                zoom={VIEW_PRESETS[activeView].zoom}
+                center={viewPresets[activeView].center}
+                zoom={viewPresets[activeView].zoom}
               />
             ) : (
               <FitBounds venues={filteredVenues} />
@@ -958,7 +985,11 @@ export default function MapView() {
 
           {/* Overlays */}
           <MapLegend />
-          <ViewToggle activeView={activeView ?? -1} setActiveView={setActiveView} />
+          <ViewToggle
+            presets={viewPresets}
+            activeView={activeView ?? -1}
+            setActiveView={setActiveView}
+          />
           <StatsOverlay
             venueCount={filteredVenues.length}
             showCount={totalShowCount}
