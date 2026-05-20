@@ -51,6 +51,8 @@ export const MUTATION_LABEL: Record<PendingMutation, string> = {
   'preferences.toggleRegion': 'Toggle region',
   'spotify.createHypePlaylist': 'Create hype playlist',
   'spotify.createHeardPlaylist': 'Create heard playlist',
+  'discover.watchlist': 'Watch event',
+  'discover.unwatchlist': 'Stop watching event',
 };
 
 export function PendingWritesDrawer({

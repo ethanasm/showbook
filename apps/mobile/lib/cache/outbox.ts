@@ -33,7 +33,9 @@ export type PendingMutation =
   | 'preferences.removeRegion'
   | 'preferences.toggleRegion'
   | 'spotify.createHypePlaylist'
-  | 'spotify.createHeardPlaylist';
+  | 'spotify.createHeardPlaylist'
+  | 'discover.watchlist'
+  | 'discover.unwatchlist';
 
 export interface PendingWrite {
   id: string;
