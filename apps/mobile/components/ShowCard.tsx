@@ -19,6 +19,7 @@ import { useTheme } from '../lib/theme';
 import { hapticImpactMedium } from '../lib/haptics';
 import { KindBadge } from './KindBadge';
 import { StateChip } from './StateChip';
+import { RemoteImage } from './design-system/RemoteImage';
 import type { Kind, ShowState } from '../lib/theme';
 
 export interface ShowCardShow {
@@ -33,6 +34,13 @@ export interface ShowCardShow {
   dow: string; // e.g. 'FRI'
   seat?: string | null;
   price?: string | null;
+  /**
+   * Optional headliner artwork. When set, a 32pt circular avatar
+   * renders between the date block and the content column — the
+   * Home tab opts in to add a face to every row; legacy callers
+   * (Shows tab, artist/venue detail) leave it unset and look the same.
+   */
+  avatarUrl?: string | null;
 }
 
 export interface ShowCardProps {
@@ -88,6 +96,19 @@ export function ShowCard({
         <Text style={[styles.dateDay, { color: colors.ink }]}>{show.day}</Text>
         <Text style={[styles.dateDow, { color: colors.faint }]}>{show.dow}</Text>
       </View>
+
+      {/* Optional headliner avatar — opt-in via `show.avatarUrl`. When the
+          URL is missing the kind-coloured monogram fallback still renders,
+          which is the point: every row gets a face. */}
+      {show.avatarUrl !== undefined ? (
+        <RemoteImage
+          uri={show.avatarUrl}
+          name={show.headliner}
+          kind={show.kind}
+          size="thumb"
+          style={styles.avatar}
+        />
+      ) : null}
 
       {/* Content column */}
       <View style={styles.content}>
@@ -156,6 +177,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
     marginRight: 12,
+  },
+  avatar: {
+    alignSelf: 'center',
+    marginRight: 10,
   },
   dateMonth: {
     fontFamily: 'Geist Sans',

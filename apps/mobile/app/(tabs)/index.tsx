@@ -2,10 +2,15 @@
  * Home tab — M2.B real implementation.
  *
  * Composition (per `docs/specs/mobile-cloud-claude-prompts.md` C-1):
- *   - NOW PLAYING — a single ticketed show whose `date` is today
- *   - UPCOMING — next 3 ticketed shows after today
+ *   - HERO — the next ticketed show (or today's, when one exists) gets
+ *     a full-bleed image treatment via `HeroShowCard`
+ *   - UPCOMING — the remaining ticketed shows after the hero
  *   - RECENTLY ADDED — last 3 past shows by date
  *   - WISHLIST — top 3 watching shows (by `createdAt`)
+ *
+ * The greeting + at-a-glance stats live in `HomeHeader`, which
+ * replaces the generic `TopBar` for this screen so the personalised
+ * "Good morning, Ethan · 3 on deck" line can sit above the title.
  *
  * Data: a single `shows.list` read goes through `useCachedQuery` so the
  * persistent cache hydration set up in M2.A keeps the screen warm
@@ -21,22 +26,23 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { Calendar } from 'lucide-react-native';
-import { TopBar } from '../../components/TopBar';
+import { HomeHeader } from '../../components/HomeHeader';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
 import { EmptyState } from '../../components/EmptyState';
 import { GetStartedHub } from '../../components/GetStartedHub';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
+import { HeroShowCard } from '../../components/HeroShowCard';
 import { ShowCardListSkeleton } from '../../components/skeletons';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
-import { useLiveCountdown } from '../../lib/useLiveCountdown';
 import { isNonWatchableKind } from '@showbook/shared';
 import { useAuth } from '../../lib/auth';
 import { trpc } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
+import { venueImageSource } from '../../lib/images';
 
 // Derive the per-row shape from the tRPC vanilla client to avoid pulling in
 // `@trpc/server` types directly. This stays in lockstep with `shows.list`'s
@@ -86,6 +92,7 @@ function toShowCardShow(row: ShowsListItem): ShowCardShow {
     headlinerSp?.performer.name ??
     firstSp?.performer.name ??
     'Untitled show';
+  const avatarUrl = headlinerSp?.performer.imageUrl ?? firstSp?.performer.imageUrl ?? null;
 
   // Non-watchable kinds (sports / film / unknown) shouldn't reach the
   // user's saved shows in normal flow — the discover.watch guard rejects
@@ -104,15 +111,63 @@ function toShowCardShow(row: ShowsListItem): ShowCardShow {
     dow,
     seat: row.seat ?? null,
     price: row.pricePaid ?? null,
+    avatarUrl,
   };
+}
+
+/**
+ * Resolve the hero image for a show. Headliner photos are absolute URLs
+ * (TM / Spotify) so they load directly. Venue photos may be Google
+ * Places resource names that have to go through `/api/venue-photo/<id>`
+ * with the user's Bearer token attached — `venueImageSource` returns
+ * the `{ uri, headers? }` pair for that case.
+ */
+function heroImageSource(
+  row: ShowsListItem,
+  token: string | null,
+): { uri: string; headers?: Record<string, string> } | null {
+  const headlinerSp = [...row.showPerformers]
+    .filter((sp) => sp.role === 'headliner')
+    .sort((a, b) => a.sortOrder - b.sortOrder)[0];
+  const firstSp = [...row.showPerformers].sort((a, b) => a.sortOrder - b.sortOrder)[0];
+  const performerImage = headlinerSp?.performer.imageUrl ?? firstSp?.performer.imageUrl;
+  if (performerImage) {
+    return { uri: performerImage };
+  }
+  return venueImageSource(row.venue, token);
+}
+
+function countThisYear(rows: readonly ShowsListItem[], year: number): number {
+  let n = 0;
+  for (const r of rows) {
+    if (r.state !== 'past') continue;
+    if (!r.date) continue;
+    const y = Number(r.date.slice(0, 4));
+    if (y === year) n += 1;
+  }
+  return n;
+}
+
+function countOnDeck(
+  rows: readonly ShowsListItem[],
+  todayYmd: string,
+): number {
+  let n = 0;
+  for (const r of rows) {
+    if (r.state !== 'ticketed' && r.state !== 'watching') continue;
+    if (!r.date) continue;
+    if (r.date >= todayYmd) n += 1;
+  }
+  return n;
 }
 
 export default function HomeScreen(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const insets = useSafeAreaInsets();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const utils = trpc.useUtils();
+  const router = useRouter();
   const [actionSheetFor, setActionSheetFor] = React.useState<{
     id: string;
     state: ShowState;
@@ -139,7 +194,7 @@ export default function HomeScreen(): React.JSX.Element {
       (r) => r.state === 'ticketed' && r.date === today,
     );
 
-    const upcoming = rows
+    const upcomingAll = rows
       .filter(
         (r) =>
           r.state === 'ticketed' &&
@@ -147,8 +202,13 @@ export default function HomeScreen(): React.JSX.Element {
           r.date > today &&
           r.id !== nowPlaying?.id,
       )
-      .sort((a, b) => (a.date! < b.date! ? -1 : 1))
-      .slice(0, 3);
+      .sort((a, b) => (a.date! < b.date! ? -1 : 1));
+
+    // The hero promotes the first ticketed show on deck (or today's, if
+    // there is one) into a full-bleed treatment. Everything else in the
+    // upcoming bucket renders as rows beneath it.
+    const hero = nowPlaying ?? upcomingAll[0] ?? null;
+    const upcomingRest = hero === nowPlaying ? upcomingAll.slice(0, 3) : upcomingAll.slice(1, 4);
 
     const recent = rows
       .filter((r) => r.state === 'past' && r.date !== null)
@@ -160,14 +220,32 @@ export default function HomeScreen(): React.JSX.Element {
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
       .slice(0, 3);
 
-    return { nowPlaying, upcoming, recent, wishlist, total: rows.length };
+    return {
+      hero,
+      heroIsToday: hero != null && hero === nowPlaying,
+      upcoming: upcomingRest,
+      recent,
+      wishlist,
+      total: rows.length,
+    };
   }, [showsQuery.data]);
 
-  const eyebrow = sections.nowPlaying ? 'NOW PLAYING TODAY' : 'YOUR SHOWS';
+  const headerCounts = React.useMemo(() => {
+    const rows = showsQuery.data ?? [];
+    return {
+      upcoming: countOnDeck(rows, todayIso()),
+      thisYear: countThisYear(rows, new Date().getFullYear()),
+    };
+  }, [showsQuery.data]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
-      <TopBar title="Home" eyebrow={eyebrow} rightAction={<MeTopBarAction />} large />
+      <HomeHeader
+        userName={user?.name ?? null}
+        upcomingCount={headerCounts.upcoming}
+        thisYearCount={headerCounts.thisYear}
+        rightAction={<MeTopBarAction />}
+      />
 
       <ScrollView
         contentContainerStyle={
@@ -200,18 +278,30 @@ export default function HomeScreen(): React.JSX.Element {
           <GetStartedHub variant="expanded" />
         ) : (
           <>
-            {sections.nowPlaying ? (
-              <Section title="Now playing">
-                <NowPlayingCountdown dateYmd={sections.nowPlaying.date} />
-                <ShowCardLink
-                show={sections.nowPlaying}
-                onLongPress={() =>
-                  setActionSheetFor({
-                    id: sections.nowPlaying!.id,
-                    state: sections.nowPlaying!.state as ShowState,
-                  })
-                }
-              />
+            {sections.hero ? (
+              <Section
+                title={sections.heroIsToday ? 'Tonight' : 'Next up'}
+                paddingTop={4}
+              >
+                <View style={styles.heroWrap}>
+                  <HeroShowCard
+                    show={toShowCardShow(sections.hero)}
+                    dateYmd={sections.hero.date}
+                    {...(() => {
+                      const src = heroImageSource(sections.hero, token);
+                      return src
+                        ? { imageUrl: src.uri, imageHeaders: src.headers }
+                        : {};
+                    })()}
+                    onPress={() => router.push(`/show/${sections.hero!.id}`)}
+                    onLongPress={() =>
+                      setActionSheetFor({
+                        id: sections.hero!.id,
+                        state: sections.hero!.state as ShowState,
+                      })
+                    }
+                  />
+                </View>
               </Section>
             ) : null}
 
@@ -242,7 +332,7 @@ export default function HomeScreen(): React.JSX.Element {
             {sections.upcoming.length === 0 &&
             sections.recent.length === 0 &&
             sections.wishlist.length === 0 &&
-            !sections.nowPlaying ? (
+            !sections.hero ? (
               <EmptyState
                 icon={<Calendar size={40} color={colors.faint} strokeWidth={1.5} />}
                 title="Nothing on deck"
@@ -268,47 +358,21 @@ export default function HomeScreen(): React.JSX.Element {
 function Section({
   title,
   children,
+  paddingTop,
 }: {
   title: string;
   children: React.ReactNode;
+  /** Override the default section top padding (18). The hero block uses
+   * a tighter inset so it sits closer to the greeting block above. */
+  paddingTop?: number;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   return (
-    <View style={styles.section}>
+    <View style={[styles.section, paddingTop !== undefined && { paddingTop }]}>
       <Text style={[styles.sectionLabel, { color: tokens.colors.muted }]}>
         {title.toUpperCase()}
       </Text>
       <View style={styles.sectionList}>{children}</View>
-    </View>
-  );
-}
-
-/**
- * Above-the-card countdown line for the NOW PLAYING section. Reuses
- * the shared `useLiveCountdown` so cadence + formatting match the web
- * hero. Renders nothing when the show has no committed date so a
- * watching-without-date show in this section (shouldn't happen, but
- * the type allows null) doesn't show "date TBD".
- */
-function NowPlayingCountdown({ dateYmd }: { dateYmd: string | null }): React.JSX.Element | null {
-  const { tokens } = useTheme();
-  const label = useLiveCountdown(dateYmd, { fallback: '' });
-  if (!dateYmd || !label) return null;
-  return (
-    <View style={styles.countdownRow}>
-      <View
-        style={[styles.countdownDot, { backgroundColor: tokens.colors.accent }]}
-        accessible={false}
-      />
-      <Text
-        style={[
-          styles.countdownText,
-          { color: tokens.colors.muted },
-        ]}
-      >
-        {label.toUpperCase()}
-        {'  ·  DOORS 7:00 PM'}
-      </Text>
     </View>
   );
 }
@@ -356,21 +420,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 8,
   },
-  countdownRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 4,
-    paddingBottom: 8,
-  },
-  countdownDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  countdownText: {
-    fontFamily: 'Geist Mono',
-    fontSize: 10.5,
-    letterSpacing: 0.6,
+  heroWrap: {
+    paddingHorizontal: 16,
   },
 });
