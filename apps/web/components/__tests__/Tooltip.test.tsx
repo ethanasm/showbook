@@ -115,4 +115,60 @@ describe('Tooltip', () => {
     });
     assert.equal(findTooltipNode('Toggle label'), null);
   });
+
+  it('Escape key closes a sticky-open tooltip (keyboard dismissal)', () => {
+    const { getByText } = render(
+      <Tooltip label="Esc label">
+        <span>esc</span>
+      </Tooltip>,
+    );
+    const trigger = getByText('esc').parentElement!;
+    act(() => {
+      fireEvent.click(trigger);
+    });
+    assert.ok(findTooltipNode('Esc label'));
+    act(() => {
+      // Dispatch the keydown on window because the keydown handler is
+      // attached to `window` (not the trigger).
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    assert.equal(findTooltipNode('Esc label'), null);
+  });
+
+  it('Space key on the focused trigger opens the tooltip (keyboard parity for the click path)', () => {
+    const { getByText } = render(
+      <Tooltip label="Space label">
+        <span>space</span>
+      </Tooltip>,
+    );
+    const trigger = getByText('space').parentElement!;
+    act(() => {
+      fireEvent.keyDown(trigger, { key: ' ' });
+    });
+    assert.ok(findTooltipNode('Space label'));
+  });
+
+  it('pointerdown on the trigger itself does NOT close (only outside taps dismiss)', () => {
+    const { getByText } = render(
+      <Tooltip label="Inside label">
+        <span>inside</span>
+      </Tooltip>,
+    );
+    const trigger = getByText('inside').parentElement!;
+    act(() => {
+      fireEvent.click(trigger);
+    });
+    assert.ok(findTooltipNode('Inside label'));
+    // Pointerdown inside the trigger should be a no-op for the
+    // outside-close handler — the click would toggle, but a raw
+    // pointerdown without a follow-up click leaves the sticky state
+    // alone.
+    act(() => {
+      fireEvent.pointerDown(trigger);
+    });
+    assert.ok(
+      findTooltipNode('Inside label'),
+      'pointerdown inside the trigger must not close the tooltip',
+    );
+  });
 });

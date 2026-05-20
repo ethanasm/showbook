@@ -351,6 +351,15 @@ describe('shows router', () => {
     // never saw the earlier date. This test pins the fix in place: both
     // shows.create calls run the inline song-index rebuild, and the
     // song-badges resolver naturally picks up the earlier date.
+    //
+    // Pre-set a googlePlaceId + photoUrl on the venue so shows.create's
+    // lazy geocode backfill (Google Places → Nominatim) doesn't fire on
+    // each call — those hop external services that hang in CI without
+    // network/keys and would blow the 60s per-test budget.
+    await db
+      .update(venues)
+      .set({ googlePlaceId: `${PREFIX}-fake-place`, photoUrl: 'https://example.com/p.jpg' })
+      .where(eq(venues.id, VENUE));
     const performerName = `${PREFIX} Bon Iver Regression`;
     const caller = callerFor(USER);
 
@@ -465,6 +474,10 @@ describe('shows router', () => {
     // shows.setlists but didn't touch setlist_song_appearances, so the
     // newly-edited setlist's songs would render plain until the next
     // corpus-fill cron. This test exercises the bare update path.
+    await db
+      .update(venues)
+      .set({ googlePlaceId: `${PREFIX}-fake-place`, photoUrl: 'https://example.com/p.jpg' })
+      .where(eq(venues.id, VENUE));
     const performerName = `${PREFIX} Update Index Performer`;
     const caller = callerFor(USER);
     const initial = await caller.shows.create({
@@ -531,6 +544,10 @@ describe('shows router', () => {
     // the wipe wouldn't reach the DELETE step without the
     // showIds-scoped union (see song-index-rebuild.ts:347). This test
     // pins that union in place.
+    await db
+      .update(venues)
+      .set({ googlePlaceId: `${PREFIX}-fake-place`, photoUrl: 'https://example.com/p.jpg' })
+      .where(eq(venues.id, VENUE));
     const performerName = `${PREFIX} Wipe Index Performer`;
     const caller = callerFor(USER);
     const created = await caller.shows.create({
