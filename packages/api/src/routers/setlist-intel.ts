@@ -58,6 +58,7 @@ import {
   type ColdPrediction,
   type HotPrediction,
 } from '../setlist-predict';
+import { enqueueSetlistCorpusFill } from '../job-queue';
 import {
   evaluateReleaseGate,
   type ReleaseGateBreach,
@@ -679,12 +680,64 @@ export const setlistIntelRouter = router({
         }),
       );
 
+      // Festival-set predictions inherit confidence from the headline
+      // corpus when the artist's festival-shaped corpus is < 3 rows
+      // (`loadCorpusForPrediction` falls back to full corpus in that
+      // case). The headline confidence overstates certainty for a
+      // festival appearance: the artist plays a SUBSET of their tour
+      // songs in a shorter slot, so even a 100% Jaccard tour leaves
+      // real uncertainty about which subset shows up tonight. Cap each
+      // hot prediction at 0.7 so the chip rail and the banner read as
+      // "strong signal, not a sure thing" — matches what the user can
+      // verify against the predicted song list below.
+      const FESTIVAL_CONFIDENCE_CAP = 0.7;
+      for (const entry of entries) {
+        const p = entry.prediction as { style: string; confidence?: number };
+        if (p.style !== 'cold' && typeof p.confidence === 'number') {
+          p.confidence = Math.min(p.confidence, FESTIVAL_CONFIDENCE_CAP);
+        }
+      }
+
+      // Lazy corpus-fill for any lineup artist who landed on `no_corpus`
+      // cold-state. The daily refresh cron (`setlist-corpus-fill-refresh`)
+      // only walks headliners with upcoming watching/ticketed shows + the
+      // top followed performers, so festival supports stuck on
+      // "We're pulling recent setlists" never had a corpus-fill trigger.
+      // Enqueueing here means the next visit to the festival shows real
+      // data. `runSetlistCorpusFill` is idempotent (ON CONFLICT upsert)
+      // and short-circuits on `no_mbid`, so a duplicate enqueue is cheap.
+      const noCorpusEntries = entries.filter(
+        (e) =>
+          e.prediction.style === 'cold' &&
+          (e.prediction as ColdPrediction).reason === 'no_corpus',
+      );
+      if (noCorpusEntries.length > 0) {
+        await Promise.all(
+          noCorpusEntries.map(async (e) => {
+            try {
+              await enqueueSetlistCorpusFill(e.performerId, 'predict');
+            } catch (err) {
+              log.warn(
+                {
+                  event: 'setlist.predict_festival.corpus_fill_enqueue_failed',
+                  err,
+                  showId,
+                  performerId: e.performerId,
+                },
+                'festival support corpus-fill enqueue failed (non-blocking)',
+              );
+            }
+          }),
+        );
+      }
+
       log.info(
         {
           event: 'setlist.predict_festival.served',
           showId,
           lineupSize: lineup.length,
           coldCount: entries.filter((e) => e.prediction.style === 'cold').length,
+          coldCorpusFillsEnqueued: noCorpusEntries.length,
         },
         'festival per-artist predictions served',
       );

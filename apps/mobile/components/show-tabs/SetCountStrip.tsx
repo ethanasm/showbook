@@ -53,6 +53,9 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     gap: 8,
     paddingVertical: 8,
+    // Match the predicted-setlist surface gutter so the strip doesn't
+    // butt up against the left edge of the screen.
+    paddingHorizontal: 20,
   },
   primary: {
     fontSize: 11,

@@ -37,6 +37,15 @@ export interface FestivalLineupSetlistEntry {
   actualSongs: ActualSong[];
 }
 
+function chipBadge(entry: FestivalLineupSetlistEntry, isPast: boolean): string {
+  if (isPast) return String(entry.actualSongs.length);
+  const p = entry.prediction;
+  if (!p || p.style === 'cold' || p.style === 'special_event') return '–';
+  const confidence = (p as { confidence?: number }).confidence;
+  if (typeof confidence !== 'number' || !Number.isFinite(confidence)) return '–';
+  return `${Math.round(confidence * 100)}%`;
+}
+
 export interface FestivalSetlistTabProps {
   showId: string;
   isPast: boolean;
@@ -105,10 +114,12 @@ export function FestivalSetlistTab(
     id: e.performerId,
     name: e.performerName,
     sublabel: e.role === 'headliner' ? 'Headliner' : undefined,
-    // Past: show the actual song count. Upcoming: omit the count — the
-    // per-artist predicted song count varies by style and we don't
-    // want to mislead with a single number.
+    // Past: actual song count. Upcoming: per-artist prediction
+    // confidence ("82%") so each chip carries a quick read on how
+    // strong the prediction below is. Cold-state artists render an
+    // em-dash so the chip width stays consistent.
     count: isPast ? e.actualSongs.length : 0,
+    badgeText: chipBadge(e, isPast),
   }));
 
   const selected =
@@ -116,7 +127,7 @@ export function FestivalSetlistTab(
     sortedEntries[0];
 
   return (
-    <View testID="festival-setlist-tab">
+    <View testID="festival-setlist-tab" style={styles.tab}>
       <FilterChipsRow
         groups={chipGroups}
         selected={selected.performerId}
@@ -145,6 +156,11 @@ export function FestivalSetlistTab(
 }
 
 const styles = StyleSheet.create({
+  tab: {
+    // Breathing room between the show-detail tab bar above and the
+    // first row of artist chips so they don't read as glued together.
+    paddingTop: 12,
+  },
   emptyBox: {
     paddingVertical: 48,
     paddingHorizontal: 24,
