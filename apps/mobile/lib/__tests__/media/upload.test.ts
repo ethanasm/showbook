@@ -192,6 +192,85 @@ describe('uploadFile — happy path', () => {
     assert.equal(result.id, 'asset-1');
     assert.equal(result.status, 'ready');
   });
+
+  it('re-wraps the source blob with the intended mimeType so the PUT body matches the signed Content-Type', async () => {
+    // Even after HEIC normalization, `readFileAsBlob` defensively re-wraps
+    // the blob so its `type` matches the intended mimeType. RN's fetch can
+    // pass the Blob's intrinsic `type` through as the request's
+    // Content-Type, so if `fetch('file://…')` returns a blob with a stale
+    // / wrong type (e.g. `application/octet-stream`), the PUT would arrive
+    // at R2 with a Content-Type that doesn't match the signed URL → 403.
+    const server = stubServer();
+    const sourceBlob = new Blob([new Uint8Array(4_096)], {
+      type: 'application/octet-stream',
+    });
+    const { fetchImpl, calls } = makeFetch([
+      async () => okResponse(sourceBlob),
+      async () => okResponse(null, { status: 200 }),
+    ]);
+
+    await uploadFile(fakePhoto(), {
+      server,
+      showId: 'show-1',
+      fetchImpl,
+      sleepImpl: async () => undefined,
+    });
+
+    const putInit = calls[1]?.init as RequestInit | undefined;
+    const putBody = putInit?.body as Blob | undefined;
+    assert.ok(putBody instanceof Blob, 'expected PUT body to be a Blob');
+    assert.equal(
+      putBody.type,
+      'image/jpeg',
+      `PUT body blob.type must match the signed mimeType — got ${putBody.type}`,
+    );
+    const headers = putInit?.headers as Record<string, string> | undefined;
+    assert.equal(headers?.['Content-Type'], 'image/jpeg');
+  });
+
+  it('re-encodes HEIC photos to JPEG before the upload intent so R2 sees a renderable file', async () => {
+    // iPhone-picked HEIC files PUT as `application/octet-stream` and break
+    // R2's signature check; even when they don't, Chrome / Firefox can't
+    // render them. We run them through expo-image-manipulator → JPEG before
+    // any signature is generated.
+    const server = stubServer();
+    const { fetchImpl, calls } = makeFetch([
+      async () => okResponse(emptyBlob()),
+      async () => okResponse(null, { status: 200 }),
+    ]);
+
+    const heicFile: SelectedFile = {
+      uri: 'file:///private/photo.HEIC',
+      mediaType: 'photo',
+      mimeType: 'image/heic',
+      bytes: 2_276_668,
+      width: 4032,
+      height: 3024,
+    };
+
+    await uploadFile(heicFile, {
+      server,
+      showId: 'show-1',
+      fetchImpl,
+      sleepImpl: async () => undefined,
+      normalizerDeps: {
+        manipulate: async () => ({
+          uri: 'file:///cache/converted.jpg',
+          width: 4032,
+          height: 3024,
+        }),
+        measureBytes: async () => 421_337,
+      },
+    });
+
+    // Intent must reflect the JPEG, not the HEIC source.
+    assert.equal(server.intentCalls.length, 1);
+    assert.equal(server.intentCalls[0]?.mimeType, 'image/jpeg');
+    assert.equal(server.intentCalls[0]?.sourceBytes, 421_337);
+    assert.equal(server.intentCalls[0]?.variants[0]?.mimeType, 'image/jpeg');
+    // The file URI fetched for upload bytes is the converted JPEG, not the HEIC.
+    assert.equal(calls[0]?.url, 'file:///cache/converted.jpg');
+  });
 });
 
 describe('uploadFile — progress', () => {
