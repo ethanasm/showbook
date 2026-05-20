@@ -747,6 +747,7 @@ function EmptyForTab({
 function AnnouncementRow({ item }: { item: AnnouncementItem }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const router = useRouter();
   const { month, day, year, dow } = parseDate(item.showDate);
   const accent = tokens.kindColor(item.kind as Kind);
   const onSale = formatOnSale(item.onSaleDate);
@@ -756,6 +757,13 @@ function AnnouncementRow({ item }: { item: AnnouncementItem }): React.JSX.Elemen
   const support =
     item.support && item.support.length > 0
       ? `${item.kind === 'sports' && item.support.length === 1 ? 'vs' : '+'} ${item.support.join(', ')}`
+      : null;
+  // Theatre productions use the productionName as the title and don't
+  // carry a meaningful headlinerPerformerId for navigation — match the
+  // web row which only links when a real performer id is present.
+  const headlinerLinkId =
+    !item.productionName && item.headlinerPerformerId
+      ? item.headlinerPerformerId
       : null;
 
   const onPress = () => {
@@ -790,13 +798,26 @@ function AnnouncementRow({ item }: { item: AnnouncementItem }): React.JSX.Elemen
         </View>
       </View>
 
-      <Text
-        style={[styles.cardTitle, { color: colors.ink }]}
-        numberOfLines={2}
-        ellipsizeMode="tail"
-      >
-        {title}
-      </Text>
+      {headlinerLinkId ? (
+        <Text
+          onPress={() => router.push(`/artists/${headlinerLinkId}`)}
+          accessibilityRole="link"
+          accessibilityLabel={`Open ${title}`}
+          style={[styles.cardTitle, { color: colors.ink }]}
+          numberOfLines={2}
+          ellipsizeMode="tail"
+        >
+          {title}
+        </Text>
+      ) : (
+        <Text
+          style={[styles.cardTitle, { color: colors.ink }]}
+          numberOfLines={2}
+          ellipsizeMode="tail"
+        >
+          {title}
+        </Text>
+      )}
       {support && (
         <Text
           style={[styles.cardSupport, { color: colors.muted }]}
@@ -806,13 +827,26 @@ function AnnouncementRow({ item }: { item: AnnouncementItem }): React.JSX.Elemen
           {support}
         </Text>
       )}
-      <Text
-        style={[styles.cardVenue, { color: colors.muted }]}
-        numberOfLines={2}
-        ellipsizeMode="tail"
-      >
-        {venueLabel}
-      </Text>
+      {item.venue.id ? (
+        <Text
+          onPress={() => router.push(`/venues/${item.venue.id}`)}
+          accessibilityRole="link"
+          accessibilityLabel={`Open ${item.venue.name}`}
+          style={[styles.cardVenue, { color: colors.muted }]}
+          numberOfLines={2}
+          ellipsizeMode="tail"
+        >
+          {venueLabel}
+        </Text>
+      ) : (
+        <Text
+          style={[styles.cardVenue, { color: colors.muted }]}
+          numberOfLines={2}
+          ellipsizeMode="tail"
+        >
+          {venueLabel}
+        </Text>
+      )}
 
       <View style={styles.metaRow}>
         <View

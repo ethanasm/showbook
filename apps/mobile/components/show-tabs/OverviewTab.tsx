@@ -59,38 +59,59 @@ export function OverviewTab({
   return (
     <View testID="show-tab-overview">
       <View style={styles.statRow}>
-        {cells.map((cell, idx) => (
-          <View
-            key={cell.label}
-            style={[
-              styles.statCell,
-              {
-                borderRightWidth:
-                  idx === cells.length - 1 ? 0 : StyleSheet.hairlineWidth,
-                borderRightColor: colors.rule,
-                borderBottomColor: colors.rule,
-              },
-            ]}
-          >
-            <Text style={[styles.statLabel, { color: colors.faint }]}>
-              {cell.label}
-            </Text>
-            <Text
-              style={[styles.statValue, { color: colors.ink }]}
-              numberOfLines={1}
-            >
-              {cell.value}
-            </Text>
-            {cell.sub ? (
+        {cells.map((cell, idx) => {
+          const cellStyle = [
+            styles.statCell,
+            {
+              borderRightWidth:
+                idx === cells.length - 1 ? 0 : StyleSheet.hairlineWidth,
+              borderRightColor: colors.rule,
+              borderBottomColor: colors.rule,
+            },
+          ];
+          const content = (
+            <>
+              <Text style={[styles.statLabel, { color: colors.faint }]}>
+                {cell.label}
+              </Text>
               <Text
-                style={[styles.statSub, { color: colors.muted }]}
+                style={[styles.statValue, { color: colors.ink }]}
                 numberOfLines={1}
               >
-                {cell.sub}
+                {cell.value}
               </Text>
-            ) : null}
-          </View>
-        ))}
+              {cell.sub ? (
+                <Text
+                  style={[styles.statSub, { color: colors.muted }]}
+                  numberOfLines={1}
+                >
+                  {cell.sub}
+                </Text>
+              ) : null}
+            </>
+          );
+          if (cell.onPress) {
+            return (
+              <Pressable
+                key={cell.label}
+                onPress={cell.onPress}
+                accessibilityRole="link"
+                accessibilityLabel={`${cell.label} ${cell.value}`}
+                style={({ pressed }) => [
+                  ...cellStyle,
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                {content}
+              </Pressable>
+            );
+          }
+          return (
+            <View key={cell.label} style={cellStyle}>
+              {content}
+            </View>
+          );
+        })}
       </View>
 
       {musicLayerSlot ? (

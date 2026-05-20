@@ -56,6 +56,7 @@ import { trpc } from '../../lib/trpc';
 import { CACHE_DEFAULTS } from '../../lib/cache';
 
 interface ShowDetailVenue {
+  id: string;
   name: string;
   city: string;
   stateRegion: string | null;
@@ -293,6 +294,7 @@ function formatTitle(show: ShowDetail): string {
 function Hero({ show }: { show: ShowDetail }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const router = useRouter();
   const accent = tokens.kindColor(show.kind as Kind);
   const date = parseShowDate(show.date);
   const headliner = show.showPerformers.find((sp) => sp.role === 'headliner');
@@ -303,6 +305,12 @@ function Hero({ show }: { show: ShowDetail }): React.JSX.Element {
       ? show.productionName ?? headliner?.performer.name ?? 'Untitled'
       : headliner?.performer.name ?? show.productionName ?? 'Untitled';
 
+  // Headliner becomes a link to /artists/[id] when it's an actual
+  // performer (concerts/comedy/festivals); theatre productions render
+  // the production name instead and have no headliner link.
+  const titleLinkPerformerId =
+    show.kind === 'theatre' ? null : headliner?.performer.id ?? null;
+
   return (
     <View style={styles.heroWrap}>
       <View style={styles.chipRow}>
@@ -310,7 +318,18 @@ function Hero({ show }: { show: ShowDetail }): React.JSX.Element {
         {show.state !== 'past' && <StateChip state={show.state as ShowState} />}
       </View>
 
-      <Text style={[styles.heroTitle, { color: colors.ink }]}>{titleText}</Text>
+      {titleLinkPerformerId ? (
+        <Pressable
+          onPress={() => router.push(`/artists/${titleLinkPerformerId}`)}
+          accessibilityRole="link"
+          accessibilityLabel={`Open ${titleText}`}
+          style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+        >
+          <Text style={[styles.heroTitle, { color: colors.ink }]}>{titleText}</Text>
+        </Pressable>
+      ) : (
+        <Text style={[styles.heroTitle, { color: colors.ink }]}>{titleText}</Text>
+      )}
 
       {show.tourName ? (
         <Text style={[styles.heroSubtitle, { color: colors.muted }]}>
@@ -320,7 +339,19 @@ function Hero({ show }: { show: ShowDetail }): React.JSX.Element {
 
       {support.length > 0 ? (
         <Text style={[styles.heroSupport, { color: colors.muted }]} numberOfLines={2}>
-          with {support.map((sp) => sp.performer.name).join(', ')}
+          {'with '}
+          {support.map((sp, i) => (
+            <Text
+              key={sp.performer.id}
+              onPress={() => router.push(`/artists/${sp.performer.id}`)}
+              accessibilityRole="link"
+              accessibilityLabel={`Open ${sp.performer.name}`}
+              style={{ color: colors.muted }}
+            >
+              {sp.performer.name}
+              {i < support.length - 1 ? ', ' : ''}
+            </Text>
+          ))}
         </Text>
       ) : null}
 
@@ -346,11 +377,13 @@ interface FactRow {
   label: string;
   value: string;
   icon: React.ReactNode;
+  onPress?: () => void;
 }
 
 function Facts({ show }: { show: ShowDetail }): React.JSX.Element | null {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const router = useRouter();
   const accent = tokens.kindColor(show.kind as Kind);
 
   const rows: FactRow[] = [];
@@ -363,6 +396,7 @@ function Facts({ show }: { show: ShowDetail }): React.JSX.Element | null {
       label: 'VENUE',
       value: venueLabel,
       icon: <MapPin size={13} color={colors.muted} strokeWidth={1.8} />,
+      onPress: () => router.push(`/venues/${show.venue.id}`),
     });
   }
   if (show.seat) {
@@ -401,27 +435,45 @@ function Facts({ show }: { show: ShowDetail }): React.JSX.Element | null {
         { backgroundColor: colors.surface, borderLeftColor: accent },
       ]}
     >
-      {rows.map((row, i) => (
-        <View
-          key={row.key}
-          style={[
-            styles.factRow,
-            i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.rule },
-          ]}
-        >
-          <Text style={[styles.factLabel, { color: colors.faint }]}>{row.label}</Text>
-          <View style={styles.factValueWrap}>
-            {row.icon}
-            <Text
-              style={[styles.factValue, { color: colors.ink }]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
+      {rows.map((row, i) => {
+        const rowStyle = [
+          styles.factRow,
+          i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.rule },
+        ];
+        const rowContent = (
+          <>
+            <Text style={[styles.factLabel, { color: colors.faint }]}>{row.label}</Text>
+            <View style={styles.factValueWrap}>
+              {row.icon}
+              <Text
+                style={[styles.factValue, { color: colors.ink }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {row.value}
+              </Text>
+            </View>
+          </>
+        );
+        if (row.onPress) {
+          return (
+            <Pressable
+              key={row.key}
+              onPress={row.onPress}
+              accessibilityRole="link"
+              accessibilityLabel={`${row.label} ${row.value}`}
+              style={({ pressed }) => [...rowStyle, pressed && { opacity: 0.7 }]}
             >
-              {row.value}
-            </Text>
+              {rowContent}
+            </Pressable>
+          );
+        }
+        return (
+          <View key={row.key} style={rowStyle}>
+            {rowContent}
           </View>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
@@ -429,6 +481,7 @@ function Facts({ show }: { show: ShowDetail }): React.JSX.Element | null {
 function Lineup({ show }: { show: ShowDetail }): React.JSX.Element | null {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const router = useRouter();
 
   const performers = [...show.showPerformers].sort((a, b) => a.sortOrder - b.sortOrder);
   if (performers.length === 0) return null;
@@ -449,11 +502,15 @@ function Lineup({ show }: { show: ShowDetail }): React.JSX.Element | null {
     >
       <View style={[styles.lineupCard, { backgroundColor: colors.surface, borderColor: colors.rule }]}>
         {performers.map((sp, i) => (
-          <View
+          <Pressable
             key={`${sp.performer.id}:${sp.role}`}
-            style={[
+            onPress={() => router.push(`/artists/${sp.performer.id}`)}
+            accessibilityRole="link"
+            accessibilityLabel={`Open ${sp.performer.name}`}
+            style={({ pressed }) => [
               styles.lineupRow,
               i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.rule },
+              pressed && { opacity: 0.7 },
             ]}
           >
             <Text style={[styles.lineupRole, { color: colors.faint }]}>
@@ -466,7 +523,7 @@ function Lineup({ show }: { show: ShowDetail }): React.JSX.Element | null {
             >
               {sp.performer.name}
             </Text>
-          </View>
+          </Pressable>
         ))}
       </View>
     </Section>
