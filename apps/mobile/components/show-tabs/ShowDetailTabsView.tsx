@@ -29,6 +29,8 @@ import { Ticket } from 'lucide-react-native';
 import { hapticSelection } from '../../lib/haptics';
 import { useFeedback } from '../../lib/feedback';
 
+import { useAuth } from '../../lib/auth';
+import { venueImageSource } from '../../lib/images';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
 import { CACHE_DEFAULTS } from '../../lib/cache';
@@ -53,7 +55,11 @@ import {
   type ShowTabKey,
 } from '../../lib/setlist-intel';
 import { useBreakpoint } from '../../lib/responsive';
-import { getHeadliner } from '@showbook/shared';
+import {
+  formatVenueLocation,
+  getHeadliner,
+  isVenuePlaceholder,
+} from '@showbook/shared';
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
@@ -73,6 +79,8 @@ interface ShowVenue {
   name: string;
   city: string;
   stateRegion: string | null;
+  photoUrl?: string | null;
+  googlePlaceId?: string | null;
 }
 interface PerformerSetlistSection {
   kind: string;
@@ -255,9 +263,7 @@ export function ShowDetailTabsView({
   // ──────────────────────────── Panels ────────────────────────────
   const overviewCells = React.useMemo(() => {
     const venueLabel = show.venue.name;
-    const venueSub = [show.venue.city, show.venue.stateRegion]
-      .filter(Boolean)
-      .join(', ');
+    const venueSub = formatVenueLocation(show.venue);
     const seatLabel = show.seat ?? '—';
     const seatSub = show.ticketCount > 1 ? `${show.ticketCount} tix` : '1 tix';
     const priceLabel = show.pricePaid
@@ -521,6 +527,7 @@ function HeaderStrip({ show }: { show: ShowDetail }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const router = useRouter();
+  const { token } = useAuth();
   const resolvedHeadliner = getHeadliner(show);
   const title = resolvedHeadliner === 'Unknown Artist' ? 'Untitled' : resolvedHeadliner;
   const date = parseDate(show.date);
@@ -529,16 +536,18 @@ function HeaderStrip({ show }: { show: ShowDetail }): React.JSX.Element {
   const parts = title.trim().split(/\s+/);
   const head = parts.length > 1 ? parts.slice(0, -1).join(' ') + ' ' : '';
   const tail = parts.length > 1 ? (parts[parts.length - 1] as string) : title;
-  const venueLine = [show.venue.name, show.venue.city].filter(Boolean).join(' · ');
+  const venueLine = [show.venue.name, show.venue.city]
+    .filter((p) => !isVenuePlaceholder(p))
+    .join(' · ');
 
-  // Headliner image is shown only for solo-artist kinds (concert/comedy)
-  // where the title maps 1:1 to a single performer. Festivals span many
-  // artists and theatre titles are productions, so the avatar would
-  // mislead more than it'd help.
-  const showHeadlinerImage = show.kind === 'concert' || show.kind === 'comedy';
-  const headliner = show.showPerformers.find((sp) => sp.role === 'headliner');
-  const headlinerImageUrl = headliner?.performer.imageUrl ?? null;
-  const headlinerImageName = headliner?.performer.name ?? title;
+  // Top-right image renders the venue for solo-artist kinds (concert /
+  // comedy). The headliner already appears in the LINEUP row below, so
+  // showing it again here doubles up; the venue photo carries new
+  // information and reinforces the "where" alongside the "who" in the
+  // title. Festivals span many artists and theatre titles are
+  // productions, so we keep the image hidden for those.
+  const showVenueImage = show.kind === 'concert' || show.kind === 'comedy';
+  const venueImage = showVenueImage ? venueImageSource(show.venue, token) : null;
 
   return (
     <View
@@ -599,25 +608,21 @@ function HeaderStrip({ show }: { show: ShowDetail }): React.JSX.Element {
               </Pressable>
             ) : null}
           </View>
-          {showHeadlinerImage ? (
+          {showVenueImage ? (
             <Pressable
-              testID="show-tabs-header-headliner-image"
-              onPress={() =>
-                headliner
-                  ? router.push(`/artists/${headliner.performer.id}`)
-                  : undefined
-              }
-              disabled={!headliner}
-              accessibilityRole={headliner ? 'link' : 'image'}
-              accessibilityLabel={headlinerImageName}
+              testID="show-tabs-header-venue-image"
+              onPress={() => router.push(`/venues/${show.venue.id}`)}
+              accessibilityRole="link"
+              accessibilityLabel={show.venue.name}
               style={({ pressed }) => [
                 styles.headerImageWrap,
-                pressed && headliner ? { opacity: 0.85 } : null,
+                pressed ? { opacity: 0.85 } : null,
               ]}
             >
               <RemoteImage
-                uri={headlinerImageUrl}
-                name={headlinerImageName}
+                uri={venueImage?.uri ?? null}
+                headers={venueImage?.headers}
+                name={show.venue.name}
                 kind={show.kind as Kind}
                 size="custom"
                 width={84}

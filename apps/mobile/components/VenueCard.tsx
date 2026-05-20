@@ -13,6 +13,7 @@ import { useTheme } from '../lib/theme';
 import { useAuth } from '../lib/auth';
 import { venueImageSource } from '../lib/images';
 import { RemoteImage } from './design-system/RemoteImage';
+import { formatVenueLocation } from '@showbook/shared';
 
 export interface VenueCardVenue {
   id: string;
@@ -36,7 +37,7 @@ export function VenueCard({ venue, onPress }: VenueCardProps): React.JSX.Element
   const { token } = useAuth();
   const source = venueImageSource(venue, token);
 
-  const location = [venue.city, venue.stateRegion].filter(Boolean).join(', ');
+  const location = formatVenueLocation(venue);
   const subtitleParts: string[] = [];
   if (location) subtitleParts.push(location);
   if (venue.showCount && venue.showCount > 0) {

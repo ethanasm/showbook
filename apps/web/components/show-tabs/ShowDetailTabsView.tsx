@@ -20,7 +20,7 @@ import {
   isProductionShow,
   type ShowLike,
 } from "@showbook/shared";
-import { isFeatureOn } from "@showbook/shared";
+import { isFeatureOn, isVenuePlaceholder } from "@showbook/shared";
 import { MediaSection } from "@/components/media";
 import { ShowTabs } from "./ShowTabs";
 import { OverviewTab, type OverviewLineupEntry } from "./OverviewTab";
@@ -226,7 +226,7 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
   // (PAID | ON STAGE) / (DOORS | DROVE).
   const cells: StatCell[] = useMemo(() => {
     const venueLabel = show.venue.name;
-    const venueSub = show.venue.city;
+    const venueSub = isVenuePlaceholder(show.venue.city) ? undefined : show.venue.city;
     const seatLabel = show.seat ?? "—";
     const seatSub = show.ticketCount > 1 ? `${show.ticketCount} tix` : "1 tix";
     const priceLabel = show.pricePaid

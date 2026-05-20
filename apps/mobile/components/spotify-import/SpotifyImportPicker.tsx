@@ -83,13 +83,36 @@ export function SpotifyImportPicker({ flow }: SpotifyImportPickerProps): React.J
           <Stat value={flow.counts.total} label="from spotify" faint />
         </View>
         {flow.counts.importable > 0 ? (
-          <Pressable onPress={flow.toggleAll} hitSlop={6}>
-            <Text style={[styles.selectAll, { color: colors.muted }]}>
-              {flow.counts.selected === flow.counts.importable
-                ? 'Deselect all'
-                : 'Select all'}
-            </Text>
-          </Pressable>
+          <View style={styles.bulkActions}>
+            {flow.counts.selected < flow.counts.importable ? (
+              <Pressable
+                onPress={flow.selectAll}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel="Select all artists"
+              >
+                <Text style={[styles.selectAll, { color: colors.muted }]}>
+                  Select all
+                </Text>
+              </Pressable>
+            ) : null}
+            {flow.counts.selected > 0 &&
+            flow.counts.selected < flow.counts.importable ? (
+              <Text style={[styles.selectAll, { color: colors.faint }]}>·</Text>
+            ) : null}
+            {flow.counts.selected > 0 ? (
+              <Pressable
+                onPress={flow.deselectAll}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel="Deselect all artists"
+              >
+                <Text style={[styles.selectAll, { color: colors.muted }]}>
+                  Deselect all
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
         ) : null}
       </View>
 
@@ -265,6 +288,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
+  },
+  bulkActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   stat: {
     flexDirection: 'row',

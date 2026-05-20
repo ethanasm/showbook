@@ -39,6 +39,7 @@ import {
   type FestivalLineupMeta,
   type SelectedFestivalArtist,
 } from '../../lib/festival-lineup/useFestivalLineup';
+import { parseFestivalVenue } from '../../lib/festival-lineup/parseFestivalVenue';
 import {
   pickFestivalImage,
   type PickedFestivalImage,
@@ -79,10 +80,14 @@ export default function FestivalPosterScreen(): React.JSX.Element {
         sortOrder: i + 1,
       }));
 
-      const venuePayload = {
-        name: meta.venueHint?.trim() || 'TBA',
-        city: 'Unknown',
-      };
+      // Posters rarely carry a fully-resolved "Venue Name, City, State". The
+      // Groq extractor returns whatever blob it could read into `venueHint` —
+      // sometimes "Citi Field, NYC" (split into name + city) and sometimes
+      // just a location like "Napa Valley" (better used as the city while the
+      // festival name doubles as the venue name). The user can always edit
+      // the show afterwards; the goal here is to avoid persisting the literal
+      // string "Unknown" as a city.
+      const venuePayload = parseFestivalVenue(meta);
 
       const date = meta.startDate ?? '';
       if (!date) {
