@@ -8,6 +8,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '../../lib/theme';
+import { RemoteImage } from '../design-system';
 import { SectionFrame } from './SectionFrame';
 
 export interface OverviewStatCell {
@@ -22,6 +23,7 @@ export interface OverviewLineupEntry {
   name: string;
   role: string;
   characterName?: string | null;
+  imageUrl?: string | null;
 }
 
 export interface OverviewAction {
@@ -137,17 +139,28 @@ export function OverviewTab({
                 },
               ]}
             >
-              <Text style={[styles.lineupRole, { color: colors.faint }]}>
-                {entry.role.toUpperCase()}
-              </Text>
-              <Text style={[styles.lineupName, { color: colors.ink }]} numberOfLines={1}>
-                {entry.name}
-              </Text>
-              {entry.characterName ? (
-                <Text style={[styles.lineupChar, { color: colors.muted }]}>
-                  as {entry.characterName}
+              <RemoteImage
+                uri={entry.imageUrl ?? null}
+                name={entry.name}
+                kind="concert"
+                size="custom"
+                width={44}
+                height={44}
+                style={styles.lineupAvatar}
+              />
+              <View style={styles.lineupText}>
+                <Text style={[styles.lineupRole, { color: colors.faint }]}>
+                  {entry.role.toUpperCase()}
                 </Text>
-              ) : null}
+                <Text style={[styles.lineupName, { color: colors.ink }]} numberOfLines={1}>
+                  {entry.name}
+                </Text>
+                {entry.characterName ? (
+                  <Text style={[styles.lineupChar, { color: colors.muted }]}>
+                    as {entry.characterName}
+                  </Text>
+                ) : null}
+              </View>
             </Pressable>
           ))}
           {lineup.length === 0 ? (
@@ -271,9 +284,19 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   lineupRow: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderLeftWidth: 2,
+  },
+  lineupAvatar: {
+    borderRadius: 22,
+  },
+  lineupText: {
+    flex: 1,
+    minWidth: 0,
   },
   lineupRole: {
     fontFamily: 'Geist Mono',
