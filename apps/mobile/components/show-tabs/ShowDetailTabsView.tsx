@@ -43,7 +43,7 @@ import { HypePlaylistCard } from './HypePlaylistCard';
 import { KindBadge } from '../KindBadge';
 import { StateChip } from '../StateChip';
 import { MediaGrid, type MediaGridItem } from '../MediaGrid';
-import { Eyebrow, GlowBackdrop, GradientEmphasis } from '../design-system';
+import { Eyebrow, GlowBackdrop, GradientEmphasis, RemoteImage } from '../design-system';
 import {
   computeShowTabBadges,
   parseShowTab,
@@ -58,6 +58,7 @@ const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', '
 interface ShowPerformer {
   id: string;
   name: string;
+  imageUrl?: string | null;
 }
 interface ShowPerformerEntry {
   role: 'headliner' | 'support' | 'cast';
@@ -277,9 +278,9 @@ function ShowDetailTabsViewInner({
         sub: venueSub || undefined,
         onPress: () => router.push(`/venues/${show.venue.id}`),
       },
-      { label: 'SEAT', value: seatLabel, sub: seatSub },
-      { label: 'PAID', value: priceLabel },
       { label: 'STATE', value: stateLabel },
+      { label: 'PAID', value: priceLabel },
+      { label: 'SEAT', value: seatLabel, sub: seatSub },
     ];
   }, [isPast, router, show]);
 
@@ -291,6 +292,7 @@ function ShowDetailTabsViewInner({
         name: sp.performer.name,
         role: sp.role,
         characterName: sp.characterName,
+        imageUrl: sp.performer.imageUrl ?? null,
       }));
   }, [show.showPerformers]);
 
@@ -514,6 +516,15 @@ function HeaderStrip({ show }: { show: ShowDetail }): React.JSX.Element {
   const tail = parts.length > 1 ? (parts[parts.length - 1] as string) : title;
   const venueLine = [show.venue.name, show.venue.city].filter(Boolean).join(' · ');
 
+  // Headliner image is shown only for solo-artist kinds (concert/comedy)
+  // where the title maps 1:1 to a single performer. Festivals span many
+  // artists and theatre titles are productions, so the avatar would
+  // mislead more than it'd help.
+  const showHeadlinerImage = show.kind === 'concert' || show.kind === 'comedy';
+  const headliner = show.showPerformers.find((sp) => sp.role === 'headliner');
+  const headlinerImageUrl = headliner?.performer.imageUrl ?? null;
+  const headlinerImageName = headliner?.performer.name ?? title;
+
   return (
     <View
       testID="show-tabs-header"
@@ -521,55 +532,87 @@ function HeaderStrip({ show }: { show: ShowDetail }): React.JSX.Element {
     >
       <GlowBackdrop grid={false} />
       <View style={styles.headerContent}>
-        <Eyebrow>
-          {show.kind === 'theatre' ? 'THEATRE' : show.kind.toUpperCase()}
-          {date ? ` · ${date}` : ''}
-        </Eyebrow>
-        <View style={styles.headerChips}>
-          <KindBadge kind={show.kind as Kind} size="sm" />
-          {show.state !== 'past' ? (
-            <StateChip state={show.state as ShowState} />
-          ) : (
-            <View
-              testID="went-badge"
-              style={[
-                styles.wentBadge,
-                { borderColor: colors.ruleStrong },
+        <View style={styles.headerRow}>
+          <View style={styles.headerTextCol}>
+            <Eyebrow>
+              {show.kind === 'theatre' ? 'THEATRE' : show.kind.toUpperCase()}
+              {date ? ` · ${date}` : ''}
+            </Eyebrow>
+            <View style={styles.headerChips}>
+              <KindBadge kind={show.kind as Kind} size="sm" />
+              {show.state !== 'past' ? (
+                <StateChip state={show.state as ShowState} />
+              ) : (
+                <View
+                  testID="went-badge"
+                  style={[
+                    styles.wentBadge,
+                    { borderColor: colors.ruleStrong },
+                  ]}
+                >
+                  <Text style={[styles.wentBadgeText, { color: colors.muted }]}>
+                    WENT
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text
+              style={[styles.headerTitle, { color: colors.ink }]}
+              numberOfLines={2}
+            >
+              {head ? <Text>{head}</Text> : null}
+              <GradientEmphasis style={[styles.headerTitle, { color: colors.accent }]}>
+                {tail}
+              </GradientEmphasis>
+            </Text>
+            {show.tourName ? (
+              <Text style={[styles.headerSub, { color: colors.muted }]} numberOfLines={1}>
+                {show.tourName}
+              </Text>
+            ) : null}
+            {venueLine ? (
+              <Pressable
+                onPress={() => router.push(`/venues/${show.venue.id}`)}
+                accessibilityRole="link"
+                accessibilityLabel={`Open ${show.venue.name}`}
+                hitSlop={6}
+                style={({ pressed }) => [styles.headerVenueLink, pressed && { opacity: 0.6 }]}
+              >
+                <Text style={[styles.headerVenue, { color: colors.muted }]} numberOfLines={1}>
+                  {venueLine}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+          {showHeadlinerImage ? (
+            <Pressable
+              testID="show-tabs-header-headliner-image"
+              onPress={() =>
+                headliner
+                  ? router.push(`/artists/${headliner.performer.id}`)
+                  : undefined
+              }
+              disabled={!headliner}
+              accessibilityRole={headliner ? 'link' : 'image'}
+              accessibilityLabel={headlinerImageName}
+              style={({ pressed }) => [
+                styles.headerImageWrap,
+                pressed && headliner ? { opacity: 0.85 } : null,
               ]}
             >
-              <Text style={[styles.wentBadgeText, { color: colors.muted }]}>
-                WENT
-              </Text>
-            </View>
-          )}
+              <RemoteImage
+                uri={headlinerImageUrl}
+                name={headlinerImageName}
+                kind={show.kind as Kind}
+                size="custom"
+                width={84}
+                height={84}
+                aspect="1/1"
+                style={styles.headerImage}
+              />
+            </Pressable>
+          ) : null}
         </View>
-        <Text
-          style={[styles.headerTitle, { color: colors.ink }]}
-          numberOfLines={2}
-        >
-          {head ? <Text>{head}</Text> : null}
-          <GradientEmphasis style={[styles.headerTitle, { color: colors.accent }]}>
-            {tail}
-          </GradientEmphasis>
-        </Text>
-        {show.tourName ? (
-          <Text style={[styles.headerSub, { color: colors.muted }]} numberOfLines={1}>
-            {show.tourName}
-          </Text>
-        ) : null}
-        {venueLine ? (
-          <Pressable
-            onPress={() => router.push(`/venues/${show.venue.id}`)}
-            accessibilityRole="link"
-            accessibilityLabel={`Open ${show.venue.name}`}
-            hitSlop={6}
-            style={({ pressed }) => [styles.headerVenueLink, pressed && { opacity: 0.6 }]}
-          >
-            <Text style={[styles.headerVenue, { color: colors.muted }]} numberOfLines={1}>
-              {venueLine}
-            </Text>
-          </Pressable>
-        ) : null}
       </View>
     </View>
   );
@@ -608,6 +651,22 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 18,
     gap: 8,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+  },
+  headerTextCol: {
+    flex: 1,
+    minWidth: 0,
+    gap: 8,
+  },
+  headerImageWrap: {
+    marginTop: 2,
+  },
+  headerImage: {
+    borderRadius: 14,
   },
   headerChips: {
     flexDirection: 'row',
