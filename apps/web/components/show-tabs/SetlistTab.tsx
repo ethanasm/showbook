@@ -31,6 +31,7 @@ import type {
 } from "@showbook/api";
 import { SetCountStrip } from "./SetCountStrip";
 import { SpecialEventCard } from "./SpecialEventCard";
+import { formatSetlistNote } from "@showbook/shared";
 import "./show-tabs.css";
 
 const SPOILER_KEY_PREFIX = "showbook:setlist-tab:spoiler-shown:";
@@ -653,7 +654,7 @@ function SetlistTabPast({
                 key={`main-${idx}-${song.title}`}
                 position={idx + 1}
                 title={song.title}
-                evidence={song.note ?? ""}
+                evidence={formatSetlistNote(song.note)}
                 badge={resolved.badge}
                 songId={resolved.songId}
                 showId={showId}
@@ -673,7 +674,7 @@ function SetlistTabPast({
                     key={`encore-${idx}-${song.title}`}
                     position={idx + 1}
                     title={song.title}
-                    evidence={song.note ?? ""}
+                    evidence={formatSetlistNote(song.note)}
                     badge={resolved.badge}
                     songId={resolved.songId}
                     showId={showId}

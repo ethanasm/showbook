@@ -14,6 +14,7 @@ export {
   isSetlistEmpty,
   singleMainSet,
   flattenSetlistTitles,
+  formatSetlistNote,
   normalizePerformerSetlist,
   normalizePerformerSetlistsMap,
 } from './setlist';
