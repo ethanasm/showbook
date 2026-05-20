@@ -389,11 +389,8 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
       showId={show.id}
       isPast={isPast}
       state={show.state}
-      kind={show.kind}
       cells={cells}
       lineup={lineupEntries}
-      artistHistorySummary={null}
-      venueHistorySummary={null}
       onMarkAttended={
         show.state === "ticketed" ? handleMarkAttended : undefined
       }
