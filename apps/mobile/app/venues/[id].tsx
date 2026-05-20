@@ -111,6 +111,7 @@ function toShowCard(s: VenueShow, venueName: string, venueCity: string | null): 
     year: date.year,
     seat: s.seat,
     price: s.pricePaid,
+    ticketUrl: s.ticketUrl,
   };
 }
 
