@@ -1,9 +1,14 @@
 /**
- * Song-index-rebuild job — walks `shows.setlists` (attended) plus
+ * Song-index-rebuild — walks `shows.setlists` (attended) plus
  * `tour_setlists` (corpus) for a scope, upserts into `songs`, and rebuilds
  * the rows in `setlist_song_appearances` so the §4c algorithm and
  * Phase 2's "songs you've heard most" can read denormalized appearances
  * without re-parsing the setlist JSON.
+ *
+ * Lives in `@showbook/api` (not `@showbook/jobs`) so the tRPC routers
+ * can call it inline on every attended-setlist write without a
+ * circular dependency. `@showbook/jobs` re-exports `runSongIndexRebuild`
+ * for back-compat with callers that imported it from there.
  *
  * Idempotent by construction: for each source setlist we DELETE the
  * appearances tied to that source and re-INSERT from scratch. Running
@@ -228,6 +233,17 @@ function rowsForSetlist(source: Source): {
 }
 
 async function loadAttendedSources(scope: SongIndexRebuildScope): Promise<AttendedSource[]> {
+  // Symmetric to `loadCorpusSources`'s showIds-only short-circuit: a
+  // `{ tourSetlistIds }`-only scope targets corpus rows, so walking
+  // every show in the database for attended sources would be runaway.
+  if (
+    scope.tourSetlistIds &&
+    scope.tourSetlistIds.length > 0 &&
+    !scope.performerId &&
+    !scope.showIds
+  ) {
+    return [];
+  }
   const conditions = [isNotNull(shows.setlists)];
   if (scope.performerId) {
     conditions.push(
@@ -275,6 +291,20 @@ async function loadAttendedSources(scope: SongIndexRebuildScope): Promise<Attend
 }
 
 async function loadCorpusSources(scope: SongIndexRebuildScope): Promise<CorpusSource[]> {
+  // A `{ showIds }`-only scope is targeting attended rows — the caller
+  // is reacting to a `shows.setlists` write and wants only those
+  // shows' appearances refreshed. Loading every `tour_setlists` row in
+  // the database in that case was a runaway: the inline indexer in
+  // `shows.create` would walk the entire corpus on every show write,
+  // which is what blew the 60s integration test budget in CI.
+  if (
+    scope.showIds &&
+    scope.showIds.length > 0 &&
+    !scope.performerId &&
+    !scope.tourSetlistIds
+  ) {
+    return [];
+  }
   const conditions = [] as ReturnType<typeof eq>[];
   if (scope.performerId) {
     conditions.push(eq(tourSetlists.performerId, scope.performerId));
@@ -329,7 +359,19 @@ export async function runSongIndexRebuild(
     // exactly which appearances we should delete first. The DELETE step
     // is what guarantees idempotency without a unique constraint on
     // `setlist_song_appearances`.
+    //
+    // For `{ showIds }`-scoped rebuilds we deliberately union the
+    // caller's show ids with the observed-attended ids: if a show's
+    // `setlists` JSONB was wiped (the user removed the last performer
+    // setlist), `loadAttendedSources` skips the row (the
+    // `isNotNull(shows.setlists)` filter) and a delete-by-observed
+    // strategy would leak stale appearances. The union deletes by the
+    // caller's intent — "make this show's appearances reflect its
+    // current setlists, even if that's nothing".
     const attendedShowIds = new Set(attendedSources.map((s) => s.showId));
+    if (scope.showIds) {
+      for (const id of scope.showIds) attendedShowIds.add(id);
+    }
     const corpusSetlistIds = new Set(corpusSources.map((s) => s.tourSetlistId));
 
     // A `performerId`-scoped rebuild needs to also clear any attendees-

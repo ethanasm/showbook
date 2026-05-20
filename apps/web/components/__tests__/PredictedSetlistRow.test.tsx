@@ -111,7 +111,7 @@ describe('PredictedSetlistRow + TrackPreview wiring', () => {
 });
 
 describe('PredictedSetlistRow badge tooltips', () => {
-  it('renders First time + Rare badges with matching title and aria-label so the emoji is explained on hover and to screen readers', () => {
+  it('renders Your first + Rare badges with aria-label so the emoji is explained to screen readers, and each badge text is scoped (you/your vs no-prefix for artist-rare)', () => {
     const { getByTestId } = renderRow({
       position: 4,
       title: 'A Rare First Listen',
@@ -121,23 +121,43 @@ describe('PredictedSetlistRow badge tooltips', () => {
         rareCatch: { fractionPct: 3 },
       },
     });
+    // User-scoped: "Your first" + tooltip carries "you" phrasing.
     const firstTime = getByTestId('predicted-row-badge-first-time');
-    assert.equal(
-      firstTime.getAttribute('title'),
-      'First time you heard this song live',
-    );
+    assert.match(firstTime.textContent ?? '', /Your first/);
     assert.equal(
       firstTime.getAttribute('aria-label'),
-      'First time you heard this song live',
+      'The show where you first heard this live',
     );
+    // Artist-scoped: 💎 emoji (no longer overloaded 🎯) + tooltip
+    // omits "you" so the scope is obvious from the wording.
     const rare = getByTestId('predicted-row-badge-rare');
-    assert.equal(
-      rare.getAttribute('title'),
-      'Played in 3% of recent setlists',
-    );
+    assert.match(rare.textContent ?? '', /💎/);
+    assert.match(rare.textContent ?? '', /Rare \(3%\)/);
     assert.equal(
       rare.getAttribute('aria-label'),
       'Played in 3% of recent setlists',
     );
+  });
+
+  it('renders all four personal-weight chips with the new "you/your" labels and a non-overloaded artist-scope emoji', () => {
+    const { getByTestId } = renderRow({
+      position: 1,
+      title: 'Everything Chip',
+      evidence: 'core',
+      badge: {
+        firstTime: false,
+        rareCatch: { fractionPct: 4 },
+        saved: true,
+        personalFirstTime: true,
+        topTrack: true,
+      },
+    });
+    assert.match(getByTestId('predicted-row-badge-saved').textContent ?? '', /Your library/);
+    assert.match(
+      getByTestId('predicted-row-badge-personal-first-time').textContent ?? '',
+      /New to you/,
+    );
+    assert.match(getByTestId('predicted-row-badge-top-track').textContent ?? '', /Your top 50/);
+    assert.match(getByTestId('predicted-row-badge-rare').textContent ?? '', /💎/);
   });
 });

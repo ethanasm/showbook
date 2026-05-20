@@ -31,6 +31,12 @@ export { matchOrCreateVenue, isUniqueViolation } from './venue-matcher';
 export { geocodeVenue } from './geocode';
 export type { GeocodeResult } from './geocode';
 export { matchOrCreatePerformer } from './performer-matcher';
+export {
+  runSongIndexRebuild,
+  type SongIndexRebuildScope,
+  type SongIndexRebuildResult,
+  deriveRole,
+} from './song-index-rebuild';
 export { getPlacePhotoMediaUrl, getPlaceDetails } from './google-places';
 export {
   extractShowFromEmail,

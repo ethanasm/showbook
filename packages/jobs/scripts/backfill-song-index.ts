@@ -16,7 +16,7 @@
  * cheap to add at that point.
  */
 
-import { runSongIndexRebuild } from '../src/song-index-rebuild';
+import { runSongIndexRebuild } from '@showbook/api';
 
 async function main(): Promise<void> {
   const startedAt = Date.now();

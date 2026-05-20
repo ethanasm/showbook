@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { isFeatureOn } from "@showbook/shared";
+import { Tooltip } from "../design-system/Tooltip";
 import { TrackPreview } from "./TrackPreview";
 import "./show-tabs.css";
 
@@ -11,12 +12,12 @@ interface PredictedSetlistRowProps {
   evidence: string;
   /** Place a 24px disabled slot for the Phase-9 TrackPreview button. */
   showPreviewSlot?: boolean;
-  /** Phase 2: optional inline badges. When present, render the 🆕 / 🎯
-   *  chips on the right of the row and (if `songId` is provided) make
-   *  the title tap through to the song detail page.
-   *  Phase 11 §15j adds 💛 / 🎯 (first-time) / ⭐ personal-weight chips
-   *  to the same row. The 🎯 here is distinct from the existing
-   *  "rare catch" chip — first-time is per-user, rare is per-corpus. */
+  /** Optional inline badges, rendered to the right of the row. Each is
+   *  wrapped in a <Tooltip> so the explanatory text shows on hover
+   *  AND on tap (the bare HTML `title=` attribute doesn't show on
+   *  mobile). Scope is encoded in the label itself: every user-scoped
+   *  badge uses "you/your"; the artist-scoped 💎 Rare doesn't, so the
+   *  two scopes can't be confused. */
   badge?: {
     firstTime: boolean;
     rareCatch: { fractionPct: number } | null;
@@ -60,15 +61,15 @@ export function PredictedSetlistRow({
   spotifyTrackId,
 }: PredictedSetlistRowProps) {
   const previewsOn = isFeatureOn("SetlistIntelPreviews") && !!showId;
-  const firstTimeLabel = "First time you heard this song live";
+  // Badge tooltips. Disambiguation goal: every personal (user-scoped)
+  // label uses "you/your". The artist-scoped 💎 Rare tooltip
+  // deliberately omits "you" so the scope is obvious from wording.
+  const firstTimeLabel = "The show where you first heard this live";
   const rareLabel = badge?.rareCatch
     ? `Played in ${badge.rareCatch.fractionPct}% of recent setlists`
     : null;
-  // Phase 11 §15j — personal-weight chip aria-labels. Same precompute
-  // pattern as firstTimeLabel / rareLabel so the chip rendering stays
-  // declarative.
   const savedLabel = "Saved in your Spotify library";
-  const personalFirstTimeLabel = "You've never heard this song live";
+  const personalFirstTimeLabel = "You've never heard this live";
   const topTrackLabel = "In your Spotify long-term top 50";
   const titleNode = (
     <div className="predicted-row__title" data-testid="predicted-row-title">
@@ -116,54 +117,59 @@ export function PredictedSetlistRow({
       </div>
       <div className="predicted-row__badges">
         {badge?.firstTime && (
-          <span
-            className="predicted-row__badge predicted-row__badge--first-time"
-            data-testid="predicted-row-badge-first-time"
-            title={firstTimeLabel}
-            aria-label={firstTimeLabel}
-          >
-            🆕 First time
-          </span>
+          <Tooltip label={firstTimeLabel}>
+            <span
+              className="predicted-row__badge predicted-row__badge--first-time"
+              data-testid="predicted-row-badge-first-time"
+              aria-label={firstTimeLabel}
+            >
+              🆕 Your first
+            </span>
+          </Tooltip>
         )}
         {badge?.rareCatch && rareLabel && (
-          <span
-            className="predicted-row__badge predicted-row__badge--rare"
-            data-testid="predicted-row-badge-rare"
-            title={rareLabel}
-            aria-label={rareLabel}
-          >
-            🎯 Rare ({badge.rareCatch.fractionPct}%)
-          </span>
+          <Tooltip label={rareLabel}>
+            <span
+              className="predicted-row__badge predicted-row__badge--rare"
+              data-testid="predicted-row-badge-rare"
+              aria-label={rareLabel}
+            >
+              💎 Rare ({badge.rareCatch.fractionPct}%)
+            </span>
+          </Tooltip>
         )}
         {badge?.saved && (
-          <span
-            className="predicted-row__badge predicted-row__badge--saved"
-            data-testid="predicted-row-badge-saved"
-            title={savedLabel}
-            aria-label={savedLabel}
-          >
-            💛 Saved
-          </span>
+          <Tooltip label={savedLabel}>
+            <span
+              className="predicted-row__badge predicted-row__badge--saved"
+              data-testid="predicted-row-badge-saved"
+              aria-label={savedLabel}
+            >
+              💛 Your library
+            </span>
+          </Tooltip>
         )}
         {badge?.personalFirstTime && (
-          <span
-            className="predicted-row__badge predicted-row__badge--personal-first-time"
-            data-testid="predicted-row-badge-personal-first-time"
-            title={personalFirstTimeLabel}
-            aria-label={personalFirstTimeLabel}
-          >
-            🎯 First time
-          </span>
+          <Tooltip label={personalFirstTimeLabel}>
+            <span
+              className="predicted-row__badge predicted-row__badge--personal-first-time"
+              data-testid="predicted-row-badge-personal-first-time"
+              aria-label={personalFirstTimeLabel}
+            >
+              🎯 New to you
+            </span>
+          </Tooltip>
         )}
         {badge?.topTrack && (
-          <span
-            className="predicted-row__badge predicted-row__badge--top-track"
-            data-testid="predicted-row-badge-top-track"
-            title={topTrackLabel}
-            aria-label={topTrackLabel}
-          >
-            ⭐ Top track
-          </span>
+          <Tooltip label={topTrackLabel}>
+            <span
+              className="predicted-row__badge predicted-row__badge--top-track"
+              data-testid="predicted-row-badge-top-track"
+              aria-label={topTrackLabel}
+            >
+              ⭐ Your top 50
+            </span>
+          </Tooltip>
         )}
       </div>
     </div>

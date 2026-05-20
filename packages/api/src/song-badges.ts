@@ -2,17 +2,17 @@
  * Song-badge resolver. Computes the inline 🆕 / 🎯 badge map that
  * decorates the Setlist tab's track rows on the show-detail page.
  *
- * Two badges, both user-scoped (per SI-17 — the global "tour debut"
- * concept was dropped because it required corpus-completeness
- * caveats):
+ * Two badges, scope deliberately distinguished in the labels:
  *
- *   - `firstTime`  — this attended show is the earliest known
- *                    appearance of the song in the user's attended
- *                    setlist history. Renders as 🆕.
- *   - `rareCatch`  — the song appears in fewer than `RARE_THRESHOLD`
- *                    of the performer's recent corpus setlists
- *                    (12-month window). Renders as 🎯 with the
- *                    fraction in a tooltip.
+ *   - `firstTime`  — user-scoped. This attended show is the earliest
+ *                    known appearance of the song in the user's
+ *                    attended setlist history. Renders as 🆕 "Your
+ *                    first" with tooltip "The show where you first
+ *                    heard this live".
+ *   - `rareCatch`  — artist-scoped. The song appears in fewer than
+ *                    `RARE_THRESHOLD` of the performer's recent corpus
+ *                    setlists (12-month window). Renders as 💎 "Rare"
+ *                    with the fraction in a tooltip.
  *
  * The resolver is split into two pieces:
  *   1. A pure `computeSongBadges` function that takes already-loaded

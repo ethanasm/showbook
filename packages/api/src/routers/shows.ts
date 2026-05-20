@@ -20,6 +20,7 @@ import { matchOrCreatePerformer } from '../performer-matcher';
 import { searchEvents, selectBestImage } from '../ticketmaster';
 import { geocodeVenue } from '../geocode';
 import { fetchSetlistForPerformer, resolvePerformerMbid } from '../setlist-lookup';
+import { runSongIndexRebuild } from '../song-index-rebuild';
 import { child } from '@showbook/observability';
 import {
   type PerformerSetlist,
@@ -160,6 +161,37 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   watching: ['ticketed'],
   ticketed: ['past'],
 };
+
+/**
+ * Re-index a single attended show into `setlist_song_appearances` after
+ * its setlists JSONB has changed. Read-time `MIN(performance_date)` in
+ * `songBadges` then naturally resolves to the earliest known date,
+ * which is what makes "your first" badges flip off on a later show
+ * once an earlier show is added.
+ *
+ * Best-effort: indexer failures must not propagate to the caller —
+ * the show write has already committed; on failure the nightly
+ * corpus-fill refresh will catch up.
+ *
+ * We skip the matview refresh because `user_song_stats` powers the
+ * songs aggregation pages, not the per-show badges. The nightly
+ * refresh keeps it eventually-consistent and avoids the
+ * `REFRESH MATERIALIZED VIEW CONCURRENTLY` latency on every setlist
+ * edit.
+ */
+async function reindexShowAfterWrite(showId: string): Promise<void> {
+  try {
+    await runSongIndexRebuild({
+      showIds: [showId],
+      skipMatviewRefresh: true,
+    });
+  } catch (err) {
+    log.warn(
+      { event: 'shows.song_index.failed', err, showId },
+      'inline song-index rebuild failed; nightly refresh will catch up',
+    );
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Router
@@ -691,6 +723,16 @@ export const showsRouter = router({
         );
       }
 
+      // Index the freshly-written setlists into `setlist_song_appearances`
+      // so the per-song "your first" badge resolver sees them on the next
+      // read. Without this, the show's songs are invisible to the badge
+      // query until the daily corpus-fill cron runs — which is the bug
+      // that let an earlier-date show added after a later-date show
+      // leave the later show's 🆕 badges incorrectly displayed.
+      if (initialSetlists) {
+        await reindexShowAfterWrite(show.id);
+      }
+
       // Lazy Place ID + photo backfill for the venue. The matcher's geocode
       // path can silently fall back to Nominatim (which doesn't return Place
       // ID or photo) if Google's first autocomplete suggestion lacks
@@ -1079,6 +1121,11 @@ export const showsRouter = router({
           .where(and(eq(shows.id, input.showId), eq(shows.userId, userId)));
       });
 
+      // Re-index after the tx commits. The setlists JSONB may have grown,
+      // shrunk, or been wiped — the rebuild handles all three by deleting
+      // appearances for this showId before re-inserting.
+      await reindexShowAfterWrite(input.showId);
+
       return ctx.db.query.shows.findFirst({
         where: eq(shows.id, input.showId),
         with: {
@@ -1173,6 +1220,10 @@ export const showsRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
       }
 
+      const setlistChanged = !!(
+        existing.setlists && input.performerId in existing.setlists
+      );
+
       await ctx.db.transaction(async (tx) => {
         await tx
           .delete(showPerformers)
@@ -1196,6 +1247,13 @@ export const showsRouter = router({
             .where(eq(shows.id, input.showId));
         }
       });
+
+      // Re-index so the removed performer's songs disappear from the
+      // user's first-time pool. Skip when no setlist was attached to
+      // this performer — the appearance table is unchanged.
+      if (setlistChanged) {
+        await reindexShowAfterWrite(input.showId);
+      }
 
       return { success: true };
     }),
@@ -1261,6 +1319,8 @@ export const showsRouter = router({
           updatedAt: new Date(),
         })
         .where(eq(shows.id, input.showId));
+
+      await reindexShowAfterWrite(input.showId);
 
       return { success: true };
     }),

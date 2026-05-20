@@ -1,14 +1,15 @@
 /**
  * Phase 11 §15j — personal-weight chips for predicted-setlist rows.
  *
- * Three chip types per row:
- *   💛 saved      — song's Spotify track id is in the user's library
- *                   (`/me/tracks/contains`, cached via Phase 7's
- *                   `checkTracksSavedForUser`)
- *   🎯 first_time — user hasn't heard the song live in any prior
- *                   attended show (`setlist_song_appearances`)
- *   ⭐ top_track  — song is in the user's Spotify long-term top 50
- *                   (`/me/top/tracks?time_range=long_term`)
+ * Three chip types per row (all user-scoped — labels are deliberately
+ * phrased "you/your" so they can't be misread as artist-scoped):
+ *   💛 "Your library"  — Spotify track id is in the user's library
+ *                        (`/me/tracks/contains`, cached via Phase 7's
+ *                        `checkTracksSavedForUser`)
+ *   🎯 "New to you"    — user hasn't heard the song live in any prior
+ *                        attended show (`setlist_song_appearances`)
+ *   ⭐ "Your top 50"   — song is in the user's Spotify long-term top 50
+ *                        (`/me/top/tracks?time_range=long_term`)
  *
  * Top-tracks data is NOT persisted to the database — see the Phase 11
  * plan's "Top-tracks data" decision. We call `/me/top/tracks` on

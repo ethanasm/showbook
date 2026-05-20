@@ -23,7 +23,7 @@ import {
   topFollowedPerformers,
   type CorpusFillMode,
 } from './setlist-corpus-fill';
-import { runSongIndexRebuild } from './song-index-rebuild';
+import { runSongIndexRebuild } from '@showbook/api';
 import { runDailyBacktest } from './prediction-eval';
 import { runSetlistStyleRefresh } from './setlist-style-refresh';
 import { runSpotifyRecentlyPlayed } from './spotify-recently-played';
