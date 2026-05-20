@@ -117,6 +117,16 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
     );
   }, [artists]);
 
+  const selectAll = useCallback(() => {
+    if (!artists) return;
+    const importable = artists.filter((a) => a.tmMatch && !a.alreadyFollowed);
+    setSelected(new Set(importable.map((a) => a.spotifyId)));
+  }, [artists]);
+
+  const deselectAll = useCallback(() => {
+    setSelected(new Set());
+  }, []);
+
   const submitImport = useCallback(() => {
     if (!artists) return;
     const byId = new Map(artists.map((a) => [a.spotifyId, a]));
@@ -176,6 +186,8 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
     loadArtists,
     toggle,
     toggleAll,
+    selectAll,
+    deselectAll,
     submitImport,
     reset,
   };

@@ -51,15 +51,18 @@ export function SpotifyImportPicker({
   const allMatchableSelected =
     matchableIds.length > 0 &&
     matchableIds.every((id) => flow.selected.has(id));
+  const anySelected = matchableIds.some((id) => flow.selected.has(id));
 
   const handleSelectAll = () => {
-    if (allMatchableSelected) {
-      matchableIds.forEach((id) => flow.toggle(id, true));
-    } else {
-      matchableIds.forEach((id) => {
-        if (!flow.selected.has(id)) flow.toggle(id, true);
-      });
-    }
+    matchableIds.forEach((id) => {
+      if (!flow.selected.has(id)) flow.toggle(id, true);
+    });
+  };
+
+  const handleDeselectAll = () => {
+    matchableIds.forEach((id) => {
+      if (flow.selected.has(id)) flow.toggle(id, true);
+    });
   };
 
   return (
@@ -159,19 +162,52 @@ export function SpotifyImportPicker({
           ) : null}
         </div>
         {matchableIds.length > 0 && (
-          <button
-            type="button"
-            onClick={handleSelectAll}
-            style={selectAllStyle}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = "var(--ink)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = "var(--muted)";
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              flexShrink: 0,
             }}
           >
-            {allMatchableSelected ? "Deselect all" : "Select all"}
-          </button>
+            {!allMatchableSelected && (
+              <button
+                type="button"
+                onClick={handleSelectAll}
+                style={selectAllStyle}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = "var(--ink)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = "var(--muted)";
+                }}
+                aria-label="Select all artists"
+              >
+                Select all
+              </button>
+            )}
+            {anySelected && !allMatchableSelected && (
+              <span style={{ color: "var(--faint)", fontFamily: mono, fontSize: 10 }}>
+                ·
+              </span>
+            )}
+            {anySelected && (
+              <button
+                type="button"
+                onClick={handleDeselectAll}
+                style={selectAllStyle}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = "var(--ink)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = "var(--muted)";
+                }}
+                aria-label="Deselect all artists"
+              >
+                Deselect all
+              </button>
+            )}
+          </div>
         )}
       </div>
 

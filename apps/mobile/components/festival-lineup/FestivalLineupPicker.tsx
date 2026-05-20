@@ -84,11 +84,35 @@ export function FestivalLineupPicker({ flow }: FestivalLineupPickerProps): React
           ) : null}
         </View>
         {flow.rows.length > 0 ? (
-          <Pressable onPress={flow.toggleAll} hitSlop={6}>
-            <Text style={[styles.selectAll, { color: colors.muted }]}>
-              {flow.selected.size === flow.rows.length ? 'Deselect all' : 'Select all'}
-            </Text>
-          </Pressable>
+          <View style={styles.bulkActions}>
+            {flow.selected.size < flow.rows.length ? (
+              <Pressable
+                onPress={flow.selectAll}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel="Select all artists"
+              >
+                <Text style={[styles.selectAll, { color: colors.muted }]}>
+                  Select all
+                </Text>
+              </Pressable>
+            ) : null}
+            {flow.selected.size > 0 && flow.selected.size < flow.rows.length ? (
+              <Text style={[styles.selectAll, { color: colors.faint }]}>·</Text>
+            ) : null}
+            {flow.selected.size > 0 ? (
+              <Pressable
+                onPress={flow.deselectAll}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel="Deselect all artists"
+              >
+                <Text style={[styles.selectAll, { color: colors.muted }]}>
+                  Deselect all
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
         ) : null}
       </View>
 
@@ -329,6 +353,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
+  },
+  bulkActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   stat: {
     flexDirection: 'row',

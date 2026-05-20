@@ -13,7 +13,13 @@ export {
   toSetlistFmDate,
   type DateParts,
 } from './dates';
-export { formatCurrency, formatSeatDisplay } from './format';
+export {
+  formatCurrency,
+  formatSeatDisplay,
+  formatVenueLabel,
+  formatVenueLocation,
+  isVenuePlaceholder,
+} from './format';
 export { buildIcs, defaultShowTime, slugifyForFilename, type IcsEvent } from './ical';
 export {
   regionBbox,

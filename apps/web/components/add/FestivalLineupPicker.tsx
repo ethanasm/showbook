@@ -75,15 +75,32 @@ export function FestivalLineupPicker({
           )}
         </div>
         {flow.rows.length > 0 && (
-          <button
-            type="button"
-            onClick={flow.toggleAll}
-            style={selectAllStyle}
-          >
-            {flow.selected.size === flow.rows.length
-              ? "Deselect all"
-              : "Select all"}
-          </button>
+          <div style={bulkActionsStyle}>
+            {flow.selected.size < flow.rows.length && (
+              <button
+                type="button"
+                onClick={flow.selectAll}
+                style={selectAllStyle}
+                aria-label="Select all artists"
+              >
+                Select all
+              </button>
+            )}
+            {flow.selected.size > 0 &&
+              flow.selected.size < flow.rows.length && (
+                <span style={{ color: "var(--faint)" }}>·</span>
+              )}
+            {flow.selected.size > 0 && (
+              <button
+                type="button"
+                onClick={flow.deselectAll}
+                style={selectAllStyle}
+                aria-label="Deselect all artists"
+              >
+                Deselect all
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -402,6 +419,15 @@ const statsInnerStyle: React.CSSProperties = {
   fontSize: 10.5,
   letterSpacing: ".04em",
   flexWrap: "wrap",
+};
+const bulkActionsStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  fontFamily: mono,
+  fontSize: 10,
+  letterSpacing: ".08em",
+  flexShrink: 0,
 };
 const selectAllStyle: React.CSSProperties = {
   fontFamily: mono,

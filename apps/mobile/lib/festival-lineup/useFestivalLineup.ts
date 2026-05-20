@@ -193,6 +193,14 @@ export function useFestivalLineup(opts: UseFestivalLineupOptions) {
     );
   }, [rows]);
 
+  const selectAll = useCallback(() => {
+    setSelected(new Set(rows.map((r) => r.name)));
+  }, [rows]);
+
+  const deselectAll = useCallback(() => {
+    setSelected(new Set());
+  }, []);
+
   const tierFor = useCallback(
     (row: FestivalLineupRow): FestivalArtistTier =>
       tierOverrides.get(row.name) ?? row.tier,
@@ -255,6 +263,8 @@ export function useFestivalLineup(opts: UseFestivalLineupOptions) {
     setTier,
     tierFor,
     toggleAll,
+    selectAll,
+    deselectAll,
     submit,
     reset,
   };
