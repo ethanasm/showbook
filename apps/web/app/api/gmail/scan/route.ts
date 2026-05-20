@@ -16,8 +16,28 @@ import { isFeatureOn } from '@showbook/shared';
 import { db, shows } from '@showbook/db';
 import { sql } from 'drizzle-orm';
 import { child } from '@showbook/observability';
+import { decodeMobileToken } from '@/lib/mobile-token';
 
 const log = child({ component: 'web.gmail.scan' });
+
+/**
+ * Resolve the request session. Tries cookie auth first (web flow), falls
+ * back to `Authorization: Bearer <jwt>` (mobile flow). Mobile-bearer
+ * support keeps the scan endpoint reachable from the mobile app, which
+ * minted its session via `/api/auth/mobile-token` and has no cookie jar.
+ */
+async function resolveSession(req: Request): Promise<{ userId: string } | null> {
+  const cookieSession = await auth();
+  if (cookieSession?.user?.id) return { userId: cookieSession.user.id };
+
+  const header = req.headers.get('authorization');
+  if (!header || !header.startsWith('Bearer ')) return null;
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) return null;
+  const decoded = await decodeMobileToken({ token: header.slice(7), secret });
+  if (!decoded?.id) return null;
+  return { userId: decoded.id };
+}
 
 const PDF_MAX_BYTES = 200 * 1024;
 
@@ -213,9 +233,10 @@ function mergeTickets(allExtracted: ExtractedTicket[]): ExtractedTicket[] {
 
 export async function POST(request: Request) {
   // The middleware excludes /api/*; this endpoint drives Groq calls so
-  // unauthenticated access would be a direct cost vector.
-  const session = await auth();
-  const userId = session?.user?.id;
+  // unauthenticated access would be a direct cost vector. Accepts either
+  // a NextAuth cookie session (web) or a mobile Bearer JWT.
+  const session = await resolveSession(request);
+  const userId = session?.userId;
   if (!userId) {
     return new Response('Unauthorized', { status: 401 });
   }
