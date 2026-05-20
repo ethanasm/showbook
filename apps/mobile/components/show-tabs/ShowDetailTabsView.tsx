@@ -38,6 +38,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { runOptimisticMutation } from '../../lib/mutations';
 import { getCacheOutbox } from '../../lib/cache/db';
 import { ShowTabBar } from './ShowTabBar';
+import { MarkTicketedSheet } from '../MarkTicketedSheet';
 import { OverviewTab, type OverviewLineupEntry } from './OverviewTab';
 import { SetlistTab, type ActualSong, type AnyPrediction } from './SetlistTab';
 import { MediaTab } from './MediaTab';
@@ -131,6 +132,7 @@ export function ShowDetailTabsView({
   const [active, setActive] = React.useState<ShowTabKey>(
     parseShowTab(initialTab ?? null),
   );
+  const [markTicketedOpen, setMarkTicketedOpen] = React.useState(false);
 
   const headliner = show.showPerformers.find((sp) => sp.role === 'headliner');
   const resolvedHeadliner = getHeadliner(show);
@@ -320,6 +322,16 @@ export function ShowDetailTabsView({
       cells={overviewCells}
       lineup={lineupEntries}
       actions={[
+        ...(show.state === 'watching'
+          ? [
+              {
+                label: 'I have tickets',
+                primary: true,
+                testID: 'action-mark-ticketed',
+                onPress: () => setMarkTicketedOpen(true),
+              },
+            ]
+          : []),
         ...(show.state === 'ticketed'
           ? [
               {
@@ -497,6 +509,14 @@ export function ShowDetailTabsView({
       {showInlineRail ? (
         <ShowDetailRightRail isPast={isPast} slots={rightRailSlots} />
       ) : null}
+      <MarkTicketedSheet
+        open={markTicketedOpen}
+        onClose={() => setMarkTicketedOpen(false)}
+        showId={show.id}
+        initialSeat={show.seat}
+        initialPrice={show.pricePaid}
+        initialTicketCount={show.ticketCount}
+      />
     </View>
   );
 }
