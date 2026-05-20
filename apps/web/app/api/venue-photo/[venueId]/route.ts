@@ -8,7 +8,7 @@ import {
   getVenue,
   selectBestImage,
 } from '@showbook/api';
-import { fetchUpstream, isProxyableUrl } from '@/lib/venue-photo-proxy';
+import { fetchUpstream, isProxyableUrl } from '@/lib/image-proxy';
 import { decodeMobileToken } from '@/lib/mobile-token';
 import { isEmailAllowed, readAllowlistFromEnv } from '@/lib/auth-allowlist';
 import { resolveTrpcSession } from '../../trpc/[trpc]/resolve-session';

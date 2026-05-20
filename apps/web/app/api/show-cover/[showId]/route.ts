@@ -7,19 +7,9 @@ import {
   searchEvents,
   selectBestImage,
 } from '@showbook/api';
+import { fetchUpstream, isProxyableUrl } from '@/lib/image-proxy';
 
 const log = child({ component: 'web.api.show-cover' });
-
-async function fetchUpstream(url: string) {
-  const upstream = await fetch(url, {
-    cache: 'no-store',
-    signal: AbortSignal.timeout(15_000),
-  });
-  const contentType = upstream.headers.get('content-type') ?? '';
-  const ok =
-    upstream.ok && upstream.body && contentType.toLowerCase().startsWith('image/');
-  return { upstream, contentType, ok } as const;
-}
 
 function normalizeName(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -147,7 +137,35 @@ export async function GET(
     });
   }
 
-  let { upstream, contentType, ok } = await fetchUpstream(imageUrl);
+  // SSRF guard: `coverImageUrl` flows in from `shows.create` user input
+  // (via `coverImageUrl: z.string().url().optional()` on the tRPC
+  // mutation) and from `selectBestImage(tmEvent.images)` enrichment.
+  // The legitimate value is always a TM CDN URL; refusing anything
+  // else here blocks an attacker from pointing the proxy at internal
+  // services even if a non-TM URL ever lands in the column.
+  if (!isProxyableUrl(imageUrl)) {
+    log.warn(
+      {
+        event: 'show.cover.proxy.host_not_allowed',
+        showId,
+        photoHost: (() => {
+          try {
+            return new URL(imageUrl).hostname;
+          } catch {
+            return null;
+          }
+        })(),
+      },
+      'Refusing to proxy a coverImageUrl whose host is not in the allowlist',
+    );
+    return new NextResponse('Cover unavailable', {
+      status: 502,
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  }
+
+  let { upstream, contentType, ok, refusedRedirectHost } =
+    await fetchUpstream(imageUrl);
 
   // Stale-URL recovery: if the stored URL no longer serves, try a
   // fresh TM lookup once before giving up.
@@ -167,10 +185,10 @@ export async function GET(
         endDate: show.endDate,
         tmVenueId: show.tmVenueId,
       });
-      if (resolved && resolved !== imageUrl) {
+      if (resolved && resolved !== imageUrl && isProxyableUrl(resolved)) {
         const retry = await fetchUpstream(resolved);
         if (retry.ok) {
-          ({ upstream, contentType, ok } = retry);
+          ({ upstream, contentType, ok, refusedRedirectHost } = retry);
           imageUrl = resolved;
           isFresh = true;
         }
@@ -184,16 +202,28 @@ export async function GET(
   }
 
   if (!ok || !upstream.body) {
-    log.warn(
-      {
-        event: 'show.cover.proxy.upstream_error',
-        showId,
-        imageUrl,
-        upstreamStatus: upstream.status,
-        upstreamContentType: contentType,
-      },
-      'Show cover fetch failed; serving 502',
-    );
+    if (refusedRedirectHost !== undefined) {
+      log.warn(
+        {
+          event: 'show.cover.proxy.redirect_not_allowed',
+          showId,
+          redirectHost: refusedRedirectHost || null,
+          upstreamStatus: upstream.status,
+        },
+        'Upstream redirected to a host outside ALLOWED_REDIRECT_HOSTS',
+      );
+    } else {
+      log.warn(
+        {
+          event: 'show.cover.proxy.upstream_error',
+          showId,
+          imageUrl,
+          upstreamStatus: upstream.status,
+          upstreamContentType: contentType,
+        },
+        'Show cover fetch failed; serving 502',
+      );
+    }
     return new NextResponse('Upstream error', {
       status: 502,
       headers: { 'Cache-Control': 'no-store' },
@@ -220,6 +250,12 @@ export async function GET(
     headers: {
       'Content-Type': contentType,
       'X-Content-Type-Options': 'nosniff',
+      // Defense in depth — even though the content-type allowlist in
+      // `fetchUpstream` already rejects `image/svg+xml`, this CSP
+      // ensures the response can't execute scripts, load remote
+      // subresources, or run plugins if it were ever opened as a
+      // top-level document.
+      'Content-Security-Policy': "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'",
       'Cache-Control': 'public, max-age=86400, s-maxage=86400',
     },
   });

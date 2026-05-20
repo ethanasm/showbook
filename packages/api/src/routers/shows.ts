@@ -94,6 +94,16 @@ const performerSetlistSchema = z
     }
   });
 
+// `imageUrl` flows from the Add-show flow's TM attraction picker
+// (`selectBestImage(attraction.images)` → `s1.ticketm.net`) through
+// to `matchOrCreatePerformer`, where it's persisted on the global
+// `performers.imageUrl` column. `/api/performer-photo` then proxies
+// that URL server-side — so a non-URL value (the previous
+// `z.string()` schema would accept "javascript:alert(1)" or
+// "http://169.254.169.254/...") would steer the SSRF-guarded proxy
+// at internal services if the proxy-side host allowlist were ever
+// bypassed. Constrain to a real URL here for defense in depth; the
+// proxy enforces the host allowlist.
 const performerInputSchema = z.object({
   name: z.string().min(1),
   role: z.enum(['headliner', 'support', 'cast']),
@@ -101,7 +111,7 @@ const performerInputSchema = z.object({
   sortOrder: z.number().int(),
   tmAttractionId: z.string().optional(),
   musicbrainzId: z.string().optional(),
-  imageUrl: z.string().optional(),
+  imageUrl: z.string().url().optional(),
   setlist: performerSetlistSchema.optional(),
 });
 
@@ -109,7 +119,7 @@ const headlinerInputSchema = z.object({
   name: z.string().min(1),
   tmAttractionId: z.string().optional(),
   musicbrainzId: z.string().optional(),
-  imageUrl: z.string().optional(),
+  imageUrl: z.string().url().optional(),
   setlist: performerSetlistSchema.optional(),
 });
 

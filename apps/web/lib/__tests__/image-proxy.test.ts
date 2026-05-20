@@ -1,7 +1,7 @@
 /**
- * Unit tests for apps/web/lib/venue-photo-proxy.ts
+ * Unit tests for apps/web/lib/image-proxy.ts
  *
- * Locks in two behaviours:
+ * Locks in three behaviours:
  *
  *  1. The Google Places Photo (New) endpoint at
  *     `places.googleapis.com/v1/{name}/media` responds with HTTP 302 to a
@@ -12,8 +12,14 @@
  *
  *  2. The SSRF defense-in-depth posture from commit aa1203c: a redirect
  *     target outside `ALLOWED_REDIRECT_HOSTS` must be refused with
- *     `refusedRedirectHost` set, so the route logs
- *     `venue.photo.proxy.redirect_not_allowed` and returns 502.
+ *     `refusedRedirectHost` set, so the routes log
+ *     `<surface>.proxy.redirect_not_allowed` and return 502.
+ *
+ *  3. The initial-URL guard `isProxyableUrl` must reject internal,
+ *     non-http(s), and unknown hosts so the show-cover and
+ *     performer-photo routes (added 2026-05-20) can't be steered at
+ *     internal services by a planted `shows.coverImageUrl` /
+ *     `performers.imageUrl` value.
  *
  * `fetch` is dependency-injected (mock.module isn't available in this
  * project's node:test + tsx environment).
@@ -26,7 +32,7 @@ import {
   isProxyableUrl,
   ALLOWED_PROXY_HOSTS,
   ALLOWED_REDIRECT_HOSTS,
-} from '../venue-photo-proxy';
+} from '../image-proxy';
 
 function imageResponse(): Response {
   // 1x1 JPEG-ish bytes — content isn't decoded by the proxy, only
@@ -61,9 +67,18 @@ function makeMockFetch(
   return Object.assign(fn as unknown as typeof fetch, { calls });
 }
 
-describe('venue-photo-proxy: allowlists', () => {
+describe('image-proxy: allowlists', () => {
   it('ALLOWED_PROXY_HOSTS contains s1.ticketm.net (TM CDN)', () => {
     assert.ok(ALLOWED_PROXY_HOSTS.has('s1.ticketm.net'));
+  });
+
+  it('ALLOWED_PROXY_HOSTS contains Spotify CDN hosts (performers.imageUrl from SpotifyFollowRail)', () => {
+    // The Phase-9 Spotify-follow-rail forwards `match.imageUrl` (the
+    // Spotify-side artist photo) into `spotifyImport.importSelected`,
+    // so `i.scdn.co` URLs end up persisted to `performers.imageUrl`
+    // and must be proxyable. Mirrors `next.config.ts` remotePatterns.
+    assert.ok(ALLOWED_PROXY_HOSTS.has('i.scdn.co'));
+    assert.ok(ALLOWED_PROXY_HOSTS.has('mosaic.scdn.co'));
   });
 
   it('ALLOWED_REDIRECT_HOSTS contains the Google Places photo CDN hosts', () => {
@@ -84,9 +99,33 @@ describe('venue-photo-proxy: allowlists', () => {
     assert.equal(isProxyableUrl('https://s1.ticketm.net/foo/bar.jpg'), true);
   });
 
+  it('isProxyableUrl accepts Spotify CDN hosts', () => {
+    assert.equal(
+      isProxyableUrl('https://i.scdn.co/image/ab6761610000e5eb0aa1f0e0e0e0e0e0e0e0e0e0'),
+      true,
+    );
+    assert.equal(
+      isProxyableUrl('https://mosaic.scdn.co/640/ab123'),
+      true,
+    );
+  });
+
   it('isProxyableUrl rejects internal / unknown hosts', () => {
     assert.equal(isProxyableUrl('https://internal-host.local/x'), false);
     assert.equal(isProxyableUrl('https://example.com/x'), false);
+  });
+
+  it('isProxyableUrl rejects classic SSRF targets (cloud metadata, loopback, RFC1918)', () => {
+    // AWS / GCP / Azure instance metadata endpoint.
+    assert.equal(isProxyableUrl('http://169.254.169.254/latest/meta-data/'), false);
+    // Loopback in every common form.
+    assert.equal(isProxyableUrl('http://127.0.0.1:3002/api/admin/sql'), false);
+    assert.equal(isProxyableUrl('http://localhost:5433/'), false);
+    assert.equal(isProxyableUrl('http://[::1]/'), false);
+    // RFC1918 private networks (Docker bridge, k8s pod nets, home LANs).
+    assert.equal(isProxyableUrl('http://10.0.0.1/'), false);
+    assert.equal(isProxyableUrl('http://192.168.0.1/'), false);
+    assert.equal(isProxyableUrl('http://172.16.0.1/'), false);
   });
 
   it('isProxyableUrl rejects non-http(s) schemes', () => {
@@ -100,7 +139,7 @@ describe('venue-photo-proxy: allowlists', () => {
   });
 });
 
-describe('venue-photo-proxy: fetchUpstream — happy path', () => {
+describe('image-proxy: fetchUpstream — happy path', () => {
   it('returns 200 image bytes when upstream serves them directly', async () => {
     const mockFetch = makeMockFetch([
       {
@@ -166,7 +205,7 @@ describe('venue-photo-proxy: fetchUpstream — happy path', () => {
   });
 });
 
-describe('venue-photo-proxy: fetchUpstream — SSRF guard', () => {
+describe('image-proxy: fetchUpstream — SSRF guard', () => {
   it('refuses a redirect to a host outside ALLOWED_REDIRECT_HOSTS', async () => {
     const mockFetch = makeMockFetch([
       {
@@ -251,7 +290,7 @@ describe('venue-photo-proxy: fetchUpstream — SSRF guard', () => {
   });
 });
 
-describe('venue-photo-proxy: fetchUpstream — content-type guard', () => {
+describe('image-proxy: fetchUpstream — content-type guard', () => {
   it('rejects SVG content-type even on a 200 response (XSS guard)', async () => {
     const mockFetch = makeMockFetch([
       {
