@@ -105,32 +105,33 @@ function eventWithSales(opts: {
   statusCode?: string;
   saleStart?: string | null;
   saleEnd?: string | null;
+  presales?: Array<{ startDateTime?: string; endDateTime?: string }>;
 }): TMEvent {
+  const hasPublic = !!(opts.saleStart || opts.saleEnd);
+  const hasPresales = !!opts.presales && opts.presales.length > 0;
   return {
     id: 'x',
     name: 'x',
     url: null,
     dates: { start: { localDate: '2026-08-01' }, status: opts.statusCode ? { code: opts.statusCode } : undefined },
     classifications: [],
-    sales: opts.saleStart || opts.saleEnd
+    sales: hasPublic || hasPresales
       ? {
-          public: {
-            startDateTime: opts.saleStart ?? undefined,
-            endDateTime: opts.saleEnd ?? undefined,
-          },
+          ...(hasPublic
+            ? {
+                public: {
+                  startDateTime: opts.saleStart ?? undefined,
+                  endDateTime: opts.saleEnd ?? undefined,
+                },
+              }
+            : {}),
+          ...(hasPresales ? { presales: opts.presales } : {}),
         }
       : null,
     images: [],
     _embedded: { venues: [], attractions: [] },
   } as unknown as TMEvent;
 }
-
-test('determineOnSaleStatus: offsale status → sold_out', () => {
-  assert.equal(
-    determineOnSaleStatus(eventWithSales({ statusCode: 'offsale' })),
-    'sold_out',
-  );
-});
 
 test('determineOnSaleStatus: canceled status → sold_out', () => {
   // TM Discovery API uses American spelling.
@@ -147,6 +148,87 @@ test('determineOnSaleStatus: cancelled status → sold_out (defensive)', () => {
   );
 });
 
+test('determineOnSaleStatus: offsale + no public sale info → sold_out', () => {
+  assert.equal(
+    determineOnSaleStatus(eventWithSales({ statusCode: 'offsale' })),
+    'sold_out',
+  );
+});
+
+test('determineOnSaleStatus: offsale + future public start + no presale → announced', () => {
+  // Regression: TM emits dates.status.code='offsale' during the presale-only
+  // period because the public sale isn't open yet. Without a presale window
+  // currently active, classify as announced (not sold_out).
+  const future = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
+  assert.equal(
+    determineOnSaleStatus(
+      eventWithSales({ statusCode: 'offsale', saleStart: future }),
+    ),
+    'announced',
+  );
+});
+
+test('determineOnSaleStatus: offsale + future public start + active presale → presale', () => {
+  // The Shakey Graves bug: status was 'offsale' (public sale on MAY 20),
+  // an Artist Presale was currently running, and Discover showed
+  // "SOLD OUT — On sale MAY 20". Now it should read presale.
+  const past = new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString();
+  const future = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
+  assert.equal(
+    determineOnSaleStatus(
+      eventWithSales({
+        statusCode: 'offsale',
+        saleStart: future,
+        presales: [{ startDateTime: past, endDateTime: future }],
+      }),
+    ),
+    'presale',
+  );
+});
+
+test('determineOnSaleStatus: future public start + active presale (no status code) → presale', () => {
+  const past = new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString();
+  const future = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
+  assert.equal(
+    determineOnSaleStatus(
+      eventWithSales({
+        saleStart: future,
+        presales: [{ startDateTime: past, endDateTime: future }],
+      }),
+    ),
+    'presale',
+  );
+});
+
+test('determineOnSaleStatus: future public start + presale with no start time → presale', () => {
+  // TM occasionally omits startDateTime on presale entries — treat as
+  // already-started so the row reads presale rather than announced.
+  const future = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
+  assert.equal(
+    determineOnSaleStatus(
+      eventWithSales({
+        saleStart: future,
+        presales: [{ endDateTime: future }],
+      }),
+    ),
+    'presale',
+  );
+});
+
+test('determineOnSaleStatus: future public start + expired presale → announced', () => {
+  const past = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString();
+  const future = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
+  assert.equal(
+    determineOnSaleStatus(
+      eventWithSales({
+        saleStart: future,
+        presales: [{ startDateTime: past, endDateTime: past }],
+      }),
+    ),
+    'announced',
+  );
+});
+
 test('determineOnSaleStatus: future saleStart → announced', () => {
   const future = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
   assert.equal(
@@ -160,6 +242,17 @@ test('determineOnSaleStatus: past saleEnd → sold_out', () => {
   assert.equal(
     determineOnSaleStatus(
       eventWithSales({ saleStart: '2020-01-01T00:00:00Z', saleEnd: past }),
+    ),
+    'sold_out',
+  );
+});
+
+test('determineOnSaleStatus: offsale + past public start → sold_out', () => {
+  // The genuinely sold-out case: public sale opened and is now off.
+  const past = new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString();
+  assert.equal(
+    determineOnSaleStatus(
+      eventWithSales({ statusCode: 'offsale', saleStart: past }),
     ),
     'sold_out',
   );

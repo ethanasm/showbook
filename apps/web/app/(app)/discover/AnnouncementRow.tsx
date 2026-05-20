@@ -40,7 +40,10 @@ export function AnnouncementRow({
 }) {
   const date = formatShowDateShort(announcement.showDate);
   const KindIcon = KIND_ICONS[announcement.kind];
-  const isOnSale = announcement.onSaleStatus === "on_sale";
+  const isOnSale =
+    announcement.onSaleStatus === "on_sale" ||
+    announcement.onSaleStatus === "presale";
+  const isSoldOut = announcement.onSaleStatus === "sold_out";
   const runMode = isRun(announcement);
   const runDateLabel =
     runMode && announcement.runStartDate && announcement.runEndDate
@@ -54,7 +57,7 @@ export function AnnouncementRow({
 
   return (
     <div
-      className={`discover-row discover-row--${announcement.kind} ${isWatching ? "discover-row--watched" : ""} ${runMode ? "discover-row--run" : ""} ${groupBy === "region" ? "discover-row--region" : ""}`}
+      className={`discover-row discover-row--${announcement.kind} ${isWatching ? "discover-row--watched" : ""} ${runMode ? "discover-row--run" : ""} ${groupBy === "region" ? "discover-row--region" : ""} ${isSoldOut ? "discover-row--sold-out" : ""}`}
     >
       {/* Date */}
       <div>

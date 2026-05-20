@@ -15,6 +15,7 @@ import { kindEnum } from './shows';
 
 export const onSaleStatusEnum = pgEnum('on_sale_status', [
   'announced',
+  'presale',
   'on_sale',
   'sold_out',
 ]);

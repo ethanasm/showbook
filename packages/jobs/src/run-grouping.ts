@@ -33,7 +33,7 @@ export interface NormalizedEvent {
   /** Resolved performer ids for support acts, parallel to `support`. */
   supportPerformerIds: string[] | null;
   onSaleDate: Date | null;
-  onSaleStatus: 'announced' | 'on_sale' | 'sold_out';
+  onSaleStatus: 'announced' | 'presale' | 'on_sale' | 'sold_out';
   source: 'ticketmaster' | 'manual' | 'scraped';
   ticketUrl: string | null;
 }
@@ -61,7 +61,7 @@ export interface EventRun {
   supportPerformerIds: string[] | null;
   /** Earliest on-sale date across the run (most relevant for "tickets coming"). */
   onSaleDate: Date | null;
-  onSaleStatus: 'announced' | 'on_sale' | 'sold_out';
+  onSaleStatus: 'announced' | 'presale' | 'on_sale' | 'sold_out';
   source: 'ticketmaster' | 'manual' | 'scraped';
   ticketUrl: string | null;
 }
@@ -179,8 +179,9 @@ function parseTimeToMinutes(t: string): number {
 
 const STATUS_RANK: Record<NormalizedEvent['onSaleStatus'], number> = {
   on_sale: 0,
-  sold_out: 1,
-  announced: 2,
+  presale: 1,
+  sold_out: 2,
+  announced: 3,
 };
 
 function mergeCluster(cluster: NormalizedEvent[]): NormalizedEvent {
@@ -263,14 +264,16 @@ function makeRun(cluster: NormalizedEvent[]): EventRun {
   // 3-day pass is sold out but day/platinum listings remain on sale, the
   // canonical festival row should still show sold out.
   const statuses = new Set(cluster.map((e) => e.onSaleStatus));
-  const onSaleStatus: 'announced' | 'on_sale' | 'sold_out' =
+  const onSaleStatus: NormalizedEvent['onSaleStatus'] =
     representative.kind === 'festival'
       ? representative.onSaleStatus
       : statuses.has('on_sale')
         ? 'on_sale'
-        : statuses.size === 1 && statuses.has('sold_out')
-          ? 'sold_out'
-          : 'announced';
+        : statuses.has('presale')
+          ? 'presale'
+          : statuses.size === 1 && statuses.has('sold_out')
+            ? 'sold_out'
+            : 'announced';
 
   // For festivals, the support list is the union of every day's lineup —
   // otherwise picking a single representative event would throw away two
