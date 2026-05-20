@@ -152,15 +152,79 @@ function pickContent(result: { choices: Array<{ message: { content: string | nul
 // parseShowInput — free-text → structured show fields
 // ---------------------------------------------------------------------------
 
+/**
+ * In-session conversation context the chat surface can hand to
+ * `parseShowInput` so multi-turn references resolve. Without context,
+ * a follow-up like "I also saw him October 23, 2016" leaves Groq
+ * with no antecedent for "him" — with `recentShows: [{ headliner:
+ * 'Bon Iver' }]` it resolves to Bon Iver and the form opens
+ * pre-filled.
+ *
+ * The list is conversation-scoped (cleared when the chat screen
+ * unmounts) so a session never bleeds into another user / device /
+ * cold-launch.
+ */
+export interface ParseShowInputContext {
+  recentShows?: Array<{
+    headliner: string;
+    date?: string | null;
+    venue?: string | null;
+    kind?: 'concert' | 'theatre' | 'comedy' | 'festival' | null;
+  }>;
+}
+
+/**
+ * Format the recent-shows context as a short bullet list the model
+ * can scan. Exported for unit testing — the user-visible behavior
+ * depends on the exact wording.
+ */
+export function formatRecentShowsContext(
+  context: ParseShowInputContext | undefined,
+): string | null {
+  const recent = context?.recentShows ?? [];
+  if (recent.length === 0) return null;
+  const lines = recent
+    .slice(0, 5)
+    .map((s) => {
+      const bits = [s.headliner];
+      if (s.venue) bits.push(`at ${s.venue}`);
+      if (s.date) bits.push(`on ${s.date}`);
+      if (s.kind) bits.push(`(${s.kind})`);
+      return `- ${bits.join(' ')}`;
+    })
+    .join('\n');
+  return lines;
+}
+
 export async function parseShowInput(
   freeText: string,
+  context?: ParseShowInputContext,
 ): Promise<ParsedShowInput> {
+  const contextBlock = formatRecentShowsContext(context);
+  const systemContent =
+    'You are a structured data extractor for a show tracking app. ' +
+    'Extract show details from the user\'s free-text input. Return ONLY a JSON object with these fields: ' +
+    'headliner (string or null), venue_hint (string or null), date_hint (string in strict YYYY-MM-DD format or null), ' +
+    'seat_hint (string or null), kind_hint (one of: concert, theatre, comedy, festival, or null). ' +
+    'For headliner: return the artist / production / comedian / festival name the user is describing. ' +
+    'If the input is conversational (e.g. "I also saw him in 2016") with no specific name AND no usable ' +
+    'context entry below, return null — the app will let the user fill it in. ' +
+    'For date_hint: only emit YYYY-MM-DD (e.g. "2018-08-05"). If the user gives a partial date with no year, ' +
+    'assume the closest future date; if no month/day at all, return null. Never emit prose like "August 5, 2018" ' +
+    'or slash-separated dates. If any other field cannot be determined, set it to null.' +
+    (contextBlock
+      ? '\n\nConversation context — the user has already discussed these shows in this session:\n' +
+        contextBlock +
+        '\n\nIf the new input uses a pronoun ("him", "her", "them", "they", "it") or a shorthand reference ' +
+        '("also", "again", "another time", "that one"), resolve the reference to the headliner of the most ' +
+        'recent matching show in the context above, and emit that resolved name in the `headliner` field — ' +
+        'do NOT return null when a context entry can resolve the reference. ' +
+        'Carry over `venue_hint` / `kind_hint` from the same context entry only if the user\'s new input ' +
+        'does not specify a different value; otherwise prefer the new input.'
+      : '');
+
   const messages = [
-    {
-      role: 'system' as const,
-      content:
-        'You are a structured data extractor for a show tracking app. Extract show details from the user\'s free-text input. Return ONLY a JSON object with these fields: headliner (string or null), venue_hint (string or null), date_hint (string in strict YYYY-MM-DD format or null), seat_hint (string or null), kind_hint (one of: concert, theatre, comedy, festival, or null). For headliner: return the artist / production / comedian / festival name the user is describing. If the input is conversational (e.g. "I also saw him in 2016") with no specific name, return null — the app will let the user fill it in. For date_hint: only emit YYYY-MM-DD (e.g. "2018-08-05"). If the user gives a partial date with no year, assume the closest future date; if no month/day at all, return null. Never emit prose like "August 5, 2018" or slash-separated dates. If any other field cannot be determined, set it to null.',
-    },
+    { role: 'system' as const, content: systemContent },
     { role: 'user' as const, content: freeText },
   ];
 
