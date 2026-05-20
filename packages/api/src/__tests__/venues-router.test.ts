@@ -38,19 +38,71 @@ describe('venuesRouter (unit)', () => {
         latitude: null,
         longitude: null,
       };
+      // upcomingCount is now derived from the deduped row scan rather than
+      // a raw count(*), so the script returns rows for the scan + the
+      // links/user-shows lookups inside `getDedupedUpcomingAnnouncements`.
+      const upcomingRows = [
+        { id: 'a1', venueId: VENUE_ID, headliner: 'Coldplay', productionName: null, showDate: '2026-08-01' },
+        { id: 'a2', venueId: VENUE_ID, headliner: 'Pearl Jam', productionName: null, showDate: '2026-09-01' },
+        { id: 'a3', venueId: VENUE_ID, headliner: 'Lorde', productionName: null, showDate: '2026-10-01' },
+      ];
       const db = makeFakeDb({
         selectResults: [
           [venue],
           [{ venueId: VENUE_ID }], // user follows
           [{ count: 4 }], // user shows count
-          [{ count: 9 }], // upcoming announcements
+          upcomingRows, // scanned upcoming announcements
+          [], // showAnnouncementLinks for this user+venue
+          [], // user's shows at this venue (for fuzzy dedup)
         ],
       });
       const result = await caller(db).detail({ venueId: VENUE_ID });
       assert.equal(result.id, VENUE_ID);
       assert.equal(result.isFollowed, true);
       assert.equal(result.userShowCount, 4);
-      assert.equal(result.upcomingCount, 9);
+      assert.equal(result.upcomingCount, 3);
+    });
+
+    it('drops upcoming announcements that fuzzy-match a logged show', async () => {
+      const venue = {
+        id: VENUE_ID,
+        name: 'Napa Valley Expo',
+        city: 'Napa',
+        country: 'US',
+        latitude: null,
+        longitude: null,
+      };
+      const upcomingRows = [
+        {
+          id: 'a1',
+          venueId: VENUE_ID,
+          headliner: 'Various Artists',
+          productionName: 'BottleRock Napa Valley',
+          showDate: '2026-05-22',
+          runStartDate: null,
+          runEndDate: null,
+          performanceDates: null,
+        },
+      ];
+      const db = makeFakeDb({
+        selectResults: [
+          [venue],
+          [], // not followed
+          [{ count: 1 }],
+          upcomingRows,
+          [], // no announcement links
+          [
+            {
+              date: '2026-05-22',
+              endDate: null,
+              productionName: 'Bottlerock',
+              headlinerName: null,
+            },
+          ],
+        ],
+      });
+      const result = await caller(db).detail({ venueId: VENUE_ID });
+      assert.equal(result.upcomingCount, 0);
     });
   });
 
@@ -139,10 +191,62 @@ describe('venuesRouter (unit)', () => {
 
   describe('upcomingAnnouncements', () => {
     it('returns announcements scripted by the fake db', async () => {
-      const annos = [{ id: 'a1', headliner: 'X' }];
-      const db = makeFakeDb({ selectResults: [annos] });
+      const annos = [{ id: 'a1', headliner: 'X', showDate: '2026-08-01', productionName: null }];
+      // Three select calls: raw scan, link lookup, user-show lookup. With no
+      // matches the dedup is a no-op.
+      const db = makeFakeDb({ selectResults: [annos, [], []] });
       const result = await caller(db).upcomingAnnouncements({ venueId: VENUE_ID });
       assert.deepEqual(result, annos);
+    });
+
+    it('drops an announcement that fuzzy-matches a logged show', async () => {
+      const annos = [
+        {
+          id: 'a1',
+          venueId: VENUE_ID,
+          headliner: 'Various Artists',
+          productionName: 'BottleRock Napa Valley',
+          showDate: '2026-05-22',
+          runStartDate: null,
+          runEndDate: null,
+          performanceDates: null,
+        },
+        {
+          id: 'a2',
+          venueId: VENUE_ID,
+          headliner: 'Coldplay',
+          productionName: null,
+          showDate: '2026-06-15',
+          runStartDate: null,
+          runEndDate: null,
+          performanceDates: null,
+        },
+      ];
+      const db = makeFakeDb({
+        selectResults: [
+          annos,
+          [], // no link rows
+          [
+            {
+              date: '2026-05-22',
+              endDate: null,
+              productionName: 'Bottlerock',
+              headlinerName: null,
+            },
+          ],
+        ],
+      });
+      const result = await caller(db).upcomingAnnouncements({ venueId: VENUE_ID });
+      assert.deepEqual(result.map((a: { id: string }) => a.id), ['a2']);
+    });
+
+    it('drops an announcement explicitly linked to a user show', async () => {
+      const annos = [{ id: 'a1', headliner: 'X', showDate: '2026-08-01', productionName: null }];
+      const db = makeFakeDb({
+        selectResults: [annos, [{ announcementId: 'a1' }], []],
+      });
+      const result = await caller(db).upcomingAnnouncements({ venueId: VENUE_ID });
+      assert.equal(result.length, 0);
     });
   });
 

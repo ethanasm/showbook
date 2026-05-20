@@ -9,7 +9,12 @@ import {
   userRegions,
   announcements,
   shows,
+  showPerformers,
+  performers,
+  showAnnouncementLinks,
+  type Database,
 } from '@showbook/db';
+import { showMatchesAnnouncement } from '@showbook/shared';
 import { getPlaceDetails } from '../google-places';
 import { matchOrCreateVenue } from '../venue-matcher';
 import { geocodeVenue } from '../geocode';
@@ -21,6 +26,77 @@ import { enforceRateLimit } from '../rate-limit';
 import { child } from '@showbook/observability';
 
 const log = child({ component: 'api.venues' });
+
+/**
+ * Upper bound on how many future announcements we scan when deduping
+ * against the user's logged shows at a venue. The dedup is in-memory
+ * (joining + fuzzy-matching headliner / production names against the user's
+ * shows at the same venue), so the bound exists to keep one user pinning
+ * a pathological venue from blowing up the request. Real-world venues
+ * rarely break double digits.
+ */
+const UPCOMING_DEDUP_SCAN_CAP = 200;
+
+/**
+ * Load future announcements for a venue, with announcements that map to a
+ * show the user already has (either via `show_announcement_links` or via
+ * a fuzzy match on date + name) filtered out. Shared between the
+ * `detail.upcomingCount` stat and the `upcomingAnnouncements` list so the
+ * two never disagree.
+ */
+async function getDedupedUpcomingAnnouncements(
+  db: Database,
+  userId: string,
+  venueId: string,
+  today: string,
+) {
+  const rows = await db
+    .select()
+    .from(announcements)
+    .where(
+      and(
+        eq(announcements.venueId, venueId),
+        gte(announcements.showDate, today),
+      ),
+    )
+    .orderBy(asc(announcements.showDate), asc(announcements.id))
+    .limit(UPCOMING_DEDUP_SCAN_CAP);
+
+  if (rows.length === 0) return rows;
+
+  // Announcements that already point at a show the user owns get dropped
+  // outright — that's the explicit dedup signal and avoids re-running the
+  // fuzzy match against the user's own watch/ticket actions.
+  const linkedRows = await db
+    .select({ announcementId: showAnnouncementLinks.announcementId })
+    .from(showAnnouncementLinks)
+    .innerJoin(shows, eq(shows.id, showAnnouncementLinks.showId))
+    .where(and(eq(shows.userId, userId), eq(shows.venueId, venueId)));
+  const linkedSet = new Set(linkedRows.map((r) => r.announcementId));
+
+  // User's shows at this venue + headliner name (via show_performers ->
+  // performers) so the fuzzy matcher can fall back from productionName to
+  // headlinerName.
+  const userShowRows = await db
+    .select({
+      date: shows.date,
+      endDate: shows.endDate,
+      productionName: shows.productionName,
+      headlinerName: performers.name,
+    })
+    .from(shows)
+    .leftJoin(
+      showPerformers,
+      and(eq(showPerformers.showId, shows.id), eq(showPerformers.role, 'headliner')),
+    )
+    .leftJoin(performers, eq(performers.id, showPerformers.performerId))
+    .where(and(eq(shows.userId, userId), eq(shows.venueId, venueId)));
+
+  return rows.filter((a) => {
+    if (linkedSet.has(a.id)) return false;
+    return !userShowRows.some((s) => showMatchesAnnouncement(s, a));
+  });
+}
 
 export const venuesRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -307,21 +383,18 @@ export const venuesRouter = router({
         );
 
       const today = new Date().toISOString().slice(0, 10);
-      const [{ count: upcomingCount } = { count: 0 }] = await ctx.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(announcements)
-        .where(
-          and(
-            eq(announcements.venueId, input.venueId),
-            gte(announcements.showDate, today),
-          ),
-        );
+      const dedupedUpcoming = await getDedupedUpcomingAnnouncements(
+        ctx.db,
+        userId,
+        input.venueId,
+        today,
+      );
 
       return {
         ...venue,
         isFollowed: Boolean(followRow),
         userShowCount,
-        upcomingCount,
+        upcomingCount: dedupedUpcoming.length,
       };
     }),
 
@@ -406,17 +479,13 @@ export const venuesRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const today = new Date().toISOString().slice(0, 10);
-      return ctx.db
-        .select()
-        .from(announcements)
-        .where(
-          and(
-            eq(announcements.venueId, input.venueId),
-            gte(announcements.showDate, today),
-          ),
-        )
-        .orderBy(asc(announcements.showDate), asc(announcements.id))
-        .limit(input.limit);
+      const deduped = await getDedupedUpcomingAnnouncements(
+        ctx.db,
+        ctx.session.user.id,
+        input.venueId,
+        today,
+      );
+      return deduped.slice(0, input.limit);
     }),
 
   userShows: protectedProcedure
