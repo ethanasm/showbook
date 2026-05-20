@@ -39,7 +39,6 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
-  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -61,7 +60,6 @@ import { KindBadge } from '../../components/KindBadge';
 import { useTheme, type Kind } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { useNetwork } from '../../lib/network';
-import { useFeedback } from '../../lib/feedback';
 import { hapticSelection } from '../../lib/haptics';
 import { trpc, type RouterOutput } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
@@ -820,7 +818,6 @@ function AnnouncementRow({
   const { tokens } = useTheme();
   const { colors } = tokens;
   const router = useRouter();
-  const { showToast } = useFeedback();
   const { month, day, year, dow } = parseDate(item.showDate);
   const accent = tokens.kindColor(item.kind as Kind);
   const onSale = formatOnSale(item.onSaleDate);
@@ -846,7 +843,6 @@ function AnnouncementRow({
   };
 
   const canWatch = !isNonWatchableKind(item.kind);
-  const ticketUrl = item.ticketUrl;
 
   return (
     <Pressable
@@ -948,46 +944,49 @@ function AnnouncementRow({
             </Text>
           )}
         </View>
-        {(canWatch || ticketUrl) && (
+        {canWatch && (
           <View style={styles.actionsRow}>
-            {canWatch && (
-              <IconAction
+            <LabeledIconAction
+              label={isWatching ? 'Watching' : 'Watch'}
+              onPress={() => {
+                void hapticSelection();
+                void onToggleWatch(item.id, isWatching);
+              }}
+              accessibilityLabel={
+                isWatching ? 'Stop watching this event' : 'Add to watching'
+              }
+              testID={`discover-row-watch-${item.id}`}
+              active={isWatching}
+              accent={accent}
+              colors={colors}
+            >
+              {isWatching ? (
+                <BookmarkCheck size={14} color={accent} strokeWidth={2} />
+              ) : (
+                <BookmarkPlus size={14} color={colors.muted} strokeWidth={2} />
+              )}
+            </LabeledIconAction>
+            {!isWatching && (
+              <LabeledIconAction
+                label="Got ticket"
                 onPress={() => {
                   void hapticSelection();
-                  void onToggleWatch(item.id, isWatching);
-                }}
-                accessibilityLabel={
-                  isWatching ? 'Stop watching this event' : 'Watch this event'
-                }
-                testID={`discover-row-watch-${item.id}`}
-                active={isWatching}
-                accent={accent}
-                colors={colors}
-              >
-                {isWatching ? (
-                  <BookmarkCheck size={14} color={accent} strokeWidth={2} />
-                ) : (
-                  <BookmarkPlus size={14} color={colors.muted} strokeWidth={2} />
-                )}
-              </IconAction>
-            )}
-            {ticketUrl && (
-              <IconAction
-                onPress={() => {
-                  void hapticSelection();
-                  Linking.openURL(ticketUrl).catch(() => {
-                    showToast({
-                      kind: 'error',
-                      text: "Couldn't open Ticketmaster.",
-                    });
+                  router.push({
+                    pathname: '/add/form',
+                    params: {
+                      kindHint: item.kind,
+                      headliner: item.productionName ?? item.headliner,
+                      venueHint: item.venue.name,
+                      dateHint: item.showDate,
+                    },
                   });
                 }}
-                accessibilityLabel="Open tickets on Ticketmaster"
-                testID={`discover-row-tickets-${item.id}`}
+                accessibilityLabel="Add as ticketed show"
+                testID={`discover-row-ticketed-${item.id}`}
                 colors={colors}
               >
                 <Ticket size={14} color={colors.muted} strokeWidth={2} />
-              </IconAction>
+              </LabeledIconAction>
             )}
           </View>
         )}
@@ -996,7 +995,15 @@ function AnnouncementRow({
   );
 }
 
-function IconAction({
+/**
+ * Stacked icon + caption used by each announcement row. The visible
+ * caption (WATCH / WATCHING / GOT TICKET) disambiguates what the two
+ * affordances do — without it the bookmark / ticket icons read as
+ * interchangeable and the ticket icon was easy to mistake for "open
+ * external ticket page".
+ */
+function LabeledIconAction({
+  label,
   onPress,
   accessibilityLabel,
   testID,
@@ -1005,6 +1012,7 @@ function IconAction({
   colors,
   children,
 }: {
+  label: string;
   onPress: () => void;
   accessibilityLabel: string;
   testID?: string;
@@ -1025,16 +1033,30 @@ function IconAction({
       testID={testID}
       style={({ pressed }) => [
         styles.iconAction,
-        {
-          backgroundColor:
-            active && accent ? `${accent}1f` : colors.surface,
-          borderColor:
-            active && accent ? `${accent}55` : colors.rule,
-          opacity: pressed ? 0.6 : 1,
-        },
+        { opacity: pressed ? 0.6 : 1 },
       ]}
     >
-      {children}
+      <View
+        style={[
+          styles.iconCircle,
+          {
+            backgroundColor:
+              active && accent ? `${accent}1f` : colors.surface,
+            borderColor:
+              active && accent ? `${accent}55` : colors.rule,
+          },
+        ]}
+      >
+        {children}
+      </View>
+      <Text
+        style={[
+          styles.iconLabel,
+          { color: active && accent ? accent : colors.muted },
+        ]}
+      >
+        {label.toUpperCase()}
+      </Text>
     </Pressable>
   );
 }
@@ -1224,16 +1246,28 @@ const styles = StyleSheet.create({
   },
   actionsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    alignItems: 'flex-start',
+    gap: 12,
   },
   iconAction: {
-    width: 30,
-    height: 30,
+    alignItems: 'center',
+    gap: 4,
+    minWidth: 44,
+  },
+  iconCircle: {
+    width: 32,
+    height: 32,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  iconLabel: {
+    fontFamily: 'Geist Mono',
+    fontSize: 8.5,
+    fontWeight: '600',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   statusBadge: {
     paddingVertical: 2,
