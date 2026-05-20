@@ -168,16 +168,23 @@ async function getHeadlinersForShows(
     .from(shows)
     .where(inArray(shows.id, showIds));
 
-  const nonTheatreIds: string[] = [];
+  const performerLookupIds: string[] = [];
   for (const row of showRows) {
-    if (row.kind === 'theatre' && row.productionName) {
+    // Theatre + festival both carry their display title on
+    // production_name (the play title / festival name). For festivals
+    // we previously read a synthetic headliner performer row instead,
+    // which was retired in migration 0052.
+    if (
+      (row.kind === 'theatre' || row.kind === 'festival') &&
+      row.productionName
+    ) {
       out.set(row.id, row.productionName);
     } else {
-      nonTheatreIds.push(row.id);
+      performerLookupIds.push(row.id);
     }
   }
 
-  if (nonTheatreIds.length === 0) return out;
+  if (performerLookupIds.length === 0) return out;
 
   const performerRows = await db
     .select({ showId: showPerformers.showId, name: performers.name })
@@ -185,13 +192,13 @@ async function getHeadlinersForShows(
     .innerJoin(performers, eq(showPerformers.performerId, performers.id))
     .where(
       and(
-        inArray(showPerformers.showId, nonTheatreIds),
+        inArray(showPerformers.showId, performerLookupIds),
         eq(showPerformers.role, 'headliner'),
       ),
     );
 
-  // Multiple headliners per show are possible (festivals); first one wins,
-  // matching the prior limit(1) behaviour.
+  // First headliner wins, matching the prior limit(1) behaviour. Festivals
+  // without a production_name fall through here too (legacy data).
   for (const row of performerRows) {
     if (!out.has(row.showId)) out.set(row.showId, row.name);
   }

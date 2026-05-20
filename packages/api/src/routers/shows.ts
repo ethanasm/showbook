@@ -498,18 +498,20 @@ export const showsRouter = router({
       // Match or create venue
       const venueResult = await matchOrCreateVenue(input.venue as VenueInput);
 
-      // For theatre, the "headliner" name is the production title — store
-      // it on the show row rather than in the performers table.
-      const productionName =
-        input.kind === 'theatre'
-          ? input.productionName ?? input.headliner.name
-          : input.productionName ?? null;
+      // For theatre and festival, the "headliner" name is the production
+      // title (play name / festival name) and lives on the show row, not
+      // in show_performers. Festivals also accept a real headliner artist
+      // through the `performers` list with role='headliner'.
+      const isProductionKind = input.kind === 'theatre' || input.kind === 'festival';
+      const productionName = isProductionKind
+        ? input.productionName ?? input.headliner.name
+        : input.productionName ?? null;
 
       // Resolve performers first so we can build the setlists map by ID.
       const setlistsMap: PerformerSetlistsMap = {};
 
       let headlinerId: string | null = null;
-      if (input.kind !== 'theatre') {
+      if (!isProductionKind) {
         const headlinerResult = await matchOrCreatePerformer({
           name: input.headliner.name,
           tmAttractionId: input.headliner.tmAttractionId,
@@ -977,14 +979,19 @@ export const showsRouter = router({
       // while they run.
       const venueResult = await matchOrCreateVenue(input.venue as VenueInput);
 
-      const productionName =
-        input.kind === 'theatre'
-          ? input.productionName ?? input.headliner.name
-          : input.productionName ?? null;
+      // Festivals + theatre carry their title in productionName, not as a
+      // synthetic headliner performer (see shows.create). The headliner
+      // input is still accepted so the existing wire shape works, but
+      // it's only used to backfill productionName when the caller didn't
+      // send it explicitly.
+      const isProductionKind = input.kind === 'theatre' || input.kind === 'festival';
+      const productionName = isProductionKind
+        ? input.productionName ?? input.headliner.name
+        : input.productionName ?? null;
 
       let resolvedHeadlinerId: string | null = null;
       const setlistsMap: PerformerSetlistsMap = {};
-      if (input.kind !== 'theatre') {
+      if (!isProductionKind) {
         const headlinerResult = await matchOrCreatePerformer({
           name: input.headliner.name,
           tmAttractionId: input.headliner.tmAttractionId,

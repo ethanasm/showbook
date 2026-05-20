@@ -147,9 +147,21 @@ export default function ShowDetailPage() {
     ? show.productionName
     : (headlinerSP?.performer.name ?? "Unknown");
 
-  const lineup = [...show.showPerformers].sort(
-    (a, b) => a.sortOrder - b.sortOrder,
-  );
+  // Festival shows used to ship with a phantom headliner performer
+  // whose name mirrored production_name. Migration 0052 drops those
+  // rows server-side; this filter keeps the lineup card clean if a
+  // browser tab is reading from a stale tRPC cache.
+  const productionNorm =
+    show.kind === "festival" && show.productionName
+      ? show.productionName.trim().toLowerCase()
+      : null;
+  const lineup = [...show.showPerformers]
+    .filter((sp) =>
+      productionNorm === null
+        ? true
+        : sp.performer.name.trim().toLowerCase() !== productionNorm,
+    )
+    .sort((a, b) => a.sortOrder - b.sortOrder);
   const mediaLineup = lineup.map((sp) => ({
     id: sp.performer.id,
     name: sp.performer.name,

@@ -482,7 +482,22 @@ function Lineup({ show }: { show: ShowDetail }): React.JSX.Element | null {
   const { colors } = tokens;
   const router = useRouter();
 
-  const performers = [...show.showPerformers].sort((a, b) => a.sortOrder - b.sortOrder);
+  // Festival shows used to ship with a phantom headliner performer
+  // whose name mirrored production_name. Migration 0052 drops those
+  // rows server-side; this filter keeps the lineup card clean if the
+  // app is reading from a stale cache (or for festivals that somehow
+  // re-acquire the row before the migration lands).
+  const productionNorm =
+    show.kind === 'festival' && show.productionName
+      ? show.productionName.trim().toLowerCase()
+      : null;
+  const performers = [...show.showPerformers]
+    .filter((sp) =>
+      productionNorm === null
+        ? true
+        : sp.performer.name.trim().toLowerCase() !== productionNorm,
+    )
+    .sort((a, b) => a.sortOrder - b.sortOrder);
   if (performers.length === 0) return null;
 
   const isTheatre = show.kind === 'theatre';

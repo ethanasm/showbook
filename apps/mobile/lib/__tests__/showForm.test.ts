@@ -344,7 +344,7 @@ describe('buildShowFormFromDetail', () => {
     assert.equal(values.performers[0].characterName, 'Eurydice');
   });
 
-  it('festival: the synthetic festival-name headliner is excluded from lineup rows', () => {
+  it('festival: a stale festival-name headliner row from legacy data is excluded from lineup rows', () => {
     idCounter = 0;
     const values = buildShowFormFromDetail(
       makeDetail({
