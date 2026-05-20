@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     letterSpacing: 11 * 0.08,
   },
   headliner: {
-    fontFamily: 'Georgia',
+    fontFamily: 'Fraunces',
     fontSize: 26,
     fontWeight: '700',
     color: '#fff',

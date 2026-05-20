@@ -93,8 +93,8 @@ export function GetStartedHub({
     {
       id: 'gmail',
       title: 'Import from Gmail',
-      subtitle: 'Backfill past shows from receipts (manage from the web app).',
-      icon: <Mail size={18} color={colors.muted} />,
+      subtitle: 'Scan your inbox for ticket confirmations.',
+      icon: <Mail size={18} color={colors.accent} />,
       href: '/integrations/gmail',
     },
     {
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
   },
   expandedTitle: {
     fontSize: 28,
-    fontFamily: 'Georgia',
+    fontFamily: 'Fraunces',
     fontWeight: '700',
     letterSpacing: -0.4,
   },

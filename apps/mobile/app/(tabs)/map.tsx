@@ -795,7 +795,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   venueTitle: {
-    fontFamily: 'Georgia',
+    fontFamily: 'Fraunces',
     fontSize: 22,
     fontWeight: '700',
     lineHeight: 26,

@@ -67,15 +67,22 @@ mock.module('../setlistfm.js', {
   },
 });
 
+// Capture for assertions: the most recent parseShowInput call's args
+// so a test can verify that parseChat forwards `recentShows` through
+// to the LLM wrapper.
+const parseShowInputCalls: Array<{ freeText: string; context: unknown }> = [];
 mock.module('../groq.js', {
   namedExports: {
-    parseShowInput: async () => ({
-      headliner: 'X',
-      venue_hint: null,
-      date_hint: null,
-      seat_hint: null,
-      kind_hint: null,
-    }),
+    parseShowInput: async (freeText: string, context: unknown) => {
+      parseShowInputCalls.push({ freeText, context });
+      return {
+        headliner: 'X',
+        venue_hint: null,
+        date_hint: null,
+        seat_hint: null,
+        kind_hint: null,
+      };
+    },
     extractCast: async () => [],
     extractShowFromEmail: async () => null,
     extractShowFromPdfText: async () => null,
@@ -228,8 +235,44 @@ describe('enrichmentRouter procedures (mocked)', () => {
   });
 
   it('parseChat returns the parsed structure (mocked)', async () => {
+    parseShowInputCalls.length = 0;
     const result = await caller().parseChat({ freeText: 'foo' });
     assert.equal(result.headliner, 'X');
+    // Default call shape: freeText only, context with undefined recentShows
+    // (we always pass a context object so the LLM wrapper has a stable
+    // arity to optimize against).
+    assert.equal(parseShowInputCalls.length, 1);
+    assert.equal(parseShowInputCalls[0].freeText, 'foo');
+    assert.deepEqual(parseShowInputCalls[0].context, { recentShows: undefined });
+  });
+
+  it('parseChat forwards recentShows context to parseShowInput', async () => {
+    // Regression for mobile chat conversation memory: when the
+    // client supplies `recentShows`, the router must hand it through
+    // to parseShowInput so the LLM prompt can resolve pronouns.
+    parseShowInputCalls.length = 0;
+    await caller().parseChat({
+      freeText: 'I also saw him October 23, 2016',
+      recentShows: [
+        {
+          headliner: 'Bon Iver',
+          date: '2018-08-05',
+          venue: 'Hollywood Bowl',
+          kind: 'concert',
+        },
+      ],
+    });
+    assert.equal(parseShowInputCalls.length, 1);
+    assert.deepEqual(parseShowInputCalls[0].context, {
+      recentShows: [
+        {
+          headliner: 'Bon Iver',
+          date: '2018-08-05',
+          venue: 'Hollywood Bowl',
+          kind: 'concert',
+        },
+      ],
+    });
   });
 
   it('extractCast returns the parsed list', async () => {

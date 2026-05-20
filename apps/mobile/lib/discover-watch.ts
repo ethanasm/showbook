@@ -19,7 +19,7 @@ import React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { runOptimisticMutation } from './mutations';
-import { getCacheOutbox } from './cache';
+import { getCacheOutbox, invalidateShowsList } from './cache';
 import { useFeedback } from './feedback';
 import { trpc } from './trpc';
 
@@ -81,6 +81,7 @@ export function useToggleWatch(opts: UseToggleWatchOptions = {}): WatchToggle {
           reconcile: () => {
             void utils.discover.watchedAnnouncementIds.invalidate();
             void utils.shows.list.invalidate();
+            invalidateShowsList(queryClient);
             onReconcile?.();
           },
         });

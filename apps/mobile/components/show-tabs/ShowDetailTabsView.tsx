@@ -29,16 +29,16 @@ import { Ticket } from 'lucide-react-native';
 import { hapticSelection } from '../../lib/haptics';
 import { useFeedback } from '../../lib/feedback';
 
+import { useAuth } from '../../lib/auth';
+import { venueImageSource } from '../../lib/images';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
 import { CACHE_DEFAULTS } from '../../lib/cache';
 import { useQueryClient } from '@tanstack/react-query';
 import { runOptimisticMutation } from '../../lib/mutations';
 import { getCacheOutbox } from '../../lib/cache/db';
-import {
-  PreviewPlayerProvider,
-} from './TrackPreviewButton';
 import { ShowTabBar } from './ShowTabBar';
+import { MarkTicketedSheet } from '../MarkTicketedSheet';
 import { OverviewTab, type OverviewLineupEntry } from './OverviewTab';
 import { SetlistTab, type ActualSong, type AnyPrediction } from './SetlistTab';
 import {
@@ -60,7 +60,11 @@ import {
   type ShowTabKey,
 } from '../../lib/setlist-intel';
 import { useBreakpoint } from '../../lib/responsive';
-import { getHeadliner } from '@showbook/shared';
+import {
+  formatVenueLocation,
+  getHeadliner,
+  isVenuePlaceholder,
+} from '@showbook/shared';
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
@@ -80,6 +84,8 @@ interface ShowVenue {
   name: string;
   city: string;
   stateRegion: string | null;
+  photoUrl?: string | null;
+  googlePlaceId?: string | null;
 }
 interface PerformerSetlistSection {
   kind: string;
@@ -114,17 +120,7 @@ export interface ShowDetailTabsViewProps {
   initialTab?: ShowTabKey;
 }
 
-export function ShowDetailTabsView(
-  props: ShowDetailTabsViewProps,
-): React.JSX.Element {
-  return (
-    <PreviewPlayerProvider>
-      <ShowDetailTabsViewInner {...props} />
-    </PreviewPlayerProvider>
-  );
-}
-
-function ShowDetailTabsViewInner({
+export function ShowDetailTabsView({
   show,
   embeddedInThreePane = false,
   initialTab,
@@ -135,12 +131,17 @@ function ShowDetailTabsViewInner({
   const breakpoint = useBreakpoint();
   const utils = trpc.useUtils();
   const queryClient = useQueryClient();
+  const { showToast } = useFeedback();
   const isPast = show.state === 'past';
   const isFestival = show.kind === 'festival';
+  const showTicketAction =
+    Boolean(show.ticketUrl) &&
+    (show.state === 'watching' || show.state === 'ticketed');
 
   const [active, setActive] = React.useState<ShowTabKey>(
     parseShowTab(initialTab ?? null),
   );
+  const [markTicketedOpen, setMarkTicketedOpen] = React.useState(false);
 
   const headliner = show.showPerformers.find((sp) => sp.role === 'headliner');
   const resolvedHeadliner = getHeadliner(show);
@@ -347,9 +348,7 @@ function ShowDetailTabsViewInner({
   // ──────────────────────────── Panels ────────────────────────────
   const overviewCells = React.useMemo(() => {
     const venueLabel = show.venue.name;
-    const venueSub = [show.venue.city, show.venue.stateRegion]
-      .filter(Boolean)
-      .join(', ');
+    const venueSub = formatVenueLocation(show.venue);
     const seatLabel = show.seat ?? '—';
     const seatSub = show.ticketCount > 1 ? `${show.ticketCount} tix` : '1 tix';
     const priceLabel = show.pricePaid
@@ -410,6 +409,16 @@ function ShowDetailTabsViewInner({
       cells={overviewCells}
       lineup={lineupEntries}
       actions={[
+        ...(show.state === 'watching'
+          ? [
+              {
+                label: 'I have tickets',
+                primary: true,
+                testID: 'action-mark-ticketed',
+                onPress: () => setMarkTicketedOpen(true),
+              },
+            ]
+          : []),
         ...(show.state === 'ticketed'
           ? [
               {
@@ -420,6 +429,24 @@ function ShowDetailTabsViewInner({
                   void updateState.mutateAsync({
                     showId: show.id,
                     newState: 'past',
+                  });
+                },
+              },
+            ]
+          : []),
+        ...(showTicketAction && show.ticketUrl
+          ? [
+              {
+                label: 'Tickets',
+                testID: 'action-open-tickets',
+                icon: <Ticket size={14} color={colors.ink} strokeWidth={2} />,
+                onPress: () => {
+                  void hapticSelection();
+                  Linking.openURL(show.ticketUrl as string).catch(() => {
+                    showToast({
+                      kind: 'error',
+                      text: "Couldn't open Ticketmaster.",
+                    });
                   });
                 },
               },
@@ -600,6 +627,14 @@ function ShowDetailTabsViewInner({
       {showInlineRail ? (
         <ShowDetailRightRail isPast={isPast} slots={rightRailSlots} />
       ) : null}
+      <MarkTicketedSheet
+        open={markTicketedOpen}
+        onClose={() => setMarkTicketedOpen(false)}
+        showId={show.id}
+        initialSeat={show.seat}
+        initialPrice={show.pricePaid}
+        initialTicketCount={show.ticketCount}
+      />
     </View>
   );
 }
@@ -608,28 +643,27 @@ function HeaderStrip({ show }: { show: ShowDetail }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const router = useRouter();
-  const { showToast } = useFeedback();
+  const { token } = useAuth();
   const resolvedHeadliner = getHeadliner(show);
   const title = resolvedHeadliner === 'Unknown Artist' ? 'Untitled' : resolvedHeadliner;
   const date = parseDate(show.date);
-  const showTicketAction =
-    Boolean(show.ticketUrl) &&
-    (show.state === 'watching' || show.state === 'ticketed');
 
   // Gradient-emphasis the last word of the title for a touch of editorial flair.
   const parts = title.trim().split(/\s+/);
   const head = parts.length > 1 ? parts.slice(0, -1).join(' ') + ' ' : '';
   const tail = parts.length > 1 ? (parts[parts.length - 1] as string) : title;
-  const venueLine = [show.venue.name, show.venue.city].filter(Boolean).join(' · ');
+  const venueLine = [show.venue.name, show.venue.city]
+    .filter((p) => !isVenuePlaceholder(p))
+    .join(' · ');
 
-  // Headliner image is shown only for solo-artist kinds (concert/comedy)
-  // where the title maps 1:1 to a single performer. Festivals span many
-  // artists and theatre titles are productions, so the avatar would
-  // mislead more than it'd help.
-  const showHeadlinerImage = show.kind === 'concert' || show.kind === 'comedy';
-  const headliner = show.showPerformers.find((sp) => sp.role === 'headliner');
-  const headlinerImageUrl = headliner?.performer.imageUrl ?? null;
-  const headlinerImageName = headliner?.performer.name ?? title;
+  // Top-right image renders the venue for solo-artist kinds (concert /
+  // comedy). The headliner already appears in the LINEUP row below, so
+  // showing it again here doubles up; the venue photo carries new
+  // information and reinforces the "where" alongside the "who" in the
+  // title. Festivals span many artists and theatre titles are
+  // productions, so we keep the image hidden for those.
+  const showVenueImage = show.kind === 'concert' || show.kind === 'comedy';
+  const venueImage = showVenueImage ? venueImageSource(show.venue, token) : null;
 
   return (
     <View
@@ -661,30 +695,6 @@ function HeaderStrip({ show }: { show: ShowDetail }): React.JSX.Element {
                   </Text>
                 </View>
               )}
-              {showTicketAction && show.ticketUrl ? (
-                <Pressable
-                  onPress={() => {
-                    void hapticSelection();
-                    Linking.openURL(show.ticketUrl as string).catch(() => {
-                      showToast({
-                        kind: 'error',
-                        text: "Couldn't open Ticketmaster.",
-                      });
-                    });
-                  }}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel="Open tickets on Ticketmaster"
-                  testID="show-header-tickets"
-                  style={({ pressed }) => [
-                    styles.ticketAction,
-                    { borderColor: colors.rule, backgroundColor: colors.surface },
-                    pressed && { opacity: 0.6 },
-                  ]}
-                >
-                  <Ticket size={14} color={colors.muted} strokeWidth={2} />
-                </Pressable>
-              ) : null}
             </View>
             <Text
               style={[styles.headerTitle, { color: colors.ink }]}
@@ -714,25 +724,21 @@ function HeaderStrip({ show }: { show: ShowDetail }): React.JSX.Element {
               </Pressable>
             ) : null}
           </View>
-          {showHeadlinerImage ? (
+          {showVenueImage ? (
             <Pressable
-              testID="show-tabs-header-headliner-image"
-              onPress={() =>
-                headliner
-                  ? router.push(`/artists/${headliner.performer.id}`)
-                  : undefined
-              }
-              disabled={!headliner}
-              accessibilityRole={headliner ? 'link' : 'image'}
-              accessibilityLabel={headlinerImageName}
+              testID="show-tabs-header-venue-image"
+              onPress={() => router.push(`/venues/${show.venue.id}`)}
+              accessibilityRole="link"
+              accessibilityLabel={show.venue.name}
               style={({ pressed }) => [
                 styles.headerImageWrap,
-                pressed && headliner ? { opacity: 0.85 } : null,
+                pressed ? { opacity: 0.85 } : null,
               ]}
             >
               <RemoteImage
-                uri={headlinerImageUrl}
-                name={headlinerImageName}
+                uri={venueImage?.uri ?? null}
+                headers={venueImage?.headers}
+                name={show.venue.name}
                 kind={show.kind as Kind}
                 size="custom"
                 width={84}
@@ -804,7 +810,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerTitle: {
-    fontFamily: 'Georgia',
+    fontFamily: 'Fraunces',
     fontSize: 28,
     fontWeight: '700',
     letterSpacing: -0.6,
@@ -832,13 +838,5 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     letterSpacing: 1.4,
-  },
-  ticketAction: {
-    width: 28,
-    height: 28,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });

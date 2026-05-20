@@ -15,10 +15,10 @@
  * sees the latest token after sign-in/sign-out without being recreated.
  *
  * Font loading: loadAppFonts() is called during mount with the splash
- * screen kept visible until fonts are ready. Today loadAppFonts is a no-op
- * (system font fallbacks), so this gates the UI for one tick. When Geist
- * is wired up later, the gate will hold the splash until the .ttf files
- * are loaded — no other code change required.
+ * screen kept visible until fonts are ready. Fraunces 700 is loaded via
+ * `@expo-google-fonts/fraunces` and registered under the 'Fraunces' family
+ * for heroTitle / headliner usage; Geist Sans still falls back to the
+ * system sans (polish pass).
  */
 
 import React from 'react';
@@ -32,6 +32,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider, useTheme } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { trpc, createQueryClient, createTrpcClient } from '../lib/trpc';
+import { setMobileTelemetryLogger } from '../lib/telemetry';
 import { CacheBridge } from '../lib/cache/CacheBridge';
 import { deleteCacheDatabase } from '../lib/cache';
 import { warmCacheForOfflineUse } from '../lib/cache/warmup';
@@ -50,6 +51,8 @@ import { BannerHost } from '../components/Banner';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { PendingWritesDrawer } from '../components/PendingWritesDrawer';
+import { PreviewMiniPlayer } from '../components/PreviewMiniPlayer';
+import { PreviewPlayerProvider } from '../lib/preview-player-provider';
 import { useNetwork } from '../lib/network';
 
 // Keep the splash screen up until fonts are ready. Errors here are
@@ -87,23 +90,33 @@ export default function RootLayout(): React.JSX.Element {
                   <CacheBridge>
                     <NetworkProvider>
                       <OfflineBridge>
-                        <BannerHost />
-                        <OfflineBanner />
-                        {/*
-                         * Root <Stack> exposes per-screen `presentation`
-                         * options (modal + native swipe-down) to leaf
-                         * route files via `<Stack.Screen options={...} />`.
-                         * Defaults: header hidden, swipe-back gesture on.
-                         */}
-                        <Stack
-                          screenOptions={{
-                            headerShown: false,
-                            gestureEnabled: true,
-                          }}
-                        />
-                        <ToastHost />
-                        <ThemedStatusBar />
-                        <PendingWritesDrawerHost />
+                        <PreviewPlayerProvider>
+                          <BannerHost />
+                          <OfflineBanner />
+                          {/*
+                           * Root <Stack> exposes per-screen `presentation`
+                           * options (modal + native swipe-down) to leaf
+                           * route files via `<Stack.Screen options={...} />`.
+                           * Defaults: header hidden, swipe-back gesture on.
+                           */}
+                          <Stack
+                            screenOptions={{
+                              headerShown: false,
+                              gestureEnabled: true,
+                            }}
+                          />
+                          <ToastHost />
+                          <ThemedStatusBar />
+                          <PendingWritesDrawerHost />
+                          {/*
+                           * Floating stop button — visible whenever the
+                           * preview controller's `isPlaying` flag is set.
+                           * Mounted at this level (above the Stack)
+                           * so it survives navigation between Show /
+                           * Artist / Song detail screens.
+                           */}
+                          <PreviewMiniPlayer />
+                        </PreviewPlayerProvider>
                       </OfflineBridge>
                     </NetworkProvider>
                   </CacheBridge>
@@ -268,6 +281,28 @@ function TrpcProviders({ children }: { children: React.ReactNode }): React.JSX.E
   const [trpcClient] = React.useState(() =>
     createTrpcClient(() => tokenRef.current),
   );
+
+  // Wire the mobile telemetry sink to the tRPC client so any failed
+  // procedure (or out-of-band failure like an R2 PUT 403) round-trips to
+  // Axiom via `telemetry.logClientError`. Reset on unmount so a torn-down
+  // client doesn't keep getting hit.
+  React.useEffect(() => {
+    setMobileTelemetryLogger((payload) => {
+      // Auth required — silently drop reports before sign-in. The user
+      // hasn't acted yet, so anything failing is environmental, and we
+      // don't have a session to attribute it to.
+      if (!tokenRef.current) return;
+      void trpcClient.telemetry.logClientError
+        .mutate({
+          event: payload.event,
+          message: payload.message,
+          level: payload.level ?? 'error',
+          context: payload.context,
+        })
+        .catch(() => undefined);
+    });
+    return () => setMobileTelemetryLogger(null);
+  }, [trpcClient]);
 
   useSignOutCleanup(queryClient, user?.id ?? null);
   usePostSignInWarmup(trpcClient, queryClient, user?.id ?? null);

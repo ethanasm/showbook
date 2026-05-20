@@ -44,6 +44,11 @@ import { useTheme } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
 import { useFeedback } from '../../lib/feedback';
 import { toUserMessage } from '../../lib/errors';
+import {
+  appendRecent,
+  isConversationKind,
+  type SessionRecentShow,
+} from '../../lib/conversationMemory';
 
 const SUGGESTIONS = [
   'Phoebe Bridgers at the Greek 8/15 GA',
@@ -68,6 +73,23 @@ export default function AddChatScreen(): React.JSX.Element {
   const parse = trpc.enrichment.parseChat.useMutation();
 
   // ---------------------------------------------------------------------------
+  // Conversation memory
+  // ---------------------------------------------------------------------------
+  // Tracks the last few shows the user has discussed in this session
+  // so follow-ups like "I also saw him October 23, 2016" can resolve
+  // "him" to the most recent headliner via the parseChat context. The
+  // buffer survives navigation between the chat tab and the form
+  // modal (component stays mounted), and resets when the chat tab
+  // unmounts — so memory doesn't bleed across cold launches or
+  // sign-outs.
+  const [sessionRecent, setSessionRecent] = React.useState<SessionRecentShow[]>([]);
+  // Mirror the buffer into a ref so `submit` reads the freshest value
+  // without re-creating its useCallback identity on every entry — the
+  // chat composer's onPress would otherwise close over a stale array.
+  const sessionRecentRef = React.useRef<SessionRecentShow[]>([]);
+  sessionRecentRef.current = sessionRecent;
+
+  // ---------------------------------------------------------------------------
   // Saved-show confirmation card
   // ---------------------------------------------------------------------------
   // The form routes back with ?savedShowId=<id> after a successful
@@ -77,6 +99,7 @@ export default function AddChatScreen(): React.JSX.Element {
   // deterministic fallback shows up first; the richer message swaps
   // in when the round-trip resolves.
   const summarize = trpc.enrichment.summarizeShowSaved.useMutation();
+  const utils = trpc.useUtils();
   const [confirmation, setConfirmation] = React.useState<{
     showId: string;
     message: string;
@@ -107,6 +130,39 @@ export default function AddChatScreen(): React.JSX.Element {
         // Best-effort: leave the optimistic copy in place. The user
         // can still tap to open the show or send the next message.
       });
+
+    // Pull the saved show into the conversation-memory buffer so
+    // pronoun follow-ups work. We use the canonical record from the
+    // server (post-matchOrCreate*) rather than re-deriving from the
+    // chat history — the form may have edited the headliner / venue
+    // before save, and we want the *truth* in context, not the
+    // user's first guess.
+    utils.client.shows.detail
+      .query({ showId: savedShowId })
+      .then((detail) => {
+        if (!detail) return;
+        const performers = [...(detail.showPerformers ?? [])].sort(
+          (a, b) => a.sortOrder - b.sortOrder,
+        );
+        const headlinerName =
+          detail.productionName ??
+          performers.find((p) => p.role === 'headliner')?.performer.name ??
+          '';
+        if (!headlinerName) return;
+        setSessionRecent((prev) =>
+          appendRecent(prev, {
+            headliner: headlinerName,
+            date: detail.date,
+            venue: detail.venue?.name ?? null,
+            kind: isConversationKind(detail.kind) ? detail.kind : null,
+          }),
+        );
+      })
+      .catch(() => {
+        // Best-effort enrichment — if the detail fetch fails the
+        // optimistic parse-time entry (added in `submit` below) is
+        // still in the buffer.
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.savedShowId]);
 
@@ -118,7 +174,35 @@ export default function AddChatScreen(): React.JSX.Element {
       // the user is moving on, so the recap shouldn't hang around.
       setConfirmation(null);
       try {
-        const parsed = await parse.mutateAsync({ freeText: trimmed });
+        const parsed = await parse.mutateAsync({
+          freeText: trimmed,
+          // Pass the in-session memory so the server can resolve
+          // pronouns ("him", "her") and shorthand ("also", "again")
+          // to a previously named headliner.
+          recentShows: sessionRecentRef.current.length > 0
+            ? sessionRecentRef.current
+            : undefined,
+        });
+        // Optimistically append the parsed headliner so a follow-up
+        // *within the same parse-but-not-yet-saved branch* (user
+        // dismisses the form and immediately types again) still has
+        // context. The detail-fetch effect above will replace this
+        // with a canonical entry once the form is actually saved.
+        // Hoist headliner into a const so the narrowing survives the
+        // setState callback closure — `parsed.headliner` is `string | null`
+        // (post-#286), and TS won't carry the truthy narrow through the
+        // closure boundary on its own.
+        const parsedHeadliner = parsed.headliner;
+        if (parsedHeadliner) {
+          setSessionRecent((prev) =>
+            appendRecent(prev, {
+              headliner: parsedHeadliner,
+              date: parsed.date_hint,
+              venue: parsed.venue_hint,
+              kind: isConversationKind(parsed.kind_hint) ? parsed.kind_hint : null,
+            }),
+          );
+        }
         router.push({
           pathname: '/add/form',
           params: {
@@ -342,7 +426,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   introTitle: {
-    fontFamily: 'Georgia',
+    fontFamily: 'Fraunces',
     fontSize: 22,
     fontWeight: '600',
     lineHeight: 26,

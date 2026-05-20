@@ -2,11 +2,15 @@
  * Home tab — M2.B real implementation.
  *
  * Composition (per `docs/specs/mobile-cloud-claude-prompts.md` C-1):
- *   - HERO — the next ticketed show (or today's, when one exists) gets
- *     a full-bleed image treatment via `HeroShowCard`
- *   - UPCOMING — the remaining ticketed shows after the hero
+ *   - HERO — the next dated upcoming show (ticketed or watching) gets
+ *     a full-bleed image treatment via `HeroShowCard`. Today's ticketed
+ *     show wins when present.
+ *   - UPCOMING — the remaining dated upcoming shows after the hero,
+ *     sorted by date regardless of ticketed/watching state. Matches the
+ *     "N on deck" count in the header.
  *   - RECENTLY ADDED — last 3 past shows by date
- *   - WISHLIST — top 3 watching shows (by `createdAt`)
+ *   - WISHLIST — watching shows without a date (TBD entries) only;
+ *     dated watching shows already appear in Upcoming.
  *
  * The greeting + at-a-glance stats live in `HomeHeader`, which
  * replaces the generic `TopBar` for this screen so the personalised
@@ -94,7 +98,13 @@ function toShowCardShow(row: ShowsListItem): ShowCardShow {
     headlinerSp?.performer.name ??
     firstSp?.performer.name ??
     'Untitled show';
-  const avatarUrl = headlinerSp?.performer.imageUrl ?? firstSp?.performer.imageUrl ?? null;
+  // Festivals shouldn't borrow a lineup member's face — the row would
+  // misrepresent the event ("Bottlerock" with one band's photo). Force
+  // the kind-coloured monogram fallback by clearing the avatar URL.
+  const avatarUrl =
+    row.kind === 'festival'
+      ? null
+      : (headlinerSp?.performer.imageUrl ?? firstSp?.performer.imageUrl ?? null);
 
   // Non-watchable kinds (sports / film / unknown) shouldn't reach the
   // user's saved shows in normal flow — the discover.watch guard rejects
@@ -129,6 +139,11 @@ function heroImageSource(
   row: ShowsListItem,
   token: string | null,
 ): { uri: string; headers?: Record<string, string> } | null {
+  // Festivals get the kind-coloured monogram treatment — using a lineup
+  // member's photo on the full-bleed hero misrepresents the event.
+  if (row.kind === 'festival') {
+    return null;
+  }
   const headlinerSp = [...row.showPerformers]
     .filter((sp) => sp.role === 'headliner')
     .sort((a, b) => a.sortOrder - b.sortOrder)[0];
@@ -200,7 +215,7 @@ export default function HomeScreen(): React.JSX.Element {
     const upcomingAll = rows
       .filter(
         (r) =>
-          r.state === 'ticketed' &&
+          (r.state === 'ticketed' || r.state === 'watching') &&
           r.date !== null &&
           r.date > today &&
           r.id !== nowPlaying?.id,
@@ -218,8 +233,11 @@ export default function HomeScreen(): React.JSX.Element {
       .sort((a, b) => (a.date! < b.date! ? 1 : -1))
       .slice(0, 3);
 
+    // Dated watching shows already render in Upcoming alongside ticketed
+    // entries, so the wishlist section is reserved for TBD-date entries
+    // (the "I want to go but haven't picked a date" bucket).
     const wishlist = rows
-      .filter((r) => r.state === 'watching')
+      .filter((r) => r.state === 'watching' && r.date === null)
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
       .slice(0, 3);
 

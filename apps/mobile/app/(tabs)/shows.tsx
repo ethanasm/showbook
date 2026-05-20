@@ -67,6 +67,7 @@ interface ShowRow {
   seat: string | null;
   pricePaid: string | null;
   productionName: string | null;
+  ticketUrl: string | null;
   venue: { name: string; city: string | null };
   performers: {
     name: string;
@@ -111,6 +112,11 @@ function parseLocalDate(iso: string): Date {
 }
 
 function headlinerAvatarOf(row: ShowRow): string | null {
+  // Festivals shouldn't borrow a lineup member's face — let the
+  // ShowCard avatar fall through to the kind-coloured monogram.
+  if (row.kind === 'festival') {
+    return null;
+  }
   const headlinerSp = [...row.performers]
     .filter((p) => p.role === 'headliner')
     .sort((a, b) => a.sortOrder - b.sortOrder)[0];
@@ -140,6 +146,7 @@ function toShowCard(row: ShowRow): ShowCardShow {
       seat: row.seat,
       price: row.pricePaid ? `$${row.pricePaid}` : null,
       avatarUrl,
+      ticketUrl: row.ticketUrl,
     };
   }
   return {
@@ -156,6 +163,7 @@ function toShowCard(row: ShowRow): ShowCardShow {
     seat: row.seat,
     price: row.pricePaid ? `$${row.pricePaid}` : null,
     avatarUrl,
+    ticketUrl: row.ticketUrl,
   };
 }
 
@@ -204,6 +212,7 @@ export default function ShowsScreen(): React.JSX.Element {
       seat: s.seat,
       pricePaid: s.pricePaid,
       productionName: s.productionName,
+      ticketUrl: s.ticketUrl,
       venue: { name: s.venue.name, city: s.venue.city },
       performers: s.showPerformers.map((sp) => ({
         name: sp.performer.name,

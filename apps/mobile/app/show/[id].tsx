@@ -38,7 +38,7 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 import type { PerformerSetlist } from '@showbook/shared';
-import { getHeadliner, isFeatureOn } from '@showbook/shared';
+import { formatVenueLabel, getHeadliner, isFeatureOn } from '@showbook/shared';
 
 import { TopBar } from '../../components/TopBar';
 import { KindBadge } from '../../components/KindBadge';
@@ -388,9 +388,7 @@ function Facts({ show }: { show: ShowDetail }): React.JSX.Element | null {
   const accent = tokens.kindColor(show.kind as Kind);
 
   const rows: FactRow[] = [];
-  const venueLabel = [show.venue.name, show.venue.city, show.venue.stateRegion]
-    .filter(Boolean)
-    .join(' · ');
+  const venueLabel = formatVenueLabel(show.venue);
   if (venueLabel) {
     rows.push({
       key: 'venue',
@@ -741,7 +739,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   heroTitle: {
-    fontFamily: 'Georgia',
+    fontFamily: 'Fraunces',
     fontSize: 30,
     fontWeight: '600',
     lineHeight: 32,

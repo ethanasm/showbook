@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   title: {
-    fontFamily: 'Georgia',
+    fontFamily: 'Fraunces',
     fontSize: 26,
     fontWeight: '600',
     textAlign: 'center',

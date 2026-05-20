@@ -9,6 +9,7 @@ import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseShowInput,
+  formatRecentShowsContext,
   extractShowFromEmail,
   validateAndDedupTickets,
   extractShowFromPdfText,
@@ -92,6 +93,11 @@ describe('parseShowInput', () => {
     // schema rejected it with z.string() and the user saw a Zod blob
     // toast. Now null flows through and the form opens with the
     // resolved date pre-filled, headliner empty for the user to add.
+    //
+    // With conversation memory (this branch) Groq will *usually*
+    // resolve "him" to a context entry, but this null-tolerance is
+    // still the safety net for prompts that have no context (cold
+    // session) or no matching entry.
     const json = JSON.stringify({
       headliner: null,
       venue_hint: null,
@@ -106,6 +112,142 @@ describe('parseShowInput', () => {
     assert.equal(result.headliner, null);
     assert.equal(result.date_hint, '2016-10-23');
     assert.equal(result.kind_hint, null);
+  });
+
+  it('includes recent-show context in the system prompt when provided', async () => {
+    // Regression: conversation memory lets "I also saw him October 23, 2016"
+    // resolve "him" to the most recent headliner from context. Assert by
+    // intercepting the Groq client call and inspecting the prompt
+    // actually delivered to the model.
+    let capturedSystem = '';
+    __test.setClient({
+      chat: {
+        completions: {
+          create: async (req: {
+            messages: Array<{ role: string; content: string }>;
+          }) => {
+            capturedSystem = req.messages[0]?.content ?? '';
+            return {
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      headliner: 'Bon Iver',
+                      venue_hint: null,
+                      date_hint: '2016-10-23',
+                      seat_hint: null,
+                      kind_hint: 'concert',
+                    }),
+                  },
+                },
+              ],
+            };
+          },
+        },
+      },
+    });
+    const result = await parseShowInput(
+      'I also saw him October 23, 2016',
+      {
+        recentShows: [
+          {
+            headliner: 'Bon Iver',
+            date: '2018-08-05',
+            venue: 'Hollywood Bowl',
+            kind: 'concert',
+          },
+        ],
+      },
+    );
+    assert.equal(result.headliner, 'Bon Iver');
+    assert.equal(result.date_hint, '2016-10-23');
+    assert.match(capturedSystem, /Conversation context/);
+    assert.match(capturedSystem, /Bon Iver/);
+    assert.match(capturedSystem, /Hollywood Bowl/);
+    // The "resolve pronouns" guidance must be present, otherwise the
+    // model has no instruction telling it what to do with the context.
+    assert.match(capturedSystem, /pronoun/i);
+    assert.match(capturedSystem, /him/);
+  });
+
+  it('omits the conversation-context section when no recent shows are passed', async () => {
+    let capturedSystem = '';
+    __test.setClient({
+      chat: {
+        completions: {
+          create: async (req: {
+            messages: Array<{ role: string; content: string }>;
+          }) => {
+            capturedSystem = req.messages[0]?.content ?? '';
+            return {
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      headliner: 'Phoebe Bridgers',
+                      venue_hint: null,
+                      date_hint: null,
+                      seat_hint: null,
+                      kind_hint: 'concert',
+                    }),
+                  },
+                },
+              ],
+            };
+          },
+        },
+      },
+    });
+    await parseShowInput('Phoebe Bridgers');
+    assert.doesNotMatch(capturedSystem, /Conversation context/);
+    assert.doesNotMatch(capturedSystem, /pronoun/i);
+
+    // Same behavior when the array is explicitly empty (e.g. fresh
+    // chat session) — we still skip the context block so the model
+    // doesn't see an empty bulleted list and hallucinate.
+    await parseShowInput('Phoebe Bridgers', { recentShows: [] });
+    assert.doesNotMatch(capturedSystem, /Conversation context/);
+  });
+});
+
+describe('formatRecentShowsContext', () => {
+  it('returns null for empty / undefined / missing context', () => {
+    assert.equal(formatRecentShowsContext(undefined), null);
+    assert.equal(formatRecentShowsContext({}), null);
+    assert.equal(formatRecentShowsContext({ recentShows: [] }), null);
+  });
+
+  it('renders headliner only when other fields are absent', () => {
+    const out = formatRecentShowsContext({
+      recentShows: [{ headliner: 'Bon Iver' }],
+    });
+    assert.equal(out, '- Bon Iver');
+  });
+
+  it('renders headliner + venue + date + kind in the expected order', () => {
+    const out = formatRecentShowsContext({
+      recentShows: [
+        {
+          headliner: 'Bon Iver',
+          venue: 'Hollywood Bowl',
+          date: '2018-08-05',
+          kind: 'concert',
+        },
+      ],
+    });
+    assert.equal(out, '- Bon Iver at Hollywood Bowl on 2018-08-05 (concert)');
+  });
+
+  it('caps the list at 5 entries to keep the prompt cheap', () => {
+    const recentShows = Array.from({ length: 8 }).map((_, i) => ({
+      headliner: `Artist ${i}`,
+    }));
+    const out = formatRecentShowsContext({ recentShows });
+    assert.ok(out);
+    const lines = out!.split('\n');
+    assert.equal(lines.length, 5);
+    assert.equal(lines[0], '- Artist 0');
+    assert.equal(lines[4], '- Artist 4');
   });
 });
 

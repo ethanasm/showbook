@@ -4,15 +4,16 @@
  * Layout follows docs/design/hifi/prefs.jsx (PrefsMobile) within the limits of
  * what M2 actually exposes:
  *   - User card row (avatar circle + name + signed-in email)
- *   - INTEGRATIONS section: Gmail / Ticketmaster / Google Places — display
- *     only on mobile. Tapping a row pushes /integrations/[id], which renders
- *     a "Not yet on mobile" EmptyState; integrations are managed on web. The
- *     connect status text is a placeholder because the prefs router does
- *     not yet expose integration state — see INTEGRATIONS comment below.
- *   - REGION section: shows the user's first saved region from the existing
- *     `preferences.get` query (the prefs router treats regions as a list and
- *     does not name a "default" — we display the first as the effective
- *     default, with a "Not set" affordance otherwise).
+ *   - INTEGRATIONS section: Gmail / Ticketmaster / Google Places.
+ *     Tapping a row pushes /integrations/[id]. Ticketmaster + Google
+ *     Places resolve to the "built-in" detail screen (app-wide API keys,
+ *     always-on), Gmail falls back to the "manage from web" placeholder
+ *     until a mobile OAuth bridge lands. See `useIntegrationStatus` below
+ *     for the row-status branch.
+ *   - REGION section: tappable row that pushes /regions, which lists the
+ *     full set of saved regions and exposes the same add / remove /
+ *     toggle controls as web Preferences (capped at 5 per user via
+ *     `preferences.addRegion`).
  *   - APPEARANCE section: Theme (Light / Dark / System) + Density
  *     (Comfortable / Compact). Density is persisted locally via
  *     useTheme().setDensity (see lib/theme.ts).
@@ -223,21 +224,29 @@ export default function MeScreen(): React.JSX.Element {
             { backgroundColor: colors.surface, borderColor: colors.rule },
           ]}
         >
-          <View style={styles.row}>
+          <Pressable
+            onPress={() => router.push('/regions')}
+            accessibilityRole="button"
+            accessibilityLabel="Edit regions"
+            testID="me-regions-row"
+            style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+          >
+            <MapPin size={18} color={colors.muted} strokeWidth={2} />
             <View style={styles.rowText}>
               <Text style={[styles.rowLabel, { color: colors.ink }]}>Region</Text>
               <Text style={[styles.rowSub, { color: colors.muted }]} numberOfLines={1}>
-                {defaultRegion
-                  ? `${defaultRegion.cityName} · ${defaultRegion.radiusMiles}mi`
-                  : prefsQuery.isLoading
-                    ? 'Loading…'
-                    : 'Not set'}
+                {prefsQuery.isLoading
+                  ? 'Loading…'
+                  : defaultRegion
+                    ? regionRowSubtitle(prefsQuery.data?.regions ?? [], defaultRegion)
+                    : 'Tap to add your first region'}
               </Text>
               <Text style={[styles.rowSub, { color: colors.faint, marginTop: 2 }]} numberOfLines={1}>
                 powers your daily email
               </Text>
             </View>
-          </View>
+            <ChevronRight size={16} color={colors.faint} strokeWidth={2} />
+          </Pressable>
         </View>
 
         {/* SYNC */}
@@ -384,20 +393,41 @@ function IntegrationRowView({
 }
 
 /**
- * Per-row status text. Spotify is the only integration with live
- * connection state today; the others stay on the static "Not connected"
- * placeholder until their respective tRPC procedures land.
+ * Per-row status text.
+ *  - Spotify is a per-user OAuth integration with live connection state.
+ *  - Ticketmaster + Google Places are app-wide API keys baked into the
+ *    Showbook backend (`TICKETMASTER_API_KEY` / `GOOGLE_PLACES_API_KEY`),
+ *    so they're effectively always-on for every signed-in user. The
+ *    `[id].tsx` detail screen explains this when tapped.
+ *  - Gmail is a per-user OAuth flow on web; the mobile OAuth bridge
+ *    isn't wired up yet, so it stays on the placeholder.
  */
 function useIntegrationStatus(id: IntegrationRow['id']): string {
   // The hook always renders — we read it unconditionally and ignore the
   // value for non-Spotify rows. Cheap (cached connectionStatus query).
   const spotify = useSpotifyConnection();
+  if (id === 'ticketmaster' || id === 'google-places') return 'Connected · Built-in';
   if (id !== 'spotify') return 'Not connected';
   if (spotify.connection.status === 'loading') return 'Checking…';
   if (spotify.connection.status === 'disconnected') return 'Not connected';
   return spotify.connection.displayName
     ? `Connected · ${spotify.connection.displayName}`
     : 'Connected';
+}
+
+/**
+ * Subtitle for the Region row. With one region we show the dot-separated
+ * "City · Radius" pattern from the web Preferences page; with multiple
+ * we show the default-region detail plus a "+N more" hint so the user
+ * knows the row is plural.
+ */
+function regionRowSubtitle(
+  regions: readonly { cityName: string; radiusMiles: number }[],
+  primary: { cityName: string; radiusMiles: number },
+): string {
+  const head = `${primary.cityName} · ${primary.radiusMiles}mi`;
+  if (regions.length <= 1) return head;
+  return `${head} · +${regions.length - 1} more`;
 }
 
 function ThemePreferenceSelector(): React.JSX.Element {

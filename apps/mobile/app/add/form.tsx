@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { ChevronLeft, Check } from 'lucide-react-native';
 import { NestableScrollContainer } from 'react-native-draggable-flatlist';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { TopBar } from '../../components/TopBar';
 import {
@@ -39,7 +40,7 @@ import { trpc } from '../../lib/trpc';
 import { useFeedback } from '../../lib/feedback';
 import { toUserMessage } from '../../lib/errors';
 import { runOptimisticMutation } from '../../lib/mutations';
-import { getCacheOutbox } from '../../lib/cache';
+import { getCacheOutbox, invalidateShowsList } from '../../lib/cache';
 import {
   emptyShowFormValues,
   serializeShowFormForKind,
@@ -68,6 +69,7 @@ export default function AddFormScreen(): React.JSX.Element {
   const router = useRouter();
   const params = useLocalSearchParams();
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
   const { showToast } = useFeedback();
 
   const { values, set } = useFormState<ShowFormValues>(
@@ -179,6 +181,7 @@ export default function AddFormScreen(): React.JSX.Element {
         call: (input) => utils.client.shows.create.mutate(input),
         reconcile: () => {
           void utils.shows.list.invalidate();
+          invalidateShowsList(queryClient);
         },
       });
       const newId = result?.id;
@@ -202,7 +205,7 @@ export default function AddFormScreen(): React.JSX.Element {
     } finally {
       setSubmitting(false);
     }
-  }, [values, set, utils, router, showToast]);
+  }, [values, set, utils, router, showToast, queryClient]);
 
   return (
     <>
