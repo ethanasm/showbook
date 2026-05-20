@@ -200,9 +200,16 @@ test('getMediaUploadUrl: returns presigned R2 URL in r2 mode', async () => {
   process.env.R2_ACCOUNT_ID = 'acct123';
   process.env.R2_ACCESS_KEY_ID = 'AK';
   process.env.R2_SECRET_ACCESS_KEY = 'SK';
+  process.env.R2_BUCKET_NAME = 'showbook';
   const url = await getMediaUploadUrl('showbook/x.jpg', 'image/jpeg');
-  assert.match(url, /^https:\/\/[^/]+\.r2\.cloudflarestorage\.com\/showbook\/x\.jpg/);
+  // Path-style host (bucket in path, not subdomain) — required by R2.
+  assert.match(url, /^https:\/\/acct123\.r2\.cloudflarestorage\.com\/showbook\/showbook\/x\.jpg/);
   assert.match(url, /X-Amz-Algorithm=AWS4-HMAC-SHA256/);
+  // R2 returns 403 if the URL carries SDK-default CRC32 checksum query params
+  // because they're computed against an empty body at sign time; the actual
+  // PUT body never matches. The R2 client config disables this — verify it.
+  assert.doesNotMatch(url, /x-amz-checksum-crc32/);
+  assert.doesNotMatch(url, /x-amz-sdk-checksum-algorithm/);
 });
 
 test('getMediaReadUrl: returns presigned R2 URL in r2 mode', async () => {
@@ -210,8 +217,9 @@ test('getMediaReadUrl: returns presigned R2 URL in r2 mode', async () => {
   process.env.R2_ACCOUNT_ID = 'acct123';
   process.env.R2_ACCESS_KEY_ID = 'AK';
   process.env.R2_SECRET_ACCESS_KEY = 'SK';
+  process.env.R2_BUCKET_NAME = 'showbook';
   const url = await getMediaReadUrl('showbook/x.jpg');
-  assert.match(url, /^https:\/\/[^/]+\.r2\.cloudflarestorage\.com\/showbook\/x\.jpg/);
+  assert.match(url, /^https:\/\/acct123\.r2\.cloudflarestorage\.com\/showbook\/showbook\/x\.jpg/);
 });
 
 // ── r2 mode: head + delete via stubbed S3Client.send ──────────────────
