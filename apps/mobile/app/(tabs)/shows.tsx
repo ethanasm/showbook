@@ -62,7 +62,12 @@ interface ShowRow {
   pricePaid: string | null;
   productionName: string | null;
   venue: { name: string; city: string | null };
-  performers: { name: string; role: 'headliner' | 'support' | 'cast'; sortOrder: number }[];
+  performers: {
+    name: string;
+    role: 'headliner' | 'support' | 'cast';
+    sortOrder: number;
+    imageUrl: string | null;
+  }[];
 }
 
 function pad2(n: number): string {
@@ -99,8 +104,17 @@ function parseLocalDate(iso: string): Date {
   return new Date(y, (m ?? 1) - 1, d ?? 1);
 }
 
+function headlinerAvatarOf(row: ShowRow): string | null {
+  const headlinerSp = [...row.performers]
+    .filter((p) => p.role === 'headliner')
+    .sort((a, b) => a.sortOrder - b.sortOrder)[0];
+  const firstSp = [...row.performers].sort((a, b) => a.sortOrder - b.sortOrder)[0];
+  return headlinerSp?.imageUrl ?? firstSp?.imageUrl ?? null;
+}
+
 function toShowCard(row: ShowRow): ShowCardShow {
   const headliner = headlinerOf(row);
+  const avatarUrl = headlinerAvatarOf(row);
   if (row.date) {
     const d = parseLocalDate(row.date);
     return {
@@ -115,6 +129,7 @@ function toShowCard(row: ShowRow): ShowCardShow {
       dow: DOW_SHORT[d.getDay()],
       seat: row.seat,
       price: row.pricePaid ? `$${row.pricePaid}` : null,
+      avatarUrl,
     };
   }
   return {
@@ -129,6 +144,7 @@ function toShowCard(row: ShowRow): ShowCardShow {
     dow: '',
     seat: row.seat,
     price: row.pricePaid ? `$${row.pricePaid}` : null,
+    avatarUrl,
   };
 }
 
@@ -182,6 +198,7 @@ export default function ShowsScreen(): React.JSX.Element {
         name: sp.performer.name,
         role: sp.role,
         sortOrder: sp.sortOrder,
+        imageUrl: sp.performer.imageUrl ?? null,
       })),
     }));
   }, [showsQuery.data]);
