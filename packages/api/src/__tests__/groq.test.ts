@@ -84,6 +84,29 @@ describe('parseShowInput', () => {
       /failed schema validation/,
     );
   });
+
+  it('accepts a null headliner — ambiguous conversational inputs return null instead of crashing', async () => {
+    // Regression for the chat-mode "Add" screen: typing a follow-up
+    // like "I also saw him October 23, 2016" makes Groq emit
+    // `headliner: null` (no name in the text). Before this change the
+    // schema rejected it with z.string() and the user saw a Zod blob
+    // toast. Now null flows through and the form opens with the
+    // resolved date pre-filled, headliner empty for the user to add.
+    const json = JSON.stringify({
+      headliner: null,
+      venue_hint: null,
+      date_hint: '2016-10-23',
+      seat_hint: null,
+      kind_hint: null,
+    });
+    __test.setClient(
+      makeClient(async () => ({ choices: [{ message: { content: json } }] })),
+    );
+    const result = await parseShowInput('I also saw him October 23, 2016');
+    assert.equal(result.headliner, null);
+    assert.equal(result.date_hint, '2016-10-23');
+    assert.equal(result.kind_hint, null);
+  });
 });
 
 describe('extractShowFromEmail', () => {

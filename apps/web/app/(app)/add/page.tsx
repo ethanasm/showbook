@@ -183,7 +183,12 @@ export default function AddPage() {
   ]);
   const [chatInput, setChatInput] = useState("");
   const [chatParsed, setChatParsed] = useState<{
-    headliner: string;
+    // Nullable because parseChat can resolve a date / kind without a
+    // name (conversational follow-ups, "I saw something on 2018-08-05",
+    // etc). The confirm-save path below guards against an empty
+    // headliner and surfaces an assistant message instead of letting
+    // the server reject with a 400.
+    headliner: string | null;
     venue_hint: string | null;
     date_hint: string | null;
     seat_hint: string | null;
@@ -932,6 +937,23 @@ export default function AddPage() {
 
   const handleChatConfirmSave = useCallback(async () => {
     if (!chatParsed) return;
+    if (!chatParsed.headliner) {
+      // parseChat can resolve a date / kind without a name (e.g.
+      // "I saw something October 23, 2016"). Surface that gap as an
+      // assistant message and reset the confirm state instead of
+      // sending an empty `headliner.name` to a Zod-required field.
+      setChatConfirmed(false);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            "Who was the headliner? Reply with the artist / production name and I'll fill in the rest.",
+        },
+      ]);
+      return;
+    }
+    const headlinerName = chatParsed.headliner;
 
     const showKind = chatParsed.kind_hint ?? "concert";
     const showDate =
@@ -940,7 +962,7 @@ export default function AddPage() {
     try {
       const created = await createShow.mutateAsync({
         kind: showKind,
-        headliner: { name: chatParsed.headliner },
+        headliner: { name: headlinerName },
         venue: {
           name: chatParsed.venue_hint ?? "Unknown Venue",
           city: "Unknown",

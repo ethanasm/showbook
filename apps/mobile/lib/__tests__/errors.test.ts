@@ -40,6 +40,31 @@ describe('isInternalErrorMessage', () => {
       true,
     );
   });
+
+  it('detects a Zod schema-validation blob from a Groq-backed procedure', () => {
+    // Regression for the chat-mode "Add" screen: an ambiguous prompt
+    // ("I also saw him October 23, 2016") caused Groq to return
+    // `headliner: null`, the server's z.string() rejected it, and
+    // the raw Zod error JSON ended up as the toast body.
+    assert.equal(
+      isInternalErrorMessage(
+        'Groq response failed schema validation: [\n  {\n    "expected": "string",\n    "code": "invalid_type",\n    "path": ["headliner"],\n    "message": "Invalid input"\n  }\n]',
+      ),
+      true,
+    );
+    assert.equal(
+      isInternalErrorMessage('Failed schema validation: ...'),
+      true,
+    );
+    assert.equal(
+      isInternalErrorMessage('No response from Groq'),
+      true,
+    );
+    assert.equal(
+      isInternalErrorMessage('Failed to parse Groq response as JSON: {malformed}'),
+      true,
+    );
+  });
 });
 
 describe('toUserMessage', () => {
@@ -70,5 +95,18 @@ describe('toUserMessage', () => {
 
   it('falls back when err is an Error with empty message', () => {
     assert.equal(toUserMessage(new Error(''), 'Could not save'), 'Could not save');
+  });
+
+  it('hides a Groq schema-validation dump behind the caller-supplied fallback', () => {
+    const err = new Error(
+      'Groq response failed schema validation: [\n  {\n    "expected": "string",\n    "code": "invalid_type",\n    "path": ["headliner"],\n    "message": "Invalid input"\n  }\n]',
+    );
+    assert.equal(
+      toUserMessage(
+        err,
+        'Couldn’t make sense of that — open the form to enter it manually.',
+      ),
+      'Couldn’t make sense of that — open the form to enter it manually.',
+    );
   });
 });

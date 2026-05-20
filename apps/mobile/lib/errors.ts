@@ -20,6 +20,14 @@ const INTERNAL_PREFIXES = [
   'invalid input syntax',
   'syntaxerror',
   'unique constraint',
+  // Zod schema-validation blobs leak from LLM-backed procedures when
+  // the model returns a shape the server doesn't accept. The error
+  // message is a multi-line JSON dump (path, code, expected/received)
+  // that's actively misleading to a user.
+  'failed schema validation',
+  'groq response failed schema validation',
+  'no response from groq',
+  'failed to parse groq response',
 ];
 
 export function isInternalErrorMessage(message: string): boolean {
