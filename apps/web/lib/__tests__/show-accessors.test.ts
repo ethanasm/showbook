@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildActualSongsFromSetlist,
   getHeadliner,
   getHeadlinerId,
   getHeadlinerImageUrl,
@@ -311,6 +312,69 @@ test("getSupport: returns empty array when no supports", () => {
     ),
     [],
   );
+});
+
+// ── getSupportPerformers ─────────────────────────────────────────────────
+
+// ── buildActualSongsFromSetlist ──────────────────────────────────────────
+
+test("buildActualSongsFromSetlist: returns [] for null / undefined", () => {
+  assert.deepEqual(buildActualSongsFromSetlist(null), []);
+  assert.deepEqual(buildActualSongsFromSetlist(undefined), []);
+});
+
+test("buildActualSongsFromSetlist: returns [] for an empty sections array", () => {
+  assert.deepEqual(buildActualSongsFromSetlist({ sections: [] }), []);
+});
+
+test("buildActualSongsFromSetlist: flattens sections + songs preserving indices", () => {
+  const out = buildActualSongsFromSetlist({
+    sections: [
+      { kind: "set", songs: [{ title: "A" }, { title: "B" }, { title: "C" }] },
+      { kind: "encore", songs: [{ title: "E1" }] },
+    ],
+  });
+  assert.deepEqual(out, [
+    { title: "A", sectionIndex: 0, songIndex: 0, isEncore: false, isOpenerOrCloser: true, note: null },
+    { title: "B", sectionIndex: 0, songIndex: 1, isEncore: false, isOpenerOrCloser: false, note: null },
+    { title: "C", sectionIndex: 0, songIndex: 2, isEncore: false, isOpenerOrCloser: true, note: null },
+    { title: "E1", sectionIndex: 1, songIndex: 0, isEncore: true, isOpenerOrCloser: false, note: null },
+  ]);
+});
+
+test("buildActualSongsFromSetlist: opener+closer flags only fire on non-encore sections", () => {
+  const out = buildActualSongsFromSetlist({
+    sections: [
+      { kind: "encore", songs: [{ title: "Only" }] },
+    ],
+  });
+  // Encore section's only song is neither opener nor closer.
+  assert.equal(out[0].isOpenerOrCloser, false);
+});
+
+test("buildActualSongsFromSetlist: a single-song non-encore section marks the song as both opener and closer", () => {
+  const out = buildActualSongsFromSetlist({
+    sections: [{ kind: "set", songs: [{ title: "Solo" }] }],
+  });
+  assert.equal(out.length, 1);
+  assert.equal(out[0].isOpenerOrCloser, true);
+});
+
+test("buildActualSongsFromSetlist: passes through note when present, defaults to null", () => {
+  const out = buildActualSongsFromSetlist({
+    sections: [
+      { kind: "set", songs: [{ title: "A", note: "intro" }, { title: "B" }] },
+    ],
+  });
+  assert.equal(out[0].note, "intro");
+  assert.equal(out[1].note, null);
+});
+
+test("buildActualSongsFromSetlist: missing section.kind treats the section as non-encore", () => {
+  const out = buildActualSongsFromSetlist({
+    sections: [{ songs: [{ title: "X" }] }],
+  });
+  assert.equal(out[0].isEncore, false);
 });
 
 // ── getSupportPerformers ─────────────────────────────────────────────────

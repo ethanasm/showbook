@@ -21,6 +21,7 @@ import {
   type ShowLike,
 } from "@showbook/shared";
 import { isFeatureOn, isVenuePlaceholder } from "@showbook/shared";
+import { buildActualSongsFromSetlist } from "@/lib/show-accessors";
 import { MediaSection } from "@/components/media";
 import { ShowTabs } from "./ShowTabs";
 import { OverviewTab, type OverviewLineupEntry } from "./OverviewTab";
@@ -213,27 +214,8 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
   }, [show]);
 
   const buildActualSongs = useCallback(
-    (performerId: string): ActualSong[] => {
-      const sl = setlistsMap[performerId];
-      if (!sl) return [];
-      const out: ActualSong[] = [];
-      sl.sections.forEach((section, sIdx) => {
-        const isEncore = section.kind === "encore";
-        section.songs.forEach((song, songIdx) => {
-          out.push({
-            title: song.title,
-            sectionIndex: sIdx,
-            songIndex: songIdx,
-            isEncore,
-            isOpenerOrCloser:
-              (!isEncore && sIdx === 0 && songIdx === 0) ||
-              (!isEncore && songIdx === section.songs.length - 1),
-            note: song.note ?? null,
-          });
-        });
-      });
-      return out;
-    },
+    (performerId: string): ActualSong[] =>
+      buildActualSongsFromSetlist(setlistsMap[performerId]),
     [setlistsMap],
   );
 
