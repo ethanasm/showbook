@@ -111,6 +111,11 @@ function parseLocalDate(iso: string): Date {
 }
 
 function headlinerAvatarOf(row: ShowRow): string | null {
+  // Festivals shouldn't borrow a lineup member's face — let the
+  // ShowCard avatar fall through to the kind-coloured monogram.
+  if (row.kind === 'festival') {
+    return null;
+  }
   const headlinerSp = [...row.performers]
     .filter((p) => p.role === 'headliner')
     .sort((a, b) => a.sortOrder - b.sortOrder)[0];

@@ -27,6 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
 import { ChevronLeft, Image as ImageIcon, RefreshCcw } from 'lucide-react-native';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { TopBar } from '../../components/TopBar';
 import { useTheme } from '../../lib/theme';
@@ -34,6 +35,7 @@ import { useFeedback } from '../../lib/feedback';
 import { trpc } from '../../lib/trpc';
 import { runOptimisticMutation } from '../../lib/mutations';
 import { getCacheOutbox } from '../../lib/cache/db';
+import { invalidateShowsList } from '../../lib/cache/invalidate';
 import {
   useFestivalLineup,
   type FestivalLineupMeta,
@@ -57,6 +59,7 @@ export default function FestivalPosterScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
   const { showToast } = useFeedback();
   const [poster, setPoster] = React.useState<PickedFestivalImage | null>(null);
 
@@ -110,6 +113,7 @@ export default function FestivalPosterScreen(): React.JSX.Element {
         call: (input) => utils.client.shows.create.mutate(input),
         reconcile: () => {
           void utils.shows.list.invalidate();
+          invalidateShowsList(queryClient);
         },
       });
 
@@ -121,7 +125,7 @@ export default function FestivalPosterScreen(): React.JSX.Element {
         router.back();
       }
     },
-    [router, showToast, utils],
+    [router, showToast, utils, queryClient],
   );
 
   const flow = useFestivalLineup({ onSubmit: handleSubmit });

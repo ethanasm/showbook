@@ -35,7 +35,7 @@ import { trpc } from '../../../lib/trpc';
 import { useFeedback } from '../../../lib/feedback';
 import { toUserMessage } from '../../../lib/errors';
 import { runOptimisticMutation } from '../../../lib/mutations';
-import { getCacheOutbox } from '../../../lib/cache';
+import { getCacheOutbox, invalidateShowsList } from '../../../lib/cache';
 import {
   buildShowFormFromDetail,
   serializeShowFormForKind,
@@ -218,6 +218,7 @@ export default function EditShowScreen(): React.JSX.Element {
         reconcile: () => {
           void utils.shows.detail.invalidate({ showId });
           void utils.shows.list.invalidate();
+          invalidateShowsList(queryClient);
         },
       });
       showToast({ kind: 'success', text: 'Saved' });

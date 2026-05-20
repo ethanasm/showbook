@@ -28,7 +28,7 @@ import { useTheme, type ShowState } from '../lib/theme';
 import { trpc } from '../lib/trpc';
 import { useFeedback } from '../lib/feedback';
 import { runOptimisticMutation } from '../lib/mutations';
-import { getCacheOutbox } from '../lib/cache';
+import { getCacheOutbox, invalidateShowsList } from '../lib/cache';
 
 export interface ShowActionSheetProps {
   open: boolean;
@@ -87,6 +87,7 @@ export function ShowActionSheet({
         },
         reconcile: () => {
           void utils.shows.list.invalidate();
+          invalidateShowsList(queryClient);
           void utils.shows.detail.invalidate({ showId });
         },
       });
@@ -108,6 +109,7 @@ export function ShowActionSheet({
         call: (input) => utils.client.shows.delete.mutate(input),
         reconcile: () => {
           void utils.shows.list.invalidate();
+          invalidateShowsList(queryClient);
         },
       });
       showToast({ kind: 'success', text: 'Show deleted' });
