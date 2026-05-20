@@ -170,9 +170,14 @@ export default function VenuesListScreen(): React.JSX.Element {
             />
           )}
           ListHeaderComponent={
-            <Text style={[styles.listLabel, { color: colors.muted }]}>
-              {merged.length} {merged.length === 1 ? 'VENUE' : 'VENUES'}
-            </Text>
+            <View style={styles.listHeader}>
+              <Text style={[styles.listLabel, { color: colors.muted }]}>
+                {merged.length} {merged.length === 1 ? 'VENUE' : 'VENUES'}
+              </Text>
+              <Text style={[styles.listBlurb, { color: colors.muted }]}>
+                Your venue collection — from logged shows and follows.
+              </Text>
+            </View>
           }
         />
       )}
@@ -196,6 +201,9 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 48,
   },
+  listHeader: {
+    paddingBottom: 8,
+  },
   listLabel: {
     fontFamily: 'Geist Sans',
     fontSize: 10.5,
@@ -203,7 +211,13 @@ const styles = StyleSheet.create({
     letterSpacing: 1.05,
     textTransform: 'uppercase',
     paddingHorizontal: 4,
-    paddingBottom: 8,
+  },
+  listBlurb: {
+    fontFamily: 'Geist Sans',
+    fontSize: 13,
+    lineHeight: 18,
+    paddingHorizontal: 4,
+    paddingTop: 4,
   },
   separator: {
     height: 8,
