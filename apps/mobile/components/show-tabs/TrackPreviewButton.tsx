@@ -1,109 +1,29 @@
 /**
  * TrackPreviewButton (mobile) — 24pt ▶ button that lives in the third
- * column of every setlist row. Phase 10 Part B3 ports the web
- * `TrackPreview` component to React Native using the abstracted
- * `PreviewPlayerController`.
+ * column of every setlist row. Mirrors the web `TrackPreview`:
  *
- * Audio playback driver: this component owns a single `PreviewPlayer`
- * provider per show-detail screen. The default driver wraps
- * `expo-audio` so the 30-second preview plays through the device
- * speaker on iOS / Android and through HTMLAudioElement on the Expo
- * web bundle. Tests can pass a custom driver (typically the
- * `NoopPlaybackDriver`) so the suite stays free of the native module.
+ *  - idle ▶ when a preview URL (or Spotify track id) is already cached
+ *  - on tap with neither cached: spins while `resolveTrackPreview`
+ *    runs, then plays the resolved URL (or marks the row unavailable)
+ *  - active: hairline-thick disc with the controller's playback flag
+ *  - disabled (cursor-not-allowed semantics) only when we tried to
+ *    resolve and got nothing
+ *
+ * The `PreviewPlayerProvider` itself lives in
+ * `apps/mobile/lib/preview-player-provider.tsx` and is mounted by
+ * the root `_layout.tsx` so playback survives navigation between
+ * Show / Artist / Song screens.
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { useTheme } from '../../lib/theme';
-import {
-  PreviewPlayerController,
-  type PlaybackDriver,
-  type PreviewHandle,
-  type PreviewPlayerState,
-} from '../../lib/setlist-intel';
-import { ExpoAudioDriver } from '../../lib/setlist-intel/expo-audio-driver';
+import type { PreviewHandle } from '../../lib/setlist-intel';
+import { usePreviewPlayer } from '../../lib/preview-player-provider';
+import { trpc } from '../../lib/trpc';
 
-// ----------------------------------------------------------------------
-// Provider + hook
-// ----------------------------------------------------------------------
-
-interface PreviewPlayerContextValue {
-  controller: PreviewPlayerController;
-  state: PreviewPlayerState;
-}
-
-const PreviewPlayerContext = React.createContext<PreviewPlayerContextValue | null>(
-  null,
-);
-
-export interface PreviewPlayerProviderProps {
-  /**
-   * Inject a custom playback driver — primarily for tests that want to
-   * assert against `NoopPlaybackDriver` without dragging the
-   * `expo-audio` native module into the unit-test loader. When omitted
-   * the provider builds an `ExpoAudioDriver` so iOS / Android / web
-   * bundles all get real audio playback.
-   */
-  driver?: PlaybackDriver;
-  children: React.ReactNode;
-}
-
-export function PreviewPlayerProvider({
-  driver,
-  children,
-}: PreviewPlayerProviderProps): React.JSX.Element {
-  const [state, setState] = React.useState<PreviewPlayerState>({
-    currentTrackKey: null,
-    isPlaying: false,
-  });
-
-  // Build the controller once per provider; preserve identity across
-  // re-renders so the underlying driver isn't torn down on every paint.
-  // The driver gets a callback hook so `didJustFinish` from the audio
-  // element flips the row glyph back to ▶ without forcing the user to
-  // tap stop.
-  const controllerRef = React.useRef<PreviewPlayerController | null>(null);
-  if (controllerRef.current === null) {
-    const resolved =
-      driver ??
-      new ExpoAudioDriver({
-        onEnded: () => controllerRef.current?.handleEnded(),
-      });
-    controllerRef.current = new PreviewPlayerController({
-      driver: resolved,
-      onStateChange: (s) => setState(s),
-    });
-  }
-
-  React.useEffect(() => {
-    const controller = controllerRef.current;
-    return () => {
-      if (controller) {
-        void controller.dispose();
-      }
-    };
-  }, []);
-
-  const value = React.useMemo<PreviewPlayerContextValue>(
-    () => ({ controller: controllerRef.current as PreviewPlayerController, state }),
-    [state],
-  );
-
-  return (
-    <PreviewPlayerContext.Provider value={value}>
-      {children}
-    </PreviewPlayerContext.Provider>
-  );
-}
-
-function usePreviewPlayer(): PreviewPlayerContextValue | null {
-  return React.useContext(PreviewPlayerContext);
-}
-
-// ----------------------------------------------------------------------
-// Button
-// ----------------------------------------------------------------------
+export { PreviewPlayerProvider } from '../../lib/preview-player-provider';
 
 export interface TrackPreviewButtonProps {
   showId: string;
@@ -121,10 +41,24 @@ export function TrackPreviewButton({
   const { tokens } = useTheme();
   const { colors } = tokens;
   const ctx = usePreviewPlayer();
+  const utils = trpc.useUtils();
+  const resolveMutation = trpc.setlistIntel.resolveTrackPreview.useMutation();
+
   const [unavailable, setUnavailable] = React.useState(false);
+  // Local override for the cached preview URL — when the resolver
+  // returns one mid-session, hold onto it so a second tap on the same
+  // row plays immediately without bouncing back through the cache.
+  const [resolved, setResolved] = React.useState<{
+    previewUrl: string | null;
+    spotifyTrackId: string | null;
+  } | null>(null);
+
+  const effectivePreviewUrl = resolved?.previewUrl ?? previewUrl;
+  const effectiveSpotifyId = resolved?.spotifyTrackId ?? spotifyTrackId;
+
   const key = `${showId}:${title.toLowerCase()}`;
   const isActive = ctx?.state.currentTrackKey === key;
-  const hasAnySource = Boolean(previewUrl ?? spotifyTrackId);
+  const isLoading = ctx?.state.loadingKey === key;
 
   // When mounted outside a provider (defensive), render a static slot
   // so the row's grid stays aligned.
@@ -138,22 +72,54 @@ export function TrackPreviewButton({
     );
   }
 
-  const disabled = unavailable || !hasAnySource;
+  const disabled = unavailable;
 
   const handle: PreviewHandle = {
     key,
-    previewUrl,
-    spotifyTrackId,
+    previewUrl: effectivePreviewUrl,
+    spotifyTrackId: effectiveSpotifyId,
     label: title,
   };
 
   const onPress = async () => {
-    if (disabled && !isActive) return;
     if (isActive) {
       await ctx.controller.stop();
       return;
     }
-    await ctx.controller.play(handle, () => setUnavailable(true));
+    if (disabled) return;
+
+    await ctx.controller.play(handle, {
+      resolve: effectivePreviewUrl
+        ? undefined
+        : async () => {
+            const next = await resolveMutation.mutateAsync({
+              showId,
+              title,
+            });
+            setResolved(next);
+            // Update the cached previews map so other rows for this
+            // performer (and a return visit to this show) see the
+            // freshly-resolved URL without re-hitting the resolver.
+            utils.setlistIntel.trackPreviewsForShow.setData(
+              { showId },
+              (prev) => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  previews: {
+                    ...prev.previews,
+                    [title.toLowerCase()]: {
+                      previewUrl: next.previewUrl,
+                      spotifyTrackId: next.spotifyTrackId,
+                    },
+                  },
+                };
+              },
+            );
+            return next;
+          },
+      onUnavailable: () => setUnavailable(true),
+    });
   };
 
   return (
@@ -163,7 +129,13 @@ export function TrackPreviewButton({
       }}
       accessibilityRole="button"
       accessibilityLabel={
-        isActive ? 'Stop preview' : unavailable ? 'Preview unavailable' : 'Play 30-second preview'
+        isActive
+          ? 'Stop preview'
+          : isLoading
+            ? 'Loading preview…'
+            : unavailable
+              ? 'Preview unavailable'
+              : 'Play 30-second preview'
       }
       testID={`track-preview-button-${title.toLowerCase().replace(/\s+/g, '-')}`}
       disabled={disabled && !isActive}
@@ -176,14 +148,22 @@ export function TrackPreviewButton({
         },
       ]}
     >
-      <View
-        style={[
-          styles.glyph,
-          {
-            borderLeftColor: isActive ? colors.accentText : colors.ink,
-          },
-        ]}
-      />
+      {isLoading ? (
+        <ActivityIndicator
+          size="small"
+          color={colors.ink}
+          testID="track-preview-spinner"
+        />
+      ) : (
+        <View
+          style={[
+            styles.glyph,
+            {
+              borderLeftColor: isActive ? colors.accentText : colors.ink,
+            },
+          ]}
+        />
+      )}
     </Pressable>
   );
 }

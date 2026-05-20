@@ -51,6 +51,8 @@ import { BannerHost } from '../components/Banner';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { PendingWritesDrawer } from '../components/PendingWritesDrawer';
+import { PreviewMiniPlayer } from '../components/PreviewMiniPlayer';
+import { PreviewPlayerProvider } from '../lib/preview-player-provider';
 import { useNetwork } from '../lib/network';
 
 // Keep the splash screen up until fonts are ready. Errors here are
@@ -88,23 +90,33 @@ export default function RootLayout(): React.JSX.Element {
                   <CacheBridge>
                     <NetworkProvider>
                       <OfflineBridge>
-                        <BannerHost />
-                        <OfflineBanner />
-                        {/*
-                         * Root <Stack> exposes per-screen `presentation`
-                         * options (modal + native swipe-down) to leaf
-                         * route files via `<Stack.Screen options={...} />`.
-                         * Defaults: header hidden, swipe-back gesture on.
-                         */}
-                        <Stack
-                          screenOptions={{
-                            headerShown: false,
-                            gestureEnabled: true,
-                          }}
-                        />
-                        <ToastHost />
-                        <ThemedStatusBar />
-                        <PendingWritesDrawerHost />
+                        <PreviewPlayerProvider>
+                          <BannerHost />
+                          <OfflineBanner />
+                          {/*
+                           * Root <Stack> exposes per-screen `presentation`
+                           * options (modal + native swipe-down) to leaf
+                           * route files via `<Stack.Screen options={...} />`.
+                           * Defaults: header hidden, swipe-back gesture on.
+                           */}
+                          <Stack
+                            screenOptions={{
+                              headerShown: false,
+                              gestureEnabled: true,
+                            }}
+                          />
+                          <ToastHost />
+                          <ThemedStatusBar />
+                          <PendingWritesDrawerHost />
+                          {/*
+                           * Floating stop button — visible whenever the
+                           * preview controller's `isPlaying` flag is set.
+                           * Mounted at this level (above the Stack)
+                           * so it survives navigation between Show /
+                           * Artist / Song detail screens.
+                           */}
+                          <PreviewMiniPlayer />
+                        </PreviewPlayerProvider>
                       </OfflineBridge>
                     </NetworkProvider>
                   </CacheBridge>
