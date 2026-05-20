@@ -60,6 +60,11 @@ export interface HotPrediction {
   wildcards: PredictedSong[];
   rotation: PredictedSong[];
   confidence: number;
+  /** One-sentence rationale for the headline confidence number,
+   *  surfaced under the percentage in the banner. Null when the
+   *  prediction is on the strong-active-tour happy path and the
+   *  number speaks for itself. */
+  confidenceNote: string | null;
   sampleSize: number;
   tourId: string | null;
   tourName: string | null;
@@ -87,6 +92,7 @@ export interface ColdPrediction {
   sampleSize: 0;
   tourCoverage: 'cold';
   confidence: 0;
+  confidenceNote: null;
   core: [];
   likely: [];
   wildcards: [];
@@ -117,6 +123,12 @@ const TIER_WEIGHTS: Record<TierLabel, number> = {
   d: 0.1,
   e: 0.04,
 };
+
+// Bump whenever the prediction math, bucketing, or confidence formula
+// changes. Folded into `loadCorpusForPrediction`'s signature so the
+// in-DB prediction cache invalidates on the next read instead of
+// serving stale payloads through the 4-hour TTL fallback.
+const PREDICTION_LOGIC_VERSION = 'v2';
 
 const PRIOR_ALPHA = 2;
 const PRIOR_BETA = 2;
@@ -352,7 +364,13 @@ export async function loadCorpusForPrediction(opts: {
 
     return {
       setlists,
-      signature: `${realSig}|${albumSig}`,
+      // PREDICTION_LOGIC_VERSION is stitched into the signature so a
+      // confidence-math change invalidates every cached prediction —
+      // otherwise rows whose corpus hasn't changed since the previous
+      // logic version keep serving the old payload until either the
+      // 4-hour TTL elapses or the artist's setlist.fm coverage shifts.
+      // Bump when prediction confidence / bucketing changes.
+      signature: `${realSig}|${albumSig}|${PREDICTION_LOGIC_VERSION}`,
     };
   });
 }
@@ -918,11 +936,21 @@ export function predictSetlist(opts: {
     tierACount: realTierA.length,
     tier: tier.filter((s) => !s.isSynthetic),
   });
+  const finalConfidence = Math.max(
+    0,
+    Math.min(1, coverage === 'last_year' ? Math.min(confidence, 0.5) : confidence),
+  );
 
   return {
     style: 'stable',
     ...buckets,
-    confidence: Math.max(0, Math.min(1, coverage === 'last_year' ? Math.min(confidence, 0.5) : confidence)),
+    confidence: finalConfidence,
+    confidenceNote: explainConfidence({
+      coverage,
+      confidence: finalConfidence,
+      confidenceSample,
+      targetDate: opts.targetDate,
+    }),
     sampleSize: opts.corpus.filter((r) => !r.isSynthetic).length,
     tourId: activeTourId,
     tourName: active?.tourName ?? null,
@@ -931,6 +959,62 @@ export function predictSetlist(opts: {
     setCountPrediction: computeSetCount(opts.corpus),
     multiNightContext: opts.runContext ?? null,
   };
+}
+
+/**
+ * One-sentence rationale for the headline confidence number. Picks the
+ * dominant factor pulling the score down (no active tour / stale
+ * setlists / inconsistent songs) and phrases it as plain English for
+ * the banner subcopy. Returns null when the prediction is on the
+ * strong active-tour happy path and the number speaks for itself.
+ */
+export function explainConfidence(opts: {
+  coverage: TourCoverage;
+  confidence: number;
+  confidenceSample: TieredSetlist[];
+  targetDate: string;
+}): string | null {
+  if (opts.coverage === 'cold') return null;
+  // Silent above ~65% on an active tour — the number is informative.
+  if (opts.coverage === 'active_tour' && opts.confidence >= 0.65) {
+    return null;
+  }
+  if (opts.confidenceSample.length === 0) {
+    return 'Not enough recent setlist data to score this one with confidence.';
+  }
+  // `confidenceSample` was sorted descending by performanceDate when it
+  // came out of `bucketTiers` (the original corpus query ordered DESC),
+  // so [0] is the latest.
+  const latestDate = opts.confidenceSample[0]?.performanceDate ?? null;
+  const daysSinceLatest = latestDate
+    ? Math.max(
+        0,
+        Math.floor(
+          (new Date(opts.targetDate).getTime() - new Date(latestDate).getTime()) /
+            MS_PER_DAY,
+        ),
+      )
+    : null;
+
+  const monthsAgo = (days: number): string => {
+    if (days < 30) return 'less than a month ago';
+    const months = Math.round(days / 30);
+    return `~${months} month${months === 1 ? '' : 's'} ago`;
+  };
+
+  if (opts.coverage === 'last_year') {
+    if (daysSinceLatest && daysSinceLatest > 60) {
+      return `No active tour — latest setlist was ${monthsAgo(daysSinceLatest)}, so we're working off older shows.`;
+    }
+    return "No active tour right now — confidence reflects last year's shows rather than a live run.";
+  }
+
+  if (opts.coverage === 'recent_tour') {
+    return 'Tour wrapped recently — set may have shifted since the last show we have on file.';
+  }
+
+  // active_tour but middling confidence — usually a consistency issue.
+  return 'Setlist varies a fair amount show-to-show.';
 }
 
 function resolveCoverage(opts: {
@@ -952,6 +1036,7 @@ export function coldPrediction(reason: ColdReason, performerName: string | null 
     sampleSize: 0,
     tourCoverage: 'cold',
     confidence: 0,
+    confidenceNote: null,
     core: [],
     likely: [],
     wildcards: [],
@@ -1031,6 +1116,8 @@ export async function predictedSetlistCached(
         'setCountPrediction' in rawPayload ? rawPayload.setCountPrediction : null,
       multiNightContext:
         'multiNightContext' in rawPayload ? rawPayload.multiNightContext : null,
+      confidenceNote:
+        'confidenceNote' in rawPayload ? rawPayload.confidenceNote : null,
     } as HotPrediction | ColdPrediction;
     log.info(
       {

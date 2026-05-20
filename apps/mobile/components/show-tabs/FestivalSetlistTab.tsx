@@ -113,11 +113,12 @@ export function FestivalSetlistTab(
   const chipGroups: FilterGroup[] = sortedEntries.map((e) => ({
     id: e.performerId,
     name: e.performerName,
-    sublabel: e.role === 'headliner' ? 'Headliner' : undefined,
     // Past: actual song count. Upcoming: per-artist prediction
     // confidence ("82%") so each chip carries a quick read on how
     // strong the prediction below is. Cold-state artists render an
-    // em-dash so the chip width stays consistent.
+    // em-dash so the chip width stays consistent. Role (headliner /
+    // support) is implicit in chip ordering — repeating it as a
+    // sublabel just crowds the rail.
     count: isPast ? e.actualSongs.length : 0,
     badgeText: chipBadge(e, isPast),
   }));

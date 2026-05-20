@@ -692,9 +692,22 @@ export const setlistIntelRouter = router({
       // verify against the predicted song list below.
       const FESTIVAL_CONFIDENCE_CAP = 0.7;
       for (const entry of entries) {
-        const p = entry.prediction as { style: string; confidence?: number };
+        const p = entry.prediction as {
+          style: string;
+          confidence?: number;
+          confidenceNote?: string | null;
+        };
         if (p.style !== 'cold' && typeof p.confidence === 'number') {
+          const before = p.confidence;
           p.confidence = Math.min(p.confidence, FESTIVAL_CONFIDENCE_CAP);
+          // When the cap actually clipped the score, overwrite the
+          // headliner-flavored confidenceNote with the festival-specific
+          // reason so the banner doesn't say "active tour" while the
+          // chip shows a depressed percentage.
+          if (p.confidence < before) {
+            p.confidenceNote =
+              'Festival sets are usually shorter than tour shows — we know the songs, less so the exact subset they\'ll pick.';
+          }
         }
       }
 

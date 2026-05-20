@@ -59,6 +59,7 @@ export type AnyPrediction =
   | {
       style: 'stable';
       confidence: number;
+      confidenceNote?: string | null;
       sampleSize: number;
       tourName: string | null;
       core: {
