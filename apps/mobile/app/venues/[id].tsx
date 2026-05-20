@@ -20,6 +20,7 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Link } from 'expo-router';
@@ -30,6 +31,9 @@ import {
   Calendar,
   Music,
   Image as ImageIcon,
+  BookmarkCheck,
+  BookmarkPlus,
+  Ticket,
 } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { EmptyState } from '../../components/EmptyState';
@@ -49,6 +53,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { runOptimisticMutation } from '../../lib/mutations';
 import { getCacheOutbox } from '../../lib/cache/db';
 import { useFeedback } from '../../lib/feedback';
+import {
+  WATCHED_IDS_CACHE_KEY,
+  useToggleWatch,
+  type WatchToggle,
+} from '../../lib/discover-watch';
 import { venueImageSource } from '../../lib/images';
 
 // Derive screen types from the tRPC vanilla client so drift in the server
@@ -136,6 +145,28 @@ export default function VenueDetailScreen(): React.JSX.Element {
     enabled: Boolean(token) && venueId.length > 0,
   });
 
+  // Watched-event id set drives the per-row "Watching" indicator AND
+  // filters watched rows out of the Upcoming list — once the user
+  // follows an event it should move down to Your Shows on the same
+  // screen instead of staying in two places at once.
+  const watchedQuery = useCachedQuery<readonly string[]>({
+    queryKey: [...WATCHED_IDS_CACHE_KEY],
+    queryFn: () => utils.client.discover.watchedAnnouncementIds.query(),
+    enabled: Boolean(token),
+  });
+  const watchedSet = React.useMemo(
+    () => new Set(watchedQuery.data ?? []),
+    [watchedQuery.data],
+  );
+
+  const onToggleWatch = useToggleWatch({
+    onReconcile: () => {
+      void utils.venues.detail.invalidate({ venueId });
+      void utils.venues.userShows.invalidate({ venueId });
+      void utils.venues.upcomingAnnouncements.invalidate({ venueId });
+    },
+  });
+
   const back = (
     <Pressable
       onPress={() => (router.canGoBack() ? router.back() : router.replace('/venues'))}
@@ -206,7 +237,12 @@ export default function VenueDetailScreen(): React.JSX.Element {
             refreshControl={refreshControl}
           >
             <Hero venue={venue} venueId={venueId} />
-            <Upcoming items={upcoming} loading={upcomingQuery.isLoading} />
+            <Upcoming
+              items={upcoming.filter((a) => !watchedSet.has(a.id))}
+              loading={upcomingQuery.isLoading}
+              watchedSet={watchedSet}
+              onToggleWatch={onToggleWatch}
+            />
             <YourShows
               shows={shows}
               loading={showsQuery.isLoading}
@@ -402,9 +438,13 @@ function FollowVenueButton({
 function Upcoming({
   items,
   loading,
+  watchedSet,
+  onToggleWatch,
 }: {
   items: UpcomingAnnouncement[];
   loading: boolean;
+  watchedSet: Set<string>;
+  onToggleWatch: WatchToggle;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -425,7 +465,12 @@ function Upcoming({
       ) : (
         <View style={styles.upcomingList}>
           {items.map((a) => (
-            <UpcomingRow key={a.id} item={a} />
+            <UpcomingRow
+              key={a.id}
+              item={a}
+              isWatching={watchedSet.has(a.id)}
+              onToggleWatch={onToggleWatch}
+            />
           ))}
         </View>
       )}
@@ -433,12 +478,31 @@ function Upcoming({
   );
 }
 
-function UpcomingRow({ item }: { item: UpcomingAnnouncement }): React.JSX.Element {
+function UpcomingRow({
+  item,
+  isWatching,
+  onToggleWatch,
+}: {
+  item: UpcomingAnnouncement;
+  isWatching: boolean;
+  onToggleWatch: WatchToggle;
+}): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const { showToast } = useFeedback();
   const { month, day, dow } = parseDate(item.showDate);
   const accent = tokens.kindColor(item.kind);
   const title = item.productionName ?? item.headliner;
+  const canWatch = !isNonWatchableKind(item.kind);
+  // The `venues.upcomingAnnouncements` procedure returns raw rows and
+  // doesn't synthesize a Ticketmaster URL from `sourceEventId` the way
+  // `discover.followedFeed` does — fall back here so the Ticket icon
+  // appears whenever we have any way to deep-link.
+  const ticketUrl =
+    item.ticketUrl ??
+    (item.sourceEventId
+      ? `https://www.ticketmaster.com/event/${item.sourceEventId}`
+      : null);
 
   return (
     <View
@@ -464,7 +528,93 @@ function UpcomingRow({ item }: { item: UpcomingAnnouncement }): React.JSX.Elemen
           {title}
         </Text>
       </View>
+      {(canWatch || ticketUrl) && (
+        <View style={styles.upcomingActions}>
+          {canWatch && (
+            <RowIconAction
+              onPress={() => {
+                void hapticSelection();
+                void onToggleWatch(item.id, isWatching);
+              }}
+              accessibilityLabel={
+                isWatching ? 'Stop watching this event' : 'Watch this event'
+              }
+              testID={`venue-upcoming-watch-${item.id}`}
+              active={isWatching}
+              accent={accent}
+              colors={colors}
+            >
+              {isWatching ? (
+                <BookmarkCheck size={14} color={accent} strokeWidth={2} />
+              ) : (
+                <BookmarkPlus size={14} color={colors.muted} strokeWidth={2} />
+              )}
+            </RowIconAction>
+          )}
+          {ticketUrl && (
+            <RowIconAction
+              onPress={() => {
+                void hapticSelection();
+                Linking.openURL(ticketUrl).catch(() => {
+                  showToast({
+                    kind: 'error',
+                    text: "Couldn't open Ticketmaster.",
+                  });
+                });
+              }}
+              accessibilityLabel="Open tickets on Ticketmaster"
+              testID={`venue-upcoming-tickets-${item.id}`}
+              colors={colors}
+            >
+              <Ticket size={14} color={colors.muted} strokeWidth={2} />
+            </RowIconAction>
+          )}
+        </View>
+      )}
     </View>
+  );
+}
+
+/**
+ * Small pill-shaped icon button used by the Upcoming row. Matches the
+ * Discover tab's row actions so the affordance stays consistent across
+ * the two surfaces.
+ */
+function RowIconAction({
+  onPress,
+  accessibilityLabel,
+  testID,
+  active,
+  accent,
+  colors,
+  children,
+}: {
+  onPress: () => void;
+  accessibilityLabel: string;
+  testID?: string;
+  active?: boolean;
+  accent?: string;
+  colors: ReturnType<typeof useTheme>['tokens']['colors'];
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      testID={testID}
+      style={({ pressed }) => [
+        styles.upcomingIconAction,
+        {
+          backgroundColor: active && accent ? `${accent}1f` : colors.surface,
+          borderColor: active && accent ? `${accent}55` : colors.rule,
+          opacity: pressed ? 0.6 : 1,
+        },
+      ]}
+    >
+      {children}
+    </Pressable>
   );
 }
 
@@ -720,6 +870,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     lineHeight: 19,
+  },
+  upcomingActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: 8,
+  },
+  upcomingIconAction: {
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
   },
   showsList: {
     gap: 8,

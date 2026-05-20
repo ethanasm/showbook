@@ -51,7 +51,6 @@ import {
   Ticket,
   Users,
 } from 'lucide-react-native';
-import { useQueryClient } from '@tanstack/react-query';
 import { isNonWatchableKind } from '@showbook/shared';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
 import { SegmentedControl } from '../../components/SegmentedControl';
@@ -65,8 +64,12 @@ import { useNetwork } from '../../lib/network';
 import { useFeedback } from '../../lib/feedback';
 import { hapticSelection } from '../../lib/haptics';
 import { trpc, type RouterOutput } from '../../lib/trpc';
-import { useCachedQuery, getCacheOutbox } from '../../lib/cache';
-import { runOptimisticMutation } from '../../lib/mutations';
+import { useCachedQuery } from '../../lib/cache';
+import {
+  WATCHED_IDS_CACHE_KEY,
+  useToggleWatch,
+  type WatchToggle,
+} from '../../lib/discover-watch';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
 
@@ -79,8 +82,6 @@ type PreferencesPayload = RouterOutput<UtilsClient['preferences']['get']['query'
 type WatchedIds = RouterOutput<UtilsClient['discover']['watchedAnnouncementIds']['query']>;
 type AnnouncementItem = FollowedFeed['items'][number];
 type NearbyAnnouncementItem = NearbyFeed['items'][number];
-
-const WATCHED_IDS_CACHE_KEY = ['mobile', 'discover', 'watchedAnnouncementIds'];
 
 type DiscoverTab = 'venues' | 'artists' | 'regions';
 
@@ -980,8 +981,6 @@ function AnnouncementRow({
   );
 }
 
-type WatchToggle = (announcementId: string, currentlyWatching: boolean) => Promise<void>;
-
 function IconAction({
   onPress,
   accessibilityLabel,
@@ -1022,72 +1021,6 @@ function IconAction({
     >
       {children}
     </Pressable>
-  );
-}
-
-/**
- * Watch / unwatch a Discover announcement through the optimistic mutation
- * runner. Updates the cached `watchedAnnouncementIds` list before the
- * network call so the icon flips instantly; reconciliation invalidates
- * Shows + Discover queries on success so newly-created watchlist shows
- * land in the Shows tab.
- *
- * `isNonWatchableKind` events (sports / film / unknown) can never reach
- * this path because the watch icon is suppressed for them upstream — the
- * server would reject the mutation with BAD_REQUEST anyway.
- */
-function useToggleWatch(): WatchToggle {
-  const utils = trpc.useUtils();
-  const queryClient = useQueryClient();
-  const { showToast } = useFeedback();
-
-  return React.useCallback(
-    async (announcementId, currentlyWatching) => {
-      try {
-        await runOptimisticMutation<{ announcementId: string }, readonly string[] | null, unknown>({
-          mutation: currentlyWatching ? 'discover.unwatchlist' : 'discover.watchlist',
-          input: { announcementId },
-          outbox: getCacheOutbox(),
-          call: (input) =>
-            currentlyWatching
-              ? utils.client.discover.unwatchlist.mutate(input)
-              : utils.client.discover.watchlist.mutate(input),
-          optimistic: {
-            snapshot: () =>
-              queryClient.getQueryData<readonly string[]>(WATCHED_IDS_CACHE_KEY) ?? null,
-            apply: () => {
-              queryClient.setQueryData<readonly string[]>(
-                WATCHED_IDS_CACHE_KEY,
-                (prev) => {
-                  const list = prev ?? [];
-                  if (currentlyWatching) {
-                    return list.filter((id) => id !== announcementId);
-                  }
-                  return list.includes(announcementId) ? list : [...list, announcementId];
-                },
-              );
-            },
-            rollback: (snap) => {
-              queryClient.setQueryData(WATCHED_IDS_CACHE_KEY, snap ?? undefined);
-            },
-          },
-          reconcile: () => {
-            void utils.discover.watchedAnnouncementIds.invalidate();
-            void utils.shows.list.invalidate();
-          },
-        });
-      } catch {
-        // Outbox owns the row now; surface a soft confirmation so the
-        // user knows the change isn't lost.
-        showToast({
-          kind: 'info',
-          text: currentlyWatching
-            ? "We'll stop watching when you're back online."
-            : "We'll watch when you're back online.",
-        });
-      }
-    },
-    [utils, queryClient, showToast],
   );
 }
 
