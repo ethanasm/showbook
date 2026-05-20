@@ -77,6 +77,7 @@ function buildClient(): WarmupClientSurface {
       followedFeed: { query: make({ items: [] }) },
       followedArtistsFeed: { query: make({ items: [] }) },
       nearbyFeed: { query: make({ items: [] }) },
+      watchedAnnouncementIds: { query: make([]) },
     },
   };
 }
