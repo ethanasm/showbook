@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   cta: {
-    borderRadius: 12,
+    borderRadius: 999,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',

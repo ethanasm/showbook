@@ -10,10 +10,11 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { Sheet } from './Sheet';
+import { Button } from './design-system';
 import { useTheme } from '../lib/theme';
 import { trpc } from '../lib/trpc';
 import { useFeedback } from '../lib/feedback';
@@ -155,36 +156,21 @@ export function MarkTicketedSheet({
         />
 
         <View style={styles.actionsRow}>
-          <Pressable
+          <Button
+            label="Cancel"
             onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel"
-            style={({ pressed }) => [
-              styles.cancelBtn,
-              { borderColor: colors.ruleStrong },
-              pressed && { opacity: 0.7 },
-            ]}
-          >
-            <Text style={[styles.cancelLabel, { color: colors.ink }]}>Cancel</Text>
-          </Pressable>
-          <Pressable
+            variant="ghost"
+            size="md"
+          />
+          <Button
+            label={submitting ? 'Saving…' : 'Confirm'}
             onPress={() => void submit()}
             disabled={!canSubmit}
-            accessibilityRole="button"
-            accessibilityLabel="Confirm"
+            loading={submitting}
+            variant="primary"
+            size="md"
             testID="mark-ticketed-confirm"
-            style={({ pressed }) => [
-              styles.confirmBtn,
-              {
-                backgroundColor: colors.accent,
-                opacity: !canSubmit ? 0.5 : pressed ? 0.85 : 1,
-              },
-            ]}
-          >
-            <Text style={[styles.confirmLabel, { color: colors.accentText }]}>
-              {submitting ? 'Saving…' : 'Confirm'}
-            </Text>
-          </Pressable>
+          />
         </View>
       </View>
     </Sheet>
@@ -260,7 +246,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '400',
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -269,26 +255,5 @@ const styles = StyleSheet.create({
     gap: 10,
     justifyContent: 'flex-end',
     marginTop: 6,
-  },
-  cancelBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
-  },
-  cancelLabel: {
-    fontFamily: 'Geist Sans',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  confirmBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 8,
-  },
-  confirmLabel: {
-    fontFamily: 'Geist Sans',
-    fontSize: 13,
-    fontWeight: '600',
   },
 });

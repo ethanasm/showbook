@@ -8,7 +8,8 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '../../lib/theme';
-import { RemoteImage } from '../design-system';
+import { RADII } from '../../lib/theme-utils';
+import { Button, RemoteImage } from '../design-system';
 import { SectionFrame } from './SectionFrame';
 
 export interface OverviewStatCell {
@@ -171,44 +172,16 @@ export function OverviewTab({
       <SectionFrame title="Actions">
         <View style={styles.actionRow}>
           {actions.map((action) => (
-            <Pressable
+            <Button
               key={action.label}
-              onPress={action.onPress}
-              accessibilityRole="button"
-              accessibilityLabel={action.label}
+              label={action.label}
+              onPress={action.onPress ?? (() => undefined)}
+              variant={action.primary ? 'primary' : 'ghost'}
+              danger={action.danger ?? false}
+              leftIcon={action.icon}
+              size="md"
               testID={action.testID}
-              style={({ pressed }) => [
-                styles.actionButton,
-                {
-                  backgroundColor: action.primary
-                    ? colors.accent
-                    : 'transparent',
-                  borderColor: action.danger
-                    ? '#E63946'
-                    : colors.ruleStrong,
-                  opacity: pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              {action.icon ? (
-                <View style={styles.actionIcon}>{action.icon}</View>
-              ) : null}
-              <Text
-                style={[
-                  styles.actionLabel,
-                  {
-                    color: action.primary
-                      ? colors.accentText
-                      : action.danger
-                        ? '#E63946'
-                        : colors.ink,
-                    fontWeight: action.primary ? '600' : '500',
-                  },
-                ]}
-              >
-                {action.label}
-              </Text>
-            </Pressable>
+            />
           ))}
         </View>
       </SectionFrame>
@@ -256,6 +229,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderLeftWidth: 2,
+    borderRadius: RADII.lg,
   },
   lineupAvatar: {
     borderRadius: 22,
@@ -291,21 +265,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  actionIcon: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionLabel: {
-    fontFamily: 'Geist Sans',
-    fontSize: 13,
   },
 });

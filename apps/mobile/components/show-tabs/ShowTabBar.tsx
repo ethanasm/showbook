@@ -13,6 +13,7 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import {
   SHOW_TAB_KEYS,
   type ShowTabBadges,
@@ -136,7 +137,7 @@ const styles = StyleSheet.create({
   badge: {
     paddingHorizontal: 7,
     paddingVertical: 2,
-    borderRadius: 8,
+    borderRadius: RADII.pill,
     minWidth: 18,
     alignItems: 'center',
     justifyContent: 'center',

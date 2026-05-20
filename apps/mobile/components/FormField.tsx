@@ -85,8 +85,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '400',
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderRadius: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
   },
   multiline: {

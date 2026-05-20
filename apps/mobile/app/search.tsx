@@ -395,7 +395,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingVertical: 10,
     paddingHorizontal: 14,
-    borderRadius: 10,
+    borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
   },
   searchInput: {
