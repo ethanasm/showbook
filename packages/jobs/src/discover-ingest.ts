@@ -44,22 +44,43 @@ export function futureISO(months: number): string {
 
 export function determineOnSaleStatus(
   event: TMEvent,
-): 'announced' | 'on_sale' | 'sold_out' {
+): 'announced' | 'presale' | 'on_sale' | 'sold_out' {
   const now = new Date();
-  if (event.dates?.status?.code === 'offsale') return 'sold_out';
   // TM Discovery API uses American spelling 'canceled'; accept both defensively.
   if (event.dates?.status?.code === 'canceled') return 'sold_out';
   if (event.dates?.status?.code === 'cancelled') return 'sold_out';
 
   const publicSale = event.sales?.public;
-  if (publicSale?.startDateTime) {
-    const saleStart = new Date(publicSale.startDateTime);
-    if (saleStart > now) return 'announced';
+  const publicStart = publicSale?.startDateTime
+    ? new Date(publicSale.startDateTime)
+    : null;
+  const publicEnd = publicSale?.endDateTime
+    ? new Date(publicSale.endDateTime)
+    : null;
+
+  // The public sale hasn't opened yet — the event can't be sold out.
+  // Distinguish presale (a currently-active entry in sales.presales[])
+  // from announced (no presale window or all presale windows have passed).
+  // TM emits dates.status.code='offsale' during the presale-only period
+  // because the *public* sale isn't open; trusting that verbatim used to
+  // mark presales as sold out — exactly the contradiction surfaced by
+  // "SOLD OUT — On sale MAY 20".
+  if (publicStart && publicStart > now) {
+    const inPresale = event.sales?.presales?.some((p) => {
+      const start = p.startDateTime ? new Date(p.startDateTime) : null;
+      const end = p.endDateTime ? new Date(p.endDateTime) : null;
+      const startedOrUnknown = !start || start <= now;
+      const notYetEnded = !end || end > now;
+      return startedOrUnknown && notYetEnded;
+    });
+    return inPresale ? 'presale' : 'announced';
   }
-  if (publicSale?.endDateTime) {
-    const saleEnd = new Date(publicSale.endDateTime);
-    if (saleEnd < now) return 'sold_out';
-  }
+
+  // Public sale has started (or there's no public-sale info at all).
+  // From here, explicit 'offsale' or a past endDateTime means sold out.
+  if (event.dates?.status?.code === 'offsale') return 'sold_out';
+  if (publicEnd && publicEnd < now) return 'sold_out';
+
   return 'on_sale';
 }
 

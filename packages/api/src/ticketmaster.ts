@@ -73,6 +73,13 @@ export interface TMEvent {
       startDateTime?: string;
       endDateTime?: string;
     };
+    presales?: Array<{
+      name?: string;
+      startDateTime?: string;
+      endDateTime?: string;
+      url?: string;
+      description?: string;
+    }>;
   };
   classifications?: Array<{
     primary?: boolean;

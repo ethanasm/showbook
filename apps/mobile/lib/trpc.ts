@@ -12,10 +12,13 @@
 
 import { MutationCache, QueryClient } from '@tanstack/react-query';
 import { createTRPCReact, httpBatchLink } from '@trpc/react-query';
+import { observable } from '@trpc/server/observable';
+import type { TRPCLink } from '@trpc/client';
 import superjson from 'superjson';
 import type { AppRouter } from '@showbook/api';
 import { API_URL } from './env';
 import { hapticSuccess, hapticWarning } from './haptics';
+import { reportClientError, describeError } from './telemetry';
 
 export const trpc = createTRPCReact<AppRouter>();
 
@@ -73,9 +76,55 @@ export function createQueryClient(): QueryClient {
   });
 }
 
+/**
+ * `errorReporterLink` reports every failed tRPC operation to the mobile
+ * telemetry sink. This is what gives us Axiom visibility into mobile-side
+ * failures that today are invisible to the server (the user sees a toast,
+ * but ops have no record of the procedure that blew up).
+ *
+ * Two important guards:
+ *   1. Skip the `telemetry.logClientError` op itself — otherwise a logging
+ *      failure would trigger another logging call and so on.
+ *   2. Swallow any reporting error so the original procedure error still
+ *      surfaces to the UI exactly as it did before.
+ */
+function errorReporterLink(): TRPCLink<AppRouter> {
+  return () =>
+    ({ op, next }) =>
+      observable((observer) => {
+        const sub = next(op).subscribe({
+          next: (value) => observer.next(value),
+          error: (err) => {
+            if (op.path !== 'telemetry.logClientError') {
+              try {
+                const data = (err as { data?: { httpStatus?: number; code?: string } })?.data;
+                reportClientError({
+                  event: 'trpc.error',
+                  message: describeError(err),
+                  level: 'error',
+                  context: {
+                    path: op.path,
+                    type: op.type,
+                    httpStatus: data?.httpStatus,
+                    code: data?.code,
+                  },
+                });
+              } catch {
+                // never let telemetry derail the original error.
+              }
+            }
+            observer.error(err);
+          },
+          complete: () => observer.complete(),
+        });
+        return () => sub.unsubscribe();
+      });
+}
+
 export function createTrpcClient(getToken: () => string | null) {
   return trpc.createClient({
     links: [
+      errorReporterLink(),
       httpBatchLink({
         url: `${API_URL}/api/trpc`,
         transformer: superjson,

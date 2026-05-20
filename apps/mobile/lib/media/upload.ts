@@ -17,6 +17,7 @@
  * `over-quota` screen instead of showing a generic toast.
  */
 
+import { reportClientError, describeError } from '../telemetry';
 import {
   OverQuotaError,
   UploadCancelledError,
@@ -213,13 +214,70 @@ async function putToS3(
     });
   } catch (err) {
     if (isAbortError(err)) throw new UploadCancelledError();
+    reportClientError({
+      event: 'upload.put.network_error',
+      level: 'error',
+      message: describeError(err),
+      context: { host: safeHostFromUrl(target.uploadUrl), key: target.key, mimeType: target.mimeType },
+    });
     throw err;
   }
   if (res.status === 402) {
     throw new OverQuotaError('Storage limit reached');
   }
   if (!res.ok) {
+    // R2 (and any S3-compatible service) returns an XML body explaining
+    // the failure — `<Error><Code>SignatureDoesNotMatch</Code>…</Error>`
+    // — but historically we only kept the HTTP status. Capture the body
+    // (clipped) and ship it to Axiom under `mobile.upload.put.failed` so
+    // ops can distinguish auth vs. signature vs. routing failures
+    // without needing the user to dump logs from their phone.
+    const bodyPreview = await readResponseBodyPreview(res);
+    reportClientError({
+      event: 'upload.put.failed',
+      level: 'error',
+      message: `R2 PUT ${res.status}`,
+      context: {
+        status: res.status,
+        host: safeHostFromUrl(target.uploadUrl),
+        key: target.key,
+        mimeType: target.mimeType,
+        bodyPreview,
+      },
+    });
     throw new UploadHttpError(res.status, 'put');
+  }
+}
+
+const RESPONSE_BODY_PREVIEW_BYTES = 1024;
+
+/**
+ * Read up to ~1 KB of the response body. R2's XML error envelope is far
+ * smaller than that (`<Error>…</Error>` is typically under 400 bytes), but
+ * we clip defensively so a misbehaving upstream can't blow up the log
+ * payload. Returns `null` if the body can't be read at all (already
+ * consumed, network drop) — we'd rather log the failure without the body
+ * than swallow the whole event.
+ */
+async function readResponseBodyPreview(res: Response): Promise<string | null> {
+  try {
+    const text = await res.text();
+    if (text.length <= RESPONSE_BODY_PREVIEW_BYTES) return text;
+    return `${text.slice(0, RESPONSE_BODY_PREVIEW_BYTES)}…`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pull the host out of a presigned URL for logging without leaking the
+ * signature. Falls back to a redacted marker if the URL is malformed.
+ */
+function safeHostFromUrl(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return '<malformed-url>';
   }
 }
 

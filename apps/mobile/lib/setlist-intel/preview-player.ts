@@ -23,6 +23,7 @@ export interface PreviewHandle {
   key: string;
   previewUrl: string | null;
   spotifyTrackId: string | null;
+  /** Display label for the floating mini-player. Falls back to the key. */
   label?: string;
 }
 
@@ -36,8 +37,30 @@ export interface PlaybackDriver {
 }
 
 export interface PreviewPlayerState {
+  /** Key of the currently-playing row, or null if nothing is playing. */
   currentTrackKey: string | null;
+  /** Key of the row whose preview URL is being resolved, or null. */
+  loadingKey: string | null;
   isPlaying: boolean;
+  /** Label of the currently-playing row, surfaced by the mini-player. */
+  currentLabel: string | null;
+}
+
+export interface PlayOptions {
+  /**
+   * Async resolver invoked when `handle.previewUrl` is null. Lets the
+   * controller stay free of tRPC / network plumbing — the React layer
+   * passes a closure that hits `setlistIntel.resolveTrackPreview` and
+   * writes the result back into the React Query cache. Return value
+   * mirrors the mutation's shape; only `previewUrl` is consumed by the
+   * driver, `spotifyTrackId` is returned for the caller to persist.
+   */
+  resolve?: () => Promise<{
+    previewUrl: string | null;
+    spotifyTrackId: string | null;
+  }>;
+  /** Fires when no playable URL is reachable — even after `resolve`. */
+  onUnavailable?: () => void;
 }
 
 export interface PreviewPlayerControllerOptions {
@@ -46,13 +69,17 @@ export interface PreviewPlayerControllerOptions {
   onStateChange?: (state: PreviewPlayerState) => void;
 }
 
+const INITIAL_STATE: PreviewPlayerState = {
+  currentTrackKey: null,
+  loadingKey: null,
+  isPlaying: false,
+  currentLabel: null,
+};
+
 export class PreviewPlayerController {
   private driver: PlaybackDriver;
   private onStateChange?: (state: PreviewPlayerState) => void;
-  private state: PreviewPlayerState = {
-    currentTrackKey: null,
-    isPlaying: false,
-  };
+  private state: PreviewPlayerState = { ...INITIAL_STATE };
 
   constructor(opts: PreviewPlayerControllerOptions) {
     this.driver = opts.driver;
@@ -65,35 +92,67 @@ export class PreviewPlayerController {
 
   /**
    * Begin playback for `handle`. When the row is already active, this
-   * toggles to stop (matches the web contract). When no preview URL is
-   * available, `onUnavailable` fires so the row can flip its glyph to
-   * the disabled state and surface a toast.
+   * toggles to stop (matches the web contract). When `handle.previewUrl`
+   * is null and `options.resolve` is provided, the controller calls the
+   * resolver while flipping `loadingKey` so the row can show a spinner;
+   * the resolved URL (if any) is then handed straight to the driver.
+   * When no playable URL is reachable, `onUnavailable` fires so the row
+   * can mark itself disabled.
    */
   async play(
     handle: PreviewHandle,
-    onUnavailable?: () => void,
+    options: PlayOptions = {},
   ): Promise<void> {
     if (this.state.currentTrackKey === handle.key) {
       await this.stop();
       return;
     }
     await this.driver.stop().catch(() => undefined);
-    if (!handle.previewUrl) {
-      onUnavailable?.();
+
+    let previewUrl = handle.previewUrl;
+    if (!previewUrl && options.resolve) {
+      this.setState({
+        currentTrackKey: null,
+        loadingKey: handle.key,
+        isPlaying: false,
+        currentLabel: null,
+      });
+      try {
+        const resolved = await options.resolve();
+        previewUrl = resolved.previewUrl;
+      } catch {
+        this.setState({ ...INITIAL_STATE });
+        options.onUnavailable?.();
+        return;
+      }
+      // Bail if another row started loading mid-resolve — that race
+      // wins and this resolve is stale.
+      if (this.state.loadingKey !== handle.key) return;
+    }
+
+    if (!previewUrl) {
+      this.setState({ ...INITIAL_STATE });
+      options.onUnavailable?.();
       return;
     }
+
     try {
-      await this.driver.play(handle.previewUrl);
-      this.setState({ currentTrackKey: handle.key, isPlaying: true });
+      await this.driver.play(previewUrl);
+      this.setState({
+        currentTrackKey: handle.key,
+        loadingKey: null,
+        isPlaying: true,
+        currentLabel: handle.label ?? null,
+      });
     } catch {
-      this.setState({ currentTrackKey: null, isPlaying: false });
-      onUnavailable?.();
+      this.setState({ ...INITIAL_STATE });
+      options.onUnavailable?.();
     }
   }
 
   async stop(): Promise<void> {
     await this.driver.stop().catch(() => undefined);
-    this.setState({ currentTrackKey: null, isPlaying: false });
+    this.setState({ ...INITIAL_STATE });
   }
 
   /**
@@ -102,7 +161,7 @@ export class PreviewPlayerController {
    * flips back to the idle ▶ glyph.
    */
   handleEnded(): void {
-    this.setState({ currentTrackKey: null, isPlaying: false });
+    this.setState({ ...INITIAL_STATE });
   }
 
   async dispose(): Promise<void> {

@@ -40,7 +40,9 @@ import {
   StyleSheet,
   ActivityIndicator,
   Linking,
+  type LayoutChangeEvent,
 } from 'react-native';
+import Svg, { Line } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import {
   BookmarkCheck,
@@ -118,6 +120,7 @@ function formatOnSale(value: string | Date | null): string | null {
 
 const ON_SALE_LABEL: Record<AnnouncementItem['onSaleStatus'], string> = {
   announced: 'Announced',
+  presale: 'Presale',
   on_sale: 'On sale',
   sold_out: 'Sold out',
 };
@@ -808,6 +811,51 @@ function EmptyForTab({
   );
 }
 
+/**
+ * Renders -45° diagonal stripes scaled to the parent card's measured
+ * dimensions. Used as a background layer on sold-out announcements so the
+ * row is recognisably struck through without obscuring the text. The
+ * comment in this file's header (iOS #263) explains why SVG Pattern/Mask
+ * is off the table — we draw explicit <Line> elements instead.
+ */
+function SoldOutStripes({
+  color,
+  width,
+  height,
+}: {
+  color: string;
+  width: number;
+  height: number;
+}): React.JSX.Element | null {
+  if (width <= 0 || height <= 0) return null;
+  const spacing = 9;
+  const lines: React.ReactElement[] = [];
+  for (let x = -height; x < width; x += spacing) {
+    lines.push(
+      <Line
+        key={x}
+        x1={x}
+        y1={0}
+        x2={x + height}
+        y2={height}
+        stroke={color}
+        strokeWidth={1}
+        opacity={0.5}
+      />,
+    );
+  }
+  return (
+    <Svg
+      width={width}
+      height={height}
+      pointerEvents="none"
+      style={StyleSheet.absoluteFill}
+    >
+      {lines}
+    </Svg>
+  );
+}
+
 function AnnouncementRow({
   item,
   isWatching,
@@ -826,6 +874,17 @@ function AnnouncementRow({
   const onSale = formatOnSale(item.onSaleDate);
   const onSaleLabel = ON_SALE_LABEL[item.onSaleStatus];
   const ticketUrl = item.ticketUrl;
+  const isSoldOut = item.onSaleStatus === 'sold_out';
+  const [cardSize, setCardSize] = React.useState<{ w: number; h: number }>({
+    w: 0,
+    h: 0,
+  });
+  const onCardLayout = React.useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setCardSize((prev) =>
+      prev.w === width && prev.h === height ? prev : { w: width, h: height },
+    );
+  }, []);
   const title = item.productionName ?? item.headliner;
   const venueLabel = [item.venue.name, item.venue.city].filter(Boolean).join(' · ');
   const support =
@@ -851,6 +910,7 @@ function AnnouncementRow({
   return (
     <Pressable
       onPress={onPress}
+      onLayout={isSoldOut ? onCardLayout : undefined}
       style={({ pressed }) => [
         styles.card,
         {
@@ -858,9 +918,17 @@ function AnnouncementRow({
           borderColor: colors.rule,
           borderLeftColor: accent,
         },
+        isSoldOut && styles.cardSoldOut,
         pressed && { opacity: 0.9 },
       ]}
     >
+      {isSoldOut && (
+        <SoldOutStripes
+          color={colors.rule}
+          width={cardSize.w}
+          height={cardSize.h}
+        />
+      )}
       <View style={styles.cardHeaderRow}>
         <View style={styles.dateBlock}>
           <Text style={[styles.dateMonth, { color: colors.muted }]}>{month}</Text>
@@ -1203,6 +1271,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderLeftWidth: 3,
     gap: 6,
+  },
+  cardSoldOut: {
+    overflow: 'hidden',
   },
   cardHeaderRow: {
     flexDirection: 'row',

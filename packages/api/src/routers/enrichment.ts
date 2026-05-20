@@ -237,17 +237,48 @@ export const enrichmentRouter = router({
   // ---------------------------------------------------------------------------
   // parseChat — LLM free-text parsing
   // ---------------------------------------------------------------------------
+  //
+  // Accepts an optional `recentShows` array — shows the user has
+  // already discussed in this conversation. The Groq prompt uses it
+  // to resolve pronouns and shorthand references ("him", "her",
+  // "also", "again", "that one") to a previously named headliner,
+  // so multi-turn flows like:
+  //
+  //   user: "Bon Iver at the Hollywood Bowl August 5, 2018"
+  //   [...saved...]
+  //   user: "I also saw him October 23, 2016"
+  //
+  // resolve "him" → "Bon Iver" instead of returning an empty headliner.
   parseChat: protectedProcedure
     .input(
       z.object({
         freeText: z.string().min(1),
+        // Cap at 5 — anything older than that has very low signal for
+        // pronoun resolution and burns tokens.
+        recentShows: z
+          .array(
+            z.object({
+              headliner: z.string().min(1).max(200),
+              date: z.string().max(40).nullable().optional(),
+              venue: z.string().max(200).nullable().optional(),
+              kind: z
+                .enum(['concert', 'theatre', 'comedy', 'festival'])
+                .nullable()
+                .optional(),
+            }),
+          )
+          .max(5)
+          .optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       enforceLLMQuota(ctx.session.user.id);
       return withTrace(
         'trpc.enrichment.parseChat',
-        () => parseShowInput(input.freeText),
+        () =>
+          parseShowInput(input.freeText, {
+            recentShows: input.recentShows,
+          }),
         { userId: ctx.session.user.id, tags: ['enrichment', 'llm'] },
       );
     }),
