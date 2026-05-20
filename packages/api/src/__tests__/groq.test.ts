@@ -15,6 +15,7 @@ import {
   extractCast,
   extractFestivalLineupFromImage,
   extractFestivalLineupFromPdfText,
+  summarizeShowSaved,
   __test,
   type ExtractedTicketInfo,
 } from '../groq';
@@ -495,6 +496,77 @@ describe('extractFestivalLineupFromPdfText', () => {
     );
     const result = await extractFestivalLineupFromPdfText('text');
     assert.deepEqual(result.artists, []);
+  });
+});
+
+describe('summarizeShowSaved', () => {
+  it('returns the Groq message when the call succeeds', async () => {
+    const json = JSON.stringify({
+      message:
+        'Got it — Bon Iver at the Hollywood Bowl is in your logbook. Want to add another?',
+    });
+    __test.setClient(
+      makeClient(async () => ({ choices: [{ message: { content: json } }] })),
+    );
+    const out = await summarizeShowSaved({
+      kind: 'concert',
+      title: 'Bon Iver',
+      venueName: 'Hollywood Bowl',
+      venueCity: 'Los Angeles',
+      date: '2018-08-05',
+      state: 'past',
+      supportingActs: [],
+    });
+    assert.ok(out);
+    assert.match(out, /Bon Iver/);
+    assert.match(out, /Hollywood Bowl/);
+  });
+
+  it('returns null when GROQ_API_KEY is missing (deterministic-fallback path)', async () => {
+    delete process.env.GROQ_API_KEY;
+    const out = await summarizeShowSaved({
+      kind: 'concert',
+      title: 'Bon Iver',
+      venueName: 'Hollywood Bowl',
+      date: '2018-08-05',
+      state: 'past',
+      supportingActs: [],
+    });
+    assert.equal(out, null);
+  });
+
+  it('returns null when the schema fails (caller falls back)', async () => {
+    __test.setClient(
+      makeClient(async () => ({
+        choices: [{ message: { content: '{"unexpected": true}' } }],
+      })),
+    );
+    const out = await summarizeShowSaved({
+      kind: 'concert',
+      title: 'Bon Iver',
+      venueName: 'Hollywood Bowl',
+      date: '2018-08-05',
+      state: 'past',
+      supportingActs: [],
+    });
+    assert.equal(out, null);
+  });
+
+  it('returns null when the SDK throws', async () => {
+    __test.setClient(
+      makeClient(async () => {
+        throw new Error('rate limited');
+      }),
+    );
+    const out = await summarizeShowSaved({
+      kind: 'concert',
+      title: 'Bon Iver',
+      venueName: 'Hollywood Bowl',
+      date: null,
+      state: 'past',
+      supportingActs: [],
+    });
+    assert.equal(out, null);
   });
 });
 

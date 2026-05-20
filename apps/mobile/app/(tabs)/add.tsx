@@ -8,6 +8,11 @@
  * Errors fall through to the form with whatever raw text the user
  * entered — they can always finish by hand. The chat surface is a
  * convenience, never a hard dependency.
+ *
+ * When the form saves successfully, it routes back here with a
+ * `savedShowId` param. We render a confirmation card (Groq-summarized
+ * with a deterministic fallback) above the suggestions so the user
+ * can describe another show without losing context.
  */
 
 import React from 'react';
@@ -23,8 +28,16 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { ArrowRight, Image as ImageIcon, Sparkles, PenLine } from 'lucide-react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  ArrowRight,
+  Check,
+  ChevronRight,
+  Image as ImageIcon,
+  Sparkles,
+  PenLine,
+  X,
+} from 'lucide-react-native';
 
 import { TopBar } from '../../components/TopBar';
 import { useTheme } from '../../lib/theme';
@@ -37,20 +50,72 @@ const SUGGESTIONS = [
   'Tyler the Creator MSG Sep 22 sec 224',
 ];
 
+function paramString(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] ?? '';
+  return value ?? '';
+}
+
 export default function AddChatScreen(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams();
   const { showToast } = useFeedback();
 
   const [text, setText] = React.useState('');
   const parse = trpc.enrichment.parseChat.useMutation();
 
+  // ---------------------------------------------------------------------------
+  // Saved-show confirmation card
+  // ---------------------------------------------------------------------------
+  // The form routes back with ?savedShowId=<id> after a successful
+  // create. We capture the id once into local state, immediately
+  // clear it from the route so a tab re-focus doesn't re-trigger the
+  // card, then fire the Groq summary in the background. The
+  // deterministic fallback shows up first; the richer message swaps
+  // in when the round-trip resolves.
+  const summarize = trpc.enrichment.summarizeShowSaved.useMutation();
+  const [confirmation, setConfirmation] = React.useState<{
+    showId: string;
+    message: string;
+  } | null>(null);
+
+  React.useEffect(() => {
+    const savedShowId = paramString(params.savedShowId);
+    if (!savedShowId) return;
+    if (confirmation && confirmation.showId === savedShowId) return;
+
+    setConfirmation({
+      showId: savedShowId,
+      message: 'Saved. Polishing the recap…',
+    });
+    // Strip the param so a later focus / re-mount doesn't re-fire.
+    router.setParams({ savedShowId: '' });
+
+    summarize
+      .mutateAsync({ showId: savedShowId })
+      .then((res) => {
+        setConfirmation((prev) =>
+          prev && prev.showId === savedShowId
+            ? { showId: savedShowId, message: res.message }
+            : prev,
+        );
+      })
+      .catch(() => {
+        // Best-effort: leave the optimistic copy in place. The user
+        // can still tap to open the show or send the next message.
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.savedShowId]);
+
   const submit = React.useCallback(
     async (raw: string) => {
       const trimmed = raw.trim();
       if (trimmed.length === 0) return;
+      // Sending a new message clears the previous confirmation card —
+      // the user is moving on, so the recap shouldn't hang around.
+      setConfirmation(null);
       try {
         const parsed = await parse.mutateAsync({ freeText: trimmed });
         router.push({
@@ -106,16 +171,68 @@ export default function AddChatScreen(): React.JSX.Element {
           contentContainerStyle={styles.scrollPad}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.intro}>
-            <Sparkles size={20} color={colors.accent} strokeWidth={1.6} />
-            <Text style={[styles.introTitle, { color: colors.ink }]}>
-              Just describe the show
-            </Text>
-            <Text style={[styles.introBody, { color: colors.muted }]}>
-              Headliner, venue, date — any order, any abbreviation. We’ll fill in
-              the rest and let you tweak it.
-            </Text>
-          </View>
+          {confirmation ? (
+            <View
+              style={[
+                styles.confirmCard,
+                { borderColor: colors.rule, backgroundColor: colors.surface },
+              ]}
+              testID="add-saved-confirmation"
+            >
+              <View
+                style={[
+                  styles.confirmIcon,
+                  { backgroundColor: colors.accentFaded },
+                ]}
+              >
+                <Check size={14} color={colors.accent} strokeWidth={2.6} />
+              </View>
+              <View style={styles.confirmBody}>
+                <Text style={[styles.confirmText, { color: colors.ink }]}>
+                  {confirmation.message}
+                </Text>
+                <View style={styles.confirmActions}>
+                  <Pressable
+                    onPress={() => router.push(`/show/${confirmation.showId}`)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open the show I just added"
+                    style={({ pressed }) => [
+                      styles.confirmAction,
+                      pressed && { opacity: 0.7 },
+                    ]}
+                  >
+                    <Text style={[styles.confirmActionText, { color: colors.accent }]}>
+                      Open show
+                    </Text>
+                    <ChevronRight size={12} color={colors.accent} strokeWidth={2.4} />
+                  </Pressable>
+                </View>
+              </View>
+              <Pressable
+                onPress={() => setConfirmation(null)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss"
+                style={({ pressed }) => [
+                  styles.confirmDismiss,
+                  pressed && { opacity: 0.6 },
+                ]}
+              >
+                <X size={14} color={colors.faint} strokeWidth={2} />
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.intro}>
+              <Sparkles size={20} color={colors.accent} strokeWidth={1.6} />
+              <Text style={[styles.introTitle, { color: colors.ink }]}>
+                Just describe the show
+              </Text>
+              <Text style={[styles.introBody, { color: colors.muted }]}>
+                Headliner, venue, date — any order, any abbreviation. We’ll fill in
+                the rest and let you tweak it.
+              </Text>
+            </View>
+          )}
 
           <View style={styles.suggestions}>
             {SUGGESTIONS.map((s) => (
@@ -298,5 +415,54 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist Sans',
     fontSize: 12,
     lineHeight: 16,
+  },
+  confirmCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+  },
+  confirmIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  confirmBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 8,
+  },
+  confirmText: {
+    fontFamily: 'Geist Sans',
+    fontSize: 14,
+    lineHeight: 19,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  confirmAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  confirmActionText: {
+    fontFamily: 'Geist Sans',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  confirmDismiss: {
+    width: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
   },
 });

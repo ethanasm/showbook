@@ -20,11 +20,19 @@ import { VenueTypeahead, type VenueSuggestion } from './VenueTypeahead';
 import { LineupEditor } from './LineupEditor';
 import { Collapsible } from './Collapsible';
 import { useTheme } from '../lib/theme';
+import { normalizeDashes } from '../lib/dateInput';
 import type {
   PerformerRow,
   ShowFormKind,
   ShowFormValues,
 } from '../lib/showForm';
+
+export interface ShowFormErrors {
+  title?: string;
+  venue?: string;
+  date?: string;
+  endDate?: string;
+}
 
 const KIND_OPTIONS: { value: ShowFormKind; label: string }[] = [
   { value: 'concert', label: 'Concert' },
@@ -53,6 +61,14 @@ export interface ShowFormFieldsProps {
   venueSuggestions: VenueSuggestion[];
   venueLoading: boolean;
   onVenueSearch: (q: string) => void;
+  /**
+   * Per-field validation errors rendered inline under the matching
+   * input. The parent screen owns the validation logic and clears
+   * errors as the user types (handled here automatically via the
+   * `clearError` callback wired into each `onChangeText`).
+   */
+  errors?: ShowFormErrors;
+  clearError?: (key: keyof ShowFormErrors) => void;
 }
 
 export function ShowFormFields({
@@ -61,6 +77,8 @@ export function ShowFormFields({
   venueSuggestions,
   venueLoading,
   onVenueSearch,
+  errors,
+  clearError,
 }: ShowFormFieldsProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -80,13 +98,17 @@ export function ShowFormFields({
       <FormField
         label={TITLE_LABEL[values.kind]}
         value={values.title}
-        onChangeText={(v) => set('title', v)}
+        onChangeText={(v) => {
+          set('title', v);
+          clearError?.('title');
+        }}
         placeholder={TITLE_PLACEHOLDER[values.kind]}
         autoCapitalize="words"
+        error={errors?.title}
         testID="title-input"
       />
 
-      <FormField label="Venue">
+      <FormField label="Venue" error={errors?.venue}>
         <VenueTypeahead
           value={values.venueQuery}
           onChange={(v) => {
@@ -94,6 +116,7 @@ export function ShowFormFields({
             if (values.venue && v !== values.venue.name) {
               set('venue', null);
             }
+            clearError?.('venue');
           }}
           onSelect={(venue) => {
             set('venue', {
@@ -104,6 +127,7 @@ export function ShowFormFields({
               country: venue.country ?? null,
             });
             set('venueQuery', venue.name);
+            clearError?.('venue');
           }}
           onSearch={onVenueSearch}
           suggestions={venueSuggestions}
@@ -131,18 +155,35 @@ export function ShowFormFields({
           label={isFestival ? 'Start date' : 'Date'}
           flex={1}
           value={values.date}
-          onChangeText={(v) => set('date', v)}
+          onChangeText={(v) => {
+            // Normalize en-dash / em-dash / other Unicode dash variants
+            // to ASCII hyphen on every keystroke. iOS smart punctuation
+            // can silently substitute en-dash (U+2013) inside a date,
+            // and the field looks identical to the user but fails the
+            // YYYY-MM-DD validator. Stripping eagerly means the user
+            // can't accidentally end up with a "wrong" date that looks
+            // right.
+            set('date', normalizeDashes(v));
+            clearError?.('date');
+          }}
           placeholder="YYYY-MM-DD"
           autoCapitalize="none"
+          keyboardType="numbers-and-punctuation"
+          error={errors?.date}
         />
         {isFestival ? (
           <FormField
             label="End date"
             flex={1}
             value={values.endDate}
-            onChangeText={(v) => set('endDate', v)}
+            onChangeText={(v) => {
+              set('endDate', normalizeDashes(v));
+              clearError?.('endDate');
+            }}
             placeholder="YYYY-MM-DD"
             autoCapitalize="none"
+            keyboardType="numbers-and-punctuation"
+            error={errors?.endDate}
           />
         ) : null}
       </FormRow>

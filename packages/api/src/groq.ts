@@ -153,7 +153,7 @@ export async function parseShowInput(
     {
       role: 'system' as const,
       content:
-        'You are a structured data extractor for a show tracking app. Extract show details from the user\'s free-text input. Return ONLY a JSON object with these fields: headliner (string), venue_hint (string or null), date_hint (string or null), seat_hint (string or null), kind_hint (one of: concert, theatre, comedy, festival, or null). If a field cannot be determined, set it to null.',
+        'You are a structured data extractor for a show tracking app. Extract show details from the user\'s free-text input. Return ONLY a JSON object with these fields: headliner (string), venue_hint (string or null), date_hint (string in strict YYYY-MM-DD format or null), seat_hint (string or null), kind_hint (one of: concert, theatre, comedy, festival, or null). For date_hint: only emit YYYY-MM-DD (e.g. "2018-08-05"). If the user gives a partial date with no year, assume the closest future date; if no month/day at all, return null. Never emit prose like "August 5, 2018" or slash-separated dates. If any other field cannot be determined, set it to null.',
     },
     { role: 'user' as const, content: freeText },
   ];
@@ -686,6 +686,90 @@ export async function generateHealthSummaryPreamble(
     const parsed = preambleSchema.safeParse(raw);
     if (!parsed.success) return null;
     const text = parsed.data.preamble.trim();
+    return text.length > 0 ? text : null;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// summarizeShowSaved — chat-style confirmation after adding a show
+// ---------------------------------------------------------------------------
+
+export interface ShowSavedSummaryInput {
+  kind: 'concert' | 'theatre' | 'comedy' | 'festival';
+  title: string;
+  venueName: string;
+  venueCity?: string | null;
+  /** YYYY-MM-DD calendar date, or null when not yet pinned down. */
+  date: string | null;
+  /** Optional festival end date YYYY-MM-DD. */
+  endDate?: string | null;
+  /** Was this show created in the past, ticketed-future, or watching state? */
+  state: 'past' | 'ticketed' | 'watching';
+  /** Lineup / support names, in sortOrder. Used to colour the message. */
+  supportingActs: string[];
+}
+
+const showSavedSchema = z.object({
+  message: z.string().min(1).max(280),
+});
+
+/**
+ * Render a short chat-style confirmation that the show was saved.
+ * The chat screen displays this above the composer so the user can
+ * keep going — "Got it, X is in the books. Anything else?" register.
+ *
+ * Returns null on any failure (missing key, malformed output) so the
+ * caller can fall back to a deterministic template.
+ */
+export async function summarizeShowSaved(
+  input: ShowSavedSummaryInput,
+): Promise<string | null> {
+  if (!process.env.GROQ_API_KEY) return null;
+
+  const messages = [
+    {
+      role: 'system' as const,
+      content:
+        'You write a one-sentence chat-style confirmation that a show was added to the user\'s personal entertainment tracker. ' +
+        'Voice: warm, factual, low-key — like a friend acknowledging "got it". ' +
+        'Reference the headliner / production name and the venue. Optionally reference the date in a casual way ' +
+        '("next Friday", "in August", "back in 2018") only if it adds clarity; never just echo "YYYY-MM-DD". ' +
+        'End with a brief invitation to add another or do something else (e.g. "Anything else?" / "What else?"). ' +
+        'Hard cap 35 words. Plain prose, no markdown, no emoji, no exclamation marks. ' +
+        'Return ONLY a JSON object: {"message": "..."}.',
+    },
+    {
+      role: 'user' as const,
+      content: JSON.stringify(input),
+    },
+  ];
+
+  try {
+    const result = await traceLLM({
+      name: 'groq.summarizeShowSaved',
+      model: MODEL_TEXT,
+      input: messages,
+      modelParameters: { response_format: 'json_object', temperature: 0.6, reasoning_effort: TEXT_REASONING_EFFORT },
+      run: () =>
+        groq().chat.completions.create({
+          model: MODEL_TEXT,
+          messages,
+          response_format: { type: 'json_object' },
+          temperature: 0.6,
+          reasoning_effort: TEXT_REASONING_EFFORT,
+        }),
+      extractUsage: groqUsage,
+      extractOutput: pickContent,
+    });
+
+    const content = pickContent(result);
+    if (!content) return null;
+    const raw = JSON.parse(content) as unknown;
+    const parsed = showSavedSchema.safeParse(raw);
+    if (!parsed.success) return null;
+    const text = parsed.data.message.trim();
     return text.length > 0 ? text : null;
   } catch {
     return null;
