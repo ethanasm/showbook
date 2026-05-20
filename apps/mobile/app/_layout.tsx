@@ -187,6 +187,8 @@ function OfflineBridge({ children }: { children: React.ReactNode }): React.JSX.E
           return swallowAlreadyInState(() => c.venues.follow.mutate(payload));
         case 'venues.unfollow':
           return swallowAlreadyInState(() => c.venues.unfollow.mutate(payload));
+        case 'venues.rename':
+          return c.venues.rename.mutate(payload);
         case 'performers.follow':
           return swallowAlreadyInState(() => c.performers.follow.mutate(payload));
         case 'performers.unfollow':

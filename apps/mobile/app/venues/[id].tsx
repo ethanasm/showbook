@@ -32,6 +32,7 @@ import {
   Image as ImageIcon,
   BookmarkPlus,
   Ticket,
+  Pencil,
 } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { EmptyState } from '../../components/EmptyState';
@@ -40,9 +41,10 @@ import { QueryBoundary } from '../../components/QueryBoundary';
 import { KindBadge } from '../../components/KindBadge';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
+import { RenameVenueSheet } from '../../components/RenameVenueSheet';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
-import { hapticSelection } from '../../lib/haptics';
+import { hapticSelection, hapticImpactMedium } from '../../lib/haptics';
 import { isNonWatchableKind } from '@showbook/shared';
 import { useAuth } from '../../lib/auth';
 import { trpc, type RouterOutput } from '../../lib/trpc';
@@ -309,6 +311,17 @@ function Hero({
   const head = parts.length > 1 ? parts.slice(0, -1).join(' ') + ' ' : '';
   const tail = parts.length > 1 ? (parts[parts.length - 1] as string) : venue.name;
 
+  // Mirror the web app's rename gate (`packages/api/src/routers/venues.ts`):
+  // only show the rename affordance when the user already has standing at
+  // the venue — server still enforces this on submit.
+  const canRename = venue.isFollowed || venue.userShowCount > 0;
+  const [renameOpen, setRenameOpen] = React.useState(false);
+  const openRename = React.useCallback(() => {
+    if (!canRename) return;
+    void hapticImpactMedium();
+    setRenameOpen(true);
+  }, [canRename]);
+
   return (
     <View style={styles.heroWrap}>
       <RemoteImage
@@ -323,12 +336,37 @@ function Hero({
       />
       <View style={styles.heroBody}>
         <Eyebrow>{venue.isFollowed ? 'FOLLOWING · VENUE' : 'VENUE'}</Eyebrow>
-        <Text style={[styles.heroTitle, { color: colors.ink }]} numberOfLines={2}>
-          {head ? <Text>{head}</Text> : null}
-          <GradientEmphasis style={[styles.heroTitle, { color: colors.accent }]}>
-            {tail}
-          </GradientEmphasis>
-        </Text>
+        <Pressable
+          onLongPress={canRename ? openRename : undefined}
+          delayLongPress={350}
+          disabled={!canRename}
+          accessibilityRole={canRename ? 'button' : undefined}
+          accessibilityLabel={canRename ? `${venue.name}. Long press to rename.` : undefined}
+          style={styles.heroTitleRow}
+        >
+          <Text style={[styles.heroTitle, { color: colors.ink, flexShrink: 1 }]} numberOfLines={2}>
+            {head ? <Text>{head}</Text> : null}
+            <GradientEmphasis style={[styles.heroTitle, { color: colors.accent }]}>
+              {tail}
+            </GradientEmphasis>
+          </Text>
+          {canRename ? (
+            <Pressable
+              onPress={openRename}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Rename venue"
+              testID="venue-rename-button"
+              style={({ pressed }) => [
+                styles.renameIconBtn,
+                { borderColor: colors.rule, backgroundColor: colors.surface },
+                pressed && { opacity: 0.6 },
+              ]}
+            >
+              <Pencil size={14} color={colors.muted} strokeWidth={2} />
+            </Pressable>
+          ) : null}
+        </Pressable>
         {location ? (
           <View style={styles.heroLocation}>
             <MapPin size={13} color={colors.muted} strokeWidth={2} />
@@ -338,6 +376,14 @@ function Hero({
         {summary ? <Text style={[styles.heroSummary, { color: colors.muted }]}>{summary}</Text> : null}
         <FollowVenueButton venueId={venueId} isFollowed={venue.isFollowed} />
       </View>
+      {canRename ? (
+        <RenameVenueSheet
+          open={renameOpen}
+          onClose={() => setRenameOpen(false)}
+          venueId={venueId}
+          currentName={venue.name}
+        />
+      ) : null}
     </View>
   );
 }
@@ -781,6 +827,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 34,
     letterSpacing: -0.6,
+  },
+  heroTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    alignSelf: 'stretch',
+  },
+  renameIconBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
   },
   heroLocation: {
     flexDirection: 'row',
