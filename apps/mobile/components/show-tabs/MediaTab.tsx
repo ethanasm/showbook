@@ -14,14 +14,12 @@ const PRE_STUBS = [
   { emoji: '🎫', title: 'Ticket stub', sub: 'from Apple Wallet' },
   { emoji: '🎵', title: 'Live playlist', sub: 'after setlist syncs' },
   { emoji: '📍', title: 'Map of venue', sub: 'Google Places' },
-  { emoji: '📰', title: 'Press recap', sub: 'Pitchfork / Variety' },
 ];
 
 const PAST_STUBS = [
   { emoji: '🎫', title: 'Ticket stub', sub: 'Apple Wallet' },
   { emoji: '🎵', title: 'I-heard playlist', sub: 'after setlist syncs' },
   { emoji: '📍', title: 'Venue map', sub: 'tap for walk-out gif' },
-  { emoji: '📰', title: 'Press recap', sub: 'matched on tour name' },
 ];
 
 export interface MediaTabProps {
