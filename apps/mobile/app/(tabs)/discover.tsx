@@ -98,6 +98,13 @@ interface FilterGroup {
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const DOWS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
+// Cap rendered rows per feed. The chip row and "N upcoming" summary still
+// reflect the full filtered set; only the AnnouncementRow tree is sliced.
+// With 800+ Region announcements rendered into a non-virtualized ScrollView
+// the tab swap stalled for several seconds — paginating the render keeps
+// the totals honest without paying that cost.
+const PAGE_SIZE = 50;
+
 function parseDate(iso: string): { month: string; day: string; year: string; dow: string } {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   if (!m) return { month: '—', day: '—', year: '—', dow: '' };
@@ -171,11 +178,20 @@ export default function DiscoverScreen(): React.JSX.Element {
     string | null
   >(null);
 
+  // Render budget for the current feed. Reset whenever the tab or any
+  // chip filter changes so a freshly-selected scope always starts at
+  // page 1 rather than carrying the previous tab's expanded budget.
+  const [visibleCount, setVisibleCount] = React.useState(PAGE_SIZE);
+
   // Clear filter when switching tabs — chips reset per-tab.
   React.useEffect(() => {
     setSelectedGroupId(null);
     setSelectedRegionVenueId(null);
   }, [tab]);
+
+  React.useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [tab, selectedGroupId, selectedRegionVenueId]);
 
   // Clear the venue sub-filter whenever the user changes the region
   // selection above it; otherwise a stale venue id could leave the
@@ -431,6 +447,13 @@ export default function DiscoverScreen(): React.JSX.Element {
   const isEmpty = !isLoading && !isErrored && items.length === 0;
   const filterCount = filteredItems.length;
 
+  const visibleItems = React.useMemo(
+    () => filteredItems.slice(0, visibleCount),
+    [filteredItems, visibleCount],
+  );
+  const remainingCount = Math.max(0, filterCount - visibleItems.length);
+  const hasMore = remainingCount > 0;
+
   return (
     <ScreenWrapper
       title="Discover"
@@ -531,14 +554,14 @@ export default function DiscoverScreen(): React.JSX.Element {
             </View>
             {tab === 'regions' && !selectedGroupId ? (
               <RegionGroupedList
-                items={filteredItems as NearbyAnnouncementItem[]}
+                items={visibleItems as NearbyAnnouncementItem[]}
                 groups={groupList}
                 watchedSet={watchedSet}
                 onToggleWatch={onToggleWatch}
               />
             ) : (
               <View style={styles.list}>
-                {filteredItems.map((item) => (
+                {visibleItems.map((item) => (
                   <AnnouncementRow
                     key={item.id}
                     item={item}
@@ -547,6 +570,16 @@ export default function DiscoverScreen(): React.JSX.Element {
                   />
                 ))}
               </View>
+            )}
+            {hasMore && (
+              <LoadMoreButton
+                remaining={remainingCount}
+                pageSize={PAGE_SIZE}
+                onPress={() => {
+                  hapticSelection();
+                  setVisibleCount((c) => c + PAGE_SIZE);
+                }}
+              />
             )}
           </>
         )}
@@ -671,6 +704,42 @@ function FilterChip({
         {count}
       </Text>
     </Pressable>
+  );
+}
+
+function LoadMoreButton({
+  remaining,
+  pageSize,
+  onPress,
+}: {
+  remaining: number;
+  pageSize: number;
+  onPress: () => void;
+}): React.JSX.Element {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+  const next = Math.min(pageSize, remaining);
+  return (
+    <View style={styles.loadMoreWrap}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`Load ${next} more`}
+        testID="discover-load-more"
+        style={({ pressed }) => [
+          styles.loadMoreButton,
+          { borderColor: colors.rule, backgroundColor: colors.surface },
+          pressed && { opacity: 0.7 },
+        ]}
+      >
+        <Text style={[styles.loadMoreLabel, { color: colors.ink }]}>
+          Load {next} more
+        </Text>
+        <Text style={[styles.loadMoreMeta, { color: colors.muted }]}>
+          {remaining} remaining
+        </Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -1242,6 +1311,31 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: 16,
     gap: 10,
+  },
+  loadMoreWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+  },
+  loadMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  loadMoreLabel: {
+    fontFamily: 'Geist Sans',
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: -0.1,
+  },
+  loadMoreMeta: {
+    fontFamily: 'Geist Mono',
+    fontSize: 10.5,
+    letterSpacing: 0.4,
   },
   regionGroup: {
     gap: 10,
