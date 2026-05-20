@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
   },
   expandedTitle: {
     fontSize: 28,
-    fontFamily: 'Georgia',
+    fontFamily: 'Fraunces',
     fontWeight: '700',
     letterSpacing: -0.4,
   },

@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   splashTitle: {
-    fontFamily: 'Georgia',
+    fontFamily: 'Fraunces',
     fontSize: 30,
     fontWeight: '700',
     lineHeight: 34,

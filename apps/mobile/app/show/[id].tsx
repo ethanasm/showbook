@@ -741,7 +741,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   heroTitle: {
-    fontFamily: 'Georgia',
+    fontFamily: 'Fraunces',
     fontSize: 30,
     fontWeight: '600',
     lineHeight: 32,

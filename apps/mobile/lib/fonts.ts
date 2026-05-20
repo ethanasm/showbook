@@ -1,23 +1,22 @@
 /**
  * Font loader.
  *
- * The theme tokens reference 'Geist Sans' and 'Georgia' as fontFamily values.
- * For M1 we ship without bundled Geist assets — React Native falls back to
- * the system sans-serif on iOS (San Francisco; close enough for headers and
- * body text) and the system default on Android. Georgia ships natively on
- * iOS and renders as Roboto's serif fallback on Android.
+ * Loads Fraunces 700 (bold) under the family name 'Fraunces' so the type
+ * ramp's `fontFamily: 'Fraunces'` + `fontWeight: '700'` style (heroTitle,
+ * headliner) renders with the real face on both iOS and Android. We only
+ * ship the bold cut because that's the only weight referenced by the type
+ * ramp; ship more weights when the ramp grows.
  *
- * Adding @expo-google-fonts/geist before TestFlight is on the polish backlog;
- * see TASKS.md "M1 known issues". Until then this loader is a no-op so the
- * app boots immediately without an extra network/file-system round trip.
+ * Geist Sans is still a no-op — RN falls back to the system sans on iOS
+ * (San Francisco; close enough) and the platform default on Android. The
+ * Geist polish pass is tracked in TASKS.md "M1 known issues".
  */
 
+import * as Font from 'expo-font';
+import { Fraunces_700Bold } from '@expo-google-fonts/fraunces/700Bold';
+
 export async function loadAppFonts(): Promise<void> {
-  // No-op: rely on system font fallbacks. To enable Geist later:
-  //   import * as Font from 'expo-font';
-  //   await Font.loadAsync({
-  //     'Geist Sans': require('../assets/fonts/Geist-Regular.ttf'),
-  //     'Geist Sans-Bold': require('../assets/fonts/Geist-Bold.ttf'),
-  //   });
-  return;
+  await Font.loadAsync({
+    Fraunces: Fraunces_700Bold,
+  });
 }

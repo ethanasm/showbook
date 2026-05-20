@@ -695,7 +695,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerTitle: {
-    fontFamily: 'Georgia',
+    fontFamily: 'Fraunces',
     fontSize: 28,
     fontWeight: '700',
     letterSpacing: -0.6,

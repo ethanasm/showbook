@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   title: {
-    fontFamily: 'Georgia',
+    fontFamily: 'Fraunces',
     fontSize: 30,
     fontWeight: '700',
     lineHeight: 34,
