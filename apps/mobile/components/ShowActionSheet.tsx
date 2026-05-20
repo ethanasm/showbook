@@ -20,10 +20,12 @@ import {
   CheckCircle,
   ListMusic,
   Pencil,
+  Ticket,
   Trash2,
 } from 'lucide-react-native';
 
 import { Sheet } from './Sheet';
+import { MarkTicketedSheet } from './MarkTicketedSheet';
 import { useTheme, type ShowState } from '../lib/theme';
 import { trpc } from '../lib/trpc';
 import { useFeedback } from '../lib/feedback';
@@ -52,6 +54,7 @@ export function ShowActionSheet({
   const utils = trpc.useUtils();
   const queryClient = useQueryClient();
   const { showToast } = useFeedback();
+  const [markTicketedOpen, setMarkTicketedOpen] = React.useState(false);
 
   const goEdit = () => {
     onClose();
@@ -60,6 +63,11 @@ export function ShowActionSheet({
   const goSetlist = () => {
     onClose();
     router.push(`/show/${showId}/setlist`);
+  };
+
+  const openMarkTicketed = () => {
+    onClose();
+    setMarkTicketedOpen(true);
   };
 
   const markWatched = async (): Promise<void> => {
@@ -135,32 +143,49 @@ export function ShowActionSheet({
   };
 
   return (
-    <Sheet open={open} onClose={onClose} snapPoints={['44%']}>
-      <View style={styles.body}>
-        <ActionRow
-          icon={<Pencil size={18} color={colors.ink} strokeWidth={2} />}
-          label="Edit show"
-          onPress={goEdit}
-        />
-        <ActionRow
-          icon={<ListMusic size={18} color={colors.ink} strokeWidth={2} />}
-          label="Edit setlist"
-          onPress={goSetlist}
-        />
-        <ActionRow
-          icon={<CheckCircle size={18} color={colors.ink} strokeWidth={2} />}
-          label="Mark as watched"
-          onPress={() => void markWatched()}
-          disabled={state === 'past'}
-        />
-        <ActionRow
-          icon={<Trash2 size={18} color={colors.danger} strokeWidth={2} />}
-          label="Delete show"
-          onPress={askDelete}
-          danger
-        />
-      </View>
-    </Sheet>
+    <>
+      <Sheet open={open} onClose={onClose} snapPoints={['44%']}>
+        <View style={styles.body}>
+          <ActionRow
+            icon={<Pencil size={18} color={colors.ink} strokeWidth={2} />}
+            label="Edit show"
+            onPress={goEdit}
+          />
+          <ActionRow
+            icon={<ListMusic size={18} color={colors.ink} strokeWidth={2} />}
+            label="Edit setlist"
+            onPress={goSetlist}
+          />
+          {state === 'watching' ? (
+            <ActionRow
+              icon={<Ticket size={18} color={colors.ink} strokeWidth={2} />}
+              label="I have tickets"
+              onPress={openMarkTicketed}
+              testID="action-mark-ticketed"
+            />
+          ) : null}
+          {state === 'ticketed' ? (
+            <ActionRow
+              icon={<CheckCircle size={18} color={colors.ink} strokeWidth={2} />}
+              label="Mark as watched"
+              onPress={() => void markWatched()}
+              testID="action-mark-watched"
+            />
+          ) : null}
+          <ActionRow
+            icon={<Trash2 size={18} color={colors.danger} strokeWidth={2} />}
+            label="Delete show"
+            onPress={askDelete}
+            danger
+          />
+        </View>
+      </Sheet>
+      <MarkTicketedSheet
+        open={markTicketedOpen}
+        onClose={() => setMarkTicketedOpen(false)}
+        showId={showId}
+      />
+    </>
   );
 }
 
@@ -170,12 +195,14 @@ function ActionRow({
   onPress,
   danger = false,
   disabled = false,
+  testID,
 }: {
   icon: React.ReactNode;
   label: string;
   onPress: () => void;
   danger?: boolean;
   disabled?: boolean;
+  testID?: string;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -190,6 +217,7 @@ function ActionRow({
       ]}
       accessibilityRole="button"
       accessibilityLabel={label}
+      testID={testID}
     >
       {icon}
       <Text

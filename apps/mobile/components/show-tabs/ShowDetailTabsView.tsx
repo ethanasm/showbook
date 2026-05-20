@@ -39,6 +39,7 @@ import {
   PreviewPlayerProvider,
 } from './TrackPreviewButton';
 import { ShowTabBar } from './ShowTabBar';
+import { MarkTicketedSheet } from '../MarkTicketedSheet';
 import { OverviewTab, type OverviewLineupEntry } from './OverviewTab';
 import { SetlistTab, type ActualSong, type AnyPrediction } from './SetlistTab';
 import { MediaTab } from './MediaTab';
@@ -136,6 +137,7 @@ function ShowDetailTabsViewInner({
   const [active, setActive] = React.useState<ShowTabKey>(
     parseShowTab(initialTab ?? null),
   );
+  const [markTicketedOpen, setMarkTicketedOpen] = React.useState(false);
 
   const headliner = show.showPerformers.find((sp) => sp.role === 'headliner');
   const resolvedHeadliner = getHeadliner(show);
@@ -327,6 +329,16 @@ function ShowDetailTabsViewInner({
       cells={overviewCells}
       lineup={lineupEntries}
       actions={[
+        ...(show.state === 'watching'
+          ? [
+              {
+                label: 'I have tickets',
+                primary: true,
+                testID: 'action-mark-ticketed',
+                onPress: () => setMarkTicketedOpen(true),
+              },
+            ]
+          : []),
         ...(show.state === 'ticketed'
           ? [
               {
@@ -504,6 +516,14 @@ function ShowDetailTabsViewInner({
       {showInlineRail ? (
         <ShowDetailRightRail isPast={isPast} slots={rightRailSlots} />
       ) : null}
+      <MarkTicketedSheet
+        open={markTicketedOpen}
+        onClose={() => setMarkTicketedOpen(false)}
+        showId={show.id}
+        initialSeat={show.seat}
+        initialPrice={show.pricePaid}
+        initialTicketCount={show.ticketCount}
+      />
     </View>
   );
 }
