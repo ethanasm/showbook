@@ -1,14 +1,18 @@
-// Hostname allowlists and upstream fetcher for `/api/venue-photo/[venueId]`.
+// Hostname allowlists and upstream fetcher shared by the three image
+// proxy routes — `/api/venue-photo/[venueId]`,
+// `/api/show-cover/[showId]`, and `/api/performer-photo/[performerId]`.
 // Lives in `lib/` so the redirect-handling logic can be exercised by a
 // unit test with an injected `fetch` (mock.module is unavailable in the
 // project's node:test + tsx setup).
 
-// Initial-URL allowlist for absolute `venues.photoUrl` values. The only
-// legitimate http(s)-prefixed value persisted to this column is
-// Ticketmaster's CDN (returned by `getVenue(...).images[].url`); Google
-// Places resolves through `getPlacePhotoMediaUrl` and never lands here
-// as a raw URL. Adding a host here without a security review re-opens
-// the SSRF vector previously closed by tightening `venueInputSchema`.
+// Initial-URL allowlist for absolute image URLs persisted to
+// `venues.photoUrl`, `shows.coverImageUrl`, and `performers.imageUrl`.
+// The only legitimate http(s)-prefixed value in any of these columns is
+// Ticketmaster's CDN (`selectBestImage` returns `s1.ticketm.net` URLs);
+// Google Places resolves through `getPlacePhotoMediaUrl` and never
+// lands here as a raw URL. Adding a host here without a security
+// review re-opens the SSRF vector previously closed by tightening the
+// input schemas and the proxy fetches.
 export const ALLOWED_PROXY_HOSTS: ReadonlySet<string> = new Set([
   's1.ticketm.net',
 ]);

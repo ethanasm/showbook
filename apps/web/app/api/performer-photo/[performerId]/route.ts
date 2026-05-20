@@ -7,19 +7,9 @@ import {
   searchAttractions,
   selectBestImage,
 } from '@showbook/api';
+import { fetchUpstream, isProxyableUrl } from '@/lib/image-proxy';
 
 const log = child({ component: 'web.api.performer-photo' });
-
-async function fetchUpstream(url: string) {
-  const upstream = await fetch(url, {
-    cache: 'no-store',
-    signal: AbortSignal.timeout(15_000),
-  });
-  const contentType = upstream.headers.get('content-type') ?? '';
-  const ok =
-    upstream.ok && upstream.body && contentType.toLowerCase().startsWith('image/');
-  return { upstream, contentType, ok } as const;
-}
 
 function normalizeName(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -141,7 +131,36 @@ export async function GET(
     });
   }
 
-  let { upstream, contentType, ok } = await fetchUpstream(imageUrl);
+  // SSRF guard: `performers.imageUrl` is populated from
+  // `performerInputSchema.imageUrl` (user input via `shows.create`)
+  // and from `selectBestImage(attraction.images)` enrichment. The
+  // legitimate value is always a TM CDN URL; refusing anything else
+  // here blocks an attacker from steering this server-side fetch at
+  // internal services. Performers are global rows, so a poisoned
+  // imageUrl would be reachable by any authenticated user.
+  if (!isProxyableUrl(imageUrl)) {
+    log.warn(
+      {
+        event: 'performer.photo.proxy.host_not_allowed',
+        performerId,
+        photoHost: (() => {
+          try {
+            return new URL(imageUrl).hostname;
+          } catch {
+            return null;
+          }
+        })(),
+      },
+      'Refusing to proxy a performer imageUrl whose host is not in the allowlist',
+    );
+    return new NextResponse('Photo unavailable', {
+      status: 502,
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  }
+
+  let { upstream, contentType, ok, refusedRedirectHost } =
+    await fetchUpstream(imageUrl);
 
   // Stale-URL recovery: if a stored URL no longer serves, try a fresh TM
   // lookup once before giving up.
@@ -159,10 +178,14 @@ export async function GET(
         performer.ticketmasterAttractionId,
         performer.name,
       );
-      if (resolved && resolved.imageUrl !== imageUrl) {
+      if (
+        resolved &&
+        resolved.imageUrl !== imageUrl &&
+        isProxyableUrl(resolved.imageUrl)
+      ) {
         const retry = await fetchUpstream(resolved.imageUrl);
         if (retry.ok) {
-          ({ upstream, contentType, ok } = retry);
+          ({ upstream, contentType, ok, refusedRedirectHost } = retry);
           imageUrl = resolved.imageUrl;
           tmIdToPersist = resolved.tmAttractionId;
           isFresh = true;
@@ -177,16 +200,28 @@ export async function GET(
   }
 
   if (!ok || !upstream.body) {
-    log.warn(
-      {
-        event: 'performer.photo.proxy.upstream_error',
-        performerId,
-        imageUrl,
-        upstreamStatus: upstream.status,
-        upstreamContentType: contentType,
-      },
-      'Performer image fetch failed; serving 502 fallback',
-    );
+    if (refusedRedirectHost !== undefined) {
+      log.warn(
+        {
+          event: 'performer.photo.proxy.redirect_not_allowed',
+          performerId,
+          redirectHost: refusedRedirectHost || null,
+          upstreamStatus: upstream.status,
+        },
+        'Upstream redirected to a host outside ALLOWED_REDIRECT_HOSTS',
+      );
+    } else {
+      log.warn(
+        {
+          event: 'performer.photo.proxy.upstream_error',
+          performerId,
+          imageUrl,
+          upstreamStatus: upstream.status,
+          upstreamContentType: contentType,
+        },
+        'Performer image fetch failed; serving 502 fallback',
+      );
+    }
     return new NextResponse('Upstream error', {
       status: 502,
       headers: { 'Cache-Control': 'no-store' },
@@ -213,6 +248,7 @@ export async function GET(
     headers: {
       'Content-Type': contentType,
       'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'",
       'Cache-Control': 'public, max-age=86400, s-maxage=86400',
     },
   });
