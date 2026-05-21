@@ -282,14 +282,18 @@ describe('showsRouter (unit)', () => {
       );
     });
 
-    it('rejects watching→ticketed without a seat', async () => {
+    it('allows watching→ticketed without a seat', async () => {
       const existing = { id: SHOW_ID, state: 'watching', seat: null };
-      const db = makeFakeDb({ selectResults: [[existing]] });
-      await assert.rejects(
-        () =>
-          caller(db).updateState({ showId: SHOW_ID, newState: 'ticketed' }),
-        (err: unknown) => err instanceof TRPCError && err.code === 'BAD_REQUEST',
-      );
+      const updated = { ...existing, state: 'ticketed' };
+      const db = makeFakeDb({
+        selectResults: [[existing]],
+        updateResults: [[updated]],
+      });
+      const result = await caller(db).updateState({
+        showId: SHOW_ID,
+        newState: 'ticketed',
+      });
+      assert.equal((result as { state: string }).state, 'ticketed');
     });
 
     it('allows watching→ticketed when seat already exists', async () => {

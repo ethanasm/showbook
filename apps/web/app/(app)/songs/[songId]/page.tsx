@@ -6,17 +6,16 @@ import Link from "next/link";
 import { ChevronLeft, ExternalLink, Music } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { CenteredMessage, QueryBoundary } from "@/components/design-system";
-import { formatDateLong, formatDateMedium, isFeatureOn } from "@showbook/shared";
+import { formatDateLong, formatDateMedium } from "@showbook/shared";
 
 export default function SongDetailPage() {
   const params = useParams<{ songId: string }>();
   const router = useRouter();
   const songId = params?.songId ?? "";
 
-  const flagOn = isFeatureOn("SetlistIntelSongs");
   const detailQuery = trpc.songs.byId.useQuery(
     { songId },
-    { enabled: Boolean(songId) && flagOn },
+    { enabled: Boolean(songId) },
   );
 
   // Fire one telemetry ping per (mount, songId) pair.
@@ -34,11 +33,6 @@ export default function SongDetailPage() {
       // best-effort.
     });
   }, [songId]);
-
-  if (!flagOn) {
-    router.replace("/home");
-    return null;
-  }
 
   return (
     <QueryBoundary

@@ -40,6 +40,7 @@ import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { HeroShowCard } from '../../components/HeroShowCard';
 import { ShowCardListSkeleton } from '../../components/skeletons';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
+import { MarkTicketedSheet } from '../../components/MarkTicketedSheet';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { hasProductionLabel, isNonWatchableKind } from '@showbook/shared';
@@ -219,6 +220,7 @@ export default function HomeScreen(): React.JSX.Element {
     id: string;
     state: ShowState;
   } | null>(null);
+  const [markTicketedForId, setMarkTicketedForId] = React.useState<string | null>(null);
 
   const showsQuery = useCachedQuery<ShowsListItem[]>({
     queryKey: ['mobile', 'home', 'shows.list'],
@@ -398,6 +400,14 @@ export default function HomeScreen(): React.JSX.Element {
           onClose={() => setActionSheetFor(null)}
           showId={actionSheetFor.id}
           state={actionSheetFor.state}
+          onMarkTicketed={() => setMarkTicketedForId(actionSheetFor.id)}
+        />
+      ) : null}
+      {markTicketedForId ? (
+        <MarkTicketedSheet
+          open
+          onClose={() => setMarkTicketedForId(null)}
+          showId={markTicketedForId}
         />
       ) : null}
     </View>

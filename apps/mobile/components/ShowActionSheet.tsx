@@ -4,6 +4,12 @@
  * Shows, Artist, Venue) can mount it on long-press without pulling in
  * the detail screen.
  *
+ * The `MarkTicketedSheet` is owned by the parent screen — Home / Shows
+ * mount the action sheet conditionally on `actionSheetFor`, which would
+ * unmount any child sheet the moment "I have tickets" called
+ * `onClose()`. The parent renders MarkTicketedSheet directly and we
+ * fire `onMarkTicketed` here so its lifecycle is independent.
+ *
  * Mutations route through `runOptimisticMutation` + the shared SQLite
  * outbox so a network failure leaves a retryable row in
  * `pending_writes` instead of vanishing with a toast. Delete is
@@ -25,7 +31,6 @@ import {
 } from 'lucide-react-native';
 
 import { Sheet } from './Sheet';
-import { MarkTicketedSheet } from './MarkTicketedSheet';
 import { useTheme, type ShowState } from '../lib/theme';
 import { trpc } from '../lib/trpc';
 import { useFeedback } from '../lib/feedback';
@@ -39,6 +44,11 @@ export interface ShowActionSheetProps {
   state: ShowState;
   /** When true, popping the show after delete returns to /(tabs)/shows. */
   popAfterDelete?: boolean;
+  /**
+   * Fires when the user picks "I have tickets". The parent is responsible
+   * for rendering the `MarkTicketedSheet` — see the file header for why.
+   */
+  onMarkTicketed?: () => void;
 }
 
 export function ShowActionSheet({
@@ -47,6 +57,7 @@ export function ShowActionSheet({
   showId,
   state,
   popAfterDelete = false,
+  onMarkTicketed,
 }: ShowActionSheetProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -54,7 +65,6 @@ export function ShowActionSheet({
   const utils = trpc.useUtils();
   const queryClient = useQueryClient();
   const { showToast } = useFeedback();
-  const [markTicketedOpen, setMarkTicketedOpen] = React.useState(false);
 
   const goEdit = () => {
     onClose();
@@ -67,7 +77,7 @@ export function ShowActionSheet({
 
   const openMarkTicketed = () => {
     onClose();
-    setMarkTicketedOpen(true);
+    onMarkTicketed?.();
   };
 
   const markWatched = async (): Promise<void> => {
@@ -145,49 +155,42 @@ export function ShowActionSheet({
   };
 
   return (
-    <>
-      <Sheet open={open} onClose={onClose} snapPoints={['44%']}>
-        <View style={styles.body}>
+    <Sheet open={open} onClose={onClose} snapPoints={['44%']}>
+      <View style={styles.body}>
+        <ActionRow
+          icon={<Pencil size={18} color={colors.ink} strokeWidth={2} />}
+          label="Edit show"
+          onPress={goEdit}
+        />
+        <ActionRow
+          icon={<ListMusic size={18} color={colors.ink} strokeWidth={2} />}
+          label="Edit setlist"
+          onPress={goSetlist}
+        />
+        {state === 'watching' ? (
           <ActionRow
-            icon={<Pencil size={18} color={colors.ink} strokeWidth={2} />}
-            label="Edit show"
-            onPress={goEdit}
+            icon={<Ticket size={18} color={colors.ink} strokeWidth={2} />}
+            label="I have tickets"
+            onPress={openMarkTicketed}
+            testID="action-mark-ticketed"
           />
+        ) : null}
+        {state === 'ticketed' ? (
           <ActionRow
-            icon={<ListMusic size={18} color={colors.ink} strokeWidth={2} />}
-            label="Edit setlist"
-            onPress={goSetlist}
+            icon={<CheckCircle size={18} color={colors.ink} strokeWidth={2} />}
+            label="Mark as watched"
+            onPress={() => void markWatched()}
+            testID="action-mark-watched"
           />
-          {state === 'watching' ? (
-            <ActionRow
-              icon={<Ticket size={18} color={colors.ink} strokeWidth={2} />}
-              label="I have tickets"
-              onPress={openMarkTicketed}
-              testID="action-mark-ticketed"
-            />
-          ) : null}
-          {state === 'ticketed' ? (
-            <ActionRow
-              icon={<CheckCircle size={18} color={colors.ink} strokeWidth={2} />}
-              label="Mark as watched"
-              onPress={() => void markWatched()}
-              testID="action-mark-watched"
-            />
-          ) : null}
-          <ActionRow
-            icon={<Trash2 size={18} color={colors.danger} strokeWidth={2} />}
-            label="Delete show"
-            onPress={askDelete}
-            danger
-          />
-        </View>
-      </Sheet>
-      <MarkTicketedSheet
-        open={markTicketedOpen}
-        onClose={() => setMarkTicketedOpen(false)}
-        showId={showId}
-      />
-    </>
+        ) : null}
+        <ActionRow
+          icon={<Trash2 size={18} color={colors.danger} strokeWidth={2} />}
+          label="Delete show"
+          onPress={askDelete}
+          danger
+        />
+      </View>
+    </Sheet>
   );
 }
 

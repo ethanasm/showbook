@@ -3,8 +3,7 @@
 /**
  * Improvised-style predicted-setlist subtree. Phase 6 of setlist-
  * intelligence (§15d improvised + §15p display variants). Mounts
- * inside the Setlist tab when `prediction.style === 'improvised'`
- * AND the `SetlistIntelImprovisedDisplay` feature flag is ON.
+ * inside the Setlist tab when `prediction.style === 'improvised'`.
  *
  * The model **refuses** song-by-song prediction. The display replaces
  * the likely-setlist section with:
@@ -424,55 +423,3 @@ function PopularPicksList({
   );
 }
 
-/**
- * Fallback shown when the improvised display would be served but the
- * `SetlistIntelImprovisedDisplay` flag is OFF (or the release-gate
- * hasn't cleared the show-mode calibration threshold yet).
- */
-export function ImprovisedGateBlocked() {
-  return (
-    <div
-      data-testid="improvised-gate-blocked"
-      style={{
-        padding: "32px var(--page-pad-x)",
-        textAlign: "center",
-        background: "var(--surface)",
-        borderBottom: "1px solid var(--rule)",
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--font-geist-sans), sans-serif",
-          fontSize: 16,
-          fontWeight: 600,
-          color: "var(--ink)",
-        }}
-      >
-        Improvised-style display temporarily disabled
-      </div>
-      <div
-        style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
-          color: "var(--muted)",
-          marginTop: 10,
-          letterSpacing: ".02em",
-          maxWidth: 460,
-          marginInline: "auto",
-          lineHeight: 1.6,
-        }}
-      >
-        The vibe sketch isn&rsquo;t calibrated yet — the show-mode
-        calibration check needs to clear before the display flips on.
-        See{" "}
-        <a
-          href="/admin/eval"
-          style={{ color: "var(--ink)", textDecoration: "underline" }}
-        >
-          /admin/eval
-        </a>
-        .
-      </div>
-    </div>
-  );
-}

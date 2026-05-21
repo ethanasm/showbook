@@ -21,7 +21,7 @@ import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { db } from '@showbook/db';
 import { albums, predictionCache, predictionSnapshots, tourSetlists } from '@showbook/db';
 import { child } from '@showbook/observability';
-import { isFeatureOn, type PerformerSetlist } from '@showbook/shared';
+import { type PerformerSetlist } from '@showbook/shared';
 import { synthesizeAlbumDropRows } from './album-drop-synthetic';
 import {
   computeSetCount,
@@ -74,8 +74,7 @@ export interface HotPrediction {
    *  Null when sampleSize < 3 makes the estimate too noisy to show. */
   setCountPrediction: SetCountPrediction | null;
   /** Phase 11 §15e — multi-night anti-repeat context. Non-null when
-   *  the target sits inside a same-venue run AND the
-   *  SetlistIntelMultiNightGeneralized flag is ON. */
+   *  the target sits inside a same-venue run. */
   multiNightContext: {
     venue: string;
     priorNights: number;
@@ -339,21 +338,17 @@ export async function loadCorpusForPrediction(opts: {
       if (headlineRows.length >= 3) realRows = headlineRows;
     }
 
-    // Phase 11 §15m — when the album-drop flag is ON, append synthetic
-    // CorpusRow entries representing tracks from albums released
-    // within ±60 days of the target. The aggregator below treats
-    // synthetic rows as Tier-A in position but caps their weight via
-    // the `isSynthetic` flag.
-    let setlists = realRows;
-    if (isFeatureOn('SetlistIntelAlbumDrop')) {
-      const synthetic = await synthesizeAlbumDropRows({
-        performerId: opts.performerId,
-        targetDate: opts.targetDate,
-        existingCorpus: realRows,
-        tx,
-      });
-      setlists = realRows.concat(synthetic);
-    }
+    // Phase 11 §15m — append synthetic CorpusRow entries representing
+    // tracks from albums released within ±60 days of the target. The
+    // aggregator below treats synthetic rows as Tier-A in position but
+    // caps their weight via the `isSynthetic` flag.
+    const synthetic = await synthesizeAlbumDropRows({
+      performerId: opts.performerId,
+      targetDate: opts.targetDate,
+      existingCorpus: realRows,
+      tx,
+    });
+    const setlists = realRows.concat(synthetic);
 
     const realSig = sigRow?.signature
       ? new Date(sigRow.signature).toISOString()

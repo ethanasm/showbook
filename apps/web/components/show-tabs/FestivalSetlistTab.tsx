@@ -47,15 +47,8 @@ interface FestivalSetlistTabProps {
   entries: FestivalLineupSetlistEntry[];
   predictionsLoading: boolean;
   hypePlaylistEnabled?: boolean;
-  musicLayerV2Enabled?: boolean;
   badgePayload?: Parameters<typeof SetlistTab>[0]["badgePayload"];
   trackPreviews?: Parameters<typeof SetlistTab>[0]["trackPreviews"];
-  rotatingDisplayEnabled?: boolean;
-  rotatingGateBlocked?: boolean;
-  theatricalDisplayEnabled?: boolean;
-  theatricalGateBlocked?: boolean;
-  improvisedDisplayEnabled?: boolean;
-  improvisedGateBlocked?: boolean;
   onOpenSpoilerSettings?: () => void;
 }
 
@@ -157,15 +150,8 @@ export function FestivalSetlistTab(
         predictionLoading={props.predictionsLoading}
         actualSongs={selected.actualSongs}
         hypePlaylistEnabled={props.hypePlaylistEnabled}
-        musicLayerV2Enabled={props.musicLayerV2Enabled}
         badgePayload={props.badgePayload}
         trackPreviews={props.trackPreviews}
-        rotatingDisplayEnabled={props.rotatingDisplayEnabled}
-        rotatingGateBlocked={props.rotatingGateBlocked}
-        theatricalDisplayEnabled={props.theatricalDisplayEnabled}
-        theatricalGateBlocked={props.theatricalGateBlocked}
-        improvisedDisplayEnabled={props.improvisedDisplayEnabled}
-        improvisedGateBlocked={props.improvisedGateBlocked}
         onOpenSpoilerSettings={props.onOpenSpoilerSettings}
       />
     </div>

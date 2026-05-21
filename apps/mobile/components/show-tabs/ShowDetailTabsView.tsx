@@ -69,13 +69,12 @@ import {
 } from '../../lib/setlist-intel';
 import { useBreakpoint } from '../../lib/responsive';
 import {
+  formatDateRangeShort,
   formatVenueLocation,
   getHeadliner,
   hasProductionLabel,
   isVenuePlaceholder,
 } from '@showbook/shared';
-
-const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
 interface ShowPerformer {
   id: string;
@@ -108,6 +107,7 @@ export interface ShowDetail {
   kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports' | 'film' | 'unknown';
   state: 'past' | 'ticketed' | 'watching';
   date: string | null;
+  endDate: string | null;
   seat: string | null;
   pricePaid: string | null;
   ticketCount: number;
@@ -184,10 +184,7 @@ export function ShowDetailTabsView({
       },
     );
 
-  const hypeFeatureQuery = trpc.spotify.hypePlaylistFeature.useQuery(undefined, {
-    staleTime: 5 * 60_000,
-  });
-  const hypePlaylistEnabled = Boolean(hypeFeatureQuery.data?.enabled);
+  const hypePlaylistEnabled = true;
 
   const badgeQuery = trpc.shows.songBadges.useQuery(
     { showId: show.id },
@@ -501,9 +498,6 @@ export function ShowDetailTabsView({
       badgePayload={badgeQuery.data ?? null}
       trackPreviews={previewsQuery.data?.previews ?? null}
       hypePlaylistEnabled={hypePlaylistEnabled}
-      rotatingDisplayEnabled
-      theatricalDisplayEnabled
-      improvisedDisplayEnabled
     />
   ) : (
     <SetlistTab
@@ -517,9 +511,6 @@ export function ShowDetailTabsView({
       badgePayload={badgeQuery.data ?? null}
       trackPreviews={previewsQuery.data?.previews ?? null}
       hypePlaylistEnabled={hypePlaylistEnabled}
-      rotatingDisplayEnabled
-      theatricalDisplayEnabled
-      improvisedDisplayEnabled
     />
   );
 
@@ -702,7 +693,7 @@ function HeaderStrip({
   const insets = useSafeAreaInsets();
   const resolvedHeadliner = getHeadliner(show);
   const title = resolvedHeadliner === 'Unknown Artist' ? 'Untitled' : resolvedHeadliner;
-  const date = parseDate(show.date);
+  const date = show.date ? formatDateRangeShort(show.date, show.endDate) : null;
   const venueLine = [show.venue.name, show.venue.city]
     .filter((p) => !isVenuePlaceholder(p))
     .join(' · ');
@@ -862,17 +853,6 @@ function HeaderStrip({
       </View>
     </View>
   );
-}
-
-function parseDate(date: string | null | undefined): string | null {
-  if (!date) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
-  if (!m) return null;
-  const year = Number(m[1]);
-  const monthIdx = Number(m[2]) - 1;
-  const day = Number(m[3]);
-  const month = MONTHS[monthIdx] ?? '';
-  return `${month} ${day}, ${year}`;
 }
 
 const styles = StyleSheet.create({

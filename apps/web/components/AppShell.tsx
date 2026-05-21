@@ -8,7 +8,6 @@ import { GlobalSearch, openGlobalSearch } from "@/components/GlobalSearch";
 import { SiteFooter } from "@/components/SiteFooter";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "next-auth/react";
-import { isFeatureOn } from "@showbook/shared";
 import type { ReactNode } from "react";
 
 function pathnameToNavId(pathname: string): string {
@@ -39,13 +38,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Use lightweight count procedures rather than `*.list().length` —
   // otherwise every page render fetches the full show/performer/venue list
   // (potentially thousands of rows with relations) just to read its length.
-  const songsEnabled = isFeatureOn("SetlistIntelSongs");
   const showsCountsQuery = trpc.shows.countsByMode.useQuery(undefined, { staleTime: 60_000 });
   const performersCountQuery = trpc.performers.count.useQuery(undefined, { staleTime: 60_000 });
   const venuesCountQuery = trpc.venues.count.useQuery(undefined, { staleTime: 60_000 });
   const songsCountQuery = trpc.songs.count.useQuery(undefined, {
     staleTime: 60_000,
-    enabled: songsEnabled,
   });
   // `amIAdmin` is server-derived from the user's email + ADMIN_EMAILS allowlist.
   // Stale-time of 5 min keeps the sidebar quiet; the `/admin` page still does
@@ -83,7 +80,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             userName={userName}
             userInitials={userInitials}
             isAdmin={isAdmin}
-            flags={{ SetlistIntelSongs: songsEnabled }}
           />
         </div>
         <main className="app-shell__content">

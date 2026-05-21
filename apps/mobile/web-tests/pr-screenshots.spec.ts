@@ -456,7 +456,6 @@ const ROUTES: RouteSpec[] = [
         setlists: null,
       },
       'setlistIntel.predictedFestivalSetlists': { entries: [] },
-      'spotify.hypePlaylistFeature': { enabled: false },
       'shows.songBadges': { byPerformerId: {} },
       'setlistIntel.trackPreviewsForShow': { previews: {} },
       'media.listForShow': [],
