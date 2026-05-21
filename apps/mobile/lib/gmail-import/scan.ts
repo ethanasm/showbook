@@ -163,6 +163,23 @@ export async function runGmailScan(opts: ScanRunOptions): Promise<ScanResult> {
   return consumeStream(res.body, opts.onProgress);
 }
 
+/**
+ * Translate an `error` SSE payload into a user-facing message. A
+ * Gmail-side 401/403 means the access token Google just minted is
+ * already unusable (revoked grant, account without Gmail, or a stale
+ * cached redirect from a previous attempt) — the right next step is
+ * to reconnect rather than retry the same token.
+ */
+function scanErrorMessage(payload: GmailScanError): string {
+  if (payload.status === 401 || payload.status === 403) {
+    return 'Gmail rejected the access token. Tap Scan Gmail again to reconnect.';
+  }
+  if (payload.status && payload.status >= 500) {
+    return `Gmail is having trouble (HTTP ${payload.status}). Try again in a minute.`;
+  }
+  return payload.message || 'Gmail scan failed.';
+}
+
 async function consumeStream(
   body: ReadableStream<Uint8Array>,
   onProgress?: (progress: GmailScanProgress) => void,
@@ -183,7 +200,7 @@ async function consumeStream(
       if (!decoded) continue;
       if (decoded.kind === 'progress') onProgress?.(decoded.payload);
       else if (decoded.kind === 'done') final = decoded.payload;
-      else if (decoded.kind === 'error') scanError = decoded.payload.message;
+      else if (decoded.kind === 'error') scanError = scanErrorMessage(decoded.payload);
     }
   }
 
@@ -194,7 +211,7 @@ async function consumeStream(
     if (!decoded) continue;
     if (decoded.kind === 'progress') onProgress?.(decoded.payload);
     else if (decoded.kind === 'done') final = decoded.payload;
-    else if (decoded.kind === 'error') scanError = decoded.payload.message;
+    else if (decoded.kind === 'error') scanError = scanErrorMessage(decoded.payload);
   }
 
   if (scanError) throw new Error(scanError);
@@ -215,7 +232,7 @@ async function consumeFullBody(
     if (!decoded) continue;
     if (decoded.kind === 'progress') onProgress?.(decoded.payload);
     else if (decoded.kind === 'done') final = decoded.payload;
-    else if (decoded.kind === 'error') scanError = decoded.payload.message;
+    else if (decoded.kind === 'error') scanError = scanErrorMessage(decoded.payload);
   }
   if (scanError) throw new Error(scanError);
   if (!final) throw new Error('Gmail scan ended without a result.');

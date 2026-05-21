@@ -58,9 +58,19 @@ export function useGmailConnection(): UseGmailConnectionResult {
     setError(null);
     setBusy(true);
     try {
+      // `preferEphemeralSession: true` forces ASWebAuthenticationSession (iOS)
+      // / Chrome Custom Tabs (Android) to use an isolated cookie jar with no
+      // state shared from a previous OAuth attempt. Without it, a rapid
+      // second scan can dispatch a cached redirect from the first flow —
+      // returning an access token Google has already invalidated, which
+      // surfaces as a Gmail-side 401 ("Gmail search failed") on the next
+      // tap. The trade-off is that the user re-authenticates with Google
+      // each scan; we pass `login_hint=<email>` server-side so the chooser
+      // is pre-filled and the extra step is a single confirmation tap.
       const result = await WebBrowser.openAuthSessionAsync(
         buildGmailOAuthStartUrl(API_URL, bearerToken),
         MOBILE_REDIRECT_SCHEME,
+        { preferEphemeralSession: true },
       );
       if (result.type === 'cancel' || result.type === 'dismiss') {
         return null;
