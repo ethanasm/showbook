@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { isFeatureOn } from "@showbook/shared";
 import { Tooltip } from "../design-system/Tooltip";
 import { TrackPreview } from "./TrackPreview";
 import "./show-tabs.css";
@@ -33,8 +32,8 @@ interface PredictedSetlistRowProps {
   /**
    * Phase 9 — when set, render the real `<TrackPreview>` button in the
    * 24px slot. Requires `showId` so the button can call
-   * `setlistIntel.resolveTrackPreview` on lazy resolve. When the
-   * `SetlistIntelPreviews` flag is OFF, the slot stays empty.
+   * `setlistIntel.resolveTrackPreview` on lazy resolve. When absent,
+   * the slot stays empty.
    */
   showId?: string;
   /** Phase 9 — cached preview URL from `trackPreviewsForShow`. */
@@ -60,7 +59,7 @@ export function PredictedSetlistRow({
   previewUrl,
   spotifyTrackId,
 }: PredictedSetlistRowProps) {
-  const previewsOn = isFeatureOn("SetlistIntelPreviews") && !!showId;
+  const previewsOn = !!showId;
   // Badge tooltips. Disambiguation goal: every personal (user-scoped)
   // label uses "you/your". The artist-scoped 💎 Rare tooltip
   // deliberately omits "you" so the scope is obvious from wording.

@@ -165,24 +165,10 @@ describe('SHOW_TAB_KEYS', () => {
 });
 
 describe('isHypePlaylistVisible — SI-05', () => {
-  test('feature OFF always hides the card', () => {
-    for (const style of ['stable', 'rotating', 'theatrical', 'improvised', 'cold']) {
-      assert.equal(
-        isHypePlaylistVisible({
-          featureEnabled: false,
-          isPast: false,
-          setlistStyle: style,
-        }),
-        false,
-        `style ${style} should hide when feature OFF`,
-      );
-    }
-  });
   test('pre-show: stable + theatrical render the hype card', () => {
     for (const style of ['stable', 'theatrical']) {
       assert.equal(
         isHypePlaylistVisible({
-          featureEnabled: true,
           isPast: false,
           setlistStyle: style,
         }),
@@ -194,7 +180,6 @@ describe('isHypePlaylistVisible — SI-05', () => {
   test('pre-show: rotating is hidden (model cannot pick 25 confident songs)', () => {
     assert.equal(
       isHypePlaylistVisible({
-        featureEnabled: true,
         isPast: false,
         setlistStyle: 'rotating',
       }),
@@ -204,7 +189,6 @@ describe('isHypePlaylistVisible — SI-05', () => {
   test('pre-show: improvised is hidden (same SI-05 reasoning as rotating)', () => {
     assert.equal(
       isHypePlaylistVisible({
-        featureEnabled: true,
         isPast: false,
         setlistStyle: 'improvised',
       }),
@@ -215,7 +199,6 @@ describe('isHypePlaylistVisible — SI-05', () => {
     for (const style of ['stable', 'rotating', 'theatrical', 'improvised', 'cold']) {
       assert.equal(
         isHypePlaylistVisible({
-          featureEnabled: true,
           isPast: true,
           setlistStyle: style,
         }),

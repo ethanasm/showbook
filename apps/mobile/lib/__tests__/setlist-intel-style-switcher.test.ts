@@ -15,60 +15,17 @@ describe('pickSetlistView', () => {
     assert.equal(pickSetlistView({ style: 'cold' }), 'cold');
   });
 
-  it('routes stable to the stable view regardless of flags', () => {
+  it('routes stable to the stable view', () => {
     assert.equal(pickSetlistView({ style: 'stable' }), 'stable');
-    assert.equal(
-      pickSetlistView({ style: 'stable' }, { rotatingDisplayEnabled: false }),
-      'stable',
-    );
   });
 
-  it('blocks rotating when the display flag is off', () => {
-    assert.equal(
-      pickSetlistView({ style: 'rotating' }, { rotatingDisplayEnabled: false }),
-      'rotating_blocked',
-    );
+  it('routes rotating to the rotating view', () => {
+    assert.equal(pickSetlistView({ style: 'rotating' }), 'rotating');
   });
 
-  it('renders rotating when its flag is on', () => {
-    assert.equal(
-      pickSetlistView({ style: 'rotating' }, { rotatingDisplayEnabled: true }),
-      'rotating',
-    );
-  });
-
-  it('blocks theatrical / improvised when flags are off', () => {
-    assert.equal(
-      pickSetlistView(
-        { style: 'theatrical' },
-        { theatricalDisplayEnabled: false },
-      ),
-      'theatrical_blocked',
-    );
-    assert.equal(
-      pickSetlistView(
-        { style: 'improvised' },
-        { improvisedDisplayEnabled: false },
-      ),
-      'improvised_blocked',
-    );
-  });
-
-  it('renders theatrical / improvised when flags are on', () => {
-    assert.equal(
-      pickSetlistView(
-        { style: 'theatrical' },
-        { theatricalDisplayEnabled: true },
-      ),
-      'theatrical',
-    );
-    assert.equal(
-      pickSetlistView(
-        { style: 'improvised' },
-        { improvisedDisplayEnabled: true },
-      ),
-      'improvised',
-    );
+  it('routes theatrical / improvised to their respective views', () => {
+    assert.equal(pickSetlistView({ style: 'theatrical' }), 'theatrical');
+    assert.equal(pickSetlistView({ style: 'improvised' }), 'improvised');
   });
 });
 
