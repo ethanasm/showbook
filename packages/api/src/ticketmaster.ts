@@ -477,3 +477,43 @@ export function selectBestImage(images?: TMImage[]): string | null {
   pool.sort((a, b) => b.width - a.width);
   return pool[0].url;
 }
+
+/**
+ * Pick the best usable image across a candidate list of TM attractions
+ * for a given productionName. Walks the list twice:
+ *
+ *   1. Exact (case-insensitive, trimmed) name matches whose `images[]`
+ *      yields a usable URL via `selectBestImage`.
+ *   2. `"<name> (<suffix>)"` variants — TM frequently leaves the bare
+ *      record without promo art and maintains the region/year-suffixed
+ *      record (e.g. `"Cabaret at the Kit Kat Club"` is image-less while
+ *      `"Cabaret at the Kit Kat Club (NY)"` carries the real poster).
+ *      The trailing-`)` check prevents `"Cabaret Extreme"` from sneaking
+ *      in just because its name starts with `"Cabaret"`.
+ *
+ * Returns null if no candidate yields a usable image — the caller logs
+ * `show.cover.no_match` and the row stays uncovered until the next pass.
+ */
+export function pickAttractionImage(
+  candidates: TMAttraction[],
+  productionName: string,
+): string | null {
+  const target = productionName.trim().toLowerCase();
+  if (!target) return null;
+
+  for (const a of candidates) {
+    if (a.name.trim().toLowerCase() !== target) continue;
+    const url = selectBestImage(a.images);
+    if (url) return url;
+  }
+
+  const suffixPrefix = `${target} (`;
+  for (const a of candidates) {
+    const n = a.name.trim().toLowerCase();
+    if (!n.startsWith(suffixPrefix) || !n.endsWith(')')) continue;
+    const url = selectBestImage(a.images);
+    if (url) return url;
+  }
+
+  return null;
+}

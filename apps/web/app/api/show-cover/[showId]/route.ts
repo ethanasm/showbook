@@ -3,6 +3,7 @@ import { auth } from '@/auth';
 import { db, eq, shows, venues } from '@showbook/db';
 import { child } from '@showbook/observability';
 import {
+  pickAttractionImage,
   searchAttractions,
   searchEvents,
   selectBestImage,
@@ -18,10 +19,6 @@ const log = child({ component: 'web.api.show-cover' });
 // Bearer JWT minted via /api/auth/mobile-token rather than a NextAuth cookie
 // — can load show cover images through the same SSRF-guarded proxy the web uses.
 const AUTH_SECRET = process.env.AUTH_SECRET;
-
-function normalizeName(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, ' ');
-}
 
 interface ShowContext {
   productionName: string;
@@ -53,11 +50,14 @@ async function lookupTmImage(
     }
   }
 
-  // Path 2: attraction search by name with exact-match guard.
+  // Path 2: attraction search. `pickAttractionImage` walks every exact-
+  // name match first, then `"<name> (...)"` variants, so we don't get
+  // stuck on a stale TM record whose `images[]` is empty when a
+  // sibling record carries the real poster. See the matching comment
+  // in `packages/jobs/src/backfill-show-cover-images.ts`.
   const candidates = await searchAttractions(ctx.productionName);
-  const target = normalizeName(ctx.productionName);
-  const match = candidates.find((a) => normalizeName(a.name) === target);
-  if (match) return selectBestImage(match.images);
+  const match = pickAttractionImage(candidates, ctx.productionName);
+  if (match) return match;
 
   return null;
 }

@@ -21,6 +21,7 @@ export {
   inferKind,
   extractMusicbrainzId,
   selectBestImage,
+  pickAttractionImage,
   normalizeFestivalText,
   extractFestivalName,
   type TMEvent,

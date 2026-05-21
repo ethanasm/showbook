@@ -26,6 +26,7 @@ import type {
   searchVenues as SearchVenuesFn,
   searchAttractions as SearchAttractionsFn,
   selectBestImage as SelectBestImageFn,
+  pickAttractionImage as PickAttractionImageFn,
   extractMusicbrainzId as ExtractMusicbrainzIdFn,
   inferKind as InferKindFn,
   TMImage,
@@ -41,6 +42,7 @@ let getAttraction: typeof GetAttractionFn;
 let searchVenues: typeof SearchVenuesFn;
 let searchAttractions: typeof SearchAttractionsFn;
 let selectBestImage: typeof SelectBestImageFn;
+let pickAttractionImage: typeof PickAttractionImageFn;
 let extractMusicbrainzId: typeof ExtractMusicbrainzIdFn;
 let inferKind: typeof InferKindFn;
 let TMError: typeof TMErrorClass;
@@ -58,6 +60,7 @@ before(async () => {
   searchVenues = mod.searchVenues;
   searchAttractions = mod.searchAttractions;
   selectBestImage = mod.selectBestImage;
+  pickAttractionImage = mod.pickAttractionImage;
   extractMusicbrainzId = mod.extractMusicbrainzId;
   inferKind = mod.inferKind;
   TMError = mod.TMError;
@@ -405,11 +408,74 @@ test('selectBestImage: falls back to widest non-3_2 when no 3_2 exists', () => {
   assert.equal(result, 'big.jpg');
 });
 
-// ── extractMusicbrainzId ────────────────────────────────────────────────
+// ── pickAttractionImage ─────────────────────────────────────────────────
 
 function attraction(overrides: Partial<TMAttraction> = {}): TMAttraction {
   return { id: 'a', name: 'A', ...overrides };
 }
+
+test('pickAttractionImage: returns null when no candidates', () => {
+  assert.equal(pickAttractionImage([], 'Anything'), null);
+});
+
+test('pickAttractionImage: returns null when productionName is empty / whitespace', () => {
+  const a = attraction({ name: 'X', images: [img({ url: 'a.jpg' })] });
+  assert.equal(pickAttractionImage([a], ''), null);
+  assert.equal(pickAttractionImage([a], '   '), null);
+});
+
+test('pickAttractionImage: returns the URL of an exact-name match with usable images', () => {
+  const a = attraction({ name: 'Ragtime', images: [img({ ratio: '3_2', width: 800, url: 'r.jpg' })] });
+  assert.equal(pickAttractionImage([a], 'Ragtime'), 'r.jpg');
+});
+
+test('pickAttractionImage: matches exact name case-insensitively, ignoring leading/trailing whitespace', () => {
+  const a = attraction({ name: '  RAGTIME  ', images: [img({ url: 'r.jpg' })] });
+  assert.equal(pickAttractionImage([a], '  ragtime '), 'r.jpg');
+});
+
+test('pickAttractionImage: when the exact-name match has no usable images, falls through to a `<name> (...)` variant with images', () => {
+  // Mirrors the prod 2026-05-21 regression: "Cabaret at the Kit Kat Club"
+  // is a stale TM record with no art, and the maintained record is
+  // "Cabaret at the Kit Kat Club (NY)" with the real poster.
+  const stale = attraction({ id: 'stale', name: 'Cabaret at the Kit Kat Club', images: [] });
+  const real = attraction({
+    id: 'real',
+    name: 'Cabaret at the Kit Kat Club (NY)',
+    images: [img({ ratio: '3_2', width: 1200, url: 'ny.jpg' })],
+  });
+  assert.equal(
+    pickAttractionImage([stale, real], 'Cabaret at the Kit Kat Club'),
+    'ny.jpg',
+  );
+});
+
+test('pickAttractionImage: prefers an exact-name match with images over a `<name> (...)` variant with images', () => {
+  const exact = attraction({ id: 'e', name: 'Show', images: [img({ url: 'exact.jpg' })] });
+  const variant = attraction({ id: 'v', name: 'Show (UK)', images: [img({ url: 'variant.jpg' })] });
+  assert.equal(pickAttractionImage([exact, variant], 'Show'), 'exact.jpg');
+});
+
+test('pickAttractionImage: does not match unrelated names that merely start with the productionName', () => {
+  // The trailing-`)` + parenthesis-open check is what makes
+  // "Cabaret Extreme" ineligible to satisfy a "Cabaret at the Kit Kat Club"
+  // request — otherwise the loose prefix scan would accept it as long as
+  // it carried any image.
+  const cabaret = attraction({ name: 'Cabaret at the Kit Kat Club', images: [] });
+  const extreme = attraction({ name: 'Cabaret Extreme', images: [img({ url: 'extreme.jpg' })] });
+  assert.equal(
+    pickAttractionImage([cabaret, extreme], 'Cabaret at the Kit Kat Club'),
+    null,
+  );
+});
+
+test('pickAttractionImage: returns null when every candidate yields no usable image', () => {
+  const a = attraction({ name: 'X', images: [img({ fallback: true })] });
+  const b = attraction({ name: 'X (NY)', images: [img({ fallback: true })] });
+  assert.equal(pickAttractionImage([a, b], 'X'), null);
+});
+
+// ── extractMusicbrainzId ────────────────────────────────────────────────
 
 test('extractMusicbrainzId: returns the first MBID when present', () => {
   const a = attraction({
