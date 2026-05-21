@@ -1,27 +1,26 @@
 /**
  * HEIC normalization for the upload pipeline.
  *
- * iPhone's photo library hands back HEIC files by default. R2's presigned
- * URL is signed with the picker-reported MIME, but on iOS RN's
- * `fetch('file://…HEIC')` returns a Blob whose intrinsic `type` is
- * `application/octet-stream` (the OS has no system-wide MIME mapping for
- * HEIC) — and when a Blob body is PUT, the runtime can use `blob.type` in
- * place of the explicit `Content-Type` header. R2 then sees a Content-Type
- * that doesn't match the signature and returns 403 SignatureDoesNotMatch.
- *
- * Beyond the upload itself, HEIC isn't renderable in Chrome or Firefox,
- * so even a successful upload would fail to display on the web client.
- * The web client already re-encodes HEIC to WebP via `heic-to` before
- * upload (see `apps/web/components/media/uploadHelpers.ts`); this is the
- * mobile equivalent — but JPEG instead of WebP because
+ * iPhone's photo library hands back HEIC files by default. The web
+ * client can't render HEIC (Chrome/Firefox have no decoder), so even a
+ * successful upload would fail to display on the web. The web client
+ * already re-encodes HEIC to WebP via `heic-to` before upload (see
+ * `apps/web/components/media/uploadHelpers.ts`); this is the mobile
+ * equivalent — but JPEG instead of WebP because
  * `expo-image-manipulator`'s native re-encoder targets JPEG/PNG only.
  *
+ * The PUT step now uses the native upload task (which honors the
+ * explicit Content-Type header regardless of the file's intrinsic MIME),
+ * so the HEIC → JPEG conversion is purely about cross-browser
+ * viewability — not a precondition for the upload to succeed.
+ *
  * Module hygiene: this file MUST NOT statically import
- * `expo-image-manipulator`. That package transitively imports
- * `react-native`, whose `typeof` syntax trips the esbuild transformer
- * that `tsx` uses for `node --test`. The default deps lazy-load it via
- * dynamic `import()`, which the tsx loader only resolves at call time
- * — and tests always pass their own `deps`, so they never reach it.
+ * `expo-image-manipulator` or `expo-file-system`. Both transitively
+ * import `react-native`, whose `typeof` syntax trips the esbuild
+ * transformer that `tsx` uses for `node --test`. The default deps
+ * lazy-load them via dynamic `import()`, which the tsx loader only
+ * resolves at call time — and tests always pass their own `deps`, so
+ * they never reach it.
  */
 
 import type { SelectedFile } from './types';
@@ -38,7 +37,7 @@ export function shouldConvertHeic(
 
 /**
  * Minimal interface for the side effects this helper performs. Lets the
- * unit test stub out the native manipulator + file-read without spinning
+ * unit test stub out the native manipulator + file-stat without spinning
  * up Expo's native modules.
  */
 export interface NormalizerDeps {
@@ -50,20 +49,29 @@ let cachedDefaultDeps: NormalizerDeps | null = null;
 
 async function getDefaultDeps(): Promise<NormalizerDeps> {
   if (cachedDefaultDeps) return cachedDefaultDeps;
-  const mod = await import('expo-image-manipulator');
+  const [manipulator, fileSystem] = await Promise.all([
+    import('expo-image-manipulator'),
+    import('expo-file-system/legacy'),
+  ]);
   cachedDefaultDeps = {
     async manipulate(uri) {
-      const result = await mod.manipulateAsync(uri, [], {
+      const result = await manipulator.manipulateAsync(uri, [], {
         compress: JPEG_QUALITY,
-        format: mod.SaveFormat.JPEG,
+        format: manipulator.SaveFormat.JPEG,
       });
       return { uri: result.uri, width: result.width, height: result.height };
     },
     async measureBytes(uri) {
-      const res = await fetch(uri);
-      if (!res.ok) throw new Error(`Failed to measure ${uri}: ${res.status}`);
-      const blob = await res.blob();
-      return blob.size;
+      // `fetch(file://…)` reads the whole file into memory just to read
+      // `blob.size`, and on iOS its behavior with cache URIs from
+      // ImageManipulator has been inconsistent across SDK versions.
+      // `getInfoAsync` does a single stat() syscall and returns the size
+      // directly without buffering the bytes.
+      const info = await fileSystem.getInfoAsync(uri);
+      if (!info.exists || info.isDirectory) {
+        throw new Error(`Failed to measure ${uri}: file does not exist`);
+      }
+      return info.size;
     },
   };
   return cachedDefaultDeps;
