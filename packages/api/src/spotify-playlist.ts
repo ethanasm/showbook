@@ -297,12 +297,22 @@ export async function getExistingPlaylist(opts: {
   userId: string;
   showId: string;
   kind: PlaylistKind;
+  /**
+   * Festival shows hold one playlist per (user, performer); concerts
+   * resolve to the headliner. When omitted the lookup falls back to
+   * the show's headliner so legacy callers that pre-date the festival
+   * per-performer split keep their behavior.
+   */
+  performerId?: string;
 }): Promise<{
   playlistId: string;
   spotifyUrl: string;
   trackCount: number;
   durationMs: number;
 } | null> {
+  const performerId =
+    opts.performerId ?? (await resolveDefaultPerformerId(opts.userId, opts.showId));
+  if (!performerId) return null;
   const [row] = await db
     .select({
       playlistId: showSpotifyPlaylists.playlistId,
@@ -316,10 +326,30 @@ export async function getExistingPlaylist(opts: {
         eq(showSpotifyPlaylists.userId, opts.userId),
         eq(showSpotifyPlaylists.showId, opts.showId),
         eq(showSpotifyPlaylists.kind, opts.kind),
+        eq(showSpotifyPlaylists.performerId, performerId),
       ),
     )
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Best-effort headliner resolver for `getExistingPlaylist` callers
+ * that omit `performerId`. Returns `null` when the show is missing or
+ * has no headliner — callers treat that as "no existing row".
+ */
+async function resolveDefaultPerformerId(
+  userId: string,
+  showId: string,
+): Promise<string | null> {
+  const show = await db.query.shows.findFirst({
+    where: and(eq(shows.id, showId), eq(shows.userId, userId)),
+    with: {
+      showPerformers: { with: { performer: true } },
+    },
+  });
+  if (!show) return null;
+  return getHeadlinerId(show as ShowLike) ?? null;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -361,14 +391,17 @@ interface ShowContext {
     >;
     venue: { id: string; name: string };
   };
-  headlinerId: string;
-  headlinerName: string;
+  /** Performer the playlist is being built for — headliner by default,
+   *  user-picked artist for festival lineup chips. */
+  performerId: string;
+  performerName: string;
 }
 
 async function loadShowContext(
   dbi: Database,
   userId: string,
   showId: string,
+  performerIdOverride?: string,
 ): Promise<ShowContext> {
   const show = await dbi.query.shows.findFirst({
     where: and(eq(shows.id, showId), eq(shows.userId, userId)),
@@ -393,19 +426,22 @@ async function loadShowContext(
       message: 'Show has no headliner',
     });
   }
-  const headliner = show.showPerformers.find(
-    (sp) => sp.performer.id === headlinerId,
+  const targetId = performerIdOverride ?? headlinerId;
+  const performer = show.showPerformers.find(
+    (sp) => sp.performer.id === targetId,
   );
-  if (!headliner) {
+  if (!performer) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
-      message: 'Headliner performer not found in lineup',
+      message: performerIdOverride
+        ? 'Performer not in show lineup'
+        : 'Headliner performer not found in lineup',
     });
   }
   return {
     show: show as ShowContext['show'],
-    headlinerId,
-    headlinerName: headliner.performer.name,
+    performerId: targetId,
+    performerName: performer.performer.name,
   };
 }
 
@@ -446,6 +482,10 @@ function actualTracksFromSetlist(setlist: PerformerSetlist): SetlistTrack[] {
 export interface CreateHypeInput {
   userId: string;
   showId: string;
+  /** Festival lineup picker — when set, the prediction + playlist are
+   *  scoped to this performer instead of the show's headliner. Must
+   *  match a `show_performers` row for the show. */
+  performerId?: string;
 }
 
 /**
@@ -454,8 +494,9 @@ export interface CreateHypeInput {
  * Showbook-branded name, and adds tracks in 100-URI batches in the
  * predicted set order.
  *
- * Idempotent: a second call with the same `(showId, userId)` returns
- * the previously created playlist without re-mutating Spotify state.
+ * Idempotent: a second call with the same `(showId, userId, performerId)`
+ * returns the previously created playlist without re-mutating Spotify
+ * state.
  */
 export async function createHypePlaylist(
   input: CreateHypeInput,
@@ -463,33 +504,22 @@ export async function createHypePlaylist(
   return withTrace(
     'spotify.createHypePlaylist',
     () => createHypePlaylistInner(input),
-    { userId: input.userId, metadata: { showId: input.showId } },
+    {
+      userId: input.userId,
+      metadata: { showId: input.showId, performerId: input.performerId ?? null },
+    },
   );
 }
 
 async function createHypePlaylistInner(
   input: CreateHypeInput,
 ): Promise<CreatePlaylistResult> {
-  // Idempotency short-circuit.
-  const existing = await getExistingPlaylist({
-    userId: input.userId,
-    showId: input.showId,
-    kind: 'hype',
-  });
-  if (existing) {
-    log.info(
-      {
-        event: 'spotify.hype_playlist.reused',
-        userId: input.userId,
-        showId: input.showId,
-        playlistId: existing.playlistId,
-      },
-      'Returning existing hype playlist',
-    );
-    return { ...existing, requested: existing.trackCount, missing: [], reused: true };
-  }
-
-  const ctx = await loadShowContext(db, input.userId, input.showId);
+  const ctx = await loadShowContext(
+    db,
+    input.userId,
+    input.showId,
+    input.performerId,
+  );
   if (ctx.show.kind !== 'concert' && ctx.show.kind !== 'festival') {
     throw new TRPCError({
       code: 'BAD_REQUEST',
@@ -503,9 +533,34 @@ async function createHypePlaylistInner(
     });
   }
 
+  // Idempotency short-circuit. Scoped to the resolved performer so the
+  // festival chip rail can hold one playlist per lineup artist.
+  const existing = await getExistingPlaylist({
+    userId: input.userId,
+    showId: input.showId,
+    kind: 'hype',
+    performerId: ctx.performerId,
+  });
+  if (existing) {
+    log.info(
+      {
+        event: 'spotify.hype_playlist.reused',
+        userId: input.userId,
+        showId: input.showId,
+        performerId: ctx.performerId,
+        playlistId: existing.playlistId,
+      },
+      'Returning existing hype playlist',
+    );
+    return { ...existing, requested: existing.trackCount, missing: [], reused: true };
+  }
+
   const prediction = await predictedSetlistCached({
-    performerId: ctx.headlinerId,
+    performerId: ctx.performerId,
     targetDate: ctx.show.date,
+    // Mirror predictedFestivalSetlists' corpus filter so the prediction
+    // matches what the FestivalSetlistTab shows under the hype card.
+    prefer: ctx.show.kind === 'festival' ? 'festival' : undefined,
   });
   if (prediction.style === 'cold') {
     throw new TRPCError({
@@ -531,10 +586,11 @@ async function createHypePlaylistInner(
   return executePlaylistCreate({
     userId: input.userId,
     showId: input.showId,
+    performerId: ctx.performerId,
     kind: 'hype',
     tracks,
     meta: {
-      artistName: ctx.headlinerName,
+      artistName: ctx.performerName,
       venueName: ctx.show.venue.name,
       date: ctx.show.date,
       confidence: prediction.confidence,
@@ -545,13 +601,18 @@ async function createHypePlaylistInner(
 export interface CreateHeardInput {
   userId: string;
   showId: string;
+  /** Festival lineup picker — when set, the playlist is built from
+   *  this performer's slot in `shows.setlists`. Must match a
+   *  `show_performers` row for the show. */
+  performerId?: string;
 }
 
 /**
  * Post-show "I Heard" playlist. Same shape as `createHypePlaylist`
  * but sourced from the actual recorded setlist (per-performer
  * `shows.setlists` map; falls back to the legacy `shows.setlist`
- * array).
+ * array — that fallback only applies to the headliner because the
+ * column itself is a single setlist).
  */
 export async function createHeardPlaylist(
   input: CreateHeardInput,
@@ -559,32 +620,22 @@ export async function createHeardPlaylist(
   return withTrace(
     'spotify.createHeardPlaylist',
     () => createHeardPlaylistInner(input),
-    { userId: input.userId, metadata: { showId: input.showId } },
+    {
+      userId: input.userId,
+      metadata: { showId: input.showId, performerId: input.performerId ?? null },
+    },
   );
 }
 
 async function createHeardPlaylistInner(
   input: CreateHeardInput,
 ): Promise<CreatePlaylistResult> {
-  const existing = await getExistingPlaylist({
-    userId: input.userId,
-    showId: input.showId,
-    kind: 'heard',
-  });
-  if (existing) {
-    log.info(
-      {
-        event: 'spotify.heard_playlist.reused',
-        userId: input.userId,
-        showId: input.showId,
-        playlistId: existing.playlistId,
-      },
-      'Returning existing heard playlist',
-    );
-    return { ...existing, requested: existing.trackCount, missing: [], reused: true };
-  }
-
-  const ctx = await loadShowContext(db, input.userId, input.showId);
+  const ctx = await loadShowContext(
+    db,
+    input.userId,
+    input.showId,
+    input.performerId,
+  );
   if (!ctx.show.date) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
@@ -592,30 +643,57 @@ async function createHeardPlaylistInner(
     });
   }
 
+  const existing = await getExistingPlaylist({
+    userId: input.userId,
+    showId: input.showId,
+    kind: 'heard',
+    performerId: ctx.performerId,
+  });
+  if (existing) {
+    log.info(
+      {
+        event: 'spotify.heard_playlist.reused',
+        userId: input.userId,
+        showId: input.showId,
+        performerId: ctx.performerId,
+        playlistId: existing.playlistId,
+      },
+      'Returning existing heard playlist',
+    );
+    return { ...existing, requested: existing.trackCount, missing: [], reused: true };
+  }
+
+  const headlinerId = getHeadlinerId(ctx.show as ShowLike);
   const setlistsMap = normalizePerformerSetlistsMap(ctx.show.setlists);
-  let headlinerSetlist = setlistsMap[ctx.headlinerId];
-  if (!headlinerSetlist && ctx.show.setlist && ctx.show.setlist.length > 0) {
-    headlinerSetlist = {
+  let performerSetlist = setlistsMap[ctx.performerId];
+  if (
+    !performerSetlist &&
+    ctx.performerId === headlinerId &&
+    ctx.show.setlist &&
+    ctx.show.setlist.length > 0
+  ) {
+    performerSetlist = {
       sections: [
         { kind: 'set', songs: ctx.show.setlist.map((title) => ({ title })) },
       ],
     };
   }
-  if (!headlinerSetlist || setlistTotalSongs(headlinerSetlist) === 0) {
+  if (!performerSetlist || setlistTotalSongs(performerSetlist) === 0) {
     throw new TRPCError({
       code: 'PRECONDITION_FAILED',
       message: 'setlist_empty',
     });
   }
 
-  const tracks = actualTracksFromSetlist(headlinerSetlist);
+  const tracks = actualTracksFromSetlist(performerSetlist);
   return executePlaylistCreate({
     userId: input.userId,
     showId: input.showId,
+    performerId: ctx.performerId,
     kind: 'heard',
     tracks,
     meta: {
-      artistName: ctx.headlinerName,
+      artistName: ctx.performerName,
       venueName: ctx.show.venue.name,
       date: ctx.show.date,
       confidence: null,
@@ -631,6 +709,7 @@ async function createHeardPlaylistInner(
 interface ExecuteInput {
   userId: string;
   showId: string;
+  performerId: string;
   kind: PlaylistKind;
   tracks: SetlistTrack[];
   meta: PlaylistMetadata;
@@ -767,6 +846,7 @@ async function executePlaylistCreate(
     .values({
       showId: input.showId,
       userId: input.userId,
+      performerId: input.performerId,
       kind: input.kind,
       playlistId: playlist.id,
       spotifyUrl: playlist.spotifyUrl,
@@ -780,6 +860,7 @@ async function executePlaylistCreate(
       event: `spotify.${input.kind}_playlist.created`,
       userId: input.userId,
       showId: input.showId,
+      performerId: input.performerId,
       playlistId: playlist.id,
       trackCount: resolution.uris.length,
       requested: resolution.requested,

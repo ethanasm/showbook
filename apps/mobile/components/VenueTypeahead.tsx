@@ -26,11 +26,29 @@ import { useTheme } from '../lib/theme';
 import { useDebouncedValue } from '../lib/useDebouncedValue';
 
 export interface VenueSuggestion {
+  /**
+   * Stable list key. For local DB venues this is the venue UUID; for
+   * Google Places suggestions it's a synthetic `place:${placeId}` token
+   * so the row keys don't collide.
+   */
   id: string;
   name: string;
   city?: string | null;
   stateRegion?: string | null;
   country?: string | null;
+  /**
+   * Set when the suggestion comes from Google Places autocomplete and
+   * the venue hasn't been materialized into our DB yet. The selection
+   * handler in the parent screen calls `venues.createFromPlace` to turn
+   * it into a real venue row before setting it on the form.
+   */
+  placeId?: string;
+  /**
+   * Free-text address line shown under the suggestion name when present
+   * — Google Places returns this; local DB venues fall back to
+   * `city, stateRegion`.
+   */
+  formattedAddress?: string;
 }
 
 export interface VenueTypeaheadProps {
@@ -66,17 +84,41 @@ export function VenueTypeahead({
   const { tokens } = useTheme();
   const { colors } = tokens;
   const debounced = useDebouncedValue(value, debounceMs);
+  // After the user taps a suggestion we hide the dropdown until they
+  // type again. Without this the parent's `value` update (to the
+  // selected venue name) keeps `value.trim().length > 0` true, so the
+  // list would stay visible — and the debounced effect below would
+  // re-fire `onSearch` against the new value and immediately
+  // repopulate it.
+  const [dismissed, setDismissed] = React.useState(false);
 
   React.useEffect(() => {
+    if (dismissed) return;
     const trimmed = debounced.trim();
     if (trimmed.length === 0) return;
     onSearch(trimmed);
     // Intentionally omit `onSearch` from deps — every keystroke would
     // otherwise re-fire if the parent recreated the callback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debounced]);
+  }, [debounced, dismissed]);
 
-  const showResults = value.trim().length > 0;
+  const handleChangeText = React.useCallback(
+    (next: string) => {
+      setDismissed(false);
+      onChange(next);
+    },
+    [onChange],
+  );
+
+  const handleSelect = React.useCallback(
+    (venue: VenueSuggestion) => {
+      setDismissed(true);
+      onSelect(venue);
+    },
+    [onSelect],
+  );
+
+  const showResults = !dismissed && value.trim().length > 0;
 
   return (
     <View testID={testID} style={styles.wrap}>
@@ -84,7 +126,7 @@ export function VenueTypeahead({
         <Search size={16} color={colors.muted} strokeWidth={2} />
         <TextInput
           value={value}
-          onChangeText={onChange}
+          onChangeText={handleChangeText}
           placeholder={placeholder}
           placeholderTextColor={colors.faint}
           autoCapitalize="words"
@@ -102,7 +144,7 @@ export function VenueTypeahead({
           {suggestions.map((venue, i) => (
             <Pressable
               key={venue.id}
-              onPress={() => onSelect(venue)}
+              onPress={() => handleSelect(venue)}
               accessibilityRole="button"
               accessibilityLabel={`Select ${venue.name}`}
               testID={testID ? `${testID}-row-${venue.id}` : undefined}
@@ -117,9 +159,10 @@ export function VenueTypeahead({
                 <Text style={[styles.rowName, { color: colors.ink }]} numberOfLines={1}>
                   {venue.name}
                 </Text>
-                {venue.city ? (
+                {venue.formattedAddress ?? venue.city ? (
                   <Text style={[styles.rowMeta, { color: colors.muted }]} numberOfLines={1}>
-                    {[venue.city, venue.stateRegion].filter(Boolean).join(', ')}
+                    {venue.formattedAddress ??
+                      [venue.city, venue.stateRegion].filter(Boolean).join(', ')}
                   </Text>
                 ) : null}
               </View>

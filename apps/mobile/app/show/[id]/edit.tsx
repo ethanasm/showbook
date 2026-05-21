@@ -29,7 +29,6 @@ import {
   ShowFormFields,
   type ShowFormErrors,
 } from '../../../components/ShowFormFields';
-import type { VenueSuggestion } from '../../../components/VenueTypeahead';
 import { useTheme } from '../../../lib/theme';
 import { trpc } from '../../../lib/trpc';
 import { useFeedback } from '../../../lib/feedback';
@@ -43,6 +42,7 @@ import {
   type ShowFormValues,
 } from '../../../lib/showForm';
 import { isYmd, normalizeDateInput } from '../../../lib/dateInput';
+import { useVenueSearch } from '../../../lib/useVenueSearch';
 import { newPerformerRowId } from '../../../components/LineupEditor';
 
 const SCREEN_OPTIONS = { presentation: 'modal', gestureEnabled: true } as const;
@@ -108,29 +108,28 @@ export default function EditShowScreen(): React.JSX.Element {
     });
   }, [initial, values]);
 
-  const [venueResults, setVenueResults] = React.useState<VenueSuggestion[]>([]);
-  const [venueLoading, setVenueLoading] = React.useState(false);
+  const venueSearch = useVenueSearch(utils.client);
 
-  const runVenueSearch = React.useCallback(
-    (q: string) => {
-      setVenueLoading(true);
-      utils.client.venues.search
-        .query({ query: q })
-        .then((rows) => {
-          setVenueResults(
-            rows.map((r) => ({
-              id: r.id,
-              name: r.name,
-              city: r.city,
-              stateRegion: r.stateRegion,
-              country: r.country,
-            })),
-          );
-        })
-        .catch(() => setVenueResults([]))
-        .finally(() => setVenueLoading(false));
+  const onSelectPlace = React.useCallback(
+    async (placeId: string) => {
+      try {
+        const created = await venueSearch.resolvePlace(placeId);
+        set('venue', {
+          id: created.id,
+          name: created.name,
+          city: created.city,
+          stateRegion: created.stateRegion,
+          country: created.country,
+        });
+        set('venueQuery', created.name);
+      } catch (err) {
+        showToast({
+          kind: 'error',
+          text: toUserMessage(err, 'Could not load venue details'),
+        });
+      }
     },
-    [utils],
+    [venueSearch, set, showToast],
   );
 
   const [saving, setSaving] = React.useState(false);
@@ -295,9 +294,10 @@ export default function EditShowScreen(): React.JSX.Element {
             <ShowFormFields
               values={values}
               set={set}
-              venueSuggestions={venueResults}
-              venueLoading={venueLoading}
-              onVenueSearch={runVenueSearch}
+              venueSuggestions={venueSearch.suggestions}
+              venueLoading={venueSearch.loading}
+              onVenueSearch={venueSearch.runSearch}
+              onSelectPlace={onSelectPlace}
               errors={errors}
               clearError={clearError}
             />

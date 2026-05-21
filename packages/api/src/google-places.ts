@@ -86,10 +86,21 @@ const PlaceDetailsResponseSchema = z
 
 export async function autocomplete(
   input: string,
-  types: string[] = ['establishment'],
+  types?: string[],
 ): Promise<PlaceSuggestion[]> {
   const API_KEY = getApiKey();
   if (!API_KEY || input.length < 2) return [];
+
+  // Places API (New): each place has a single primary type from a leaf
+  // category (e.g. `performing_arts_theater`, `concert_hall`). Filtering
+  // by the umbrella `establishment` excludes those leaves, which is why
+  // a broad venue search needs to send no filter at all. Callers that
+  // genuinely want a narrow filter (city picker, etc.) pass explicit
+  // types.
+  const body: Record<string, unknown> = { input };
+  if (types && types.length > 0) {
+    body.includedPrimaryTypes = types;
+  }
 
   const res = await fetch(`${BASE_URL}/places:autocomplete`, {
     method: 'POST',
@@ -97,10 +108,7 @@ export async function autocomplete(
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': API_KEY,
     },
-    body: JSON.stringify({
-      input,
-      includedPrimaryTypes: types,
-    }),
+    body: JSON.stringify(body),
     signal: AbortSignal.timeout(8_000),
   });
 

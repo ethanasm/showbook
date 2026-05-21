@@ -6,6 +6,9 @@
  * dependencies tight and matches the design's minimal grid (1px rule
  * borders, kind-colored dots per event, "today" highlighted with surface
  * tint and bold day number).
+ *
+ * Also exports `MiniMonth` — a compact 7-col grid used to render each
+ * month in the Shows tab's year view, with a single event dot per day.
  */
 
 import React from 'react';
@@ -175,30 +178,190 @@ const styles = StyleSheet.create({
   },
   cell: {
     width: `${100 / 7}%`,
-    minHeight: 56,
-    paddingVertical: 6,
+    minHeight: 64,
+    paddingVertical: 8,
     paddingHorizontal: 6,
-    gap: 4,
+    gap: 6,
   },
   dayNum: {
     fontFamily: 'Geist Sans',
-    fontSize: 12,
-    lineHeight: 14,
+    fontSize: 13,
+    lineHeight: 16,
   },
   dotRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 4,
     flexWrap: 'wrap',
   },
   dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   moreText: {
     fontFamily: 'Geist Sans',
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '500',
+  },
+});
+
+// ---------------------------------------------------------------------------
+// MiniMonth — used by the Shows tab's year view.
+// ---------------------------------------------------------------------------
+
+const MONTH_LABEL = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+] as const;
+
+export interface MiniMonthProps {
+  year: number;
+  /** 0-indexed month (Jan = 0). */
+  month: number;
+  events: Record<string, CalendarEvent[]>;
+  todayISO: string;
+  onPress?: () => void;
+  /** When true, the tile is rendered dimmed and not pressable. */
+  disabled?: boolean;
+}
+
+export function MiniMonth({
+  year,
+  month,
+  events,
+  todayISO,
+  onPress,
+  disabled = false,
+}: MiniMonthProps): React.JSX.Element {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysIn = new Date(year, month + 1, 0).getDate();
+
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDow; i += 1) cells.push(null);
+  for (let d = 1; d <= daysIn; d += 1) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  let eventCount = 0;
+  for (let d = 1; d <= daysIn; d += 1) {
+    const iso = isoFor(year, month, d);
+    eventCount += events[iso]?.length ?? 0;
+  }
+
+  const isCurrentMonth =
+    todayISO.startsWith(`${year}-${month < 9 ? `0${month + 1}` : month + 1}-`);
+
+  const Wrapper = onPress && !disabled ? Pressable : View;
+  return (
+    <Wrapper
+      {...(onPress && !disabled
+        ? {
+            onPress,
+            accessibilityRole: 'button' as const,
+            accessibilityLabel: `${MONTH_LABEL[month]} ${year}, ${eventCount} ${
+              eventCount === 1 ? 'show' : 'shows'
+            }`,
+          }
+        : {})}
+      style={[
+        miniStyles.tile,
+        {
+          backgroundColor: colors.surface,
+          borderColor: isCurrentMonth ? colors.ink : colors.rule,
+          borderWidth: isCurrentMonth ? 1 : StyleSheet.hairlineWidth,
+          opacity: disabled ? 0.45 : 1,
+        },
+      ]}
+    >
+      <Text style={[miniStyles.monthLabel, { color: colors.ink }]}>
+        {MONTH_LABEL[month]}
+      </Text>
+      <View style={miniStyles.grid}>
+        {cells.map((day, i) => {
+          const iso = day ? isoFor(year, month, day) : null;
+          const dayEvents = iso ? events[iso] ?? [] : [];
+          const isToday = iso === todayISO;
+          const primary = dayEvents[0];
+          const dotColor = primary
+            ? primary.state === 'ticketed'
+              ? colors.accent
+              : tokens.kindColor(primary.kind)
+            : null;
+          const dotOpacity = primary?.state === 'watching' ? 0.5 : 1;
+
+          return (
+            <View key={i} style={miniStyles.cell}>
+              <Text
+                style={[
+                  miniStyles.dayNum,
+                  {
+                    color: isToday
+                      ? colors.ink
+                      : day
+                        ? colors.muted
+                        : 'transparent',
+                    fontWeight: isToday ? '700' : '400',
+                  },
+                ]}
+              >
+                {day ?? ''}
+              </Text>
+              <View style={miniStyles.dotSlot}>
+                {dotColor && (
+                  <View
+                    style={[
+                      miniStyles.dot,
+                      { backgroundColor: dotColor, opacity: dotOpacity },
+                    ]}
+                  />
+                )}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    </Wrapper>
+  );
+}
+
+const miniStyles = StyleSheet.create({
+  tile: {
+    borderRadius: 8,
+    padding: 8,
+    gap: 6,
+  },
+  monthLabel: {
+    fontFamily: 'Geist Sans',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  cell: {
+    width: `${100 / 7}%`,
+    alignItems: 'center',
+    paddingVertical: 1,
+  },
+  dayNum: {
+    fontFamily: 'Geist Sans',
+    fontSize: 8.5,
+    lineHeight: 10,
+  },
+  dotSlot: {
+    height: 5,
+    marginTop: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dot: {
+    width: 4.5,
+    height: 4.5,
+    borderRadius: 2.5,
   },
 });

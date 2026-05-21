@@ -92,6 +92,13 @@ const config: ExpoConfig = {
           LSHandlerRank: 'Alternate',
         },
       ],
+      // iOS 9+ requires every URL scheme passed to `canOpenURL` to be
+      // declared here, otherwise the call returns false even when the
+      // target app is installed. `spotify` powers the native handoff
+      // from the Hype / Heard playlist cards via `buildSpotifyOpenPlan`
+      // (`spotify://playlist/{id}`); without it iOS silently falls
+      // back to the in-app browser.
+      LSApplicationQueriesSchemes: ['spotify'],
     },
   },
   android: {
