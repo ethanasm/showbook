@@ -2,8 +2,8 @@
  * M4 upload pipeline tests.
  *
  * The pipeline talks to the server via an injected `UploadServer` and PUTs
- * to S3 via an injected `fetchImpl`. Both are stubbed here so the test
- * never opens a network socket.
+ * to S3 via an injected `putImpl`. Both are stubbed here so the test never
+ * opens a network socket.
  *
  * Coverage:
  *  - happy path: intent → S3 PUT → confirm, with the request shape asserted
@@ -22,8 +22,11 @@ import {
   OverQuotaError,
   UploadCancelledError,
   UploadHttpError,
+  type PutFileFn,
+  type PutResult,
   type SelectedFile,
   type UploadServer,
+  type UploadTarget,
   type UploadIntentInput,
   type UploadIntentResult,
   type MediaAssetDto,
@@ -105,39 +108,41 @@ function stubServer(opts: {
   };
 }
 
-interface FetchCall {
-  url: string;
-  init?: RequestInit;
+interface PutCall {
+  target: UploadTarget;
+  fileUri: string;
+  signal: AbortSignal | undefined;
 }
 
-function makeFetch(handlers: Array<(url: string, init?: RequestInit) => Promise<Response> | Response>): {
-  fetchImpl: typeof globalThis.fetch;
-  calls: FetchCall[];
+type PutHandler = (call: PutCall) => Promise<PutResult> | PutResult;
+
+/**
+ * Build a `putImpl` that returns successive results per call. If only
+ * one handler is provided, it's reused for every call. Records each call
+ * so tests can assert on URL / mime / signal state.
+ */
+function makePut(handlers: PutHandler[]): {
+  putImpl: PutFileFn;
+  calls: PutCall[];
 } {
-  const calls: FetchCall[] = [];
+  const calls: PutCall[] = [];
   let i = 0;
-  const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : (input as Request).url;
-    calls.push({ url, init });
+  const putImpl: PutFileFn = async (args) => {
+    calls.push({ target: args.target, fileUri: args.fileUri, signal: args.signal });
     const handler = handlers[Math.min(i, handlers.length - 1)];
     i++;
-    if (!handler) throw new Error('no fetch handler');
-    return handler(url, init);
-  }) as typeof globalThis.fetch;
-  return { fetchImpl, calls };
+    if (!handler) throw new Error('no put handler');
+    return handler({ target: args.target, fileUri: args.fileUri, signal: args.signal });
+  };
+  return { putImpl, calls };
 }
 
-function okResponse(body: BodyInit | null = null, init: ResponseInit = { status: 200 }): Response {
-  return new Response(body, init);
+function okPut(): PutHandler {
+  return () => ({ status: 200, bodyPreview: null });
 }
 
-function emptyBlob(size = 4): Blob {
-  return new Blob([new Uint8Array(size)], { type: 'image/jpeg' });
+function errPut(status: number, body: string | null = null): PutHandler {
+  return () => ({ status, bodyPreview: body });
 }
 
 // ---------------------------------------------------------------------------
@@ -147,18 +152,13 @@ function emptyBlob(size = 4): Blob {
 describe('uploadFile — happy path', () => {
   it('chains picker → presigned URL → S3 PUT → confirm', async () => {
     const server = stubServer();
-    const { fetchImpl, calls } = makeFetch([
-      // Step A: read source bytes from the file:// uri
-      async () => okResponse(emptyBlob()),
-      // Step B: PUT to S3
-      async () => okResponse(null, { status: 200 }),
-    ]);
+    const { putImpl, calls } = makePut([okPut()]);
 
     const file = fakePhoto({ caption: 'Cool moment' });
     const result = await uploadFile(file, {
       server,
       showId: 'show-1',
-      fetchImpl,
+      putImpl,
       sleepImpl: async () => undefined,
     });
 
@@ -175,15 +175,12 @@ describe('uploadFile — happy path', () => {
     assert.equal(intent.variants[0]?.name, 'source');
     assert.equal(intent.variants[0]?.bytes, 4_096);
 
-    // Two fetches: read file, then PUT
-    assert.equal(calls.length, 2);
-    assert.equal(calls[0]?.url, 'file:///private/photo.jpg');
-    assert.equal(calls[1]?.url, 'https://s3.example.com/upload?sig=abc');
-    assert.equal((calls[1]?.init as RequestInit | undefined)?.method, 'PUT');
-    const headers = (calls[1]?.init as RequestInit | undefined)?.headers as
-      | Record<string, string>
-      | undefined;
-    assert.equal(headers?.['Content-Type'], 'image/jpeg');
+    // One PUT to the presigned URL, carrying the source file uri and
+    // explicit mime that the URL was signed for.
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.fileUri, 'file:///private/photo.jpg');
+    assert.equal(calls[0]?.target.uploadUrl, 'https://s3.example.com/upload?sig=abc');
+    assert.equal(calls[0]?.target.mimeType, 'image/jpeg');
 
     // Confirm
     assert.equal(server.completeCalls.length, 1);
@@ -193,51 +190,13 @@ describe('uploadFile — happy path', () => {
     assert.equal(result.status, 'ready');
   });
 
-  it('re-wraps the source blob with the intended mimeType so the PUT body matches the signed Content-Type', async () => {
-    // Even after HEIC normalization, `readFileAsBlob` defensively re-wraps
-    // the blob so its `type` matches the intended mimeType. RN's fetch can
-    // pass the Blob's intrinsic `type` through as the request's
-    // Content-Type, so if `fetch('file://…')` returns a blob with a stale
-    // / wrong type (e.g. `application/octet-stream`), the PUT would arrive
-    // at R2 with a Content-Type that doesn't match the signed URL → 403.
-    const server = stubServer();
-    const sourceBlob = new Blob([new Uint8Array(4_096)], {
-      type: 'application/octet-stream',
-    });
-    const { fetchImpl, calls } = makeFetch([
-      async () => okResponse(sourceBlob),
-      async () => okResponse(null, { status: 200 }),
-    ]);
-
-    await uploadFile(fakePhoto(), {
-      server,
-      showId: 'show-1',
-      fetchImpl,
-      sleepImpl: async () => undefined,
-    });
-
-    const putInit = calls[1]?.init as RequestInit | undefined;
-    const putBody = putInit?.body as Blob | undefined;
-    assert.ok(putBody instanceof Blob, 'expected PUT body to be a Blob');
-    assert.equal(
-      putBody.type,
-      'image/jpeg',
-      `PUT body blob.type must match the signed mimeType — got ${putBody.type}`,
-    );
-    const headers = putInit?.headers as Record<string, string> | undefined;
-    assert.equal(headers?.['Content-Type'], 'image/jpeg');
-  });
-
   it('re-encodes HEIC photos to JPEG before the upload intent so R2 sees a renderable file', async () => {
-    // iPhone-picked HEIC files PUT as `application/octet-stream` and break
-    // R2's signature check; even when they don't, Chrome / Firefox can't
-    // render them. We run them through expo-image-manipulator → JPEG before
-    // any signature is generated.
+    // iPhone-picked HEIC files can't render on Chrome / Firefox; we run
+    // them through expo-image-manipulator → JPEG so the upload that lands
+    // in R2 is web-viewable. (The PUT itself is HEIC-safe now via the
+    // native upload task — but cross-browser display still requires JPEG.)
     const server = stubServer();
-    const { fetchImpl, calls } = makeFetch([
-      async () => okResponse(emptyBlob()),
-      async () => okResponse(null, { status: 200 }),
-    ]);
+    const { putImpl, calls } = makePut([okPut()]);
 
     const heicFile: SelectedFile = {
       uri: 'file:///private/photo.HEIC',
@@ -251,7 +210,7 @@ describe('uploadFile — happy path', () => {
     await uploadFile(heicFile, {
       server,
       showId: 'show-1',
-      fetchImpl,
+      putImpl,
       sleepImpl: async () => undefined,
       normalizerDeps: {
         manipulate: async () => ({
@@ -268,24 +227,41 @@ describe('uploadFile — happy path', () => {
     assert.equal(server.intentCalls[0]?.mimeType, 'image/jpeg');
     assert.equal(server.intentCalls[0]?.sourceBytes, 421_337);
     assert.equal(server.intentCalls[0]?.variants[0]?.mimeType, 'image/jpeg');
-    // The file URI fetched for upload bytes is the converted JPEG, not the HEIC.
-    assert.equal(calls[0]?.url, 'file:///cache/converted.jpg');
+    // The file URI handed to the PUT is the converted JPEG, not the HEIC.
+    assert.equal(calls[0]?.fileUri, 'file:///cache/converted.jpg');
+  });
+
+  it('hands the original file URI to the PUT step rather than buffering bytes in JS', async () => {
+    // Regression: the pre-PR fetch+Blob path loaded the entire file into
+    // JS memory just to PUT it. The native upload task streams from disk
+    // — the test confirms we pass through the file:// URI and never read
+    // it ourselves.
+    const server = stubServer();
+    const { putImpl, calls } = makePut([okPut()]);
+
+    const file = fakePhoto({ uri: 'file:///some/path/IMG_4242.jpg', bytes: 12_345_678 });
+    await uploadFile(file, {
+      server,
+      showId: 'show-1',
+      putImpl,
+      sleepImpl: async () => undefined,
+    });
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.fileUri, 'file:///some/path/IMG_4242.jpg');
   });
 });
 
 describe('uploadFile — progress', () => {
   it('reports progress monotonically from 0 to 1', async () => {
     const server = stubServer();
-    const { fetchImpl } = makeFetch([
-      async () => okResponse(emptyBlob()),
-      async () => okResponse(null, { status: 200 }),
-    ]);
+    const { putImpl } = makePut([okPut()]);
 
     const progress: number[] = [];
     await uploadFile(fakePhoto(), {
       server,
       showId: 'show-1',
-      fetchImpl,
+      putImpl,
       sleepImpl: async () => undefined,
       onProgress: (f) => progress.push(f),
     });
@@ -307,21 +283,18 @@ describe('uploadFile — retry with exponential backoff', () => {
   it('retries 5xx PUT failures and then succeeds', async () => {
     const server = stubServer();
     let putAttempts = 0;
-    const { fetchImpl, calls } = makeFetch([
-      // file read
-      async () => okResponse(emptyBlob()),
-      // PUT attempts: two 503s then a 200
-      async () => {
+    const { putImpl, calls } = makePut([
+      () => {
         putAttempts++;
-        return okResponse(null, { status: 503 });
+        return { status: 503, bodyPreview: null };
       },
-      async () => {
+      () => {
         putAttempts++;
-        return okResponse(null, { status: 503 });
+        return { status: 503, bodyPreview: null };
       },
-      async () => {
+      () => {
         putAttempts++;
-        return okResponse(null, { status: 200 });
+        return { status: 200, bodyPreview: null };
       },
     ]);
 
@@ -329,7 +302,7 @@ describe('uploadFile — retry with exponential backoff', () => {
     await uploadFile(fakePhoto(), {
       server,
       showId: 'show-1',
-      fetchImpl,
+      putImpl,
       baseBackoffMs: 10,
       sleepImpl: async (ms) => {
         sleeps.push(ms);
@@ -341,29 +314,27 @@ describe('uploadFile — retry with exponential backoff', () => {
     assert.equal(sleeps.length, 2);
     assert.equal(sleeps[0], 10); // base * 2^0
     assert.equal(sleeps[1], 20); // base * 2^1
-    // 4 fetches: 1 file read + 3 PUTs
-    assert.equal(calls.length, 4);
+    assert.equal(calls.length, 3);
   });
 
   it('retries network errors (TypeError) on the PUT step', async () => {
     const server = stubServer();
     let putAttempts = 0;
-    const { fetchImpl } = makeFetch([
-      async () => okResponse(emptyBlob()),
-      async () => {
+    const { putImpl } = makePut([
+      () => {
         putAttempts++;
         throw new TypeError('Network request failed');
       },
-      async () => {
+      () => {
         putAttempts++;
-        return okResponse(null, { status: 200 });
+        return { status: 200, bodyPreview: null };
       },
     ]);
 
     await uploadFile(fakePhoto(), {
       server,
       showId: 'show-1',
-      fetchImpl,
+      putImpl,
       baseBackoffMs: 1,
       sleepImpl: async () => undefined,
     });
@@ -374,11 +345,10 @@ describe('uploadFile — retry with exponential backoff', () => {
   it('gives up after maxRetries on persistent 5xx and surfaces the HTTP error', async () => {
     const server = stubServer();
     let attempts = 0;
-    const { fetchImpl } = makeFetch([
-      async () => okResponse(emptyBlob()),
-      async () => {
+    const { putImpl } = makePut([
+      () => {
         attempts++;
-        return okResponse(null, { status: 502 });
+        return { status: 502, bodyPreview: null };
       },
     ]);
 
@@ -386,7 +356,7 @@ describe('uploadFile — retry with exponential backoff', () => {
       uploadFile(fakePhoto(), {
         server,
         showId: 'show-1',
-        fetchImpl,
+        putImpl,
         maxRetries: 2,
         baseBackoffMs: 1,
         sleepImpl: async () => undefined,
@@ -401,16 +371,13 @@ describe('uploadFile — retry with exponential backoff', () => {
 describe('uploadFile — over-quota signal', () => {
   it('surfaces 402 from the PUT step as OverQuotaError', async () => {
     const server = stubServer();
-    const { fetchImpl } = makeFetch([
-      async () => okResponse(emptyBlob()),
-      async () => okResponse(null, { status: 402 }),
-    ]);
+    const { putImpl } = makePut([errPut(402)]);
 
     await assert.rejects(
       uploadFile(fakePhoto(), {
         server,
         showId: 'show-1',
-        fetchImpl,
+        putImpl,
         sleepImpl: async () => undefined,
       }),
       (err) => err instanceof OverQuotaError,
@@ -420,11 +387,10 @@ describe('uploadFile — over-quota signal', () => {
   it('does NOT retry an over-quota response', async () => {
     const server = stubServer();
     let putAttempts = 0;
-    const { fetchImpl } = makeFetch([
-      async () => okResponse(emptyBlob()),
-      async () => {
+    const { putImpl } = makePut([
+      () => {
         putAttempts++;
-        return okResponse(null, { status: 402 });
+        return { status: 402, bodyPreview: null };
       },
     ]);
 
@@ -432,7 +398,7 @@ describe('uploadFile — over-quota signal', () => {
       uploadFile(fakePhoto(), {
         server,
         showId: 'show-1',
-        fetchImpl,
+        putImpl,
         baseBackoffMs: 1,
         sleepImpl: async () => undefined,
       }),
@@ -470,26 +436,23 @@ describe('uploadFile — telemetry on PUT failure', () => {
     const server = stubServer();
     const r2ErrorBody =
       '<?xml version="1.0" encoding="UTF-8"?><Error><Code>SignatureDoesNotMatch</Code><Message>The request signature we calculated does not match the signature you provided.</Message></Error>';
-    const { fetchImpl } = makeFetch([
-      async () => okResponse(emptyBlob()),
-      async () => new Response(r2ErrorBody, { status: 403 }),
-    ]);
+    const { putImpl } = makePut([errPut(403, r2ErrorBody)]);
 
     await assert.rejects(
       uploadFile(fakePhoto(), {
         server,
         showId: 'show-1',
-        fetchImpl,
+        putImpl,
         maxRetries: 0,
         sleepImpl: async () => undefined,
       }),
       (err) => err instanceof UploadHttpError && err.status === 403 && err.step === 'put',
     );
 
-    // Lifecycle markers (upload.start, upload.read_ok, upload.failed_at)
-    // also fire, so filter to the specific failure event we care about.
-    // Telemetry payload includes the status, the host (so ops know which
-    // R2 endpoint is failing), the storage key, and a body preview so the
+    // Lifecycle markers (upload.start, upload.failed_at) also fire, so
+    // filter to the specific failure event we care about. Telemetry
+    // payload includes the status, the host (so ops know which R2
+    // endpoint is failing), the storage key, and a body preview so the
     // actual error code (SignatureDoesNotMatch vs AccessDenied vs …) is
     // visible in Axiom without round-tripping back to the user.
     const putReports = reports.filter((r) => r.event === 'upload.put.failed');
@@ -514,9 +477,8 @@ describe('uploadFile — telemetry on PUT failure', () => {
     setMobileTelemetryLogger((p) => reports.push(p));
 
     const server = stubServer();
-    const { fetchImpl } = makeFetch([
-      async () => okResponse(emptyBlob()),
-      async () => {
+    const { putImpl } = makePut([
+      () => {
         throw new TypeError('Network request failed');
       },
     ]);
@@ -525,7 +487,7 @@ describe('uploadFile — telemetry on PUT failure', () => {
       uploadFile(fakePhoto(), {
         server,
         showId: 'show-1',
-        fetchImpl,
+        putImpl,
         maxRetries: 0,
         baseBackoffMs: 1,
         sleepImpl: async () => undefined,
@@ -543,11 +505,10 @@ describe('uploadFile — telemetry on PUT failure', () => {
 
     const server = stubServer();
     const controller = new AbortController();
-    const { fetchImpl } = makeFetch([
-      async () => okResponse(emptyBlob()),
-      (_url, init) =>
-        new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener('abort', () => {
+    const { putImpl } = makePut([
+      ({ signal }) =>
+        new Promise<PutResult>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => {
             const err = new Error('Aborted') as Error & { name: string };
             err.name = 'AbortError';
             reject(err);
@@ -558,7 +519,7 @@ describe('uploadFile — telemetry on PUT failure', () => {
     const p = uploadFile(fakePhoto(), {
       server,
       showId: 'show-1',
-      fetchImpl,
+      putImpl,
       signal: controller.signal,
       sleepImpl: async () => undefined,
     });
@@ -566,10 +527,9 @@ describe('uploadFile — telemetry on PUT failure', () => {
     controller.abort();
     await assert.rejects(p, UploadCancelledError);
 
-    // The lifecycle markers `upload.start` and `upload.read_ok` may fire
-    // before the abort signal hits, but neither `upload.put.failed`,
-    // `upload.put.network_error`, nor `upload.failed_at` should — a user
-    // cancel isn't a failure.
+    // The lifecycle marker `upload.start` may fire before the abort
+    // hits, but neither `upload.put.failed`, `upload.put.network_error`,
+    // nor `upload.failed_at` should — a user cancel isn't a failure.
     const failureEvents = reports.filter(
       (r) =>
         r.event === 'upload.put.failed' ||
@@ -585,61 +545,27 @@ describe('uploadFile — telemetry on PUT failure', () => {
 });
 
 describe('uploadFile — lifecycle telemetry', () => {
-  it('emits start → read_ok → success markers on the happy path so Axiom can locate stuck uploads', async () => {
+  it('emits start → success markers on the happy path so Axiom can locate stuck uploads', async () => {
     const reports: ClientEventPayload[] = [];
     setMobileTelemetryLogger((p) => reports.push(p));
 
     const server = stubServer();
-    const { fetchImpl } = makeFetch([
-      async () => okResponse(emptyBlob()),
-      async () => okResponse(null, { status: 200 }),
-    ]);
+    const { putImpl } = makePut([okPut()]);
 
     await uploadFile(fakePhoto(), {
       server,
       showId: 'show-1',
-      fetchImpl,
+      putImpl,
       sleepImpl: async () => undefined,
     });
 
     const events = reports.map((r) => r.event);
     assert.ok(events.includes('upload.start'), `missing upload.start, got: ${events.join(', ')}`);
-    assert.ok(events.includes('upload.read_ok'), `missing upload.read_ok, got: ${events.join(', ')}`);
     assert.ok(events.includes('upload.success'), `missing upload.success, got: ${events.join(', ')}`);
 
     const success = reports.find((r) => r.event === 'upload.success')!;
     const ctx = success.context as Record<string, unknown>;
     assert.equal(ctx.assetId, 'asset-1');
-    assert.equal(typeof ctx.elapsedMs, 'number');
-  });
-
-  it('fires a terminal upload.failed_at with stage=read_file when the source blob cannot be read', async () => {
-    // This is the gap that caused 10 stuck-pending media_assets in prod
-    // to log NOTHING: readFileAsBlob threw between the (successful)
-    // intent step and the never-attempted PUT, and no telemetry fired.
-    const reports: ClientEventPayload[] = [];
-    setMobileTelemetryLogger((p) => reports.push(p));
-
-    const server = stubServer();
-    const { fetchImpl } = makeFetch([
-      // Step A: file:// read returns 404 — simulates a stale/expired
-      // photo URI from the picker (common on Android).
-      async () => new Response(null, { status: 404 }),
-    ]);
-
-    await assert.rejects(
-      uploadFile(fakePhoto(), {
-        server,
-        showId: 'show-1',
-        fetchImpl,
-        sleepImpl: async () => undefined,
-      }),
-    );
-
-    const failed = reports.find((r) => r.event === 'upload.failed_at');
-    assert.ok(failed, 'expected a terminal upload.failed_at event');
-    const ctx = failed!.context as Record<string, unknown>;
-    assert.equal(ctx.stage, 'read_file');
     assert.equal(typeof ctx.elapsedMs, 'number');
   });
 
@@ -667,6 +593,29 @@ describe('uploadFile — lifecycle telemetry', () => {
     assert.ok(failed, 'expected a terminal upload.failed_at event');
     assert.equal((failed!.context as Record<string, unknown>).stage, 'intent');
   });
+
+  it('fires upload.failed_at with stage=put when every retry of the PUT fails', async () => {
+    const reports: ClientEventPayload[] = [];
+    setMobileTelemetryLogger((p) => reports.push(p));
+
+    const server = stubServer();
+    const { putImpl } = makePut([errPut(500)]);
+
+    await assert.rejects(
+      uploadFile(fakePhoto(), {
+        server,
+        showId: 'show-1',
+        putImpl,
+        maxRetries: 0,
+        baseBackoffMs: 1,
+        sleepImpl: async () => undefined,
+      }),
+    );
+
+    const failed = reports.find((r) => r.event === 'upload.failed_at');
+    assert.ok(failed, 'expected a terminal upload.failed_at event');
+    assert.equal((failed!.context as Record<string, unknown>).stage, 'put');
+  });
 });
 
 describe('uploadFile — cancellation', () => {
@@ -674,12 +623,9 @@ describe('uploadFile — cancellation', () => {
     const server = stubServer();
     const controller = new AbortController();
 
-    const { fetchImpl } = makeFetch([
-      async () => okResponse(emptyBlob()),
-      // PUT: hangs until the signal aborts, then throws an AbortError
-      (_url, init) =>
-        new Promise<Response>((_resolve, reject) => {
-          const signal = init?.signal as AbortSignal | undefined;
+    const { putImpl } = makePut([
+      ({ signal }) =>
+        new Promise<PutResult>((_resolve, reject) => {
           if (signal) {
             signal.addEventListener('abort', () => {
               const err = new Error('Aborted') as Error & { name: string };
@@ -693,11 +639,11 @@ describe('uploadFile — cancellation', () => {
     const promise = uploadFile(fakePhoto(), {
       server,
       showId: 'show-1',
-      fetchImpl,
+      putImpl,
       signal: controller.signal,
       sleepImpl: async () => undefined,
     });
-    // Let the file-read + PUT start
+    // Let the PUT start
     await new Promise((r) => setTimeout(r, 0));
     controller.abort();
     await assert.rejects(promise, UploadCancelledError);

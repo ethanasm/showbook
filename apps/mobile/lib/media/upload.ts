@@ -3,7 +3,7 @@
  *
  * Per file the flow is:
  *   1. Ask the server for a presigned upload URL (`createUploadIntent`).
- *   2. PUT the source bytes to S3 at the returned URL (with progress).
+ *   2. PUT the source file to R2 via the native upload task (with progress).
  *   3. Confirm the upload (`completeUpload`) so the server flips the row
  *      from `pending` to `ready` and kicks off transcode.
  *
@@ -15,6 +15,23 @@
  * when limits are exceeded; some deployments may return raw HTTP 402.
  * Both surface as `OverQuotaError` so the caller routes the user to the
  * `over-quota` screen instead of showing a generic toast.
+ *
+ * Why a native upload task (vs. `fetch` + `Blob`):
+ *   - React Native's `fetch(file://…)` reads the entire file into a Blob
+ *     in JS memory. For multi-megabyte photos this is slow and risks
+ *     OOM on older devices.
+ *   - When a Blob body is PUT, the RN runtime can override the explicit
+ *     `Content-Type` header with the Blob's intrinsic `type`. On iOS that
+ *     intrinsic type is `application/octet-stream` for HEIC files (the OS
+ *     has no system-wide MIME mapping for HEIC), which doesn't match the
+ *     presigned URL's signed Content-Type and produces a 403
+ *     SignatureDoesNotMatch from R2. Every previous mobile upload attempt
+ *     hit exactly this — the prod DB had 25 stuck-pending `media_assets`
+ *     rows with `mime_type=image/heic` and no successful upload.
+ *   - `FileSystem.createUploadTask` (expo-file-system/legacy) uses the
+ *     native NSURLSessionUploadTask on iOS and OkHttp on Android. Both
+ *     respect the explicit `Content-Type` header verbatim and stream the
+ *     file from disk without buffering it in JS memory.
  */
 
 import { reportClientEvent, describeError } from '../telemetry';
@@ -34,11 +51,32 @@ import type {
   UploadTarget,
 } from './types';
 
+/**
+ * Native upload task result. The PUT step boils down to: I got an HTTP
+ * status back and (optionally) the first ~1 KB of the response body for
+ * diagnostics. Anything richer would couple the upload pipeline to a
+ * specific transport library.
+ */
+export interface PutResult {
+  status: number;
+  /** First ~1 KB of the response body. R2's XML error envelope fits in well under that. */
+  bodyPreview: string | null;
+}
+
+/**
+ * The PUT step is abstracted behind this interface so tests can replace
+ * the native upload task with a deterministic stub. Production wires
+ * `defaultPutFile` (expo-file-system createUploadTask) at call time.
+ */
+export type PutFileFn = (args: {
+  target: UploadTarget;
+  fileUri: string;
+  signal: AbortSignal | undefined;
+}) => Promise<PutResult>;
+
 export interface UploadOptions {
   server: UploadServer;
   showId: string;
-  /** Optional fetch impl override — defaults to globalThis.fetch. Used by tests. */
-  fetchImpl?: typeof globalThis.fetch;
   /** Performer ids to attach when calling `createUploadIntent`. */
   performerIds?: string[];
   /** Cancel signal. When aborted, in-flight PUTs cancel and an UploadCancelledError throws. */
@@ -53,11 +91,14 @@ export interface UploadOptions {
   sleepImpl?: (ms: number) => Promise<void>;
   /** Image-manipulator override — used by tests to skip native modules. */
   normalizerDeps?: NormalizerDeps;
+  /** PUT step override — used by tests to skip expo-file-system. */
+  putImpl?: PutFileFn;
 }
 
 const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_BASE_BACKOFF_MS = 250;
 const MAX_BACKOFF_MS = 4000;
+const RESPONSE_BODY_PREVIEW_BYTES = 1024;
 
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -192,50 +233,108 @@ function mapServerError(err: unknown, step: 'intent' | 'complete'): Error {
   return err instanceof Error ? err : new Error(message || 'Upload failed');
 }
 
+let cachedDefaultPut: PutFileFn | null = null;
+
 /**
- * PUT a single variant's bytes to its presigned URL. Reports progress as
- * 0..1 fractions through `onProgress`. Treats 402 as over-quota and 5xx
- * as retryable. Cancellation is wired through `signal`.
+ * Default PUT implementation — backed by `expo-file-system/legacy`'s
+ * `createUploadTask`. Lazy-loaded so unit tests that always inject
+ * `putImpl` never touch the native module.
  *
- * The fetch API's progress events aren't available in React Native, so we
- * report start (0) and end (1). Multi-variant flows interpolate across
- * variants. The progress callback is monotonically non-decreasing.
+ * `createUploadTask` returns an `UploadTask` with `uploadAsync()` and
+ * `cancelAsync()`. We race the upload against the abort signal so a
+ * user-cancel mid-flight tears down the native task instead of letting
+ * it complete in the background.
+ */
+async function defaultPutFile(args: {
+  target: UploadTarget;
+  fileUri: string;
+  signal: AbortSignal | undefined;
+}): Promise<PutResult> {
+  if (!cachedDefaultPut) {
+    const FileSystem = await import('expo-file-system/legacy');
+    cachedDefaultPut = async ({ target, fileUri, signal }) => {
+      const task = FileSystem.createUploadTask(target.uploadUrl, fileUri, {
+        httpMethod: 'PUT',
+        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+        headers: { 'Content-Type': target.mimeType },
+      });
+      let cancelled = false;
+      const onAbort = () => {
+        cancelled = true;
+        task.cancelAsync().catch(() => undefined);
+      };
+      if (signal) {
+        if (signal.aborted) {
+          onAbort();
+          throw new UploadCancelledError();
+        }
+        signal.addEventListener('abort', onAbort);
+      }
+      try {
+        const result = await task.uploadAsync();
+        if (cancelled) throw new UploadCancelledError();
+        if (!result) throw new UploadCancelledError();
+        const body = result.body ?? '';
+        return {
+          status: result.status,
+          bodyPreview:
+            body.length === 0
+              ? null
+              : body.length <= RESPONSE_BODY_PREVIEW_BYTES
+                ? body
+                : `${body.slice(0, RESPONSE_BODY_PREVIEW_BYTES)}…`,
+        };
+      } finally {
+        if (signal) signal.removeEventListener('abort', onAbort);
+      }
+    };
+  }
+  return cachedDefaultPut(args);
+}
+
+/**
+ * PUT a single variant's bytes to its presigned URL. Treats 402 as
+ * over-quota and 5xx as retryable. Cancellation is wired through `signal`
+ * — the native upload task is torn down on abort.
+ *
+ * Progress fractions are reported at variant boundaries by the caller.
+ * The native upload task does emit per-byte progress callbacks but we
+ * deliberately keep the contract coarse so the UI logic doesn't have to
+ * interpolate across retries.
  */
 async function putToS3(
   target: UploadTarget,
-  body: Blob,
-  fetchImpl: typeof globalThis.fetch,
+  fileUri: string,
+  put: PutFileFn,
   signal: AbortSignal | undefined,
 ): Promise<void> {
-  let res: Response;
+  let res: PutResult;
   try {
-    res = await fetchImpl(target.uploadUrl, {
-      method: 'PUT',
-      body,
-      headers: { 'Content-Type': target.mimeType },
-      signal,
-    });
+    res = await put({ target, fileUri, signal });
   } catch (err) {
+    if (err instanceof UploadCancelledError) throw err;
     if (isAbortError(err)) throw new UploadCancelledError();
     reportClientEvent({
       event: 'upload.put.network_error',
       level: 'error',
       message: describeError(err),
-      context: { host: safeHostFromUrl(target.uploadUrl), key: target.key, mimeType: target.mimeType },
+      context: {
+        host: safeHostFromUrl(target.uploadUrl),
+        key: target.key,
+        mimeType: target.mimeType,
+      },
     });
     throw err;
   }
   if (res.status === 402) {
     throw new OverQuotaError('Storage limit reached');
   }
-  if (!res.ok) {
+  if (res.status < 200 || res.status >= 300) {
     // R2 (and any S3-compatible service) returns an XML body explaining
     // the failure — `<Error><Code>SignatureDoesNotMatch</Code>…</Error>`
-    // — but historically we only kept the HTTP status. Capture the body
-    // (clipped) and ship it to Axiom under `mobile.upload.put.failed` so
-    // ops can distinguish auth vs. signature vs. routing failures
-    // without needing the user to dump logs from their phone.
-    const bodyPreview = await readResponseBodyPreview(res);
+    // — so capture the body preview and ship it to Axiom under
+    // `mobile.upload.put.failed` so ops can distinguish auth vs.
+    // signature vs. routing failures.
     reportClientEvent({
       event: 'upload.put.failed',
       level: 'error',
@@ -245,30 +344,10 @@ async function putToS3(
         host: safeHostFromUrl(target.uploadUrl),
         key: target.key,
         mimeType: target.mimeType,
-        bodyPreview,
+        bodyPreview: res.bodyPreview,
       },
     });
     throw new UploadHttpError(res.status, 'put');
-  }
-}
-
-const RESPONSE_BODY_PREVIEW_BYTES = 1024;
-
-/**
- * Read up to ~1 KB of the response body. R2's XML error envelope is far
- * smaller than that (`<Error>…</Error>` is typically under 400 bytes), but
- * we clip defensively so a misbehaving upstream can't blow up the log
- * payload. Returns `null` if the body can't be read at all (already
- * consumed, network drop) — we'd rather log the failure without the body
- * than swallow the whole event.
- */
-async function readResponseBodyPreview(res: Response): Promise<string | null> {
-  try {
-    const text = await res.text();
-    if (text.length <= RESPONSE_BODY_PREVIEW_BYTES) return text;
-    return `${text.slice(0, RESPONSE_BODY_PREVIEW_BYTES)}…`;
-  } catch {
-    return null;
   }
 }
 
@@ -282,31 +361,6 @@ function safeHostFromUrl(url: string): string {
   } catch {
     return '<malformed-url>';
   }
-}
-
-/**
- * Read a `file://` URI into a Blob the fetch impl can PUT. React Native's
- * fetch supports passing a Blob directly. The caller controls fetch impl
- * (tests stub it), so this helper just opens the file once.
- */
-async function readFileAsBlob(
-  uri: string,
-  mimeType: string,
-  fetchImpl: typeof globalThis.fetch,
-): Promise<Blob> {
-  // RN's fetch accepts file:// URIs; this is the simplest cross-platform
-  // path that doesn't require a separate FS module. If we ever target web,
-  // swap to a FormData / File path.
-  const res = await fetchImpl(uri);
-  if (!res.ok) throw new Error(`Failed to read source file: ${res.status}`);
-  const blob = await res.blob();
-  // Always re-wrap with the intended mimeType, even when `blob.type` is set.
-  // On iOS, `fetch('file://…HEIC')` returns a blob whose `type` is
-  // `application/octet-stream` (no system MIME mapping for HEIC), and when
-  // a Blob body is passed to `fetch` RN can use `blob.type` in place of the
-  // explicit `Content-Type` header — which mismatches the value the
-  // presigned R2 URL was signed for and produces a 403 SignatureDoesNotMatch.
-  return new Blob([blob], { type: mimeType });
 }
 
 /**
@@ -324,8 +378,8 @@ export async function uploadFile(
   file: SelectedFile,
   opts: UploadOptions,
 ): Promise<MediaAssetDto> {
-  const fetchImpl = opts.fetchImpl ?? globalThis.fetch.bind(globalThis);
   const sleep = opts.sleepImpl ?? defaultSleep;
+  const put = opts.putImpl ?? defaultPutFile;
   const retryDeps: RetryDeps = {
     signal: opts.signal,
     maxRetries: opts.maxRetries ?? DEFAULT_MAX_RETRIES,
@@ -348,11 +402,8 @@ export async function uploadFile(
 
   // Lifecycle markers — every upload fires `upload.start`, and exactly one
   // terminal `upload.success` / `upload.failed_at` (with a `stage` field).
-  // The 10 stuck-pending media_assets rows in prod had no telemetry trail
-  // before this — we knew the intent step succeeded (DB row created) and
-  // the row never reached `ready`, but couldn't see where in the pipeline
-  // the failure was. These markers let us locate the exact failing stage
-  // in Axiom without rebuilding the app.
+  // These markers let us locate the exact failing stage in Axiom without
+  // rebuilding the app.
   const t0 = Date.now();
   const originalMimeType = file.mimeType;
   reportClientEvent({
@@ -368,11 +419,10 @@ export async function uploadFile(
   });
 
   // HEIC normalization. iPhone photos arrive as HEIC; we re-encode to JPEG
-  // so (a) the presigned-URL Content-Type matches what RN actually PUTs
-  // (HEIC blobs come back from `fetch(file://)` as application/octet-stream
-  // on iOS, breaking the signature), and (b) the web client can render the
-  // photo at all (Chrome / Firefox don't support HEIC). Non-HEIC files
-  // pass through unchanged.
+  // so the web client can render them at all (Chrome / Firefox don't
+  // support HEIC). The PUT itself is now resilient to HEIC because the
+  // native upload task honors the explicit Content-Type header, but
+  // normalization is still required for cross-browser viewability.
   try {
     file = await normalizeForUpload(file, opts.normalizerDeps);
   } catch (err) {
@@ -423,39 +473,11 @@ export async function uploadFile(
 
   const totalSteps = intent.targets.length + 1; // +1 for the confirm step
 
-  let blob: Blob;
-  try {
-    blob = await readFileAsBlob(file.uri, file.mimeType, fetchImpl);
-  } catch (err) {
-    if (!isUserCancellation(err)) {
-      reportClientEvent({
-        event: 'upload.failed_at',
-        level: 'error',
-        message: describeError(err),
-        context: {
-          stage: 'read_file',
-          uri: redactedUri(file.uri),
-          mimeType: file.mimeType,
-          bytes: file.bytes,
-          elapsedMs: Date.now() - t0,
-        },
-      });
-    }
-    throw err;
-  }
-
-  reportClientEvent({
-    event: 'upload.read_ok',
-    level: 'warn',
-    message: 'source file read',
-    context: { blobSize: (blob as { size?: number }).size ?? null, blobType: blob.type || null },
-  });
-
   for (let i = 0; i < intent.targets.length; i++) {
     const target = intent.targets[i]!;
     try {
       await withRetry(
-        () => putToS3(target, blob, fetchImpl, opts.signal),
+        () => putToS3(target, file.uri, put, opts.signal),
         retryDeps,
       );
     } catch (err) {
@@ -502,16 +524,6 @@ export async function uploadFile(
   });
 
   return result;
-}
-
-/**
- * Strip query strings off `file://` URIs before logging. Photo-picker URIs
- * are local paths and don't contain secrets, but on Android they sometimes
- * carry session-scoped query params we don't need in Axiom.
- */
-function redactedUri(uri: string): string {
-  const q = uri.indexOf('?');
-  return q === -1 ? uri : `${uri.slice(0, q)}?…`;
 }
 
 /**
