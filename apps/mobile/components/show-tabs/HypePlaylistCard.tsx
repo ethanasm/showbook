@@ -186,15 +186,20 @@ export function HypePlaylistCard({
   const openExisting = React.useCallback(async () => {
     if (!existing) return;
     const plan = buildSpotifyOpenPlan(existing.spotifyUrl);
+    // Try the native deep link directly rather than gating on
+    // `Linking.canOpenURL`. `canOpenURL` only returns true when the
+    // scheme is declared up front — `LSApplicationQueriesSchemes` on
+    // iOS, a `<queries>` element on Android 11+ — and a missing
+    // declaration silently sent every tap to the in-app browser even
+    // when the Spotify app was installed. `openURL` rejects when no
+    // handler is registered, which is exactly the signal we need to
+    // fall back to the web URL.
     if (plan.primary && plan.primary !== plan.fallback) {
       try {
-        const canOpen = await Linking.canOpenURL(plan.primary);
-        if (canOpen) {
-          await Linking.openURL(plan.primary);
-          return;
-        }
+        await Linking.openURL(plan.primary);
+        return;
       } catch {
-        // Fall through to the web URL.
+        // Spotify app not installed — fall through to the web URL.
       }
     }
     if (plan.fallback) {
