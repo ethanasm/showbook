@@ -30,6 +30,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
 import { SegmentedControl } from '../../components/SegmentedControl';
+import { FilterChipsRow, type FilterGroup } from '../../components/FilterChipsRow';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { EmptyState } from '../../components/EmptyState';
 import { EmptyStateHero } from '../../components/design-system';
@@ -780,15 +781,58 @@ function StatsView({
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
-  const stats = React.useMemo(() => buildStats(rows), [rows]);
+  const [selectedYear, setSelectedYear] = React.useState<number | null>(null);
+
+  const yearGroups = React.useMemo<FilterGroup[]>(() => {
+    const counts = new Map<number, number>();
+    for (const r of rows) {
+      if (!r.date) continue;
+      const y = Number(r.date.slice(0, 4));
+      if (!Number.isFinite(y)) continue;
+      counts.set(y, (counts.get(y) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([year, count]) => ({
+        id: String(year),
+        name: String(year),
+        count,
+      }));
+  }, [rows]);
+
+  React.useEffect(() => {
+    if (selectedYear !== null && !yearGroups.some((g) => g.id === String(selectedYear))) {
+      setSelectedYear(null);
+    }
+  }, [yearGroups, selectedYear]);
+
+  const filteredRows = React.useMemo(() => {
+    if (selectedYear === null) return rows;
+    const prefix = `${selectedYear}-`;
+    return rows.filter((r) => r.date != null && r.date.startsWith(prefix));
+  }, [rows, selectedYear]);
+
+  const stats = React.useMemo(() => buildStats(filteredRows), [filteredRows]);
   const maxPerformer = stats.topPerformers[0]?.count ?? 1;
   const maxVenue = stats.topVenues[0]?.count ?? 1;
 
   return (
-    <ScrollView
-      contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32, gap: 16 }}
-      refreshControl={refreshControl}
-    >
+    <View style={{ flex: 1 }}>
+      {yearGroups.length > 1 ? (
+        <FilterChipsRow
+          groups={yearGroups}
+          selected={selectedYear !== null ? String(selectedYear) : null}
+          onSelect={(id) => setSelectedYear(id === null ? null : Number(id))}
+          totalCount={rows.length}
+          allLabel="All time"
+          variant="sub"
+          testIdPrefix="stats-year-chip"
+        />
+      ) : null}
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32, gap: 16 }}
+        refreshControl={refreshControl}
+      >
       <View style={[styles.statGrid, { backgroundColor: colors.rule }]}>
         <StatTile value={String(stats.total)} label="shows" />
         <StatTile value={formatMoney(stats.spent)} label="spent" />
@@ -899,7 +943,8 @@ function StatsView({
           ))
         )}
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
