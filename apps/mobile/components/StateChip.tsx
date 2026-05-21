@@ -19,6 +19,15 @@ type ChipState = ShowState | 'wishlist';
 
 interface StateChipProps {
   state: ChipState;
+  /**
+   * `default` — themed pill (yellow accent for ticketed, outlined for
+   * watching/wishlist). Used on the app shell where the chip sits on a
+   * solid surface.
+   * `onPhoto` — mirrors the show-detail hero treatment: ticketed becomes
+   * a solid white pill with dark text, watching/wishlist become dark
+   * frosted-glass pills. Picks a legible look against arbitrary photos.
+   */
+  tone?: 'default' | 'onPhoto';
 }
 
 // Module-scope interface — not rebuilt per render
@@ -30,41 +39,68 @@ interface ChipConfig {
   icon: React.JSX.Element;
 }
 
-function getChipConfig(state: Exclude<ChipState, 'past'>, colors: ColorTokens): ChipConfig {
+function getChipConfig(
+  state: Exclude<ChipState, 'past'>,
+  colors: ColorTokens,
+  onPhoto: boolean,
+): ChipConfig {
   switch (state) {
     case 'ticketed':
-      return {
-        label: 'TICKETED',
-        bg: colors.accent,
-        textColor: colors.accentText,
-        icon: <Check size={9} color={colors.accentText} strokeWidth={2.5} />,
-      };
+      return onPhoto
+        ? {
+            label: 'TICKETED',
+            bg: '#fff',
+            textColor: '#1a1a1a',
+            icon: <Check size={9} color="#1a1a1a" strokeWidth={2.5} />,
+          }
+        : {
+            label: 'TICKETED',
+            bg: colors.accent,
+            textColor: colors.accentText,
+            icon: <Check size={9} color={colors.accentText} strokeWidth={2.5} />,
+          };
     case 'watching':
-      return {
-        label: 'WATCHING',
-        bg: 'transparent',
-        textColor: colors.ink,
-        borderColor: colors.ruleStrong,
-        icon: <Eye size={9} color={colors.ink} strokeWidth={2.5} />,
-      };
+      return onPhoto
+        ? {
+            label: 'WATCHING',
+            bg: 'rgba(0,0,0,0.42)',
+            textColor: '#fff',
+            borderColor: 'rgba(255,255,255,0.32)',
+            icon: <Eye size={9} color="#fff" strokeWidth={2.5} />,
+          }
+        : {
+            label: 'WATCHING',
+            bg: 'transparent',
+            textColor: colors.ink,
+            borderColor: colors.ruleStrong,
+            icon: <Eye size={9} color={colors.ink} strokeWidth={2.5} />,
+          };
     case 'wishlist':
-      return {
-        label: 'WISHLIST',
-        bg: 'transparent',
-        textColor: colors.ink,
-        borderColor: colors.ruleStrong,
-        icon: <Bookmark size={9} color={colors.ink} strokeWidth={2.5} />,
-      };
+      return onPhoto
+        ? {
+            label: 'WISHLIST',
+            bg: 'rgba(0,0,0,0.42)',
+            textColor: '#fff',
+            borderColor: 'rgba(255,255,255,0.32)',
+            icon: <Bookmark size={9} color="#fff" strokeWidth={2.5} />,
+          }
+        : {
+            label: 'WISHLIST',
+            bg: 'transparent',
+            textColor: colors.ink,
+            borderColor: colors.ruleStrong,
+            icon: <Bookmark size={9} color={colors.ink} strokeWidth={2.5} />,
+          };
   }
 }
 
-export function StateChip({ state }: StateChipProps): React.JSX.Element | null {
+export function StateChip({ state, tone = 'default' }: StateChipProps): React.JSX.Element | null {
   const { tokens } = useTheme();
   const { colors } = tokens;
 
   if (state === 'past') return null;
 
-  const chip = getChipConfig(state, colors);
+  const chip = getChipConfig(state, colors, tone === 'onPhoto');
 
   return (
     <View
