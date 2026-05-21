@@ -29,6 +29,22 @@ export const KIND_LABELS = {
   unknown: 'Unknown',
 } as const;
 
+// Single-character emoji glyphs used as a typographic icon for each show
+// kind in surfaces that prefer an inline character over a Lucide SVG (e.g.
+// the Add page's compact kind picker and the right-rail LivePreview). All
+// four are well-supported emoji in both the iOS and Android system fonts,
+// so the same glyph renders with a colour pictograph on every platform —
+// avoiding the old-Unicode-fallback split (♫ / ★ rendering as serif text
+// while 🎭 / 🎙 render as colour emoji) the original set produced.
+// The Lucide equivalents live in `apps/web/lib/kind-icons.ts` for surfaces
+// that want the full icon component instead.
+export const KIND_GLYPHS = {
+  concert: '🎵',
+  theatre: '🎭',
+  comedy: '🎙',
+  festival: '🎪',
+} as const;
+
 // Kinds that can be the `kind` of a show on a user's watchlist. Sports,
 // film, and unknown are surfaced on the Discover feed but cannot (yet) be
 // added as shows — `discover.watch` rejects them and the UI hides the
