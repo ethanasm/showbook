@@ -379,6 +379,13 @@
       "when": 1795968420000,
       "tag": "0053_show_spotify_playlists_performer_id",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1795968480000,
+      "tag": "0054_drop_unknown_announcements",
+      "breakpoints": true
     }
   ]
 }
