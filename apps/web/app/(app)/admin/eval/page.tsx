@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { isFeatureOn } from "@showbook/shared";
 import { Hydrate } from "@/lib/hydrate";
 import {
   dehydrateState,
@@ -10,13 +9,10 @@ import EvalView from "./View.client";
 
 export default async function AdminEvalPage() {
   const caller = await getServerCaller();
-  // Two gates: the existing ADMIN_EMAILS allowlist AND the
-  // SetlistIntelEvalHarness flag. Either one missing → notFound() so the
-  // page is indistinguishable from a 404 to non-admins and to users on
-  // builds where the flag is OFF.
+  // The ADMIN_EMAILS allowlist gate. notFound() so the page is
+  // indistinguishable from a 404 to non-admins.
   const { isAdmin } = await caller.admin.amIAdmin();
   if (!isAdmin) notFound();
-  if (!isFeatureOn("SetlistIntelEvalHarness")) notFound();
 
   await Promise.all([
     prefetch("admin.amIAdmin", undefined, () => caller.admin.amIAdmin()),

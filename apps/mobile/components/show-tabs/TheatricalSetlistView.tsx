@@ -212,29 +212,6 @@ function RotatingSlotCard({
   );
 }
 
-export function TheatricalGateBlocked(): React.JSX.Element {
-  const { tokens } = useTheme();
-  const { colors } = tokens;
-  return (
-    <View
-      testID="theatrical-gate-blocked"
-      style={[
-        styles.gateBlocked,
-        { backgroundColor: colors.surface, borderBottomColor: colors.rule },
-      ]}
-    >
-      <Text style={[styles.gateBlockedTitle, { color: colors.ink }]}>
-        Theatrical-style display temporarily disabled
-      </Text>
-      <Text style={[styles.gateBlockedBody, { color: colors.muted }]}>
-        The setlist model isn&rsquo;t calibrated for theatrical tours yet —
-        the back-test evaluation will unlock the display once the Brier
-        threshold clears.
-      </Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   copy: {
     fontFamily: 'Geist Mono',

@@ -870,25 +870,34 @@ describe('shows router', () => {
     );
   });
 
-  it('updateState requires seat for watching → ticketed', async () => {
-    const tempShow = fakeUuid(PREFIX, 'watching-noseat');
+  it('updateState allows watching → ticketed without a seat', async () => {
+    const noSeatShow = fakeUuid(PREFIX, 'watching-noseat');
     await createTestShow({
-      id: tempShow,
+      id: noSeatShow,
       userId: USER,
       venueId: VENUE,
       state: 'watching',
       date: '2099-09-09',
     });
-    await assert.rejects(
-      () => callerFor(USER).shows.updateState({
-        showId: tempShow,
-        newState: 'ticketed',
-      }),
-      (err: unknown) => err instanceof TRPCError && err.code === 'BAD_REQUEST',
-    );
-    // Now provide seat — should succeed and update fields.
+    // No seat — should still succeed (state-only flip).
+    const flipped = await callerFor(USER).shows.updateState({
+      showId: noSeatShow,
+      newState: 'ticketed',
+    });
+    assert.equal(flipped.state, 'ticketed');
+    assert.equal(flipped.seat, null);
+
+    // Optional seat / price / count are still applied when present.
+    const withSeat = fakeUuid(PREFIX, 'watching-withseat');
+    await createTestShow({
+      id: withSeat,
+      userId: USER,
+      venueId: VENUE,
+      state: 'watching',
+      date: '2099-09-09',
+    });
     const updated = await callerFor(USER).shows.updateState({
-      showId: tempShow,
+      showId: withSeat,
       newState: 'ticketed',
       seat: 'A1',
       pricePaid: '12.00',
@@ -900,7 +909,7 @@ describe('shows router', () => {
 
     // ticketed -> past (legitimate transition).
     const past = await callerFor(USER).shows.updateState({
-      showId: tempShow,
+      showId: withSeat,
       newState: 'past',
     });
     assert.equal(past.state, 'past');

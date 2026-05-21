@@ -5,9 +5,6 @@
  *
  * Data backing the screenshots is seeded by
  * `scripts/seed-phase6-screenshot-data.mjs` (run before this spec).
- * Both SetlistIntelTheatricalDisplay and SetlistIntelImprovisedDisplay
- * feature flags must be ON for the variants to render — they ship ON
- * by default in this PR.
  */
 
 import { test, expect } from '@playwright/test';

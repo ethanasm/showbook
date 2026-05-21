@@ -105,9 +105,6 @@ function buildClient(opts: BuildClientOptions = {}): {
     },
     preferences: { get: { query: make('preferences.get', { theme: 'system' }) } },
     setlistIntel: {
-      musicLayerV2Feature: {
-        query: make('setlistIntel.musicLayerV2Feature', { enabled: false }),
-      },
       predictedSetlist: { query: make('setlistIntel.predictedSetlist', { style: 'cold' }) },
       predictedFestivalSetlists: {
         query: make('setlistIntel.predictedFestivalSetlists', { entries: [] }),
@@ -117,7 +114,6 @@ function buildClient(opts: BuildClientOptions = {}): {
       },
     },
     spotify: {
-      hypePlaylistFeature: { query: make('spotify.hypePlaylistFeature', { enabled: false }) },
       connectionStatus: {
         query: make('spotify.connectionStatus', { connected: false }),
       },
@@ -153,8 +149,6 @@ describe('warmCacheForOfflineUse', () => {
     assert.equal(counts['performers.list'], 1);
     assert.equal(counts['performers.followed'], 1);
     assert.equal(counts['preferences.get'], 1);
-    assert.equal(counts['setlistIntel.musicLayerV2Feature'], 1);
-    assert.equal(counts['spotify.hypePlaylistFeature'], 1);
     assert.equal(counts['spotify.connectionStatus'], 1);
     assert.equal(counts['discover.followedFeed'], 1);
     assert.equal(counts['discover.followedArtistsFeed'], 1);
