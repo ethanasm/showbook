@@ -808,20 +808,24 @@ function HeaderStrip({
         </View>
       </View>
 
-      {/* Eyebrow row — sits just under the chrome row. */}
+      {/* Eyebrow row — frosted-glass pill so it stays legible against
+          bright skies / busy photos. Translucent white + hairline border
+          carries the "sleek glass" look without pulling in expo-blur. */}
       <View
         style={[heroStyles.eyebrowRow, { top: insets.top + 56 }]}
         pointerEvents="none"
       >
-        <Text style={heroStyles.eyebrow} numberOfLines={1}>
-          {eyebrow}
-        </Text>
+        <View style={heroStyles.eyebrowPill}>
+          <Text style={heroStyles.eyebrow} numberOfLines={1}>
+            {eyebrow}
+          </Text>
+        </View>
       </View>
 
       {/* Bottom block — kind chip, title, optional tour, venue link. */}
       <View style={heroStyles.bottomBlock} pointerEvents="box-none">
         <View style={heroStyles.kindRow}>
-          <KindBadge kind={show.kind as Kind} size="sm" />
+          <KindBadge kind={show.kind as Kind} size="sm" tone="onPhoto" />
         </View>
         <Text style={heroStyles.title} numberOfLines={2}>
           {title}
@@ -931,6 +935,16 @@ const heroStyles = StyleSheet.create({
     position: 'absolute',
     left: 20,
     right: 20,
+    flexDirection: 'row',
+  },
+  eyebrowPill: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.55)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    alignSelf: 'flex-start',
   },
   eyebrow: {
     fontFamily: 'Geist Sans',
@@ -938,7 +952,7 @@ const heroStyles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 11 * 0.14,
     textTransform: 'uppercase',
-    color: 'rgba(255,255,255,0.88)',
+    color: '#1a1a1a',
   },
   bottomBlock: {
     position: 'absolute',
