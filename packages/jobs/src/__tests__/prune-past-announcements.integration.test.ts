@@ -140,6 +140,14 @@ describe('runPrunePastAnnouncements', () => {
     await db.insert(venues).values([
       { id: VENUE, name: 'Hall', city: 'NYC', country: 'US' },
     ]);
+    // Anchor the venue against a concurrent `runPruneOrphanCatalog()`
+    // sweep — same pattern as PR #334 applied to the cascade test
+    // below. The performer is anchored a few lines down by the
+    // `userPerformerFollows` insert, but the venue would otherwise
+    // race-delete before the announcement insert and FK-violate.
+    await db.insert(userVenueFollows).values([
+      { userId: USER_A, venueId: VENUE },
+    ]);
     await db.insert(performers).values([
       { id: PERFORMER, name: 'Followed Artist' },
     ]);
