@@ -152,6 +152,13 @@ function setSearchEvents(events: TestTmEvent[]) {
   nextSearchEvents = events;
 }
 
+// Mutable so a test can flip the inferred kind to exercise the unknown-skip
+// branch in normalizeTmEvent without having to mock the whole TM module.
+let nextInferredKind: string = 'concert';
+function setInferredKind(kind: string) {
+  nextInferredKind = kind;
+}
+
 mock.module('@showbook/api', {
   namedExports: {
     searchEvents: async () => ({
@@ -160,7 +167,7 @@ mock.module('@showbook/api', {
       page: 0,
       size: 200,
     }),
-    inferKind: () => 'concert',
+    inferKind: () => nextInferredKind,
     selectBestImage: () => null,
     extractMusicbrainzId: () => null,
     extractFestivalName: (name: string) => name,
@@ -184,6 +191,7 @@ before(async () => {
 beforeEach(() => {
   reset();
   setSearchEvents([makeTmEvent('e-1')]);
+  setInferredKind('concert');
 });
 
 describe('ingestVenue (with events)', () => {
@@ -208,6 +216,22 @@ describe('ingestVenue (with events)', () => {
     });
     const result = await mod.ingestVenue('v1');
     assert.equal(result.events, 0);
+  });
+
+  it('drops events whose inferred kind is "unknown" instead of persisting them', async () => {
+    // TM events without a usable segment id (the High Roller Wheel et al)
+    // used to flood Discover as "UNKNOWN" rows. They're now filtered at
+    // normalize time so no insert ever happens.
+    reset({
+      selectResults: [
+        [{ id: 'v1', tmVenueId: 'tm-v-1' }], // venue lookup
+        [], // existingSourceIds
+      ],
+    });
+    setInferredKind('unknown');
+    const result = await mod.ingestVenue('v1');
+    assert.equal(result.events, 0);
+    assert.equal(SCRIPT.insertCount, 0);
   });
 });
 

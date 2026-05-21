@@ -211,6 +211,25 @@ async function normalizeTmEvent(
   }
 
   const kind = inferKind(event.classifications, { eventName: event.name });
+
+  // Drop events that classify as "unknown" — TM didn't tell us what they are,
+  // and they pile up on Discover as noise (the High Roller Wheel at the LINQ
+  // and similar attractions that ship without a usable segment id). The
+  // refresh path below mirrors this by deleting any existing row that would
+  // re-classify back into 'unknown'.
+  if (kind === 'unknown') {
+    log.warn(
+      {
+        event: 'tm.normalize.skipped',
+        reason: 'unknown_kind',
+        tmEventId: event.id,
+        name: event.name,
+      },
+      'Skipping TM event with unknown kind',
+    );
+    return null;
+  }
+
   // Defensively drop attractions with a missing/blank `name`. TM occasionally
   // returns attraction objects with only an `id`, which used to leak through
   // as the literal string "undefined" in `announcement.support` (postgres-js
@@ -623,6 +642,23 @@ async function refreshExistingFromTmEvent(
   const onSaleDate = parseOnSaleDate(event);
   const ticketUrl = event.url ?? null;
   const kind = inferKind(event.classifications, { eventName: event.name });
+
+  // If TM has degraded a previously-classified event back to "unknown" (lost
+  // its segment id on a re-ingest), drop the row rather than persisting the
+  // noise — mirrors the normalize-side filter that refuses to create unknown
+  // rows in the first place.
+  if (kind === 'unknown') {
+    await db
+      .delete(announcements)
+      .where(
+        and(
+          eq(announcements.source, 'ticketmaster'),
+          sql`(${announcements.sourceEventId} = ${event.id} OR ${event.id} = ANY(${announcements.extraSourceEventIds}))`,
+        ),
+      );
+    return null;
+  }
+
   const headliner = kind === 'festival' ? extractFestivalName(event.name) : null;
 
   const updated = await db
