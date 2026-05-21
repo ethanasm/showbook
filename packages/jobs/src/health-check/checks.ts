@@ -143,7 +143,13 @@ export async function checkMissedSchedules(
     (acc, e) => Math.max(acc, e.windowHours ?? 24),
     24,
   );
-  const sinceThreshold = new Date(now.getTime() - maxWindowHours * 60 * 60 * 1000);
+  // postgres-js encodes bind params by `Buffer.byteLength`, which crashes
+  // on a Date instance with "string argument must be of type string or an
+  // instance of Buffer". Bind as an ISO string and let postgres cast to
+  // timestamptz at the boundary.
+  const sinceThresholdIso = new Date(
+    now.getTime() - maxWindowHours * 60 * 60 * 1000,
+  ).toISOString();
 
   // Drizzle's `sql` template expands a JS array as a parenthesised tuple
   // (`($1, $2, …)`), which postgres reads as a record literal — `name = ANY((…))`
@@ -160,11 +166,11 @@ export async function checkMissedSchedules(
       FROM (
         SELECT name, created_on
         FROM pgboss.job
-        WHERE name = ANY(${queueNamesSql}) AND created_on > ${sinceThreshold}
+        WHERE name = ANY(${queueNamesSql}) AND created_on > ${sinceThresholdIso}
         UNION ALL
         SELECT name, created_on
         FROM pgboss.archive
-        WHERE name = ANY(${queueNamesSql}) AND created_on > ${sinceThreshold}
+        WHERE name = ANY(${queueNamesSql}) AND created_on > ${sinceThresholdIso}
       ) j
       GROUP BY name
     `);
@@ -179,7 +185,7 @@ export async function checkMissedSchedules(
     return {
       name: 'missed_schedules',
       status: 'warn',
-      summary: `Could not inspect pgboss.job: ${err instanceof Error ? err.message : String(err)}`,
+      summary: `Could not inspect pgboss.job: ${formatErrSummary(err)}`,
     };
   }
 
@@ -288,6 +294,11 @@ interface QueueRow {
   retry: number;
 }
 
+interface QueueFailureRow {
+  name: string;
+  failed: number;
+}
+
 export async function checkPgBossQueue(): Promise<CheckResult> {
   try {
     const result = await db.execute(sql`
@@ -312,15 +323,54 @@ export async function checkPgBossQueue(): Promise<CheckResult> {
     const active = Number(row.active_total);
     const retry = Number(row.retry);
 
+    // When there are failures, drill into the top offending queue so the
+    // email body answers "which job is broken?" without the operator
+    // opening Axiom. Without this, a single noisy queue (e.g. corpus-fill
+    // during a setlist.fm 429 storm) reports as a faceless "N failed".
+    let topQueue: { name: string; failed: number } | null = null;
+    if (failed > 0) {
+      const breakdown = await db.execute(sql`
+        select name, count(*)::int as failed
+        from pgboss.job
+        where state = 'failed'
+        group by name
+        order by count(*) desc
+        limit 5
+      `);
+      const breakdownRows =
+        (breakdown as unknown as { rows?: QueueFailureRow[] }).rows ??
+        (breakdown as unknown as QueueFailureRow[]);
+      if (breakdownRows.length > 0) {
+        const first = breakdownRows[0]!;
+        topQueue = { name: first.name, failed: Number(first.failed) };
+      }
+      const status: CheckStatus = stuck > 0 || failed > 5 ? 'fail' : 'warn';
+      const detail: Record<string, unknown> = {
+        failed,
+        active_stuck: stuck,
+        active_total: active,
+        retry,
+        topQueues: breakdownRows.map((r) => ({
+          name: r.name,
+          failed: Number(r.failed),
+        })),
+      };
+      const summary =
+        stuck > 0
+          ? `${stuck} stuck active · ${failed} failed · top: ${topQueue?.name ?? '(unknown)'} (${topQueue?.failed ?? 0})`
+          : `${failed} failed · top: ${topQueue?.name ?? '(unknown)'} (${topQueue?.failed ?? 0})`;
+      return { name: 'pgboss_queue', status, summary, detail };
+    }
+
     const status: CheckStatus =
-      stuck > 0 || failed > 5 ? 'fail' : failed > 0 || retry > 5 ? 'warn' : 'ok';
+      stuck > 0 ? 'fail' : retry > 5 ? 'warn' : 'ok';
     return {
       name: 'pgboss_queue',
       status,
       summary:
         status === 'ok'
           ? 'Queue healthy'
-          : `${stuck} stuck active · ${failed} failed · ${retry} retrying`,
+          : `${stuck} stuck active · ${retry} retrying`,
       detail: { failed, active_stuck: stuck, active_total: active, retry },
     };
   } catch (err) {
@@ -485,4 +535,26 @@ function formatAge(hours: number): string {
   return `${Math.round(hours / 24)}d`;
 }
 
-export const _testing = { etDayOfWeek, formatAge, SCHEDULED_EXPECTATIONS };
+/**
+ * Build a one-line error summary suitable for the email subject /
+ * check-result `summary` field. Drizzle wraps every query failure in a
+ * `DrizzleQueryError` whose `.message` is `Failed query: <sql>\nparams: …`
+ * — the actual postgres `code` + `message` lives on `err.cause`. Walking
+ * the chain surfaces the useful bit so the email is actionable instead
+ * of just showing the SQL we already know about.
+ */
+function formatErrSummary(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const cause = (err as Error & { cause?: unknown }).cause;
+  if (cause && typeof cause === 'object') {
+    const c = cause as { code?: unknown; message?: unknown };
+    if (typeof c.message === 'string' && c.message.length > 0) {
+      return typeof c.code === 'string' && c.code.length > 0
+        ? `${c.code} ${c.message}`
+        : c.message;
+    }
+  }
+  return err.message;
+}
+
+export const _testing = { etDayOfWeek, formatAge, formatErrSummary, SCHEDULED_EXPECTATIONS };

@@ -99,10 +99,31 @@ function toSetlistFmDate(date: string | Date): string {
 }
 
 // ---------------------------------------------------------------------------
-// Rate limiter – simple sequential delay
+// Rate limiter – simple sequential delay + process-wide 429 cooldown
 // ---------------------------------------------------------------------------
 
 let lastRequestTime = 0;
+
+// When setlist.fm returns 429 we set a cooldown so subsequent callers fail
+// fast instead of each one queueing a fresh request that also 429s. Without
+// this every pg-boss-driven consumer (corpus-fill, setlist-retry, mbid
+// resolution) burns its retry budget against a single sustained rate-limit
+// event — observed in prod 2026-05-21 as 875 enrichment/setlist-corpus-fill
+// rows piling into `pgboss.job` over a 3h window after the daily quota
+// tipped.
+let cooldownUntilMs = 0;
+const COOLDOWN_MS = 60_000;
+
+/** Test-only hook: clears the cooldown state between cases. */
+export function _resetRateLimitState(): void {
+  lastRequestTime = 0;
+  cooldownUntilMs = 0;
+}
+
+function isRateLimitedNow(): number {
+  const now = Date.now();
+  return cooldownUntilMs > now ? cooldownUntilMs - now : 0;
+}
 
 async function rateLimit(): Promise<void> {
   const now = Date.now();
@@ -125,6 +146,19 @@ async function apiFetch<T>(path: string): Promise<T> {
     throw new SetlistFmError(
       "SETLISTFM_API_KEY environment variable is not set",
       0,
+      path,
+    );
+  }
+
+  const remainingCooldown = isRateLimitedNow();
+  if (remainingCooldown > 0) {
+    log.warn(
+      { event: 'setlistfm.request.cooldown_skip', path, remainingMs: remainingCooldown },
+      'setlist.fm in cooldown; skipping request',
+    );
+    throw new SetlistFmError(
+      `setlist.fm in cooldown for ${remainingCooldown}ms`,
+      429,
       path,
     );
   }
@@ -155,6 +189,16 @@ async function apiFetch<T>(path: string): Promise<T> {
       signal: AbortSignal.timeout(10_000),
     });
     if (!retry.ok) {
+      if (retry.status === 429) {
+        // Second 429 in a row → daily quota is genuinely gone. Open the
+        // cooldown gate so further callers fail fast without consuming
+        // pg-boss retry budget.
+        cooldownUntilMs = Date.now() + COOLDOWN_MS;
+        log.warn(
+          { event: 'setlistfm.request.cooldown_opened', path, cooldownMs: COOLDOWN_MS },
+          'setlist.fm cooldown opened',
+        );
+      }
       throw new SetlistFmError(
         `setlist.fm ${retry.status}: ${retry.statusText}`,
         retry.status,
