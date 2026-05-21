@@ -46,6 +46,7 @@ import { StateChip } from '../../components/StateChip';
 import { EmptyState } from '../../components/EmptyState';
 import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
+import { MarkTicketedSheet } from '../../components/MarkTicketedSheet';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import {
   ShowDetailTabsView,
@@ -162,6 +163,7 @@ export default function ShowDetailScreen(
   );
 
   const [actionSheetOpen, setActionSheetOpen] = React.useState(false);
+  const [markTicketedOpen, setMarkTicketedOpen] = React.useState(false);
   const moreAction = show ? (
     <Pressable
       onPress={() => setActionSheetOpen(true)}
@@ -225,6 +227,17 @@ export default function ShowDetailScreen(
             showId={show.id}
             state={show.state as ShowState}
             popAfterDelete
+            onMarkTicketed={() => setMarkTicketedOpen(true)}
+          />
+        ) : null}
+        {show ? (
+          <MarkTicketedSheet
+            open={markTicketedOpen}
+            onClose={() => setMarkTicketedOpen(false)}
+            showId={show.id}
+            initialSeat={show.seat}
+            initialPrice={show.pricePaid}
+            initialTicketCount={show.ticketCount}
           />
         ) : null}
       </View>
@@ -286,6 +299,17 @@ export default function ShowDetailScreen(
           showId={show.id}
           state={show.state as ShowState}
           popAfterDelete
+          onMarkTicketed={() => setMarkTicketedOpen(true)}
+        />
+      ) : null}
+      {show ? (
+        <MarkTicketedSheet
+          open={markTicketedOpen}
+          onClose={() => setMarkTicketedOpen(false)}
+          showId={show.id}
+          initialSeat={show.seat}
+          initialPrice={show.pricePaid}
+          initialTicketCount={show.ticketCount}
         />
       ) : null}
     </View>

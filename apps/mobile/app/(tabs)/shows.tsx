@@ -40,6 +40,7 @@ import { EmptyStateHero } from '../../components/design-system';
 import { ShowCardListSkeleton } from '../../components/skeletons';
 import { CalendarGrid, MiniMonth, type CalendarEvent } from '../../components/CalendarGrid';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
+import { MarkTicketedSheet } from '../../components/MarkTicketedSheet';
 import { useSelectedShow } from '../../components/ThreePaneLayout';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
@@ -198,6 +199,7 @@ export default function ShowsScreen(): React.JSX.Element {
     id: string;
     state: ShowState;
   } | null>(null);
+  const [markTicketedForId, setMarkTicketedForId] = React.useState<string | null>(null);
 
   const showsQuery = useCachedQuery<ShowsListItem[]>({
     queryKey: ['mobile', 'shows.list'],
@@ -366,6 +368,14 @@ export default function ShowsScreen(): React.JSX.Element {
           onClose={() => setActionSheetFor(null)}
           showId={actionSheetFor.id}
           state={actionSheetFor.state}
+          onMarkTicketed={() => setMarkTicketedForId(actionSheetFor.id)}
+        />
+      ) : null}
+      {markTicketedForId ? (
+        <MarkTicketedSheet
+          open
+          onClose={() => setMarkTicketedForId(null)}
+          showId={markTicketedForId}
         />
       ) : null}
     </View>
