@@ -42,12 +42,11 @@ import {
   type PreviewMap,
 } from '../../lib/setlist-intel';
 
-export interface ActualSong {
-  title: string;
-  isEncore: boolean;
-  isOpenerOrCloser?: boolean;
-  note?: string | null;
-}
+// Canonical shape lives in `@showbook/shared` — re-exported here so
+// existing `import { type ActualSong } from './SetlistTab'` call
+// sites stay stable.
+import type { ActualSong } from '@showbook/shared';
+export type { ActualSong };
 
 // Loose superset of every prediction shape — the parent passes through
 // `predictedSetlist` whatever the server returned.

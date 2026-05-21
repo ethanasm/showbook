@@ -69,6 +69,9 @@ import {
 } from '../../lib/setlist-intel';
 import { useBreakpoint } from '../../lib/responsive';
 import {
+  buildActualSongsFromSetlist,
+  buildFestivalLineupEntries,
+  countFestivalActualSongs,
   formatDateRangeShort,
   formatVenueLocation,
   getHeadliner,
@@ -202,33 +205,10 @@ export function ShowDetailTabsView({
   );
 
   // ──────────────────────────── Derived state ────────────────────────────
-  const buildActualSongs = React.useCallback(
-    (performerId: string): ActualSong[] => {
-      const sl = show.setlists?.[performerId];
-      if (!sl) return [];
-      const out: ActualSong[] = [];
-      sl.sections.forEach((section, sIdx) => {
-        const isEncore = section.kind === 'encore';
-        section.songs.forEach((song, songIdx) => {
-          out.push({
-            title: song.title,
-            isEncore,
-            isOpenerOrCloser:
-              (!isEncore && sIdx === 0 && songIdx === 0) ||
-              (!isEncore && songIdx === section.songs.length - 1),
-            note: song.note ?? null,
-          });
-        });
-      });
-      return out;
-    },
-    [show.setlists],
-  );
-
   const actualSongs: ActualSong[] = React.useMemo(() => {
     if (!isPast || !headliner) return [];
-    return buildActualSongs(headliner.performer.id);
-  }, [buildActualSongs, headliner, isPast]);
+    return buildActualSongsFromSetlist(show.setlists?.[headliner.performer.id]);
+  }, [headliner, isPast, show.setlists]);
   const actualSongCount = actualSongs.length;
 
   // For festivals, build one entry per lineup artist. Past = pull
@@ -237,42 +217,35 @@ export function ShowDetailTabsView({
   // entries (keyed by performerId).
   const festivalLineupSetlists: FestivalLineupSetlistEntry[] = React.useMemo(() => {
     if (!isFestival) return [];
-    const predictions = new Map<string, AnyPrediction>();
-    if (!isPast) {
-      const data = festivalPredictionsQuery.data;
-      if (data?.entries) {
-        for (const e of data.entries) {
-          predictions.set(e.performerId, e.prediction as AnyPrediction);
-        }
-      }
-    }
-    return show.showPerformers
-      .filter(
-        (sp) => sp.role === 'headliner' || sp.role === 'support',
-      )
-      .map((sp) => ({
-        performerId: sp.performer.id,
-        performerName: sp.performer.name,
-        role: sp.role as 'headliner' | 'support',
-        sortOrder: sp.sortOrder,
-        prediction: predictions.get(sp.performer.id) ?? null,
-        actualSongs: isPast ? buildActualSongs(sp.performer.id) : [],
-      }));
+    return buildFestivalLineupEntries<AnyPrediction>({
+      showPerformers: show.showPerformers,
+      isPast,
+      predictions:
+        !isPast && festivalPredictionsQuery.data?.entries
+          ? festivalPredictionsQuery.data.entries.map((e) => ({
+              performerId: e.performerId,
+              prediction: e.prediction as AnyPrediction,
+            }))
+          : null,
+      setlistsByPerformer: show.setlists ?? {},
+    });
   }, [
-    buildActualSongs,
     festivalPredictionsQuery.data,
     isFestival,
     isPast,
+    show.setlists,
     show.showPerformers,
   ]);
 
-  const festivalActualSongCount = React.useMemo(() => {
-    if (!isFestival || !isPast) return 0;
-    return festivalLineupSetlists.reduce(
-      (acc, e) => acc + e.actualSongs.length,
-      0,
-    );
-  }, [festivalLineupSetlists, isFestival, isPast]);
+  const festivalActualSongCount = React.useMemo(
+    () =>
+      countFestivalActualSongs({
+        isFestival,
+        isPast,
+        entries: festivalLineupSetlists,
+      }),
+    [festivalLineupSetlists, isFestival, isPast],
+  );
 
   // Festival predictions are an array. The tab-bar badge is a single
   // confidence number, so reduce to the headliner's confidence when

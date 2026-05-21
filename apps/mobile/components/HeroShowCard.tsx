@@ -21,7 +21,7 @@ import { hapticImpactMedium } from '../lib/haptics';
 import { KindBadge } from './KindBadge';
 import { StateChip } from './StateChip';
 import { RemoteImage } from './design-system/RemoteImage';
-import { useLiveCountdown } from '../lib/useLiveCountdown';
+import { useLiveCountdown } from '@showbook/shared/hooks';
 import type { ShowCardShow } from './ShowCard';
 
 export interface HeroShowCardProps {
