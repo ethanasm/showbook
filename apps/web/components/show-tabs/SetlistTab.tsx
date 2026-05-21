@@ -31,7 +31,7 @@ import type {
 } from "@showbook/api";
 import { SetCountStrip } from "./SetCountStrip";
 import { SpecialEventCard } from "./SpecialEventCard";
-import { formatSetlistNote } from "@showbook/shared";
+import { formatSetlistNote, type ActualSong } from "@showbook/shared";
 import "./show-tabs.css";
 
 const SPOILER_KEY_PREFIX = "showbook:setlist-tab:spoiler-shown:";
@@ -152,14 +152,7 @@ function resolvePreview(
   };
 }
 
-export interface ActualSong {
-  title: string;
-  sectionIndex: number;
-  songIndex: number;
-  isEncore: boolean;
-  isOpenerOrCloser?: boolean;
-  note?: string | null;
-}
+export type { ActualSong };
 
 export function SetlistTab(props: SetlistTabProps) {
   if (props.isPast) {
