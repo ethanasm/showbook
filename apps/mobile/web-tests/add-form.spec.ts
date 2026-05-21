@@ -60,11 +60,18 @@ test.describe('mobile web — add form route', () => {
                     city: 'Berkeley',
                     stateRegion: 'CA',
                     country: 'US',
+                    googlePlaceId: null,
                   },
                 ],
               },
             },
           };
+        }
+        if (proc === 'enrichment.searchPlaces') {
+          // The hybrid venue typeahead also pings Google Places.
+          // Returning an empty array keeps the test focused on the
+          // local-DB code path without needing a Places API key.
+          return { result: { data: { json: [] } } };
         }
         return { result: { data: { json: null } } };
       });
