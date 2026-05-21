@@ -1,8 +1,7 @@
 /**
  * Phase 3 Playwright spec — Spotify hype playlist card on the
- * Setlist tab. The feature flag is gated to admins in prod; this
- * spec mocks the relevant tRPC endpoints (hypePlaylistFeature,
- * existingPlaylist, connectionStatus, predictedSetlist) via a
+ * Setlist tab. This spec mocks the relevant tRPC endpoints
+ * (existingPlaylist, connectionStatus, predictedSetlist) via a
  * single batch-aware interceptor so the real card renders against
  * a seeded ticketed show.
  *
@@ -35,7 +34,6 @@ const STABLE_PREDICTION = {
 };
 
 interface MockOverrides {
-  hypePlaylistFeature?: { enabled: boolean };
   connectionStatus?:
     | { connected: false }
     | {
@@ -126,9 +124,6 @@ function wrapResult(json: unknown, meta?: unknown) {
 }
 
 function overrideFor(proc: string, overrides: MockOverrides): unknown {
-  if (proc === 'spotify.hypePlaylistFeature' && overrides.hypePlaylistFeature) {
-    return wrapResult(overrides.hypePlaylistFeature);
-  }
   if (proc === 'spotify.connectionStatus' && overrides.connectionStatus) {
     return wrapResult(overrides.connectionStatus);
   }
@@ -175,9 +170,8 @@ function inlinePrimary(page: Page) {
 }
 
 test.describe('Hype playlist card — pre-show variant', () => {
-  test('renders the real hype card when the feature is enabled', async ({ page }) => {
+  test('renders the real hype card for a stable prediction', async ({ page }) => {
     await installTrpcMocks(page, {
-      hypePlaylistFeature: { enabled: true },
       existingPlaylist: null,
       connectionStatus: { connected: false },
       predictionStable: true,
@@ -194,24 +188,8 @@ test.describe('Hype playlist card — pre-show variant', () => {
     ).toBeVisible();
   });
 
-  test('falls back to the P1 placeholder when the feature is disabled', async ({ page }) => {
-    await installTrpcMocks(page, {
-      hypePlaylistFeature: { enabled: false },
-      existingPlaylist: null,
-      connectionStatus: { connected: false },
-      predictionStable: true,
-    });
-    await gotoTicketedConcertSetlistTab(page);
-
-    await expect(page.getByTestId('hype-playlist-placeholder')).toBeVisible({
-      timeout: 15_000,
-    });
-    await expect(page.getByTestId('hype-playlist-card-hype')).toHaveCount(0);
-  });
-
   test('tapping the card on a fresh account opens the Spotify connect modal', async ({ page }) => {
     await installTrpcMocks(page, {
-      hypePlaylistFeature: { enabled: true },
       existingPlaylist: null,
       connectionStatus: { connected: false },
       predictionStable: true,
@@ -230,7 +208,6 @@ test.describe('Hype playlist card — pre-show variant', () => {
 
   test('opens existing playlist in a new tab when the row already exists', async ({ page }) => {
     await installTrpcMocks(page, {
-      hypePlaylistFeature: { enabled: true },
       existingPlaylist: {
         playlistId: 'pl-existing',
         spotifyUrl: 'https://open.spotify.com/playlist/pl-existing',

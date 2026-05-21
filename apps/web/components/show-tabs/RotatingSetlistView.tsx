@@ -3,9 +3,7 @@
 /**
  * Rotating-style predicted-setlist subtree. Phase 5 of setlist-
  * intelligence (§15c–15e). Mounts inside the Setlist tab whenever
- * `prediction.style === 'rotating'` AND the
- * `SetlistIntelRotatingDisplay` feature flag is ON AND the
- * server-side calibration release-gate passes.
+ * `prediction.style === 'rotating'`.
  *
  * Top to bottom (matches the rotating-style spec in
  * docs/specs/setlist-intelligence/ui-spec.md §4.1):
@@ -461,59 +459,6 @@ function PositionPoolCandidateRow({
       >
         {sharePct}%
       </span>
-    </div>
-  );
-}
-
-/**
- * Fallback shown when the rotating display would be served but the
- * calibration release gate has not yet cleared. See Phase 5 task #4 —
- * the gate failure does NOT also take down the stable-style flag.
- */
-export function RotatingGateBlocked() {
-  return (
-    <div
-      data-testid="rotating-gate-blocked"
-      style={{
-        padding: "32px var(--page-pad-x)",
-        textAlign: "center",
-        background: "var(--surface)",
-        borderBottom: "1px solid var(--rule)",
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--font-geist-sans), sans-serif",
-          fontSize: 16,
-          fontWeight: 600,
-          color: "var(--ink)",
-        }}
-      >
-        Rotating-style display temporarily disabled
-      </div>
-      <div
-        style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
-          color: "var(--muted)",
-          marginTop: 10,
-          letterSpacing: ".02em",
-          maxWidth: 460,
-          marginInline: "auto",
-          lineHeight: 1.6,
-        }}
-      >
-        The setlist model isn&rsquo;t calibrated yet — the back-test back-test
-        evaluation will unlock the rotating display once stability targets
-        clear. See{" "}
-        <a
-          href="/admin/eval"
-          style={{ color: "var(--ink)", textDecoration: "underline" }}
-        >
-          /admin/eval
-        </a>
-        .
-      </div>
     </div>
   );
 }

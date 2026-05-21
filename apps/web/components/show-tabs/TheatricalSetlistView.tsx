@@ -3,8 +3,7 @@
 /**
  * Theatrical-style predicted-setlist subtree. Phase 6 of setlist-
  * intelligence (§15c theatrical + §15p display variants). Mounts
- * inside the Setlist tab when `prediction.style === 'theatrical'`
- * AND the `SetlistIntelTheatricalDisplay` feature flag is ON.
+ * inside the Setlist tab when `prediction.style === 'theatrical'`.
  *
  * Top to bottom (matches the worked example in
  * `docs/specs/setlist-intelligence/worked-examples.md` §3 +
@@ -370,57 +369,3 @@ function CandidateRow({
   );
 }
 
-/**
- * Fallback shown when the theatrical display would be served but the
- * `SetlistIntelTheatricalDisplay` flag is OFF (or the release-gate
- * hasn't cleared the theatrical_brier threshold yet). Mirrors the
- * Phase-5 `RotatingGateBlocked` shape so the page-level handling is
- * symmetric.
- */
-export function TheatricalGateBlocked() {
-  return (
-    <div
-      data-testid="theatrical-gate-blocked"
-      style={{
-        padding: "32px var(--page-pad-x)",
-        textAlign: "center",
-        background: "var(--surface)",
-        borderBottom: "1px solid var(--rule)",
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--font-geist-sans), sans-serif",
-          fontSize: 16,
-          fontWeight: 600,
-          color: "var(--ink)",
-        }}
-      >
-        Theatrical-style display temporarily disabled
-      </div>
-      <div
-        style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
-          color: "var(--muted)",
-          marginTop: 10,
-          letterSpacing: ".02em",
-          maxWidth: 460,
-          marginInline: "auto",
-          lineHeight: 1.6,
-        }}
-      >
-        The setlist model isn&rsquo;t calibrated for theatrical tours
-        yet — the back-test evaluation will unlock the display once
-        the Brier threshold clears. See{" "}
-        <a
-          href="/admin/eval"
-          style={{ color: "var(--ink)", textDecoration: "underline" }}
-        >
-          /admin/eval
-        </a>
-        .
-      </div>
-    </div>
-  );
-}

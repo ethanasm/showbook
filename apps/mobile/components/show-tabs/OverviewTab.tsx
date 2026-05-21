@@ -1,7 +1,7 @@
 /**
  * OverviewTab (mobile) — stat row · lineup · actions, plus an
- * optional music-layer slot for the FanLoyaltyRing (Phase 7) when
- * SetlistIntelMusicLayerV2 lands. Mirror of the web `OverviewTab`.
+ * optional music-layer slot for the FanLoyaltyRing (Phase 7).
+ * Mirror of the web `OverviewTab`.
  */
 
 import React from 'react';

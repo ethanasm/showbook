@@ -14,7 +14,6 @@
  *   heard this song live."
  *
  * Phase 7 (music layer v2):
- * - `musicLayerV2Feature()` — flag gate query (admin-bypass).
  * - `fanLoyalty({ showId })` — donut ring source data (past shows).
  * - `discoveredLive({ showId })` — list-row rail data (past shows).
  * - `saveDiscoveredSong({ songId })` — PUT /me/tracks mutation.
@@ -40,13 +39,10 @@ import {
   songs,
   userPerformerFollows,
   userSpotifySkippedArtists,
-  users,
 } from '@showbook/db';
 import {
   getHeadlinerId,
-  isFeatureOn,
   isProductionShow,
-  type FeatureFlagKey,
   type ShowLike,
 } from '@showbook/shared';
 import { child } from '@showbook/observability';
@@ -87,7 +83,6 @@ import {
   saveDiscoveredSong,
   primingStatForShow,
 } from '../spotify-music-layer';
-import { isAdminEmail } from '../admin';
 import { ensureFreshUserToken } from '../spotify-tokens';
 import {
   getFollowedArtists,
@@ -124,26 +119,6 @@ const firstTimesInput = z
 
 const showIdOnly = z.object({ showId: z.string().uuid() });
 const saveDiscoveredInput = z.object({ songId: z.string().uuid() });
-
-const MUSIC_LAYER_V2_FLAG: FeatureFlagKey = 'SetlistIntelMusicLayerV2';
-
-/**
- * Resolves the Phase 7 music-layer-v2 gate for a user. The flag is OFF
- * globally; the `ADMIN_EMAILS` allowlist bypasses so the developer can
- * validate against a real Spotify connection before rollout.
- */
-async function isMusicLayerV2EnabledForUser(
-  dbi: typeof import('@showbook/db').db,
-  userId: string,
-): Promise<boolean> {
-  if (isFeatureOn(MUSIC_LAYER_V2_FLAG)) return true;
-  const [user] = await dbi
-    .select({ email: users.email })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-  return isAdminEmail(user?.email);
-}
 
 export const setlistIntelRouter = router({
   /**
@@ -217,33 +192,27 @@ export const setlistIntelRouter = router({
       // matches the (performer, date, venue) tuple, we never predict
       // and the UI renders a SpecialEventCard with the rule's copy +
       // prior matching events. The lookup is a single indexed query.
-      if (isFeatureOn('SetlistIntelSpecialEvents')) {
-        try {
-          const specialEvent = await lookupSpecialEventRule({
-            performerId: headlinerId,
-            targetDate: show.date,
-            venueName: targetVenueName,
-          });
-          if (specialEvent) {
-            return specialEvent;
-          }
-        } catch (err) {
-          log.error(
-            { event: 'setlist.special_event.lookup_failed', err, showId: input.showId },
-            'special-event rule lookup failed; falling through',
-          );
+      try {
+        const specialEvent = await lookupSpecialEventRule({
+          performerId: headlinerId,
+          targetDate: show.date,
+          venueName: targetVenueName,
+        });
+        if (specialEvent) {
+          return specialEvent;
         }
+      } catch (err) {
+        log.error(
+          { event: 'setlist.special_event.lookup_failed', err, showId: input.showId },
+          'special-event rule lookup failed; falling through',
+        );
       }
 
-      // Phase 5 — style classifier branch. When the §15b classifier
-      // is on AND the performer is rotating-style, we run the gap-
-      // based rotating model instead of §4c stable. The
-      // SetlistIntelStyleClassifier flag exists so we can fall every
-      // performer back to 'stable' if the classifier misbehaves.
-      const styleClassifierOn = isFeatureOn('SetlistIntelStyleClassifier');
-      const effectiveStyle = styleClassifierOn
-        ? (perf.setlistStyleOverride ?? perf.setlistStyle ?? 'stable')
-        : 'stable';
+      // Phase 5 — style classifier branch. When the performer is
+      // rotating/theatrical/improvised-style, we run the matching
+      // model instead of §4c stable.
+      const effectiveStyle =
+        perf.setlistStyleOverride ?? perf.setlistStyle ?? 'stable';
 
       if (effectiveStyle === 'rotating') {
         try {
@@ -412,18 +381,15 @@ export const setlistIntelRouter = router({
       try {
         // Phase 11 §15e — generalize multi-night anti-repeat to
         // stable-style residencies (Adele Caesars Palace, Bruno Mars
-        // Sphere). When the flag is ON and a venue match exists, run
-        // the detector against a quick corpus load and feed the
-        // resulting runContext through to the stable predictor so it
-        // can apply the 0.05 anti-repeat penalty on already-played
-        // songs. Skips the extra corpus load when there's no venue.
+        // Sphere). When a venue match exists, run the detector against
+        // a quick corpus load and feed the resulting runContext through
+        // to the stable predictor so it can apply the 0.05 anti-repeat
+        // penalty on already-played songs. Skips the extra corpus load
+        // when there's no venue.
         let stableRunContext: NonNullable<
           Parameters<typeof predictedSetlistCached>[0]['runContext']
         > | null = null;
-        if (
-          isFeatureOn('SetlistIntelMultiNightGeneralized') &&
-          targetVenueName
-        ) {
+        if (targetVenueName) {
           try {
             const { setlists } = await loadCorpusForPrediction({
               performerId: headlinerId,
@@ -550,7 +516,6 @@ export const setlistIntelRouter = router({
         return { entries: [] };
       }
 
-      const styleClassifierOn = isFeatureOn('SetlistIntelStyleClassifier');
       const targetDate = show.date;
       const showId = input.showId;
 
@@ -589,9 +554,8 @@ export const setlistIntelRouter = router({
               };
             }
 
-            const effectiveStyle = styleClassifierOn
-              ? (perf.setlistStyleOverride ?? perf.setlistStyle ?? 'stable')
-              : 'stable';
+            const effectiveStyle =
+              perf.setlistStyleOverride ?? perf.setlistStyle ?? 'stable';
 
             if (effectiveStyle === 'rotating') {
               const { setlists } = await loadCorpusForPrediction({
@@ -987,13 +951,6 @@ export const setlistIntelRouter = router({
       artists: SpotifyArtist[];
     }> => {
       const userId = ctx.session.user.id;
-      if (!isFeatureOn('SetlistIntelPreviews')) {
-        log.debug(
-          { event: 'spotify.follow_diff.empty', reason: 'flag_off', userId },
-          'follow-diff served empty (flag off)',
-        );
-        return { connected: false, artists: [] };
-      }
       const accessToken = await ensureFreshUserToken(userId);
       if (!accessToken) {
         return { connected: false, artists: [] };
@@ -1542,19 +1499,6 @@ export const setlistIntelRouter = router({
   // ───────────────────────────────────────────────────────────────────
 
   /**
-   * Gate query for the Phase 7 music-layer-v2 UI (fan loyalty ring,
-   * discovered-live rail, priming stat). Returns `{ enabled }` based
-   * on the global flag and the admin-email allowlist.
-   */
-  musicLayerV2Feature: protectedProcedure.query(async ({ ctx }) => {
-    const enabled = await isMusicLayerV2EnabledForUser(
-      ctx.db,
-      ctx.session.user.id,
-    );
-    return { enabled };
-  }),
-
-  /**
    * Fan-loyalty ring source data — past shows only. Walks the actual
    * setlist, asks Spotify which of those tracks the user has saved,
    * and returns the rolled-up count/percentage. Computed on demand;
@@ -1564,12 +1508,6 @@ export const setlistIntelRouter = router({
     .input(showIdOnly)
     .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      if (!(await isMusicLayerV2EnabledForUser(ctx.db, userId))) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'feature_disabled:SetlistIntelMusicLayerV2',
-        });
-      }
       try {
         return await fanLoyaltyForShow({
           db: ctx.db,
@@ -1603,12 +1541,6 @@ export const setlistIntelRouter = router({
     .input(showIdOnly)
     .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      if (!(await isMusicLayerV2EnabledForUser(ctx.db, userId))) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'feature_disabled:SetlistIntelMusicLayerV2',
-        });
-      }
       try {
         return await discoveredLiveForShow({
           db: ctx.db,
@@ -1641,12 +1573,6 @@ export const setlistIntelRouter = router({
     .input(saveDiscoveredInput)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      if (!(await isMusicLayerV2EnabledForUser(ctx.db, userId))) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'feature_disabled:SetlistIntelMusicLayerV2',
-        });
-      }
       const result = await saveDiscoveredSong({
         db: ctx.db,
         userId,
@@ -1694,11 +1620,6 @@ export const setlistIntelRouter = router({
     .input(showIdOnly)
     .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      if (!(await isMusicLayerV2EnabledForUser(ctx.db, userId))) {
-        // Quiet failure path — the UI hides the line entirely when the
-        // flag is off, no need to bubble an error.
-        return { prepCount: null, postCount: null };
-      }
       return primingStatForShow({
         db: ctx.db,
         userId,
