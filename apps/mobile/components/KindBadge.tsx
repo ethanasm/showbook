@@ -22,6 +22,13 @@ import type { Kind } from '../lib/theme';
 interface KindBadgeProps {
   kind: Kind;
   size?: 'sm' | 'md';
+  /**
+   * `default` — kind-coloured tint background (used on the app shell).
+   * `onPhoto` — translucent white pill with dark text + icon. Stays
+   * legible against busy hero photos where the default kindColor tint
+   * disappears into the image.
+   */
+  tone?: 'default' | 'onPhoto';
 }
 
 const KIND_LABEL: Record<Kind, string> = {
@@ -50,9 +57,13 @@ const KIND_ICON: Record<Kind, LucideIconComponent> = {
   unknown: HelpCircle,
 };
 
-export function KindBadge({ kind, size = 'sm' }: KindBadgeProps): React.JSX.Element {
+export function KindBadge({
+  kind,
+  size = 'sm',
+  tone = 'default',
+}: KindBadgeProps): React.JSX.Element {
   const { tokens } = useTheme();
-  const color = tokens.kindColor(kind);
+  const kindColor = tokens.kindColor(kind);
   const IconComponent = KIND_ICON[kind];
 
   const isSm = size === 'sm';
@@ -62,26 +73,30 @@ export function KindBadge({ kind, size = 'sm' }: KindBadgeProps): React.JSX.Elem
   const paddingHorizontal = isSm ? 8 : 10;
   const gap = isSm ? 4 : 5;
 
+  const onPhoto = tone === 'onPhoto';
+  // hex '22' = 0x22 = 34 alpha ≈ 13% opacity — matches design literal
+  const backgroundColor = onPhoto ? 'rgba(255,255,255,0.92)' : kindColor + '22';
+  const fg = onPhoto ? '#1a1a1a' : kindColor;
+
   return (
     <View
       style={[
         styles.container,
         {
-          // hex '22' = 0x22 = 34 alpha ≈ 13% opacity — matches design literal
-          backgroundColor: color + '22',
+          backgroundColor,
           paddingVertical,
           paddingHorizontal,
           gap,
         },
       ]}
     >
-      <IconComponent size={iconSize} color={color} strokeWidth={2.5} />
+      <IconComponent size={iconSize} color={fg} strokeWidth={2.5} />
       <Text
         style={[
           styles.label,
           {
             fontSize,
-            color,
+            color: fg,
             letterSpacing: fontSize * 0.06, // 0.06em equivalent
           },
         ]}
