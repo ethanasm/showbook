@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { child } from '@showbook/observability';
+import { isFeatureOn } from '@showbook/shared';
 import { auth } from '@/auth';
 
 const logger = child({ component: 'web.eventbrite.callback' });
@@ -21,6 +22,10 @@ function clearStateCookie(response: NextResponse, isSecure: boolean): NextRespon
 }
 
 export async function GET(req: NextRequest) {
+  if (!isFeatureOn('EventbriteImportEnabled')) {
+    return new NextResponse('Not Found', { status: 404 });
+  }
+
   const session = await auth();
   if (!session?.user?.id) {
     return new NextResponse('Unauthorized', { status: 401 });

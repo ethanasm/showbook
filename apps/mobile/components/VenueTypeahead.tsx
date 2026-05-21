@@ -91,16 +91,31 @@ export function VenueTypeahead({
   // re-fire `onSearch` against the new value and immediately
   // repopulate it.
   const [dismissed, setDismissed] = React.useState(false);
+  // Edit form pre-fills `value` with the existing venue name. Without
+  // a focus gate the dropdown would open on mount before the user
+  // touched the field. Suggestions only render once the user has
+  // actually focused the input.
+  const [focused, setFocused] = React.useState(false);
+  // Delay the blur so a tap on a suggestion row still fires its
+  // `onPress` before the dropdown unmounts.
+  const blurTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (blurTimerRef.current !== null) clearTimeout(blurTimerRef.current);
+    };
+  }, []);
 
   React.useEffect(() => {
     if (dismissed) return;
+    if (!focused) return;
     const trimmed = debounced.trim();
     if (trimmed.length === 0) return;
     onSearch(trimmed);
     // Intentionally omit `onSearch` from deps — every keystroke would
     // otherwise re-fire if the parent recreated the callback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debounced, dismissed]);
+  }, [debounced, dismissed, focused]);
 
   const handleChangeText = React.useCallback(
     (next: string) => {
@@ -118,7 +133,22 @@ export function VenueTypeahead({
     [onSelect],
   );
 
-  const showResults = !dismissed && value.trim().length > 0;
+  const handleFocus = React.useCallback(() => {
+    if (blurTimerRef.current !== null) {
+      clearTimeout(blurTimerRef.current);
+      blurTimerRef.current = null;
+    }
+    setFocused(true);
+  }, []);
+
+  const handleBlur = React.useCallback(() => {
+    blurTimerRef.current = setTimeout(() => {
+      setFocused(false);
+      blurTimerRef.current = null;
+    }, 150);
+  }, []);
+
+  const showResults = !dismissed && focused && value.trim().length > 0;
 
   return (
     <View testID={testID} style={styles.wrap}>
@@ -131,6 +161,8 @@ export function VenueTypeahead({
           placeholderTextColor={colors.faint}
           autoCapitalize="words"
           autoCorrect={false}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           style={[styles.input, { color: colors.ink }]}
           testID={testID ? `${testID}-input` : undefined}
         />

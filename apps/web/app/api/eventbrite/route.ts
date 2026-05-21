@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
 import { randomBytes } from 'node:crypto';
+import { isFeatureOn } from '@showbook/shared';
 import { auth } from '@/auth';
 
 const STATE_COOKIE = 'eventbrite_oauth_state';
 const STATE_TTL_SECONDS = 600;
 
 export async function GET() {
+  if (!isFeatureOn('EventbriteImportEnabled')) {
+    return new NextResponse('Not Found', { status: 404 });
+  }
+
   const session = await auth();
   if (!session?.user?.id) {
     return new NextResponse('Unauthorized', { status: 401 });
