@@ -9,6 +9,7 @@ import {
   scoreEmailLikelyTicket,
   HEURISTIC_THRESHOLD,
   isRateLimited,
+  GmailError,
   type GmailAttachmentRef,
   type ExtractedTicketInfo,
 } from '@showbook/api';
@@ -378,7 +379,30 @@ export async function POST(request: Request) {
         const merged = mergeTickets(allExtracted);
         send('done', { tickets: merged, truncated });
       } catch (err) {
-        send('error', { message: err instanceof Error ? err.message : 'Scan failed' });
+        // Tag GmailError separately so we can surface a status-aware
+        // hint to the client and so Axiom queries can pivot on the
+        // upstream Gmail HTTP status. Without this branch the only
+        // server-side signal for a failed scan is the api.gmail
+        // `gmail.request.error` warn — which lacks userId attribution
+        // and the response body Google returned.
+        const gmailStatus =
+          err instanceof GmailError ? err.status : undefined;
+        const message =
+          err instanceof Error ? err.message : 'Scan failed';
+        log.error(
+          {
+            event: 'gmail.scan.failed',
+            err,
+            userId,
+            gmailStatus,
+            gmailDetail:
+              err instanceof GmailError
+                ? err.detail?.slice(0, 500)
+                : undefined,
+          },
+          'Gmail scan failed',
+        );
+        send('error', { message, status: gmailStatus });
       } finally {
         controller.close();
       }

@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
   // Google in the subsequent redirect.
   const session = await auth();
   let userId = session?.user?.id ?? null;
+  let resolvedEmail: string | null = session?.user?.email ?? null;
   let mintedSessionEmail: string | null = null;
   let mintedFromMobileToken = false;
   if (!userId && mode === OAUTH_MODE_MOBILE) {
@@ -44,6 +45,7 @@ export async function GET(req: NextRequest) {
       if (decoded?.id) {
         userId = decoded.id;
         mintedSessionEmail = decoded.email;
+        resolvedEmail = decoded.email;
         mintedFromMobileToken = true;
       }
     }
@@ -69,8 +71,16 @@ export async function GET(req: NextRequest) {
     scope: 'https://www.googleapis.com/auth/gmail.readonly',
     access_type: 'online',
     prompt: 'select_account',
+    // Bundle previously-granted scopes so re-connecting can't accidentally
+    // narrow the token to a subset that lacks gmail.readonly.
+    include_granted_scopes: 'true',
     state,
   });
+  // Pre-fill the account chooser when we know which Google account the user
+  // signed in with. Without this, a user with multiple Google accounts can
+  // accidentally pick a non-Gmail account on a repeat scan and surface a
+  // Gmail-side 401 ("Gmail search failed").
+  if (resolvedEmail) params.set('login_hint', resolvedEmail);
 
   const response = NextResponse.redirect(
     `https://accounts.google.com/o/oauth2/v2/auth?${params}`,
