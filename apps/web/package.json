@@ -32,7 +32,7 @@
     "@trpc/react-query": "^11.17.0",
     "@trpc/server": "^11.0.0",
     "drizzle-orm": "^0.45.2",
-    "geist": "^1.4.1",
+    "geist": "^1.7.1",
     "google-auth-library": "^10.6.2",
     "heic-to": "^1.4.2",
     "langfuse": "^3.38.4",
