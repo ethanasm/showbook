@@ -59,6 +59,7 @@ export {
   getMessageBody,
   getAttachment,
   buildBulkScanQueries,
+  GmailError,
 } from './gmail';
 export type { GmailAttachmentRef, GmailMessageDetail } from './gmail';
 export {

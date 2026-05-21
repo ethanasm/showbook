@@ -248,6 +248,32 @@ describe('runGmailScan', () => {
     );
   });
 
+  it('rewrites an upstream Gmail 401 into a reconnect hint', async () => {
+    const fetchImpl = (() =>
+      Promise.resolve(
+        makeSseResponse([
+          'event: error\ndata: {"message":"Gmail search failed","status":401}\n\n',
+        ]),
+      )) as unknown as typeof fetch;
+    await assert.rejects(
+      () => runGmailScan({ ...baseOpts, fetchImpl }),
+      /reconnect/i,
+    );
+  });
+
+  it('rewrites an upstream Gmail 5xx into a retry hint with the code', async () => {
+    const fetchImpl = (() =>
+      Promise.resolve(
+        makeSseResponse([
+          'event: error\ndata: {"message":"Gmail search failed","status":503}\n\n',
+        ]),
+      )) as unknown as typeof fetch;
+    await assert.rejects(
+      () => runGmailScan({ ...baseOpts, fetchImpl }),
+      /503/,
+    );
+  });
+
   it('rejects with a friendly message on 429', async () => {
     const fetchImpl = (() =>
       Promise.resolve(

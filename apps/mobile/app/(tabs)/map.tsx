@@ -257,6 +257,14 @@ function pinRadius(count: number): number {
   return Math.max(8, Math.min(22, 7 + count * 1.4));
 }
 
+function chunkRegions(regions: FocusRegion[], size: number): FocusRegion[][] {
+  const rows: FocusRegion[][] = [];
+  for (let i = 0; i < regions.length; i += size) {
+    rows.push(regions.slice(i, i + size));
+  }
+  return rows;
+}
+
 /**
  * Convert a saved region (lat/lng + radius in miles) into a react-native-maps
  * `Region` framed so the radius fits horizontally with a little padding.
@@ -590,35 +598,48 @@ export default function MapScreen(): React.JSX.Element {
                   },
                 ]}
               >
-                {focusRegions.map((focus, i) => {
-                  const active = focus.id === activeFocusId;
-                  return (
-                    <Pressable
-                      key={focus.id}
-                      onPress={() => onFocusPress(focus)}
-                      style={[
-                        styles.focusToggleBtn,
-                        i > 0 && {
-                          borderLeftColor: colors.ruleStrong,
-                          borderLeftWidth: 1,
-                        },
-                        active && { backgroundColor: colors.ink },
-                      ]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Focus map on ${focus.label}`}
-                    >
-                      <Text
-                        style={[
-                          styles.focusToggleLabel,
-                          { color: active ? colors.bg : colors.muted },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {focus.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                {chunkRegions(focusRegions, 3).map((row, rowIdx) => (
+                  <View
+                    key={rowIdx}
+                    style={[
+                      styles.focusToggleRow,
+                      rowIdx > 0 && {
+                        borderTopColor: colors.ruleStrong,
+                        borderTopWidth: 1,
+                      },
+                    ]}
+                  >
+                    {row.map((focus, i) => {
+                      const active = focus.id === activeFocusId;
+                      return (
+                        <Pressable
+                          key={focus.id}
+                          onPress={() => onFocusPress(focus)}
+                          style={[
+                            styles.focusToggleBtn,
+                            i > 0 && {
+                              borderLeftColor: colors.ruleStrong,
+                              borderLeftWidth: 1,
+                            },
+                            active && { backgroundColor: colors.ink },
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Focus map on ${focus.label}`}
+                        >
+                          <Text
+                            style={[
+                              styles.focusToggleLabel,
+                              { color: active ? colors.bg : colors.muted },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {focus.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ))}
               </View>
             )}
           </>
@@ -881,13 +902,17 @@ const styles = StyleSheet.create({
     bottom: 16,
     right: 16,
     maxWidth: '85%',
-    flexDirection: 'row',
+    flexDirection: 'column',
     borderWidth: 1,
+  },
+  focusToggleRow: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
   },
   focusToggleBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    flexShrink: 1,
+    flex: 1,
   },
   focusToggleLabel: {
     fontFamily: 'Geist Mono',

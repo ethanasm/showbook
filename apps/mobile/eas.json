@@ -11,6 +11,9 @@
     "preview": {
       "distribution": "internal",
       "channel": "preview",
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://showbook.ethanasm.me",
         "EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS": "222563763412-v5hj97rgnhnl2uesff3kvefvn2n4na2a.apps.googleusercontent.com",

@@ -140,6 +140,14 @@ describe('runPrunePastAnnouncements', () => {
     await db.insert(venues).values([
       { id: VENUE, name: 'Hall', city: 'NYC', country: 'US' },
     ]);
+    // Anchor the venue against a concurrent `runPruneOrphanCatalog()`
+    // sweep — same pattern as PR #334 applied to the cascade test
+    // below. The performer is anchored a few lines down by the
+    // `userPerformerFollows` insert, but the venue would otherwise
+    // race-delete before the announcement insert and FK-violate.
+    await db.insert(userVenueFollows).values([
+      { userId: USER_A, venueId: VENUE },
+    ]);
     await db.insert(performers).values([
       { id: PERFORMER, name: 'Followed Artist' },
     ]);
@@ -175,6 +183,16 @@ describe('runPrunePastAnnouncements', () => {
     ]);
     await db.insert(venues).values([
       { id: VENUE, name: 'Hall', city: 'NYC', country: 'US' },
+    ]);
+    // Anchor the venue against a concurrent `runPruneOrphanCatalog()`
+    // sweep from a sibling test file. Without this, the orphan-prune
+    // can delete the just-inserted venue (no follows, shows, or
+    // announcements reference it yet) in the window before the show
+    // insert, and the show insert then FK-violates. PR #309 added this
+    // preserver pattern to the first test in this file but missed
+    // this one.
+    await db.insert(userVenueFollows).values([
+      { userId: USER_A, venueId: VENUE },
     ]);
     await db.insert(shows).values([
       {
