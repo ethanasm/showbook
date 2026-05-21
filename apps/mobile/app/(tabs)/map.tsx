@@ -944,18 +944,16 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 16,
     right: 16,
-    maxWidth: '85%',
     flexDirection: 'column',
+    alignItems: 'flex-end',
     borderWidth: 1,
   },
   focusToggleRow: {
     flexDirection: 'row',
-    alignSelf: 'stretch',
   },
   focusToggleBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    flex: 1,
   },
   focusToggleLabel: {
     fontFamily: 'Geist Mono',

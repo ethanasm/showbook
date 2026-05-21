@@ -24,7 +24,16 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ticket } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  Bookmark,
+  Check,
+  ChevronLeft,
+  Eye,
+  MoreHorizontal,
+  Ticket,
+} from 'lucide-react-native';
 
 import { hapticSelection } from '../../lib/haptics';
 import { useFeedback } from '../../lib/feedback';
@@ -50,9 +59,8 @@ import { NotesTab } from './NotesTab';
 import { ShowDetailRightRail } from './ShowDetailRightRail';
 import { HypePlaylistCard } from './HypePlaylistCard';
 import { KindBadge } from '../KindBadge';
-import { StateChip } from '../StateChip';
 import { MediaGrid, type MediaGridItem } from '../MediaGrid';
-import { Eyebrow, GlowBackdrop, GradientEmphasis, RemoteImage } from '../design-system';
+import { RemoteImage } from '../design-system';
 import {
   computeShowTabBadges,
   parseShowTab,
@@ -118,12 +126,19 @@ export interface ShowDetailTabsViewProps {
   embeddedInThreePane?: boolean;
   /** Optional initial tab override (deep link). */
   initialTab?: ShowTabKey;
+  /** Floating hero chrome callbacks. When provided, `HeaderStrip` renders
+   *  glass-pill back / more buttons over the photo so the screen-level
+   *  TopBar can be suppressed. */
+  onBack?: () => void;
+  onMore?: () => void;
 }
 
 export function ShowDetailTabsView({
   show,
   embeddedInThreePane = false,
   initialTab,
+  onBack,
+  onMore,
 }: ShowDetailTabsViewProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -612,7 +627,7 @@ export function ShowDetailTabsView({
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
       <View style={styles.body}>
-        <HeaderStrip show={show} />
+        <HeaderStrip show={show} onBack={onBack} onMore={onMore} />
         <ShowTabBar active={active} badges={badges} onSelect={setActive} />
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -646,121 +661,189 @@ export function ShowDetailTabsView({
   );
 }
 
-function HeaderStrip({ show }: { show: ShowDetail }): React.JSX.Element {
+const HERO_BODY_HEIGHT = 340;
+
+function StateChipOnDark({ state }: { state: ShowState }): React.JSX.Element | null {
+  if (state === 'past') return null;
+  const config =
+    state === 'ticketed'
+      ? { label: 'TICKETED', icon: <Check size={10} color="#1a1a1a" strokeWidth={2.5} />, bg: '#fff', fg: '#1a1a1a' }
+      : state === 'watching'
+        ? { label: 'WATCHING', icon: <Eye size={10} color="#fff" strokeWidth={2.5} />, bg: 'rgba(0,0,0,0.42)', fg: '#fff' }
+        : { label: 'WISHLIST', icon: <Bookmark size={10} color="#fff" strokeWidth={2.5} />, bg: 'rgba(0,0,0,0.42)', fg: '#fff' };
+  return (
+    <View
+      style={[
+        heroStyles.statePill,
+        { backgroundColor: config.bg, borderColor: 'rgba(255,255,255,0.32)' },
+      ]}
+    >
+      {config.icon}
+      <Text style={[heroStyles.statePillText, { color: config.fg }]}>{config.label}</Text>
+    </View>
+  );
+}
+
+function HeaderStrip({
+  show,
+  onBack,
+  onMore,
+}: {
+  show: ShowDetail;
+  onBack?: () => void;
+  onMore?: () => void;
+}): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const router = useRouter();
   const { token } = useAuth();
+  const insets = useSafeAreaInsets();
   const resolvedHeadliner = getHeadliner(show);
   const title = resolvedHeadliner === 'Unknown Artist' ? 'Untitled' : resolvedHeadliner;
   const date = parseDate(show.date);
-
-  // Gradient-emphasis the last word of the title for a touch of editorial flair.
-  const parts = title.trim().split(/\s+/);
-  const head = parts.length > 1 ? parts.slice(0, -1).join(' ') + ' ' : '';
-  const tail = parts.length > 1 ? (parts[parts.length - 1] as string) : title;
   const venueLine = [show.venue.name, show.venue.city]
     .filter((p) => !isVenuePlaceholder(p))
     .join(' · ');
 
-  // Top-right image renders the venue across kinds. For concerts /
-  // comedy the headliner already appears in the LINEUP row below, so
-  // doubling up the artist photo here adds nothing; the venue photo
-  // reinforces "where" alongside the "who" in the title and falls back
-  // to a kind-coloured monogram. Festivals span many artists and
-  // theatre titles are productions — both are venue-anchored, so the
-  // venue photo carries the same "where" signal, but a monogram would
-  // just repeat the title text. For those two kinds we render the
-  // photo only when one is actually linked and otherwise leave the
-  // top-right blank.
+  // Background photo. The venue image was chosen historically because
+  // concerts/comedy already surface the headliner photo in the LINEUP
+  // row below — repeating it here adds nothing. RemoteImage falls back
+  // to a kind-coloured monogram when no photo is available.
   const venueImage = venueImageSource(show.venue, token);
-  const monogramOk = show.kind === 'concert' || show.kind === 'comedy';
-  const showVenueImage = monogramOk || venueImage !== null;
+
+  const eyebrow =
+    `${show.kind === 'theatre' ? 'THEATRE' : show.kind.toUpperCase()}` +
+    (date ? ` · ${date.toUpperCase()}` : '');
+
+  const heroHeight = insets.top + HERO_BODY_HEIGHT;
 
   return (
     <View
       testID="show-tabs-header"
-      style={[styles.header, { borderBottomColor: colors.rule }]}
+      style={[heroStyles.hero, { height: heroHeight, borderBottomColor: colors.rule }]}
     >
-      <GlowBackdrop grid={false} />
-      <View style={styles.headerContent}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerTextCol}>
-            <Eyebrow>
-              {show.kind === 'theatre' ? 'THEATRE' : show.kind.toUpperCase()}
-              {date ? ` · ${date}` : ''}
-            </Eyebrow>
-            <View style={styles.headerChips}>
-              <KindBadge kind={show.kind as Kind} size="sm" />
-              {show.state !== 'past' ? (
-                <StateChip state={show.state as ShowState} />
-              ) : (
-                <View
-                  testID="went-badge"
-                  style={[
-                    styles.wentBadge,
-                    { borderColor: colors.ruleStrong },
-                  ]}
-                >
-                  <Text style={[styles.wentBadgeText, { color: colors.muted }]}>
-                    WENT
-                  </Text>
-                </View>
-              )}
-            </View>
-            <Text
-              style={[styles.headerTitle, { color: colors.ink }]}
-              numberOfLines={2}
+      {/* Tappable photo background — opens the venue. The Pressable lives
+          behind the chrome row (which is `pointerEvents: 'box-none'` so
+          buttons receive their own taps). */}
+      <Pressable
+        testID="show-tabs-header-venue-image"
+        onPress={() => router.push(`/venues/${show.venue.id}`)}
+        accessibilityRole="link"
+        accessibilityLabel={show.venue.name}
+        style={StyleSheet.absoluteFillObject}
+      >
+        <RemoteImage
+          uri={venueImage?.uri ?? null}
+          headers={venueImage?.headers}
+          name={show.venue.name}
+          kind={show.kind as Kind}
+          size="custom"
+          height={heroHeight}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </Pressable>
+
+      {/* Scrim: dark at top for status bar + floating chrome, transparent
+          in the middle so the photo breathes, dark at bottom for the
+          title block. */}
+      <LinearGradient
+        colors={[
+          'rgba(0,0,0,0.55)',
+          'rgba(0,0,0,0.20)',
+          'rgba(0,0,0,0.00)',
+          'rgba(0,0,0,0.30)',
+          'rgba(0,0,0,0.82)',
+        ]}
+        locations={[0, 0.18, 0.42, 0.70, 1]}
+        style={StyleSheet.absoluteFillObject}
+        pointerEvents="none"
+      />
+
+      {/* Top row — floating chrome buttons + state pill. */}
+      <View
+        style={[heroStyles.topRow, { paddingTop: insets.top + 8 }]}
+        pointerEvents="box-none"
+      >
+        {onBack ? (
+          <Pressable
+            onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            hitSlop={8}
+            style={({ pressed }) => [
+              heroStyles.glassBtn,
+              pressed && { opacity: 0.7 },
+            ]}
+          >
+            <ChevronLeft size={22} color="#fff" strokeWidth={2.2} />
+          </Pressable>
+        ) : (
+          <View style={heroStyles.glassBtnPlaceholder} />
+        )}
+        <View style={heroStyles.topRightStack} pointerEvents="box-none">
+          {show.state !== 'past' ? (
+            <StateChipOnDark state={show.state as ShowState} />
+          ) : (
+            <View
+              testID="went-badge"
+              style={[heroStyles.statePill, { backgroundColor: 'rgba(0,0,0,0.42)', borderColor: 'rgba(255,255,255,0.32)' }]}
             >
-              {head ? <Text>{head}</Text> : null}
-              <GradientEmphasis style={[styles.headerTitle, { color: colors.accent }]}>
-                {tail}
-              </GradientEmphasis>
-            </Text>
-            {show.tourName ? (
-              <Text style={[styles.headerSub, { color: colors.muted }]} numberOfLines={1}>
-                {show.tourName}
-              </Text>
-            ) : null}
-            {venueLine ? (
-              <Pressable
-                onPress={() => router.push(`/venues/${show.venue.id}`)}
-                accessibilityRole="link"
-                accessibilityLabel={`Open ${show.venue.name}`}
-                hitSlop={6}
-                style={({ pressed }) => [styles.headerVenueLink, pressed && { opacity: 0.6 }]}
-              >
-                <Text style={[styles.headerVenue, { color: colors.muted }]} numberOfLines={1}>
-                  {venueLine}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-          {showVenueImage ? (
+              <Text style={[heroStyles.statePillText, { color: '#fff' }]}>WENT</Text>
+            </View>
+          )}
+          {onMore ? (
             <Pressable
-              testID="show-tabs-header-venue-image"
-              onPress={() => router.push(`/venues/${show.venue.id}`)}
-              accessibilityRole="link"
-              accessibilityLabel={show.venue.name}
+              onPress={onMore}
+              accessibilityRole="button"
+              accessibilityLabel="More actions"
+              hitSlop={8}
               style={({ pressed }) => [
-                styles.headerImageWrap,
-                pressed ? { opacity: 0.85 } : null,
+                heroStyles.glassBtn,
+                pressed && { opacity: 0.7 },
               ]}
             >
-              <RemoteImage
-                uri={venueImage?.uri ?? null}
-                headers={venueImage?.headers}
-                name={show.venue.name}
-                kind={show.kind as Kind}
-                size="custom"
-                width={84}
-                height={84}
-                aspect="1/1"
-                style={styles.headerImage}
-              />
+              <MoreHorizontal size={20} color="#fff" strokeWidth={2.2} />
             </Pressable>
           ) : null}
         </View>
+      </View>
+
+      {/* Eyebrow row — sits just under the chrome row. */}
+      <View
+        style={[heroStyles.eyebrowRow, { top: insets.top + 56 }]}
+        pointerEvents="none"
+      >
+        <Text style={heroStyles.eyebrow} numberOfLines={1}>
+          {eyebrow}
+        </Text>
+      </View>
+
+      {/* Bottom block — kind chip, title, optional tour, venue link. */}
+      <View style={heroStyles.bottomBlock} pointerEvents="box-none">
+        <View style={heroStyles.kindRow}>
+          <KindBadge kind={show.kind as Kind} size="sm" />
+        </View>
+        <Text style={heroStyles.title} numberOfLines={2}>
+          {title}
+        </Text>
+        {show.tourName ? (
+          <Text style={heroStyles.tour} numberOfLines={1}>
+            {show.tourName}
+          </Text>
+        ) : null}
+        {venueLine ? (
+          <Pressable
+            onPress={() => router.push(`/venues/${show.venue.id}`)}
+            accessibilityRole="link"
+            accessibilityLabel={`Open ${show.venue.name}`}
+            hitSlop={6}
+            style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+          >
+            <Text style={heroStyles.venue} numberOfLines={1}>
+              {venueLine}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -789,67 +872,102 @@ const styles = StyleSheet.create({
   scroll: {
     paddingBottom: 48,
   },
-  header: {
+});
+
+const heroStyles = StyleSheet.create({
+  hero: {
     position: 'relative',
     overflow: 'hidden',
     borderBottomWidth: StyleSheet.hairlineWidth,
+    backgroundColor: '#1a1525',
   },
-  headerContent: {
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 18,
-    gap: 8,
-  },
-  headerRow: {
+  topRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    paddingHorizontal: 16,
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-  },
-  headerTextCol: {
-    flex: 1,
-    minWidth: 0,
+    justifyContent: 'space-between',
+    alignItems: 'center',
     gap: 8,
   },
-  headerImageWrap: {
-    marginTop: 2,
-  },
-  headerImage: {
-    borderRadius: 14,
-  },
-  headerChips: {
+  topRightStack: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  headerTitle: {
-    fontFamily: 'Fraunces',
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: -0.6,
-    lineHeight: 32,
+  glassBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.38)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  headerSub: {
+  glassBtnPlaceholder: {
+    width: 36,
+    height: 36,
+  },
+  statePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    height: 26,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  statePillText: {
+    fontFamily: 'Geist Sans',
+    fontSize: 10.5,
+    fontWeight: '600',
+    letterSpacing: 10.5 * 0.08,
+    textTransform: 'uppercase',
+  },
+  eyebrowRow: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+  },
+  eyebrow: {
+    fontFamily: 'Geist Sans',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 11 * 0.14,
+    textTransform: 'uppercase',
+    color: 'rgba(255,255,255,0.88)',
+  },
+  bottomBlock: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    bottom: 18,
+    gap: 6,
+  },
+  kindRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  title: {
+    fontFamily: 'Fraunces',
+    fontSize: 34,
+    fontWeight: '700',
+    letterSpacing: -0.8,
+    lineHeight: 38,
+    color: '#fff',
+  },
+  tour: {
     fontFamily: 'Geist Sans',
     fontSize: 14,
+    color: 'rgba(255,255,255,0.86)',
   },
-  headerVenueLink: {
-    alignSelf: 'flex-start',
-    marginTop: 2,
-  },
-  headerVenue: {
+  venue: {
     fontFamily: 'Geist Sans',
     fontSize: 13,
-  },
-  wentBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 999,
-  },
-  wentBadgeText: {
-    fontFamily: 'Geist Mono',
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 1.4,
+    color: 'rgba(255,255,255,0.92)',
   },
 });

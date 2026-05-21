@@ -396,6 +396,72 @@ const ROUTES: RouteSpec[] = [
       },
     },
   },
+  // Show detail — modernized title section (full-bleed venue photo hero
+  // with floating chrome, eyebrow + state pill, kind chip + serif title
+  // + venue line). Stub a watching festival so the WATCHING pill renders.
+  {
+    name: '12-show-detail-festival',
+    path: '/show/screenshot-show-festival',
+    ready: /Bottlerock|FESTIVAL/i,
+    trpcStubs: {
+      'shows.detail': {
+        id: 'screenshot-show-festival',
+        userId: 'pr-screenshots-user',
+        kind: 'festival',
+        state: 'watching',
+        date: '2026-05-22',
+        seat: null,
+        pricePaid: null,
+        ticketCount: 1,
+        productionName: 'Bottlerock',
+        tourName: null,
+        notes: null,
+        rating: null,
+        source: 'manual',
+        ticketmasterId: null,
+        ticketUrl: null,
+        createdAt: '2026-04-01T18:00:00.000Z',
+        updatedAt: '2026-04-01T18:00:00.000Z',
+        venue: {
+          id: 'sb-venue-napa',
+          name: 'Napa Valley Expo',
+          city: 'Napa',
+          stateRegion: 'CA',
+          country: 'US',
+          lat: 38.298,
+          lng: -122.282,
+          googlePlaceId: null,
+          photoUrl: null,
+        },
+        showPerformers: [
+          {
+            role: 'headliner',
+            sortOrder: 0,
+            characterName: null,
+            performer: { id: 'p-lorde', name: 'Lorde', imageUrl: null },
+          },
+          {
+            role: 'support',
+            sortOrder: 1,
+            characterName: null,
+            performer: { id: 'p-teddy', name: 'Teddy Swims', imageUrl: null },
+          },
+          {
+            role: 'support',
+            sortOrder: 2,
+            characterName: null,
+            performer: { id: 'p-tash', name: 'Tash Sultana', imageUrl: null },
+          },
+        ],
+        setlists: null,
+      },
+      'setlistIntel.predictedFestivalSetlists': { entries: [] },
+      'spotify.hypePlaylistFeature': { enabled: false },
+      'shows.songBadges': { byPerformerId: {} },
+      'setlistIntel.trackPreviewsForShow': { previews: {} },
+      'media.listForShow': [],
+    },
+  },
 ];
 
 const variant = (process.env.PR_SCREENSHOT_VARIANT ?? 'after').toLowerCase();

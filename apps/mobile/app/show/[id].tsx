@@ -178,19 +178,26 @@ export default function ShowDetailScreen(
   // detail payload so the swap is invisible to the data layer.
   // ──────────────────────────────────────────────────────────────────
   if (tabbedEnabled) {
+    // The full-bleed hero owns its own chrome (back + more buttons floating
+    // over the photo), so we skip the screen-level TopBar and let the hero
+    // bleed under the status bar. Loading / error states still need the
+    // top safe-area inset so the spinner doesn't render under the notch.
+    const onBack = (): void => {
+      if (router.canGoBack()) router.back();
+      else router.replace('/(tabs)/shows');
+    };
     return (
       <View
-        style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}
+        style={{ flex: 1, backgroundColor: colors.bg }}
         testID="show-detail-tabs-root"
       >
-        <TopBar title="Show" leading={back} rightAction={moreAction} />
         {query.isLoading ? (
-          <View style={styles.center}>
+          <View style={[styles.center, { paddingTop: insets.top }]}>
             <ActivityIndicator color={colors.muted} />
           </View>
         ) : null}
         {query.isError && !show ? (
-          <View style={styles.center}>
+          <View style={[styles.center, { paddingTop: insets.top }]}>
             <EmptyState
               icon={<AlertCircle size={40} color={colors.faint} strokeWidth={1.5} />}
               title="Couldn't load show"
@@ -202,6 +209,8 @@ export default function ShowDetailScreen(
         {show ? (
           <ShowDetailTabsView
             show={show as TabbedShowDetail}
+            onBack={onBack}
+            onMore={() => setActionSheetOpen(true)}
             initialTab={
               typeof params.tab === 'string'
                 ? (params.tab as 'overview' | 'setlist' | 'media' | 'notes')
