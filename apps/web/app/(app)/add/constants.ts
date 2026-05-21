@@ -1,17 +1,25 @@
+import { KIND_GLYPHS, KIND_LABELS } from "@showbook/shared";
 import type { ShowKind } from "@/components/design-system";
 import type { Timeframe } from "./types";
+
+const ENRICHMENT_HINTS: Record<ShowKind, string> = {
+  concert: "setlist.fm",
+  theatre: "playbill",
+  comedy: "tour · material",
+  festival: "multi-day lineup",
+};
 
 export const KIND_CONFIG: {
   kind: ShowKind;
   label: string;
   icon: string;
   enrichmentHint: string;
-}[] = [
-  { kind: "concert", label: "Concert", icon: "♫", enrichmentHint: "setlist.fm" },
-  { kind: "theatre", label: "Theatre", icon: "🎭", enrichmentHint: "playbill" },
-  { kind: "comedy", label: "Comedy", icon: "🎙", enrichmentHint: "tour · material" },
-  { kind: "festival", label: "Festival", icon: "★", enrichmentHint: "multi-day lineup" },
-];
+}[] = (["concert", "theatre", "comedy", "festival"] as const).map((k) => ({
+  kind: k,
+  label: KIND_LABELS[k],
+  icon: KIND_GLYPHS[k],
+  enrichmentHint: ENRICHMENT_HINTS[k],
+}));
 
 export const TIMEFRAME_CONFIG: {
   key: Timeframe;
