@@ -7,6 +7,7 @@ import {
   formatDateMedium,
   formatDateParts,
   formatDateRangeLong,
+  formatDateRangeShort,
   formatOnSaleDate,
   formatShowDate,
   formatYear,
@@ -66,6 +67,48 @@ test("formatDateRangeLong: two-date range with hyphen", () => {
 
 test("formatDateRangeLong: returns fallback when start is null", () => {
   assert.equal(formatDateRangeLong(null, "2024-01-01"), "Date TBD");
+});
+
+// ── formatDateRangeShort ────────────────────────────────────────────────
+
+test("formatDateRangeShort: single date when end is null", () => {
+  assert.equal(formatDateRangeShort("2024-08-09", null), "AUG 9, 2024");
+});
+
+test("formatDateRangeShort: single date when end equals start", () => {
+  assert.equal(formatDateRangeShort("2024-08-09", "2024-08-09"), "AUG 9, 2024");
+});
+
+test("formatDateRangeShort: same month uses en-dash between days", () => {
+  assert.equal(
+    formatDateRangeShort("2024-08-09", "2024-08-11"),
+    "AUG 9–11, 2024",
+  );
+});
+
+test("formatDateRangeShort: cross-month within a year", () => {
+  assert.equal(
+    formatDateRangeShort("2024-08-30", "2024-09-02"),
+    "AUG 30 – SEP 2, 2024",
+  );
+});
+
+test("formatDateRangeShort: cross-year keeps both years", () => {
+  assert.equal(
+    formatDateRangeShort("2024-12-30", "2025-01-02"),
+    "DEC 30, 2024 – JAN 2, 2025",
+  );
+});
+
+test("formatDateRangeShort: falls back when start is null", () => {
+  assert.equal(formatDateRangeShort(null, "2024-08-11"), "DATE TBD");
+});
+
+test("formatDateRangeShort: ignores end <= start", () => {
+  assert.equal(
+    formatDateRangeShort("2024-08-09", "2024-08-08"),
+    "AUG 9, 2024",
+  );
 });
 
 // ── formatDateParts ─────────────────────────────────────────────────────
