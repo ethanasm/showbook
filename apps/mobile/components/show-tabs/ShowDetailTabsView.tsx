@@ -182,10 +182,7 @@ export function ShowDetailTabsView({
       },
     );
 
-  const hypeFeatureQuery = trpc.spotify.hypePlaylistFeature.useQuery(undefined, {
-    staleTime: 5 * 60_000,
-  });
-  const hypePlaylistEnabled = Boolean(hypeFeatureQuery.data?.enabled);
+  const hypePlaylistEnabled = true;
 
   const badgeQuery = trpc.shows.songBadges.useQuery(
     { showId: show.id },
@@ -499,9 +496,6 @@ export function ShowDetailTabsView({
       badgePayload={badgeQuery.data ?? null}
       trackPreviews={previewsQuery.data?.previews ?? null}
       hypePlaylistEnabled={hypePlaylistEnabled}
-      rotatingDisplayEnabled
-      theatricalDisplayEnabled
-      improvisedDisplayEnabled
     />
   ) : (
     <SetlistTab
@@ -515,9 +509,6 @@ export function ShowDetailTabsView({
       badgePayload={badgeQuery.data ?? null}
       trackPreviews={previewsQuery.data?.previews ?? null}
       hypePlaylistEnabled={hypePlaylistEnabled}
-      rotatingDisplayEnabled
-      theatricalDisplayEnabled
-      improvisedDisplayEnabled
     />
   );
 
