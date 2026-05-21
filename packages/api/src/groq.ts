@@ -1,6 +1,22 @@
 import Groq from 'groq-sdk';
 import { z } from 'zod';
 import { traceLLM, groqUsage } from '@showbook/observability';
+import {
+  LlmCallError,
+  LlmEmptyResponseError,
+  LlmParseError,
+  LlmValidationError,
+  withLlmRetry,
+} from './llm-call';
+import {
+  EXTRACT_CAST_PROMPT,
+  EXTRACT_SHOW_FROM_EMAIL_PROMPT,
+  EXTRACT_SHOW_FROM_PDF_PROMPT,
+  FESTIVAL_LINEUP_INSTRUCTIONS,
+  PARSE_SHOW_INPUT_BASE_PROMPT,
+  PARSE_SHOW_INPUT_CONTEXT_PREFIX,
+  PARSE_SHOW_INPUT_CONTEXT_SUFFIX,
+} from './llm-prompts';
 
 // ---------------------------------------------------------------------------
 // Runtime-validation schemas for LLM JSON output. We never trust Groq output
@@ -202,25 +218,11 @@ export async function parseShowInput(
 ): Promise<ParsedShowInput> {
   const contextBlock = formatRecentShowsContext(context);
   const systemContent =
-    'You are a structured data extractor for a show tracking app. ' +
-    'Extract show details from the user\'s free-text input. Return ONLY a JSON object with these fields: ' +
-    'headliner (string or null), venue_hint (string or null), date_hint (string in strict YYYY-MM-DD format or null), ' +
-    'seat_hint (string or null), kind_hint (one of: concert, theatre, comedy, festival, or null). ' +
-    'For headliner: return the artist / production / comedian / festival name the user is describing. ' +
-    'If the input is conversational (e.g. "I also saw him in 2016") with no specific name AND no usable ' +
-    'context entry below, return null — the app will let the user fill it in. ' +
-    'For date_hint: only emit YYYY-MM-DD (e.g. "2018-08-05"). If the user gives a partial date with no year, ' +
-    'assume the closest future date; if no month/day at all, return null. Never emit prose like "August 5, 2018" ' +
-    'or slash-separated dates. If any other field cannot be determined, set it to null.' +
+    PARSE_SHOW_INPUT_BASE_PROMPT +
     (contextBlock
-      ? '\n\nConversation context — the user has already discussed these shows in this session:\n' +
+      ? PARSE_SHOW_INPUT_CONTEXT_PREFIX +
         contextBlock +
-        '\n\nIf the new input uses a pronoun ("him", "her", "them", "they", "it") or a shorthand reference ' +
-        '("also", "again", "another time", "that one"), resolve the reference to the headliner of the most ' +
-        'recent matching show in the context above, and emit that resolved name in the `headliner` field — ' +
-        'do NOT return null when a context entry can resolve the reference. ' +
-        'Carry over `venue_hint` / `kind_hint` from the same context entry only if the user\'s new input ' +
-        'does not specify a different value; otherwise prefer the new input.'
+        PARSE_SHOW_INPUT_CONTEXT_SUFFIX
       : '');
 
   const messages = [
@@ -228,10 +230,16 @@ export async function parseShowInput(
     { role: 'user' as const, content: freeText },
   ];
 
-  const result = await traceLLM({
+  // Failure-mode contract: the helper throws `LlmCallError` /
+  // `LlmEmptyResponseError` / `LlmParseError` / `LlmValidationError`
+  // depending on where the call fell over. They all extend `Error`
+  // with the same human-readable message the previous inline
+  // implementation produced, so callers that catch by message regex
+  // keep working.
+  return withLlmRetry({
     name: 'groq.parseShowInput',
     model: MODEL_TEXT,
-    input: messages,
+    tracedInput: messages,
     modelParameters: { response_format: 'json_object', reasoning_effort: TEXT_REASONING_EFFORT },
     run: () =>
       groq().chat.completions.create({
@@ -240,30 +248,8 @@ export async function parseShowInput(
         response_format: { type: 'json_object' },
         reasoning_effort: TEXT_REASONING_EFFORT,
       }),
-    extractUsage: groqUsage,
-    extractOutput: pickContent,
+    schema: parsedShowInputSchema,
   });
-
-  const content = pickContent(result);
-  if (!content) {
-    throw new Error('No response from Groq');
-  }
-
-  let raw: unknown;
-  try {
-    raw = JSON.parse(content);
-  } catch {
-    throw new Error(
-      `Failed to parse Groq response as JSON: ${content.slice(0, 200)}`,
-    );
-  }
-  const parsed = parsedShowInputSchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new Error(
-      `Groq response failed schema validation: ${parsed.error.message}`,
-    );
-  }
-  return parsed.data;
 }
 
 // ---------------------------------------------------------------------------
@@ -278,87 +264,39 @@ export async function extractShowFromEmail(
   retries = 3,
 ): Promise<ExtractedTicketInfo | null> {
   const messages = [
-    {
-      role: 'system' as const,
-      content:
-        'You are a structured data extractor for a LIVE ENTERTAINMENT tracker (concerts, theatre, comedy shows, music festivals). Given an email, determine if it is a ticket confirmation for a live entertainment event and extract ALL available details.\n\n' +
-        'Return ONLY a JSON object with these fields:\n' +
-        '- headliner (string): the main performer or artist name. For festivals, this is the top-billed act. For theatre/broadway, this is the lead performer if known.\n' +
-        '- production_name (string or null): for festivals, the festival name (e.g. "Governors Ball", "Coachella"). For theatre/broadway, the show title (e.g. "Wicked", "Hamilton"). Null for concerts and comedy.\n' +
-        '- venue_name (string or null): the venue name. Look carefully — it is usually near the date and address. Examples: "Fox Theater", "Madison Square Garden", "The Fillmore".\n' +
-        '- venue_city (string or null): the city. Often appears after the venue name or in the address line.\n' +
-        '- venue_state (string or null): the full state or region name (e.g. "California", "New York", "Texas"), never abbreviations\n' +
-        '- date (string or null): the event date in YYYY-MM-DD format. Look for dates in ANY format (e.g. "Sun · Aug 16, 2026", "March 15, 2025", "03/15/2025") and convert to YYYY-MM-DD.\n' +
-        '- seat (string or null): section, row, and seat info combined\n' +
-        '- price (string or null): total price paid as a decimal string\n' +
-        '- ticket_count (number or null): number of tickets purchased (e.g. 2 if "Qty: 2")\n' +
-        '- kind_hint (one of: concert, theatre, comedy, festival, or null)\n' +
-        '- confidence (one of: high, medium, low): how confident you are this is a ticket for a live entertainment event\n\n' +
-        'IMPORTANT: Extract EVERY field you can find. Do not leave fields null if the information is anywhere in the email. Scan the ENTIRE email body carefully.\n\n' +
-        'DATE YEAR: The email Date header tells you WHEN the email was sent. Ticket confirmation emails are sent BEFORE the event. ' +
-        'The event date should be on or after the email send date, typically within 0-12 months. ' +
-        'If the email body shows a date without a year (e.g. "March 15" or "Sat, Aug 16"), use the email Date header to determine the correct year. ' +
-        'The event year should NEVER be before the year the email was sent.\n\n' +
-        'ONLY extract tickets for: concerts, music festivals, theatre/broadway shows, comedy shows, and other live performances with artists/performers.\n\n' +
-        'Return {"confidence": "low", "headliner": ""} with all other fields null for ANY of these:\n' +
-        '- Museum, gallery, or exhibition tickets\n' +
-        '- Merchandise, posters, or physical goods orders\n' +
-        '- Bus, shuttle, or transportation tickets (even if related to a festival)\n' +
-        '- Sports events, theme parks, tours, or experiences\n' +
-        '- Marketing emails, newsletters, or shipping notifications\n' +
-        '- Parking passes or camping passes',
-    },
+    { role: 'system' as const, content: EXTRACT_SHOW_FROM_EMAIL_PROMPT },
     {
       role: 'user' as const,
       content: `Subject: ${emailSubject}\nFrom: ${emailFrom}\nDate: ${emailDate ?? 'unknown'}\n\n${emailBody.slice(0, 8000)}`,
     },
   ];
 
-  let result;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      result = await traceLLM({
-        name: 'groq.extractShowFromEmail',
-        model: MODEL_TEXT,
-        input: messages,
-        modelParameters: { response_format: 'json_object', reasoning_effort: TEXT_REASONING_EFFORT },
-        metadata: { attempt },
-        run: () =>
-          groq().chat.completions.create({
-            model: MODEL_TEXT,
-            messages,
-            response_format: { type: 'json_object' },
-            reasoning_effort: TEXT_REASONING_EFFORT,
-          }),
-        extractUsage: groqUsage,
-        extractOutput: pickContent,
-      });
-      break;
-    } catch (err: unknown) {
-      const e = err as { status?: number; headers?: { get?: (k: string) => string | null } };
-      if (e.status === 429 && attempt < retries) {
-        const retryAfter = e.headers?.get?.('retry-after');
-        const waitMs = retryAfter ? Math.ceil(parseFloat(retryAfter) * 1000) : 300;
-        await new Promise((r) => setTimeout(r, waitMs));
-        continue;
-      }
-      return null;
-    }
-  }
-
-  const content = result ? pickContent(result) : null;
-  if (!content) return null;
-
-  let raw: unknown;
+  // Email extraction has the loosest contract of the six callers: any
+  // failure (429 retries exhausted, no content, bad JSON, schema miss,
+  // low-confidence verdict) collapses to `null` so the Gmail scan loop
+  // skips the message and moves on.
+  let data: ExtractedTicketInfo;
   try {
-    raw = JSON.parse(content);
+    data = await withLlmRetry({
+      name: 'groq.extractShowFromEmail',
+      model: MODEL_TEXT,
+      tracedInput: messages,
+      modelParameters: { response_format: 'json_object', reasoning_effort: TEXT_REASONING_EFFORT },
+      run: () =>
+        groq().chat.completions.create({
+          model: MODEL_TEXT,
+          messages,
+          response_format: { type: 'json_object' },
+          reasoning_effort: TEXT_REASONING_EFFORT,
+        }),
+      schema: extractedTicketInfoSchema,
+      retries,
+    });
   } catch {
     return null;
   }
-  const parsed = extractedTicketInfoSchema.safeParse(raw);
-  if (!parsed.success) return null;
-  if (!parsed.data.headliner || parsed.data.confidence === 'low') return null;
-  return parsed.data;
+  if (!data.headliner || data.confidence === 'low') return null;
+  return data;
 }
 
 // ---------------------------------------------------------------------------
@@ -421,32 +359,14 @@ export async function extractShowFromPdfText(
   pdfText: string,
 ): Promise<ExtractedTicketInfo> {
   const messages = [
-    {
-      role: 'system' as const,
-      content:
-        'You are a structured data extractor for a LIVE ENTERTAINMENT tracker. ' +
-        'Given text extracted from a PDF ticket or receipt, extract ALL available details.\n\n' +
-        'Return ONLY a JSON object with these fields:\n' +
-        '- headliner (string): the main performer or artist name. For festivals, the top-billed act. For theatre, the lead performer if known.\n' +
-        '- production_name (string or null): for festivals, the festival name (e.g. "Governors Ball"). For theatre, the show title (e.g. "Wicked"). Null for concerts and comedy.\n' +
-        '- venue_name (string or null): the venue name\n' +
-        '- venue_city (string or null): the city\n' +
-        '- venue_state (string or null): the full state or region name (e.g. "California", "New York", "Texas"), never abbreviations\n' +
-        '- date (string or null): the event date in YYYY-MM-DD format\n' +
-        '- seat (string or null): section, row, and seat info combined\n' +
-        '- price (string or null): total price paid as a decimal string\n' +
-        '- ticket_count (number or null): number of tickets purchased\n' +
-        '- kind_hint (one of: concert, theatre, comedy, festival, or null)\n' +
-        '- confidence (one of: high, medium, low)\n\n' +
-        'Extract EVERY field you can find. Do not leave fields null if the information is anywhere in the text.',
-    },
+    { role: 'system' as const, content: EXTRACT_SHOW_FROM_PDF_PROMPT },
     { role: 'user' as const, content: pdfText.slice(0, 8000) },
   ];
 
-  const result = await traceLLM({
+  return withLlmRetry({
     name: 'groq.extractShowFromPdfText',
     model: MODEL_TEXT,
-    input: messages,
+    tracedInput: messages,
     modelParameters: { response_format: 'json_object', reasoning_effort: TEXT_REASONING_EFFORT },
     run: () =>
       groq().chat.completions.create({
@@ -455,26 +375,8 @@ export async function extractShowFromPdfText(
         response_format: { type: 'json_object' },
         reasoning_effort: TEXT_REASONING_EFFORT,
       }),
-    extractUsage: groqUsage,
-    extractOutput: pickContent,
+    schema: extractedTicketInfoSchema,
   });
-
-  const raw = pickContent(result);
-  if (!raw) throw new Error('No response from Groq');
-
-  let parsedJson: unknown;
-  try {
-    parsedJson = JSON.parse(raw);
-  } catch {
-    throw new Error(`Failed to parse Groq response: ${raw.slice(0, 200)}`);
-  }
-  const parsed = extractedTicketInfoSchema.safeParse(parsedJson);
-  if (!parsed.success) {
-    throw new Error(
-      `Groq response failed schema validation: ${parsed.error.message}`,
-    );
-  }
-  return parsed.data;
 }
 
 function detectImageMime(b64: string): string {
@@ -505,59 +407,42 @@ export async function extractCast(
       role: 'user' as const,
       content: [
         { type: 'image_marker', mime },
-        {
-          type: 'text',
-          text: 'Extract the principal cast list from this playbill photo. Return ONLY a JSON object with a "cast" key containing an array of objects with "actor" and "role" fields. Skip ensemble, swing, understudy, dance captain, fight captain, music director, and orchestra listings. Example: {"cast": [{"actor": "Cynthia Erivo", "role": "Elphaba"}]}',
-        },
+        { type: 'text', text: EXTRACT_CAST_PROMPT },
       ],
     },
   ];
 
-  const result = await traceLLM({
-    name: 'groq.extractCast',
-    model: MODEL_VISION,
-    input: tracedInput,
-    modelParameters: { response_format: 'json_object' },
-    metadata: { imageMime: mime, imageBytes: imageBase64.length },
-    run: () =>
-      groq().chat.completions.create({
-        model: MODEL_VISION,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'image_url', image_url: { url: dataUrl } },
-              {
-                type: 'text',
-                text: 'Extract the principal cast list from this playbill photo. Return ONLY a JSON object with a "cast" key containing an array of objects with "actor" and "role" fields. Skip ensemble, swing, understudy, dance captain, fight captain, music director, and orchestra listings. Example: {"cast": [{"actor": "Cynthia Erivo", "role": "Elphaba"}]}',
-              },
-            ],
-          },
-        ],
-        response_format: { type: 'json_object' },
-      }),
-    extractUsage: groqUsage,
-    extractOutput: pickContent,
-  });
-
-  const content = pickContent(result);
-  if (!content) {
-    throw new Error('No response from Groq');
-  }
-
-  let raw: unknown;
   try {
-    raw = JSON.parse(content);
-  } catch {
-    throw new Error(
-      `Failed to parse Groq response as JSON: ${content.slice(0, 200)}`,
-    );
+    const data = await withLlmRetry({
+      name: 'groq.extractCast',
+      model: MODEL_VISION,
+      tracedInput,
+      modelParameters: { response_format: 'json_object' },
+      metadata: { imageMime: mime, imageBytes: imageBase64.length },
+      run: () =>
+        groq().chat.completions.create({
+          model: MODEL_VISION,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'image_url', image_url: { url: dataUrl } },
+                { type: 'text', text: EXTRACT_CAST_PROMPT },
+              ],
+            },
+          ],
+          response_format: { type: 'json_object' },
+        }),
+      schema: castResponseSchema,
+    });
+    return data.cast;
+  } catch (err) {
+    // Soft-fail only on schema-validation drift (e.g. a playbill page
+    // with no recognizable cast block). Empty response / JSON parse
+    // failure still propagates so the caller can show a real error.
+    if (err instanceof LlmValidationError) return [];
+    throw err;
   }
-  const parsed = castResponseSchema.safeParse(raw);
-  if (!parsed.success) {
-    return [];
-  }
-  return parsed.data.cast;
 }
 
 // ---------------------------------------------------------------------------
@@ -865,58 +750,47 @@ function truncateDetail(detail: Record<string, unknown>): Record<string, unknown
 // extractFestivalLineup — festival poster / schedule → lineup with tiers
 // ---------------------------------------------------------------------------
 
-const FESTIVAL_LINEUP_INSTRUCTIONS =
-  'You are extracting a music festival lineup. Read EVERY performing artist name. ' +
-  'Tier the artists: the visually largest / topmost / boldest names are "headliner"; ' +
-  'all other artists are "support". For text (PDF) input, use ALL-CAPS or top-of-grid ' +
-  'lines as the headliner signal. Skip sponsor logos, presenter blurbs ("XYZ Presents…"), ' +
-  'stage names, ticket pricing, and time-slot labels with no artist attached. If the ' +
-  'festival name, dates, or venue appear on the source, extract them; otherwise null. ' +
-  'Dates must be YYYY-MM-DD format — if the source only shows "June 6-8 2026", emit ' +
-  'start_date "2026-06-06" and end_date "2026-06-08". ' +
-  'Return ONLY a JSON object with this exact shape: ' +
-  '{"festival_name": string|null, "start_date": string|null, "end_date": string|null, ' +
-  '"venue_hint": string|null, "artists": [{"name": string, "tier": "headliner"|"support"}]}.';
+const EMPTY_FESTIVAL_LINEUP: FestivalLineup = {
+  festivalName: null,
+  startDate: null,
+  endDate: null,
+  venueHint: null,
+  artists: [],
+};
 
-function parseFestivalLineupContent(content: string | null): FestivalLineup {
-  if (!content) {
-    return {
-      festivalName: null,
-      startDate: null,
-      endDate: null,
-      venueHint: null,
-      artists: [],
-    };
-  }
-  let raw: unknown;
-  try {
-    raw = JSON.parse(content);
-  } catch {
-    return {
-      festivalName: null,
-      startDate: null,
-      endDate: null,
-      venueHint: null,
-      artists: [],
-    };
-  }
-  const parsed = festivalLineupSchema.safeParse(raw);
-  if (!parsed.success) {
-    return {
-      festivalName: null,
-      startDate: null,
-      endDate: null,
-      venueHint: null,
-      artists: [],
-    };
-  }
+/** Map the schema's snake_case shape to the camelCase domain type. */
+function toFestivalLineup(
+  parsed: z.infer<typeof festivalLineupSchema>,
+): FestivalLineup {
   return {
-    festivalName: parsed.data.festival_name,
-    startDate: parsed.data.start_date,
-    endDate: parsed.data.end_date,
-    venueHint: parsed.data.venue_hint,
-    artists: parsed.data.artists,
+    festivalName: parsed.festival_name,
+    startDate: parsed.start_date,
+    endDate: parsed.end_date,
+    venueHint: parsed.venue_hint,
+    artists: parsed.artists,
   };
+}
+
+/**
+ * Festival lineup extraction is the most permissive of the six
+ * callers: any failure (empty content, malformed JSON, schema miss,
+ * Groq error) collapses to an empty lineup so the operator can still
+ * pick artists by hand.
+ */
+function safeExtractFestivalLineup(
+  run: () => Promise<z.infer<typeof festivalLineupSchema>>,
+): Promise<FestivalLineup> {
+  return run().then(toFestivalLineup).catch((err) => {
+    if (
+      err instanceof LlmCallError ||
+      err instanceof LlmEmptyResponseError ||
+      err instanceof LlmParseError ||
+      err instanceof LlmValidationError
+    ) {
+      return EMPTY_FESTIVAL_LINEUP;
+    }
+    throw err;
+  });
 }
 
 export async function extractFestivalLineupFromImage(
@@ -937,31 +811,30 @@ export async function extractFestivalLineupFromImage(
     },
   ];
 
-  const result = await traceLLM({
-    name: 'groq.extractFestivalLineup',
-    model: MODEL_VISION,
-    input: tracedInput,
-    modelParameters: { response_format: 'json_object' },
-    metadata: { source: 'image', imageMime: mime, imageBytes: imageBase64.length },
-    run: () =>
-      groq().chat.completions.create({
-        model: MODEL_VISION,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'image_url', image_url: { url: dataUrl } },
-              { type: 'text', text: FESTIVAL_LINEUP_INSTRUCTIONS },
-            ],
-          },
-        ],
-        response_format: { type: 'json_object' },
-      }),
-    extractUsage: groqUsage,
-    extractOutput: pickContent,
-  });
-
-  return parseFestivalLineupContent(pickContent(result));
+  return safeExtractFestivalLineup(() =>
+    withLlmRetry({
+      name: 'groq.extractFestivalLineup',
+      model: MODEL_VISION,
+      tracedInput,
+      modelParameters: { response_format: 'json_object' },
+      metadata: { source: 'image', imageMime: mime, imageBytes: imageBase64.length },
+      run: () =>
+        groq().chat.completions.create({
+          model: MODEL_VISION,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'image_url', image_url: { url: dataUrl } },
+                { type: 'text', text: FESTIVAL_LINEUP_INSTRUCTIONS },
+              ],
+            },
+          ],
+          response_format: { type: 'json_object' },
+        }),
+      schema: festivalLineupSchema,
+    }),
+  );
 }
 
 export async function extractFestivalLineupFromPdfText(
@@ -972,25 +845,24 @@ export async function extractFestivalLineupFromPdfText(
     { role: 'user' as const, content: pdfText.slice(0, 12000) },
   ];
 
-  const result = await traceLLM({
-    name: 'groq.extractFestivalLineup',
-    model: MODEL_TEXT,
-    input: messages,
-    modelParameters: {
-      response_format: 'json_object',
-      reasoning_effort: TEXT_REASONING_EFFORT,
-    },
-    metadata: { source: 'pdf', textBytes: pdfText.length },
-    run: () =>
-      groq().chat.completions.create({
-        model: MODEL_TEXT,
-        messages,
-        response_format: { type: 'json_object' },
+  return safeExtractFestivalLineup(() =>
+    withLlmRetry({
+      name: 'groq.extractFestivalLineup',
+      model: MODEL_TEXT,
+      tracedInput: messages,
+      modelParameters: {
+        response_format: 'json_object',
         reasoning_effort: TEXT_REASONING_EFFORT,
-      }),
-    extractUsage: groqUsage,
-    extractOutput: pickContent,
-  });
-
-  return parseFestivalLineupContent(pickContent(result));
+      },
+      metadata: { source: 'pdf', textBytes: pdfText.length },
+      run: () =>
+        groq().chat.completions.create({
+          model: MODEL_TEXT,
+          messages,
+          response_format: { type: 'json_object' },
+          reasoning_effort: TEXT_REASONING_EFFORT,
+        }),
+      schema: festivalLineupSchema,
+    }),
+  );
 }
