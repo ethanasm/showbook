@@ -76,7 +76,8 @@ test('autocomplete: maps placePrediction suggestions with structuredFormat', asy
     assert.equal(headers['X-Goog-Api-Key'], 'test-key');
     const body = JSON.parse(String(init?.body));
     assert.equal(body.input, 'Fillmore');
-    assert.deepEqual(body.includedPrimaryTypes, ['establishment']);
+    // No type filter by default — see autocomplete() JSDoc.
+    assert.equal(body.includedPrimaryTypes, undefined);
 
     return jsonResponse({
       suggestions: [
@@ -129,6 +130,18 @@ test('autocomplete: passes custom types through to body', async () => {
   });
   await autocomplete('Foo', ['restaurant', 'bar']);
   assert.deepEqual(bodySeen.includedPrimaryTypes, ['restaurant', 'bar']);
+});
+
+test('autocomplete: omits includedPrimaryTypes when types is undefined or empty', async () => {
+  const bodies: any[] = [];
+  stubFetch(async (_url, init) => {
+    bodies.push(JSON.parse(String(init?.body)));
+    return jsonResponse({ suggestions: [] });
+  });
+  await autocomplete('Foo');
+  await autocomplete('Foo', []);
+  assert.equal(bodies[0].includedPrimaryTypes, undefined);
+  assert.equal(bodies[1].includedPrimaryTypes, undefined);
 });
 
 test('autocomplete: handles missing structuredFormat — falls back to text.text', async () => {

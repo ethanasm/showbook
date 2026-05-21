@@ -26,11 +26,29 @@ import { useTheme } from '../lib/theme';
 import { useDebouncedValue } from '../lib/useDebouncedValue';
 
 export interface VenueSuggestion {
+  /**
+   * Stable list key. For local DB venues this is the venue UUID; for
+   * Google Places suggestions it's a synthetic `place:${placeId}` token
+   * so the row keys don't collide.
+   */
   id: string;
   name: string;
   city?: string | null;
   stateRegion?: string | null;
   country?: string | null;
+  /**
+   * Set when the suggestion comes from Google Places autocomplete and
+   * the venue hasn't been materialized into our DB yet. The selection
+   * handler in the parent screen calls `venues.createFromPlace` to turn
+   * it into a real venue row before setting it on the form.
+   */
+  placeId?: string;
+  /**
+   * Free-text address line shown under the suggestion name when present
+   * — Google Places returns this; local DB venues fall back to
+   * `city, stateRegion`.
+   */
+  formattedAddress?: string;
 }
 
 export interface VenueTypeaheadProps {
@@ -117,9 +135,10 @@ export function VenueTypeahead({
                 <Text style={[styles.rowName, { color: colors.ink }]} numberOfLines={1}>
                   {venue.name}
                 </Text>
-                {venue.city ? (
+                {venue.formattedAddress ?? venue.city ? (
                   <Text style={[styles.rowMeta, { color: colors.muted }]} numberOfLines={1}>
-                    {[venue.city, venue.stateRegion].filter(Boolean).join(', ')}
+                    {venue.formattedAddress ??
+                      [venue.city, venue.stateRegion].filter(Boolean).join(', ')}
                   </Text>
                 ) : null}
               </View>
