@@ -65,8 +65,23 @@ describe('VenueTypeahead', () => {
     assert.equal(findSuggestionRows(renderer).length, 0);
   });
 
-  it('renders suggestions when value is non-empty', () => {
+  it('renders nothing on mount when value is pre-filled until the user focuses the input', () => {
+    // Edit-form case: the parent pre-fills the query with the existing
+    // venue name. Without a focus gate the dropdown would pop open
+    // before the user touches the field.
+    const renderer = renderTypeahead({ value: 'Golden Gate Park', suggestions: SAMPLES });
+    assert.equal(findSuggestionRows(renderer).length, 0);
+    TestRenderer.act(() => {
+      findInput(renderer).props.onFocus();
+    });
+    assert.equal(findSuggestionRows(renderer).length, 2);
+  });
+
+  it('renders suggestions when value is non-empty and the input has been focused', () => {
     const renderer = renderTypeahead({ value: 'gre', suggestions: SAMPLES });
+    TestRenderer.act(() => {
+      findInput(renderer).props.onFocus();
+    });
     const rows = findSuggestionRows(renderer);
     assert.equal(rows.length, 2);
   });
@@ -77,6 +92,9 @@ describe('VenueTypeahead', () => {
       value: 'gre',
       suggestions: SAMPLES,
       onSelect,
+    });
+    TestRenderer.act(() => {
+      findInput(renderer).props.onFocus();
     });
     const rows = findSuggestionRows(renderer);
     TestRenderer.act(() => {
@@ -110,6 +128,9 @@ describe('VenueTypeahead', () => {
             }),
           ),
         );
+      });
+      TestRenderer.act(() => {
+        findInput(renderer).props.onFocus();
       });
 
       // Type "g", "gr", "gre", "gree" within 30ms each — well under the
@@ -172,6 +193,9 @@ describe('VenueTypeahead', () => {
         );
       });
       TestRenderer.act(() => {
+        findInput(renderer).props.onFocus();
+      });
+      TestRenderer.act(() => {
         mock.timers.tick(50);
       });
       assert.equal(onSearch.mock.callCount(), 0);
@@ -215,6 +239,10 @@ describe('VenueTypeahead', () => {
           }
         });
       };
+      render();
+      TestRenderer.act(() => {
+        findInput(renderer).props.onFocus();
+      });
       render();
       assert.equal(findSuggestionRows(renderer).length, 2);
 
