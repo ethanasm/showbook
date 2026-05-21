@@ -15,6 +15,10 @@ import {
   tourSetlists,
 } from '@showbook/db';
 import { computeSongBadges, type SongBadgesMap } from '../song-badges';
+import {
+  resolveListForMapHeadliners,
+  showsWithRelationsShape,
+} from '../queries/show-queries';
 import { matchOrCreateVenue, type VenueInput } from '../venue-matcher';
 import { matchOrCreatePerformer } from '../performer-matcher';
 import { searchEvents, selectBestImage } from '../ticketmaster';
@@ -268,12 +272,7 @@ export const showsRouter = router({
       return ctx.db.query.shows.findMany({
         where: and(...conditions),
         orderBy: [desc(shows.date)],
-        with: {
-          venue: true,
-          showPerformers: {
-            with: { performer: true },
-          },
-        },
+        with: showsWithRelationsShape,
       });
     }),
 
@@ -375,8 +374,9 @@ export const showsRouter = router({
     }
 
     if (nonProductionIds.length > 0) {
-      // Pull every showPerformer (not just role='headliner') so we can
-      // mirror the 3-tier fallback in apps/web/lib/show-accessors.ts:
+      // Pull every showPerformer (not just role='headliner') so the
+      // resolver can apply the 3-tier fallback from
+      // `apps/web/lib/show-accessors.ts`:
       //   1) headliner with sortOrder === 0
       //   2) any headliner
       //   3) first showPerformer regardless of role
@@ -393,40 +393,10 @@ export const showsRouter = router({
         .innerJoin(performers, eq(showPerformers.performerId, performers.id))
         .where(inArray(showPerformers.showId, nonProductionIds));
 
-      type Best = {
-        tier: 0 | 1 | 2;
-        sortOrder: number;
-        name: string;
-        performerId: string;
-        imageUrl: string | null;
-      };
-      const best = new Map<string, Best>();
-      for (const row of performerRows) {
-        const tier: Best['tier'] =
-          row.role === 'headliner' && row.sortOrder === 0
-            ? 0
-            : row.role === 'headliner'
-              ? 1
-              : 2;
-        const cur = best.get(row.showId);
-        if (
-          !cur ||
-          tier < cur.tier ||
-          (tier === cur.tier && row.sortOrder < cur.sortOrder)
-        ) {
-          best.set(row.showId, {
-            tier,
-            sortOrder: row.sortOrder,
-            name: row.name,
-            performerId: row.performerId,
-            imageUrl: row.imageUrl,
-          });
-        }
-      }
-      for (const [showId, b] of best) {
-        headlinerName.set(showId, b.name);
-        headlinerId.set(showId, b.performerId);
-        headlinerImageUrl.set(showId, b.imageUrl);
+      for (const [showId, h] of resolveListForMapHeadliners(performerRows)) {
+        headlinerName.set(showId, h.name);
+        headlinerId.set(showId, h.performerId);
+        headlinerImageUrl.set(showId, h.imageUrl);
       }
     }
 
@@ -502,12 +472,7 @@ export const showsRouter = router({
 
       const show = await ctx.db.query.shows.findFirst({
         where: and(eq(shows.id, input.showId), eq(shows.userId, userId)),
-        with: {
-          venue: true,
-          showPerformers: {
-            with: { performer: true },
-          },
-        },
+        with: showsWithRelationsShape,
       });
 
       if (!show) {
@@ -888,12 +853,7 @@ export const showsRouter = router({
       // Return the full show with relations
       return ctx.db.query.shows.findFirst({
         where: eq(shows.id, show.id),
-        with: {
-          venue: true,
-          showPerformers: {
-            with: { performer: true },
-          },
-        },
+        with: showsWithRelationsShape,
       });
     }),
 
@@ -1144,12 +1104,7 @@ export const showsRouter = router({
 
       return ctx.db.query.shows.findFirst({
         where: eq(shows.id, input.showId),
-        with: {
-          venue: true,
-          showPerformers: {
-            with: { performer: true },
-          },
-        },
+        with: showsWithRelationsShape,
       });
     }),
 

@@ -11,7 +11,7 @@ import { initFullTrackDriver } from "@/lib/spotify-playback";
 import {
   formatDateRangeLong,
   daysUntil,
-  normalizePerformerSetlistsMap,
+  resolveShowSetlistsMap,
   type PerformerSetlistsMap,
 } from "@showbook/shared";
 import {
@@ -153,21 +153,15 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
     },
   });
 
-  const setlistsMap: PerformerSetlistsMap = useMemo(() => {
-    const map = normalizePerformerSetlistsMap(show.setlists);
-    if (Object.keys(map).length > 0) return map;
-    const headlinerId = getHeadlinerId(show);
-    if (headlinerId && show.setlist && show.setlist.length > 0) {
-      return {
-        [headlinerId]: {
-          sections: [
-            { kind: "set", songs: show.setlist.map((title) => ({ title })) },
-          ],
-        },
-      };
-    }
-    return {};
-  }, [show]);
+  const setlistsMap: PerformerSetlistsMap = useMemo(
+    () =>
+      resolveShowSetlistsMap({
+        setlists: show.setlists,
+        legacySetlist: show.setlist,
+        headlinerPerformerId: getHeadlinerId(show),
+      }),
+    [show],
+  );
 
   const buildActualSongs = useCallback(
     (performerId: string): ActualSong[] =>
