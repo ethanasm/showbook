@@ -190,11 +190,15 @@ describe('uploadFile — happy path', () => {
     assert.equal(result.status, 'ready');
   });
 
-  it('re-encodes HEIC photos to JPEG before the upload intent so R2 sees a renderable file', async () => {
-    // iPhone-picked HEIC files can't render on Chrome / Firefox; we run
-    // them through expo-image-manipulator → JPEG so the upload that lands
-    // in R2 is web-viewable. (The PUT itself is HEIC-safe now via the
-    // native upload task — but cross-browser display still requires JPEG.)
+  it('passes HEIC photos straight through to the upload intent without JS-side re-encode', async () => {
+    // Earlier revisions ran HEIC through expo-image-manipulator first so
+    // Chrome / Firefox could render the stored file. That step crashed
+    // iOS natively the moment the OTA bundle finally caught up to PR
+    // #319 — the user's app force-closed on every upload tap. Now the
+    // native upload task PUTs the raw HEIC to R2 (signed Content-Type
+    // honored verbatim) and the web client decodes HEIC for display via
+    // `heic-to`. The regression guard here is that the intent the
+    // server sees matches the original picker output — no JPEG swap.
     const server = stubServer();
     const { putImpl, calls } = makePut([okPut()]);
 
@@ -212,23 +216,13 @@ describe('uploadFile — happy path', () => {
       showId: 'show-1',
       putImpl,
       sleepImpl: async () => undefined,
-      normalizerDeps: {
-        manipulate: async () => ({
-          uri: 'file:///cache/converted.jpg',
-          width: 4032,
-          height: 3024,
-        }),
-        measureBytes: async () => 421_337,
-      },
     });
 
-    // Intent must reflect the JPEG, not the HEIC source.
     assert.equal(server.intentCalls.length, 1);
-    assert.equal(server.intentCalls[0]?.mimeType, 'image/jpeg');
-    assert.equal(server.intentCalls[0]?.sourceBytes, 421_337);
-    assert.equal(server.intentCalls[0]?.variants[0]?.mimeType, 'image/jpeg');
-    // The file URI handed to the PUT is the converted JPEG, not the HEIC.
-    assert.equal(calls[0]?.fileUri, 'file:///cache/converted.jpg');
+    assert.equal(server.intentCalls[0]?.mimeType, 'image/heic');
+    assert.equal(server.intentCalls[0]?.sourceBytes, 2_276_668);
+    assert.equal(server.intentCalls[0]?.variants[0]?.mimeType, 'image/heic');
+    assert.equal(calls[0]?.fileUri, 'file:///private/photo.HEIC');
   });
 
   it('hands the original file URI to the PUT step rather than buffering bytes in JS', async () => {
