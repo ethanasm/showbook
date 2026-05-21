@@ -181,6 +181,77 @@ describe('VenueTypeahead', () => {
     }
   });
 
+  it('hides the suggestion list after a row is selected and reopens when the user types again', () => {
+    mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+      const onSearch = mock.fn();
+      let value = 'gre';
+      let renderer;
+      const buildTree = () =>
+        React.createElement(
+          ThemeProvider,
+          null,
+          React.createElement(VenueTypeahead, {
+            value,
+            onChange: (next) => {
+              value = next;
+            },
+            onSelect: () => {
+              // Mirror the real parent: echo the venue name into
+              // the input so `value` stays non-empty.
+              value = SAMPLES[0].name;
+            },
+            onSearch,
+            suggestions: SAMPLES,
+            debounceMs: 10,
+          }),
+        );
+      const render = () => {
+        TestRenderer.act(() => {
+          if (renderer) {
+            renderer.update(buildTree());
+          } else {
+            renderer = TestRenderer.create(buildTree());
+          }
+        });
+      };
+      render();
+      assert.equal(findSuggestionRows(renderer).length, 2);
+
+      // Tap the first suggestion.
+      TestRenderer.act(() => {
+        findSuggestionRows(renderer)[0].props.onPress();
+      });
+      // Re-render with the parent's updated value.
+      render();
+      // Settle past the debounce window; the debounced effect must not
+      // re-fire onSearch against the post-select value and the dropdown
+      // must stay hidden.
+      TestRenderer.act(() => {
+        mock.timers.tick(50);
+      });
+      render();
+      assert.equal(findSuggestionRows(renderer).length, 0);
+      const callsAfterSelect = onSearch.mock.callCount();
+
+      // User types again: dropdown should reopen on the next render.
+      TestRenderer.act(() => {
+        findInput(renderer).props.onChangeText('walter');
+      });
+      render();
+      assert.equal(findSuggestionRows(renderer).length, 2);
+      TestRenderer.act(() => {
+        mock.timers.tick(50);
+      });
+      assert.ok(
+        onSearch.mock.callCount() > callsAfterSelect,
+        'onSearch should fire again once the user resumes typing',
+      );
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
   it('forwards typed text via onChange', () => {
     const onChange = mock.fn();
     const renderer = renderTypeahead({ onChange });

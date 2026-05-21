@@ -62,6 +62,14 @@ export interface ShowFormFieldsProps {
   venueLoading: boolean;
   onVenueSearch: (q: string) => void;
   /**
+   * Optional hook for Google Places suggestions (those that carry a
+   * `placeId`). The parent screen is responsible for materializing the
+   * place into a real venue via `venues.createFromPlace` and then
+   * setting the resulting venue on the form. When absent, place
+   * suggestions are treated as inert.
+   */
+  onSelectPlace?: (placeId: string, suggestion: VenueSuggestion) => void;
+  /**
    * Per-field validation errors rendered inline under the matching
    * input. The parent screen owns the validation logic and clears
    * errors as the user types (handled here automatically via the
@@ -77,6 +85,7 @@ export function ShowFormFields({
   venueSuggestions,
   venueLoading,
   onVenueSearch,
+  onSelectPlace,
   errors,
   clearError,
 }: ShowFormFieldsProps): React.JSX.Element {
@@ -119,6 +128,17 @@ export function ShowFormFields({
             clearError?.('venue');
           }}
           onSelect={(venue) => {
+            if (venue.placeId) {
+              // Google Places hit — defer to the parent so it can call
+              // `venues.createFromPlace` and set the resulting real
+              // venue. We still echo the name into the query so the
+              // user sees the tap registered while the network call
+              // settles.
+              set('venueQuery', venue.name);
+              clearError?.('venue');
+              onSelectPlace?.(venue.placeId, venue);
+              return;
+            }
             set('venue', {
               id: venue.id,
               name: venue.name,

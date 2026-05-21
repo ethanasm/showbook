@@ -51,9 +51,14 @@ export async function geocodeVenue(
   const stateSuffix = stateRegion ? `, ${stateRegion}` : '';
   const query = `${venueName}, ${city}${stateSuffix}`;
 
-  // Google Places first — returns googlePlaceId for dedup
+  // Google Places first — returns googlePlaceId for dedup. No type
+  // filter: Places API (New) treats `establishment` as an umbrella that
+  // excludes leaves like `performing_arts_theater` / `concert_hall`, so
+  // filtering on it can drop Broadway theatres and similar venues
+  // entirely. The query string already includes city + state, which is
+  // enough context for Google to rank the right venue first.
   try {
-    const suggestions = await autocomplete(query, ['establishment']);
+    const suggestions = await autocomplete(query);
     if (suggestions.length > 0) {
       const details = await getPlaceDetails(suggestions[0].placeId);
       if (details && details.latitude && details.longitude) {

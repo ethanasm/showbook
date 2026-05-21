@@ -43,7 +43,14 @@ export function parseGmailRedirect(url: string): GmailRedirectResult | null {
   const status = params.get('status');
   if (status === 'ok') {
     const accessToken = params.get('accessToken');
-    if (!accessToken) return { status: 'error', reason: 'missing_token' };
+    // Treat the literal strings 'undefined' / 'null' as missing — the
+    // server should never send those, but `URLSearchParams.set(key, x)`
+    // happily stringifies `undefined`/`null` if the caller forgets to
+    // validate, and a bad token from us would surface to the user as
+    // an inscrutable Gmail-side 401.
+    if (!accessToken || accessToken === 'undefined' || accessToken === 'null') {
+      return { status: 'error', reason: 'missing_token' };
+    }
     return { status: 'ok', accessToken };
   }
   if (status === 'error') {

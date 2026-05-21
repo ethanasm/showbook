@@ -121,16 +121,87 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const tokens = (await tokenRes.json()) as { access_token: string };
+  const tokens = (await tokenRes.json()) as {
+    access_token?: unknown;
+    scope?: unknown;
+  };
+  const accessTokenRaw = tokens.access_token;
+  if (typeof accessTokenRaw !== 'string' || !accessTokenRaw) {
+    // 200 from Google's token endpoint with no usable access_token is rare
+    // but has been observed in the wild (empty body on intermittent
+    // failures). Returning the literal undefined would let
+    // `URLSearchParams.set` coerce it to the string "undefined" and
+    // surface as a Gmail-side 401 later — fail loudly here instead.
+    logger.warn(
+      {
+        event: 'gmail.callback.access_token_missing',
+        scope: typeof tokens.scope === 'string' ? tokens.scope : undefined,
+      },
+      'Gmail token exchange returned no access_token',
+    );
+    if (isMobile) {
+      return mobileRedirectResponse({
+        payload: { type: 'error', reason: 'token_exchange_failed' },
+        isSecure,
+      });
+    }
+    return clearStateCookie(
+      new NextResponse(
+        `<html><body><p>Token exchange returned no access token.</p><script>
+        if (window.opener) {
+          window.opener.postMessage({type:"gmail-auth-error"}, window.location.origin);
+          setTimeout(function() { window.close(); }, 500);
+        }
+      </script></body></html>`,
+        { headers: { 'Content-Type': 'text/html' } },
+      ),
+      isSecure,
+    );
+  }
+  // Google's token endpoint returns the actual granted scopes as a
+  // space-separated string. If gmail.readonly is missing the access token
+  // is technically valid but every Gmail API call will return 403 — bail
+  // here with a token_exchange_failed so the mobile UI can prompt
+  // re-consent, instead of letting the scan endpoint surface a confusing
+  // "Gmail search failed".
+  const grantedScopes =
+    typeof tokens.scope === 'string' ? tokens.scope.split(/\s+/) : [];
+  if (!grantedScopes.includes('https://www.googleapis.com/auth/gmail.readonly')) {
+    logger.warn(
+      {
+        event: 'gmail.callback.scope_missing',
+        granted: grantedScopes.join(' '),
+      },
+      'Gmail token exchange returned token without gmail.readonly scope',
+    );
+    if (isMobile) {
+      return mobileRedirectResponse({
+        payload: { type: 'error', reason: 'token_exchange_failed' },
+        isSecure,
+      });
+    }
+    return clearStateCookie(
+      new NextResponse(
+        `<html><body><p>Gmail read-only access was not granted.</p><script>
+        if (window.opener) {
+          window.opener.postMessage({type:"gmail-auth-error"}, window.location.origin);
+          setTimeout(function() { window.close(); }, 500);
+        }
+      </script></body></html>`,
+        { headers: { 'Content-Type': 'text/html' } },
+      ),
+      isSecure,
+    );
+  }
 
   if (isMobile) {
     return mobileRedirectResponse({
-      payload: { type: 'success', accessToken: tokens.access_token },
+      payload: { type: 'success', accessToken: accessTokenRaw },
       isSecure,
     });
   }
 
-  const accessToken = escapeForScript(tokens.access_token);
+  const accessToken = escapeForScript(accessTokenRaw);
 
   return clearStateCookie(
     new NextResponse(

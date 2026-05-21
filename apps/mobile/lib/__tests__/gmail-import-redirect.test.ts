@@ -56,6 +56,23 @@ describe('parseGmailRedirect', () => {
     assert.deepEqual(result, { status: 'error', reason: 'missing_token' });
   });
 
+  it('rejects the literal string "undefined" as a token', () => {
+    // URLSearchParams stringifies `undefined` to "undefined" if the
+    // server forgets to validate the token before redirecting. Don't
+    // let that bubble all the way to Gmail as a Bearer header.
+    const result = parseGmailRedirect(
+      'showbook://gmail/connected?status=ok&accessToken=undefined',
+    );
+    assert.deepEqual(result, { status: 'error', reason: 'missing_token' });
+  });
+
+  it('rejects the literal string "null" as a token', () => {
+    const result = parseGmailRedirect(
+      'showbook://gmail/connected?status=ok&accessToken=null',
+    );
+    assert.deepEqual(result, { status: 'error', reason: 'missing_token' });
+  });
+
   it('returns null when there is no query string at all', () => {
     assert.equal(parseGmailRedirect('showbook://gmail/connected'), null);
   });

@@ -34,4 +34,11 @@ export interface GmailScanDone {
 
 export interface GmailScanError {
   message: string;
+  /**
+   * Upstream Gmail HTTP status when the scan failed inside a Gmail API
+   * call. Lets the client distinguish "your Gmail authorization is no
+   * longer accepted" (401/403) from "Showbook hit a snag" (everything
+   * else) and prompt the right next step.
+   */
+  status?: number;
 }

@@ -26,7 +26,7 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MapPin, RefreshCw, X } from 'lucide-react-native';
 import MapView, {
   Marker,
@@ -257,6 +257,14 @@ function pinRadius(count: number): number {
   return Math.max(8, Math.min(22, 7 + count * 1.4));
 }
 
+function chunkRegions(regions: FocusRegion[], size: number): FocusRegion[][] {
+  const rows: FocusRegion[][] = [];
+  for (let i = 0; i < regions.length; i += size) {
+    rows.push(regions.slice(i, i + size));
+  }
+  return rows;
+}
+
 /**
  * Convert a saved region (lat/lng + radius in miles) into a react-native-maps
  * `Region` framed so the radius fits horizontally with a little padding.
@@ -288,6 +296,13 @@ export default function MapScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
   const mapRef = React.useRef<MapView>(null);
+  const router = useRouter();
+  const params = useLocalSearchParams<{ focusVenueId?: string | string[] }>();
+  const focusVenueId = React.useMemo(() => {
+    const v = params.focusVenueId;
+    if (Array.isArray(v)) return v[0] ?? null;
+    return v ?? null;
+  }, [params.focusVenueId]);
 
   const utils = trpc.useUtils();
   const showsQuery = useCachedQuery<MapShow[]>({
@@ -355,9 +370,13 @@ export default function MapScreen(): React.JSX.Element {
   );
 
   // Fit camera to the user's venues once, on first successful load.
+  // Skipped when an inbound `focusVenueId` is going to override the
+  // camera anyway — otherwise the user would see a flash of the full
+  // collection before the focus animation lands.
   React.useEffect(() => {
     if (didFitOnce) return;
     if (!showsQuery.isSuccess) return;
+    if (focusVenueId) return;
     const allVenues = groupByVenue(allShows);
     if (allVenues.length === 0) return;
     const fit = fitRegion(allVenues);
@@ -365,7 +384,39 @@ export default function MapScreen(): React.JSX.Element {
     setLoadedRegion(fit);
     mapRef.current?.animateToRegion(fit, 400);
     setDidFitOnce(true);
-  }, [showsQuery.isSuccess, allShows, didFitOnce]);
+  }, [showsQuery.isSuccess, allShows, didFitOnce, focusVenueId]);
+
+  // External focus — e.g. the "Venue map" row on a past show's Media
+  // tab routes here with `?focusVenueId=<id>`. We resolve the venue
+  // out of the user's already-loaded show set, animate to a tight
+  // region around it, and pop the venue sheet so the user lands on
+  // the same UI they'd see after tapping the pin manually. The route
+  // param is cleared after consumption so a later tab refocus doesn't
+  // re-trigger the animation.
+  React.useEffect(() => {
+    if (!focusVenueId) return;
+    if (!showsQuery.isSuccess) return;
+    const allVenues = groupByVenue(allShows);
+    const target = allVenues.find((v) => v.venueId === focusVenueId);
+    if (!target) {
+      // Venue isn't in the user's show set (deleted, missing coords);
+      // drop the param so we don't keep re-evaluating on every render.
+      router.setParams({ focusVenueId: '' });
+      return;
+    }
+    const next: Region = {
+      latitude: target.lat,
+      longitude: target.lng,
+      latitudeDelta: 0.05,
+      longitudeDelta: 0.05,
+    };
+    setRegion(next);
+    setLoadedRegion(next);
+    mapRef.current?.animateToRegion(next, 400);
+    setDidFitOnce(true);
+    setSelectedClusterId(`v:${target.venueId}`);
+    router.setParams({ focusVenueId: '' });
+  }, [focusVenueId, showsQuery.isSuccess, allShows, router]);
 
   const onRegionChangeComplete = React.useCallback((next: Region) => {
     setRegion(next);
@@ -590,35 +641,48 @@ export default function MapScreen(): React.JSX.Element {
                   },
                 ]}
               >
-                {focusRegions.map((focus, i) => {
-                  const active = focus.id === activeFocusId;
-                  return (
-                    <Pressable
-                      key={focus.id}
-                      onPress={() => onFocusPress(focus)}
-                      style={[
-                        styles.focusToggleBtn,
-                        i > 0 && {
-                          borderLeftColor: colors.ruleStrong,
-                          borderLeftWidth: 1,
-                        },
-                        active && { backgroundColor: colors.ink },
-                      ]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Focus map on ${focus.label}`}
-                    >
-                      <Text
-                        style={[
-                          styles.focusToggleLabel,
-                          { color: active ? colors.bg : colors.muted },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {focus.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                {chunkRegions(focusRegions, 3).map((row, rowIdx) => (
+                  <View
+                    key={rowIdx}
+                    style={[
+                      styles.focusToggleRow,
+                      rowIdx > 0 && {
+                        borderTopColor: colors.ruleStrong,
+                        borderTopWidth: 1,
+                      },
+                    ]}
+                  >
+                    {row.map((focus, i) => {
+                      const active = focus.id === activeFocusId;
+                      return (
+                        <Pressable
+                          key={focus.id}
+                          onPress={() => onFocusPress(focus)}
+                          style={[
+                            styles.focusToggleBtn,
+                            i > 0 && {
+                              borderLeftColor: colors.ruleStrong,
+                              borderLeftWidth: 1,
+                            },
+                            active && { backgroundColor: colors.ink },
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Focus map on ${focus.label}`}
+                        >
+                          <Text
+                            style={[
+                              styles.focusToggleLabel,
+                              { color: active ? colors.bg : colors.muted },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {focus.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ))}
               </View>
             )}
           </>
@@ -881,13 +945,17 @@ const styles = StyleSheet.create({
     bottom: 16,
     right: 16,
     maxWidth: '85%',
-    flexDirection: 'row',
+    flexDirection: 'column',
     borderWidth: 1,
+  },
+  focusToggleRow: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
   },
   focusToggleBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    flexShrink: 1,
+    flex: 1,
   },
   focusToggleLabel: {
     fontFamily: 'Geist Mono',

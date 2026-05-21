@@ -34,6 +34,11 @@ import { getCacheOutbox } from '../../lib/cache/db';
 
 export interface HypePlaylistCardProps {
   showId: string;
+  /** Performer whose songs the playlist is built from — the festival
+   *  Setlist tab passes the chip-rail selection so each lineup
+   *  artist gets its own playlist row; single-artist concerts pass
+   *  the headliner. */
+  performerId: string;
   artist: string;
   kind: 'hype' | 'heard';
   trackCount: number;
@@ -53,6 +58,7 @@ interface PlaylistRow {
 
 export function HypePlaylistCard({
   showId,
+  performerId,
   artist,
   kind,
   trackCount,
@@ -67,6 +73,7 @@ export function HypePlaylistCard({
   const existingQuery = trpc.spotify.existingPlaylist.useQuery({
     showId,
     kind,
+    performerId,
   });
   const existing = (existingQuery.data ?? null) as PlaylistRow | null;
 
@@ -101,7 +108,7 @@ export function HypePlaylistCard({
     // Spotify URL.
     const existingKey = [
       ['spotify', 'existingPlaylist'],
-      { input: { showId, kind }, type: 'query' },
+      { input: { showId, kind, performerId }, type: 'query' },
     ];
     type Cache = PlaylistRow | null | undefined;
     const sentinel: PlaylistRow = {
@@ -120,12 +127,12 @@ export function HypePlaylistCard({
         requested: number;
       };
       const { result } = await runOptimisticMutation<
-        { showId: string },
+        { showId: string; performerId: string },
         Cache,
         CreateResult
       >({
         mutation: mutationKind,
-        input: { showId },
+        input: { showId, performerId },
         outbox: getCacheOutbox(),
         call: (input) =>
           (kind === 'hype'
@@ -141,7 +148,7 @@ export function HypePlaylistCard({
           },
         },
         reconcile: () => {
-          void utils.spotify.existingPlaylist.invalidate({ showId, kind });
+          void utils.spotify.existingPlaylist.invalidate({ showId, kind, performerId });
         },
       });
       const missing = result.missing.length;
@@ -181,20 +188,25 @@ export function HypePlaylistCard({
     } finally {
       setIsCreating(false);
     }
-  }, [kind, network.online, queryClient, showId, utils]);
+  }, [kind, network.online, performerId, queryClient, showId, utils]);
 
   const openExisting = React.useCallback(async () => {
     if (!existing) return;
     const plan = buildSpotifyOpenPlan(existing.spotifyUrl);
+    // Try the native deep link directly rather than gating on
+    // `Linking.canOpenURL`. `canOpenURL` only returns true when the
+    // scheme is declared up front — `LSApplicationQueriesSchemes` on
+    // iOS, a `<queries>` element on Android 11+ — and a missing
+    // declaration silently sent every tap to the in-app browser even
+    // when the Spotify app was installed. `openURL` rejects when no
+    // handler is registered, which is exactly the signal we need to
+    // fall back to the web URL.
     if (plan.primary && plan.primary !== plan.fallback) {
       try {
-        const canOpen = await Linking.canOpenURL(plan.primary);
-        if (canOpen) {
-          await Linking.openURL(plan.primary);
-          return;
-        }
+        await Linking.openURL(plan.primary);
+        return;
       } catch {
-        // Fall through to the web URL.
+        // Spotify app not installed — fall through to the web URL.
       }
     }
     if (plan.fallback) {

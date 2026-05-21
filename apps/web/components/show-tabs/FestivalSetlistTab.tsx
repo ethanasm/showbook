@@ -150,6 +150,7 @@ export function FestivalSetlistTab(
       </div>
       <SetlistTab
         showId={props.showId}
+        performerId={selected.performerId}
         isPast={isPast}
         artistName={selected.performerName}
         prediction={selected.prediction ?? null}

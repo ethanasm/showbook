@@ -18,7 +18,7 @@ import {
   View,
 } from 'react-native';
 import { Check, GripVertical, Pencil, Search, X } from 'lucide-react-native';
-import NestableDraggableFlatListImport, {
+import DraggableFlatListImport, {
   type RenderItemParams,
 } from 'react-native-draggable-flatlist';
 import { useTheme } from '../../lib/theme';
@@ -32,11 +32,16 @@ import type {
   FestivalLineupTmMatch,
 } from '../../lib/festival-lineup/useFestivalLineup';
 
-// CJS interop — see the same pattern in `LineupEditor.tsx`.
-const NestableDraggableFlatList =
-  (NestableDraggableFlatListImport as unknown as {
-    NestableDraggableFlatList?: typeof NestableDraggableFlatListImport;
-  }).NestableDraggableFlatList ?? NestableDraggableFlatListImport;
+// Standalone draggable list (manages its own scrolling). We use this
+// rather than `NestableDraggableFlatList` because the picker is the
+// only scroll region on the screen — the nestable variant defers
+// scrolling to a parent `NestableScrollContainer` that doesn't exist
+// here, which left the last rows trapped under the sticky footer.
+// CJS interop matches the pattern in `LineupEditor.tsx`.
+const DraggableFlatList =
+  (DraggableFlatListImport as unknown as {
+    default?: typeof DraggableFlatListImport;
+  }).default ?? DraggableFlatListImport;
 
 interface FestivalLineupPickerProps {
   flow: FestivalLineupFlow;
@@ -185,7 +190,7 @@ export function FestivalLineupPicker({ flow }: FestivalLineupPickerProps): React
           ))}
         </ScrollView>
       ) : (
-        <NestableDraggableFlatList<FestivalLineupRow>
+        <DraggableFlatList<FestivalLineupRow>
           data={flow.rows}
           keyExtractor={(item) => item.id}
           renderItem={({ item, drag, isActive }: RenderItemParams<FestivalLineupRow>) =>
@@ -193,7 +198,9 @@ export function FestivalLineupPicker({ flow }: FestivalLineupPickerProps): React
           }
           onDragEnd={({ data }) => flow.reorder(data)}
           activationDistance={8}
+          style={styles.list}
           contentContainerStyle={styles.listContent}
+          keyboardShouldPersistTaps="handled"
         />
       )}
     </View>

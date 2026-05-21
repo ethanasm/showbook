@@ -33,16 +33,25 @@ export interface PullToRefreshProps {
 /**
  * Build a themed RefreshControl element for use with FlatList / SectionList /
  * ScrollView's `refreshControl` prop.
+ *
+ * The `refreshing` argument is the underlying fetch state (typically
+ * `query.isFetching && !query.isLoading`), but the spinner is only shown
+ * when the current cycle was started by a real user pull. Without that
+ * gate the iOS RefreshControl flashes on every background refetch and,
+ * worse, can get stuck visible after a tab switch — the foreground-sync
+ * hop invalidates all active queries on every app resume, and rapid
+ * `refreshing` toggles leave the native spinner spinning. See the
+ * `useRefreshHaptics` docblock for the manual-cycle bookkeeping.
  */
 export function useThemedRefreshControl(
   refreshing: boolean,
   onRefresh: () => void,
 ): React.ReactElement<RefreshControlProps> {
   const { tokens } = useTheme();
-  const { onManualRefresh } = useRefreshHaptics(refreshing, onRefresh);
+  const { onManualRefresh, manualRefreshing } = useRefreshHaptics(refreshing, onRefresh);
   return (
     <RefreshControl
-      refreshing={refreshing}
+      refreshing={manualRefreshing && refreshing}
       onRefresh={onManualRefresh}
       tintColor={tokens.colors.accent}
       colors={[tokens.colors.accent]}

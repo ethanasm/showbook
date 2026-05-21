@@ -55,6 +55,9 @@ export type SetlistTrackPreviewMap = Record<
 
 interface SetlistTabProps {
   showId: string;
+  /** Performer the tab is rendering — the show's headliner for
+   *  single-artist concerts, the picked lineup artist on festivals. */
+  performerId: string;
   isPast: boolean;
   artistName: string;
   /** Predicted-setlist tRPC response. Null while loading. */
@@ -253,6 +256,7 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
           <SectionFrame title="Hype playlist">
             <HypePlaylistCard
               showId={props.showId}
+              performerId={props.performerId}
               kind="hype"
               artist={artistName}
               trackCount={totalCount}
@@ -319,6 +323,7 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
         {hypePlaylistEnabled ? (
           <HypePlaylistCard
             showId={props.showId}
+            performerId={props.performerId}
             kind="hype"
             artist={artistName}
             trackCount={hypeTotalCount}
@@ -588,6 +593,7 @@ function SetlistTabPast({
   hypePlaylistEnabled,
   musicLayerV2Enabled,
   showId,
+  performerId,
   badgePayload,
   trackPreviews,
 }: SetlistTabProps) {
@@ -642,6 +648,7 @@ function SetlistTabPast({
         <SectionFrame title={`I Heard ${artistName}`}>
           <HypePlaylistCard
             showId={showId}
+            performerId={performerId}
             kind="heard"
             artist={artistName}
             trackCount={total}

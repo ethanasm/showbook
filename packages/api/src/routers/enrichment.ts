@@ -395,11 +395,16 @@ export const enrichmentRouter = router({
         max: 30,
         windowMs: 60_000,
       });
-      const typeMap = {
-        venue: ['establishment'],
-        city: ['locality', 'administrative_area_level_1'],
-      };
-      return placesAutocomplete(input.query, typeMap[input.types]);
+      // 'venue' sends no type filter — Places API (New) treats `establishment`
+      // as an umbrella, so filtering on it excludes leaf types like
+      // `performing_arts_theater` / `concert_hall`. Letting Google rank
+      // unrestricted matches surfaces Broadway theatres + lets the user
+      // search by street address (e.g. "149 W 45").
+      const types =
+        input.types === 'city'
+          ? ['locality', 'administrative_area_level_1']
+          : undefined;
+      return placesAutocomplete(input.query, types);
     }),
 
   placeDetails: protectedProcedure
