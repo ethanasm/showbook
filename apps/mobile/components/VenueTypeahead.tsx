@@ -84,17 +84,41 @@ export function VenueTypeahead({
   const { tokens } = useTheme();
   const { colors } = tokens;
   const debounced = useDebouncedValue(value, debounceMs);
+  // After the user taps a suggestion we hide the dropdown until they
+  // type again. Without this the parent's `value` update (to the
+  // selected venue name) keeps `value.trim().length > 0` true, so the
+  // list would stay visible — and the debounced effect below would
+  // re-fire `onSearch` against the new value and immediately
+  // repopulate it.
+  const [dismissed, setDismissed] = React.useState(false);
 
   React.useEffect(() => {
+    if (dismissed) return;
     const trimmed = debounced.trim();
     if (trimmed.length === 0) return;
     onSearch(trimmed);
     // Intentionally omit `onSearch` from deps — every keystroke would
     // otherwise re-fire if the parent recreated the callback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debounced]);
+  }, [debounced, dismissed]);
 
-  const showResults = value.trim().length > 0;
+  const handleChangeText = React.useCallback(
+    (next: string) => {
+      setDismissed(false);
+      onChange(next);
+    },
+    [onChange],
+  );
+
+  const handleSelect = React.useCallback(
+    (venue: VenueSuggestion) => {
+      setDismissed(true);
+      onSelect(venue);
+    },
+    [onSelect],
+  );
+
+  const showResults = !dismissed && value.trim().length > 0;
 
   return (
     <View testID={testID} style={styles.wrap}>
@@ -102,7 +126,7 @@ export function VenueTypeahead({
         <Search size={16} color={colors.muted} strokeWidth={2} />
         <TextInput
           value={value}
-          onChangeText={onChange}
+          onChangeText={handleChangeText}
           placeholder={placeholder}
           placeholderTextColor={colors.faint}
           autoCapitalize="words"
@@ -120,7 +144,7 @@ export function VenueTypeahead({
           {suggestions.map((venue, i) => (
             <Pressable
               key={venue.id}
-              onPress={() => onSelect(venue)}
+              onPress={() => handleSelect(venue)}
               accessibilityRole="button"
               accessibilityLabel={`Select ${venue.name}`}
               testID={testID ? `${testID}-row-${venue.id}` : undefined}
