@@ -38,7 +38,12 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 import type { PerformerSetlist } from '@showbook/shared';
-import { formatVenueLabel, getHeadliner, isFeatureOn } from '@showbook/shared';
+import {
+  formatDateParts,
+  formatVenueLabel,
+  getHeadliner,
+  isFeatureOn,
+} from '@showbook/shared';
 
 import { TopBar } from '../../components/TopBar';
 import { KindBadge } from '../../components/KindBadge';
@@ -88,31 +93,6 @@ interface ShowDetail {
   setlists: Record<string, PerformerSetlist> | null;
 }
 
-const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-const DOWS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-
-interface DateParts {
-  month: string;
-  day: string;
-  year: string;
-  dow: string;
-}
-
-function parseShowDate(date: string | null | undefined): DateParts | null {
-  if (!date) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
-  if (!m) return null;
-  const year = Number(m[1]);
-  const monthIdx = Number(m[2]) - 1;
-  const day = Number(m[3]);
-  const d = new Date(year, monthIdx, day);
-  return {
-    month: MONTHS[monthIdx] ?? '',
-    day: String(day),
-    year: String(year),
-    dow: DOWS[d.getDay()] ?? '',
-  };
-}
 
 export interface ShowDetailScreenProps {
   /** Override the route param — used by the iPad three-pane layout. */
@@ -306,7 +286,7 @@ function Hero({ show }: { show: ShowDetail }): React.JSX.Element {
   const { colors } = tokens;
   const router = useRouter();
   const accent = tokens.kindColor(show.kind as Kind);
-  const date = parseShowDate(show.date);
+  const date = show.date ? formatDateParts(show.date) : null;
   const headliner = show.showPerformers.find((sp) => sp.role === 'headliner');
   const support = show.showPerformers.filter((sp) => sp.role === 'support');
 

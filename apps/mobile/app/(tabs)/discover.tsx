@@ -54,7 +54,7 @@ import {
   Users,
 } from 'lucide-react-native';
 import { useFeedback } from '../../lib/feedback';
-import { isNonWatchableKind } from '@showbook/shared';
+import { formatDateParts, isNonWatchableKind } from '@showbook/shared';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { EmptyState } from '../../components/EmptyState';
@@ -90,27 +90,12 @@ type NearbyAnnouncementItem = NearbyFeed['items'][number];
 
 type DiscoverTab = 'venues' | 'artists' | 'regions';
 
-const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-const DOWS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-
 // Cap rendered rows per feed. The chip row and "N upcoming" summary still
 // reflect the full filtered set; only the AnnouncementRow tree is sliced.
 // With 800+ Region announcements rendered into a non-virtualized ScrollView
 // the tab swap stalled for several seconds — paginating the render keeps
 // the totals honest without paying that cost.
 const PAGE_SIZE = 50;
-
-function parseDate(iso: string): { month: string; day: string; year: string; dow: string } {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  if (!m) return { month: '—', day: '—', year: '—', dow: '' };
-  const y = Number(m[1]);
-  const mo = Number(m[2]);
-  const d = Number(m[3]);
-  const local = new Date(y, mo - 1, d);
-  const month = MONTHS[mo - 1] ?? '—';
-  const dow = DOWS[local.getDay()] ?? '';
-  return { month, day: String(d), year: String(y), dow };
-}
 
 /**
  * Multi-night runs (e.g. Phantom of the Opera at the Orpheum) carry a
@@ -127,23 +112,17 @@ function isRun(item: AnnouncementItem | NearbyAnnouncementItem): boolean {
 }
 
 function formatRunRange(start: string, end: string): string {
-  const fmt = (iso: string): string => {
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-    if (!m) return iso;
-    const mo = Number(m[2]);
-    const d = Number(m[3]);
-    const month = MONTHS[mo - 1] ?? '';
-    return `${month} ${d}`;
-  };
-  return `${fmt(start)} – ${fmt(end)}`;
+  const a = formatDateParts(start);
+  const b = formatDateParts(end);
+  return `${a.month} ${a.day} – ${b.month} ${b.day}`;
 }
 
 function formatOnSale(value: string | Date | null): string | null {
   if (!value) return null;
   const d = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  const month = MONTHS[d.getMonth()] ?? '';
-  return `${month} ${d.getDate()}`;
+  const parts = formatDateParts(d);
+  return `${parts.month} ${parts.day}`;
 }
 
 const ON_SALE_LABEL: Record<AnnouncementItem['onSaleStatus'], string> = {
@@ -840,7 +819,7 @@ function AnnouncementRow({
   const { colors } = tokens;
   const router = useRouter();
   const { showToast } = useFeedback();
-  const { month, day, year, dow } = parseDate(item.showDate);
+  const { month, day, year, dow } = formatDateParts(item.showDate);
   const accent = tokens.kindColor(item.kind as Kind);
   const onSale = formatOnSale(item.onSaleDate);
   const onSaleLabel = ON_SALE_LABEL[item.onSaleStatus];
