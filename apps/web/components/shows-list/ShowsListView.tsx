@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
+import { isFeatureOn } from "@showbook/shared";
 import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
 import {
   EmptyState,
@@ -96,6 +97,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
   const labels = MODE_LABELS[mode];
   const isUpcoming = mode === "upcoming";
   const isLogbook = mode === "logbook";
+  const eventbriteEnabled = isFeatureOn("EventbriteImportEnabled");
 
   const PAGE_SIZE = compact ? 10 : 12;
 
@@ -527,8 +529,17 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
   // Back-compat: ?gmail=1 still opens Gmail. New: ?import=gmail|setlistfm|eventbrite.
   useEffect(() => {
     const importParam = searchParams.get("import");
-    if (importParam === "gmail" || importParam === "setlistfm" || importParam === "eventbrite") {
-      handleOpenImportModal(importParam);
+    const isValidImport =
+      importParam === "gmail" ||
+      importParam === "setlistfm" ||
+      (importParam === "eventbrite" && eventbriteEnabled);
+    if (isValidImport) {
+      handleOpenImportModal(importParam as ImportSource);
+      router.replace(isUpcoming ? "/upcoming" : "/logbook");
+      return;
+    }
+    if (importParam === "eventbrite" && !eventbriteEnabled) {
+      // Flag-OFF backdoor seal: strip the param without opening the modal.
       router.replace(isUpcoming ? "/upcoming" : "/logbook");
       return;
     }
@@ -867,7 +878,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
               title="Import attended shows from setlist.fm"
               style={{
                 border: "none",
-                borderRight: "1px solid var(--rule-strong)",
+                borderRight: eventbriteEnabled ? "1px solid var(--rule-strong)" : "none",
                 cursor: "pointer",
                 background: "transparent",
                 color: "var(--ink)",
@@ -885,28 +896,30 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
               <Mail size={14} />
               <span>setlist.fm</span>
             </button>
-            <button
-              onClick={() => handleOpenImportModal("eventbrite")}
-              title="Import past orders from Eventbrite"
-              style={{
-                border: "none",
-                cursor: "pointer",
-                background: "transparent",
-                color: "var(--ink)",
-                padding: "10px 14px",
-                fontFamily: "var(--font-geist-sans), sans-serif",
-                fontSize: 13,
-                fontWeight: 500,
-                letterSpacing: -0.2,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "flex-start",
-                gap: 7,
-              }}
-            >
-              <Ticket size={14} />
-              <span>Eventbrite</span>
-            </button>
+            {eventbriteEnabled && (
+              <button
+                onClick={() => handleOpenImportModal("eventbrite")}
+                title="Import past orders from Eventbrite"
+                style={{
+                  border: "none",
+                  cursor: "pointer",
+                  background: "transparent",
+                  color: "var(--ink)",
+                  padding: "10px 14px",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  letterSpacing: -0.2,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "flex-start",
+                  gap: 7,
+                }}
+              >
+                <Ticket size={14} />
+                <span>Eventbrite</span>
+              </button>
+            )}
           </div>
           {totalShows > 0 && (
             <button
@@ -1019,29 +1032,31 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
             <Mail size={13} />
             setlist.fm
           </button>
-          <button
-            type="button"
-            onClick={() => handleOpenImportModal("eventbrite")}
-            style={{
-              padding: "10px 18px",
-              background: "transparent",
-              color: "var(--ink)",
-              border: "1px solid var(--rule-strong)",
-              borderRadius: 8,
-              cursor: "pointer",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 11,
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
-              fontWeight: 500,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <Ticket size={13} />
-            Eventbrite
-          </button>
+          {eventbriteEnabled && (
+            <button
+              type="button"
+              onClick={() => handleOpenImportModal("eventbrite")}
+              style={{
+                padding: "10px 18px",
+                background: "transparent",
+                color: "var(--ink)",
+                border: "1px solid var(--rule-strong)",
+                borderRadius: 8,
+                cursor: "pointer",
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: 11,
+                letterSpacing: ".06em",
+                textTransform: "uppercase",
+                fontWeight: 500,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Ticket size={13} />
+              Eventbrite
+            </button>
+          )}
         </div>
       );
       const secondary = (
@@ -1330,7 +1345,9 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
             {([
               { source: "gmail" as const, label: "Gmail", desc: "Scan confirmation emails", icon: <Image src="/google-g.svg" alt="" width={16} height={16} /> },
               { source: "setlistfm" as const, label: "setlist.fm", desc: "Import attended setlists", icon: <Mail size={16} /> },
-              { source: "eventbrite" as const, label: "Eventbrite", desc: "Sync past orders", icon: <Ticket size={16} /> },
+              ...(eventbriteEnabled
+                ? [{ source: "eventbrite" as const, label: "Eventbrite", desc: "Sync past orders", icon: <Ticket size={16} /> }]
+                : []),
             ]).map(({ source, label, desc, icon }) => (
               <button
                 key={source}
