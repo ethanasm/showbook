@@ -4,11 +4,10 @@
  *
  * Concurrency note: node:test runs integration test FILES in parallel,
  * so `runPruneOrphanCatalog()` from a sibling test file can fire mid-
- * test and wipe any announcement whose `announcement_has_preserver()`
- * predicate returns false. Each seeded announcement here therefore
- * gets a preserver (venue follow, headliner follow, or linked show)
- * so it survives the concurrent sweep — see the equivalent anchor
- * pattern in `discover-ingest.integration.test.ts`.
+ * test and wipe any row whose preserver predicate isn't satisfied yet.
+ * Per-test seeds are therefore inserted inside a single `db.transaction`
+ * so the sibling sweep can't observe an unanchored intermediate state —
+ * on commit, every row and its preserver become visible together.
  *
  * Run with:
  *   pnpm --filter @showbook/jobs test:integration
@@ -70,54 +69,54 @@ describe('runPrunePastAnnouncements', () => {
   beforeEach(cleanup);
 
   it('deletes past-dated announcements and keeps today / future ones', async () => {
-    // Seed a venue + user-venue follow so all three announcements are
-    // preserved against a concurrent `runPruneOrphanCatalog()` sweep
-    // from a sibling test file. The `runPrunePastAnnouncements()` we
-    // exercise here ignores preservers (that's the whole point of the
-    // job), so this anchor doesn't affect what the test measures —
-    // only the cross-file race that would otherwise wipe the today /
-    // future rows out from under us.
-    await db.insert(users).values([
-      { id: USER_A, name: 'A', email: 'a@test.local' },
-    ]);
-    await db.insert(venues).values([
-      { id: VENUE, name: 'Hall', city: 'NYC', country: 'US' },
-    ]);
-    await db.insert(userVenueFollows).values([
-      { userId: USER_A, venueId: VENUE },
-    ]);
-    await db.insert(announcements).values([
-      {
-        id: ANN_PAST,
-        venueId: VENUE,
-        kind: 'concert',
-        headliner: 'Past',
-        showDate: offsetDate(-1),
-        onSaleStatus: 'on_sale',
-        source: 'ticketmaster',
-        sourceEventId: `${PREFIX}-past`,
-      },
-      {
-        id: ANN_TODAY,
-        venueId: VENUE,
-        kind: 'concert',
-        headliner: 'Today',
-        showDate: offsetDate(0),
-        onSaleStatus: 'on_sale',
-        source: 'ticketmaster',
-        sourceEventId: `${PREFIX}-today`,
-      },
-      {
-        id: ANN_FUTURE,
-        venueId: VENUE,
-        kind: 'concert',
-        headliner: 'Future',
-        showDate: offsetDate(7),
-        onSaleStatus: 'on_sale',
-        source: 'ticketmaster',
-        sourceEventId: `${PREFIX}-future`,
-      },
-    ]);
+    // The venue-follow is a fixture preserver kept here so the
+    // today / future announcements survive the orphan sweep that
+    // `runPrunePastAnnouncements` is intentionally not gated by;
+    // wrapping the seed in a transaction is what stops the sibling
+    // sweep from observing the venue mid-insert.
+    await db.transaction(async (tx) => {
+      await tx.insert(users).values([
+        { id: USER_A, name: 'A', email: 'a@test.local' },
+      ]);
+      await tx.insert(venues).values([
+        { id: VENUE, name: 'Hall', city: 'NYC', country: 'US' },
+      ]);
+      await tx.insert(userVenueFollows).values([
+        { userId: USER_A, venueId: VENUE },
+      ]);
+      await tx.insert(announcements).values([
+        {
+          id: ANN_PAST,
+          venueId: VENUE,
+          kind: 'concert',
+          headliner: 'Past',
+          showDate: offsetDate(-1),
+          onSaleStatus: 'on_sale',
+          source: 'ticketmaster',
+          sourceEventId: `${PREFIX}-past`,
+        },
+        {
+          id: ANN_TODAY,
+          venueId: VENUE,
+          kind: 'concert',
+          headliner: 'Today',
+          showDate: offsetDate(0),
+          onSaleStatus: 'on_sale',
+          source: 'ticketmaster',
+          sourceEventId: `${PREFIX}-today`,
+        },
+        {
+          id: ANN_FUTURE,
+          venueId: VENUE,
+          kind: 'concert',
+          headliner: 'Future',
+          showDate: offsetDate(7),
+          onSaleStatus: 'on_sale',
+          source: 'ticketmaster',
+          sourceEventId: `${PREFIX}-future`,
+        },
+      ]);
+    });
 
     const result = await runPrunePastAnnouncements();
 
@@ -134,39 +133,38 @@ describe('runPrunePastAnnouncements', () => {
     // This is the bug that motivated the job: the orphan-prune
     // backstop preserves announcements whose headliner is followed,
     // so past announcements for followed artists accumulate forever.
-    await db.insert(users).values([
-      { id: USER_A, name: 'A', email: 'a@test.local' },
-    ]);
-    await db.insert(venues).values([
-      { id: VENUE, name: 'Hall', city: 'NYC', country: 'US' },
-    ]);
-    // Anchor the venue against a concurrent `runPruneOrphanCatalog()`
-    // sweep — same pattern as PR #334 applied to the cascade test
-    // below. The performer is anchored a few lines down by the
-    // `userPerformerFollows` insert, but the venue would otherwise
-    // race-delete before the announcement insert and FK-violate.
-    await db.insert(userVenueFollows).values([
-      { userId: USER_A, venueId: VENUE },
-    ]);
-    await db.insert(performers).values([
-      { id: PERFORMER, name: 'Followed Artist' },
-    ]);
-    await db.insert(userPerformerFollows).values([
-      { userId: USER_A, performerId: PERFORMER },
-    ]);
-    await db.insert(announcements).values([
-      {
-        id: ANN_PAST_FOLLOWED_PERFORMER,
-        venueId: VENUE,
-        kind: 'concert',
-        headliner: 'Followed Artist',
-        headlinerPerformerId: PERFORMER,
-        showDate: offsetDate(-1),
-        onSaleStatus: 'on_sale',
-        source: 'ticketmaster',
-        sourceEventId: `${PREFIX}-fol-past`,
-      },
-    ]);
+    // The performer-follow is what we're verifying doesn't preserve
+    // the past announcement; the venue-follow is incidental fixture.
+    await db.transaction(async (tx) => {
+      await tx.insert(users).values([
+        { id: USER_A, name: 'A', email: 'a@test.local' },
+      ]);
+      await tx.insert(venues).values([
+        { id: VENUE, name: 'Hall', city: 'NYC', country: 'US' },
+      ]);
+      await tx.insert(userVenueFollows).values([
+        { userId: USER_A, venueId: VENUE },
+      ]);
+      await tx.insert(performers).values([
+        { id: PERFORMER, name: 'Followed Artist' },
+      ]);
+      await tx.insert(userPerformerFollows).values([
+        { userId: USER_A, performerId: PERFORMER },
+      ]);
+      await tx.insert(announcements).values([
+        {
+          id: ANN_PAST_FOLLOWED_PERFORMER,
+          venueId: VENUE,
+          kind: 'concert',
+          headliner: 'Followed Artist',
+          headlinerPerformerId: PERFORMER,
+          showDate: offsetDate(-1),
+          onSaleStatus: 'on_sale',
+          source: 'ticketmaster',
+          sourceEventId: `${PREFIX}-fol-past`,
+        },
+      ]);
+    });
 
     await runPrunePastAnnouncements();
 
@@ -178,47 +176,42 @@ describe('runPrunePastAnnouncements', () => {
   });
 
   it('cascade-drops the link row but keeps the linked user show', async () => {
-    await db.insert(users).values([
-      { id: USER_A, name: 'A', email: 'a@test.local' },
-    ]);
-    await db.insert(venues).values([
-      { id: VENUE, name: 'Hall', city: 'NYC', country: 'US' },
-    ]);
-    // Anchor the venue against a concurrent `runPruneOrphanCatalog()`
-    // sweep from a sibling test file. Without this, the orphan-prune
-    // can delete the just-inserted venue (no follows, shows, or
-    // announcements reference it yet) in the window before the show
-    // insert, and the show insert then FK-violates. PR #309 added this
-    // preserver pattern to the first test in this file but missed
-    // this one.
-    await db.insert(userVenueFollows).values([
-      { userId: USER_A, venueId: VENUE },
-    ]);
-    await db.insert(shows).values([
-      {
-        id: SHOW_X,
-        userId: USER_A,
-        venueId: VENUE,
-        kind: 'concert',
-        state: 'past',
-        date: offsetDate(-1),
-      },
-    ]);
-    await db.insert(announcements).values([
-      {
-        id: ANN_PAST_LINKED,
-        venueId: VENUE,
-        kind: 'concert',
-        headliner: 'Linked Past',
-        showDate: offsetDate(-1),
-        onSaleStatus: 'on_sale',
-        source: 'ticketmaster',
-        sourceEventId: `${PREFIX}-linked-past`,
-      },
-    ]);
-    await db.insert(showAnnouncementLinks).values([
-      { showId: SHOW_X, announcementId: ANN_PAST_LINKED },
-    ]);
+    await db.transaction(async (tx) => {
+      await tx.insert(users).values([
+        { id: USER_A, name: 'A', email: 'a@test.local' },
+      ]);
+      await tx.insert(venues).values([
+        { id: VENUE, name: 'Hall', city: 'NYC', country: 'US' },
+      ]);
+      await tx.insert(userVenueFollows).values([
+        { userId: USER_A, venueId: VENUE },
+      ]);
+      await tx.insert(shows).values([
+        {
+          id: SHOW_X,
+          userId: USER_A,
+          venueId: VENUE,
+          kind: 'concert',
+          state: 'past',
+          date: offsetDate(-1),
+        },
+      ]);
+      await tx.insert(announcements).values([
+        {
+          id: ANN_PAST_LINKED,
+          venueId: VENUE,
+          kind: 'concert',
+          headliner: 'Linked Past',
+          showDate: offsetDate(-1),
+          onSaleStatus: 'on_sale',
+          source: 'ticketmaster',
+          sourceEventId: `${PREFIX}-linked-past`,
+        },
+      ]);
+      await tx.insert(showAnnouncementLinks).values([
+        { showId: SHOW_X, announcementId: ANN_PAST_LINKED },
+      ]);
+    });
 
     await runPrunePastAnnouncements();
 
