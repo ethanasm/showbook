@@ -39,7 +39,7 @@ import { hapticSelection } from '../../lib/haptics';
 import { useFeedback } from '../../lib/feedback';
 
 import { useAuth } from '../../lib/auth';
-import { venueImageSource } from '../../lib/images';
+import { showCoverImageSource, venueImageSource } from '../../lib/images';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
 import { CACHE_DEFAULTS } from '../../lib/cache';
@@ -72,6 +72,7 @@ import {
   formatDateRangeShort,
   formatVenueLocation,
   getHeadliner,
+  hasProductionLabel,
   isVenuePlaceholder,
 } from '@showbook/shared';
 
@@ -112,6 +113,7 @@ export interface ShowDetail {
   ticketCount: number;
   tourName: string | null;
   productionName: string | null;
+  coverImageUrl: string | null;
   notes: string | null;
   ticketUrl: string | null;
   venue: ShowVenue;
@@ -698,9 +700,18 @@ function HeaderStrip({
 
   // Background photo. The venue image was chosen historically because
   // concerts/comedy already surface the headliner photo in the LINEUP
-  // row below — repeating it here adds nothing. RemoteImage falls back
-  // to a kind-coloured monogram when no photo is available.
+  // row below — repeating it here adds nothing. For production shows
+  // (theatre + festival w/ productionName) the TM-sourced cover is the
+  // show's identity, so it wins over the venue photo when populated. If
+  // `coverImageUrl` hasn't been resolved yet the helper returns null and
+  // we fall through to the venue photo, preserving the existing UX.
+  // RemoteImage falls back to a kind-coloured monogram when neither is
+  // available — same as before.
+  const coverImage = hasProductionLabel(show)
+    ? showCoverImageSource({ id: show.id, coverImageUrl: show.coverImageUrl }, token)
+    : null;
   const venueImage = venueImageSource(show.venue, token);
+  const backgroundImage = coverImage ?? venueImage;
 
   const eyebrow =
     `${show.kind === 'theatre' ? 'THEATRE' : show.kind.toUpperCase()}` +
@@ -724,9 +735,9 @@ function HeaderStrip({
         style={StyleSheet.absoluteFillObject}
       >
         <RemoteImage
-          uri={venueImage?.uri ?? null}
-          headers={venueImage?.headers}
-          name={show.venue.name}
+          uri={backgroundImage?.uri ?? null}
+          headers={backgroundImage?.headers}
+          name={coverImage ? title : show.venue.name}
           kind={show.kind as Kind}
           size="custom"
           height={heroHeight}

@@ -44,6 +44,13 @@ export interface ShowCardShow {
    */
   avatarUrl?: string | null;
   /**
+   * Optional auth headers for `avatarUrl`. Required when the URL points
+   * at a session-gated proxy like `/api/show-cover/<id>` — the Bearer
+   * token rides along so expo-image can load it. Direct CDN URLs (TM /
+   * Spotify) leave this unset.
+   */
+  avatarHeaders?: Record<string, string>;
+  /**
    * When set on a watching/ticketed row, a Ticket icon button renders
    * before the chevron so the user can jump straight to the listing
    * (Ticketmaster, etc.) without opening the show detail first.
@@ -119,6 +126,7 @@ export function ShowCard({
       {show.avatarUrl !== undefined ? (
         <RemoteImage
           uri={show.avatarUrl}
+          headers={show.avatarHeaders}
           name={show.headliner}
           kind={show.kind}
           size="thumb"
