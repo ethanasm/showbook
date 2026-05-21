@@ -49,14 +49,11 @@ export interface ShowTabBadges {
  * sourced from the deterministic actual setlist, not the model).
  */
 export function isHypePlaylistVisible(opts: {
-  /** Feature-flag verdict from `spotify.hypePlaylistFeature`. */
-  featureEnabled: boolean;
   /** True when the show has already happened (state === 'past'). */
   isPast: boolean;
   /** The prediction's style, or `'stable'` when the query is empty. */
   setlistStyle: string;
 }): boolean {
-  if (!opts.featureEnabled) return false;
   if (opts.isPast) return true;
   return opts.setlistStyle !== 'rotating' && opts.setlistStyle !== 'improvised';
 }

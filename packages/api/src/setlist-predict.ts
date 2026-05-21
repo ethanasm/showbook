@@ -74,8 +74,7 @@ export interface HotPrediction {
    *  Null when sampleSize < 3 makes the estimate too noisy to show. */
   setCountPrediction: SetCountPrediction | null;
   /** Phase 11 §15e — multi-night anti-repeat context. Non-null when
-   *  the target sits inside a same-venue run AND the
-   *  SetlistIntelMultiNightGeneralized flag is ON. */
+   *  the target sits inside a same-venue run. */
   multiNightContext: {
     venue: string;
     priorNights: number;

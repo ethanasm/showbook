@@ -5,6 +5,7 @@ export {
   formatDateMedium,
   formatDateParts,
   formatDateRangeLong,
+  formatDateRangeShort,
   formatOnSaleDate,
   formatShowDate,
   formatYear,

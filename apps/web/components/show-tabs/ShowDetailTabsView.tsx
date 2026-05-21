@@ -11,7 +11,7 @@ import { initFullTrackDriver } from "@/lib/spotify-playback";
 import {
   formatDateRangeLong,
   daysUntil,
-  normalizePerformerSetlistsMap,
+  resolveShowSetlistsMap,
   type PerformerSetlistsMap,
 } from "@showbook/shared";
 import {
@@ -20,7 +20,7 @@ import {
   isProductionShow,
   type ShowLike,
 } from "@showbook/shared";
-import { isFeatureOn, isVenuePlaceholder } from "@showbook/shared";
+import { isVenuePlaceholder } from "@showbook/shared";
 import {
   buildActualSongsFromSetlist,
   buildFestivalLineupEntries,
@@ -73,10 +73,8 @@ interface ShowDetailTabsViewProps {
 }
 
 /**
- * New 4-tab show detail (2026-05-16 redesign). Gated behind the
- * `SetlistIntelShowTabs` feature flag. Reads the same `shows.detail`
- * payload as the legacy page; deltas only in the inside-the-tabs
- * layout.
+ * 4-tab show detail (2026-05-16 redesign). Reads the `shows.detail`
+ * payload.
  */
 export function ShowDetailTabsView(props: ShowDetailTabsViewProps) {
   // Wrap in the PreviewPlayerProvider so every PredictedSetlistRow's
@@ -117,69 +115,23 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
       },
     );
 
-  // Phase 5 — rotating-display flag. Single-user prod: we render the
-  // rotating UI whenever the dev flag is ON, regardless of the
-  // server-side calibration gate verdict. The gate still emits
-  // setlist.release_gate.{passed,failed} from the server when other
-  // callers hit setlistIntel.releaseGate, so the audit trail stays;
-  // the client just doesn't hard-block on it. Re-introduce the
-  // gate-blocked branch (rotatingGateBlocked) once we have a
-  // multi-user audience and want safety-rails.
-  const rotatingFlagOn = isFeatureOn("SetlistIntelRotatingDisplay");
-  const rotatingDisplayEnabled = rotatingFlagOn;
-  const rotatingGateBlocked = false;
-
-  // Phase 6 — theatrical + improvised display flags. Default OFF.
-  // When OFF, the matching prediction.style routes the panel to the
-  // SetlistTabComingSoon fallback rather than the Phase-6 view.
-  const theatricalDisplayEnabled = isFeatureOn(
-    "SetlistIntelTheatricalDisplay",
-  );
-  const theatricalGateBlocked = false;
-  const improvisedDisplayEnabled = isFeatureOn(
-    "SetlistIntelImprovisedDisplay",
-  );
-  const improvisedGateBlocked = false;
-
-  // Phase 3 — global flag + admin override decides whether the real
-  // Spotify-backed HypePlaylistCard renders in place of the P1
-  // placeholder. Query is cheap (a single users select) and cached
-  // for the session.
-  const hypeFeatureQuery = trpc.spotify.hypePlaylistFeature.useQuery(
-    undefined,
-    { staleTime: 5 * 60_000 },
-  );
-
-  // Phase 7 — flag gate for the music-layer-v2 surfaces (fan loyalty
-  // ring, discovered-live rail, priming stat). When OFF, we keep the
-  // P1 empty placeholders rendering instead of the data-backed atoms.
-  const musicLayerV2Query = trpc.setlistIntel.musicLayerV2Feature.useQuery(
-    undefined,
-    { staleTime: 5 * 60_000 },
-  );
-  const musicLayerV2Enabled = Boolean(musicLayerV2Query.data?.enabled);
-
   // Phase 2 — inline song badges. Only fetch for past shows where
-  // there's a setlist on record AND the Songs surface is on.
-  const songsFlagOn = isFeatureOn("SetlistIntelSongs");
+  // there's a setlist on record.
   const badgeQuery = trpc.shows.songBadges.useQuery(
     { showId: show.id },
     {
-      enabled: isPast && songsFlagOn,
+      enabled: isPast,
       staleTime: 1000 * 60 * 5,
     },
   );
 
   // Phase 9 — cached previews. Cheap (single read of the songs table
-  // for the headliner), so we fire it unconditionally when the
-  // SetlistIntelPreviews flag is on. The row UI gracefully degrades
-  // when the response is missing the title; the resolver mutation
-  // backfills on first tap.
-  const previewsFlagOn = isFeatureOn("SetlistIntelPreviews");
+  // for the headliner). The row UI gracefully degrades when the
+  // response is missing the title; the resolver mutation backfills on
+  // first tap.
   const previewsQuery = trpc.setlistIntel.trackPreviewsForShow.useQuery(
     { showId: show.id },
     {
-      enabled: previewsFlagOn,
       staleTime: 1000 * 60 * 5,
     },
   );
@@ -201,21 +153,15 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
     },
   });
 
-  const setlistsMap: PerformerSetlistsMap = useMemo(() => {
-    const map = normalizePerformerSetlistsMap(show.setlists);
-    if (Object.keys(map).length > 0) return map;
-    const headlinerId = getHeadlinerId(show);
-    if (headlinerId && show.setlist && show.setlist.length > 0) {
-      return {
-        [headlinerId]: {
-          sections: [
-            { kind: "set", songs: show.setlist.map((title) => ({ title })) },
-          ],
-        },
-      };
-    }
-    return {};
-  }, [show]);
+  const setlistsMap: PerformerSetlistsMap = useMemo(
+    () =>
+      resolveShowSetlistsMap({
+        setlists: show.setlists,
+        legacySetlist: show.setlist,
+        headlinerPerformerId: getHeadlinerId(show),
+      }),
+    [show],
+  );
 
   const buildActualSongs = useCallback(
     (performerId: string): ActualSong[] =>
@@ -386,14 +332,11 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
   }));
 
   // Music-layer slot for the Overview tab. Only rendered when the
-  // FanLoyaltyRing is going to mount — past show + v2 flag on. The
-  // pre-show VibeRadar placeholder is gone (Phase 8 deferred to v2 —
-  // Spotify audio-features probe returned 403 on 2026-05-17) and the
-  // past-show "Fan loyalty coming in Phase 7" empty card was dead
-  // space for the long tail of users not in the v2 allowlist.
+  // FanLoyaltyRing is going to mount — past show. The pre-show
+  // VibeRadar placeholder is gone (Phase 8 deferred — Spotify
+  // audio-features probe returned 403 on 2026-05-17).
   // FanLoyaltyRing owns its own loading/empty/disconnected states.
-  const musicLayerPlaceholder =
-    isPast && musicLayerV2Enabled ? <FanLoyaltyRing showId={show.id} /> : null;
+  const musicLayerPlaceholder = isPast ? <FanLoyaltyRing showId={show.id} /> : null;
 
   const showLikeForGate: ShowLike = show;
   const isUnsupportedKind =
@@ -413,17 +356,13 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
   // "I Heard" card is unaffected: it's deterministic from the actual
   // setlist. Stable + theatrical keep the card pre-show.
   const hypePlaylistEnabled = isHypePlaylistVisible({
-    featureEnabled: Boolean(hypeFeatureQuery.data?.enabled),
     isPast,
     setlistStyle,
   });
 
   // Phase 6 — theatrical + improvised join rotating as styles that
   // can pass through SetlistTab. We still hide the tab for unsupported
-  // kinds + production shows. A theatrical/improvised prediction with
-  // the matching display flag OFF will render the in-tab "gate
-  // blocked" placeholder rather than SetlistTabComingSoon — keeps the
-  // page geometry consistent with Phase 5 rotating.
+  // kinds + production shows.
   const setlistStylePassesGate =
     setlistStyle === "stable" ||
     setlistStyle === "cold" ||
@@ -431,8 +370,8 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
     setlistStyle === "theatrical" ||
     setlistStyle === "improvised";
   // Festivals always show the setlist tab (per-artist predictions are
-  // populated independently). For non-festivals, the gate-blocked
-  // styles still route to the SetlistTabComingSoon placeholder.
+  // populated independently). For non-festivals, unsupported styles
+  // still route to the SetlistTabComingSoon placeholder.
   const showSetlistTab = isFestival
     ? true
     : !isPast && (isUnsupportedKind || isProduction)
@@ -447,15 +386,8 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
       entries={festivalLineupSetlists}
       predictionsLoading={festivalPredictionsQuery.isLoading}
       hypePlaylistEnabled={hypePlaylistEnabled}
-      musicLayerV2Enabled={musicLayerV2Enabled}
       badgePayload={badgeQuery.data ?? null}
       trackPreviews={previewsQuery.data?.previews ?? null}
-      rotatingDisplayEnabled={rotatingDisplayEnabled}
-      rotatingGateBlocked={rotatingGateBlocked}
-      theatricalDisplayEnabled={theatricalDisplayEnabled}
-      theatricalGateBlocked={theatricalGateBlocked}
-      improvisedDisplayEnabled={improvisedDisplayEnabled}
-      improvisedGateBlocked={improvisedGateBlocked}
     />
   ) : !isPast && (isUnsupportedKind || isProduction) ? (
     <SetlistTabComingSoon style={show.kind} />
@@ -471,15 +403,8 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
       predictionLoading={predictionQuery.isLoading}
       actualSongs={actualSongs}
       hypePlaylistEnabled={hypePlaylistEnabled}
-      musicLayerV2Enabled={musicLayerV2Enabled}
       badgePayload={badgeQuery.data ?? null}
       trackPreviews={previewsQuery.data?.previews ?? null}
-      rotatingDisplayEnabled={rotatingDisplayEnabled}
-      rotatingGateBlocked={rotatingGateBlocked}
-      theatricalDisplayEnabled={theatricalDisplayEnabled}
-      theatricalGateBlocked={theatricalGateBlocked}
-      improvisedDisplayEnabled={improvisedDisplayEnabled}
-      improvisedGateBlocked={improvisedGateBlocked}
     />
   );
 
@@ -552,10 +477,10 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
         background: "var(--bg)",
       }}
     >
-      {previewsFlagOn && <FullTrackDriverMount />}
+      <FullTrackDriverMount />
       <ShowHeaderStrip
         show={show}
-        showPrimingStat={isPast && musicLayerV2Enabled}
+        showPrimingStat={isPast}
       />
       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         <ShowTabs

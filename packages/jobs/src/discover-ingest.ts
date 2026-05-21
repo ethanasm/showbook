@@ -25,6 +25,24 @@ import {
   type NormalizedEvent,
 } from './run-grouping';
 import { child } from '@showbook/observability';
+import { determineOnSaleStatus, parseOnSaleDate } from './on-sale-status';
+import {
+  filterValidAttractions,
+  hasValidKind,
+  hasValidVenueCity,
+  hasValidVenueName,
+  type SkipResult,
+} from './tm-event-validation';
+import {
+  extendExistingRun,
+  findExistingRunRow,
+  insertNewRunAnnouncement,
+} from './run-upsert-strategy';
+
+// Re-exported so existing `@showbook/jobs` importers (incl. the unit
+// test suite under packages/jobs/src/__tests__/discover-ingest.test.ts)
+// keep working without an import-path change.
+export { determineOnSaleStatus, parseOnSaleDate };
 
 const log = child({ component: 'discover-ingest' });
 
@@ -42,60 +60,9 @@ export function futureISO(months: number): string {
   return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
-export function determineOnSaleStatus(
-  event: TMEvent,
-): 'announced' | 'presale' | 'on_sale' | 'sold_out' {
-  const now = new Date();
-  // TM Discovery API uses American spelling 'canceled'; accept both defensively.
-  if (event.dates?.status?.code === 'canceled') return 'sold_out';
-  if (event.dates?.status?.code === 'cancelled') return 'sold_out';
-
-  const publicSale = event.sales?.public;
-  const publicStart = publicSale?.startDateTime
-    ? new Date(publicSale.startDateTime)
-    : null;
-  const publicEnd = publicSale?.endDateTime
-    ? new Date(publicSale.endDateTime)
-    : null;
-
-  // The public sale hasn't opened yet — the event can't be sold out.
-  // Distinguish presale (a currently-active entry in sales.presales[])
-  // from announced (no presale window or all presale windows have passed).
-  // TM emits dates.status.code='offsale' during the presale-only period
-  // because the *public* sale isn't open; trusting that verbatim used to
-  // mark presales as sold out — exactly the contradiction surfaced by
-  // "SOLD OUT — On sale MAY 20".
-  if (publicStart && publicStart > now) {
-    const inPresale = event.sales?.presales?.some((p) => {
-      const start = p.startDateTime ? new Date(p.startDateTime) : null;
-      const end = p.endDateTime ? new Date(p.endDateTime) : null;
-      const startedOrUnknown = !start || start <= now;
-      const notYetEnded = !end || end > now;
-      return startedOrUnknown && notYetEnded;
-    });
-    return inPresale ? 'presale' : 'announced';
-  }
-
-  // Public sale has started (or there's no public-sale info at all).
-  // From here, explicit 'offsale' or a past endDateTime means sold out.
-  if (event.dates?.status?.code === 'offsale') return 'sold_out';
-  if (publicEnd && publicEnd < now) return 'sold_out';
-
-  return 'on_sale';
-}
-
-export function parseOnSaleDate(event: TMEvent): Date | null {
-  const startDateTime = event.sales?.public?.startDateTime;
-  if (!startDateTime) return null;
-
-  const date = new Date(startDateTime);
-  if (Number.isNaN(date.getTime())) return null;
-
-  // Ticketmaster sometimes uses 1900-01-01 as a placeholder. Treat it as
-  // missing so the UI does not show a bogus on-sale date.
-  if (date.getUTCFullYear() < 2000) return null;
-
-  return date;
+function emitSkip(check: SkipResult & { skip: true }): null {
+  log.warn({ event: 'tm.normalize.skipped', reason: check.reason, ...check.fields }, check.msg);
+  return null;
 }
 
 /**
@@ -146,49 +113,13 @@ async function normalizeTmEvent(
   event: TMEvent,
   resolvedVenueId?: string,
 ): Promise<NormalizedEvent | null> {
-  const tmVenue = event._embedded?.venues?.[0];
-  if (!tmVenue) return null;
+  const venueNameCheck = hasValidVenueName(event);
+  if (venueNameCheck.skip) return emitSkip(venueNameCheck);
 
-  // TM occasionally returns events with a venue object that has no `name`
-  // (observed for European venues where the city is the only text field —
-  // Düsseldorf, 2026-04-30). matchOrCreateVenue rejects empty names, so
-  // skip+log here rather than emitting a `tm.normalize.failed` error per
-  // event. Without a venue name there's no usable show row to create.
-  if (!tmVenue.name || tmVenue.name.trim().length === 0) {
-    log.warn(
-      {
-        event: 'tm.normalize.skipped',
-        reason: 'missing_venue_name',
-        tmEventId: event.id,
-        name: event.name,
-        city: tmVenue.city?.name,
-      },
-      'Skipping TM event with no venue name',
-    );
-    return null;
-  }
+  const venueCityCheck = hasValidVenueCity(event);
+  if (venueCityCheck.skip) return emitSkip(venueCityCheck);
 
-  // TM also returns events with a venue name but no city — these are
-  // overwhelmingly Ticketmaster Resale Marketplace listings (event ids like
-  // `ZkDnngzZDdAjbJpUFAGnI9l-Lv9oEss`, 2026-05-17) where the "venue" is the
-  // reseller's business address (a notary, a UPS Store, …) rather than the
-  // actual concert venue. They also tend to ship malformed `_embedded.attractions`
-  // (missing `name` on the support attraction), which then leaks through to
-  // Discover as "+ undefined". Skip rather than create a venue with city
-  // "Unknown" that the UI surfaces verbatim.
-  if (!tmVenue.city?.name || tmVenue.city.name.trim().length === 0) {
-    log.warn(
-      {
-        event: 'tm.normalize.skipped',
-        reason: 'missing_venue_city',
-        tmEventId: event.id,
-        name: event.name,
-        venueName: tmVenue.name,
-      },
-      'Skipping TM event with no venue city',
-    );
-    return null;
-  }
+  const tmVenue = event._embedded!.venues![0]!;
 
   let venueId: string;
   if (resolvedVenueId) {
@@ -211,42 +142,17 @@ async function normalizeTmEvent(
   }
 
   const kind = inferKind(event.classifications, { eventName: event.name });
+  const kindCheck = hasValidKind(kind, event);
+  if (kindCheck.skip) return emitSkip(kindCheck);
 
-  // Drop events that classify as "unknown" — TM didn't tell us what they are,
-  // and they pile up on Discover as noise (the High Roller Wheel at the LINQ
-  // and similar attractions that ship without a usable segment id). The
-  // refresh path below mirrors this by deleting any existing row that would
-  // re-classify back into 'unknown'.
-  if (kind === 'unknown') {
-    log.warn(
-      {
-        event: 'tm.normalize.skipped',
-        reason: 'unknown_kind',
-        tmEventId: event.id,
-        name: event.name,
-      },
-      'Skipping TM event with unknown kind',
-    );
-    return null;
-  }
-
-  // Defensively drop attractions with a missing/blank `name`. TM occasionally
-  // returns attraction objects with only an `id`, which used to leak through
-  // as the literal string "undefined" in `announcement.support` (postgres-js
-  // stringifies JS undefined when serializing a text[]) and crash
-  // matchOrCreatePerformer in `name.trim().toLowerCase()`. See the Lizzo
-  // resale-marketplace event ZkDnngzZDdAjbJpUFAGnI9l-Lv9oEss, 2026-05-17.
-  const rawAttractions = event._embedded?.attractions ?? [];
-  const attractions = rawAttractions.filter(
-    (a) => typeof a.name === 'string' && a.name.trim().length > 0,
-  );
-  if (attractions.length < rawAttractions.length) {
+  const { attractions, dropped } = filterValidAttractions(event);
+  if (dropped > 0) {
     log.warn(
       {
         event: 'tm.normalize.attraction_dropped',
         reason: 'missing_name',
         tmEventId: event.id,
-        dropped: rawAttractions.length - attractions.length,
+        dropped,
       },
       'Dropped TM attraction(s) with missing name',
     );
@@ -392,89 +298,12 @@ async function upsertRun(
   );
   if (newSourceIds.length === 0) return 0;
 
-  // Look for an existing run row at the same (productionName, venueId, kind).
-  const [existing] = await db
-    .select()
-    .from(announcements)
-    .where(
-      and(
-        eq(announcements.venueId, run.venueId),
-        run.kind === 'festival'
-          ? sql`${announcements.kind} in ('festival', 'concert')`
-          : eq(announcements.kind, run.kind),
-        eq(announcements.productionName, run.productionName),
-      ),
-    )
-    .limit(1);
-
+  const existing = await findExistingRunRow(run);
   if (existing) {
-    // Merge dates into the existing run.
-    const existingDates = new Set(existing.performanceDates ?? []);
-    let extended = false;
-    for (const d of run.performanceDates) {
-      if (!existingDates.has(d)) {
-        existingDates.add(d);
-        extended = true;
-      }
-    }
-    const merged = Array.from(existingDates).sort();
-    const mergedExtras = Array.from(
-      new Set([
-        ...(existing.extraSourceEventIds ?? []),
-        ...run.extraSourceEventIds,
-      ]),
-    );
-    await db
-      .update(announcements)
-      .set({
-        kind: run.kind,
-        runStartDate: merged[0]!,
-        runEndDate: merged[merged.length - 1]!,
-        performanceDates: merged,
-        showDate: merged[0]!,
-        support: run.support ?? existing.support,
-        supportPerformerIds:
-          run.supportPerformerIds ?? existing.supportPerformerIds,
-        onSaleDate:
-          run.kind === 'festival'
-            ? run.onSaleDate
-            : run.onSaleDate ?? existing.onSaleDate,
-        onSaleStatus: run.onSaleStatus,
-        ticketUrl: run.ticketUrl ?? existing.ticketUrl,
-        extraSourceEventIds: mergedExtras.length > 0 ? mergedExtras : null,
-      })
-      .where(eq(announcements.id, existing.id));
-    for (const id of newSourceIds) existingSourceIds.add(id);
-    for (const id of run.extraSourceEventIds) existingSourceIds.add(id);
-    return extended ? 1 : 0;
+    return extendExistingRun(existing, run, newSourceIds, existingSourceIds);
   }
 
-  // Fresh run row.
-  await db.insert(announcements).values({
-    venueId: run.venueId,
-    kind: run.kind,
-    headliner: run.headliner,
-    headlinerPerformerId: run.headlinerPerformerId,
-    support: run.support,
-    supportPerformerIds: run.supportPerformerIds,
-    productionName: run.productionName,
-    showDate: run.runStartDate,
-    runStartDate: run.runStartDate,
-    runEndDate: run.runEndDate,
-    performanceDates: run.performanceDates,
-    onSaleDate: run.onSaleDate,
-    onSaleStatus: run.onSaleStatus,
-    source: run.source,
-    // sourceEventId is per-night, not per-run; leave null on a run row and
-    // let the per-night IDs live in performanceDates' association via
-    // existingSourceIds dedup.
-    sourceEventId: null,
-    extraSourceEventIds:
-      run.extraSourceEventIds.length > 0 ? run.extraSourceEventIds : null,
-    ticketUrl: run.ticketUrl,
-  });
-  for (const id of newSourceIds) existingSourceIds.add(id);
-  for (const id of run.extraSourceEventIds) existingSourceIds.add(id);
+  await insertNewRunAnnouncement(run, newSourceIds, existingSourceIds);
   return 1;
 }
 

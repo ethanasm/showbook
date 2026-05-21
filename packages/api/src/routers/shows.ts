@@ -930,16 +930,6 @@ export const showsRouter = router({
         });
       }
 
-      // watching -> ticketed requires seat
-      if (existing.state === 'watching' && input.newState === 'ticketed') {
-        if (!input.seat && !existing.seat) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Seat is required when transitioning from watching to ticketed',
-          });
-        }
-      }
-
       const updates: Record<string, unknown> = {
         state: input.newState,
         updatedAt: new Date(),

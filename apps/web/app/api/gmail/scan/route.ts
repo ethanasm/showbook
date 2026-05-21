@@ -13,7 +13,6 @@ import {
   type GmailAttachmentRef,
   type ExtractedTicketInfo,
 } from '@showbook/api';
-import { isFeatureOn } from '@showbook/shared';
 import { db, shows } from '@showbook/db';
 import { sql } from 'drizzle-orm';
 import { child } from '@showbook/observability';
@@ -148,15 +147,13 @@ async function processMessage(
 ): Promise<ProcessResult> {
   const detail = await getMessageBody(accessToken, messageId);
 
-  if (isFeatureOn('GmailScanHeuristicGate')) {
-    const score = scoreEmailLikelyTicket({
-      subject: detail.subject,
-      body: detail.body,
-      from: detail.from,
-    });
-    if (score < HEURISTIC_THRESHOLD) {
-      return { ticket: null, skippedByHeuristic: true, usedPdfFallback: false };
-    }
+  const score = scoreEmailLikelyTicket({
+    subject: detail.subject,
+    body: detail.body,
+    from: detail.from,
+  });
+  if (score < HEURISTIC_THRESHOLD) {
+    return { ticket: null, skippedByHeuristic: true, usedPdfFallback: false };
   }
 
   let extracted = await extractShowFromEmail(
@@ -167,11 +164,7 @@ async function processMessage(
   );
 
   let usedPdfFallback = false;
-  if (
-    !extracted &&
-    isFeatureOn('GmailScanPdfAttachments') &&
-    detail.attachments.length > 0
-  ) {
+  if (!extracted && detail.attachments.length > 0) {
     extracted = await tryExtractFromPdf(accessToken, messageId, detail.attachments);
     if (extracted) {
       usedPdfFallback = true;
@@ -304,24 +297,22 @@ export async function POST(request: Request) {
         // migration.
         let dedupSkipped = 0;
         let messagesToProcess = allMessages;
-        if (isFeatureOn('GmailScanCrossScanDedup')) {
-          const seenRows = await db
-            .select({ id: sql<string>`source_refs ->> 'gmailMessageId'` })
-            .from(shows)
-            .where(
-              sql`${shows.userId} = ${userId} AND source_refs ? 'gmailMessageId'`,
+        const seenRows = await db
+          .select({ id: sql<string>`source_refs ->> 'gmailMessageId'` })
+          .from(shows)
+          .where(
+            sql`${shows.userId} = ${userId} AND source_refs ? 'gmailMessageId'`,
+          );
+        const seenIds = new Set(seenRows.map((r) => r.id).filter(Boolean));
+        if (seenIds.size > 0) {
+          const before = allMessages.length;
+          messagesToProcess = allMessages.filter((m) => !seenIds.has(m.id));
+          dedupSkipped = before - messagesToProcess.length;
+          if (dedupSkipped > 0) {
+            log.info(
+              { event: 'gmail.scan.dedup.skipped', userId, count: dedupSkipped },
+              'Gmail scan skipped previously-saved messages',
             );
-          const seenIds = new Set(seenRows.map((r) => r.id).filter(Boolean));
-          if (seenIds.size > 0) {
-            const before = allMessages.length;
-            messagesToProcess = allMessages.filter((m) => !seenIds.has(m.id));
-            dedupSkipped = before - messagesToProcess.length;
-            if (dedupSkipped > 0) {
-              log.info(
-                { event: 'gmail.scan.dedup.skipped', userId, count: dedupSkipped },
-                'Gmail scan skipped previously-saved messages',
-              );
-            }
           }
         }
 

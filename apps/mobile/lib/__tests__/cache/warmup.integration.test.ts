@@ -65,13 +65,11 @@ function buildClient(): WarmupClientSurface {
     },
     preferences: { get: { query: make({ theme: 'system', regions: [] }) } },
     setlistIntel: {
-      musicLayerV2Feature: { query: make({ enabled: false }) },
       predictedSetlist: { query: make({ style: 'cold' }) },
       predictedFestivalSetlists: { query: make({ entries: [] }) },
       trackPreviewsForShow: { query: make({ previews: {} }) },
     },
     spotify: {
-      hypePlaylistFeature: { query: make({ enabled: false }) },
       connectionStatus: { query: make({ connected: false }) },
     },
     discover: {
@@ -109,22 +107,6 @@ describe('warmup + persister integration', () => {
       await storage.get(
         serializeQueryKey([
           ['preferences', 'get'],
-          { input: undefined, type: 'query' },
-        ]),
-      ),
-    );
-    assert.ok(
-      await storage.get(
-        serializeQueryKey([
-          ['setlistIntel', 'musicLayerV2Feature'],
-          { input: undefined, type: 'query' },
-        ]),
-      ),
-    );
-    assert.ok(
-      await storage.get(
-        serializeQueryKey([
-          ['spotify', 'hypePlaylistFeature'],
           { input: undefined, type: 'query' },
         ]),
       ),

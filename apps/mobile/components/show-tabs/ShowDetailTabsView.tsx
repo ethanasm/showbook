@@ -39,7 +39,7 @@ import { hapticSelection } from '../../lib/haptics';
 import { useFeedback } from '../../lib/feedback';
 
 import { useAuth } from '../../lib/auth';
-import { venueImageSource } from '../../lib/images';
+import { showCoverImageSource, venueImageSource } from '../../lib/images';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
 import { CACHE_DEFAULTS } from '../../lib/cache';
@@ -69,12 +69,12 @@ import {
 } from '../../lib/setlist-intel';
 import { useBreakpoint } from '../../lib/responsive';
 import {
+  formatDateRangeShort,
   formatVenueLocation,
   getHeadliner,
+  hasProductionLabel,
   isVenuePlaceholder,
 } from '@showbook/shared';
-
-const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
 interface ShowPerformer {
   id: string;
@@ -107,11 +107,13 @@ export interface ShowDetail {
   kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports' | 'film' | 'unknown';
   state: 'past' | 'ticketed' | 'watching';
   date: string | null;
+  endDate: string | null;
   seat: string | null;
   pricePaid: string | null;
   ticketCount: number;
   tourName: string | null;
   productionName: string | null;
+  coverImageUrl: string | null;
   notes: string | null;
   ticketUrl: string | null;
   venue: ShowVenue;
@@ -182,10 +184,7 @@ export function ShowDetailTabsView({
       },
     );
 
-  const hypeFeatureQuery = trpc.spotify.hypePlaylistFeature.useQuery(undefined, {
-    staleTime: 5 * 60_000,
-  });
-  const hypePlaylistEnabled = Boolean(hypeFeatureQuery.data?.enabled);
+  const hypePlaylistEnabled = true;
 
   const badgeQuery = trpc.shows.songBadges.useQuery(
     { showId: show.id },
@@ -499,9 +498,6 @@ export function ShowDetailTabsView({
       badgePayload={badgeQuery.data ?? null}
       trackPreviews={previewsQuery.data?.previews ?? null}
       hypePlaylistEnabled={hypePlaylistEnabled}
-      rotatingDisplayEnabled
-      theatricalDisplayEnabled
-      improvisedDisplayEnabled
     />
   ) : (
     <SetlistTab
@@ -515,9 +511,6 @@ export function ShowDetailTabsView({
       badgePayload={badgeQuery.data ?? null}
       trackPreviews={previewsQuery.data?.previews ?? null}
       hypePlaylistEnabled={hypePlaylistEnabled}
-      rotatingDisplayEnabled
-      theatricalDisplayEnabled
-      improvisedDisplayEnabled
     />
   );
 
@@ -700,16 +693,25 @@ function HeaderStrip({
   const insets = useSafeAreaInsets();
   const resolvedHeadliner = getHeadliner(show);
   const title = resolvedHeadliner === 'Unknown Artist' ? 'Untitled' : resolvedHeadliner;
-  const date = parseDate(show.date);
+  const date = show.date ? formatDateRangeShort(show.date, show.endDate) : null;
   const venueLine = [show.venue.name, show.venue.city]
     .filter((p) => !isVenuePlaceholder(p))
     .join(' · ');
 
   // Background photo. The venue image was chosen historically because
   // concerts/comedy already surface the headliner photo in the LINEUP
-  // row below — repeating it here adds nothing. RemoteImage falls back
-  // to a kind-coloured monogram when no photo is available.
+  // row below — repeating it here adds nothing. For production shows
+  // (theatre + festival w/ productionName) the TM-sourced cover is the
+  // show's identity, so it wins over the venue photo when populated. If
+  // `coverImageUrl` hasn't been resolved yet the helper returns null and
+  // we fall through to the venue photo, preserving the existing UX.
+  // RemoteImage falls back to a kind-coloured monogram when neither is
+  // available — same as before.
+  const coverImage = hasProductionLabel(show)
+    ? showCoverImageSource({ id: show.id, coverImageUrl: show.coverImageUrl }, token)
+    : null;
   const venueImage = venueImageSource(show.venue, token);
+  const backgroundImage = coverImage ?? venueImage;
 
   const eyebrow =
     `${show.kind === 'theatre' ? 'THEATRE' : show.kind.toUpperCase()}` +
@@ -733,9 +735,9 @@ function HeaderStrip({
         style={StyleSheet.absoluteFillObject}
       >
         <RemoteImage
-          uri={venueImage?.uri ?? null}
-          headers={venueImage?.headers}
-          name={show.venue.name}
+          uri={backgroundImage?.uri ?? null}
+          headers={backgroundImage?.headers}
+          name={coverImage ? title : show.venue.name}
           kind={show.kind as Kind}
           size="custom"
           height={heroHeight}
@@ -851,17 +853,6 @@ function HeaderStrip({
       </View>
     </View>
   );
-}
-
-function parseDate(date: string | null | undefined): string | null {
-  if (!date) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
-  if (!m) return null;
-  const year = Number(m[1]);
-  const monthIdx = Number(m[2]) - 1;
-  const day = Number(m[3]);
-  const month = MONTHS[monthIdx] ?? '';
-  return `${month} ${day}, ${year}`;
 }
 
 const styles = StyleSheet.create({

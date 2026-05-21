@@ -28,16 +28,7 @@ export type SetlistView =
   | 'stable'
   | 'rotating'
   | 'theatrical'
-  | 'improvised'
-  | 'rotating_blocked'
-  | 'theatrical_blocked'
-  | 'improvised_blocked';
-
-export interface SetlistViewFlags {
-  rotatingDisplayEnabled?: boolean;
-  theatricalDisplayEnabled?: boolean;
-  improvisedDisplayEnabled?: boolean;
-}
+  | 'improvised';
 
 /**
  * Decide which view to render in the Setlist tab pre-show. Mirrors the
@@ -45,15 +36,13 @@ export interface SetlistViewFlags {
  *  - loading: prediction not yet resolved
  *  - cold: server returned cold (`no_corpus`, `wrong_kind`, etc.)
  *  - stable: stable archetype — render predicted setlist with rows
- *  - rotating / theatrical / improvised: matching subtree, unless the
- *    matching display flag is OFF (then the *_blocked variant renders)
+ *  - rotating / theatrical / improvised: matching subtree
  *
  * Post-show always renders the actual setlist; this helper is only for
  * pre-show routing.
  */
 export function pickSetlistView(
   prediction: MinimalPrediction | null,
-  flags: SetlistViewFlags = {},
 ): SetlistView {
   if (!prediction) return 'cold';
   switch (prediction.style) {
@@ -62,15 +51,11 @@ export function pickSetlistView(
     case 'stable':
       return 'stable';
     case 'rotating':
-      return flags.rotatingDisplayEnabled ? 'rotating' : 'rotating_blocked';
+      return 'rotating';
     case 'theatrical':
-      return flags.theatricalDisplayEnabled
-        ? 'theatrical'
-        : 'theatrical_blocked';
+      return 'theatrical';
     case 'improvised':
-      return flags.improvisedDisplayEnabled
-        ? 'improvised'
-        : 'improvised_blocked';
+      return 'improvised';
     case 'special_event':
       // The SetlistTab renders the SpecialEventCard before consulting
       // pickSetlistView, so this branch never fires in practice.

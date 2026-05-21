@@ -78,3 +78,37 @@ export function performerImageSource(
   }
   return null;
 }
+
+export interface ShowCoverInput {
+  id: string;
+  coverImageUrl?: string | null;
+}
+
+/**
+ * Show-cover image source for theatre and festival productions. Returns null
+ * when `coverImageUrl` isn't populated yet — callers fall back to whatever
+ * they showed before (kind monogram in the row chrome, venue photo on the
+ * detail hero, nothing on surfaces that previously displayed nothing).
+ *
+ * Routes through the `/api/show-cover/<id>` proxy when authenticated so the
+ * lazy-resolve and stale-URL recovery in the route can heal rows whose
+ * stored TM CDN URL has rotted — same pattern as `performerImageSource`.
+ * Falls back to the direct TM CDN URL (which is public) when no token is
+ * available, so cached rows still render once the bundle is offline.
+ */
+export function showCoverImageSource(
+  show: ShowCoverInput,
+  token: string | null,
+): ImageSource | null {
+  if (!show.coverImageUrl) return null;
+  if (token && API_URL) {
+    return {
+      uri: `${API_URL}/api/show-cover/${show.id}`,
+      headers: { Authorization: `Bearer ${token}` },
+    };
+  }
+  if (/^https?:\/\//i.test(show.coverImageUrl)) {
+    return { uri: show.coverImageUrl };
+  }
+  return null;
+}

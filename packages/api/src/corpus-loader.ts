@@ -15,7 +15,7 @@
 
 import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { albums, db, tourSetlists } from '@showbook/db';
-import { isFeatureOn, type PerformerSetlist } from '@showbook/shared';
+import { type PerformerSetlist } from '@showbook/shared';
 import { synthesizeAlbumDropRows } from './album-drop-synthetic';
 import { MS_PER_DAY, TIER_E_DAYS } from './predict-helpers';
 
@@ -65,34 +65,6 @@ export interface CorpusLoadResult {
 // in-DB prediction cache invalidates on the next read instead of
 // serving stale payloads through the 4-hour TTL fallback.
 export const PREDICTION_LOGIC_VERSION = 'v2';
-
-// ─────────────────────────────────────────────────────────────────────
-// Synthetic-album-drop branch (Phase 11 §15m)
-// ─────────────────────────────────────────────────────────────────────
-
-/**
- * Feature-flag-gated synthesis hop. When `SetlistIntelAlbumDrop` is ON
- * we append synthetic `CorpusRow` entries representing tracks from
- * albums released within ±60 days of the target; tier bucketing treats
- * them as Tier-A in position but caps their weight via the
- * `isSynthetic` flag (see `bucketTiers`). When the flag is OFF we
- * return the real corpus untouched.
- */
-async function maybeAppendSyntheticAlbumDropRows(opts: {
-  performerId: string;
-  targetDate: string;
-  real: CorpusRow[];
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0];
-}): Promise<CorpusRow[]> {
-  if (!isFeatureOn('SetlistIntelAlbumDrop')) return opts.real;
-  const synthetic = await synthesizeAlbumDropRows({
-    performerId: opts.performerId,
-    targetDate: opts.targetDate,
-    existingCorpus: opts.real,
-    tx: opts.tx,
-  });
-  return opts.real.concat(synthetic);
-}
 
 // ─────────────────────────────────────────────────────────────────────
 // Loader
@@ -196,12 +168,17 @@ export async function loadCorpusForPrediction(opts: {
       if (headlineRows.length >= 3) realRows = headlineRows;
     }
 
-    const setlists = await maybeAppendSyntheticAlbumDropRows({
+    // Phase 11 §15m — append synthetic CorpusRow entries representing
+    // tracks from albums released within ±60 days of the target. The
+    // aggregator below treats synthetic rows as Tier-A in position but
+    // caps their weight via the `isSynthetic` flag.
+    const synthetic = await synthesizeAlbumDropRows({
       performerId: opts.performerId,
       targetDate: opts.targetDate,
-      real: realRows,
+      existingCorpus: realRows,
       tx,
     });
+    const setlists = realRows.concat(synthetic);
 
     const realSig = sigRow?.signature
       ? new Date(sigRow.signature).toISOString()
