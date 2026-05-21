@@ -17,17 +17,14 @@ import { SectionFrame } from './SectionFrame';
 import { HypePlaylistCard } from './HypePlaylistCard';
 import { StableSetlistView } from './StableSetlistView';
 import {
-  RotatingGateBlocked,
   RotatingSetlistView,
   type RotatingPredictionLike,
 } from './RotatingSetlistView';
 import {
-  TheatricalGateBlocked,
   TheatricalSetlistView,
   type TheatricalPredictionLike,
 } from './TheatricalSetlistView';
 import {
-  ImprovisedGateBlocked,
   ImprovisedSetlistView,
   type ImprovisedPredictionLike,
 } from './ImprovisedSetlistView';
@@ -105,9 +102,6 @@ export interface SetlistTabProps {
   badgePayload?: BadgePayload | null;
   trackPreviews?: PreviewMap | null;
   hypePlaylistEnabled?: boolean;
-  rotatingDisplayEnabled?: boolean;
-  theatricalDisplayEnabled?: boolean;
-  improvisedDisplayEnabled?: boolean;
 }
 
 export function SetlistTab(props: SetlistTabProps): React.JSX.Element {
@@ -130,9 +124,6 @@ function SetlistTabUpcoming(props: SetlistTabProps): React.JSX.Element {
     predictionLoading,
     trackPreviews,
     hypePlaylistEnabled,
-    rotatingDisplayEnabled,
-    theatricalDisplayEnabled,
-    improvisedDisplayEnabled,
   } = props;
 
   if (predictionLoading) {
@@ -162,14 +153,7 @@ function SetlistTabUpcoming(props: SetlistTabProps): React.JSX.Element {
     );
   }
 
-  const view = pickSetlistView(
-    { style: prediction.style },
-    {
-      rotatingDisplayEnabled,
-      theatricalDisplayEnabled,
-      improvisedDisplayEnabled,
-    },
-  );
+  const view = pickSetlistView({ style: prediction.style });
 
   // SI-05 hide rule for hype playlist.
   const showHype =
@@ -225,15 +209,12 @@ function SetlistTabUpcoming(props: SetlistTabProps): React.JSX.Element {
       {view === 'rotating' && prediction.style === 'rotating' ? (
         <RotatingSetlistView prediction={prediction} />
       ) : null}
-      {view === 'rotating_blocked' ? <RotatingGateBlocked /> : null}
       {view === 'theatrical' && prediction.style === 'theatrical' ? (
         <TheatricalSetlistView prediction={prediction} />
       ) : null}
-      {view === 'theatrical_blocked' ? <TheatricalGateBlocked /> : null}
       {view === 'improvised' && prediction.style === 'improvised' ? (
         <ImprovisedSetlistView prediction={prediction} />
       ) : null}
-      {view === 'improvised_blocked' ? <ImprovisedGateBlocked /> : null}
       <Text style={[styles.lockNote, { color: colors.faint }]}>
         Setlist locks in after the show. We&rsquo;ll auto-pull the actual
         songs from setlist.fm and offer a &ldquo;save tonight to Spotify

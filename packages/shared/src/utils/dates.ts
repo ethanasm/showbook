@@ -122,6 +122,46 @@ export function formatDateRangeLong(
   return `${startLabel} - ${endLabel}`;
 }
 
+// Compact uppercase range used in chrome strips (e.g. the mobile show-detail
+// eyebrow). Single date → "AUG 9, 2024". Same month → "AUG 9–11, 2024".
+// Cross-month / cross-year fall through to the longer "AUG 30 – SEP 2, 2024"
+// or "DEC 30, 2024 – JAN 2, 2025" forms so the year is never ambiguous.
+export function formatDateRangeShort(
+  startDate: string | Date | null | undefined,
+  endDate: string | Date | null | undefined,
+  fallback = 'DATE TBD',
+): string {
+  if (!startDate) return fallback;
+  const start = parseLocalDate(startDate);
+  if (isNaN(start.getTime())) return fallback;
+
+  const startMonth = start
+    .toLocaleDateString('en-US', { month: 'short' })
+    .toUpperCase();
+  const startDay = start.getDate();
+  const startYear = start.getFullYear();
+  const single = `${startMonth} ${startDay}, ${startYear}`;
+
+  if (!endDate || endDate === startDate) return single;
+  const end = parseLocalDate(endDate);
+  if (isNaN(end.getTime())) return single;
+
+  const endMonth = end
+    .toLocaleDateString('en-US', { month: 'short' })
+    .toUpperCase();
+  const endDay = end.getDate();
+  const endYear = end.getFullYear();
+  if (end.getTime() <= start.getTime()) return single;
+
+  if (startYear === endYear && start.getMonth() === end.getMonth()) {
+    return `${startMonth} ${startDay}–${endDay}, ${startYear}`;
+  }
+  if (startYear === endYear) {
+    return `${startMonth} ${startDay} – ${endMonth} ${endDay}, ${startYear}`;
+  }
+  return `${startMonth} ${startDay}, ${startYear} – ${endMonth} ${endDay}, ${endYear}`;
+}
+
 export interface DateParts {
   month: string;
   day: string;

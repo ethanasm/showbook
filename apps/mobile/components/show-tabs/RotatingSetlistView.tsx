@@ -292,29 +292,6 @@ function PositionPoolCard({
   );
 }
 
-export function RotatingGateBlocked(): React.JSX.Element {
-  const { tokens } = useTheme();
-  const { colors } = tokens;
-  return (
-    <View
-      testID="rotating-gate-blocked"
-      style={[
-        styles.gateBlocked,
-        { backgroundColor: colors.surface, borderBottomColor: colors.rule },
-      ]}
-    >
-      <Text style={[styles.gateBlockedTitle, { color: colors.ink }]}>
-        Rotating-style display temporarily disabled
-      </Text>
-      <Text style={[styles.gateBlockedBody, { color: colors.muted }]}>
-        The setlist model isn&rsquo;t calibrated yet — the back-test
-        evaluation will unlock the rotating display once stability
-        targets clear.
-      </Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   multiNight: {
     paddingHorizontal: 20,

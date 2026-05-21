@@ -38,8 +38,14 @@ import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { EmptyState } from '../../components/EmptyState';
 import { EmptyStateHero } from '../../components/design-system';
 import { ShowCardListSkeleton } from '../../components/skeletons';
-import { CalendarGrid, MiniMonth, type CalendarEvent } from '../../components/CalendarGrid';
+import {
+  CalendarGrid,
+  MiniMonth,
+  type CalendarEvent,
+  type CalendarSpan,
+} from '../../components/CalendarGrid';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
+import { MarkTicketedSheet } from '../../components/MarkTicketedSheet';
 import { useSelectedShow } from '../../components/ThreePaneLayout';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
@@ -47,6 +53,7 @@ import { trpc } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
 import { useAuth } from '../../lib/auth';
 import { headlinerDisplayName } from '../../lib/show-display';
+import { showCoverImageSource } from '../../lib/images';
 import {
   atMaxCursor,
   atMinCursor,
@@ -69,9 +76,11 @@ interface ShowRow {
   kind: Kind;
   state: ShowState;
   date: string | null;
+  endDate: string | null;
   seat: string | null;
   pricePaid: string | null;
   productionName: string | null;
+  coverImageUrl: string | null;
   ticketUrl: string | null;
   venue: { id: string; name: string; city: string | null };
   performers: {
@@ -130,9 +139,23 @@ function headlinerAvatarOf(row: ShowRow): string | null {
   return headlinerSp?.imageUrl ?? firstSp?.imageUrl ?? null;
 }
 
-function toShowCard(row: ShowRow): ShowCardShow {
+function toShowCard(row: ShowRow, token: string | null): ShowCardShow {
   const headliner = headlinerOf(row);
-  const avatarUrl = headlinerAvatarOf(row);
+  // Production shows (theatre + festival w/ productionName) prefer the
+  // TM-sourced cover image when the daily backfill or first-view
+  // lazy-resolve has populated it. When the row's `coverImageUrl` is
+  // still null the helper returns null and the avatar falls through to
+  // the legacy performer photo / monogram — same UX as before.
+  // Inline the production-label predicate to avoid hauling in a
+  // `ShowLike`-shaped object (this row uses `performers`, not `showPerformers`).
+  const isProductionLabeled =
+    (row.kind === 'theatre' || row.kind === 'festival') &&
+    Boolean(row.productionName);
+  const coverSource = isProductionLabeled
+    ? showCoverImageSource({ id: row.id, coverImageUrl: row.coverImageUrl }, token)
+    : null;
+  const avatarUrl = coverSource?.uri ?? headlinerAvatarOf(row);
+  const avatarHeaders = coverSource?.headers;
   if (row.date) {
     const d = parseLocalDate(row.date);
     return {
@@ -152,6 +175,7 @@ function toShowCard(row: ShowRow): ShowCardShow {
       seat: row.seat,
       price: row.pricePaid ? `$${row.pricePaid}` : null,
       avatarUrl,
+      avatarHeaders,
       ticketUrl: row.ticketUrl,
     };
   }
@@ -198,6 +222,7 @@ export default function ShowsScreen(): React.JSX.Element {
     id: string;
     state: ShowState;
   } | null>(null);
+  const [markTicketedForId, setMarkTicketedForId] = React.useState<string | null>(null);
 
   const showsQuery = useCachedQuery<ShowsListItem[]>({
     queryKey: ['mobile', 'shows.list'],
@@ -215,9 +240,11 @@ export default function ShowsScreen(): React.JSX.Element {
       kind: s.kind as Kind,
       state: s.state as ShowState,
       date: s.date,
+      endDate: s.endDate ?? null,
       seat: s.seat,
       pricePaid: s.pricePaid,
       productionName: s.productionName,
+      coverImageUrl: s.coverImageUrl,
       ticketUrl: s.ticketUrl,
       venue: { id: s.venue.id, name: s.venue.name, city: s.venue.city },
       performers: s.showPerformers.map((sp) => ({
@@ -366,6 +393,14 @@ export default function ShowsScreen(): React.JSX.Element {
           onClose={() => setActionSheetFor(null)}
           showId={actionSheetFor.id}
           state={actionSheetFor.state}
+          onMarkTicketed={() => setMarkTicketedForId(actionSheetFor.id)}
+        />
+      ) : null}
+      {markTicketedForId ? (
+        <MarkTicketedSheet
+          open
+          onClose={() => setMarkTicketedForId(null)}
+          showId={markTicketedForId}
         />
       ) : null}
     </View>
@@ -512,7 +547,8 @@ function RowCard({
   onLongPress: () => void;
   compact?: boolean;
 }): React.JSX.Element {
-  const card = toShowCard(row);
+  const { token } = useAuth();
+  const card = toShowCard(row, token);
   if (isThreePane) {
     return (
       <ShowCard
@@ -569,10 +605,28 @@ function CalendarView({
     const map: Record<string, CalendarEvent[]> = {};
     for (const r of rows) {
       if (!r.date) continue;
+      // Multi-day events render as a spanning bar (see `spanEvents` below)
+      // instead of repeating a dot on every day of the run.
+      if (r.endDate && r.endDate > r.date) continue;
       const list = map[r.date] ?? (map[r.date] = []);
       list.push({ kind: r.kind, state: r.state });
     }
     return map;
+  }, [rows]);
+
+  const spanEvents = React.useMemo<CalendarSpan[]>(() => {
+    const out: CalendarSpan[] = [];
+    for (const r of rows) {
+      if (!r.date || !r.endDate || r.endDate <= r.date) continue;
+      out.push({
+        id: r.id,
+        startISO: r.date,
+        endISO: r.endDate,
+        kind: r.kind,
+        state: r.state,
+      });
+    }
+    return out;
   }, [rows]);
 
   const monthPrefix = `${cursor.year}-${pad2(cursor.month + 1)}-`;
@@ -592,7 +646,14 @@ function CalendarView({
     [rows, yearPrefix],
   );
 
-  const visibleRows = selected ? rowsInMonth.filter((r) => r.date === selected) : rowsInMonth;
+  const visibleRows = selected
+    ? rowsInMonth.filter((r) => {
+        if (!r.date) return false;
+        if (r.date === selected) return true;
+        if (r.endDate && r.date <= selected && selected <= r.endDate) return true;
+        return false;
+      })
+    : rowsInMonth;
 
   const scopeRows = calendarMode === 'year' ? rowsInYear : rowsInMonth;
   const counts = React.useMemo(() => {
@@ -742,6 +803,7 @@ function CalendarView({
                 year={cursor.year}
                 month={m}
                 events={eventsByDay}
+                spans={spanEvents}
                 todayISO={today}
                 onPress={() => onSelectYearMonth(m)}
                 disabled={!isMonthInBounds(m)}
@@ -754,6 +816,7 @@ function CalendarView({
           year={cursor.year}
           month={cursor.month}
           events={eventsByDay}
+          spans={spanEvents}
           todayISO={today}
           selectedISO={selected}
           onSelectDay={(iso) => setSelected((cur) => (cur === iso ? null : iso))}

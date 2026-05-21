@@ -1,8 +1,8 @@
 /**
  * Bottom sheet that captures seat / cost / ticket count and transitions
- * a show from `watching` → `ticketed`. The server enforces a seat on
- * that transition (`packages/api/src/routers/shows.ts` updateState), so
- * the Confirm button stays disabled until the seat field has a value.
+ * a show from `watching` → `ticketed`. Every field is optional — the
+ * Confirm button only flips the state, and seat/price/ticketCount are
+ * applied when present.
  *
  * Mutations route through `runOptimisticMutation` + the SQLite outbox so
  * a network failure leaves a retryable `shows.updateState` row in
@@ -19,7 +19,7 @@ import { useTheme } from '../lib/theme';
 import { trpc } from '../lib/trpc';
 import { useFeedback } from '../lib/feedback';
 import { runOptimisticMutation } from '../lib/mutations';
-import { getCacheOutbox } from '../lib/cache';
+import { getCacheOutbox, invalidateShowsList } from '../lib/cache';
 
 export interface MarkTicketedSheetProps {
   open: boolean;
@@ -60,7 +60,7 @@ export function MarkTicketedSheet({
     }
   }, [open, initialSeat, initialPrice, initialTicketCount]);
 
-  const canSubmit = seat.trim().length > 0 && !submitting;
+  const canSubmit = !submitting;
 
   const submit = async (): Promise<void> => {
     if (!canSubmit) return;
@@ -75,15 +75,15 @@ export function MarkTicketedSheet({
     const payload: {
       showId: string;
       newState: 'ticketed';
-      seat: string;
+      seat?: string;
       pricePaid?: string;
       ticketCount: number;
     } = {
       showId,
       newState: 'ticketed' as const,
-      seat: trimmedSeat,
       ticketCount: ticketCountValue,
     };
+    if (trimmedSeat.length > 0) payload.seat = trimmedSeat;
     if (trimmedPrice.length > 0) payload.pricePaid = trimmedPrice;
 
     try {
@@ -100,7 +100,7 @@ export function MarkTicketedSheet({
               return {
                 ...prev,
                 state: 'ticketed',
-                seat: trimmedSeat,
+                seat: trimmedSeat.length > 0 ? trimmedSeat : (prev as { seat?: string | null }).seat ?? null,
                 pricePaid: trimmedPrice.length > 0 ? trimmedPrice : (prev as { pricePaid?: string | null }).pricePaid ?? null,
                 ticketCount: ticketCountValue,
               };
@@ -110,6 +110,7 @@ export function MarkTicketedSheet({
         },
         reconcile: () => {
           void utils.shows.list.invalidate();
+          invalidateShowsList(queryClient);
           void utils.shows.detail.invalidate({ showId });
         },
       });
@@ -127,7 +128,7 @@ export function MarkTicketedSheet({
       <View style={styles.body}>
         <Text style={[styles.title, { color: colors.ink }]}>I have tickets</Text>
         <Text style={[styles.hint, { color: colors.muted }]}>
-          We&apos;ll move this show to the &quot;ticketed&quot; state.
+          We&apos;ll move this show to &quot;ticketed&quot;. All fields are optional.
         </Text>
 
         <Field

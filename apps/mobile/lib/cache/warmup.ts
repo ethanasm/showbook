@@ -11,7 +11,6 @@
  *   Phase 1 — roots (serial):
  *     shows.list, shows.listForMap, venues.list, venues.followed,
  *     performers.list, performers.followed, preferences.get,
- *     setlistIntel.musicLayerV2Feature, spotify.hypePlaylistFeature,
  *     spotify.connectionStatus,
  *     discover.followedFeed, discover.followedArtistsFeed,
  *     discover.nearbyFeed (added 2026-05-19 so the daily-digest
@@ -88,13 +87,11 @@ export interface WarmupClientSurface {
   };
   preferences: { get: AnyInputQuery };
   setlistIntel: {
-    musicLayerV2Feature: AnyInputQuery;
     predictedSetlist: AnyInputQuery;
     predictedFestivalSetlists: AnyInputQuery;
     trackPreviewsForShow: AnyInputQuery;
   };
   spotify: {
-    hypePlaylistFeature: AnyInputQuery;
     connectionStatus: AnyInputQuery;
   };
   discover: {
@@ -359,18 +356,6 @@ export async function warmCacheForOfflineUse(
   await step('preferences.get', async () => {
     const data = await c.preferences.get.query();
     qc.setQueryData(trpcKey(['preferences', 'get'], undefined), data);
-    return data;
-  });
-
-  await step('setlistIntel.musicLayerV2Feature', async () => {
-    const data = await c.setlistIntel.musicLayerV2Feature.query();
-    qc.setQueryData(trpcKey(['setlistIntel', 'musicLayerV2Feature'], undefined), data);
-    return data;
-  });
-
-  await step('spotify.hypePlaylistFeature', async () => {
-    const data = await c.spotify.hypePlaylistFeature.query();
-    qc.setQueryData(trpcKey(['spotify', 'hypePlaylistFeature'], undefined), data);
     return data;
   });
 

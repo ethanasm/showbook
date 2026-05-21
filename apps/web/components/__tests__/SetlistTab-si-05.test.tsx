@@ -199,7 +199,6 @@ describe('SetlistTab — SI-05 hide rule for HypePlaylistCard (pre-show)', () =>
         prediction={rotatingPrediction()}
         predictionLoading={false}
         hypePlaylistEnabled
-        rotatingDisplayEnabled
       />,
     );
     assert.equal(
@@ -221,7 +220,6 @@ describe('SetlistTab — SI-05 hide rule for HypePlaylistCard (pre-show)', () =>
         prediction={improvisedPrediction()}
         predictionLoading={false}
         hypePlaylistEnabled
-        improvisedDisplayEnabled
       />,
     );
     assert.equal(
@@ -243,7 +241,6 @@ describe('SetlistTab — SI-05 hide rule for HypePlaylistCard (pre-show)', () =>
         prediction={theatricalPrediction()}
         predictionLoading={false}
         hypePlaylistEnabled
-        theatricalDisplayEnabled
       />,
     );
     assert.ok(getByTestId('hype-card-stub'), 'theatrical should mount the hype card');

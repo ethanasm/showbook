@@ -40,13 +40,14 @@ import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { HeroShowCard } from '../../components/HeroShowCard';
 import { ShowCardListSkeleton } from '../../components/skeletons';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
+import { MarkTicketedSheet } from '../../components/MarkTicketedSheet';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
-import { isNonWatchableKind } from '@showbook/shared';
+import { hasProductionLabel, isNonWatchableKind } from '@showbook/shared';
 import { useAuth } from '../../lib/auth';
 import { trpc } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
-import { venueImageSource } from '../../lib/images';
+import { showCoverImageSource, venueImageSource } from '../../lib/images';
 
 // Derive the per-row shape from the tRPC vanilla client to avoid pulling in
 // `@trpc/server` types directly. This stays in lockstep with `shows.list`'s
@@ -67,7 +68,7 @@ function todayIso(): string {
   return `${y}-${m}-${d}`;
 }
 
-function toShowCardShow(row: ShowsListItem): ShowCardShow {
+function toShowCardShow(row: ShowsListItem, token: string | null): ShowCardShow {
   // Date can be null for watching-without-date entries; fall back to em-dashes.
   let month = '—';
   let day = '—';
@@ -98,13 +99,26 @@ function toShowCardShow(row: ShowsListItem): ShowCardShow {
     headlinerSp?.performer.name ??
     firstSp?.performer.name ??
     'Untitled show';
-  // Festivals shouldn't borrow a lineup member's face — the row would
-  // misrepresent the event ("Bottlerock" with one band's photo). Force
-  // the kind-coloured monogram fallback by clearing the avatar URL.
+  // Production shows (theatre + festival w/ productionName) reach for the
+  // TM-sourced cover image stored on the row when one's been resolved by
+  // the daily backfill or first-view lazy-resolve. When `coverImageUrl`
+  // is still null the helper returns null and the row falls through to
+  // the kind-coloured monogram — same UX as before this wiring landed,
+  // so we don't introduce a placeholder for shows TM has no art for.
+  //
+  // Non-production rows keep the legacy fallback to the headliner's
+  // photo. Festivals never borrow a lineup member's face — the row would
+  // misrepresent the event ("Bottlerock" with one band's photo) — so
+  // their non-production fallback is null (monogram).
+  const coverSource = hasProductionLabel(row)
+    ? showCoverImageSource({ id: row.id, coverImageUrl: row.coverImageUrl }, token)
+    : null;
   const avatarUrl =
-    row.kind === 'festival'
+    coverSource?.uri ??
+    (row.kind === 'festival'
       ? null
-      : (headlinerSp?.performer.imageUrl ?? firstSp?.performer.imageUrl ?? null);
+      : (headlinerSp?.performer.imageUrl ?? firstSp?.performer.imageUrl ?? null));
+  const avatarHeaders = coverSource?.headers;
 
   // Non-watchable kinds (sports / film / unknown) shouldn't reach the
   // user's saved shows in normal flow — the discover.watch guard rejects
@@ -125,6 +139,7 @@ function toShowCardShow(row: ShowsListItem): ShowCardShow {
     seat: row.seat ?? null,
     price: row.pricePaid ?? null,
     avatarUrl,
+    avatarHeaders,
   };
 }
 
@@ -139,6 +154,19 @@ function heroImageSource(
   row: ShowsListItem,
   token: string | null,
 ): { uri: string; headers?: Record<string, string> } | null {
+  // Production shows (theatre + festival w/ productionName) prefer the
+  // TM-sourced cover image — that's the show's identity, and the venue
+  // photo would actively confuse the user for a touring production
+  // (Ragtime at Vivian Beaumont vs. the same poster at every stop). When
+  // `coverImageUrl` is still null the helper returns null and we fall
+  // through to the previous behaviour (venue photo, then monogram).
+  if (hasProductionLabel(row)) {
+    const cover = showCoverImageSource(
+      { id: row.id, coverImageUrl: row.coverImageUrl },
+      token,
+    );
+    if (cover) return cover;
+  }
   // Festivals span many artists — borrowing a lineup member's photo
   // misrepresents the event. The venue itself carries the right "where"
   // signal (Napa Valley Expo, Golden Gate Park, etc.); fall through to
@@ -192,6 +220,7 @@ export default function HomeScreen(): React.JSX.Element {
     id: string;
     state: ShowState;
   } | null>(null);
+  const [markTicketedForId, setMarkTicketedForId] = React.useState<string | null>(null);
 
   const showsQuery = useCachedQuery<ShowsListItem[]>({
     queryKey: ['mobile', 'home', 'shows.list'],
@@ -307,7 +336,7 @@ export default function HomeScreen(): React.JSX.Element {
               >
                 <View style={styles.heroWrap}>
                   <HeroShowCard
-                    show={toShowCardShow(sections.hero)}
+                    show={toShowCardShow(sections.hero, token)}
                     dateYmd={sections.hero.date}
                     {...(() => {
                       const src = heroImageSource(sections.hero, token);
@@ -371,6 +400,14 @@ export default function HomeScreen(): React.JSX.Element {
           onClose={() => setActionSheetFor(null)}
           showId={actionSheetFor.id}
           state={actionSheetFor.state}
+          onMarkTicketed={() => setMarkTicketedForId(actionSheetFor.id)}
+        />
+      ) : null}
+      {markTicketedForId ? (
+        <MarkTicketedSheet
+          open
+          onClose={() => setMarkTicketedForId(null)}
+          showId={markTicketedForId}
         />
       ) : null}
     </View>
@@ -406,7 +443,8 @@ function ShowCardLink({
   show: ShowsListItem;
   onLongPress: () => void;
 }): React.JSX.Element {
-  const card = React.useMemo(() => toShowCardShow(show), [show]);
+  const { token } = useAuth();
+  const card = React.useMemo(() => toShowCardShow(show, token), [show, token]);
   return (
     <Link href={`/show/${show.id}`} asChild>
       <ShowCard show={card} onLongPress={onLongPress} />
