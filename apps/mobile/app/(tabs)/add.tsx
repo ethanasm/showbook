@@ -261,6 +261,7 @@ export default function AddChatScreen(): React.JSX.Element {
         <ScrollView
           contentContainerStyle={styles.scrollPad}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         >
           {confirmation ? (
             <View
