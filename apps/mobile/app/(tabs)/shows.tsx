@@ -435,6 +435,12 @@ function TimelineView({
   // mid-fling, tight enough to bound memory on heavy logs. The
   // batch-render cap keeps each JS frame under ~16ms on mid-tier
   // Android by feeding rows in waves rather than one giant pass.
+  //
+  // `removeClippedSubviews` is deliberately off: React Native warns it
+  // "may have bugs (missing content)" and the combination with sticky
+  // section headers reliably reproduced a stuck/blank list after tab or
+  // segmented-control switches in this screen. The window/batch tuning
+  // above is enough virtualisation for the typical log size.
   return (
     <SectionList<ShowRow, TimelineSection>
       sections={sections.map((s) => ({ ...s, data: s.rows }))}
@@ -445,7 +451,6 @@ function TimelineView({
       initialNumToRender={12}
       maxToRenderPerBatch={8}
       windowSize={11}
-      removeClippedSubviews
       renderSectionHeader={({ section }) => (
         <View
           style={[
