@@ -38,7 +38,12 @@ import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { EmptyState } from '../../components/EmptyState';
 import { EmptyStateHero } from '../../components/design-system';
 import { ShowCardListSkeleton } from '../../components/skeletons';
-import { CalendarGrid, MiniMonth, type CalendarEvent } from '../../components/CalendarGrid';
+import {
+  CalendarGrid,
+  MiniMonth,
+  type CalendarEvent,
+  type CalendarSpan,
+} from '../../components/CalendarGrid';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
 import { useSelectedShow } from '../../components/ThreePaneLayout';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
@@ -69,6 +74,7 @@ interface ShowRow {
   kind: Kind;
   state: ShowState;
   date: string | null;
+  endDate: string | null;
   seat: string | null;
   pricePaid: string | null;
   productionName: string | null;
@@ -215,6 +221,7 @@ export default function ShowsScreen(): React.JSX.Element {
       kind: s.kind as Kind,
       state: s.state as ShowState,
       date: s.date,
+      endDate: s.endDate ?? null,
       seat: s.seat,
       pricePaid: s.pricePaid,
       productionName: s.productionName,
@@ -569,10 +576,28 @@ function CalendarView({
     const map: Record<string, CalendarEvent[]> = {};
     for (const r of rows) {
       if (!r.date) continue;
+      // Multi-day events render as a spanning bar (see `spanEvents` below)
+      // instead of repeating a dot on every day of the run.
+      if (r.endDate && r.endDate > r.date) continue;
       const list = map[r.date] ?? (map[r.date] = []);
       list.push({ kind: r.kind, state: r.state });
     }
     return map;
+  }, [rows]);
+
+  const spanEvents = React.useMemo<CalendarSpan[]>(() => {
+    const out: CalendarSpan[] = [];
+    for (const r of rows) {
+      if (!r.date || !r.endDate || r.endDate <= r.date) continue;
+      out.push({
+        id: r.id,
+        startISO: r.date,
+        endISO: r.endDate,
+        kind: r.kind,
+        state: r.state,
+      });
+    }
+    return out;
   }, [rows]);
 
   const monthPrefix = `${cursor.year}-${pad2(cursor.month + 1)}-`;
@@ -592,7 +617,14 @@ function CalendarView({
     [rows, yearPrefix],
   );
 
-  const visibleRows = selected ? rowsInMonth.filter((r) => r.date === selected) : rowsInMonth;
+  const visibleRows = selected
+    ? rowsInMonth.filter((r) => {
+        if (!r.date) return false;
+        if (r.date === selected) return true;
+        if (r.endDate && r.date <= selected && selected <= r.endDate) return true;
+        return false;
+      })
+    : rowsInMonth;
 
   const scopeRows = calendarMode === 'year' ? rowsInYear : rowsInMonth;
   const counts = React.useMemo(() => {
@@ -742,6 +774,7 @@ function CalendarView({
                 year={cursor.year}
                 month={m}
                 events={eventsByDay}
+                spans={spanEvents}
                 todayISO={today}
                 onPress={() => onSelectYearMonth(m)}
                 disabled={!isMonthInBounds(m)}
@@ -754,6 +787,7 @@ function CalendarView({
           year={cursor.year}
           month={cursor.month}
           events={eventsByDay}
+          spans={spanEvents}
           todayISO={today}
           selectedISO={selected}
           onSelectDay={(iso) => setSelected((cur) => (cur === iso ? null : iso))}

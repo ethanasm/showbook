@@ -92,6 +92,9 @@ export function CalendarView({
   function buildDayShowsMap(year: number, month: number) {
     const map = new Map<number, ShowData[]>();
     for (const show of shows) {
+      // Multi-day shows render as a continuous spanning bar — don't repeat
+      // a per-day pill across each day of the festival.
+      if (show.endDate && show.endDate > show.date) continue;
       const d = new Date(show.date + "T00:00:00");
       if (d.getMonth() === month && d.getFullYear() === year) {
         const day = d.getDate();
@@ -100,6 +103,59 @@ export function CalendarView({
       }
     }
     return map;
+  }
+
+  // Multi-day events that overlap the displayed month, split into per-week
+  // segments so each row of the grid can render its slice of the bar.
+  function buildMonthSpanSegments(year: number, month: number) {
+    const monthStart = new Date(year, month, 1).getTime();
+    const monthEnd = new Date(year, month + 1, 0).getTime();
+    const DAY = 86_400_000;
+    type Segment = {
+      id: string;
+      kind: ShowData["kind"];
+      state: ShowData["state"];
+      week: number;
+      startCol: number;
+      endCol: number;
+      continuesLeft: boolean;
+      continuesRight: boolean;
+      label: string;
+    };
+    const result: Segment[] = [];
+    for (const show of shows) {
+      if (!show.endDate || show.endDate <= show.date) continue;
+      const startMs = new Date(show.date + "T00:00:00").getTime();
+      const endMs = new Date(show.endDate + "T00:00:00").getTime();
+      if (endMs < monthStart || startMs > monthEnd) continue;
+      const clippedStart = Math.max(startMs, monthStart);
+      const clippedEnd = Math.min(endMs, monthEnd);
+      let cursor = clippedStart;
+      while (cursor <= clippedEnd) {
+        const cursorDate = new Date(cursor);
+        const dow = cursorDate.getDay();
+        const weekEndCandidate = cursor + (6 - dow) * DAY;
+        const segmentEnd = Math.min(weekEndCandidate, clippedEnd);
+        const dayOfMonth = cursorDate.getDate();
+        const firstDayOfWeekIdx = getFirstDayOfWeek(year, month);
+        const week = Math.floor((firstDayOfWeekIdx + dayOfMonth - 1) / 7);
+        const startCol = dow;
+        const endCol = dow + Math.round((segmentEnd - cursor) / DAY);
+        result.push({
+          id: show.id,
+          kind: show.kind,
+          state: show.state,
+          week,
+          startCol,
+          endCol,
+          continuesLeft: cursor > startMs,
+          continuesRight: segmentEnd < endMs,
+          label: getHeadliner(show),
+        });
+        cursor = segmentEnd + DAY;
+      }
+    }
+    return result;
   }
 
   const toolbarNav = (
@@ -207,11 +263,16 @@ export function CalendarView({
   const daysInMonth = getDaysInMonth(calYear, calMonth);
   const firstDay = getFirstDayOfWeek(calYear, calMonth);
   const dayShowsMap = buildDayShowsMap(calYear, calMonth);
+  const spanSegments = buildMonthSpanSegments(calYear, calMonth);
 
   const cells: (number | null)[] = [];
   for (let i = 0; i < firstDay; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
   while (cells.length % 7) cells.push(null);
+  const weekRows: (number | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) {
+    weekRows.push(cells.slice(i, i + 7));
+  }
 
   const isToday = (d: number | null) =>
     d !== null &&
@@ -229,6 +290,19 @@ export function CalendarView({
       else if (s.state === "ticketed") upInMonth++;
       else if (s.state === "watching") watchInMonth++;
     }
+  }
+  // Spans live outside the per-day map; bucket them into the month
+  // counters once each so multi-night runs still register.
+  for (const show of shows) {
+    if (!show.endDate || show.endDate <= show.date) continue;
+    const startMs = new Date(show.date + "T00:00:00").getTime();
+    const endMs = new Date(show.endDate + "T00:00:00").getTime();
+    const monthStart = new Date(calYear, calMonth, 1).getTime();
+    const monthEnd = new Date(calYear, calMonth + 1, 0).getTime();
+    if (endMs < monthStart || startMs > monthEnd) continue;
+    if (show.state === "past") pastInMonth++;
+    else if (show.state === "ticketed") upInMonth++;
+    else if (show.state === "watching") watchInMonth++;
   }
 
   const railShows = shows
@@ -327,67 +401,122 @@ export function CalendarView({
               </div>
             ))}
           </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(7, 1fr)",
-              gridAutoRows: "minmax(92px, 1fr)",
-            }}
-          >
-            {cells.map((d, i) => {
-              const todayCell = isToday(d);
-              const evs = d ? (dayShowsMap.get(d) ?? []) : [];
+          <div>
+            {weekRows.map((row, weekIdx) => {
+              const segmentsForWeek = spanSegments.filter((s) => s.week === weekIdx);
               return (
                 <div
-                  key={i}
+                  key={weekIdx}
                   style={{
-                    padding: "7px 9px",
-                    borderRight: i % 7 === 6 ? "none" : "1px solid var(--rule)",
-                    borderBottom: "1px solid var(--rule)",
-                    background: todayCell ? "var(--surface2)" : "transparent",
-                    opacity: d ? 1 : 0.35,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 5,
+                    position: "relative",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(7, 1fr)",
+                    minHeight: 92,
                   }}
                 >
-                  <div
-                    style={{
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 11,
-                      color: todayCell
-                        ? "var(--ink)"
-                        : d
-                          ? "var(--muted)"
-                          : "var(--faint)",
-                      fontWeight: todayCell ? 600 : 400,
-                      letterSpacing: ".02em",
-                    }}
-                  >
-                    {d ?? ""}
-                  </div>
-                  {evs.map((s) => (
-                    <div
-                      key={s.id}
-                      style={{
-                        fontFamily: "var(--font-geist-mono), monospace",
-                        fontSize: 10,
-                        color: "var(--ink)",
-                        padding: "3px 6px",
-                        background:
-                          s.state === "past"
-                            ? "transparent"
-                            : `var(--kind-${s.kind}, rgba(255,255,255,0.1))`,
-                        borderLeft: `2px solid var(--kind-${s.kind})`,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        letterSpacing: ".01em",
-                      }}
-                    >
-                      {getHeadliner(s)}
-                    </div>
-                  ))}
+                  {row.map((d, c) => {
+                    const todayCell = isToday(d);
+                    const evs = d ? (dayShowsMap.get(d) ?? []) : [];
+                    return (
+                      <div
+                        key={c}
+                        style={{
+                          padding: "7px 9px",
+                          borderRight: c === 6 ? "none" : "1px solid var(--rule)",
+                          borderBottom: "1px solid var(--rule)",
+                          background: todayCell ? "var(--surface2)" : "transparent",
+                          opacity: d ? 1 : 0.35,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 5,
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontFamily: "var(--font-geist-mono), monospace",
+                            fontSize: 11,
+                            color: todayCell
+                              ? "var(--ink)"
+                              : d
+                                ? "var(--muted)"
+                                : "var(--faint)",
+                            fontWeight: todayCell ? 600 : 400,
+                            letterSpacing: ".02em",
+                          }}
+                        >
+                          {d ?? ""}
+                        </div>
+                        {segmentsForWeek.length > 0 ? (
+                          <div style={{ height: 4 + segmentsForWeek.length * 18 }} />
+                        ) : null}
+                        {evs.map((s) => (
+                          <div
+                            key={s.id}
+                            style={{
+                              fontFamily: "var(--font-geist-mono), monospace",
+                              fontSize: 10,
+                              color: "var(--ink)",
+                              padding: "3px 6px",
+                              background:
+                                s.state === "past"
+                                  ? "transparent"
+                                  : `var(--kind-${s.kind}, rgba(255,255,255,0.1))`,
+                              borderLeft: `2px solid var(--kind-${s.kind})`,
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              letterSpacing: ".01em",
+                            }}
+                          >
+                            {getHeadliner(s)}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                  {segmentsForWeek.map((seg, idx) => {
+                    const widthPct = ((seg.endCol - seg.startCol + 1) * 100) / 7;
+                    const leftPct = (seg.startCol * 100) / 7;
+                    const alpha = seg.state === "watching" ? 0.55 : 1;
+                    return (
+                      <div
+                        key={`${seg.id}-${idx}`}
+                        title={seg.label}
+                        style={{
+                          position: "absolute",
+                          left: `${leftPct}%`,
+                          width: `${widthPct}%`,
+                          top: 26 + idx * 18,
+                          height: 16,
+                          paddingLeft: seg.continuesLeft ? 6 : 8,
+                          paddingRight: seg.continuesRight ? 6 : 8,
+                          marginLeft: seg.continuesLeft ? 0 : 4,
+                          marginRight: seg.continuesRight ? 0 : 4,
+                          background: `var(--kind-${seg.kind}, rgba(255,255,255,0.12))`,
+                          borderLeft: seg.continuesLeft
+                            ? "none"
+                            : `2px solid var(--kind-${seg.kind})`,
+                          borderTopLeftRadius: seg.continuesLeft ? 0 : 3,
+                          borderBottomLeftRadius: seg.continuesLeft ? 0 : 3,
+                          borderTopRightRadius: seg.continuesRight ? 0 : 3,
+                          borderBottomRightRadius: seg.continuesRight ? 0 : 3,
+                          opacity: alpha,
+                          display: "flex",
+                          alignItems: "center",
+                          fontFamily: "var(--font-geist-mono), monospace",
+                          fontSize: 10,
+                          color: "var(--ink)",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          letterSpacing: ".01em",
+                          pointerEvents: "none",
+                        }}
+                      >
+                        {seg.continuesLeft ? "" : seg.label}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -544,9 +673,15 @@ function YearView({
   atMaxYear,
   isMobile,
 }: YearViewProps) {
-  // Build all-shows-by-date map
+  // Build all-shows-by-date map. Multi-day events are bucketed onto every
+  // day they cover so the year view's per-day dot logic stays simple — the
+  // bar overlay below uses the raw show list to draw spanning rails.
   const dateShowsMap = new Map<string, ShowData[]>();
   for (const show of shows) {
+    // Multi-day shows render as bars; skip the per-day dot logic for them
+    // so a 3-day festival doesn't compete with single-day events for the
+    // single dot slot.
+    if (show.endDate && show.endDate > show.date) continue;
     const key = show.date; // "YYYY-MM-DD"
     if (!dateShowsMap.has(key)) dateShowsMap.set(key, []);
     dateShowsMap.get(key)!.push(show);
@@ -555,6 +690,52 @@ function YearView({
   const YEAR_MONTHS = Array.from({ length: 12 }, (_, i) => i);
   const dows = ["S", "M", "T", "W", "T", "F", "S"];
 
+  function buildMiniSpanSegments(year: number, month: number) {
+    const monthStart = new Date(year, month, 1).getTime();
+    const monthEnd = new Date(year, month + 1, 0).getTime();
+    const DAY = 86_400_000;
+    type Seg = {
+      id: string;
+      kind: ShowData["kind"];
+      state: ShowData["state"];
+      week: number;
+      startCol: number;
+      endCol: number;
+      continuesLeft: boolean;
+      continuesRight: boolean;
+    };
+    const firstDayOfWeekIdx = getFirstDayOfWeek(year, month);
+    const out: Seg[] = [];
+    for (const show of shows) {
+      if (!show.endDate || show.endDate <= show.date) continue;
+      const startMs = new Date(show.date + "T00:00:00").getTime();
+      const endMs = new Date(show.endDate + "T00:00:00").getTime();
+      if (endMs < monthStart || startMs > monthEnd) continue;
+      const clippedStart = Math.max(startMs, monthStart);
+      const clippedEnd = Math.min(endMs, monthEnd);
+      let cursor = clippedStart;
+      while (cursor <= clippedEnd) {
+        const cursorDate = new Date(cursor);
+        const dow = cursorDate.getDay();
+        const weekEndCandidate = cursor + (6 - dow) * DAY;
+        const segmentEnd = Math.min(weekEndCandidate, clippedEnd);
+        const week = Math.floor((firstDayOfWeekIdx + cursorDate.getDate() - 1) / 7);
+        out.push({
+          id: show.id,
+          kind: show.kind,
+          state: show.state,
+          week,
+          startCol: dow,
+          endCol: dow + Math.round((segmentEnd - cursor) / DAY),
+          continuesLeft: cursor > startMs,
+          continuesRight: segmentEnd < endMs,
+        });
+        cursor = segmentEnd + DAY;
+      }
+    }
+    return out;
+  }
+
   function miniMonthGrid(year: number, month: number) {
     const daysInMonth = getDaysInMonth(year, month);
     const firstDay = getFirstDayOfWeek(year, month);
@@ -562,6 +743,9 @@ function YearView({
     for (let i = 0; i < firstDay; i++) cells.push(null);
     for (let d = 1; d <= daysInMonth; d++) cells.push(d);
     while (cells.length % 7) cells.push(null);
+    const weeks: (number | null)[][] = [];
+    for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+    const segs = buildMiniSpanSegments(year, month);
 
     const isThisMonth = year === today.getFullYear() && month === today.getMonth();
 
@@ -599,6 +783,7 @@ function YearView({
             display: "grid",
             gridTemplateColumns: "repeat(7, 1fr)",
             gap: 1,
+            marginBottom: 2,
           }}
         >
           {dows.map((d, i) => (
@@ -614,52 +799,93 @@ function YearView({
               {d}
             </div>
           ))}
-          {cells.map((d, ci) => {
-            const dateKey = d
-              ? `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`
-              : null;
-            const hasDot = dateKey ? (dateShowsMap.get(dateKey) ?? []).length > 0 : false;
-            const isToday =
-              d !== null &&
-              year === today.getFullYear() &&
-              month === today.getMonth() &&
-              d === today.getDate();
+        </div>
+        <div>
+          {weeks.map((row, weekIdx) => {
+            const segmentsForWeek = segs.filter((s) => s.week === weekIdx);
             return (
               <div
-                key={ci}
+                key={weekIdx}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  height: 10,
                   position: "relative",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(7, 1fr)",
+                  gap: 1,
                 }}
               >
-                {d && (
-                  <>
-                    {isToday && (
-                      <div
-                        style={{
-                          position: "absolute",
-                          inset: 0,
-                          background: "var(--accent)",
-                          opacity: 0.15,
-                          borderRadius: 1,
-                        }}
-                      />
-                    )}
-                    {hasDot && (
-                      <div
-                        style={{
-                          width: 4,
-                          height: 4,
-                          borderRadius: "50%",
-                          background: "var(--accent)",
-                        }}
-                      />
-                    )}
-                  </>
-                )}
+                {row.map((d, ci) => {
+                  const dateKey = d
+                    ? `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`
+                    : null;
+                  const hasDot = dateKey
+                    ? (dateShowsMap.get(dateKey) ?? []).length > 0
+                    : false;
+                  const isToday =
+                    d !== null &&
+                    year === today.getFullYear() &&
+                    month === today.getMonth() &&
+                    d === today.getDate();
+                  return (
+                    <div
+                      key={ci}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        height: 10,
+                        position: "relative",
+                      }}
+                    >
+                      {d && (
+                        <>
+                          {isToday && (
+                            <div
+                              style={{
+                                position: "absolute",
+                                inset: 0,
+                                background: "var(--accent)",
+                                opacity: 0.15,
+                                borderRadius: 1,
+                              }}
+                            />
+                          )}
+                          {hasDot && (
+                            <div
+                              style={{
+                                width: 4,
+                                height: 4,
+                                borderRadius: "50%",
+                                background: "var(--accent)",
+                              }}
+                            />
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+                {segmentsForWeek.map((seg, idx) => {
+                  const widthPct = ((seg.endCol - seg.startCol + 1) * 100) / 7;
+                  const leftPct = (seg.startCol * 100) / 7;
+                  return (
+                    <div
+                      key={`${seg.id}-${idx}`}
+                      style={{
+                        position: "absolute",
+                        left: `${leftPct}%`,
+                        width: `${widthPct}%`,
+                        bottom: idx * 3,
+                        height: 2,
+                        background: `var(--kind-${seg.kind}, var(--accent))`,
+                        opacity: seg.state === "watching" ? 0.5 : 1,
+                        borderTopLeftRadius: seg.continuesLeft ? 0 : 1,
+                        borderBottomLeftRadius: seg.continuesLeft ? 0 : 1,
+                        borderTopRightRadius: seg.continuesRight ? 0 : 1,
+                        borderBottomRightRadius: seg.continuesRight ? 0 : 1,
+                      }}
+                    />
+                  );
+                })}
               </div>
             );
           })}
