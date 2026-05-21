@@ -38,7 +38,12 @@ import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { EmptyState } from '../../components/EmptyState';
 import { EmptyStateHero } from '../../components/design-system';
 import { ShowCardListSkeleton } from '../../components/skeletons';
-import { CalendarGrid, MiniMonth, type CalendarEvent } from '../../components/CalendarGrid';
+import {
+  CalendarGrid,
+  MiniMonth,
+  type CalendarEvent,
+  type CalendarSpan,
+} from '../../components/CalendarGrid';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
 import { useSelectedShow } from '../../components/ThreePaneLayout';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
@@ -69,12 +74,14 @@ interface ShowRow {
   kind: Kind;
   state: ShowState;
   date: string | null;
+  endDate: string | null;
   seat: string | null;
   pricePaid: string | null;
   productionName: string | null;
   ticketUrl: string | null;
-  venue: { name: string; city: string | null };
+  venue: { id: string; name: string; city: string | null };
   performers: {
+    id: string;
     name: string;
     role: 'headliner' | 'support' | 'cast';
     sortOrder: number;
@@ -214,12 +221,14 @@ export default function ShowsScreen(): React.JSX.Element {
       kind: s.kind as Kind,
       state: s.state as ShowState,
       date: s.date,
+      endDate: s.endDate ?? null,
       seat: s.seat,
       pricePaid: s.pricePaid,
       productionName: s.productionName,
       ticketUrl: s.ticketUrl,
-      venue: { name: s.venue.name, city: s.venue.city },
+      venue: { id: s.venue.id, name: s.venue.name, city: s.venue.city },
       performers: s.showPerformers.map((sp) => ({
+        id: sp.performer.id,
         name: sp.performer.name,
         role: sp.role,
         sortOrder: sp.sortOrder,
@@ -567,10 +576,28 @@ function CalendarView({
     const map: Record<string, CalendarEvent[]> = {};
     for (const r of rows) {
       if (!r.date) continue;
+      // Multi-day events render as a spanning bar (see `spanEvents` below)
+      // instead of repeating a dot on every day of the run.
+      if (r.endDate && r.endDate > r.date) continue;
       const list = map[r.date] ?? (map[r.date] = []);
       list.push({ kind: r.kind, state: r.state });
     }
     return map;
+  }, [rows]);
+
+  const spanEvents = React.useMemo<CalendarSpan[]>(() => {
+    const out: CalendarSpan[] = [];
+    for (const r of rows) {
+      if (!r.date || !r.endDate || r.endDate <= r.date) continue;
+      out.push({
+        id: r.id,
+        startISO: r.date,
+        endISO: r.endDate,
+        kind: r.kind,
+        state: r.state,
+      });
+    }
+    return out;
   }, [rows]);
 
   const monthPrefix = `${cursor.year}-${pad2(cursor.month + 1)}-`;
@@ -590,7 +617,14 @@ function CalendarView({
     [rows, yearPrefix],
   );
 
-  const visibleRows = selected ? rowsInMonth.filter((r) => r.date === selected) : rowsInMonth;
+  const visibleRows = selected
+    ? rowsInMonth.filter((r) => {
+        if (!r.date) return false;
+        if (r.date === selected) return true;
+        if (r.endDate && r.date <= selected && selected <= r.endDate) return true;
+        return false;
+      })
+    : rowsInMonth;
 
   const scopeRows = calendarMode === 'year' ? rowsInYear : rowsInMonth;
   const counts = React.useMemo(() => {
@@ -740,6 +774,7 @@ function CalendarView({
                 year={cursor.year}
                 month={m}
                 events={eventsByDay}
+                spans={spanEvents}
                 todayISO={today}
                 onPress={() => onSelectYearMonth(m)}
                 disabled={!isMonthInBounds(m)}
@@ -752,6 +787,7 @@ function CalendarView({
           year={cursor.year}
           month={cursor.month}
           events={eventsByDay}
+          spans={spanEvents}
           todayISO={today}
           selectedISO={selected}
           onSelectDay={(iso) => setSelected((cur) => (cur === iso ? null : iso))}
@@ -813,30 +849,29 @@ interface Stats {
   venueCount: number;
   artistCount: number;
   byKind: { kind: Kind; count: number }[];
-  topPerformers: { name: string; count: number; kind: Kind }[];
-  topVenues: { name: string; city: string | null; count: number }[];
+  topPerformers: { id: string; name: string; count: number; kind: Kind }[];
+  topVenues: { id: string; name: string; city: string | null; count: number }[];
 }
 
 function buildStats(rows: ShowRow[]): Stats {
   let spent = 0;
-  const venueCounts = new Map<string, { name: string; city: string | null; count: number }>();
-  const performerCounts = new Map<string, { name: string; count: number; kind: Kind }>();
+  const venueCounts = new Map<string, { id: string; name: string; city: string | null; count: number }>();
+  const performerCounts = new Map<string, { id: string; name: string; count: number; kind: Kind }>();
   const kindCounts = new Map<Kind, number>();
 
   for (const r of rows) {
     spent += priceCents(r);
-    const venueKey = r.venue.name;
-    const v = venueCounts.get(venueKey);
+    const v = venueCounts.get(r.venue.id);
     if (v) v.count += 1;
-    else venueCounts.set(venueKey, { name: r.venue.name, city: r.venue.city, count: 1 });
+    else venueCounts.set(r.venue.id, { id: r.venue.id, name: r.venue.name, city: r.venue.city, count: 1 });
 
     kindCounts.set(r.kind, (kindCounts.get(r.kind) ?? 0) + 1);
 
     for (const p of r.performers) {
       if (p.role !== 'headliner') continue;
-      const cur = performerCounts.get(p.name);
+      const cur = performerCounts.get(p.id);
       if (cur) cur.count += 1;
-      else performerCounts.set(p.name, { name: p.name, count: 1, kind: r.kind });
+      else performerCounts.set(p.id, { id: p.id, name: p.name, count: 1, kind: r.kind });
     }
   }
 
@@ -868,6 +903,7 @@ function StatsView({
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const router = useRouter();
   const [selectedYear, setSelectedYear] = React.useState<number | null>(null);
 
   const yearGroups = React.useMemo<FilterGroup[]>(() => {
@@ -972,7 +1008,17 @@ function StatsView({
           </Text>
         ) : (
           stats.topPerformers.map((p) => (
-            <View key={p.name} style={[styles.rankRow, { borderBottomColor: colors.rule }]}>
+            <Pressable
+              key={p.id}
+              onPress={() => router.push(`/artists/${p.id}`)}
+              accessibilityRole="link"
+              accessibilityLabel={`Open ${p.name}`}
+              style={({ pressed }) => [
+                styles.rankRow,
+                { borderBottomColor: colors.rule },
+                pressed && { opacity: 0.6 },
+              ]}
+            >
               <Text
                 style={[styles.rankName, { color: colors.ink }]}
                 numberOfLines={1}
@@ -989,7 +1035,7 @@ function StatsView({
                 />
               </View>
               <Text style={[styles.rankCount, { color: colors.ink }]}>{p.count}×</Text>
-            </View>
+            </Pressable>
           ))
         )}
       </View>
@@ -1005,7 +1051,17 @@ function StatsView({
           </Text>
         ) : (
           stats.topVenues.map((v) => (
-            <View key={v.name} style={[styles.rankRow, { borderBottomColor: colors.rule }]}>
+            <Pressable
+              key={v.id}
+              onPress={() => router.push(`/venues/${v.id}`)}
+              accessibilityRole="link"
+              accessibilityLabel={`Open ${v.name}`}
+              style={({ pressed }) => [
+                styles.rankRow,
+                { borderBottomColor: colors.rule },
+                pressed && { opacity: 0.6 },
+              ]}
+            >
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={[styles.rankName, { color: colors.ink }]} numberOfLines={1}>
                   {v.name}
@@ -1026,7 +1082,7 @@ function StatsView({
                 />
               </View>
               <Text style={[styles.rankCount, { color: colors.ink }]}>{v.count}</Text>
-            </View>
+            </Pressable>
           ))
         )}
       </View>
