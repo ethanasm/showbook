@@ -21,6 +21,10 @@ import {
 export interface StablePredictionLike {
   style: 'stable';
   confidence: number;
+  /** Optional one-sentence rationale for the confidence number,
+   *  rendered as subcopy under the banner. Older cached payloads may
+   *  omit this — keep it optional so legacy fixtures still render. */
+  confidenceNote?: string | null;
   sampleSize: number;
   tourName: string | null;
   core: {
@@ -74,6 +78,7 @@ export function StableSetlistView({
         sampleSize={prediction.sampleSize}
         tourName={prediction.tourName}
         archetype="STABLE"
+        subCopy={prediction.confidenceNote ?? undefined}
       />
       <SectionFrame title="Likely setlist" count={total}>
         <View testID="predicted-setlist-grid">

@@ -19,6 +19,7 @@ import {
   bucketTiers,
   coldPrediction,
   computeConfidence,
+  explainConfidence,
   pickActiveTour,
   pickBucketingDate,
   pickRole,
@@ -1789,5 +1790,100 @@ describe('untagged-corpus show (regression — Foster the People 0% bug)', () =>
     for (const title of core) {
       assert.ok(coreSet.has(title.toLowerCase()), `expected ${title} in core`);
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// 17. explainConfidence — banner subcopy
+// ─────────────────────────────────────────────────────────────────────
+
+describe('explainConfidence', () => {
+  const target = '2026-05-22';
+
+  test('returns null on the active-tour happy path (>= 0.65)', () => {
+    const tier = bucketTiers({
+      setlists: [
+        corpusRow({ id: 'a', date: '2026-05-18', tourId: 't', tourName: 'T', songs: ['s'] }),
+        corpusRow({ id: 'b', date: '2026-05-15', tourId: 't', tourName: 'T', songs: ['s'] }),
+      ],
+      targetDate: target,
+      activeTourId: 't',
+    });
+    const note = explainConfidence({
+      coverage: 'active_tour',
+      confidence: 0.8,
+      confidenceSample: tier,
+      targetDate: target,
+    });
+    assert.equal(note, null);
+  });
+
+  test('last_year coverage with stale corpus mentions the months-ago gap', () => {
+    const tier = bucketTiers({
+      setlists: [
+        corpusRow({ id: 'a', date: '2025-09-20', tourId: null, tourName: null, songs: ['s'] }),
+        corpusRow({ id: 'b', date: '2025-09-15', tourId: null, tourName: null, songs: ['s'] }),
+      ],
+      targetDate: target,
+      activeTourId: null,
+    });
+    const note = explainConfidence({
+      coverage: 'last_year',
+      confidence: 0.5,
+      confidenceSample: tier,
+      targetDate: target,
+    });
+    assert.ok(note, 'expected non-null note');
+    assert.match(note!, /No active tour/);
+    assert.match(note!, /month/);
+  });
+
+  test('last_year coverage with recent-ish corpus picks the generic phrasing', () => {
+    const tier = bucketTiers({
+      setlists: [
+        corpusRow({ id: 'a', date: '2026-05-10', tourId: null, tourName: null, songs: ['s'] }),
+        corpusRow({ id: 'b', date: '2026-05-05', tourId: null, tourName: null, songs: ['s'] }),
+      ],
+      targetDate: target,
+      activeTourId: null,
+    });
+    const note = explainConfidence({
+      coverage: 'last_year',
+      confidence: 0.5,
+      confidenceSample: tier,
+      targetDate: target,
+    });
+    assert.ok(note, 'expected non-null note');
+    assert.match(note!, /No active tour right now/);
+  });
+
+  test('active-tour mid confidence calls out song variance', () => {
+    const tier = bucketTiers({
+      setlists: [
+        corpusRow({ id: 'a', date: '2026-05-18', tourId: 't', tourName: 'T', songs: ['s'] }),
+      ],
+      targetDate: target,
+      activeTourId: 't',
+    });
+    const note = explainConfidence({
+      coverage: 'active_tour',
+      confidence: 0.5,
+      confidenceSample: tier,
+      targetDate: target,
+    });
+    assert.ok(note, 'expected non-null note');
+    assert.match(note!, /varies/);
+  });
+
+  test('cold coverage returns null (no banner shown anyway)', () => {
+    assert.equal(
+      explainConfidence({
+        coverage: 'cold',
+        confidence: 0,
+        confidenceSample: [],
+        targetDate: target,
+      }),
+      null,
+    );
   });
 });

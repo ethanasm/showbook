@@ -77,9 +77,11 @@ function stablePrediction(): HotPrediction {
   return {
     style: 'stable',
     confidence: 0.92,
+    confidenceNote: null,
     sampleSize: 12,
     tourId: null,
     tourName: 'Test Tour',
+    tourCoverage: 'active_tour',
     spoilerBlurDefault: false,
     core: [
       { title: 'Greedy', evidence: '12/12', role: 'opener', songId: null },
@@ -89,7 +91,9 @@ function stablePrediction(): HotPrediction {
     likely: [],
     wildcards: [],
     rotation: [],
-  } as HotPrediction;
+    setCountPrediction: null,
+    multiNightContext: null,
+  } as unknown as HotPrediction;
 }
 
 function rotatingPrediction(): RotatingPrediction {

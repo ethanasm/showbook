@@ -309,6 +309,9 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
         confidence={prediction.confidence}
         sampleSize={prediction.sampleSize}
         tourName={prediction.tourName}
+        confidenceNote={
+          'confidenceNote' in prediction ? prediction.confidenceNote : null
+        }
       />
       <SetCountStrip prediction={setCountPrediction} />
 
@@ -402,10 +405,12 @@ function ConfidenceBanner({
   confidence,
   sampleSize,
   tourName,
+  confidenceNote,
 }: {
   confidence: number;
   sampleSize: number;
   tourName: string | null;
+  confidenceNote?: string | null;
 }) {
   const pct = Math.round(confidence * 100);
   return (
@@ -427,8 +432,9 @@ function ConfidenceBanner({
           {sampleSize} setlists in our corpus
         </div>
         <div className="setlist-banner__source-sub">
-          We use setlist.fm + your attended shows · model recalibrates each
-          night
+          {confidenceNote
+            ? confidenceNote
+            : 'We use setlist.fm + your attended shows · model recalibrates each night'}
         </div>
       </div>
     </div>
