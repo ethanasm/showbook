@@ -3,7 +3,8 @@
  * `apps/web/components/show-tabs/HypePlaylistCard.tsx`.
  *
  * Behavior parity:
- *  - Branded cover at left + headline copy / two CTAs on the right.
+ *  - Branded album-art tile + headline copy stacked over a full-width
+ *    "Open in Spotify" CTA.
  *  - First tap without a Spotify connection slides up the
  *    `SpotifyConnectSheet` and resumes the action on success.
  *  - When an existing playlist row exists, tapping "Open in Spotify"
@@ -20,6 +21,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Music } from 'lucide-react-native';
 
 import { useTheme } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import { hapticSuccess } from '../../lib/haptics';
 import { trpc } from '../../lib/trpc';
 import { useNetwork } from '../../lib/network';
@@ -81,7 +83,6 @@ export function HypePlaylistCard({
   const [isCreating, setIsCreating] = React.useState(false);
 
   const isQueued = existing?.pending === true;
-  const kickerLabel = kind === 'hype' ? 'HYPE PLAYLIST' : `I HEARD ${artist.toUpperCase()}`;
   const headlineText =
     kind === 'hype'
       ? `Spin up ${trackCount} song${trackCount === 1 ? '' : 's'} you'll hear`
@@ -232,66 +233,59 @@ export function HypePlaylistCard({
           {
             backgroundColor: colors.surface,
             borderColor: colors.rule,
-            borderLeftColor: colors.accent,
           },
         ]}
       >
-        <View
-          style={[
-            styles.cover,
-            { backgroundColor: colors.ink },
-          ]}
-          accessibilityElementsHidden
-        >
-          <Text style={[styles.coverBrand, { color: colors.accent }]}>
-            SHOWBOOK
-          </Text>
-          <Text style={[styles.coverTitle, { color: colors.bg }]}>
-            {kind === 'hype' ? 'hype' : 'heard'}{'\n'}
-            {artist.toLowerCase().split(' ')[0] ?? ''}
-          </Text>
-          <View style={[styles.coverBar, { backgroundColor: colors.accent }]} />
-        </View>
-        <View style={styles.body}>
-          <Text style={[styles.kicker, { color: colors.muted }]}>
-            {kickerLabel}
-          </Text>
-          <Text style={[styles.headline, { color: colors.ink }]}>
-            {headlineText}
-          </Text>
-          <Text style={[styles.sub, { color: colors.muted }]}>{subCopy}</Text>
-          <View style={styles.buttonRow}>
-            <Pressable
-              testID={`hype-card-${kind}-primary`}
-              accessibilityRole="button"
-              accessibilityLabel={ctaLabel}
-              onPress={() => {
-                void handlePrimaryPress();
-              }}
-              disabled={isCreating || isQueued}
-              style={({ pressed }) => [
-                styles.primaryButton,
-                {
-                  backgroundColor: colors.accent,
-                  opacity: isCreating || isQueued ? 0.6 : pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              <Music size={12} color={colors.accentText} />
-              <Text style={[styles.primaryLabel, { color: colors.accentText }]}>
-                {ctaLabel}
-              </Text>
-            </Pressable>
-          </View>
-          {statusMsg ? (
-            <Text
-              testID={`hype-card-${kind}-status`}
-              style={[styles.status, { color: colors.muted }]}
-            >
-              {isCreating ? 'Building playlist on Spotify…' : statusMsg}
+        <View style={styles.topRow}>
+          <View
+            style={[styles.cover, { backgroundColor: colors.ink }]}
+            accessibilityElementsHidden
+          >
+            <Text style={[styles.coverBrand, { color: colors.accent }]}>
+              SHOWBOOK
             </Text>
-          ) : null}
+            <Text style={[styles.coverTitle, { color: colors.bg }]}>
+              {kind === 'hype' ? 'hype' : 'heard'}{'\n'}
+              {artist.toLowerCase().split(' ')[0] ?? ''}
+            </Text>
+            <View style={[styles.coverBar, { backgroundColor: colors.accent }]} />
+          </View>
+          <View style={styles.copy}>
+            <Text style={[styles.headline, { color: colors.ink }]}>
+              {headlineText}
+            </Text>
+            <Text style={[styles.sub, { color: colors.muted }]}>{subCopy}</Text>
+          </View>
         </View>
+        <Pressable
+          testID={`hype-card-${kind}-primary`}
+          accessibilityRole="button"
+          accessibilityLabel={ctaLabel}
+          onPress={() => {
+            void handlePrimaryPress();
+          }}
+          disabled={isCreating || isQueued}
+          style={({ pressed }) => [
+            styles.primaryButton,
+            {
+              backgroundColor: colors.accent,
+              opacity: isCreating || isQueued ? 0.6 : pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <Music size={14} color={colors.accentText} />
+          <Text style={[styles.primaryLabel, { color: colors.accentText }]}>
+            {ctaLabel}
+          </Text>
+        </Pressable>
+        {statusMsg ? (
+          <Text
+            testID={`hype-card-${kind}-status`}
+            style={[styles.status, { color: colors.muted }]}
+          >
+            {isCreating ? 'Building playlist on Spotify…' : statusMsg}
+          </Text>
+        ) : null}
       </View>
       <SpotifyConnectSheet
         open={sheetOpen}
@@ -314,81 +308,81 @@ export function HypePlaylistCard({
 const styles = StyleSheet.create({
   card: {
     marginHorizontal: 20,
-    flexDirection: 'row',
-    gap: 0,
+    padding: 14,
+    borderRadius: RADII.xl,
     borderWidth: StyleSheet.hairlineWidth,
-    borderLeftWidth: 2,
     overflow: 'hidden',
   },
+  topRow: {
+    flexDirection: 'row',
+    gap: 14,
+    alignItems: 'flex-start',
+  },
   cover: {
-    width: 96,
-    paddingHorizontal: 10,
-    paddingVertical: 12,
+    width: 72,
+    height: 86,
+    borderRadius: RADII.md,
+    paddingHorizontal: 8,
+    paddingVertical: 9,
     justifyContent: 'space-between',
   },
   coverBrand: {
     fontFamily: 'Geist Mono',
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '600',
-    letterSpacing: 1.4,
+    letterSpacing: 1.2,
   },
   coverTitle: {
     fontFamily: 'Geist Sans',
-    fontSize: 20,
+    fontSize: 15,
     fontWeight: '700',
-    lineHeight: 22,
-    letterSpacing: -0.6,
+    lineHeight: 17,
+    letterSpacing: -0.4,
   },
   coverBar: {
-    height: 3,
-    width: 32,
+    height: 2,
+    width: 24,
+    borderRadius: 1,
   },
-  body: {
+  copy: {
     flex: 1,
-    padding: 14,
+    paddingTop: 2,
     gap: 4,
-  },
-  kicker: {
-    fontFamily: 'Geist Mono',
-    fontSize: 9,
-    letterSpacing: 1.2,
-    fontWeight: '500',
   },
   headline: {
     fontFamily: 'Geist Sans',
     fontSize: 16,
     fontWeight: '600',
-    letterSpacing: -0.3,
+    letterSpacing: -0.25,
     lineHeight: 21,
-    marginTop: 2,
   },
   sub: {
     fontFamily: 'Geist Mono',
-    fontSize: 10.5,
-    letterSpacing: 0.3,
-    lineHeight: 14,
-  },
-  buttonRow: {
-    marginTop: 10,
+    fontSize: 11,
+    letterSpacing: 0.25,
+    lineHeight: 15,
   },
   primaryButton: {
+    marginTop: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    alignSelf: 'flex-start',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: RADII.lg,
   },
   primaryLabel: {
-    fontFamily: 'Geist Mono',
-    fontSize: 11,
+    fontFamily: 'Geist Sans',
+    fontSize: 14,
     fontWeight: '600',
-    letterSpacing: 0.5,
+    letterSpacing: 0.1,
   },
   status: {
     fontFamily: 'Geist Mono',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 0.3,
-    marginTop: 6,
+    marginTop: 10,
+    textAlign: 'center',
   },
 });
