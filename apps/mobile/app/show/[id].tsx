@@ -77,6 +77,7 @@ interface ShowDetail {
   kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports' | 'film' | 'unknown';
   state: 'past' | 'ticketed' | 'watching';
   date: string | null;
+  endDate: string | null;
   seat: string | null;
   pricePaid: string | null;
   ticketCount: number;
@@ -112,6 +113,53 @@ function parseShowDate(date: string | null | undefined): DateParts | null {
     day: String(day),
     year: String(year),
     dow: DOWS[d.getDay()] ?? '',
+  };
+}
+
+interface DateRange {
+  dayLabel: string;
+  monthLabel: string;
+  trailing: string;
+}
+
+function buildDateRange(
+  start: string | null | undefined,
+  end: string | null | undefined,
+): DateRange | null {
+  const startParts = parseShowDate(start);
+  if (!startParts) return null;
+  const endParts = end && end !== start ? parseShowDate(end) : null;
+  if (!endParts) {
+    return {
+      dayLabel: startParts.day,
+      monthLabel: `${startParts.month} · ${startParts.year}`,
+      trailing: startParts.dow,
+    };
+  }
+  const sameMonth = startParts.month === endParts.month && startParts.year === endParts.year;
+  const dayLabel = sameMonth
+    ? `${startParts.day}–${endParts.day}`
+    : `${startParts.day}–${endParts.month} ${endParts.day}`;
+  const monthLabel = sameMonth
+    ? `${startParts.month} · ${startParts.year}`
+    : startParts.year === endParts.year
+      ? `${startParts.month} · ${startParts.year}`
+      : `${startParts.month} ${startParts.year} – ${endParts.month} ${endParts.year}`;
+  const startMs = new Date(
+    Number(startParts.year),
+    MONTHS.indexOf(startParts.month),
+    Number(startParts.day),
+  ).getTime();
+  const endMs = new Date(
+    Number(endParts.year),
+    MONTHS.indexOf(endParts.month),
+    Number(endParts.day),
+  ).getTime();
+  const nights = Math.max(1, Math.round((endMs - startMs) / 86_400_000) + 1);
+  return {
+    dayLabel,
+    monthLabel,
+    trailing: `${nights} DAYS`,
   };
 }
 
@@ -330,7 +378,7 @@ function Hero({ show }: { show: ShowDetail }): React.JSX.Element {
   const { colors } = tokens;
   const router = useRouter();
   const accent = tokens.kindColor(show.kind as Kind);
-  const date = parseShowDate(show.date);
+  const date = buildDateRange(show.date, show.endDate);
   const headliner = show.showPerformers.find((sp) => sp.role === 'headliner');
   const support = show.showPerformers.filter((sp) => sp.role === 'support');
 
@@ -392,13 +440,11 @@ function Hero({ show }: { show: ShowDetail }): React.JSX.Element {
       {date ? (
         <View style={[styles.dateBlock, { borderTopColor: colors.ruleStrong }]}>
           <View>
-            <Text style={[styles.dateDay, { color: colors.ink }]}>{date.day}</Text>
-            <Text style={[styles.dateMonth, { color: accent }]}>
-              {date.month} · {date.year}
-            </Text>
+            <Text style={[styles.dateDay, { color: colors.ink }]}>{date.dayLabel}</Text>
+            <Text style={[styles.dateMonth, { color: accent }]}>{date.monthLabel}</Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
-            <Text style={[styles.dateDow, { color: colors.muted }]}>{date.dow}</Text>
+            <Text style={[styles.dateDow, { color: colors.muted }]}>{date.trailing}</Text>
           </View>
         </View>
       ) : null}
