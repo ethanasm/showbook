@@ -104,6 +104,7 @@ describe('useRefreshHaptics', () => {
     const h = renderHarness(false);
     assert.equal(h.stubs.selectionCalls, 0);
     assert.equal(h.stubs.successCalls, 0);
+    assert.equal(h.get().manualRefreshing, false);
   });
 
   it('does not fire success haptic on a background refetch (no manual pull)', () => {
@@ -111,9 +112,14 @@ describe('useRefreshHaptics', () => {
     // flips refreshing true → false without onManualRefresh ever firing.
     const h = renderHarness(false);
     h.update(true);
+    // Spinner gate stays off during background refetches — this is the
+    // signal the themed RefreshControl uses to skip the native spinner so
+    // iOS doesn't get stuck mid-toggle on tab-switch foreground-sync.
+    assert.equal(h.get().manualRefreshing, false);
     h.update(false);
     assert.equal(h.stubs.selectionCalls, 0);
     assert.equal(h.stubs.successCalls, 0);
+    assert.equal(h.get().manualRefreshing, false);
   });
 
   it('fires selection haptic on manual pull, success haptic when it completes', () => {
@@ -123,10 +129,14 @@ describe('useRefreshHaptics', () => {
     });
     assert.equal(h.stubs.selectionCalls, 1);
     assert.equal(h.refreshCallCount(), 1);
+    // Spinner gate flips on with the pull and clears when refreshing settles.
+    assert.equal(h.get().manualRefreshing, true);
     // Refresh cycle: refreshing flips true then back to false.
     h.update(true);
+    assert.equal(h.get().manualRefreshing, true);
     h.update(false);
     assert.equal(h.stubs.successCalls, 1);
+    assert.equal(h.get().manualRefreshing, false);
   });
 
   it('does not fire success again on a follow-up background refetch', () => {
