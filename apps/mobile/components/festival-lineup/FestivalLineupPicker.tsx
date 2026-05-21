@@ -24,7 +24,7 @@ import DraggableFlatListImport, {
 import { useTheme } from '../../lib/theme';
 import { RemoteImage } from '../design-system';
 import { trpc } from '../../lib/trpc';
-import { useDebouncedValue } from '../../lib/useDebouncedValue';
+import { useDebouncedValue } from '@showbook/shared/hooks';
 import type {
   FestivalArtistTier,
   FestivalLineupFlow,

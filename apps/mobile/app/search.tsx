@@ -42,7 +42,7 @@ import { useTheme, type Kind } from '../lib/theme';
 import { useAuth } from '../lib/auth';
 import { useNetwork } from '../lib/network';
 import { trpc } from '../lib/trpc';
-import { useDebouncedValue } from '../lib/useDebouncedValue';
+import { useDebouncedValue } from '@showbook/shared/hooks';
 import {
   extractHighlight,
   groupResults,

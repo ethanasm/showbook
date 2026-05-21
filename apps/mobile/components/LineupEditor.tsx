@@ -37,7 +37,7 @@ import NestableDraggableFlatListImport, {
 } from 'react-native-draggable-flatlist';
 import { useTheme } from '../lib/theme';
 import { trpc } from '../lib/trpc';
-import { useDebouncedValue } from '../lib/useDebouncedValue';
+import { useDebouncedValue } from '@showbook/shared/hooks';
 import { hapticSelection } from '../lib/haptics';
 import { ArtistTypeahead, type ArtistSuggestion } from './ArtistTypeahead';
 import { FormField } from './FormField';

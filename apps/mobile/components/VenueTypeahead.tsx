@@ -23,7 +23,7 @@ import {
 } from 'react-native';
 import { MapPin, Search } from 'lucide-react-native';
 import { useTheme } from '../lib/theme';
-import { useDebouncedValue } from '../lib/useDebouncedValue';
+import { useDebouncedValue } from '@showbook/shared/hooks';
 
 export interface VenueSuggestion {
   /**
