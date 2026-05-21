@@ -201,7 +201,7 @@ jobs:
       # keeps the install layer warm across CI runs when pnpm-lock.yaml
       # hasn't changed.
       - name: Build and push prod web image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/web/Dockerfile
