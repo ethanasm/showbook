@@ -517,6 +517,11 @@ export function ShowDetailTabsView({
           loading={mediaQuery.isLoading}
         />
       }
+      showId={show.id}
+      venueId={show.venue.id}
+      setlistSongCount={actualSongCount}
+      hypePlaylistEnabled={hypePlaylistEnabled}
+      onSwitchToSetlistTab={() => setActive('setlist')}
     />
   );
 
