@@ -95,6 +95,9 @@ interface SetCountPredictionShape {
 
 export interface SetlistTabProps {
   showId: string;
+  /** Performer the tab is rendering — the show's headliner for
+   *  single-artist concerts, the picked lineup artist on festivals. */
+  performerId: string;
   artistName: string;
   isPast: boolean;
   prediction: AnyPrediction | null;
@@ -122,6 +125,7 @@ function SetlistTabUpcoming(props: SetlistTabProps): React.JSX.Element {
   const { colors } = tokens;
   const {
     showId,
+    performerId,
     artistName,
     prediction,
     predictionLoading,
@@ -204,6 +208,7 @@ function SetlistTabUpcoming(props: SetlistTabProps): React.JSX.Element {
         <SectionFrame title="Hype playlist">
           <HypePlaylistCard
             showId={showId}
+            performerId={performerId}
             artist={artistName}
             kind="hype"
             trackCount={hypeMeta.count}
@@ -245,6 +250,7 @@ function SetlistTabUpcoming(props: SetlistTabProps): React.JSX.Element {
 
 function SetlistTabPast({
   showId,
+  performerId,
   artistName,
   actualSongs = [],
   badgePayload,
@@ -289,6 +295,7 @@ function SetlistTabPast({
         <SectionFrame title={`I Heard ${artistName}`}>
           <HypePlaylistCard
             showId={showId}
+            performerId={performerId}
             artist={artistName}
             kind="heard"
             trackCount={total}

@@ -491,6 +491,7 @@ export function ShowDetailTabsView({
   ) : (
     <SetlistTab
       showId={show.id}
+      performerId={headliner?.performer.id ?? ''}
       artistName={headlinerName}
       isPast={isPast}
       prediction={(predictionQuery.data as AnyPrediction | undefined) ?? null}
@@ -562,9 +563,10 @@ export function ShowDetailTabsView({
   }, [hypePlaylistEnabled, isPast, predictionQuery.data]);
 
   const rightRailSlots = {
-    hypePlaylistCard: railHypeMeta ? (
+    hypePlaylistCard: railHypeMeta && headliner ? (
       <HypePlaylistCard
         showId={show.id}
+        performerId={headliner.performer.id}
         artist={headlinerName}
         kind="hype"
         trackCount={railHypeMeta.count}

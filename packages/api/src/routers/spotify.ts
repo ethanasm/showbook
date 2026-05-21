@@ -73,10 +73,18 @@ async function requireHypePlaylistEnabled(
   }
 }
 
-const showIdInput = z.object({ showId: z.string().uuid() });
+// Optional `performerId` powers the festival lineup chip rail —
+// when omitted, the playlist mutations and the existing-playlist
+// lookup default to the show's headliner so single-act concerts
+// keep their original call shape.
+const playlistMutationInput = z.object({
+  showId: z.string().uuid(),
+  performerId: z.string().uuid().optional(),
+});
 const existingPlaylistInput = z.object({
   showId: z.string().uuid(),
   kind: z.union([z.literal('hype'), z.literal('heard')]),
+  performerId: z.string().uuid().optional(),
 });
 
 export const spotifyRouter = router({
@@ -136,7 +144,12 @@ export const spotifyRouter = router({
     .input(existingPlaylistInput)
     .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      return getExistingPlaylist({ userId, showId: input.showId, kind: input.kind });
+      return getExistingPlaylist({
+        userId,
+        showId: input.showId,
+        kind: input.kind,
+        performerId: input.performerId,
+      });
     }),
 
   /**
@@ -146,13 +159,17 @@ export const spotifyRouter = router({
    * re-tapping returns the previously persisted row.
    */
   createHypePlaylist: protectedProcedure
-    .input(showIdInput)
+    .input(playlistMutationInput)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       await requireHypePlaylistEnabled(ctx.db, userId);
       const startedAt = Date.now();
       try {
-        const result = await createHypePlaylist({ userId, showId: input.showId });
+        const result = await createHypePlaylist({
+          userId,
+          showId: input.showId,
+          performerId: input.performerId,
+        });
         const durationMs = Date.now() - startedAt;
         if (result.reused) {
           log.info(
@@ -160,6 +177,7 @@ export const spotifyRouter = router({
               event: 'spotify.playlist.hype_reused',
               userId,
               showId: input.showId,
+              performerId: input.performerId ?? null,
               playlistId: result.playlistId,
               trackCount: result.trackCount,
               durationMs,
@@ -172,6 +190,7 @@ export const spotifyRouter = router({
               event: 'spotify.playlist.hype_created',
               userId,
               showId: input.showId,
+              performerId: input.performerId ?? null,
               playlistId: result.playlistId,
               trackCount: result.trackCount,
               missingCount: result.missing.length,
@@ -184,7 +203,13 @@ export const spotifyRouter = router({
       } catch (err) {
         if (err instanceof TRPCError) throw err;
         log.error(
-          { err, event: 'spotify.hype_playlist.failed', userId, showId: input.showId },
+          {
+            err,
+            event: 'spotify.hype_playlist.failed',
+            userId,
+            showId: input.showId,
+            performerId: input.performerId ?? null,
+          },
           'Hype playlist creation failed',
         );
         throw new TRPCError({
@@ -199,13 +224,17 @@ export const spotifyRouter = router({
    * setlist rather than the prediction.
    */
   createHeardPlaylist: protectedProcedure
-    .input(showIdInput)
+    .input(playlistMutationInput)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       await requireHypePlaylistEnabled(ctx.db, userId);
       const startedAt = Date.now();
       try {
-        const result = await createHeardPlaylist({ userId, showId: input.showId });
+        const result = await createHeardPlaylist({
+          userId,
+          showId: input.showId,
+          performerId: input.performerId,
+        });
         const durationMs = Date.now() - startedAt;
         if (result.reused) {
           log.info(
@@ -213,6 +242,7 @@ export const spotifyRouter = router({
               event: 'spotify.playlist.heard_reused',
               userId,
               showId: input.showId,
+              performerId: input.performerId ?? null,
               playlistId: result.playlistId,
               trackCount: result.trackCount,
               durationMs,
@@ -225,6 +255,7 @@ export const spotifyRouter = router({
               event: 'spotify.playlist.heard_created',
               userId,
               showId: input.showId,
+              performerId: input.performerId ?? null,
               playlistId: result.playlistId,
               trackCount: result.trackCount,
               missingCount: result.missing.length,
@@ -237,7 +268,13 @@ export const spotifyRouter = router({
       } catch (err) {
         if (err instanceof TRPCError) throw err;
         log.error(
-          { err, event: 'spotify.heard_playlist.failed', userId, showId: input.showId },
+          {
+            err,
+            event: 'spotify.heard_playlist.failed',
+            userId,
+            showId: input.showId,
+            performerId: input.performerId ?? null,
+          },
           'Heard playlist creation failed',
         );
         throw new TRPCError({

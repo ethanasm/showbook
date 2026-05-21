@@ -464,6 +464,7 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
   ) : (
     <SetlistTab
       showId={show.id}
+      performerId={getHeadlinerId(show) ?? ""}
       isPast={isPast}
       artistName={headlinerName}
       prediction={predictionQuery.data ?? null}
