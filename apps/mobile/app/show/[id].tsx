@@ -17,6 +17,7 @@ import type { PerformerSetlist } from '@showbook/shared';
 
 import { EmptyState } from '../../components/EmptyState';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
+import { MarkTicketedSheet } from '../../components/MarkTicketedSheet';
 import {
   ShowDetailTabsView,
   type ShowDetail as TabbedShowDetail,
@@ -87,6 +88,7 @@ export default function ShowDetailScreen(
   const show = query.data as ShowDetail | undefined;
 
   const [actionSheetOpen, setActionSheetOpen] = React.useState(false);
+  const [markTicketedOpen, setMarkTicketedOpen] = React.useState(false);
 
   const onBack = (): void => {
     if (router.canGoBack()) router.back();
@@ -136,6 +138,17 @@ export default function ShowDetailScreen(
           showId={show.id}
           state={show.state as ShowState}
           popAfterDelete
+          onMarkTicketed={() => setMarkTicketedOpen(true)}
+        />
+      ) : null}
+      {show ? (
+        <MarkTicketedSheet
+          open={markTicketedOpen}
+          onClose={() => setMarkTicketedOpen(false)}
+          showId={show.id}
+          initialSeat={show.seat}
+          initialPrice={show.pricePaid}
+          initialTicketCount={show.ticketCount}
         />
       ) : null}
     </View>
