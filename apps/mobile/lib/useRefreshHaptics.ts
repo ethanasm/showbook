@@ -11,6 +11,14 @@
  * actually started by a manual pull. The flag is set inside
  * `onManualRefresh` and consumed when refreshing flips back to false.
  *
+ * The same flag is also exposed as `manualRefreshing` so the themed
+ * RefreshControl can gate the *spinner* on user-initiated cycles. iOS
+ * `RefreshControl` gets stuck visible when its `refreshing` prop is
+ * toggled rapidly by background refetches (the foreground-sync hop
+ * fires `invalidateQueries({ type: 'active' })` on every app resume,
+ * which flips `isFetching` true → false on every active query). Gating
+ * on `manualRefreshing` keeps the spinner invisible for those.
+ *
  * Lives in `lib/` (not next to `PullToRefresh.tsx`) so it lands inside
  * the mobile coverage gate and stays unit-testable. The default haptic
  * deps are pulled in via require() rather than a top-level import so
@@ -23,6 +31,12 @@ import React from 'react';
 export interface RefreshHaptics {
   /** Wrap the consumer's onRefresh; fires the selection haptic + marks the cycle as manual. */
   onManualRefresh: () => void;
+  /**
+   * True while a user-initiated refresh cycle is in progress. Resets when
+   * `refreshing` flips back to false. Consumers (the themed RefreshControl)
+   * use this to gate the spinner so background refetches don't flash it.
+   */
+  manualRefreshing: boolean;
 }
 
 export interface RefreshHapticsDeps {
@@ -65,24 +79,24 @@ export function useRefreshHaptics(
   deps?: RefreshHapticsDeps,
 ): RefreshHaptics {
   const resolvedDeps = deps ?? defaultDeps();
-  const manualRef = React.useRef(false);
+  const [manualRefreshing, setManualRefreshing] = React.useState(false);
   const prevRefreshing = React.useRef(refreshing);
 
   React.useEffect(() => {
     if (prevRefreshing.current && !refreshing) {
-      if (manualRef.current) {
+      if (manualRefreshing) {
         void resolvedDeps.success();
+        setManualRefreshing(false);
       }
-      manualRef.current = false;
     }
     prevRefreshing.current = refreshing;
-  }, [refreshing, resolvedDeps]);
+  }, [refreshing, resolvedDeps, manualRefreshing]);
 
   const onManualRefresh = React.useCallback(() => {
-    manualRef.current = true;
+    setManualRefreshing(true);
     void resolvedDeps.selection();
     onRefresh();
   }, [onRefresh, resolvedDeps]);
 
-  return { onManualRefresh };
+  return { onManualRefresh, manualRefreshing };
 }
