@@ -42,6 +42,7 @@ import {
   pickFestivalImage,
   type PickedFestivalImage,
 } from '../../lib/festival-lineup/pickFestivalImage';
+import { consumePendingFestivalPoster } from '../../lib/festival-lineup/posterHandoff';
 import { FestivalLineupPicker } from '../../components/festival-lineup/FestivalLineupPicker';
 import { Eyebrow, GlowBackdrop } from '../../components/design-system';
 
@@ -97,6 +98,19 @@ export default function FestivalPosterScreen(): React.JSX.Element {
   );
 
   const flow = useFestivalLineup({ onSubmit: handleSubmit });
+
+  // Sheet-driven entry: the Add tab's FestivalPosterHowToSheet runs the
+  // picker before navigating here and stashes the result. Consume it on
+  // mount so we land directly in the extracting phase.
+  React.useEffect(() => {
+    const pending = consumePendingFestivalPoster();
+    if (!pending) return;
+    setPoster(pending);
+    void flow.extractFromSource({ base64: pending.base64, kind: 'image' });
+    // Run once per mount; flow identity is stable for the lifetime of
+    // this screen so the missing-dep is intentional.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const pickPoster = React.useCallback(async () => {
     const res = await pickFestivalImage();

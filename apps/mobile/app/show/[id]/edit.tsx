@@ -44,6 +44,7 @@ import {
 import { isYmd, normalizeDateInput } from '../../../lib/dateInput';
 import { useVenueSearch } from '../../../lib/useVenueSearch';
 import { newPerformerRowId } from '../../../components/LineupEditor';
+import { FestivalPosterHowToSheet } from '../../../components/FestivalPosterHowToSheet';
 
 const SCREEN_OPTIONS = { presentation: 'modal', gestureEnabled: true } as const;
 
@@ -133,6 +134,7 @@ export default function EditShowScreen(): React.JSX.Element {
   );
 
   const [saving, setSaving] = React.useState(false);
+  const [posterSheetOpen, setPosterSheetOpen] = React.useState(false);
   const [errors, setErrors] = React.useState<ShowFormErrors>({});
   const clearError = React.useCallback((key: keyof ShowFormErrors) => {
     setErrors((prev) => {
@@ -300,9 +302,14 @@ export default function EditShowScreen(): React.JSX.Element {
               onSelectPlace={onSelectPlace}
               errors={errors}
               clearError={clearError}
+              onExtractLineup={() => setPosterSheetOpen(true)}
             />
           </NestableScrollContainer>
         </KeyboardAvoidingView>
+        <FestivalPosterHowToSheet
+          open={posterSheetOpen}
+          onClose={() => setPosterSheetOpen(false)}
+        />
       </View>
     </>
   );
