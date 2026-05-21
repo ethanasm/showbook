@@ -313,3 +313,13 @@ export {
   __resetTopTracksCacheForTests,
   type PersonalChipSet,
 } from './personal-chips';
+
+// Shared read-path normalizers for `shows.setlists`. The base
+// normalizer lives in `@showbook/shared`; this module re-exports it
+// alongside `resolveShowSetlistsMap`, which adds the legacy
+// `shows.setlist text[]` fallback so list/detail consumers can call
+// one helper.
+export {
+  resolveShowSetlistsMap,
+  normalizePerformerSetlistsMap,
+} from './queries/setlist-normalize';

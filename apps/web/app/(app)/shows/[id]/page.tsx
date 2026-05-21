@@ -31,9 +31,8 @@ import {
   daysUntil,
   formatDateRangeLong,
   isDatePast,
-  normalizePerformerSetlistsMap,
+  resolveShowSetlistsMap,
   setlistTotalSongs,
-  singleMainSet,
   isFeatureOn,
   type PerformerSetlist,
   type PerformerSetlistsMap,
@@ -180,19 +179,15 @@ export default function ShowDetailPage() {
     await deleteShow.mutateAsync({ showId: show.id });
   }
 
-  // Build effective setlists: prefer the new per-performer map; fall back to
-  // the legacy `setlist text[]` placed under the headliner key for old rows.
-  // `normalizePerformerSetlistsMap` handles both new (sections) and legacy
-  // (string[]) per-performer values, so reads tolerate un-migrated rows.
-  const setlistsMap: PerformerSetlistsMap = (() => {
-    const raw = show.setlists;
-    const fromMap = normalizePerformerSetlistsMap(raw);
-    if (Object.keys(fromMap).length > 0) return fromMap;
-    if (show.setlist && show.setlist.length > 0 && headlinerSP) {
-      return { [headlinerSP.performer.id]: singleMainSet(show.setlist) };
-    }
-    return {};
-  })();
+  // Build effective setlists: prefer the new per-performer map; fall back
+  // to the legacy `setlist text[]` placed under the headliner key for old
+  // rows. `resolveShowSetlistsMap` handles both shapes so reads tolerate
+  // un-migrated rows.
+  const setlistsMap: PerformerSetlistsMap = resolveShowSetlistsMap({
+    setlists: show.setlists,
+    legacySetlist: show.setlist,
+    headlinerPerformerId: headlinerSP?.performer.id ?? null,
+  });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>

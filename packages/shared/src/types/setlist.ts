@@ -160,3 +160,26 @@ export function normalizePerformerSetlistsMap(
   }
   return out;
 }
+
+/**
+ * Resolve the effective per-performer setlist map for a show. Prefers the
+ * new `shows.setlists` JSONB map; falls back to the legacy
+ * `shows.setlist text[]` column keyed under the headliner's performer ID
+ * for un-migrated rows. Returns an empty map when both are absent.
+ */
+export function resolveShowSetlistsMap(opts: {
+  setlists: unknown;
+  legacySetlist: string[] | null | undefined;
+  headlinerPerformerId: string | null | undefined;
+}): PerformerSetlistsMap {
+  const fromMap = normalizePerformerSetlistsMap(opts.setlists);
+  if (Object.keys(fromMap).length > 0) return fromMap;
+  if (
+    opts.legacySetlist &&
+    opts.legacySetlist.length > 0 &&
+    opts.headlinerPerformerId
+  ) {
+    return { [opts.headlinerPerformerId]: singleMainSet(opts.legacySetlist) };
+  }
+  return {};
+}
