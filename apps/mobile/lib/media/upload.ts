@@ -41,7 +41,6 @@ import {
   UploadHttpError,
   looksLikeQuotaMessage,
 } from './errors';
-import { normalizeForUpload, type NormalizerDeps } from './heic';
 import type {
   MediaAssetDto,
   SelectedFile,
@@ -89,8 +88,6 @@ export interface UploadOptions {
   baseBackoffMs?: number;
   /** Sleep impl override — used by tests to skip the wall clock. */
   sleepImpl?: (ms: number) => Promise<void>;
-  /** Image-manipulator override — used by tests to skip native modules. */
-  normalizerDeps?: NormalizerDeps;
   /** PUT step override — used by tests to skip expo-file-system. */
   putImpl?: PutFileFn;
 }
@@ -405,7 +402,6 @@ export async function uploadFile(
   // These markers let us locate the exact failing stage in Axiom without
   // rebuilding the app.
   const t0 = Date.now();
-  const originalMimeType = file.mimeType;
   reportClientEvent({
     event: 'upload.start',
     level: 'warn',
@@ -418,40 +414,16 @@ export async function uploadFile(
     },
   });
 
-  // HEIC normalization. iPhone photos arrive as HEIC; we re-encode to JPEG
-  // so the web client can render them at all (Chrome / Firefox don't
-  // support HEIC). The PUT itself is now resilient to HEIC because the
-  // native upload task honors the explicit Content-Type header, but
-  // normalization is still required for cross-browser viewability.
-  try {
-    file = await normalizeForUpload(file, opts.normalizerDeps);
-  } catch (err) {
-    if (!isUserCancellation(err)) {
-      reportClientEvent({
-        event: 'upload.failed_at',
-        level: 'error',
-        message: describeError(err),
-        context: {
-          stage: 'normalize',
-          mimeType: originalMimeType,
-          elapsedMs: Date.now() - t0,
-        },
-      });
-    }
-    throw err;
-  }
-  if (file.mimeType !== originalMimeType) {
-    reportClientEvent({
-      event: 'upload.normalized',
-      level: 'warn',
-      message: 'source re-encoded for upload',
-      context: {
-        from: originalMimeType,
-        to: file.mimeType,
-        bytes: file.bytes,
-      },
-    });
-  }
+  // HEIC normalization used to live here (PR #319) but `manipulateAsync`
+  // crashed iOS natively on the user's HEIC inputs, force-closing the
+  // app the moment the OTA bundle finally caught up to that code. PR
+  // #334's native upload task honors the explicit `Content-Type` header
+  // regardless of the file's intrinsic MIME, so HEIC bytes upload
+  // cleanly to R2. Cross-browser viewability is handled downstream:
+  // mobile Safari / Chrome render HEIC natively, and the web client's
+  // existing `heic-to` decoder converts on display
+  // (`apps/web/components/media/uploadHelpers.ts` and the show-detail
+  // gallery). No JS-side re-encode required.
 
   let intent: UploadIntentResult;
   try {
