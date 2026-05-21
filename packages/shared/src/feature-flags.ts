@@ -200,6 +200,20 @@ export const FeatureFlag = {
       'shows into the empty state.',
     state: 'ON',
   },
+  EventbriteImportEnabled: {
+    description:
+      'Eventbrite OAuth + past-orders import flow. Gates every Eventbrite ' +
+      'surface: the GetStartedHub onboarding door, the desktop / mobile ' +
+      'import buttons + bottom-sheet entry + empty-state CTA on /logbook ' +
+      'and /upcoming, the `?import=eventbrite` deep-link, and the ' +
+      '/api/eventbrite, /api/eventbrite/callback, /api/eventbrite/scan ' +
+      'routes (404 when OFF so attackers cannot even tell the routes ' +
+      'exist). The Eventbrite client in @showbook/api stays compiled — ' +
+      'flipping ON re-enables the feature without a code change once ' +
+      'EVENTBRITE_CLIENT_ID / EVENTBRITE_CLIENT_SECRET are configured. ' +
+      'Default OFF.',
+    state: 'OFF',
+  },
   SetlistIntelMultiNightGeneralized: {
     description:
       'Phase 11 (setlist-intelligence) §15e — generalizes the Phase 5 ' +
