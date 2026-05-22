@@ -91,6 +91,13 @@
         "react",
         "react-dom"
       ]
+    },
+    "autolinking": {
+      "ios": {
+        "exclude": [
+          "expo-image-loader"
+        ]
+      }
     }
   }
 }
