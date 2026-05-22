@@ -391,6 +391,110 @@ export const discoverRouter = router({
     }),
 
   /**
+   * Every future announcement relevant to the user's Discover tabs —
+   * followed venues, followed artists, and active regions — unioned into a
+   * single venue-joined projection shaped exactly like `shows.listForMap`.
+   *
+   * Powers the "Discoverable" layer on the map so the same pin / cluster
+   * rendering the personal logbook uses can plot announcements without a
+   * second client code path. One OR'd query against announcements ⨝ venues:
+   * each announcement row is returned at most once even when it satisfies
+   * several branches (e.g. a followed venue that also sits inside a region).
+   */
+  mapFeed: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+
+    const [followedVenues, followedPerformers, regions] = await Promise.all([
+      db
+        .select({ venueId: userVenueFollows.venueId })
+        .from(userVenueFollows)
+        .where(eq(userVenueFollows.userId, userId)),
+      db
+        .select({ performerId: userPerformerFollows.performerId })
+        .from(userPerformerFollows)
+        .where(eq(userPerformerFollows.userId, userId)),
+      db
+        .select()
+        .from(userRegions)
+        .where(
+          and(eq(userRegions.userId, userId), eq(userRegions.active, true)),
+        ),
+    ]);
+
+    const venueIds = followedVenues.map((v) => v.venueId);
+    const performerIds = followedPerformers.map((p) => p.performerId);
+
+    // Each branch mirrors one Discover tab: followed venues, followed
+    // artists (headliner OR support), and active regions (bbox match).
+    const sourceClauses: SQL[] = [];
+    if (venueIds.length > 0) {
+      sourceClauses.push(inArray(announcements.venueId, venueIds));
+    }
+    if (performerIds.length > 0) {
+      sourceClauses.push(
+        or(
+          inArray(announcements.headlinerPerformerId, performerIds),
+          arrayOverlaps(announcements.supportPerformerIds, performerIds),
+        )!,
+      );
+    }
+    for (const region of regions) {
+      const { minLat, maxLat, minLng, maxLng } = regionBbox(region);
+      sourceClauses.push(
+        and(
+          sql`${venues.latitude} BETWEEN ${minLat} AND ${maxLat}`,
+          sql`${venues.longitude} BETWEEN ${minLng} AND ${maxLng}`,
+        )!,
+      );
+    }
+
+    // No follows and no regions ⇒ the Discover tabs are empty, so is this.
+    if (sourceClauses.length === 0) return [];
+
+    const rows = await db
+      .select({ announcement: announcements, venue: venues })
+      .from(announcements)
+      .innerJoin(venues, eq(announcements.venueId, venues.id))
+      .where(
+        and(
+          sql`${announcements.showDate} >= CURRENT_DATE`,
+          or(...sourceClauses)!,
+        ),
+      )
+      .orderBy(asc(announcements.showDate), asc(announcements.id));
+
+    return rows.map((r) => {
+      const a = r.announcement;
+      // Theatre / festival announcements render the production as the
+      // headliner — mirrors the `shows.listForMap` headliner resolution.
+      const isProduction =
+        (a.kind === 'theatre' || a.kind === 'festival') && a.productionName;
+      return {
+        id: a.id,
+        kind: a.kind,
+        state: 'discoverable' as const,
+        date: a.showDate,
+        seat: null as string | null,
+        pricePaid: null as string | null,
+        ticketCount: 1,
+        venue: {
+          id: r.venue.id,
+          name: r.venue.name,
+          city: r.venue.city,
+          stateRegion: r.venue.stateRegion,
+          latitude: r.venue.latitude,
+          longitude: r.venue.longitude,
+          photoUrl: r.venue.photoUrl,
+          googlePlaceId: r.venue.googlePlaceId,
+        },
+        headlinerName: isProduction ? a.productionName : a.headliner,
+        headlinerId: a.headlinerPerformerId,
+        headlinerImageUrl: null as string | null,
+      };
+    });
+  }),
+
+  /**
    * Returns whether a region's discover ingest job is still queued/running.
    * Used by the Near You tab to show a "Discovering shows…" indicator while
    * a just-added region is still being populated.

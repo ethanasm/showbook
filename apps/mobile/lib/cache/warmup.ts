@@ -16,7 +16,8 @@
  *     discover.nearbyFeed (added 2026-05-19 so the daily-digest
  *     deep-link into /discover renders meaningfully on a cold
  *     offline start instead of dropping straight to
- *     OfflineEmptyState).
+ *     OfflineEmptyState), discover.mapFeed (the map's
+ *     "Discoverable" layer).
  *   Phase 2 — per-show fan-out (concurrency-capped):
  *     shows.detail, media.listForShow, setlistIntel.predictedSetlist for
  *     every show; songBadges + trackPreviewsForShow only for past shows.
@@ -98,6 +99,7 @@ export interface WarmupClientSurface {
     followedFeed: AnyInputQuery;
     followedArtistsFeed: AnyInputQuery;
     nearbyFeed: AnyInputQuery;
+    mapFeed: AnyInputQuery;
     watchedAnnouncementIds: AnyInputQuery;
   };
 }
@@ -326,6 +328,14 @@ export async function warmCacheForOfflineUse(
   await step('shows.listForMap', async () => {
     const data = await c.shows.listForMap.query();
     qc.setQueryData(['mobile', 'shows.listForMap'], data);
+    return data;
+  });
+
+  // The map's "Discoverable" layer reads this — same key the screen's
+  // useCachedQuery uses — so a cold offline open can plot announcements.
+  await step('discover.mapFeed', async () => {
+    const data = await c.discover.mapFeed.query();
+    qc.setQueryData(['mobile', 'discover.mapFeed'], data);
     return data;
   });
 
