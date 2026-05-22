@@ -170,6 +170,7 @@ export function MediaGrid({
 const styles = StyleSheet.create({
   placeholderCard: {
     borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RADII.lg,
   },
   grid: {
     flexDirection: 'row',
