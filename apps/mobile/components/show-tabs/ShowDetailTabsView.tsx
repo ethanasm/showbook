@@ -734,27 +734,38 @@ function HeaderStrip({
         pointerEvents="none"
       />
 
-      {/* Top row — floating chrome buttons + state pill. */}
+      {/* Top row — floating chrome: back button + eyebrow pill on the
+          left, state pill + more menu on the right, all on one line. */}
       <View
         style={[heroStyles.topRow, { paddingTop: insets.top + 8 }]}
         pointerEvents="box-none"
       >
-        {onBack ? (
-          <Pressable
-            onPress={onBack}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            hitSlop={8}
-            style={({ pressed }) => [
-              heroStyles.glassBtn,
-              pressed && { opacity: 0.7 },
-            ]}
-          >
-            <ChevronLeft size={22} color="#fff" strokeWidth={2.2} />
-          </Pressable>
-        ) : (
-          <View style={heroStyles.glassBtnPlaceholder} />
-        )}
+        <View style={heroStyles.topLeftStack} pointerEvents="box-none">
+          {onBack ? (
+            <Pressable
+              onPress={onBack}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              hitSlop={8}
+              style={({ pressed }) => [
+                heroStyles.glassBtn,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <ChevronLeft size={22} color="#fff" strokeWidth={2.2} />
+            </Pressable>
+          ) : (
+            <View style={heroStyles.glassBtnPlaceholder} />
+          )}
+          {/* Eyebrow pill — frosted-glass so it stays legible against
+              bright skies / busy photos. Sits inline with the back
+              button so it lines up with the state pill on the right. */}
+          <View style={heroStyles.eyebrowPill}>
+            <Text style={heroStyles.eyebrow} numberOfLines={1}>
+              {eyebrow}
+            </Text>
+          </View>
+        </View>
         <View style={heroStyles.topRightStack} pointerEvents="box-none">
           {show.state !== 'past' ? (
             <StateChipOnDark state={show.state as ShowState} />
@@ -780,20 +791,6 @@ function HeaderStrip({
               <MoreHorizontal size={20} color="#fff" strokeWidth={2.2} />
             </Pressable>
           ) : null}
-        </View>
-      </View>
-
-      {/* Eyebrow row — frosted-glass pill so it stays legible against
-          bright skies / busy photos. Translucent white + hairline border
-          carries the "sleek glass" look without pulling in expo-blur. */}
-      <View
-        style={[heroStyles.eyebrowRow, { top: insets.top + 56 }]}
-        pointerEvents="none"
-      >
-        <View style={heroStyles.eyebrowPill}>
-          <Text style={heroStyles.eyebrow} numberOfLines={1}>
-            {eyebrow}
-          </Text>
         </View>
       </View>
 
@@ -860,10 +857,18 @@ const heroStyles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  topLeftStack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 1,
+    minWidth: 0,
+  },
   topRightStack: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexShrink: 0,
   },
   glassBtn: {
     width: 36,
@@ -895,12 +900,6 @@ const heroStyles = StyleSheet.create({
     letterSpacing: 10.5 * 0.08,
     textTransform: 'uppercase',
   },
-  eyebrowRow: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-    flexDirection: 'row',
-  },
   eyebrowPill: {
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: StyleSheet.hairlineWidth,
@@ -908,7 +907,7 @@ const heroStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
-    alignSelf: 'flex-start',
+    flexShrink: 1,
   },
   eyebrow: {
     fontFamily: 'Geist Sans',

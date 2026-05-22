@@ -79,6 +79,36 @@ mock.module('@showbook/api', {
       SCRIPT.selectBestImageReturns.length > 0
         ? SCRIPT.selectBestImageReturns.shift() ?? null
         : null,
+    // Mirror the real helper: walk exact-name matches first, then
+    // `<name> (...)` variants, and return the first with usable images.
+    // The mock pulls per-candidate image URLs from `selectBestImageReturns`
+    // so individual tests can script "first candidate has no images, but
+    // the second one does" — that's the failure mode the
+    // pickAttractionImage helper exists to handle.
+    pickAttractionImage: (
+      candidates: Array<{ name: string; images?: unknown[] }>,
+      productionName: string,
+    ) => {
+      const target = productionName.trim().toLowerCase();
+      const tryReturn = (): string | null => {
+        return SCRIPT.selectBestImageReturns.length > 0
+          ? SCRIPT.selectBestImageReturns.shift() ?? null
+          : null;
+      };
+      for (const c of candidates) {
+        if (c.name.trim().toLowerCase() !== target) continue;
+        const url = tryReturn();
+        if (url) return url;
+      }
+      const suffixPrefix = `${target} (`;
+      for (const c of candidates) {
+        const n = c.name.trim().toLowerCase();
+        if (!n.startsWith(suffixPrefix) || !n.endsWith(')')) continue;
+        const url = tryReturn();
+        if (url) return url;
+      }
+      return null;
+    },
   },
 });
 
@@ -195,6 +225,36 @@ describe('runBackfillShowCoverImages', () => {
     const result = await mod.runBackfillShowCoverImages();
     assert.equal(result.updated, 0);
     assert.equal(result.missing, 1);
+  });
+
+  it('falls through to a `<name> (...)` variant when the exact-name match has no usable images', async () => {
+    // Real prod regression (2026-05-21): "Cabaret at the Kit Kat Club" is a
+    // stale TM record with no art alongside a maintained
+    // "Cabaret at the Kit Kat Club (NY)" record carrying the real poster.
+    // selectBestImageReturns scripts the helper: first call (exact-name
+    // candidate) returns null, second call (suffix-variant candidate)
+    // returns the URL.
+    reset({
+      candidates: [
+        {
+          id: 'show-cabaret',
+          productionName: 'Cabaret at the Kit Kat Club',
+          date: '2024-06-20',
+          endDate: null,
+          tmVenueId: null,
+        },
+      ],
+      searchAttractionsResults: [
+        [
+          { name: 'Cabaret at the Kit Kat Club', images: [] },
+          { name: 'Cabaret at the Kit Kat Club (NY)', images: [{ url: 'https://tm/ny.jpg' }] },
+        ],
+      ],
+      selectBestImageReturns: [null, 'https://tm/ny.jpg'],
+    });
+    const result = await mod.runBackfillShowCoverImages();
+    assert.equal(result.updated, 1);
+    assert.equal(SCRIPT.updates[0].coverImageUrl, 'https://tm/ny.jpg');
   });
 
   it('caches lookups by productionName across rows', async () => {

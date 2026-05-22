@@ -8,7 +8,13 @@
 
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { searchArtist, searchSetlist, SetlistFmError } from '../setlistfm';
+import {
+  searchArtist,
+  searchSetlist,
+  SetlistFmError,
+  isSetlistFmInCooldown,
+  _resetRateLimitState,
+} from '../setlistfm';
 
 const ORIGINAL_FETCH = globalThis.fetch;
 const ORIGINAL_KEY = process.env.SETLISTFM_API_KEY;
@@ -29,12 +35,14 @@ function jsonResponse(body: unknown, init?: ResponseInit): Response {
 
 beforeEach(() => {
   process.env.SETLISTFM_API_KEY = 'test-key';
+  _resetRateLimitState();
 });
 
 afterEach(() => {
   globalThis.fetch = ORIGINAL_FETCH;
   if (ORIGINAL_KEY === undefined) delete process.env.SETLISTFM_API_KEY;
   else process.env.SETLISTFM_API_KEY = ORIGINAL_KEY;
+  _resetRateLimitState();
 });
 
 // ── SetlistFmError ──────────────────────────────────────────────────────
@@ -446,6 +454,40 @@ test('apiFetch: rethrows when 429 retry also fails', { timeout: 10_000 }, async 
     return true;
   });
   assert.equal(n, 2);
+});
+
+// ── 429 cooldown ────────────────────────────────────────────────────────
+
+test('apiFetch: opens cooldown on consecutive 429s; subsequent calls fail fast without hitting the network', { timeout: 10_000 }, async () => {
+  // Two 429s in a row → cooldown opens, third call should not even hit fetch.
+  let calls = 0;
+  stubFetch(async () => {
+    calls++;
+    return new Response('rate', { status: 429, statusText: 'Too Many' });
+  });
+
+  await assert.rejects(searchArtist('A'), (err: unknown) => {
+    assert.ok(err instanceof SetlistFmError);
+    assert.equal((err as SetlistFmError).status, 429);
+    return true;
+  });
+  assert.equal(calls, 2, 'first call should retry once before throwing');
+
+  // Cooldown should now be open — second searchArtist must not hit fetch.
+  await assert.rejects(searchArtist('B'), (err: unknown) => {
+    assert.ok(err instanceof SetlistFmError);
+    assert.equal((err as SetlistFmError).status, 429);
+    assert.match((err as Error).message, /cooldown/);
+    return true;
+  });
+  assert.equal(calls, 2, 'cooldown should suppress further network calls');
+});
+
+test('isSetlistFmInCooldown: false initially, true after consecutive 429s open the gate', { timeout: 10_000 }, async () => {
+  assert.equal(isSetlistFmInCooldown(), false);
+  stubFetch(async () => new Response('rate', { status: 429, statusText: 'Too Many' }));
+  await assert.rejects(searchArtist('A'));
+  assert.equal(isSetlistFmInCooldown(), true);
 });
 
 // ── rate limit branch ──────────────────────────────────────────────────

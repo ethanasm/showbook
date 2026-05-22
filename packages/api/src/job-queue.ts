@@ -327,3 +327,55 @@ export async function getPendingIngests(
     return { venueIds: [], performerIds: [], regionIds: [] };
   }
 }
+
+/**
+ * Of `performerIds`, return the subset that already had a
+ * `setlist-corpus-fill` job enqueued within `withinHours`.
+ *
+ * Debounces the festival lazy corpus-fill: `predictedFestivalSetlists`
+ * isn't cached at the procedure level, so without this guard every
+ * festival page open re-enqueues a 3-page `predict` fill for every cold
+ * lineup artist. On 2026-05-21 that uncontrolled fan-out put ~480 fills
+ * onto the setlist.fm 1440/day budget in one morning and cascaded into
+ * 866 failed pg-boss rows.
+ *
+ * Scans the corpus-fill partition of `pgboss.job` by name + created_on
+ * and filters candidates in JS — same shape as `getPendingIngests`. The
+ * 6h default window sits well inside pg-boss's 24h archive threshold, so
+ * a recent job is always still in `pgboss.job` (not yet in the archive).
+ */
+export async function performersWithRecentCorpusFill(
+  performerIds: string[],
+  withinHours = 6,
+): Promise<Set<string>> {
+  if (performerIds.length === 0) return new Set();
+  try {
+    // Bind as an ISO string, not a Date — postgres-js encodes bind
+    // params via Buffer.byteLength, which throws on a Date instance.
+    const sinceIso = new Date(
+      Date.now() - withinHours * 60 * 60 * 1000,
+    ).toISOString();
+    const rows = await db.execute<{ performer_id: string | null }>(
+      sql`SELECT DISTINCT data->>'performerId' AS performer_id
+            FROM pgboss.job
+            WHERE name = ${JOB_NAMES.SETLIST_CORPUS_FILL}
+              AND created_on > ${sinceIso}`,
+    );
+    const candidateSet = new Set(performerIds);
+    const recent = new Set<string>();
+    for (const r of rows) {
+      if (r.performer_id && candidateSet.has(r.performer_id)) {
+        recent.add(r.performer_id);
+      }
+    }
+    return recent;
+  } catch (err) {
+    log.error(
+      { err, event: 'job_queue.poll.failed' },
+      'performersWithRecentCorpusFill failed',
+    );
+    // Fail open — a query blip shouldn't block enqueues. The setlist.fm
+    // cooldown gate is the backstop against an actual rate-limit storm.
+    return new Set();
+  }
+}
