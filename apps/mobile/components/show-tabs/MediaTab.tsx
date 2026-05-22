@@ -1,6 +1,6 @@
 /**
  * MediaTab (mobile) — photo grid + "From the night" companion rows
- * (past) or "What we'll add automatically" preview rows (pre-show).
+ * (past) or "What shows up after the show" preview rows (pre-show).
  *
  * The photo grid is the existing MediaGrid composed by the caller
  * (mirrors how the web tab takes a `mediaSection` slot).
@@ -57,7 +57,7 @@ export function MediaTab(props: MediaTabProps): React.JSX.Element {
       <SectionFrame title="Photos" count={mediaCount}>
         {photoGrid}
       </SectionFrame>
-      <SectionFrame title={isPast ? 'From the night' : "What we'll add automatically"}>
+      <SectionFrame title={isPast ? 'From the night' : 'What shows up after the show'}>
         {isPast ? <PastNightRows {...props} /> : <PreShowRows />}
       </SectionFrame>
     </View>
