@@ -652,9 +652,14 @@ export default function MapScreen(): React.JSX.Element {
                     key={rowIdx}
                     style={[
                       styles.focusToggleRow,
-                      rowIdx > 0 && {
-                        borderTopColor: colors.ruleStrong,
-                        borderTopWidth: 1,
+                      // Divider sits on the bottom of each non-last row.
+                      // Those rows span the full container width, so the
+                      // rule reaches across the inset area below; a
+                      // `borderTop` on the next row would only span that
+                      // shorter row and leave the gap above it open.
+                      rowIdx < focusRows.length - 1 && {
+                        borderBottomColor: colors.ruleStrong,
+                        borderBottomWidth: 1,
                       },
                     ]}
                   >
