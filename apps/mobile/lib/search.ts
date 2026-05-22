@@ -36,6 +36,67 @@ export interface RawGlobalResults {
   venues: SearchVenue[];
 }
 
+/**
+ * An upcoming Ticketmaster show — the "Future shows" section of the
+ * omnisearch screen. Mirrors the `search.futureShows` tRPC payload.
+ */
+export interface FutureShow {
+  tmEventId: string;
+  title: string;
+  date: string;
+  kind: 'concert' | 'theatre' | 'comedy' | 'festival';
+  venueName: string;
+  venueCity: string | null;
+  performers: { name: string; tmAttractionId: string; imageUrl: string | null }[];
+}
+
+/**
+ * Build the `/add/form` query params that pre-fill the add-show form
+ * from a tapped future show. The form's `paramPerformers` decoder reads
+ * `performersJson`; `kindHint` / `headliner` / `venueHint` / `venueCity`
+ * / `dateHint` map straight onto the form fields.
+ *
+ * Performer detection is kind-aware:
+ *   - concert / comedy: `title` is the headliner; the remaining
+ *     attractions become support performers.
+ *   - festival: `title` is the festival name; every attraction is a
+ *     lineup row.
+ *   - theatre: only the production — cast comes from a playbill, so no
+ *     lineup is pre-filled.
+ */
+export function futureShowToFormParams(show: FutureShow): Record<string, string> {
+  const toRow = (p: FutureShow['performers'][number]) => {
+    const row: {
+      name: string;
+      tier: 'support';
+      tmAttractionId?: string;
+      imageUrl?: string;
+    } = { name: p.name, tier: 'support' };
+    if (p.tmAttractionId) row.tmAttractionId = p.tmAttractionId;
+    if (p.imageUrl) row.imageUrl = p.imageUrl;
+    return row;
+  };
+
+  let lineup: ReturnType<typeof toRow>[];
+  if (show.kind === 'festival') {
+    lineup = show.performers.map(toRow);
+  } else if (show.kind === 'theatre') {
+    lineup = [];
+  } else {
+    lineup = show.performers.slice(1).map(toRow);
+  }
+
+  const params: Record<string, string> = {
+    kindHint: show.kind,
+    headliner: show.title,
+    venueHint: show.venueName,
+    dateHint: show.date,
+  };
+  if (show.venueCity) params.venueCity = show.venueCity;
+  if (lineup.length > 0) params.performersJson = JSON.stringify(lineup);
+  return params;
+}
+
 export type SearchEntityType = 'shows' | 'artists' | 'venues';
 
 export interface SearchGroup<T> {

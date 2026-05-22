@@ -33,6 +33,7 @@ import {
   Music,
   Users,
   MapPin,
+  CalendarPlus,
 } from 'lucide-react-native';
 import { ScreenWrapper } from '../components/ScreenWrapper';
 import { EmptyState } from '../components/EmptyState';
@@ -45,8 +46,10 @@ import { trpc } from '../lib/trpc';
 import { useDebouncedValue } from '@showbook/shared/hooks';
 import {
   extractHighlight,
+  futureShowToFormParams,
   groupResults,
   isEmptyQuery,
+  type FutureShow,
   type GroupedSearchResults,
   type RawGlobalResults,
   type SearchPerformer,
@@ -87,6 +90,18 @@ export default function SearchScreen(): React.JSX.Element {
     () => groupResults((searchQuery.data as RawGlobalResults | undefined) ?? null),
     [searchQuery.data],
   );
+
+  // Upcoming Ticketmaster shows — its own query (and section) so the
+  // user's logbook results render without waiting on the TM round-trip.
+  const futureShowsQuery = trpc.search.futureShows.useQuery(
+    { query: trimmed },
+    {
+      enabled:
+        Boolean(token) && !empty && network.online && trimmed.length >= 2,
+      staleTime: 30_000,
+    },
+  );
+  const futureShows = futureShowsQuery.data ?? [];
 
   const back = (
     <Pressable
@@ -166,7 +181,9 @@ export default function SearchScreen(): React.JSX.Element {
               onPress: () => void searchQuery.refetch(),
             }}
           />
-        ) : grouped.total === 0 ? (
+        ) : grouped.total === 0 &&
+          futureShows.length === 0 &&
+          !futureShowsQuery.isLoading ? (
           <EmptyState
             icon={<SearchIcon size={40} color={colors.faint} strokeWidth={1.5} />}
             title="No matches"
@@ -204,6 +221,17 @@ export default function SearchScreen(): React.JSX.Element {
               >
                 {grouped.venues.items.map((v) => (
                   <VenueResultRow key={v.id} venue={v} query={trimmed} />
+                ))}
+              </Group>
+            ) : null}
+            {futureShows.length > 0 ? (
+              <Group
+                title="Future shows"
+                count={futureShows.length}
+                icon={<CalendarPlus size={13} color={colors.ink} strokeWidth={2} />}
+              >
+                {futureShows.map((s) => (
+                  <FutureShowResultRow key={s.tmEventId} show={s} query={trimmed} />
                 ))}
               </Group>
             ) : null}
@@ -354,6 +382,49 @@ function VenueResultRow({ venue, query }: { venue: SearchVenue; query: string })
             {venue.showCount === 1 ? '' : 's'}
           </Text>
         </View>
+      </Pressable>
+    </Link>
+  );
+}
+
+function FutureShowResultRow({
+  show,
+  query,
+}: {
+  show: FutureShow;
+  query: string;
+}): React.JSX.Element {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+  const accent = tokens.kindColor(show.kind as Kind);
+  const venueLabel = [show.venueName, show.venueCity].filter(Boolean).join(' · ');
+
+  return (
+    <Link
+      href={{ pathname: '/add/form', params: futureShowToFormParams(show) }}
+      asChild
+    >
+      <Pressable
+        style={({ pressed }) => [
+          styles.row,
+          { backgroundColor: colors.surface, borderLeftColor: accent },
+          pressed && styles.pressed,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={`Add ${show.title} to your log`}
+      >
+        <View style={styles.rowBadgeRow}>
+          <KindBadge kind={show.kind as Kind} size="sm" />
+          <Text style={[styles.rowMeta, { color: colors.muted }]}>{show.date}</Text>
+        </View>
+        <HighlightedText
+          text={show.title}
+          query={query}
+          style={[styles.rowTitle, { color: colors.ink }]}
+        />
+        <Text style={[styles.rowSubtitle, { color: colors.muted }]} numberOfLines={1}>
+          {venueLabel}
+        </Text>
       </Pressable>
     </Link>
   );
