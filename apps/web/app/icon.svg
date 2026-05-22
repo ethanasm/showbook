@@ -18,8 +18,7 @@
       V 21.5
       A 3.5 3.5 0 0 1 14.5 18
       Z"/>
-    <text x="32" y="41.5" font-family="-apple-system, BlinkMacSystemFont, 'Inter', 'Helvetica Neue', Arial, sans-serif"
-          font-weight="900" font-size="26" fill="#0C0C0C" text-anchor="middle"
-          letter-spacing="-1">S</text>
+    <text x="32" y="40" font-family="-apple-system, BlinkMacSystemFont, 'Inter', 'Helvetica Neue', Arial, sans-serif"
+          font-weight="900" font-size="23" fill="#0C0C0C" text-anchor="middle">S</text>
   </g>
 </svg>

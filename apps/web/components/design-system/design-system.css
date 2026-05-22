@@ -894,7 +894,7 @@ a.show-row__support-link:hover {
 .sidebar__header {
   padding: 20px 16px 0;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
 }
 
@@ -917,9 +917,6 @@ a.show-row__support-link:hover {
 
 .sidebar__logo-mark {
   display: block;
-  /* The mark already has a 6deg tilt baked in; the wordmark sits on the
-     true baseline, so nudge the icon down ~1px for visual alignment. */
-  margin-top: 1px;
   flex-shrink: 0;
 }
 
