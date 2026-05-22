@@ -21,6 +21,14 @@
         "EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB": "222563763412-i4g7a2t7to8qce4oa9j0msmhk9bmejal.apps.googleusercontent.com"
       }
     },
+    "preview-store": {
+      "extends": "preview",
+      "distribution": "store",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
     "production": {
       "channel": "production",
       "autoIncrement": true
@@ -41,6 +49,11 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {},
+    "preview-store": {
+      "android": {
+        "track": "internal"
+      }
+    }
   }
 }
