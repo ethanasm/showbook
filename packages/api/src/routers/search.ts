@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { eq, and, or, sql, desc, count, inArray } from 'drizzle-orm';
+import { isNonWatchableKind } from '@showbook/shared';
+import { child } from '@showbook/observability';
 import { router, protectedProcedure } from '../trpc';
 import {
   shows,
@@ -8,6 +10,16 @@ import {
   showPerformers,
   userVenueFollows,
 } from '@showbook/db';
+import { enforceRateLimit } from '../rate-limit';
+import {
+  searchEvents,
+  inferKind,
+  selectBestImage,
+  extractFestivalName,
+  type TMEvent,
+} from '../ticketmaster';
+
+const log = child({ component: 'api.search' });
 
 const RESULT_LIMIT = 8;
 
@@ -40,6 +52,67 @@ export type GlobalSearchResults = {
   performers: GlobalPerformerResult[];
   venues: GlobalVenueResult[];
 };
+
+/**
+ * A future (upcoming) show surfaced from Ticketmaster — the "Future
+ * shows" section of global search. Tapping one deep-links into the Add
+ * flow with the headliner / lineup / venue / date pre-filled.
+ *
+ * `kind` is narrowed to the four watchable kinds: Ticketmaster events
+ * that infer to `sports` / `film` / `unknown` are filtered out so the
+ * section only surfaces things the user can actually log — the same
+ * watchability rule the Discover feed applies.
+ */
+export type FutureShowResult = {
+  tmEventId: string;
+  /** Headliner name (concert/comedy) or production/festival name. */
+  title: string;
+  date: string;
+  kind: 'concert' | 'theatre' | 'comedy' | 'festival';
+  venueName: string;
+  venueCity: string | null;
+  /**
+   * Ticketmaster attractions on the event. For concerts/comedy the
+   * first entry is the headliner; for festivals it's the lineup.
+   */
+  performers: { name: string; tmAttractionId: string; imageUrl: string | null }[];
+};
+
+/**
+ * Map a Ticketmaster event to a `FutureShowResult`, or `null` when it
+ * should be dropped — either it inferred to a non-watchable kind
+ * (sports/film/unknown) or it has no venue name (the Discover
+ * normalizer refuses those too).
+ */
+function mapTmEventToFutureShow(event: TMEvent): FutureShowResult | null {
+  const kind = inferKind(event.classifications, { eventName: event.name });
+  if (isNonWatchableKind(kind)) return null;
+
+  const venue = event._embedded?.venues?.[0];
+  const venueName = venue?.name;
+  if (!venueName) return null;
+
+  const performers = (event._embedded?.attractions ?? []).map((a) => ({
+    name: a.name,
+    tmAttractionId: a.id,
+    imageUrl: selectBestImage(a.images),
+  }));
+
+  const title =
+    kind === 'festival'
+      ? extractFestivalName(event.name)
+      : performers[0]?.name ?? event.name;
+
+  return {
+    tmEventId: event.id,
+    title,
+    date: event.dates.start.localDate,
+    kind,
+    venueName,
+    venueCity: venue?.city?.name ?? null,
+    performers,
+  };
+}
 
 export const searchRouter = router({
   global: protectedProcedure
@@ -212,5 +285,50 @@ export const searchRouter = router({
         })),
         venues: venueRows,
       };
+    }),
+
+  /**
+   * Future-shows search — Ticketmaster events starting from now,
+   * surfaced as a separate section in global search. Results are
+   * filtered with the same watchability rule as Discover (no
+   * sports / film / unknown), so every row deep-links cleanly into
+   * the Add flow.
+   *
+   * Best-effort: a Ticketmaster outage (or a missing API key) yields
+   * an empty list rather than failing the whole search panel.
+   */
+  futureShows: protectedProcedure
+    .input(z.object({ query: z.string().min(2).max(100) }))
+    .query(async ({ ctx, input }): Promise<FutureShowResult[]> => {
+      enforceRateLimit(`search.futureShows:${ctx.session.user.id}`, {
+        max: 30,
+        windowMs: 60_000,
+      });
+
+      // TM wants `YYYY-MM-DDTHH:mm:ssZ` — milliseconds trip a 400.
+      const startDateTime = `${new Date().toISOString().split('.')[0]}Z`;
+
+      let events: TMEvent[];
+      try {
+        ({ events } = await searchEvents({
+          keyword: input.query.trim(),
+          startDateTime,
+          size: 20,
+        }));
+      } catch (err) {
+        log.error(
+          { err, event: 'search.future_shows.failed' },
+          'Ticketmaster future-shows search failed',
+        );
+        return [];
+      }
+
+      const results: FutureShowResult[] = [];
+      for (const event of events) {
+        const mapped = mapTmEventToFutureShow(event);
+        if (mapped) results.push(mapped);
+        if (results.length >= RESULT_LIMIT) break;
+      }
+      return results;
     }),
 });

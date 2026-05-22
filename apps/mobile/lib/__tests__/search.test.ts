@@ -12,8 +12,10 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   extractHighlight,
+  futureShowToFormParams,
   groupResults,
   isEmptyQuery,
+  type FutureShow,
   type RawGlobalResults,
 } from '../search';
 
@@ -153,5 +155,82 @@ describe('extractHighlight', () => {
     assert.ok(result);
     assert.equal(result.match, 'Sphere');
     assert.equal(result.after.endsWith('…'), true);
+  });
+});
+
+describe('futureShowToFormParams', () => {
+  const base: Omit<FutureShow, 'kind' | 'performers'> = {
+    tmEventId: 'evt-1',
+    title: 'The Headliner',
+    date: '2099-08-15',
+    venueName: 'The Greek',
+    venueCity: 'Berkeley',
+  };
+
+  it('maps a concert: title is the headliner, rest become support', () => {
+    const params = futureShowToFormParams({
+      ...base,
+      kind: 'concert',
+      performers: [
+        { name: 'The Headliner', tmAttractionId: 'h1', imageUrl: 'img-h' },
+        { name: 'Opener One', tmAttractionId: 'o1', imageUrl: null },
+        { name: 'Opener Two', tmAttractionId: 'o2', imageUrl: 'img-o2' },
+      ],
+    });
+    assert.equal(params.kindHint, 'concert');
+    assert.equal(params.headliner, 'The Headliner');
+    assert.equal(params.venueHint, 'The Greek');
+    assert.equal(params.venueCity, 'Berkeley');
+    assert.equal(params.dateHint, '2099-08-15');
+
+    const lineup = JSON.parse(params.performersJson) as unknown[];
+    assert.deepEqual(lineup, [
+      { name: 'Opener One', tier: 'support', tmAttractionId: 'o1' },
+      { name: 'Opener Two', tier: 'support', tmAttractionId: 'o2', imageUrl: 'img-o2' },
+    ]);
+  });
+
+  it('maps a festival: every attraction is a lineup row', () => {
+    const params = futureShowToFormParams({
+      ...base,
+      title: 'Sunset Fest',
+      kind: 'festival',
+      performers: [
+        { name: 'Act A', tmAttractionId: 'a', imageUrl: null },
+        { name: 'Act B', tmAttractionId: 'b', imageUrl: null },
+      ],
+    });
+    assert.equal(params.kindHint, 'festival');
+    assert.equal(params.headliner, 'Sunset Fest');
+    const lineup = JSON.parse(params.performersJson) as { name: string }[];
+    assert.equal(lineup.length, 2);
+    assert.deepEqual(
+      lineup.map((r) => r.name),
+      ['Act A', 'Act B'],
+    );
+  });
+
+  it('omits performersJson for theatre (cast comes from a playbill)', () => {
+    const params = futureShowToFormParams({
+      ...base,
+      title: 'Hamilton',
+      kind: 'theatre',
+      performers: [{ name: 'Hamilton', tmAttractionId: 'h', imageUrl: null }],
+    });
+    assert.equal(params.kindHint, 'theatre');
+    assert.equal(params.headliner, 'Hamilton');
+    assert.equal(params.performersJson, undefined);
+  });
+
+  it('omits venueCity when the show has no city', () => {
+    const params = futureShowToFormParams({
+      ...base,
+      venueCity: null,
+      kind: 'concert',
+      performers: [{ name: 'The Headliner', tmAttractionId: 'h1', imageUrl: null }],
+    });
+    assert.equal(params.venueCity, undefined);
+    // Single-attraction concert has no support acts → no lineup param.
+    assert.equal(params.performersJson, undefined);
   });
 });

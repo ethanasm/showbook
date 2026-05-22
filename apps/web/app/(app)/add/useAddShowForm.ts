@@ -292,12 +292,6 @@ export function useAddShowForm() {
     (result: TMResult) => {
       setSelectedTmEvent(result);
       setTmEnriched(true);
-      setHeadlinerName(result.performers[0]?.name ?? result.name);
-      setHeadliner({
-        name: result.performers[0]?.name ?? result.name,
-        tmAttractionId: result.performers[0]?.tmAttractionId,
-        imageUrl: result.performers[0]?.imageUrl ?? undefined,
-      });
       setVenue({
         name: result.venueName ?? "",
         city: result.venueCity ?? "",
@@ -309,14 +303,46 @@ export function useAddShowForm() {
       });
       setDate(result.date);
 
-      if (result.kind) {
-        const mappedKind = result.kind.toLowerCase() as ShowKind;
-        if (["concert", "theatre", "comedy", "festival"].includes(mappedKind)) {
-          setKind(mappedKind);
-        }
+      const mappedKind = result.kind?.toLowerCase();
+      const resultKind: ShowKind | null =
+        mappedKind === "concert" ||
+        mappedKind === "theatre" ||
+        mappedKind === "comedy" ||
+        mappedKind === "festival"
+          ? mappedKind
+          : null;
+      if (resultKind) setKind(resultKind);
+
+      // Theatre + festival are identified by a production / festival
+      // name on the show row, not a headliner performer. For a festival
+      // the event's attractions are the lineup; theatre cast comes from
+      // a playbill later, so no performers are pre-filled.
+      if (resultKind === "theatre" || resultKind === "festival") {
+        setProductionName((prev) => prev || result.name);
+        setHeadlinerName("");
+        setHeadliner({ name: "" });
+        setPerformers(
+          resultKind === "festival"
+            ? result.performers.map((p, i) => ({
+                name: p.name,
+                role: "support" as const,
+                sortOrder: i + 1,
+                tmAttractionId: p.tmAttractionId,
+                imageUrl: p.imageUrl ?? undefined,
+              }))
+            : [],
+        );
+        return;
       }
 
-      // Set additional performers
+      // Concert / comedy: first attraction is the headliner, the rest
+      // are support acts.
+      setHeadlinerName(result.performers[0]?.name ?? result.name);
+      setHeadliner({
+        name: result.performers[0]?.name ?? result.name,
+        tmAttractionId: result.performers[0]?.tmAttractionId,
+        imageUrl: result.performers[0]?.imageUrl ?? undefined,
+      });
       if (result.performers.length > 1) {
         setPerformers(
           result.performers.slice(1).map((p, i) => ({
@@ -331,6 +357,23 @@ export function useAddShowForm() {
     },
     [],
   );
+
+  // Prefill from a Ticketmaster event id — the deep link the global
+  // search "Future shows" section uses. Re-fetch the full event so the
+  // headliner, lineup, venue, and date all land on the form. Runs once;
+  // skipped in edit mode (an editId prefill takes precedence).
+  const tmEventId = searchParams.get("tmEventId");
+  const tmPrefillRef = useRef(false);
+  useEffect(() => {
+    if (!tmEventId || isEditMode || tmPrefillRef.current) return;
+    tmPrefillRef.current = true;
+    fetchTMEvent
+      .mutateAsync({ url: tmEventId })
+      .then((result) => handleSelectTmResult(result))
+      .catch(() => {
+        toast.error("Couldn't load that event from Ticketmaster");
+      });
+  }, [tmEventId, isEditMode, fetchTMEvent, handleSelectTmResult]);
 
   const handleImportFromUrl = useCallback(async () => {
     if (!importUrlValue.trim()) return;

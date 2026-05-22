@@ -61,14 +61,29 @@ export function GlobalSearch() {
     { enabled: open && debouncedQuery.length >= 2 },
   );
 
+  // Upcoming Ticketmaster events — its own query so the user's own
+  // shows/artists/venues render instantly while the TM round-trip loads.
+  const futureShowsQuery = trpc.search.futureShows.useQuery(
+    { query: debouncedQuery },
+    { enabled: open && debouncedQuery.length >= 2 },
+  );
+
   const flatItems = useMemo<FlatItem[]>(() => {
-    if (!data) return [];
-    return [
-      ...data.shows.map((s) => ({ href: `/shows/${s.id}` })),
-      ...data.performers.map((p) => ({ href: `/artists/${p.id}` })),
-      ...data.venues.map((v) => ({ href: `/venues/${v.id}` })),
-    ];
-  }, [data]);
+    const items: FlatItem[] = [];
+    if (data) {
+      items.push(
+        ...data.shows.map((s) => ({ href: `/shows/${s.id}` })),
+        ...data.performers.map((p) => ({ href: `/artists/${p.id}` })),
+        ...data.venues.map((v) => ({ href: `/venues/${v.id}` })),
+      );
+    }
+    items.push(
+      ...(futureShowsQuery.data ?? []).map((f) => ({
+        href: `/add?tmEventId=${encodeURIComponent(f.tmEventId)}`,
+      })),
+    );
+    return items;
+  }, [data, futureShowsQuery.data]);
 
   const closeAndReset = useCallback(() => {
     setOpen(false);
@@ -145,6 +160,7 @@ export function GlobalSearch() {
   const showsList = data?.shows ?? [];
   const performersList = data?.performers ?? [];
   const venuesList = data?.venues ?? [];
+  const futureShowsList = futureShowsQuery.data ?? [];
 
   let runningIndex = 0;
   const showsStart = runningIndex;
@@ -152,6 +168,12 @@ export function GlobalSearch() {
   const performersStart = runningIndex;
   runningIndex += performersList.length;
   const venuesStart = runningIndex;
+  runningIndex += venuesList.length;
+  const futureShowsStart = runningIndex;
+
+  // Show "Searching…" until both queries have something (or finished).
+  const isSearching =
+    (isFetching || futureShowsQuery.isFetching) && flatItems.length === 0;
 
   return (
     <>
@@ -195,7 +217,7 @@ export function GlobalSearch() {
               <div className="global-search__empty">
                 Type at least 2 characters to search
               </div>
-            ) : isFetching && !data ? (
+            ) : isSearching ? (
               <div className="global-search__empty">Searching…</div>
             ) : flatItems.length === 0 ? (
               <div className="global-search__empty">No matches</div>
@@ -255,6 +277,31 @@ export function GlobalSearch() {
                           primary={v.name}
                           secondary={`${v.city ?? ""}${v.showCount > 0 ? ` · ${v.showCount} show${v.showCount !== 1 ? "s" : ""}` : ""}`}
                           dataTestId="global-search-result-venue"
+                        />
+                      );
+                    })}
+                  </Section>
+                )}
+                {futureShowsList.length > 0 && (
+                  <Section title="Future shows">
+                    {futureShowsList.map((f, i) => {
+                      const idx = futureShowsStart + i;
+                      const Kind = KIND_ICONS[f.kind] ?? Music;
+                      return (
+                        <Row
+                          key={f.tmEventId}
+                          active={idx === activeIndex}
+                          onMouseEnter={() => setActiveIndex(idx)}
+                          onClick={() =>
+                            navigate(
+                              `/add?tmEventId=${encodeURIComponent(f.tmEventId)}`,
+                            )
+                          }
+                          icon={<Kind size={13} />}
+                          primary={f.title}
+                          secondary={`${f.venueName}${f.venueCity ? ` · ${f.venueCity}` : ""}`}
+                          meta={formatShortDate(f.date)}
+                          dataTestId="global-search-result-future-show"
                         />
                       );
                     })}

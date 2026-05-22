@@ -121,11 +121,19 @@ export default function AddFormScreen(): React.JSX.Element {
   const queryClient = useQueryClient();
   const { showToast } = useFeedback();
 
+  // The future-shows search hands over a venue name + city; chat / direct
+  // entry only carry a free-text hint. Seed a resolved `venue` object when
+  // both are present so the show saves with the right city instead of the
+  // "Unknown" placeholder.
+  const venueHint = paramString(params.venueHint);
+  const venueCity = paramString(params.venueCity);
+
   const { values, set } = useFormState<ShowFormValues>(
     emptyShowFormValues({
       kind: paramKind(params.kindHint),
       title: paramString(params.headliner),
-      venueQuery: paramString(params.venueHint),
+      venueQuery: venueHint,
+      venue: venueHint && venueCity ? { name: venueHint, city: venueCity } : null,
       // Chat hands over a free-form date hint (Groq is asked for ISO
       // but doesn't always comply); normalize on the way in so the
       // field starts in a valid state.
