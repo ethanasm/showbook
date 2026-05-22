@@ -55,7 +55,11 @@ import {
   type HotPrediction,
 } from '../setlist-predict';
 import type { SetlistStyle } from '../setlist-style';
-import { enqueueSetlistCorpusFill } from '../job-queue';
+import {
+  enqueueSetlistCorpusFill,
+  performersWithRecentCorpusFill,
+} from '../job-queue';
+import { isSetlistFmInCooldown } from '../setlistfm';
 import {
   evaluateReleaseGate,
   type ReleaseGateBreach,
@@ -730,17 +734,42 @@ export const setlistIntelRouter = router({
       // only walks headliners with upcoming watching/ticketed shows + the
       // top followed performers, so festival supports stuck on
       // "We're pulling recent setlists" never had a corpus-fill trigger.
-      // Enqueueing here means the next visit to the festival shows real
-      // data. `runSetlistCorpusFill` is idempotent (ON CONFLICT upsert)
-      // and short-circuits on `no_mbid`, so a duplicate enqueue is cheap.
+      //
+      // This fan-out is debounced. `predictedFestivalSetlists` isn't
+      // cached at the procedure level, so without a guard every festival
+      // page open re-enqueues a 3-page `predict` fill for every cold
+      // lineup artist — and it self-amplifies, because while setlist.fm
+      // is rate-limited the corpus stays empty so the same artists keep
+      // coming back `no_corpus`. On 2026-05-21 that put ~480 fills onto
+      // the 1440/day setlist.fm budget in one morning. Two backstops:
+      // skip the whole fan-out while setlist.fm is in a 429 cooldown, and
+      // skip any performer already enqueued in the last 6h.
       const noCorpusEntries = entries.filter(
         (e) =>
           e.prediction.style === 'cold' &&
           (e.prediction as ColdPrediction).reason === 'no_corpus',
       );
-      if (noCorpusEntries.length > 0) {
+      let enqueuedCount = 0;
+      if (noCorpusEntries.length > 0 && isSetlistFmInCooldown()) {
+        log.info(
+          {
+            event: 'setlist.predict_festival.corpus_fill_skipped',
+            showId,
+            reason: 'setlistfm_cooldown',
+            candidates: noCorpusEntries.length,
+          },
+          'festival corpus-fill fan-out skipped — setlist.fm in cooldown',
+        );
+      } else if (noCorpusEntries.length > 0) {
+        const recentlyFilled = await performersWithRecentCorpusFill(
+          noCorpusEntries.map((e) => e.performerId),
+        );
+        const toEnqueue = noCorpusEntries.filter(
+          (e) => !recentlyFilled.has(e.performerId),
+        );
+        enqueuedCount = toEnqueue.length;
         await Promise.all(
-          noCorpusEntries.map(async (e) => {
+          toEnqueue.map(async (e) => {
             try {
               await enqueueSetlistCorpusFill(e.performerId, 'predict');
             } catch (err) {
@@ -764,7 +793,8 @@ export const setlistIntelRouter = router({
           showId,
           lineupSize: lineup.length,
           coldCount: entries.filter((e) => e.prediction.style === 'cold').length,
-          coldCorpusFillsEnqueued: noCorpusEntries.length,
+          coldCorpusCandidates: noCorpusEntries.length,
+          coldCorpusFillsEnqueued: enqueuedCount,
         },
         'festival per-artist predictions served',
       );
