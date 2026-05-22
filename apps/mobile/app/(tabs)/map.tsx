@@ -39,10 +39,12 @@ import { TopBar } from '../../components/TopBar';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
 import { EmptyState } from '../../components/EmptyState';
 import { Sheet } from '../../components/Sheet';
+import { SegmentedControl } from '../../components/SegmentedControl';
 import { useTheme } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
 import { useAuth } from '../../lib/auth';
 import { useCachedQuery } from '../../lib/cache';
+import { RADII } from '../../lib/theme-utils';
 import darkStyle from './map-style-dark.json';
 import lightStyle from './map-style-light.json';
 
@@ -109,12 +111,12 @@ const DEFAULT_REGION: Region = {
 };
 
 const KIND_FILTERS: readonly { k: 'all' | Kind; label: string }[] = [
-  { k: 'all', label: 'all' },
-  { k: 'concert', label: 'concert' },
-  { k: 'theatre', label: 'theatre' },
-  { k: 'comedy', label: 'comedy' },
-  { k: 'festival', label: 'festival' },
-  { k: 'sports', label: 'sports' },
+  { k: 'all', label: 'All' },
+  { k: 'concert', label: 'Concert' },
+  { k: 'theatre', label: 'Theatre' },
+  { k: 'comedy', label: 'Comedy' },
+  { k: 'festival', label: 'Festival' },
+  { k: 'sports', label: 'Sports' },
 ];
 
 // Which layer of shows the map plots. `past` / `upcoming` split the user's
@@ -123,9 +125,9 @@ const KIND_FILTERS: readonly { k: 'all' | Kind; label: string }[] = [
 type MapMode = 'past' | 'upcoming' | 'discoverable';
 
 const MODE_FILTERS: readonly { m: MapMode; label: string }[] = [
-  { m: 'past', label: 'past' },
-  { m: 'upcoming', label: 'upcoming' },
-  { m: 'discoverable', label: 'discoverable' },
+  { m: 'past', label: 'Past' },
+  { m: 'upcoming', label: 'Upcoming' },
+  { m: 'discoverable', label: 'Discoverable' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -538,88 +540,65 @@ export default function MapScreen(): React.JSX.Element {
         large
       />
 
-      {/* Layer toggle — past / upcoming / discoverable */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterScroll}
-        contentContainerStyle={styles.modeStrip}
-      >
-        {MODE_FILTERS.map(({ m, label }) => {
-          const active = m === layer;
-          return (
-            <Pressable
-              key={m}
-              onPress={() => onLayerChange(m)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              style={[
-                styles.filterChip,
-                {
-                  borderColor: active ? colors.ink : colors.ruleStrong,
-                  backgroundColor: active ? colors.ink : 'transparent',
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.filterLabel,
-                  { color: active ? colors.bg : colors.muted },
-                ]}
-              >
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      {/* Filter bars — segmented-control styling, matching the Shows tab.
+          The layer toggle is a fixed 3-up SegmentedControl; the kind filter
+          reuses the same track / raised-pill look but stays horizontally
+          scrollable so all six kinds keep their colored dots. */}
+      <View style={[styles.filterSection, { borderBottomColor: colors.rule }]}>
+        <View style={styles.modeBar}>
+          <SegmentedControl<MapMode>
+            value={layer}
+            onChange={onLayerChange}
+            options={MODE_FILTERS.map(({ m, label }) => ({ value: m, label }))}
+          />
+        </View>
 
-      {/* Kind filter strip */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterScroll}
-        contentContainerStyle={[
-          styles.filterStrip,
-          { borderBottomColor: colors.rule },
-        ]}
-      >
-        {KIND_FILTERS.map(({ k, label }) => {
-          const active = k === kindFilter;
-          return (
-            <Pressable
-              key={k}
-              onPress={() => setKindFilter(k)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              style={[
-                styles.filterChip,
-                {
-                  borderColor: active ? colors.ink : colors.ruleStrong,
-                  backgroundColor: active ? colors.ink : 'transparent',
-                },
-              ]}
-            >
-              {k !== 'all' && (
-                <View
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.kindScroll}
+          contentContainerStyle={styles.kindScrollContent}
+        >
+          <View style={[styles.kindTrack, { backgroundColor: colors.rule }]}>
+            {KIND_FILTERS.map(({ k, label }) => {
+              const active = k === kindFilter;
+              return (
+                <Pressable
+                  key={k}
+                  onPress={() => setKindFilter(k)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={label}
                   style={[
-                    styles.filterDot,
-                    { backgroundColor: tokens.kindColor(k) },
+                    styles.kindSegment,
+                    active && { backgroundColor: colors.surface },
                   ]}
-                />
-              )}
-              <Text
-                style={[
-                  styles.filterLabel,
-                  { color: active ? colors.bg : colors.muted },
-                ]}
-              >
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+                >
+                  {k !== 'all' && (
+                    <View
+                      style={[
+                        styles.filterDot,
+                        { backgroundColor: tokens.kindColor(k) },
+                      ]}
+                    />
+                  )}
+                  <Text
+                    style={[
+                      styles.kindLabel,
+                      {
+                        color: active ? colors.ink : colors.muted,
+                        fontWeight: active ? '600' : '400',
+                      },
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </View>
 
       {/* Map area */}
       <View style={{ flex: 1, backgroundColor: colors.surfaceRaised }}>
@@ -1013,40 +992,35 @@ function Stat({ label, value }: { label: string; value: string }): React.JSX.Ele
 
 const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  filterScroll: { flexGrow: 0 },
-  modeStrip: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 8,
-    gap: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  filterStrip: {
-    paddingHorizontal: 20,
+  filterSection: {
     paddingBottom: 12,
-    gap: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
     borderBottomWidth: 1,
   },
-  filterChip: {
+  modeBar: {
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
+  kindScroll: { flexGrow: 0 },
+  kindScrollContent: {
+    paddingHorizontal: 20,
+  },
+  kindTrack: {
+    flexDirection: 'row',
+    borderRadius: RADII.pill,
+    padding: 3,
+  },
+  kindSegment: {
     paddingVertical: 6,
-    paddingHorizontal: 11,
-    borderWidth: 1,
-    borderRadius: 999,
+    paddingHorizontal: 12,
+    borderRadius: RADII.pill,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    flexShrink: 0,
   },
   filterDot: { width: 5, height: 5, borderRadius: 999 },
-  filterLabel: {
+  kindLabel: {
     fontFamily: 'Geist Sans',
-    fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
+    fontSize: 13,
   },
   pinOuter: { alignItems: 'center', justifyContent: 'center' },
   pinInner: { alignItems: 'center', justifyContent: 'center' },
