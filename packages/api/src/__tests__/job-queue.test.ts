@@ -260,6 +260,54 @@ test('getPendingIngests: returns empty on db error (logs and short-circuits)', a
   }
 });
 
+// ── performersWithRecentCorpusFill ────────────────────────────────────
+
+test('performersWithRecentCorpusFill: returns empty without querying when no candidates', async () => {
+  const original = db.execute;
+  let called = false;
+  (db as unknown as { execute: unknown }).execute = async () => {
+    called = true;
+    return [] as unknown as ReturnType<typeof db.execute>;
+  };
+  try {
+    const recent = await mod.performersWithRecentCorpusFill([]);
+    assert.equal(recent.size, 0);
+    assert.equal(called, false, 'must not query when there are no candidates');
+  } finally {
+    (db as unknown as { execute: unknown }).execute = original;
+  }
+});
+
+test('performersWithRecentCorpusFill: returns the candidate subset with a recent job', async () => {
+  const original = db.execute;
+  (db as unknown as { execute: unknown }).execute = async () =>
+    [
+      { performer_id: 'p-1' },
+      { performer_id: 'p-other' },
+      { performer_id: null },
+    ] as unknown as ReturnType<typeof db.execute>;
+  try {
+    const recent = await mod.performersWithRecentCorpusFill(['p-1', 'p-2']);
+    // p-1 has a recent job; p-2 doesn't; p-other isn't a candidate.
+    assert.deepEqual([...recent], ['p-1']);
+  } finally {
+    (db as unknown as { execute: unknown }).execute = original;
+  }
+});
+
+test('performersWithRecentCorpusFill: returns empty on db error (fails open)', async () => {
+  const original = db.execute;
+  (db as unknown as { execute: unknown }).execute = async () => {
+    throw new Error('pgboss schema missing');
+  };
+  try {
+    const recent = await mod.performersWithRecentCorpusFill(['p-1']);
+    assert.equal(recent.size, 0);
+  } finally {
+    (db as unknown as { execute: unknown }).execute = original;
+  }
+});
+
 // ── getSender caching path (covers the IIFE's "starting" branch) ──────
 
 test('getSender: reuses the in-flight starting promise when called twice', async () => {

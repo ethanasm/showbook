@@ -1,6 +1,13 @@
 export { appRouter, type AppRouter } from './root';
 export { createContext, type Session } from './trpc';
-export { searchArtist, searchSetlist, getUserAttended, fetchArtistSetlists, SetlistFmError } from './setlistfm';
+export {
+  searchArtist,
+  searchSetlist,
+  getUserAttended,
+  fetchArtistSetlists,
+  SetlistFmError,
+  isSetlistFmInCooldown,
+} from './setlistfm';
 export { fetchSetlistForPerformer, type SetlistLookupResult } from './setlist-lookup';
 export type {
   ArtistSearchResult,

@@ -125,6 +125,16 @@ function isRateLimitedNow(): number {
   return cooldownUntilMs > now ? cooldownUntilMs - now : 0;
 }
 
+/**
+ * True while a 429-triggered cooldown is suppressing setlist.fm calls.
+ * Callers that fan out non-urgent setlist.fm work (e.g. the festival
+ * lazy corpus-fill) check this so they don't pile enqueues onto a quota
+ * that's already exhausted.
+ */
+export function isSetlistFmInCooldown(): boolean {
+  return isRateLimitedNow() > 0;
+}
+
 async function rateLimit(): Promise<void> {
   const now = Date.now();
   const elapsed = now - lastRequestTime;

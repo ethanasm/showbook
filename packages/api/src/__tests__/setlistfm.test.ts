@@ -12,6 +12,7 @@ import {
   searchArtist,
   searchSetlist,
   SetlistFmError,
+  isSetlistFmInCooldown,
   _resetRateLimitState,
 } from '../setlistfm';
 
@@ -480,6 +481,13 @@ test('apiFetch: opens cooldown on consecutive 429s; subsequent calls fail fast w
     return true;
   });
   assert.equal(calls, 2, 'cooldown should suppress further network calls');
+});
+
+test('isSetlistFmInCooldown: false initially, true after consecutive 429s open the gate', { timeout: 10_000 }, async () => {
+  assert.equal(isSetlistFmInCooldown(), false);
+  stubFetch(async () => new Response('rate', { status: 429, statusText: 'Too Many' }));
+  await assert.rejects(searchArtist('A'));
+  assert.equal(isSetlistFmInCooldown(), true);
 });
 
 // ── rate limit branch ──────────────────────────────────────────────────
