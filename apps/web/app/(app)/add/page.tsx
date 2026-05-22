@@ -68,6 +68,7 @@ export default function AddPage() {
     media,
     handleHeadlinerInput, handleDateChange,
     handleSelectTmResult,
+    handleChatTmEventSelected, searchTMEvents,
     handleImportFromUrl, handlePdfImport,
     handlePlaybillUpload,
     handleSelectGmailResult,
@@ -163,6 +164,8 @@ export default function AddPage() {
           createShow={createShow}
           festivalFlowPhase={festivalFlow.phase}
           onFestivalFile={openFestivalPicker}
+          searchTMEvents={searchTMEvents}
+          onTmEventSelected={handleChatTmEventSelected}
         />
       ) : (
         renderFormFields()

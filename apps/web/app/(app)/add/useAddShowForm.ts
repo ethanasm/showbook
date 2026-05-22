@@ -358,6 +358,27 @@ export function useAddShowForm() {
     [],
   );
 
+  // Chat-mode "did you mean one of these?" hands a picked Ticketmaster
+  // event straight into the structured form: reuse the same prefill the
+  // Form-mode TM picker uses, carry over the seat the user mentioned,
+  // then flip to Form so they can review before saving.
+  const handleChatTmEventSelected = useCallback(
+    (result: TMResult, seatHint: string | null) => {
+      handleSelectTmResult(result);
+      if (seatHint) setSeat(seatHint);
+      setMode("Form");
+    },
+    [handleSelectTmResult],
+  );
+
+  // Imperative Ticketmaster event search for chat mode — the chat
+  // component runs it after the LLM parse to offer event matches.
+  const searchTMEvents = useCallback(
+    (args: { headliner: string; startDate?: string; endDate?: string }) =>
+      utils.enrichment.searchTM.fetch(args),
+    [utils],
+  );
+
   // Prefill from a Ticketmaster event id — the deep link the global
   // search "Future shows" section uses. Re-fetch the full event so the
   // headliner, lineup, venue, and date all land on the form. Runs once;
@@ -993,6 +1014,8 @@ export function useAddShowForm() {
     handleHeadlinerInput,
     handleDateChange,
     handleSelectTmResult,
+    handleChatTmEventSelected,
+    searchTMEvents,
     handleImportFromUrl,
     handlePdfImport,
     handlePlaybillUpload,
