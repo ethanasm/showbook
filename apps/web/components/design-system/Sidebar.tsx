@@ -115,7 +115,7 @@ export function Sidebar({
           onClick={() => onNavigate?.("home")}
           aria-label="Showbook home"
         >
-          <ShowbookMark size={26} className="sidebar__logo-mark" />
+          <ShowbookMark size={20} className="sidebar__logo-mark" />
           <span className="sidebar__logo-text">showbook</span>
         </button>
         <span className="sidebar__version">v2 &middot; 2026.04</span>

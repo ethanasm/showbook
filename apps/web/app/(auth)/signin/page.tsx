@@ -64,7 +64,7 @@ export default async function SignInPage({
 
       <section className="signin__panel">
         <div className="signin__brand">
-          <ShowbookMark size={36} className="signin__brand-mark" />
+          <ShowbookMark size={26} className="signin__brand-mark" />
           <span className="signin__brand-text">showbook</span>
         </div>
 

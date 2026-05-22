@@ -18,7 +18,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
     <div className="public-shell">
       <header className="public-shell__header">
         <Link href="/" className="public-shell__brand" aria-label="Showbook home">
-          <ShowbookMark size={28} />
+          <ShowbookMark size={18} />
           <span>showbook</span>
         </Link>
       </header>
