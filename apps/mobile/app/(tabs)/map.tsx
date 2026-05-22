@@ -117,12 +117,14 @@ const KIND_FILTERS: readonly { k: 'all' | Kind; label: string }[] = [
   { k: 'sports', label: 'sports' },
 ];
 
-// Which layer of shows the map plots. `past` / `upcoming` split the user's
-// own logbook by show state; `discoverable` swaps in the announcements that
-// power the three Discover tabs (followed venues / artists / regions).
-type MapMode = 'past' | 'upcoming' | 'discoverable';
+// Which layer of shows the map plots. `all` / `past` / `upcoming` split the
+// user's own logbook by show state (`all` is the whole logbook); `discoverable`
+// swaps in the announcements that power the three Discover tabs (followed
+// venues / artists / regions).
+type MapMode = 'all' | 'past' | 'upcoming' | 'discoverable';
 
 const MODE_FILTERS: readonly { m: MapMode; label: string }[] = [
+  { m: 'all', label: 'all' },
   { m: 'past', label: 'past' },
   { m: 'upcoming', label: 'upcoming' },
   { m: 'discoverable', label: 'discoverable' },
@@ -213,6 +215,24 @@ function clusterVenues(venues: VenueGroup[], region: Region): Cluster[] {
     });
   }
   return clusters;
+}
+
+/**
+ * Viewport cull. The `discoverable` layer can resolve into hundreds of
+ * venues spread nationwide; handing a marker for every one to the native
+ * map at once is what crashed the app on that layer. Off-screen pins are
+ * never visible anyway, so only clusters inside a lightly-padded box around
+ * the current region are kept — bounding the rendered marker count to what
+ * actually fits on screen (the grid clustering caps per-viewport density).
+ */
+function clustersInRegion(clusters: Cluster[], region: Region): Cluster[] {
+  const latPad = region.latitudeDelta * 0.6 + 0.0005;
+  const lngPad = region.longitudeDelta * 0.6 + 0.0005;
+  return clusters.filter(
+    (c) =>
+      Math.abs(c.lat - region.latitude) <= latPad &&
+      Math.abs(c.lng - region.longitude) <= lngPad,
+  );
 }
 
 function fitRegion(venues: VenueGroup[]): Region {
@@ -388,13 +408,34 @@ export default function MapScreen(): React.JSX.Element {
   );
 
   // The active layer: `discoverable` swaps in the Discover announcements;
-  // `past` / `upcoming` split the personal logbook by show state.
+  // `all` is the whole personal logbook; `past` / `upcoming` split it by
+  // show state.
   const allShows = React.useMemo<MapShow[]>(() => {
     if (layer === 'discoverable') return discoverableShows;
+    if (layer === 'all') return loggedShows;
     return layer === 'past'
       ? loggedShows.filter((s) => s.state === 'past')
       : loggedShows.filter((s) => s.state !== 'past');
   }, [layer, loggedShows, discoverableShows]);
+
+  // Pill counts — derived client-side from the already-loaded query data,
+  // so they add no network round-trip. Mode counts are the per-layer
+  // totals; kind counts are scoped to the active layer.
+  const modeCounts = React.useMemo<Record<MapMode, number>>(() => {
+    const past = loggedShows.filter((s) => s.state === 'past').length;
+    return {
+      all: loggedShows.length,
+      past,
+      upcoming: loggedShows.length - past,
+      discoverable: discoverableShows.length,
+    };
+  }, [loggedShows, discoverableShows]);
+
+  const kindCounts = React.useMemo<Record<string, number>>(() => {
+    const counts: Record<string, number> = { all: allShows.length };
+    for (const s of allShows) counts[s.kind] = (counts[s.kind] ?? 0) + 1;
+    return counts;
+  }, [allShows]);
 
   const filteredShows = React.useMemo(
     () =>
@@ -407,6 +448,13 @@ export default function MapScreen(): React.JSX.Element {
   const clusters = React.useMemo(
     () => clusterVenues(venues, region),
     [venues, region],
+  );
+
+  // Only the markers inside the viewport are handed to the native map —
+  // see `clustersInRegion` for why (the Discoverable-layer crash).
+  const visibleClusters = React.useMemo(
+    () => clustersInRegion(clusters, region),
+    [clusters, region],
   );
 
   // Fit camera to the user's venues once, on first successful load.
@@ -553,6 +601,7 @@ export default function MapScreen(): React.JSX.Element {
               onPress={() => onLayerChange(m)}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
+              accessibilityLabel={`${label} (${modeCounts[m]})`}
               style={[
                 styles.filterChip,
                 {
@@ -568,6 +617,17 @@ export default function MapScreen(): React.JSX.Element {
                 ]}
               >
                 {label}
+              </Text>
+              <Text
+                style={[
+                  styles.filterCount,
+                  {
+                    color: active ? colors.bg : colors.muted,
+                    opacity: active ? 0.7 : 1,
+                  },
+                ]}
+              >
+                {modeCounts[m]}
               </Text>
             </Pressable>
           );
@@ -586,12 +646,14 @@ export default function MapScreen(): React.JSX.Element {
       >
         {KIND_FILTERS.map(({ k, label }) => {
           const active = k === kindFilter;
+          const count = kindCounts[k] ?? 0;
           return (
             <Pressable
               key={k}
               onPress={() => setKindFilter(k)}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
+              accessibilityLabel={`${label} (${count})`}
               style={[
                 styles.filterChip,
                 {
@@ -616,6 +678,17 @@ export default function MapScreen(): React.JSX.Element {
               >
                 {label}
               </Text>
+              <Text
+                style={[
+                  styles.filterCount,
+                  {
+                    color: active ? colors.bg : colors.muted,
+                    opacity: active ? 0.7 : 1,
+                  },
+                ]}
+              >
+                {count}
+              </Text>
             </Pressable>
           );
         })}
@@ -638,11 +711,13 @@ export default function MapScreen(): React.JSX.Element {
             subtitle={
               allShows.length > 0
                 ? 'None of your matching venues have coordinates yet.'
-                : layer === 'past'
-                  ? 'Log a past show with a venue and it lands here.'
-                  : layer === 'upcoming'
-                    ? 'Ticketed and watchlisted shows land here.'
-                    : 'Follow venues, artists, or regions to discover shows here.'
+                : layer === 'all'
+                  ? 'Log a show with a venue and it lands here.'
+                  : layer === 'past'
+                    ? 'Log a past show with a venue and it lands here.'
+                    : layer === 'upcoming'
+                      ? 'Ticketed and watchlisted shows land here.'
+                      : 'Follow venues, artists, or regions to discover shows here.'
             }
           />
         ) : (
@@ -660,7 +735,7 @@ export default function MapScreen(): React.JSX.Element {
               showsPointsOfInterests={false}
               toolbarEnabled={false}
             >
-              {clusters.map((cluster) => {
+              {visibleClusters.map((cluster) => {
                 const color = tokens.kindColor(cluster.dominantKind);
                 const r = pinRadius(cluster.count);
                 const selected = cluster.id === selectedClusterId;
@@ -1047,6 +1122,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
+  },
+  filterCount: {
+    fontFamily: 'Geist Mono',
+    fontSize: 10,
+    fontWeight: '400',
   },
   pinOuter: { alignItems: 'center', justifyContent: 'center' },
   pinInner: { alignItems: 'center', justifyContent: 'center' },
