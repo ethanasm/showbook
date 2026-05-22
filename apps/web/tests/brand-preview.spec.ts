@@ -83,11 +83,11 @@ test.describe('web brand placement', () => {
   test('sidebar header (after)', async ({ page }) => {
     const css = await loadCss();
     const mark = afterMark(await loadMark(), 20);
-    await page.setViewportSize({ width: 320, height: 160 });
+    await page.setViewportSize({ width: 270, height: 74 });
     await page.setContent(
       `<!doctype html><html data-theme="dark"><head><style>${css}
-       body { margin: 0; background: var(--bg); padding: 24px; }
-       .frame { width: 260px; }
+       body { margin: 0; background: var(--bg); padding: 14px; }
+       .frame { width: 240px; }
        </style></head><body><div class="frame">
          <div class="sidebar__header">
            <button class="sidebar__logo" type="button">
@@ -105,11 +105,11 @@ test.describe('web brand placement', () => {
 
   test('sidebar header (before)', async ({ page }) => {
     const css = await loadCss();
-    await page.setViewportSize({ width: 320, height: 160 });
+    await page.setViewportSize({ width: 270, height: 74 });
     await page.setContent(
       `<!doctype html><html data-theme="dark"><head><style>${css}${BEFORE_CSS}
-       body { margin: 0; background: var(--bg); padding: 24px; }
-       .frame { width: 260px; }
+       body { margin: 0; background: var(--bg); padding: 14px; }
+       .frame { width: 240px; }
        </style></head><body><div class="frame">
          <div class="sidebar__header">
            <button class="sidebar__logo" type="button">
@@ -129,10 +129,10 @@ test.describe('web brand placement', () => {
   test('signin panel (after)', async ({ page }) => {
     const css = await loadCss();
     const mark = afterMark(await loadMark(), 26);
-    await page.setViewportSize({ width: 600, height: 240 });
+    await page.setViewportSize({ width: 210, height: 86 });
     await page.setContent(
       `<!doctype html><html data-theme="dark"><head><style>${css}
-       body { margin: 0; background: var(--bg); padding: 56px 64px; }
+       body { margin: 0; background: var(--bg); padding: 22px; }
        </style></head><body>
          <div class="signin__brand">
            <span class="signin__brand-mark">${mark}</span>
@@ -147,10 +147,10 @@ test.describe('web brand placement', () => {
 
   test('signin panel (before)', async ({ page }) => {
     const css = await loadCss();
-    await page.setViewportSize({ width: 600, height: 240 });
+    await page.setViewportSize({ width: 210, height: 86 });
     await page.setContent(
       `<!doctype html><html data-theme="dark"><head><style>${css}
-       body { margin: 0; background: var(--bg); padding: 56px 64px; }
+       body { margin: 0; background: var(--bg); padding: 22px; }
        </style></head><body>
          <div class="signin__brand">
            <span class="signin__brand-mark">${beforeMark(36)}</span>
@@ -167,7 +167,7 @@ test.describe('web brand placement', () => {
   test('public shell header (after)', async ({ page }) => {
     const css = await loadCss();
     const mark = afterMark(await loadMark(), 18);
-    await page.setViewportSize({ width: 520, height: 120 });
+    await page.setViewportSize({ width: 190, height: 72 });
     await page.setContent(
       `<!doctype html><html data-theme="dark"><head><style>${css}
        body { margin: 0; background: var(--bg); }
@@ -183,7 +183,7 @@ test.describe('web brand placement', () => {
 
   test('public shell header (before)', async ({ page }) => {
     const css = await loadCss();
-    await page.setViewportSize({ width: 520, height: 120 });
+    await page.setViewportSize({ width: 190, height: 72 });
     await page.setContent(
       `<!doctype html><html data-theme="dark"><head><style>${css}
        body { margin: 0; background: var(--bg); }
