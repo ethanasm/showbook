@@ -188,16 +188,18 @@ function SetlistTabUpcoming(props: SetlistTabProps): React.JSX.Element {
     <View>
       <SetCountStrip prediction={setCountPrediction ?? null} />
       {showHype && hypeMeta ? (
-        <SectionFrame title="Hype playlist">
-          <HypePlaylistCard
-            showId={showId}
-            performerId={performerId}
-            artist={artistName}
-            kind="hype"
-            trackCount={hypeMeta.count}
-            approxMinutes={hypeMeta.approxMinutes}
-          />
-        </SectionFrame>
+        <View style={styles.hypeSection}>
+          <SectionFrame title="Hype playlist">
+            <HypePlaylistCard
+              showId={showId}
+              performerId={performerId}
+              artist={artistName}
+              kind="hype"
+              trackCount={hypeMeta.count}
+              approxMinutes={hypeMeta.approxMinutes}
+            />
+          </SectionFrame>
+        </View>
       ) : null}
       {view === 'stable' && prediction.style === 'stable' ? (
         <StableSetlistView
@@ -434,6 +436,9 @@ function coldCopy(
 }
 
 const styles = StyleSheet.create({
+  hypeSection: {
+    marginBottom: 12,
+  },
   lockNote: {
     fontFamily: 'Geist Mono',
     fontSize: 10.5,
