@@ -122,6 +122,7 @@ function buildClient(opts: BuildClientOptions = {}): {
       followedFeed: { query: make('discover.followedFeed', { items: [] }) },
       followedArtistsFeed: { query: make('discover.followedArtistsFeed', { items: [] }) },
       nearbyFeed: { query: make('discover.nearbyFeed', { items: [] }) },
+      mapFeed: { query: make('discover.mapFeed', []) },
       watchedAnnouncementIds: { query: make('discover.watchedAnnouncementIds', []) },
     },
   };
@@ -153,6 +154,7 @@ describe('warmCacheForOfflineUse', () => {
     assert.equal(counts['discover.followedFeed'], 1);
     assert.equal(counts['discover.followedArtistsFeed'], 1);
     assert.equal(counts['discover.nearbyFeed'], 1);
+    assert.equal(counts['discover.mapFeed'], 1);
     assert.equal(counts['discover.watchedAnnouncementIds'], 1);
 
     // Discover feeds end up at the same cache keys the screen reads.
@@ -166,6 +168,8 @@ describe('warmCacheForOfflineUse', () => {
     assert.deepEqual(qc.getQueryData(['mobile', 'discover', 'nearbyFeed']), {
       items: [],
     });
+    // The map's Discoverable layer reads this flat key.
+    assert.deepEqual(qc.getQueryData(['mobile', 'discover.mapFeed']), []);
 
     // Both shows.list cache keys present from a single network call.
     assert.deepEqual(qc.getQueryData(['mobile', 'shows.list']), []);

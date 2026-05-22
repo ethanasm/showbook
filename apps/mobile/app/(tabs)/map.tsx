@@ -117,6 +117,17 @@ const KIND_FILTERS: readonly { k: 'all' | Kind; label: string }[] = [
   { k: 'sports', label: 'sports' },
 ];
 
+// Which layer of shows the map plots. `past` / `upcoming` split the user's
+// own logbook by show state; `discoverable` swaps in the announcements that
+// power the three Discover tabs (followed venues / artists / regions).
+type MapMode = 'past' | 'upcoming' | 'discoverable';
+
+const MODE_FILTERS: readonly { m: MapMode; label: string }[] = [
+  { m: 'past', label: 'past' },
+  { m: 'upcoming', label: 'upcoming' },
+  { m: 'discoverable', label: 'discoverable' },
+];
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -310,7 +321,14 @@ export default function MapScreen(): React.JSX.Element {
     queryFn: () => utils.client.shows.listForMap.query() as Promise<MapShow[]>,
     enabled: Boolean(token),
   });
+  const mapFeedQuery = useCachedQuery<MapShow[]>({
+    queryKey: ['mobile', 'discover.mapFeed'],
+    queryFn: () => utils.client.discover.mapFeed.query() as Promise<MapShow[]>,
+    enabled: Boolean(token),
+  });
 
+  const [layer, setLayer] = React.useState<MapMode>('past');
+  const [pendingRefit, setPendingRefit] = React.useState(false);
   const [kindFilter, setKindFilter] = React.useState<'all' | Kind>('all');
   const [region, setRegion] = React.useState<Region>(DEFAULT_REGION);
   const [loadedRegion, setLoadedRegion] = React.useState<Region>(DEFAULT_REGION);
@@ -360,10 +378,23 @@ export default function MapScreen(): React.JSX.Element {
   );
   const widestFocusRow = focusRows[0]?.length ?? 0;
 
-  const allShows = React.useMemo(
+  const loggedShows = React.useMemo(
     () => (showsQuery.data ?? []) as MapShow[],
     [showsQuery.data],
   );
+  const discoverableShows = React.useMemo(
+    () => (mapFeedQuery.data ?? []) as MapShow[],
+    [mapFeedQuery.data],
+  );
+
+  // The active layer: `discoverable` swaps in the Discover announcements;
+  // `past` / `upcoming` split the personal logbook by show state.
+  const allShows = React.useMemo<MapShow[]>(() => {
+    if (layer === 'discoverable') return discoverableShows;
+    return layer === 'past'
+      ? loggedShows.filter((s) => s.state === 'past')
+      : loggedShows.filter((s) => s.state !== 'past');
+  }, [layer, loggedShows, discoverableShows]);
 
   const filteredShows = React.useMemo(
     () =>
@@ -427,6 +458,26 @@ export default function MapScreen(): React.JSX.Element {
     router.setParams({ focusVenueId: '' });
   }, [focusVenueId, showsQuery.isSuccess, allShows, router]);
 
+  const onLayerChange = React.useCallback((next: MapMode) => {
+    setLayer(next);
+    setSelectedClusterId(null);
+    setPendingRefit(true);
+  }, []);
+
+  // After a layer switch, refit the camera once the new layer's venues
+  // are available — the discoverable feed may resolve a tick later than
+  // the state flip, so this keys on `allShows` and clears once it fires.
+  React.useEffect(() => {
+    if (!pendingRefit) return;
+    const layerVenues = groupByVenue(allShows);
+    if (layerVenues.length === 0) return;
+    const fit = fitRegion(layerVenues);
+    setRegion(fit);
+    setLoadedRegion(fit);
+    mapRef.current?.animateToRegion(fit, 400);
+    setPendingRefit(false);
+  }, [pendingRefit, allShows]);
+
   const onRegionChangeComplete = React.useCallback((next: Region) => {
     setRegion(next);
   }, []);
@@ -474,7 +525,8 @@ export default function MapScreen(): React.JSX.Element {
 
   // -- Render -------------------------------------------------------------
 
-  const isLoading = showsQuery.isLoading;
+  const isLoading =
+    layer === 'discoverable' ? mapFeedQuery.isLoading : showsQuery.isLoading;
   const hasMappableVenues = !isLoading && venues.length > 0;
 
   return (
@@ -485,6 +537,42 @@ export default function MapScreen(): React.JSX.Element {
         rightAction={<MeTopBarAction />}
         large
       />
+
+      {/* Layer toggle — past / upcoming / discoverable */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterScroll}
+        contentContainerStyle={styles.modeStrip}
+      >
+        {MODE_FILTERS.map(({ m, label }) => {
+          const active = m === layer;
+          return (
+            <Pressable
+              key={m}
+              onPress={() => onLayerChange(m)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              style={[
+                styles.filterChip,
+                {
+                  borderColor: active ? colors.ink : colors.ruleStrong,
+                  backgroundColor: active ? colors.ink : 'transparent',
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.filterLabel,
+                  { color: active ? colors.bg : colors.muted },
+                ]}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
 
       {/* Kind filter strip */}
       <ScrollView
@@ -542,11 +630,19 @@ export default function MapScreen(): React.JSX.Element {
         ) : !hasMappableVenues ? (
           <EmptyState
             icon={<MapPin size={40} color={colors.faint} strokeWidth={1.5} />}
-            title="No venues on the map yet"
+            title={
+              layer === 'discoverable'
+                ? 'Nothing to discover yet'
+                : 'No venues on the map yet'
+            }
             subtitle={
-              allShows.length === 0
-                ? 'Log a show with a venue and it will land here.'
-                : 'None of your matching venues have coordinates yet.'
+              allShows.length > 0
+                ? 'None of your matching venues have coordinates yet.'
+                : layer === 'past'
+                  ? 'Log a past show with a venue and it lands here.'
+                  : layer === 'upcoming'
+                    ? 'Ticketed and watchlisted shows land here.'
+                    : 'Follow venues, artists, or regions to discover shows here.'
             }
           />
         ) : (
@@ -714,6 +810,7 @@ export default function MapScreen(): React.JSX.Element {
           <VenueSheetContents
             venue={selectedVenue}
             onClose={() => setSelectedClusterId(null)}
+            layer={layer}
           />
         )}
       </Sheet>
@@ -728,9 +825,11 @@ export default function MapScreen(): React.JSX.Element {
 function VenueSheetContents({
   venue,
   onClose,
+  layer,
 }: {
   venue: VenueGroup;
   onClose: () => void;
+  layer: MapMode;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -745,14 +844,16 @@ function VenueSheetContents({
     venue.shows.map((s) => s.headlinerName).filter((n): n is string => Boolean(n)),
   ).size;
 
+  // Past visits read newest-first; upcoming / discoverable shows read
+  // soonest-first so the next thing to happen sits at the top.
   const sortedShows = React.useMemo(
     () =>
       [...venue.shows].sort((a, b) => {
         const ad = a.date ? new Date(a.date).getTime() : 0;
         const bd = b.date ? new Date(b.date).getTime() : 0;
-        return bd - ad;
+        return layer === 'past' ? bd - ad : ad - bd;
       }),
-    [venue],
+    [venue, layer],
   );
 
   const locationLine = [venue.city, venue.stateRegion].filter(Boolean).join(', ');
@@ -808,7 +909,9 @@ function VenueSheetContents({
       </View>
 
       <View style={styles.visitsHeader}>
-        <Text style={[styles.visitsTitle, { color: colors.ink }]}>All visits</Text>
+        <Text style={[styles.visitsTitle, { color: colors.ink }]}>
+          {layer === 'past' ? 'All visits' : 'Shows'}
+        </Text>
         <Text style={[styles.visitsCount, { color: colors.faint }]}>
           {sortedShows.length}
         </Text>
@@ -911,6 +1014,14 @@ function Stat({ label, value }: { label: string; value: string }): React.JSX.Ele
 const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   filterScroll: { flexGrow: 0 },
+  modeStrip: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 8,
+    gap: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   filterStrip: {
     paddingHorizontal: 20,
     paddingBottom: 12,

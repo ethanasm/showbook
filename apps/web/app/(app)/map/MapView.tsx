@@ -46,6 +46,48 @@ const KINDS = [
   { k: "festival", label: "Festival" },
 ] as const;
 
+// Which layer of shows the map plots. `past` / `upcoming` split the user's
+// own logbook by show state; `discoverable` swaps in the announcements that
+// power the three Discover tabs (followed venues / artists / regions).
+type MapMode = "past" | "upcoming" | "discoverable";
+
+const MODES = [
+  { m: "past", label: "Past shows" },
+  { m: "upcoming", label: "Upcoming" },
+  { m: "discoverable", label: "Discoverable" },
+] as const satisfies ReadonlyArray<{ m: MapMode; label: string }>;
+
+const MODE_DESCRIPTIONS: Record<MapMode, string> = {
+  past: "Shows you've been to",
+  upcoming: "Upcoming shows you're going to",
+  discoverable: "Shows to discover near you",
+};
+
+// Common row shape across `shows.listForMap` (logbook) and
+// `discover.mapFeed` (announcements) so one venue-grouping path serves both.
+interface MapShowRow {
+  id: string;
+  kind: string;
+  state: string;
+  date: string | null;
+  seat: string | null;
+  pricePaid: string | null;
+  ticketCount: number | null;
+  venue: {
+    id: string;
+    name: string;
+    city: string;
+    stateRegion: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    photoUrl: string | null;
+    googlePlaceId: string | null;
+  } | null;
+  headlinerName: string | null;
+  headlinerId: string | null;
+  headlinerImageUrl: string | null;
+}
+
 interface ViewPreset {
   label: string;
   center: [number, number];
@@ -271,12 +313,16 @@ function TopBar({ venues }: { venues: VenueGroup[] }) {
 // ---------------------------------------------------------------------------
 
 function FilterBar({
+  mode,
+  setMode,
   year,
   setYear,
   kind,
   setKind,
   years,
 }: {
+  mode: MapMode;
+  setMode: (m: MapMode) => void;
   year: string;
   setYear: (y: string) => void;
   kind: string;
@@ -288,8 +334,23 @@ function FilterBar({
       <div className="map-filterbar__viewing">
         <div className="map-filterbar__viewing-label">Viewing</div>
         <div className="map-filterbar__viewing-text">
-          All shows on the map
+          {MODE_DESCRIPTIONS[mode]}
         </div>
+      </div>
+
+      <div className="segmented-filter" role="group" aria-label="Show layer">
+        {MODES.map(({ m, label }) => (
+          <button
+            key={m}
+            className={`segmented-filter__btn ${
+              m === mode ? "segmented-filter__btn--active" : ""
+            }`}
+            onClick={() => setMode(m)}
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       <div className="segmented-filter">
@@ -421,9 +482,11 @@ function StatsOverlay({
 function VenueInspector({
   venue,
   onClose,
+  mode,
 }: {
   venue: VenueGroup;
   onClose: () => void;
+  mode: MapMode;
 }) {
   const router = useRouter();
   const utils = trpc.useUtils();
@@ -480,6 +543,18 @@ function VenueInspector({
     );
     return new Date(sorted[0].date + "T00:00:00").getFullYear().toString();
   }, [venue.shows]);
+
+  // Past visits read newest-first; upcoming / discoverable shows read
+  // soonest-first so the next thing to happen sits at the top.
+  const sortedShows = useMemo(() => {
+    const copy = [...venue.shows];
+    copy.sort((a, b) =>
+      mode === "past"
+        ? new Date(b.date).getTime() - new Date(a.date).getTime()
+        : new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+    return copy;
+  }, [venue.shows, mode]);
 
   return (
     <div className="venue-inspector">
@@ -565,17 +640,20 @@ function VenueInspector({
         })}
       </div>
 
-      {/* All visits header */}
+      {/* Visits / shows header */}
       <div className="venue-inspector__visits-header">
-        <div className="venue-inspector__visits-title">All visits</div>
+        <div className="venue-inspector__visits-title">
+          {mode === "past" ? "All visits" : "Shows"}
+        </div>
         <div className="venue-inspector__visits-count">
-          {venue.shows.length} &middot; newest first
+          {venue.shows.length} &middot;{" "}
+          {mode === "past" ? "newest first" : "soonest first"}
         </div>
       </div>
 
       {/* Visits list */}
       <div className="venue-inspector__visits-list">
-        {venue.shows.map((show) => {
+        {sortedShows.map((show) => {
           const { month, day, year } = formatDateParts(show.date);
           return (
             <div key={show.id} className="venue-inspector__visit-row">
@@ -670,12 +748,37 @@ export default function MapView() {
   const searchParams = useSearchParams();
   const deepLinkVenueId = searchParams.get("venue");
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(deepLinkVenueId);
+  const [mode, setMode] = useState<MapMode>("past");
   const [yearFilter, setYearFilter] = useState("All time");
   const [kindFilter, setKindFilter] = useState("all");
   const [activeView, setActiveView] = useState<number | null>(null);
 
-  const { data: shows, isLoading } = trpc.shows.listForMap.useQuery();
+  const { data: loggedShows, isLoading } = trpc.shows.listForMap.useQuery();
+  const { data: discoverableShows, isLoading: discoverableLoading } =
+    trpc.discover.mapFeed.useQuery();
   const { data: prefs } = trpc.preferences.get.useQuery();
+
+  // The active layer. `discoverable` swaps in the Discover announcements;
+  // `past` / `upcoming` split the personal logbook by show state
+  // (`past` vs. ticketed/watching).
+  const shows = useMemo<MapShowRow[]>(() => {
+    if (mode === "discoverable") {
+      return (discoverableShows ?? []) as MapShowRow[];
+    }
+    const logged = (loggedShows ?? []) as MapShowRow[];
+    return mode === "past"
+      ? logged.filter((s) => s.state === "past")
+      : logged.filter((s) => s.state !== "past");
+  }, [mode, loggedShows, discoverableShows]);
+
+  // Switching layers resets the year filter — a year that exists in the
+  // logbook rarely lines up with the future-only discoverable set — and
+  // drops the open inspector, whose venue may not exist in the new layer.
+  const handleModeChange = useCallback((next: MapMode) => {
+    setMode(next);
+    setYearFilter("All time");
+    setSelectedVenueId(null);
+  }, []);
 
   // Bottom-right focus toggle is driven by the user's active followed
   // regions (max 5, enforced by `preferences.addRegion`). Inactive
@@ -837,7 +940,44 @@ export default function MapView() {
     );
   }
 
-  if (venueGroups.length === 0) {
+  const hasAnyData =
+    (loggedShows?.length ?? 0) > 0 || (discoverableShows?.length ?? 0) > 0;
+
+  // In-map hint shown when the *current* layer has nothing to plot but
+  // another layer does — keeps the filter bar reachable so the user can
+  // switch instead of being dropped onto the full-page empty state.
+  let emptyHint: { title: string; body: string } | null = null;
+  if (mode === "discoverable" && discoverableLoading && venueGroups.length === 0) {
+    emptyHint = {
+      title: "Loading discoverable shows…",
+      body: "Pulling announcements from your follows.",
+    };
+  } else if (venueGroups.length === 0) {
+    if (mode === "past") {
+      emptyHint = {
+        title: "No past shows to map",
+        body: "Shows you've logged at a venue land here.",
+      };
+    } else if (mode === "upcoming") {
+      emptyHint = {
+        title: "No upcoming shows to map",
+        body: "Ticketed and watchlisted shows land here.",
+      };
+    } else {
+      emptyHint = {
+        title: "Nothing to discover yet",
+        body: "Follow venues, artists, or regions to see announcements here.",
+      };
+    }
+  } else if (filteredVenues.length === 0) {
+    emptyHint = {
+      title: "No venues match these filters",
+      body: "Try a different year or kind.",
+    };
+  }
+
+  // Full-page empty only when the user has nothing in *any* layer.
+  if (!hasAnyData && !discoverableLoading) {
     return (
       <div className="map-empty">
         <EmptyState
@@ -881,6 +1021,8 @@ export default function MapView() {
     <div className="map-page">
       <TopBar venues={filteredVenues} />
       <FilterBar
+        mode={mode}
+        setMode={handleModeChange}
         year={yearFilter}
         setYear={setYearFilter}
         kind={kindFilter}
@@ -994,6 +1136,13 @@ export default function MapView() {
             venueCount={filteredVenues.length}
             showCount={totalShowCount}
           />
+
+          {emptyHint && (
+            <div className="map-area__empty">
+              <div className="map-area__empty-title">{emptyHint.title}</div>
+              <div className="map-area__empty-body">{emptyHint.body}</div>
+            </div>
+          )}
         </div>
 
         {/* Inspector panel */}
@@ -1001,6 +1150,7 @@ export default function MapView() {
           <VenueInspector
             venue={selectedVenue}
             onClose={() => setSelectedVenueId(null)}
+            mode={mode}
           />
         )}
       </div>

@@ -10,6 +10,7 @@ export default async function MapPage() {
   const caller = await getServerCaller();
   await Promise.all([
     prefetch("shows.listForMap", undefined, () => caller.shows.listForMap()),
+    prefetch("discover.mapFeed", undefined, () => caller.discover.mapFeed()),
     prefetch("venues.followed", undefined, () => caller.venues.followed()),
   ]);
 

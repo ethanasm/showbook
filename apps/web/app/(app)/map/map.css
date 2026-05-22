@@ -160,15 +160,40 @@
 }
 
 .map-filterbar__viewing-text {
-  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
-  font-size: 13px;
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 11px;
   color: var(--muted);
-  letter-spacing: -0.1px;
+  letter-spacing: 0.03em;
 }
 
-/* Year + kind filter groups live in a shared
-   apps/web/components/design-system/segmented-filter.css so the same
-   markup is reused by the logbook/upcoming FilterBar. */
+/* The layer / year / kind filter groups reuse the shared
+   apps/web/components/design-system/segmented-filter.css markup. On the
+   map they adopt the compact Geist Mono "stats filter" treatment from the
+   Stats page timeframe selector — scoped to .map-filterbar so the shared
+   segmented-filter on logbook / upcoming keeps its Geist Sans look. */
+.map-filterbar .segmented-filter__btn {
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  padding: 7px 13px;
+}
+
+.map-filterbar .segmented-filter__btn--kind {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding: 7px 11px;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.map-filterbar .segmented-filter__btn--active,
+.map-filterbar .segmented-filter__btn--active-concert,
+.map-filterbar .segmented-filter__btn--active-theatre,
+.map-filterbar .segmented-filter__btn--active-comedy,
+.map-filterbar .segmented-filter__btn--active-festival {
+  font-weight: 500;
+}
 
 /* ── Body: map + inspector row ──────────────────────────────────────────── */
 
@@ -321,6 +346,38 @@
   width: 1px;
   height: 24px;
   background: var(--rule);
+}
+
+/* In-map empty hint — shown when the active layer (past / upcoming /
+   discoverable) has nothing to plot but another layer does, so the filter
+   bar stays reachable instead of dropping to the full-page empty state. */
+.map-area__empty {
+  position: absolute;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px;
+  text-align: center;
+  background: var(--bg);
+}
+
+.map-area__empty-title {
+  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.2px;
+}
+
+.map-area__empty-body {
+  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.03em;
 }
 
 /* ── Loading / empty states ─────────────────────────────────────────────── */
