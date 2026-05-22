@@ -65,8 +65,23 @@ describe('VenueTypeahead', () => {
     assert.equal(findSuggestionRows(renderer).length, 0);
   });
 
-  it('renders suggestions when value is non-empty', () => {
+  it('renders nothing on mount when value is pre-filled until the user focuses the input', () => {
+    // Edit-form case: the parent pre-fills the query with the existing
+    // venue name. Without a focus gate the dropdown would pop open
+    // before the user touches the field.
+    const renderer = renderTypeahead({ value: 'Golden Gate Park', suggestions: SAMPLES });
+    assert.equal(findSuggestionRows(renderer).length, 0);
+    TestRenderer.act(() => {
+      findInput(renderer).props.onFocus();
+    });
+    assert.equal(findSuggestionRows(renderer).length, 2);
+  });
+
+  it('renders suggestions when value is non-empty and the input has been focused', () => {
     const renderer = renderTypeahead({ value: 'gre', suggestions: SAMPLES });
+    TestRenderer.act(() => {
+      findInput(renderer).props.onFocus();
+    });
     const rows = findSuggestionRows(renderer);
     assert.equal(rows.length, 2);
   });
@@ -77,6 +92,9 @@ describe('VenueTypeahead', () => {
       value: 'gre',
       suggestions: SAMPLES,
       onSelect,
+    });
+    TestRenderer.act(() => {
+      findInput(renderer).props.onFocus();
     });
     const rows = findSuggestionRows(renderer);
     TestRenderer.act(() => {
@@ -110,6 +128,9 @@ describe('VenueTypeahead', () => {
             }),
           ),
         );
+      });
+      TestRenderer.act(() => {
+        findInput(renderer).props.onFocus();
       });
 
       // Type "g", "gr", "gre", "gree" within 30ms each — well under the
@@ -172,10 +193,88 @@ describe('VenueTypeahead', () => {
         );
       });
       TestRenderer.act(() => {
+        findInput(renderer).props.onFocus();
+      });
+      TestRenderer.act(() => {
         mock.timers.tick(50);
       });
       assert.equal(onSearch.mock.callCount(), 0);
       void renderer;
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it('hides the suggestion list after a row is selected and reopens when the user types again', () => {
+    mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+      const onSearch = mock.fn();
+      let value = 'gre';
+      let renderer;
+      const buildTree = () =>
+        React.createElement(
+          ThemeProvider,
+          null,
+          React.createElement(VenueTypeahead, {
+            value,
+            onChange: (next) => {
+              value = next;
+            },
+            onSelect: () => {
+              // Mirror the real parent: echo the venue name into
+              // the input so `value` stays non-empty.
+              value = SAMPLES[0].name;
+            },
+            onSearch,
+            suggestions: SAMPLES,
+            debounceMs: 10,
+          }),
+        );
+      const render = () => {
+        TestRenderer.act(() => {
+          if (renderer) {
+            renderer.update(buildTree());
+          } else {
+            renderer = TestRenderer.create(buildTree());
+          }
+        });
+      };
+      render();
+      TestRenderer.act(() => {
+        findInput(renderer).props.onFocus();
+      });
+      render();
+      assert.equal(findSuggestionRows(renderer).length, 2);
+
+      // Tap the first suggestion.
+      TestRenderer.act(() => {
+        findSuggestionRows(renderer)[0].props.onPress();
+      });
+      // Re-render with the parent's updated value.
+      render();
+      // Settle past the debounce window; the debounced effect must not
+      // re-fire onSearch against the post-select value and the dropdown
+      // must stay hidden.
+      TestRenderer.act(() => {
+        mock.timers.tick(50);
+      });
+      render();
+      assert.equal(findSuggestionRows(renderer).length, 0);
+      const callsAfterSelect = onSearch.mock.callCount();
+
+      // User types again: dropdown should reopen on the next render.
+      TestRenderer.act(() => {
+        findInput(renderer).props.onChangeText('walter');
+      });
+      render();
+      assert.equal(findSuggestionRows(renderer).length, 2);
+      TestRenderer.act(() => {
+        mock.timers.tick(50);
+      });
+      assert.ok(
+        onSearch.mock.callCount() > callsAfterSelect,
+        'onSearch should fire again once the user resumes typing',
+      );
     } finally {
       mock.timers.reset();
     }

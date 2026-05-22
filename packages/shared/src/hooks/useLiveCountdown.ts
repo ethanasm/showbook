@@ -1,23 +1,31 @@
-/**
- * Live-ticking countdown hook (mobile mirror of `apps/web/lib/useLiveCountdown.ts`).
- *
- * Anchor: local-time doors hour (defaults to 19:00 — matches the
- * hardcoded "doors 7:00 pm" copy in HeroCard / ShowDetail). Cadence:
- * 60 s while > 1 h away, 1 s while < 1 h, falls through to the
- * static "in 5 days" / "tomorrow" / "tonight" label above the 48 h
- * window so distant shows don't re-render every minute.
- *
- * Pure formatter (`formatCountdown`) is exported separately so unit
- * tests can advance "now" without scheduling a real interval.
- */
-
 import { useEffect, useState } from 'react';
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 const TWO_DAYS_MS = 2 * DAY_MS;
+// Default assumed doors time when the show row only carries a calendar
+// date (today everything is calendar-only — see specs note about
+// adding showTime). The mobile + web hero copy already hardcodes
+// "doors 7:00 pm", so keeping the anchor consistent here avoids a
+// jarring drift between the surrounding copy and the countdown.
 const DEFAULT_DOORS_HOUR = 19;
 
+/**
+ * Returns a live-ticking countdown label for a calendar-day show date
+ * (YYYY-MM-DD) anchored at the local-time doors hour. The hook only
+ * re-renders when it actually needs to — once per minute while > 1 h
+ * away, once per second under the last hour — so a hero card with
+ * five upcoming shows doesn't burn a frame per second on each.
+ *
+ *   - > 48 h away → calendar label ("in 5 days", "tomorrow", "tonight")
+ *   - 1 h–48 h     → "23h 04m"
+ *   - < 1 h        → "00:14:09"
+ *   - past         → "started"  (the caller can show post-show UI)
+ *
+ * `fallback` is shown when `dateYmd` is null (e.g. multi-night runs
+ * the user hasn't pinned a date for yet) — matches the existing
+ * `countdownText(null) === 'date TBD'` contract.
+ */
 export function useLiveCountdown(
   dateYmd: string | null,
   options?: { doorsHour?: number; fallback?: string },
@@ -37,6 +45,9 @@ export function useLiveCountdown(
       if (cancelled) return;
       const current = Date.now();
       setNow(current);
+      // Schedule the next tick at the cadence appropriate to how close
+      // we are to the anchor. Aligning to the next whole second boundary
+      // keeps the displayed digits monotone.
       const remaining = target! - current;
       let interval: number;
       if (remaining <= 0) {
@@ -61,11 +72,18 @@ export function useLiveCountdown(
 }
 
 function resolveTargetMs(dateYmd: string, doorsHour: number): number | null {
+  // Local-zone anchor. dateYmd is a calendar date (no zone info), so
+  // we deliberately build a local Date — UTC parsing would shift the
+  // doors anchor by the user's offset.
   const [y, m, d] = dateYmd.split('-').map(Number);
   if (!y || !m || !d) return null;
   return new Date(y, m - 1, d, doorsHour, 0, 0, 0).getTime();
 }
 
+/**
+ * Pure formatter — exposed for unit testing the cadence transitions
+ * without scheduling a real interval.
+ */
 export function formatCountdown(
   dateYmd: string,
   doorsHour: number,
@@ -75,9 +93,15 @@ export function formatCountdown(
   if (target == null) return 'date TBD';
   const remaining = target - nowMs;
 
-  if (remaining <= 0) return 'started';
+  if (remaining <= 0) {
+    // Past the doors anchor. We don't show negative deltas in the live
+    // hook — the caller's "past show" UI takes over.
+    return 'started';
+  }
 
   if (remaining > TWO_DAYS_MS) {
+    // Calendar-day text matches the existing `countdownText()` output
+    // so the > 48 h branch reads identically to the un-ticked label.
     const days = Math.round(remaining / DAY_MS);
     if (days === 1) return 'tomorrow';
     return `in ${days} days`;

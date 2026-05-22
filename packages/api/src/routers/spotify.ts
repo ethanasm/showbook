@@ -11,20 +11,15 @@
  *   - `disconnect` — operator-/user-initiated revoke from Preferences.
  *
  * Phase 3 (this file's expansion):
- *   - `hypePlaylistFeature` — gate the new HypePlaylistCard UI by the
- *     `SetlistIntelHypePlaylist` flag (global ON) or admin allowlist.
  *   - `existingPlaylist` — idempotency lookup the UI uses to flip
  *     "Open in Spotify" instead of re-creating.
  *   - `createHypePlaylist` / `createHeardPlaylist` — the playlist
  *     mutations.
  */
 
-import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { child } from '@showbook/observability';
-import { isFeatureOn, type FeatureFlagKey } from '@showbook/shared';
-import { users } from '@showbook/db';
 import { router, protectedProcedure } from '../trpc';
 import {
   disconnectSpotify,
@@ -36,47 +31,21 @@ import {
   createHypePlaylist,
   getExistingPlaylist,
 } from '../spotify-playlist';
-import { isAdminEmail } from '../admin';
 
 const log = child({ component: 'api.spotify.router', provider: 'spotify' });
 
-const FLAG_KEY: FeatureFlagKey = 'SetlistIntelHypePlaylist';
-
-/**
- * Resolves the SetlistIntelHypePlaylist gate for a given user. The flag
- * is OFF in prod by default; admins (per ADMIN_EMAILS) bypass the gate
- * so the developer can validate the feature in prod before flipping it
- * for everyone.
- */
-async function isHypePlaylistEnabledForUser(
-  dbi: typeof import('@showbook/db').db,
-  userId: string,
-): Promise<boolean> {
-  if (isFeatureOn(FLAG_KEY)) return true;
-  const [user] = await dbi
-    .select({ email: users.email })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-  return isAdminEmail(user?.email);
-}
-
-async function requireHypePlaylistEnabled(
-  dbi: typeof import('@showbook/db').db,
-  userId: string,
-): Promise<void> {
-  if (!(await isHypePlaylistEnabledForUser(dbi, userId))) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'feature_disabled:SetlistIntelHypePlaylist',
-    });
-  }
-}
-
-const showIdInput = z.object({ showId: z.string().uuid() });
+// Optional `performerId` powers the festival lineup chip rail —
+// when omitted, the playlist mutations and the existing-playlist
+// lookup default to the show's headliner so single-act concerts
+// keep their original call shape.
+const playlistMutationInput = z.object({
+  showId: z.string().uuid(),
+  performerId: z.string().uuid().optional(),
+});
 const existingPlaylistInput = z.object({
   showId: z.string().uuid(),
   kind: z.union([z.literal('hype'), z.literal('heard')]),
+  performerId: z.string().uuid().optional(),
 });
 
 export const spotifyRouter = router({
@@ -114,19 +83,6 @@ export const spotifyRouter = router({
   }),
 
   /**
-   * Gate query for the Phase 3 HypePlaylistCard UI. Returns `enabled`
-   * when the global feature flag is ON or the caller is on the
-   * `ADMIN_EMAILS` allowlist (the in-prod developer override).
-   */
-  hypePlaylistFeature: protectedProcedure.query(async ({ ctx }) => {
-    const enabled = await isHypePlaylistEnabledForUser(
-      ctx.db,
-      ctx.session.user.id,
-    );
-    return { enabled };
-  }),
-
-  /**
    * Look up the existing hype or heard playlist row for a show. Used by
    * the UI to flip the card's primary button from "Open in Spotify"
    * (build new) to "Open in Spotify" (open existing) without a new
@@ -136,7 +92,12 @@ export const spotifyRouter = router({
     .input(existingPlaylistInput)
     .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      return getExistingPlaylist({ userId, showId: input.showId, kind: input.kind });
+      return getExistingPlaylist({
+        userId,
+        showId: input.showId,
+        kind: input.kind,
+        performerId: input.performerId,
+      });
     }),
 
   /**
@@ -146,13 +107,16 @@ export const spotifyRouter = router({
    * re-tapping returns the previously persisted row.
    */
   createHypePlaylist: protectedProcedure
-    .input(showIdInput)
+    .input(playlistMutationInput)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      await requireHypePlaylistEnabled(ctx.db, userId);
       const startedAt = Date.now();
       try {
-        const result = await createHypePlaylist({ userId, showId: input.showId });
+        const result = await createHypePlaylist({
+          userId,
+          showId: input.showId,
+          performerId: input.performerId,
+        });
         const durationMs = Date.now() - startedAt;
         if (result.reused) {
           log.info(
@@ -160,6 +124,7 @@ export const spotifyRouter = router({
               event: 'spotify.playlist.hype_reused',
               userId,
               showId: input.showId,
+              performerId: input.performerId ?? null,
               playlistId: result.playlistId,
               trackCount: result.trackCount,
               durationMs,
@@ -172,6 +137,7 @@ export const spotifyRouter = router({
               event: 'spotify.playlist.hype_created',
               userId,
               showId: input.showId,
+              performerId: input.performerId ?? null,
               playlistId: result.playlistId,
               trackCount: result.trackCount,
               missingCount: result.missing.length,
@@ -184,7 +150,13 @@ export const spotifyRouter = router({
       } catch (err) {
         if (err instanceof TRPCError) throw err;
         log.error(
-          { err, event: 'spotify.hype_playlist.failed', userId, showId: input.showId },
+          {
+            err,
+            event: 'spotify.hype_playlist.failed',
+            userId,
+            showId: input.showId,
+            performerId: input.performerId ?? null,
+          },
           'Hype playlist creation failed',
         );
         throw new TRPCError({
@@ -199,13 +171,16 @@ export const spotifyRouter = router({
    * setlist rather than the prediction.
    */
   createHeardPlaylist: protectedProcedure
-    .input(showIdInput)
+    .input(playlistMutationInput)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      await requireHypePlaylistEnabled(ctx.db, userId);
       const startedAt = Date.now();
       try {
-        const result = await createHeardPlaylist({ userId, showId: input.showId });
+        const result = await createHeardPlaylist({
+          userId,
+          showId: input.showId,
+          performerId: input.performerId,
+        });
         const durationMs = Date.now() - startedAt;
         if (result.reused) {
           log.info(
@@ -213,6 +188,7 @@ export const spotifyRouter = router({
               event: 'spotify.playlist.heard_reused',
               userId,
               showId: input.showId,
+              performerId: input.performerId ?? null,
               playlistId: result.playlistId,
               trackCount: result.trackCount,
               durationMs,
@@ -225,6 +201,7 @@ export const spotifyRouter = router({
               event: 'spotify.playlist.heard_created',
               userId,
               showId: input.showId,
+              performerId: input.performerId ?? null,
               playlistId: result.playlistId,
               trackCount: result.trackCount,
               missingCount: result.missing.length,
@@ -237,7 +214,13 @@ export const spotifyRouter = router({
       } catch (err) {
         if (err instanceof TRPCError) throw err;
         log.error(
-          { err, event: 'spotify.heard_playlist.failed', userId, showId: input.showId },
+          {
+            err,
+            event: 'spotify.heard_playlist.failed',
+            userId,
+            showId: input.showId,
+            performerId: input.performerId ?? null,
+          },
           'Heard playlist creation failed',
         );
         throw new TRPCError({

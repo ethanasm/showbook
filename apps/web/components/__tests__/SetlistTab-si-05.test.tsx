@@ -173,6 +173,7 @@ describe('SetlistTab — SI-05 hide rule for HypePlaylistCard (pre-show)', () =>
       <PreviewPlayerProvider>
         <SetlistTab
           showId="show-1"
+          performerId="performer-1"
           isPast={false}
           artistName={ARTIST}
           prediction={stablePrediction()}
@@ -192,12 +193,12 @@ describe('SetlistTab — SI-05 hide rule for HypePlaylistCard (pre-show)', () =>
     const { queryByTestId } = render(
       <SetlistTab
         showId="show-1"
+        performerId="performer-1"
         isPast={false}
         artistName={ARTIST}
         prediction={rotatingPrediction()}
         predictionLoading={false}
         hypePlaylistEnabled
-        rotatingDisplayEnabled
       />,
     );
     assert.equal(
@@ -213,12 +214,12 @@ describe('SetlistTab — SI-05 hide rule for HypePlaylistCard (pre-show)', () =>
     const { queryByTestId } = render(
       <SetlistTab
         showId="show-1"
+        performerId="performer-1"
         isPast={false}
         artistName={ARTIST}
         prediction={improvisedPrediction()}
         predictionLoading={false}
         hypePlaylistEnabled
-        improvisedDisplayEnabled
       />,
     );
     assert.equal(
@@ -234,12 +235,12 @@ describe('SetlistTab — SI-05 hide rule for HypePlaylistCard (pre-show)', () =>
     const { getByTestId } = render(
       <SetlistTab
         showId="show-1"
+        performerId="performer-1"
         isPast={false}
         artistName={ARTIST}
         prediction={theatricalPrediction()}
         predictionLoading={false}
         hypePlaylistEnabled
-        theatricalDisplayEnabled
       />,
     );
     assert.ok(getByTestId('hype-card-stub'), 'theatrical should mount the hype card');

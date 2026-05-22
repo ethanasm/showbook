@@ -5,6 +5,7 @@ import './load-env-local';
 import { db, shows, venues } from '@showbook/db';
 import { and, eq, isNull, ne, or, sql } from 'drizzle-orm';
 import {
+  pickAttractionImage,
   searchAttractions,
   searchEvents,
   selectBestImage,
@@ -109,16 +110,17 @@ export async function runBackfillShowCoverImages(): Promise<BackfillShowCoverIma
           }
         }
 
-        // Path 2: attraction search by name with exact-match guard
+        // Path 2: attraction search. `pickAttractionImage` walks every
+        // candidate that matches (exact-name first, then "<name> (...)"
+        // variants) until it finds one with usable images. The earlier
+        // `candidates.find` + single `selectBestImage` fell through when
+        // TM returned a stale bare-name record with no art alongside a
+        // suffixed record carrying the real poster — see the "Cabaret
+        // at the Kit Kat Club" / "Cabaret at the Kit Kat Club (NY)"
+        // case in 2026-05-21.
         if (!imageUrl) {
-          const target = cacheKey;
           const candidates = await searchAttractions(row.productionName);
-          const match = candidates.find(
-            (a) => a.name.trim().toLowerCase() === target,
-          );
-          if (match) {
-            imageUrl = selectBestImage(match.images);
-          }
+          imageUrl = pickAttractionImage(candidates, row.productionName);
         }
 
         cache.set(cacheKey, imageUrl);

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Eye, Music, Plus, X, ArrowRight, Mail, Ticket } from "lucide-react";
+import { isFeatureOn } from "@showbook/shared";
 import { SpotifyImportModal } from "@/components/preferences/SpotifyImportModal";
 import "@/components/design-system/design-system.css";
 
@@ -58,6 +59,8 @@ export function GetStartedHub({
 }) {
   const [spotifyOpen, setSpotifyOpen] = useState(false);
 
+  const eventbriteEnabled = isFeatureOn("EventbriteImportEnabled");
+
   const doors: Door[] = [
     {
       id: "gmail",
@@ -77,15 +80,19 @@ export function GetStartedHub({
       primary: true,
       href: "/logbook?import=setlistfm",
     },
-    {
-      id: "eventbrite",
-      icon: <Ticket size={16} color="var(--accent)" />,
-      title: "Import from Eventbrite",
-      shortTitle: "Eventbrite",
-      subtitle: "Past orders for indie shows, comedy, theatre.",
-      primary: true,
-      href: "/logbook?import=eventbrite",
-    },
+    ...(eventbriteEnabled
+      ? [
+          {
+            id: "eventbrite",
+            icon: <Ticket size={16} color="var(--accent)" />,
+            title: "Import from Eventbrite",
+            shortTitle: "Eventbrite",
+            subtitle: "Past orders for indie shows, comedy, theatre.",
+            primary: true,
+            href: "/logbook?import=eventbrite",
+          } satisfies Door,
+        ]
+      : []),
     {
       id: "spotify",
       icon: <Music size={16} color="var(--accent)" />,

@@ -190,28 +190,6 @@ function PopularPicksList({
   );
 }
 
-export function ImprovisedGateBlocked(): React.JSX.Element {
-  const { tokens } = useTheme();
-  const { colors } = tokens;
-  return (
-    <View
-      testID="improvised-gate-blocked"
-      style={[
-        styles.gateBlocked,
-        { backgroundColor: colors.surface, borderBottomColor: colors.rule },
-      ]}
-    >
-      <Text style={[styles.gateBlockedTitle, { color: colors.ink }]}>
-        Improvised-style display temporarily disabled
-      </Text>
-      <Text style={[styles.gateBlockedBody, { color: colors.muted }]}>
-        The vibe sketch isn&rsquo;t calibrated yet — the show-mode
-        calibration check needs to clear before the display flips on.
-      </Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   copy: {
     fontFamily: 'Geist Mono',

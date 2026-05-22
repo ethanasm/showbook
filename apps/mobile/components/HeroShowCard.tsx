@@ -21,7 +21,7 @@ import { hapticImpactMedium } from '../lib/haptics';
 import { KindBadge } from './KindBadge';
 import { StateChip } from './StateChip';
 import { RemoteImage } from './design-system/RemoteImage';
-import { useLiveCountdown } from '../lib/useLiveCountdown';
+import { useLiveCountdown } from '@showbook/shared/hooks';
 import type { ShowCardShow } from './ShowCard';
 
 export interface HeroShowCardProps {
@@ -101,8 +101,8 @@ export function HeroShowCard({
       {/* Top row: badges left, countdown right */}
       <View style={styles.topRow} pointerEvents="none">
         <View style={styles.badgeRow}>
-          <KindBadge kind={show.kind} size="sm" />
-          {show.state !== 'past' && <StateChip state={show.state} />}
+          <KindBadge kind={show.kind} size="sm" tone="onPhoto" />
+          {show.state !== 'past' && <StateChip state={show.state} tone="onPhoto" />}
         </View>
         {countdown ? (
           <View style={styles.countdownChip}>

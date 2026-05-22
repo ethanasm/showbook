@@ -17,17 +17,14 @@ import { SectionFrame } from './SectionFrame';
 import { HypePlaylistCard } from './HypePlaylistCard';
 import { StableSetlistView } from './StableSetlistView';
 import {
-  RotatingGateBlocked,
   RotatingSetlistView,
   type RotatingPredictionLike,
 } from './RotatingSetlistView';
 import {
-  TheatricalGateBlocked,
   TheatricalSetlistView,
   type TheatricalPredictionLike,
 } from './TheatricalSetlistView';
 import {
-  ImprovisedGateBlocked,
   ImprovisedSetlistView,
   type ImprovisedPredictionLike,
 } from './ImprovisedSetlistView';
@@ -45,12 +42,11 @@ import {
   type PreviewMap,
 } from '../../lib/setlist-intel';
 
-export interface ActualSong {
-  title: string;
-  isEncore: boolean;
-  isOpenerOrCloser?: boolean;
-  note?: string | null;
-}
+// Canonical shape lives in `@showbook/shared` — re-exported here so
+// existing `import { type ActualSong } from './SetlistTab'` call
+// sites stay stable.
+import type { ActualSong } from '@showbook/shared';
+export type { ActualSong };
 
 // Loose superset of every prediction shape — the parent passes through
 // `predictedSetlist` whatever the server returned.
@@ -95,6 +91,9 @@ interface SetCountPredictionShape {
 
 export interface SetlistTabProps {
   showId: string;
+  /** Performer the tab is rendering — the show's headliner for
+   *  single-artist concerts, the picked lineup artist on festivals. */
+  performerId: string;
   artistName: string;
   isPast: boolean;
   prediction: AnyPrediction | null;
@@ -103,9 +102,6 @@ export interface SetlistTabProps {
   badgePayload?: BadgePayload | null;
   trackPreviews?: PreviewMap | null;
   hypePlaylistEnabled?: boolean;
-  rotatingDisplayEnabled?: boolean;
-  theatricalDisplayEnabled?: boolean;
-  improvisedDisplayEnabled?: boolean;
 }
 
 export function SetlistTab(props: SetlistTabProps): React.JSX.Element {
@@ -122,14 +118,12 @@ function SetlistTabUpcoming(props: SetlistTabProps): React.JSX.Element {
   const { colors } = tokens;
   const {
     showId,
+    performerId,
     artistName,
     prediction,
     predictionLoading,
     trackPreviews,
     hypePlaylistEnabled,
-    rotatingDisplayEnabled,
-    theatricalDisplayEnabled,
-    improvisedDisplayEnabled,
   } = props;
 
   if (predictionLoading) {
@@ -159,14 +153,7 @@ function SetlistTabUpcoming(props: SetlistTabProps): React.JSX.Element {
     );
   }
 
-  const view = pickSetlistView(
-    { style: prediction.style },
-    {
-      rotatingDisplayEnabled,
-      theatricalDisplayEnabled,
-      improvisedDisplayEnabled,
-    },
-  );
+  const view = pickSetlistView({ style: prediction.style });
 
   // SI-05 hide rule for hype playlist.
   const showHype =
@@ -201,15 +188,18 @@ function SetlistTabUpcoming(props: SetlistTabProps): React.JSX.Element {
     <View>
       <SetCountStrip prediction={setCountPrediction ?? null} />
       {showHype && hypeMeta ? (
-        <SectionFrame title="Hype playlist">
-          <HypePlaylistCard
-            showId={showId}
-            artist={artistName}
-            kind="hype"
-            trackCount={hypeMeta.count}
-            approxMinutes={hypeMeta.approxMinutes}
-          />
-        </SectionFrame>
+        <View style={styles.hypeSection}>
+          <SectionFrame title="Hype playlist">
+            <HypePlaylistCard
+              showId={showId}
+              performerId={performerId}
+              artist={artistName}
+              kind="hype"
+              trackCount={hypeMeta.count}
+              approxMinutes={hypeMeta.approxMinutes}
+            />
+          </SectionFrame>
+        </View>
       ) : null}
       {view === 'stable' && prediction.style === 'stable' ? (
         <StableSetlistView
@@ -221,15 +211,12 @@ function SetlistTabUpcoming(props: SetlistTabProps): React.JSX.Element {
       {view === 'rotating' && prediction.style === 'rotating' ? (
         <RotatingSetlistView prediction={prediction} />
       ) : null}
-      {view === 'rotating_blocked' ? <RotatingGateBlocked /> : null}
       {view === 'theatrical' && prediction.style === 'theatrical' ? (
         <TheatricalSetlistView prediction={prediction} />
       ) : null}
-      {view === 'theatrical_blocked' ? <TheatricalGateBlocked /> : null}
       {view === 'improvised' && prediction.style === 'improvised' ? (
         <ImprovisedSetlistView prediction={prediction} />
       ) : null}
-      {view === 'improvised_blocked' ? <ImprovisedGateBlocked /> : null}
       <Text style={[styles.lockNote, { color: colors.faint }]}>
         Setlist locks in after the show. We&rsquo;ll auto-pull the actual
         songs from setlist.fm and offer a &ldquo;save tonight to Spotify
@@ -245,6 +232,7 @@ function SetlistTabUpcoming(props: SetlistTabProps): React.JSX.Element {
 
 function SetlistTabPast({
   showId,
+  performerId,
   artistName,
   actualSongs = [],
   badgePayload,
@@ -289,6 +277,7 @@ function SetlistTabPast({
         <SectionFrame title={`I Heard ${artistName}`}>
           <HypePlaylistCard
             showId={showId}
+            performerId={performerId}
             artist={artistName}
             kind="heard"
             trackCount={total}
@@ -447,6 +436,9 @@ function coldCopy(
 }
 
 const styles = StyleSheet.create({
+  hypeSection: {
+    marginBottom: 12,
+  },
   lockNote: {
     fontFamily: 'Geist Mono',
     fontSize: 10.5,

@@ -40,7 +40,7 @@ been fully addressed).
   - `spotify-connection.ts` — mobile Spotify OAuth flow
   - `useFormState.ts`, `env.ts`
   - `feedback.ts`, `network.ts`, `theme.ts`, `responsive.ts`,
-    `search.ts`, `useDebouncedValue.ts`
+    `search.ts` (`useDebouncedValue` now lives in `@showbook/shared/hooks`)
 - `e2e/flows/` — Maestro flow YAML (sign-in / add-show / sign-out)
 
 ## Auth bridge

@@ -6,7 +6,7 @@ import {
   type StagedMediaItem,
 } from "@/components/media";
 import type { PerformerSetlist } from "@showbook/shared";
-import { setlistTotalSongs } from "@showbook/shared";
+import { KIND_GLYPHS, KIND_LABELS, setlistTotalSongs } from "@showbook/shared";
 
 /**
  * Live preview panel rendered on the right of the Add Show screen.
@@ -22,13 +22,6 @@ import { setlistTotalSongs } from "@showbook/shared";
 
 const mono = "var(--font-geist-mono), monospace";
 const sans = "var(--font-geist-sans), sans-serif";
-
-const KIND_CONFIG: { kind: ShowKind; label: string; icon: string }[] = [
-  { kind: "concert", label: "Concert", icon: "♫" },
-  { kind: "theatre", label: "Theatre", icon: "🎭" },
-  { kind: "comedy", label: "Comedy", icon: "🎙" },
-  { kind: "festival", label: "Festival", icon: "★" },
-];
 
 const kindColor = (k: ShowKind) => `var(--kind-${k})`;
 
@@ -71,7 +64,7 @@ export function LivePreview({
   provenanceStatuses,
   isEditMode,
 }: LivePreviewProps) {
-  const kindLabel = KIND_CONFIG.find((k) => k.kind === kind)?.label ?? "Show";
+  const kindLabel = kind ? KIND_LABELS[kind] : "Show";
   const kColor = kind ? kindColor(kind) : "var(--muted)";
 
   // Format date for display
@@ -205,7 +198,7 @@ export function LivePreview({
               fontWeight: 500,
             }}
           >
-            {kind ? KIND_CONFIG.find((k) => k.kind === kind)?.icon : "·"}{" "}
+            {kind ? KIND_GLYPHS[kind] : "·"}{" "}
             {kindLabel}
           </span>
           {timeAgo && (

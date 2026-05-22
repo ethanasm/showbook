@@ -24,13 +24,22 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ticket } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  Bookmark,
+  Check,
+  ChevronLeft,
+  Eye,
+  MoreHorizontal,
+  Ticket,
+} from 'lucide-react-native';
 
 import { hapticSelection } from '../../lib/haptics';
 import { useFeedback } from '../../lib/feedback';
 
 import { useAuth } from '../../lib/auth';
-import { venueImageSource } from '../../lib/images';
+import { showCoverImageSource, venueImageSource } from '../../lib/images';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
 import { CACHE_DEFAULTS } from '../../lib/cache';
@@ -50,9 +59,8 @@ import { NotesTab } from './NotesTab';
 import { ShowDetailRightRail } from './ShowDetailRightRail';
 import { HypePlaylistCard } from './HypePlaylistCard';
 import { KindBadge } from '../KindBadge';
-import { StateChip } from '../StateChip';
 import { MediaGrid, type MediaGridItem } from '../MediaGrid';
-import { Eyebrow, GlowBackdrop, GradientEmphasis, RemoteImage } from '../design-system';
+import { RemoteImage } from '../design-system';
 import {
   computeShowTabBadges,
   parseShowTab,
@@ -61,12 +69,15 @@ import {
 } from '../../lib/setlist-intel';
 import { useBreakpoint } from '../../lib/responsive';
 import {
+  buildActualSongsFromSetlist,
+  buildFestivalLineupEntries,
+  countFestivalActualSongs,
+  formatDateRangeShort,
   formatVenueLocation,
   getHeadliner,
+  hasProductionLabel,
   isVenuePlaceholder,
 } from '@showbook/shared';
-
-const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
 interface ShowPerformer {
   id: string;
@@ -99,11 +110,13 @@ export interface ShowDetail {
   kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports' | 'film' | 'unknown';
   state: 'past' | 'ticketed' | 'watching';
   date: string | null;
+  endDate: string | null;
   seat: string | null;
   pricePaid: string | null;
   ticketCount: number;
   tourName: string | null;
   productionName: string | null;
+  coverImageUrl: string | null;
   notes: string | null;
   ticketUrl: string | null;
   venue: ShowVenue;
@@ -118,12 +131,19 @@ export interface ShowDetailTabsViewProps {
   embeddedInThreePane?: boolean;
   /** Optional initial tab override (deep link). */
   initialTab?: ShowTabKey;
+  /** Floating hero chrome callbacks. When provided, `HeaderStrip` renders
+   *  glass-pill back / more buttons over the photo so the screen-level
+   *  TopBar can be suppressed. */
+  onBack?: () => void;
+  onMore?: () => void;
 }
 
 export function ShowDetailTabsView({
   show,
   embeddedInThreePane = false,
   initialTab,
+  onBack,
+  onMore,
 }: ShowDetailTabsViewProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -167,10 +187,7 @@ export function ShowDetailTabsView({
       },
     );
 
-  const hypeFeatureQuery = trpc.spotify.hypePlaylistFeature.useQuery(undefined, {
-    staleTime: 5 * 60_000,
-  });
-  const hypePlaylistEnabled = Boolean(hypeFeatureQuery.data?.enabled);
+  const hypePlaylistEnabled = true;
 
   const badgeQuery = trpc.shows.songBadges.useQuery(
     { showId: show.id },
@@ -188,33 +205,10 @@ export function ShowDetailTabsView({
   );
 
   // ──────────────────────────── Derived state ────────────────────────────
-  const buildActualSongs = React.useCallback(
-    (performerId: string): ActualSong[] => {
-      const sl = show.setlists?.[performerId];
-      if (!sl) return [];
-      const out: ActualSong[] = [];
-      sl.sections.forEach((section, sIdx) => {
-        const isEncore = section.kind === 'encore';
-        section.songs.forEach((song, songIdx) => {
-          out.push({
-            title: song.title,
-            isEncore,
-            isOpenerOrCloser:
-              (!isEncore && sIdx === 0 && songIdx === 0) ||
-              (!isEncore && songIdx === section.songs.length - 1),
-            note: song.note ?? null,
-          });
-        });
-      });
-      return out;
-    },
-    [show.setlists],
-  );
-
   const actualSongs: ActualSong[] = React.useMemo(() => {
     if (!isPast || !headliner) return [];
-    return buildActualSongs(headliner.performer.id);
-  }, [buildActualSongs, headliner, isPast]);
+    return buildActualSongsFromSetlist(show.setlists?.[headliner.performer.id]);
+  }, [headliner, isPast, show.setlists]);
   const actualSongCount = actualSongs.length;
 
   // For festivals, build one entry per lineup artist. Past = pull
@@ -223,42 +217,35 @@ export function ShowDetailTabsView({
   // entries (keyed by performerId).
   const festivalLineupSetlists: FestivalLineupSetlistEntry[] = React.useMemo(() => {
     if (!isFestival) return [];
-    const predictions = new Map<string, AnyPrediction>();
-    if (!isPast) {
-      const data = festivalPredictionsQuery.data;
-      if (data?.entries) {
-        for (const e of data.entries) {
-          predictions.set(e.performerId, e.prediction as AnyPrediction);
-        }
-      }
-    }
-    return show.showPerformers
-      .filter(
-        (sp) => sp.role === 'headliner' || sp.role === 'support',
-      )
-      .map((sp) => ({
-        performerId: sp.performer.id,
-        performerName: sp.performer.name,
-        role: sp.role as 'headliner' | 'support',
-        sortOrder: sp.sortOrder,
-        prediction: predictions.get(sp.performer.id) ?? null,
-        actualSongs: isPast ? buildActualSongs(sp.performer.id) : [],
-      }));
+    return buildFestivalLineupEntries<AnyPrediction>({
+      showPerformers: show.showPerformers,
+      isPast,
+      predictions:
+        !isPast && festivalPredictionsQuery.data?.entries
+          ? festivalPredictionsQuery.data.entries.map((e) => ({
+              performerId: e.performerId,
+              prediction: e.prediction as AnyPrediction,
+            }))
+          : null,
+      setlistsByPerformer: show.setlists ?? {},
+    });
   }, [
-    buildActualSongs,
     festivalPredictionsQuery.data,
     isFestival,
     isPast,
+    show.setlists,
     show.showPerformers,
   ]);
 
-  const festivalActualSongCount = React.useMemo(() => {
-    if (!isFestival || !isPast) return 0;
-    return festivalLineupSetlists.reduce(
-      (acc, e) => acc + e.actualSongs.length,
-      0,
-    );
-  }, [festivalLineupSetlists, isFestival, isPast]);
+  const festivalActualSongCount = React.useMemo(
+    () =>
+      countFestivalActualSongs({
+        isFestival,
+        isPast,
+        entries: festivalLineupSetlists,
+      }),
+    [festivalLineupSetlists, isFestival, isPast],
+  );
 
   // Festival predictions are an array. The tab-bar badge is a single
   // confidence number, so reduce to the headliner's confidence when
@@ -484,13 +471,11 @@ export function ShowDetailTabsView({
       badgePayload={badgeQuery.data ?? null}
       trackPreviews={previewsQuery.data?.previews ?? null}
       hypePlaylistEnabled={hypePlaylistEnabled}
-      rotatingDisplayEnabled
-      theatricalDisplayEnabled
-      improvisedDisplayEnabled
     />
   ) : (
     <SetlistTab
       showId={show.id}
+      performerId={headliner?.performer.id ?? ''}
       artistName={headlinerName}
       isPast={isPast}
       prediction={(predictionQuery.data as AnyPrediction | undefined) ?? null}
@@ -499,9 +484,6 @@ export function ShowDetailTabsView({
       badgePayload={badgeQuery.data ?? null}
       trackPreviews={previewsQuery.data?.previews ?? null}
       hypePlaylistEnabled={hypePlaylistEnabled}
-      rotatingDisplayEnabled
-      theatricalDisplayEnabled
-      improvisedDisplayEnabled
     />
   );
 
@@ -517,6 +499,11 @@ export function ShowDetailTabsView({
           loading={mediaQuery.isLoading}
         />
       }
+      showId={show.id}
+      venueId={show.venue.id}
+      setlistSongCount={actualSongCount}
+      hypePlaylistEnabled={hypePlaylistEnabled}
+      onSwitchToSetlistTab={() => setActive('setlist')}
     />
   );
 
@@ -562,9 +549,10 @@ export function ShowDetailTabsView({
   }, [hypePlaylistEnabled, isPast, predictionQuery.data]);
 
   const rightRailSlots = {
-    hypePlaylistCard: railHypeMeta ? (
+    hypePlaylistCard: railHypeMeta && headliner ? (
       <HypePlaylistCard
         showId={show.id}
+        performerId={headliner.performer.id}
         artist={headlinerName}
         kind="hype"
         trackCount={railHypeMeta.count}
@@ -605,7 +593,7 @@ export function ShowDetailTabsView({
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
       <View style={styles.body}>
-        <HeaderStrip show={show} />
+        <HeaderStrip show={show} onBack={onBack} onMore={onMore} />
         <ShowTabBar active={active} badges={badges} onSelect={setActive} />
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -639,135 +627,202 @@ export function ShowDetailTabsView({
   );
 }
 
-function HeaderStrip({ show }: { show: ShowDetail }): React.JSX.Element {
-  const { tokens } = useTheme();
-  const { colors } = tokens;
-  const router = useRouter();
-  const { token } = useAuth();
-  const resolvedHeadliner = getHeadliner(show);
-  const title = resolvedHeadliner === 'Unknown Artist' ? 'Untitled' : resolvedHeadliner;
-  const date = parseDate(show.date);
+const HERO_BODY_HEIGHT = 340;
 
-  // Gradient-emphasis the last word of the title for a touch of editorial flair.
-  const parts = title.trim().split(/\s+/);
-  const head = parts.length > 1 ? parts.slice(0, -1).join(' ') + ' ' : '';
-  const tail = parts.length > 1 ? (parts[parts.length - 1] as string) : title;
-  const venueLine = [show.venue.name, show.venue.city]
-    .filter((p) => !isVenuePlaceholder(p))
-    .join(' · ');
-
-  // Top-right image renders the venue across kinds. For concerts /
-  // comedy the headliner already appears in the LINEUP row below, so
-  // doubling up the artist photo here adds nothing; the venue photo
-  // reinforces "where" alongside the "who" in the title and falls back
-  // to a kind-coloured monogram. Festivals span many artists and
-  // theatre titles are productions — both are venue-anchored, so the
-  // venue photo carries the same "where" signal, but a monogram would
-  // just repeat the title text. For those two kinds we render the
-  // photo only when one is actually linked and otherwise leave the
-  // top-right blank.
-  const venueImage = venueImageSource(show.venue, token);
-  const monogramOk = show.kind === 'concert' || show.kind === 'comedy';
-  const showVenueImage = monogramOk || venueImage !== null;
-
+function StateChipOnDark({ state }: { state: ShowState }): React.JSX.Element | null {
+  if (state === 'past') return null;
+  const config =
+    state === 'ticketed'
+      ? { label: 'TICKETED', icon: <Check size={10} color="#1a1a1a" strokeWidth={2.5} />, bg: '#fff', fg: '#1a1a1a' }
+      : state === 'watching'
+        ? { label: 'WATCHING', icon: <Eye size={10} color="#fff" strokeWidth={2.5} />, bg: 'rgba(0,0,0,0.42)', fg: '#fff' }
+        : { label: 'WISHLIST', icon: <Bookmark size={10} color="#fff" strokeWidth={2.5} />, bg: 'rgba(0,0,0,0.42)', fg: '#fff' };
   return (
     <View
-      testID="show-tabs-header"
-      style={[styles.header, { borderBottomColor: colors.rule }]}
+      style={[
+        heroStyles.statePill,
+        { backgroundColor: config.bg, borderColor: 'rgba(255,255,255,0.32)' },
+      ]}
     >
-      <GlowBackdrop grid={false} />
-      <View style={styles.headerContent}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerTextCol}>
-            <Eyebrow>
-              {show.kind === 'theatre' ? 'THEATRE' : show.kind.toUpperCase()}
-              {date ? ` · ${date}` : ''}
-            </Eyebrow>
-            <View style={styles.headerChips}>
-              <KindBadge kind={show.kind as Kind} size="sm" />
-              {show.state !== 'past' ? (
-                <StateChip state={show.state as ShowState} />
-              ) : (
-                <View
-                  testID="went-badge"
-                  style={[
-                    styles.wentBadge,
-                    { borderColor: colors.ruleStrong },
-                  ]}
-                >
-                  <Text style={[styles.wentBadgeText, { color: colors.muted }]}>
-                    WENT
-                  </Text>
-                </View>
-              )}
-            </View>
-            <Text
-              style={[styles.headerTitle, { color: colors.ink }]}
-              numberOfLines={2}
-            >
-              {head ? <Text>{head}</Text> : null}
-              <GradientEmphasis style={[styles.headerTitle, { color: colors.accent }]}>
-                {tail}
-              </GradientEmphasis>
-            </Text>
-            {show.tourName ? (
-              <Text style={[styles.headerSub, { color: colors.muted }]} numberOfLines={1}>
-                {show.tourName}
-              </Text>
-            ) : null}
-            {venueLine ? (
-              <Pressable
-                onPress={() => router.push(`/venues/${show.venue.id}`)}
-                accessibilityRole="link"
-                accessibilityLabel={`Open ${show.venue.name}`}
-                hitSlop={6}
-                style={({ pressed }) => [styles.headerVenueLink, pressed && { opacity: 0.6 }]}
-              >
-                <Text style={[styles.headerVenue, { color: colors.muted }]} numberOfLines={1}>
-                  {venueLine}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-          {showVenueImage ? (
-            <Pressable
-              testID="show-tabs-header-venue-image"
-              onPress={() => router.push(`/venues/${show.venue.id}`)}
-              accessibilityRole="link"
-              accessibilityLabel={show.venue.name}
-              style={({ pressed }) => [
-                styles.headerImageWrap,
-                pressed ? { opacity: 0.85 } : null,
-              ]}
-            >
-              <RemoteImage
-                uri={venueImage?.uri ?? null}
-                headers={venueImage?.headers}
-                name={show.venue.name}
-                kind={show.kind as Kind}
-                size="custom"
-                width={84}
-                height={84}
-                aspect="1/1"
-                style={styles.headerImage}
-              />
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
+      {config.icon}
+      <Text style={[heroStyles.statePillText, { color: config.fg }]}>{config.label}</Text>
     </View>
   );
 }
 
-function parseDate(date: string | null | undefined): string | null {
-  if (!date) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
-  if (!m) return null;
-  const year = Number(m[1]);
-  const monthIdx = Number(m[2]) - 1;
-  const day = Number(m[3]);
-  const month = MONTHS[monthIdx] ?? '';
-  return `${month} ${day}, ${year}`;
+function HeaderStrip({
+  show,
+  onBack,
+  onMore,
+}: {
+  show: ShowDetail;
+  onBack?: () => void;
+  onMore?: () => void;
+}): React.JSX.Element {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+  const router = useRouter();
+  const { token } = useAuth();
+  const insets = useSafeAreaInsets();
+  const resolvedHeadliner = getHeadliner(show);
+  const title = resolvedHeadliner === 'Unknown Artist' ? 'Untitled' : resolvedHeadliner;
+  const date = show.date ? formatDateRangeShort(show.date, show.endDate) : null;
+  const venueLine = [show.venue.name, show.venue.city]
+    .filter((p) => !isVenuePlaceholder(p))
+    .join(' · ');
+
+  // Background photo. The venue image was chosen historically because
+  // concerts/comedy already surface the headliner photo in the LINEUP
+  // row below — repeating it here adds nothing. For production shows
+  // (theatre + festival w/ productionName) the TM-sourced cover is the
+  // show's identity, so it wins over the venue photo when populated. If
+  // `coverImageUrl` hasn't been resolved yet the helper returns null and
+  // we fall through to the venue photo, preserving the existing UX.
+  // RemoteImage falls back to a kind-coloured monogram when neither is
+  // available — same as before.
+  const coverImage = hasProductionLabel(show)
+    ? showCoverImageSource({ id: show.id, coverImageUrl: show.coverImageUrl }, token)
+    : null;
+  const venueImage = venueImageSource(show.venue, token);
+  const backgroundImage = coverImage ?? venueImage;
+
+  const eyebrow =
+    `${show.kind === 'theatre' ? 'THEATRE' : show.kind.toUpperCase()}` +
+    (date ? ` · ${date.toUpperCase()}` : '');
+
+  const heroHeight = insets.top + HERO_BODY_HEIGHT;
+
+  return (
+    <View
+      testID="show-tabs-header"
+      style={[heroStyles.hero, { height: heroHeight, borderBottomColor: colors.rule }]}
+    >
+      {/* Tappable photo background — opens the venue. The Pressable lives
+          behind the chrome row (which is `pointerEvents: 'box-none'` so
+          buttons receive their own taps). */}
+      <Pressable
+        testID="show-tabs-header-venue-image"
+        onPress={() => router.push(`/venues/${show.venue.id}`)}
+        accessibilityRole="link"
+        accessibilityLabel={show.venue.name}
+        style={StyleSheet.absoluteFillObject}
+      >
+        <RemoteImage
+          uri={backgroundImage?.uri ?? null}
+          headers={backgroundImage?.headers}
+          name={coverImage ? title : show.venue.name}
+          kind={show.kind as Kind}
+          size="custom"
+          height={heroHeight}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </Pressable>
+
+      {/* Scrim: dark at top for status bar + floating chrome, transparent
+          in the middle so the photo breathes, dark at bottom for the
+          title block. */}
+      <LinearGradient
+        colors={[
+          'rgba(0,0,0,0.55)',
+          'rgba(0,0,0,0.20)',
+          'rgba(0,0,0,0.00)',
+          'rgba(0,0,0,0.30)',
+          'rgba(0,0,0,0.82)',
+        ]}
+        locations={[0, 0.18, 0.42, 0.70, 1]}
+        style={StyleSheet.absoluteFillObject}
+        pointerEvents="none"
+      />
+
+      {/* Top row — floating chrome: back button + eyebrow pill on the
+          left, state pill + more menu on the right, all on one line. */}
+      <View
+        style={[heroStyles.topRow, { paddingTop: insets.top + 8 }]}
+        pointerEvents="box-none"
+      >
+        <View style={heroStyles.topLeftStack} pointerEvents="box-none">
+          {onBack ? (
+            <Pressable
+              onPress={onBack}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              hitSlop={8}
+              style={({ pressed }) => [
+                heroStyles.glassBtn,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <ChevronLeft size={22} color="#fff" strokeWidth={2.2} />
+            </Pressable>
+          ) : (
+            <View style={heroStyles.glassBtnPlaceholder} />
+          )}
+          {/* Eyebrow pill — frosted-glass so it stays legible against
+              bright skies / busy photos. Sits inline with the back
+              button so it lines up with the state pill on the right. */}
+          <View style={heroStyles.eyebrowPill}>
+            <Text style={heroStyles.eyebrow} numberOfLines={1}>
+              {eyebrow}
+            </Text>
+          </View>
+        </View>
+        <View style={heroStyles.topRightStack} pointerEvents="box-none">
+          {show.state !== 'past' ? (
+            <StateChipOnDark state={show.state as ShowState} />
+          ) : (
+            <View
+              testID="went-badge"
+              style={[heroStyles.statePill, { backgroundColor: 'rgba(0,0,0,0.42)', borderColor: 'rgba(255,255,255,0.32)' }]}
+            >
+              <Text style={[heroStyles.statePillText, { color: '#fff' }]}>WENT</Text>
+            </View>
+          )}
+          {onMore ? (
+            <Pressable
+              onPress={onMore}
+              accessibilityRole="button"
+              accessibilityLabel="More actions"
+              hitSlop={8}
+              style={({ pressed }) => [
+                heroStyles.glassBtn,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <MoreHorizontal size={20} color="#fff" strokeWidth={2.2} />
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+
+      {/* Bottom block — kind chip, title, optional tour, venue link. */}
+      <View style={heroStyles.bottomBlock} pointerEvents="box-none">
+        <View style={heroStyles.kindRow}>
+          <KindBadge kind={show.kind as Kind} size="sm" tone="onPhoto" />
+        </View>
+        <Text style={heroStyles.title} numberOfLines={2}>
+          {title}
+        </Text>
+        {show.tourName ? (
+          <Text style={heroStyles.tour} numberOfLines={1}>
+            {show.tourName}
+          </Text>
+        ) : null}
+        {venueLine ? (
+          <Pressable
+            onPress={() => router.push(`/venues/${show.venue.id}`)}
+            accessibilityRole="link"
+            accessibilityLabel={`Open ${show.venue.name}`}
+            hitSlop={6}
+            style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+          >
+            <Text style={heroStyles.venue} numberOfLines={1}>
+              {venueLine}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -782,67 +837,114 @@ const styles = StyleSheet.create({
   scroll: {
     paddingBottom: 48,
   },
-  header: {
+});
+
+const heroStyles = StyleSheet.create({
+  hero: {
     position: 'relative',
     overflow: 'hidden',
     borderBottomWidth: StyleSheet.hairlineWidth,
+    backgroundColor: '#1a1525',
   },
-  headerContent: {
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 18,
-    gap: 8,
-  },
-  headerRow: {
+  topRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    paddingHorizontal: 16,
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-  },
-  headerTextCol: {
-    flex: 1,
-    minWidth: 0,
-    gap: 8,
-  },
-  headerImageWrap: {
-    marginTop: 2,
-  },
-  headerImage: {
-    borderRadius: 14,
-  },
-  headerChips: {
-    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     gap: 8,
   },
-  headerTitle: {
-    fontFamily: 'Fraunces',
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: -0.6,
-    lineHeight: 32,
+  topLeftStack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 1,
+    minWidth: 0,
   },
-  headerSub: {
+  topRightStack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 0,
+  },
+  glassBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.38)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  glassBtnPlaceholder: {
+    width: 36,
+    height: 36,
+  },
+  statePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    height: 26,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  statePillText: {
+    fontFamily: 'Geist Sans',
+    fontSize: 10.5,
+    fontWeight: '600',
+    letterSpacing: 10.5 * 0.08,
+    textTransform: 'uppercase',
+  },
+  eyebrowPill: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.55)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    flexShrink: 1,
+  },
+  eyebrow: {
+    fontFamily: 'Geist Sans',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 11 * 0.14,
+    textTransform: 'uppercase',
+    color: '#1a1a1a',
+  },
+  bottomBlock: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    bottom: 18,
+    gap: 6,
+  },
+  kindRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  title: {
+    fontFamily: 'Fraunces',
+    fontSize: 34,
+    fontWeight: '700',
+    letterSpacing: -0.8,
+    lineHeight: 38,
+    color: '#fff',
+  },
+  tour: {
     fontFamily: 'Geist Sans',
     fontSize: 14,
+    color: 'rgba(255,255,255,0.86)',
   },
-  headerVenueLink: {
-    alignSelf: 'flex-start',
-    marginTop: 2,
-  },
-  headerVenue: {
+  venue: {
     fontFamily: 'Geist Sans',
     fontSize: 13,
-  },
-  wentBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 999,
-  },
-  wentBadgeText: {
-    fontFamily: 'Geist Mono',
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 1.4,
+    color: 'rgba(255,255,255,0.92)',
   },
 });

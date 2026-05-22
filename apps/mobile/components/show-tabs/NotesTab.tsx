@@ -8,6 +8,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useTheme } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import { SectionFrame } from './SectionFrame';
 
 const PROMPTS_PRE = [
@@ -113,7 +114,6 @@ export function NotesTab({
               color: colors.ink,
               backgroundColor: colors.surface,
               borderColor: colors.rule,
-              borderLeftColor: colors.ruleStrong,
             },
           ]}
         />
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     borderWidth: StyleSheet.hairlineWidth,
-    borderLeftWidth: 2,
+    borderRadius: RADII.lg,
     textAlignVertical: 'top',
   },
   savedLine: {
@@ -176,6 +176,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RADII.lg,
   },
   promptLabel: {
     fontFamily: 'Geist Sans',

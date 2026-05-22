@@ -17,4 +17,5 @@ export {
   formatSetlistNote,
   normalizePerformerSetlist,
   normalizePerformerSetlistsMap,
+  resolveShowSetlistsMap,
 } from './setlist';

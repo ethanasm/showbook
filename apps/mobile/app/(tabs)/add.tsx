@@ -36,6 +36,7 @@ import {
   Image as ImageIcon,
   Sparkles,
   PenLine,
+  Ticket,
   X,
 } from 'lucide-react-native';
 
@@ -44,6 +45,8 @@ import { useTheme } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
 import { useFeedback } from '../../lib/feedback';
 import { toUserMessage } from '../../lib/errors';
+import { WalletShareHowToSheet } from '../../components/WalletShareHowToSheet';
+import { FestivalPosterHowToSheet } from '../../components/FestivalPosterHowToSheet';
 import {
   appendRecent,
   isConversationKind,
@@ -70,6 +73,8 @@ export default function AddChatScreen(): React.JSX.Element {
   const { showToast } = useFeedback();
 
   const [text, setText] = React.useState('');
+  const [walletSheetOpen, setWalletSheetOpen] = React.useState(false);
+  const [festivalSheetOpen, setFestivalSheetOpen] = React.useState(false);
   const parse = trpc.enrichment.parseChat.useMutation();
 
   // ---------------------------------------------------------------------------
@@ -261,6 +266,7 @@ export default function AddChatScreen(): React.JSX.Element {
         <ScrollView
           contentContainerStyle={styles.scrollPad}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         >
           {confirmation ? (
             <View
@@ -342,12 +348,12 @@ export default function AddChatScreen(): React.JSX.Element {
             ))}
           </View>
 
-          {/* Festival poster door — read a lineup off an image and turn it
-              into a festival show in one tap. Sits below the chat suggestions
-              so it doesn't compete with the primary chat affordance, but
-              stays above the fold on a mobile viewport. */}
+          {/* Festival poster door — opens a how-to sheet that runs the
+              picker inline (mirrors the Apple Wallet door). On a successful
+              pick the sheet stashes the image via posterHandoff and pushes
+              to /add/festival-poster, which jumps straight to extracting. */}
           <Pressable
-            onPress={() => router.push('/add/festival-poster')}
+            onPress={() => setFestivalSheetOpen(true)}
             accessibilityRole="button"
             accessibilityLabel="Upload a festival poster"
             testID="add-festival-poster"
@@ -365,6 +371,35 @@ export default function AddChatScreen(): React.JSX.Element {
               </Text>
               <Text style={[styles.posterSub, { color: colors.muted }]}>
                 Reads the lineup, festival name, and dates — you trim the list.
+              </Text>
+            </View>
+            <ArrowRight size={16} color={colors.faint} strokeWidth={2} />
+          </Pressable>
+
+          {/* Apple Wallet door — the importer itself is share-sheet-only
+              (the .pkpass document-type registration in app.config.ts adds
+              Showbook to iOS's share sheet for pass files). This door is
+              pure discovery/education: tapping it explains the flow rather
+              than launching a picker. */}
+          <Pressable
+            onPress={() => setWalletSheetOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Import a ticket from Apple Wallet"
+            testID="add-wallet-import"
+            style={({ pressed }) => [
+              styles.posterDoor,
+              { borderColor: colors.rule, backgroundColor: colors.surface, opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <View style={[styles.posterIcon, { backgroundColor: colors.surfaceRaised }]}>
+              <Ticket size={18} color={colors.accent} strokeWidth={1.8} />
+            </View>
+            <View style={styles.posterBody}>
+              <Text style={[styles.posterTitle, { color: colors.ink }]}>
+                Import from Apple Wallet
+              </Text>
+              <Text style={[styles.posterSub, { color: colors.muted }]}>
+                Share a .pkpass to Showbook and we&rsquo;ll pre-fill the form.
               </Text>
             </View>
             <ArrowRight size={16} color={colors.faint} strokeWidth={2} />
@@ -411,6 +446,14 @@ export default function AddChatScreen(): React.JSX.Element {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+      <WalletShareHowToSheet
+        open={walletSheetOpen}
+        onClose={() => setWalletSheetOpen(false)}
+      />
+      <FestivalPosterHowToSheet
+        open={festivalSheetOpen}
+        onClose={() => setFestivalSheetOpen(false)}
+      />
     </View>
   );
 }

@@ -213,6 +213,86 @@ describe('checkMissedSchedules', () => {
     assert.equal(r.status, 'warn');
     assert.match(r.summary, /pgboss.job/);
   });
+
+  it('binds the time threshold as an ISO string (not a Date object)', async () => {
+    // postgres-js crashes with "string argument must be of type string or
+    // an instance of Buffer" when a bind parameter is a Date. The check
+    // converts to ISO before binding; assert the params reflect that.
+    EXECUTE.results = [rowsFor(TUESDAY_QUEUES, new Date(tuesdayMorning.getTime() - 60 * 60 * 1000))];
+    await checks.checkMissedSchedules(tuesdayMorning);
+    const lastCall = EXECUTE.calls.at(-1);
+    assert.ok(lastCall, 'expected a db.execute call');
+    // Drizzle's `sql` template embeds non-SQL `${value}` interpolations as
+    // raw chunks (primitives sit directly in `queryChunks`; nested SQL
+    // objects expose their own `queryChunks`). `StringChunk` instances
+    // carry `value: string[]` for the literal SQL fragments. Walk the
+    // tree and collect every non-StringChunk leaf so we can assert the
+    // bound values include the expected ISO timestamps and no Date.
+    const collectBoundValues = (chunks: unknown[]): unknown[] => {
+      const out: unknown[] = [];
+      for (const c of chunks) {
+        if (c && typeof c === 'object') {
+          // Nested SQL: recurse into its queryChunks.
+          if ('queryChunks' in c) {
+            const nested = (c as { queryChunks: unknown }).queryChunks;
+            if (Array.isArray(nested)) out.push(...collectBoundValues(nested));
+            continue;
+          }
+          // StringChunk: `value` is the literal SQL string(s) — skip.
+          if (
+            'value' in c &&
+            Array.isArray((c as { value: unknown }).value)
+          ) {
+            continue;
+          }
+          // Other objects (e.g. Param) — include their value.
+          if ('value' in c) out.push((c as { value: unknown }).value);
+          continue;
+        }
+        // Primitive interpolation — these are the bound values.
+        out.push(c);
+      }
+      return out;
+    };
+    const chunks = (lastCall.query as unknown as { queryChunks: unknown[] })
+      .queryChunks;
+    assert.ok(Array.isArray(chunks), 'sql object should expose queryChunks');
+    const paramValues = collectBoundValues(chunks);
+    const dateValues = paramValues.filter((v) => v instanceof Date);
+    assert.equal(
+      dateValues.length,
+      0,
+      `no bind param should be a Date instance, got ${dateValues.length}`,
+    );
+    const isoValues = paramValues.filter(
+      (v): v is string =>
+        typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v),
+    );
+    assert.ok(
+      isoValues.length >= 2,
+      `expected two ISO timestamp params, got ${isoValues.length}`,
+    );
+  });
+
+  it('surfaces underlying postgres cause message instead of "Failed query:"', async () => {
+    // Mirror Drizzle's `DrizzleQueryError`: wrapper message is opaque,
+    // the actual SQLSTATE + message live on .cause.
+    class FakeDrizzleErr extends Error {
+      cause: unknown;
+      constructor(message: string, cause: unknown) {
+        super(message);
+        this.cause = cause;
+      }
+    }
+    EXECUTE.shouldThrow = new FakeDrizzleErr(
+      'Failed query: SELECT … params: …',
+      { code: '42P01', message: 'relation "pgboss.archive" does not exist' },
+    );
+    const r = await checks.checkMissedSchedules(tuesdayMorning);
+    assert.equal(r.status, 'warn');
+    assert.match(r.summary, /relation "pgboss.archive" does not exist/);
+    assert.match(r.summary, /42P01/);
+  });
 });
 
 describe('checkDatabaseConnectivity', () => {
@@ -231,19 +311,45 @@ describe('checkDatabaseConnectivity', () => {
 
 describe('checkPgBossQueue', () => {
   it('flags fail when stuck active jobs > 0', async () => {
-    EXECUTE.results = [[{ failed: 0, active_stuck: 2, active_total: 5, retry: 0 }]];
+    EXECUTE.results = [
+      [{ failed: 0, active_stuck: 2, active_total: 5, retry: 0 }],
+    ];
     const r = await checks.checkPgBossQueue();
     assert.equal(r.status, 'fail');
   });
 
-  it('flags warn when failed > 0 but no stuck', async () => {
-    EXECUTE.results = [[{ failed: 1, active_stuck: 0, active_total: 0, retry: 0 }]];
+  it('flags warn when failed in 1..5 range and no stuck', async () => {
+    EXECUTE.results = [
+      [{ failed: 1, active_stuck: 0, active_total: 0, retry: 0 }],
+      [{ name: 'enrichment/setlist-corpus-fill', failed: 1 }],
+    ];
     const r = await checks.checkPgBossQueue();
     assert.equal(r.status, 'warn');
+    assert.match(r.summary, /enrichment\/setlist-corpus-fill/);
+    assert.match(r.summary, /1 failed/);
+  });
+
+  it('flags fail and surfaces top queue when failed > 5', async () => {
+    EXECUTE.results = [
+      [{ failed: 800, active_stuck: 0, active_total: 1, retry: 0 }],
+      [
+        { name: 'enrichment/setlist-corpus-fill', failed: 875 },
+        { name: 'backfill/performer-images', failed: 2 },
+      ],
+    ];
+    const r = await checks.checkPgBossQueue();
+    assert.equal(r.status, 'fail');
+    assert.match(r.summary, /enrichment\/setlist-corpus-fill/);
+    assert.match(r.summary, /\(875\)/);
+    const topQueues = r.detail?.topQueues as Array<{ name: string; failed: number }>;
+    assert.equal(topQueues.length, 2);
+    assert.equal(topQueues[0]!.name, 'enrichment/setlist-corpus-fill');
   });
 
   it('flags ok when queue is clean', async () => {
-    EXECUTE.results = [[{ failed: 0, active_stuck: 0, active_total: 0, retry: 0 }]];
+    EXECUTE.results = [
+      [{ failed: 0, active_stuck: 0, active_total: 0, retry: 0 }],
+    ];
     const r = await checks.checkPgBossQueue();
     assert.equal(r.status, 'ok');
   });

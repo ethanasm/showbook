@@ -87,4 +87,20 @@ describe('Sheet', () => {
     });
     assert.equal(panel.length, 1);
   });
+
+  it('wraps the sheet in a KeyboardAvoidingView so inputs stay visible above the keyboard', () => {
+    // Regression: the rename-venue sheet (and any other sheet that hosts
+    // a TextInput) had the keyboard overlay the field on iOS because the
+    // Modal does not propagate the activity's keyboard inset.
+    const r = render(
+      React.createElement(
+        Sheet,
+        { open: true, onClose: () => {}, snapPoints: ['42%'] },
+        React.createElement('rn-textinput', { testID: 'sheet-input' }),
+      ),
+    );
+    const kav = r.root.findAllByType('rn-keyboardavoidingview');
+    assert.equal(kav.length, 1, 'Sheet must wrap its contents in a KeyboardAvoidingView');
+    assert.equal(kav[0].props.behavior, 'padding');
+  });
 });

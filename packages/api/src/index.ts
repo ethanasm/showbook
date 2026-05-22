@@ -1,6 +1,13 @@
 export { appRouter, type AppRouter } from './root';
 export { createContext, type Session } from './trpc';
-export { searchArtist, searchSetlist, getUserAttended, fetchArtistSetlists, SetlistFmError } from './setlistfm';
+export {
+  searchArtist,
+  searchSetlist,
+  getUserAttended,
+  fetchArtistSetlists,
+  SetlistFmError,
+  isSetlistFmInCooldown,
+} from './setlistfm';
 export { fetchSetlistForPerformer, type SetlistLookupResult } from './setlist-lookup';
 export type {
   ArtistSearchResult,
@@ -21,6 +28,7 @@ export {
   inferKind,
   extractMusicbrainzId,
   selectBestImage,
+  pickAttractionImage,
   normalizeFestivalText,
   extractFestivalName,
   type TMEvent,
@@ -313,3 +321,13 @@ export {
   __resetTopTracksCacheForTests,
   type PersonalChipSet,
 } from './personal-chips';
+
+// Shared read-path normalizers for `shows.setlists`. The base
+// normalizer lives in `@showbook/shared`; this module re-exports it
+// alongside `resolveShowSetlistsMap`, which adds the legacy
+// `shows.setlist text[]` fallback so list/detail consumers can call
+// one helper.
+export {
+  resolveShowSetlistsMap,
+  normalizePerformerSetlistsMap,
+} from './queries/setlist-normalize';

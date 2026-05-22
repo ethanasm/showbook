@@ -1,1267 +1,93 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { toast } from "sonner";
-import { trpc } from "@/lib/trpc";
-import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
+import { setlistTotalSongs } from "@showbook/shared";
 import { type ShowKind } from "@/components/design-system";
 import { LivePreview } from "./LivePreview";
-import {
-  AddShowMediaStaging,
-  type StagedMediaItem,
-  uploadPhotoForShow,
-  uploadVideoForShow,
-} from "@/components/media";
 import { PerformerSetlistBlock } from "@/components/PerformerSetlistBlock";
 import { FestivalLineupModal } from "@/components/add/FestivalLineupModal";
-import {
-  useFestivalLineup,
-  type SelectedFestivalArtist,
-  type FestivalLineupMeta,
-} from "@/components/add/useFestivalLineup";
-import {
-  isDatePast,
-  setlistTotalSongs,
-  singleMainSet,
-  normalizePerformerSetlist,
-  type PerformerSetlist,
-} from "@showbook/shared";
-
-// ── Types ────────────────────────────────────────────────────
-
-type Mode = "Form" | "Chat";
-type Timeframe = "past" | "upcoming" | "watching";
-
-interface VenueData {
-  name: string;
-  city: string;
-  stateRegion?: string;
-  country?: string;
-  tmVenueId?: string;
-  googlePlaceId?: string;
-  photoUrl?: string;
-  lat?: number;
-  lng?: number;
-}
-
-interface HeadlinerData {
-  name: string;
-  tmAttractionId?: string;
-  musicbrainzId?: string;
-  imageUrl?: string;
-}
-
-interface PerformerData {
-  name: string;
-  role: "headliner" | "support" | "cast";
-  characterName?: string;
-  sortOrder: number;
-  tmAttractionId?: string;
-  musicbrainzId?: string;
-  imageUrl?: string;
-}
-
-interface TMResult {
-  tmEventId: string;
-  name: string;
-  date: string;
-  venueName: string | null;
-  venueCity: string | null;
-  venueState: string | null;
-  venueCountry: string | null;
-  venueTmId: string | null;
-  venueLat: number | null;
-  venueLng: number | null;
-  kind: string | null;
-  performers: {
-    name: string;
-    tmAttractionId: string;
-    imageUrl: string | null;
-  }[];
-}
-
-interface CastMember {
-  actor: string;
-  role: string;
-}
-
-// ── Constants ────────────────────────────────────────────────
-
-const KIND_CONFIG: {
-  kind: ShowKind;
-  label: string;
-  icon: string;
-  enrichmentHint: string;
-}[] = [
-  { kind: "concert", label: "Concert", icon: "♫", enrichmentHint: "setlist.fm" },
-  { kind: "theatre", label: "Theatre", icon: "🎭", enrichmentHint: "playbill" },
-  { kind: "comedy", label: "Comedy", icon: "🎙", enrichmentHint: "tour · material" },
-  { kind: "festival", label: "Festival", icon: "★", enrichmentHint: "multi-day lineup" },
-];
-
-const TIMEFRAME_CONFIG: {
-  key: Timeframe;
-  label: string;
-  sub: string;
-}[] = [
-  { key: "past", label: "past", sub: "already went" },
-  { key: "upcoming", label: "upcoming", sub: "have tickets" },
-  { key: "watching", label: "watching", sub: "radar · no tix" },
-];
-
-const IMPORT_SOURCES = [
-  { tag: "url", label: "Ticketmaster URL", sub: "paste a link" },
-  { tag: "pdf", label: "PDF ticket", sub: "drag or upload" },
-  { tag: "mail", label: "Gmail receipts", sub: "scan inbox" },
-];
-
-// ── Styles ───────────────────────────────────────────────────
-
-const mono = "var(--font-geist-mono), monospace";
-const sans = "var(--font-geist-sans), sans-serif";
+import { AddShowChat } from "@/components/add/AddShowChat";
+import { AddShowGmail, useAddShowGmail } from "@/components/add/AddShowGmail";
+import { MediaUploadSection } from "@/components/add/MediaUploadSection";
+import { useAddShowForm } from "./useAddShowForm";
+import { IMPORT_SOURCES, KIND_CONFIG, TIMEFRAME_CONFIG, mono, sans } from "./constants";
 
 // ── Main Component ───────────────────────────────────────────
 
 export default function AddPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  const editId = searchParams.get("editId");
-  const isEditMode = !!editId;
-
-  // Mode toggle
-  const [mode, setMode] = useState<Mode>("Form");
-
-  // Form state
-  const [timeframe, setTimeframe] = useState<Timeframe>("past");
-  const [kind, setKind] = useState<ShowKind | null>(null);
-  const [headlinerName, setHeadlinerName] = useState("");
-  const [headliner, setHeadliner] = useState<HeadlinerData>({ name: "" });
-  const [venue, setVenue] = useState<VenueData>({ name: "", city: "" });
-  const [venueQuery, setVenueQuery] = useState("");
-  const [debouncedVenueQuery, setDebouncedVenueQuery] = useState("");
-  const venueSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [date, setDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const timeframeManuallySet = useRef(false);
-  const [tmEnriched, setTmEnriched] = useState(false);
-  const [selectedTmEvent, setSelectedTmEvent] = useState<TMResult | null>(null);
-  const [importUrlOpen, setImportUrlOpen] = useState(false);
-  const [importUrlValue, setImportUrlValue] = useState("");
-  const [pdfImporting, setPdfImporting] = useState(false);
-  const [pdfError, setPdfError] = useState<string | null>(null);
-  const pdfInputRef = useRef<HTMLInputElement>(null);
-
-  // Kind-specific enrichment
-  // setlistsByPerformer: keyed by performer name (headliner or support).
-  // Stores the section-shaped PerformerSetlist so an encore returned from
-  // setlist.fm survives a round-trip through the form.
-  const [setlistsByPerformer, setSetlistsByPerformer] = useState<Record<string, PerformerSetlist>>({});
-  const [tourName, setTourName] = useState("");
-  const [performers, setPerformers] = useState<PerformerData[]>([]);
-  const [castMembers, setCastMembers] = useState<CastMember[]>([]);
-  const [openerName, setOpenerName] = useState("");
-  const [productionName, setProductionName] = useState("");
-  const [notes, setNotes] = useState("");
-
-  // Personal data
-  const [seat, setSeat] = useState("");
-  const [pricePaid, setPricePaid] = useState("");
-  const [ticketCount, setTicketCount] = useState("1");
-  const [showMoreDetails, setShowMoreDetails] = useState(false);
-
-  // Chat state
-  const [chatMessages, setChatMessages] = useState<
-    { role: "user" | "assistant"; content: string }[]
-  >([
-    {
-      role: "assistant",
-      content:
-        'Tell me about a show you saw or are going to see. For example: "Saw Radiohead at MSG on March 15, section 204"',
-    },
-  ]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatParsed, setChatParsed] = useState<{
-    // Nullable because parseChat can resolve a date / kind without a
-    // name (conversational follow-ups, "I saw something on 2018-08-05",
-    // etc). The confirm-save path below guards against an empty
-    // headliner and surfaces an assistant message instead of letting
-    // the server reject with a 400.
-    headliner: string | null;
-    venue_hint: string | null;
-    date_hint: string | null;
-    seat_hint: string | null;
-    kind_hint: ShowKind | null;
-  } | null>(null);
-  const [chatConfirmed, setChatConfirmed] = useState(false);
-
-  // Gmail scan state
-  const [gmailScanning, setGmailScanning] = useState(false);
-  const [gmailResults, setGmailResults] = useState<
-    Array<{
-      headliner: string;
-      production_name: string | null;
-      venue_name: string | null;
-      venue_city: string | null;
-      venue_state: string | null;
-      date: string | null;
-      seat: string | null;
-      price: string | null;
-      ticket_count: number | null;
-      kind_hint: "concert" | "theatre" | "comedy" | "festival" | null;
-      confidence: "high" | "medium" | "low";
-    }>
-  >([]);
-  const [gmailShowResults, setGmailShowResults] = useState(false);
-
-  // Performer search
-  const [performerSearchInput, setPerformerSearchInput] = useState("");
-  const [debouncedPerformerQuery, setDebouncedPerformerQuery] = useState("");
-  const performerSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const utils = trpc.useUtils();
-
-  // Pre-fill from query params (e.g. navigating from Map page)
-  useEffect(() => {
-    const tf = searchParams.get("timeframe");
-    if (tf === "past" || tf === "upcoming" || tf === "watching") {
-      setTimeframe(tf);
-    }
-    const venueName = searchParams.get("venueName");
-    const venueCity = searchParams.get("venueCity");
-    if (venueName) {
-      setVenue((v) => ({
-        ...v,
-        name: venueName,
-        city: venueCity ?? v.city,
-      }));
-    }
-  }, [searchParams]);
-
-  // TM search
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-
-  // Ticketmaster event search powers the headliner picker for concerts /
-  // theatre / comedy (it auto-fills venue + date from the picked event).
-  // Festivals are built up by name + lineup, so picking a one-off TM event
-  // is the wrong abstraction — we use the artist search below instead.
-  const tmSearch = trpc.enrichment.searchTM.useQuery(
-    { headliner: debouncedQuery },
-    { enabled: debouncedQuery.length >= 2 && kind !== "festival" },
-  );
-
-  // Artist (TM attraction) search — returns artists, not events. Used for the
-  // festival headliner picker and the "+ search artists" lineup add input so
-  // those flows never surface ticketmaster events.
-  const festivalHeadlinerSearch = trpc.performers.searchExternal.useQuery(
-    { query: debouncedQuery },
-    { enabled: debouncedQuery.length >= 2 && kind === "festival" },
-  );
-  const performerArtistSearch = trpc.performers.searchExternal.useQuery(
-    { query: debouncedPerformerQuery },
-    { enabled: debouncedPerformerQuery.length >= 2 },
-  );
-
-  const fetchTMEvent = trpc.enrichment.fetchTMEventByUrl.useMutation();
-
-  // Places venue search
-  const venueSearch = trpc.enrichment.searchPlaces.useQuery(
-    { query: debouncedVenueQuery, types: "venue" },
-    { enabled: debouncedVenueQuery.length >= 2 && !tmEnriched },
-  );
-
-  // Auto-fetch headliner setlist for past concerts
-  const isPastConcert =
-    kind === "concert" && date && new Date(date) < new Date();
-
-  // Media uploads are gated to events that have already happened. Use the
-  // run's last day so a multi-night festival isn't "past" until after the
-  // closing night.
-  const isPastEvent = useMemo(() => {
-    const lastDay = endDate || date;
-    return Boolean(lastDay && isDatePast(lastDay));
-  }, [date, endDate]);
-  const setlistQuery = trpc.enrichment.fetchSetlist.useQuery(
-    { performerName: headliner.name, date },
-    {
-      enabled:
-        !!isPastConcert && headliner.name.length > 0 && date.length > 0,
-    },
-  );
-  // Track which performers have a pending setlist fetch
-  const [fetchingSetlistFor, setFetchingSetlistFor] = useState<Record<string, boolean>>({});
-
-  // Mutations
-  const parseChat = trpc.enrichment.parseChat.useMutation();
-  const extractCast = trpc.enrichment.extractCast.useMutation();
-  const extractFromPdf = trpc.enrichment.extractFromPdf.useMutation();
-  const invalidateSidebarCounts = useInvalidateSidebarCounts();
-  // Undo for create reuses the same delete mutation. Silenced so the
-  // "Show removed" toast isn't shadowed by the generic "Show deleted"
-  // surface that ShowDetailTabsView and the context menu use.
-  const undoDelete = trpc.shows.delete.useMutation({
-    meta: { errorToast: false },
-  });
-  const createShow = trpc.shows.create.useMutation({
-    onSuccess: (data) => {
-      utils.shows.invalidate();
-      invalidateSidebarCounts();
-      if (data?.id) {
-        toast.success("Show added", {
-          duration: 5000,
-          action: {
-            label: "Undo",
-            onClick: async () => {
-              try {
-                await undoDelete.mutateAsync({ showId: data.id });
-                utils.shows.invalidate();
-                invalidateSidebarCounts();
-                toast.success("Show removed");
-                router.push("/home");
-              } catch {
-                toast.error("Couldn't undo — try again");
-              }
-            },
-          },
-        });
-      }
-    },
-  });
-  const updateShow = trpc.shows.update.useMutation({
-    meta: { successToast: "Show updated" },
-    onSuccess: () => {
-      utils.shows.invalidate();
-      invalidateSidebarCounts();
-    },
-  });
-  const createUploadIntent = trpc.media.createUploadIntent.useMutation();
-  const completeUpload = trpc.media.completeUpload.useMutation();
-
-  // Staged media uploads (processed after show is created)
-  const [stagedMedia, setStagedMedia] = useState<StagedMediaItem[]>([]);
-  const [mediaUploadStatus, setMediaUploadStatus] = useState<string | null>(null);
-  const [mediaUploadErrors, setMediaUploadErrors] = useState<string[]>([]);
-
-  // If the user moves the date out of the past, the staging UI hides — drop
-  // any already-picked files so they don't sneak through on save.
-  useEffect(() => {
-    if (isPastEvent || stagedMedia.length === 0) return;
-    for (const item of stagedMedia) URL.revokeObjectURL(item.previewUrl);
-    setStagedMedia([]);
-    setMediaUploadErrors([]);
-  }, [isPastEvent, stagedMedia]);
-
-  // Fetch existing show for edit mode
-  const editQuery = trpc.shows.detail.useQuery(
-    { showId: editId! },
-    { enabled: isEditMode },
-  );
-  const [editPrefilled, setEditPrefilled] = useState(false);
-
-  useEffect(() => {
-    if (!editQuery.data || editPrefilled) return;
-    const s = editQuery.data;
-
-    setKind(s.kind as ShowKind);
-    setDate(s.date ?? "");
-    if (s.endDate) setEndDate(s.endDate);
-    if (s.seat) setSeat(s.seat);
-    if (s.pricePaid) setPricePaid(s.pricePaid);
-    if (s.ticketCount) setTicketCount(String(s.ticketCount));
-    if (s.tourName) setTourName(s.tourName);
-    // Prefill setlists from an existing show. Tolerate both the new
-    // sections shape and the legacy `string[]` per-performer shape via
-    // normalizePerformerSetlist; fall back to the very-old top-level
-    // `setlist text[]` for un-migrated rows.
-    if (s.setlists && typeof s.setlists === 'object') {
-      const byName: Record<string, PerformerSetlist> = {};
-      const allPerfs = s.showPerformers ?? [];
-      for (const [pid, raw] of Object.entries(
-        s.setlists as Record<string, unknown>,
-      )) {
-        const setlist = normalizePerformerSetlist(raw);
-        if (!setlist) continue;
-        const perf = allPerfs.find(
-          (sp: { performer: { id: string } }) => sp.performer.id === pid,
-        );
-        if (perf) byName[perf.performer.name] = setlist;
-      }
-      if (Object.keys(byName).length > 0) setSetlistsByPerformer(byName);
-    } else if (s.setlist && s.setlist.length > 0) {
-      const headlinerPerf = s.showPerformers.find(
-        (sp: { role: string; sortOrder: number }) =>
-          sp.role === 'headliner' && sp.sortOrder === 0,
-      );
-      if (headlinerPerf) {
-        setSetlistsByPerformer({
-          [headlinerPerf.performer.name]: singleMainSet(s.setlist),
-        });
-      }
-    }
-
-    if (s.productionName) setProductionName(s.productionName);
-    if (s.notes) setNotes(s.notes);
-
-    const headlinerPerf = s.showPerformers.find(
-      (sp: { role: string; sortOrder: number }) => sp.role === "headliner" && sp.sortOrder === 0,
-    );
-    if (headlinerPerf) {
-      setHeadlinerName(headlinerPerf.performer.name);
-      setHeadliner({
-        name: headlinerPerf.performer.name,
-        tmAttractionId: undefined,
-        musicbrainzId: headlinerPerf.performer.musicbrainzId ?? undefined,
-        imageUrl: headlinerPerf.performer.imageUrl ?? undefined,
-      });
-    }
-
-    // Venue
-    setVenue({
-      name: s.venue.name,
-      city: s.venue.city,
-      stateRegion: s.venue.stateRegion ?? undefined,
-      country: s.venue.country ?? undefined,
-      tmVenueId: s.venue.ticketmasterVenueId ?? undefined,
-      googlePlaceId: s.venue.googlePlaceId ?? undefined,
-      photoUrl: s.venue.photoUrl ?? undefined,
-      lat: s.venue.latitude ?? undefined,
-      lng: s.venue.longitude ?? undefined,
-    });
-    setVenueQuery(s.venue.name);
-
-    // Other performers
-    const otherPerfs = s.showPerformers
-      .filter((sp: { role: string; sortOrder: number }) => !(sp.role === "headliner" && sp.sortOrder === 0))
-      .sort((a: { sortOrder: number }, b: { sortOrder: number }) => a.sortOrder - b.sortOrder)
-      .map((sp: { role: string; characterName: string | null; sortOrder: number; performer: { name: string; imageUrl: string | null; musicbrainzId: string | null } }) => ({
-        name: sp.performer.name,
-        role: sp.role as "headliner" | "support" | "cast",
-        characterName: sp.characterName ?? undefined,
-        sortOrder: sp.sortOrder,
-        musicbrainzId: sp.performer.musicbrainzId ?? undefined,
-        imageUrl: sp.performer.imageUrl ?? undefined,
-      }));
-    setPerformers(otherPerfs);
-
-    // Cast members for theatre
-    if (s.kind === "theatre") {
-      const cast = s.showPerformers
-        .filter((sp: { role: string }) => sp.role === "cast")
-        .map((sp: { characterName: string | null; performer: { name: string } }) => ({
-          actor: sp.performer.name,
-          role: sp.characterName ?? "",
-        }));
-      if (cast.length > 0) setCastMembers(cast);
-    }
-
-    // Timeframe
-    if (s.state === "past") setTimeframe("past");
-    else if (s.state === "ticketed") setTimeframe("upcoming");
-    else setTimeframe("watching");
-
-    setEditPrefilled(true);
-  }, [editQuery.data, editPrefilled]);
-
-  // Gmail
-  const scanGmailForShow = trpc.enrichment.scanGmailForShow.useMutation();
-
-  // Count auto-filled fields
-  const autoFilledCount = useMemo(() => {
-    let count = 0;
-    if (tmEnriched) {
-      if (venue.name) count++;
-      if (venue.city) count++;
-      if (date) count++;
-      if (headliner.tmAttractionId) count++;
-      if (performers.length > 0) count++;
-    }
-    if (Object.keys(setlistsByPerformer).length > 0) count++;
-    if (tourName && setlistQuery.data && kind !== "festival") count++;
-    return count;
-  }, [tmEnriched, venue, date, headliner, performers, setlistsByPerformer, tourName, setlistQuery.data, kind]);
-
-  // ── Handlers ─────────────────────────────────────────────
-
-  const handleHeadlinerInput = useCallback(
-    (value: string) => {
-      setHeadlinerName(value);
-      setHeadliner((prev) => ({ ...prev, name: value }));
-      setSelectedTmEvent(null);
-      setTmEnriched(false);
-
-      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-      if (value.length >= 2) {
-        searchTimerRef.current = setTimeout(() => {
-          setDebouncedQuery(value);
-        }, 500);
-      } else {
-        setDebouncedQuery("");
-      }
-    },
-    [],
-  );
-
-  const handleDateChange = useCallback((value: string) => {
-    setDate(value);
-    if (!timeframeManuallySet.current && value) {
-      const d = new Date(value + "T12:00:00");
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (d < today) {
-        setTimeframe("past");
-      } else if (timeframe !== "upcoming") {
-        setTimeframe("watching");
-      }
-    }
-  }, [timeframe]);
-
-  const handleSelectTmResult = useCallback(
-    (result: TMResult) => {
-      setSelectedTmEvent(result);
-      setTmEnriched(true);
-      setHeadlinerName(result.performers[0]?.name ?? result.name);
-      setHeadliner({
-        name: result.performers[0]?.name ?? result.name,
-        tmAttractionId: result.performers[0]?.tmAttractionId,
-        imageUrl: result.performers[0]?.imageUrl ?? undefined,
-      });
-      setVenue({
-        name: result.venueName ?? "",
-        city: result.venueCity ?? "",
-        stateRegion: result.venueState ?? undefined,
-        country: result.venueCountry ?? undefined,
-        tmVenueId: result.venueTmId ?? undefined,
-        lat: result.venueLat ?? undefined,
-        lng: result.venueLng ?? undefined,
-      });
-      setDate(result.date);
-
-      if (result.kind) {
-        const mappedKind = result.kind.toLowerCase() as ShowKind;
-        if (["concert", "theatre", "comedy", "festival"].includes(mappedKind)) {
-          setKind(mappedKind);
-        }
-      }
-
-      // Set additional performers
-      if (result.performers.length > 1) {
-        setPerformers(
-          result.performers.slice(1).map((p, i) => ({
-            name: p.name,
-            role: "support" as const,
-            sortOrder: i + 1,
-            tmAttractionId: p.tmAttractionId,
-            imageUrl: p.imageUrl ?? undefined,
-          })),
-        );
-      }
-    },
-    [],
-  );
-
-  const handleImportFromUrl = useCallback(async () => {
-    if (!importUrlValue.trim()) return;
-    try {
-      const result = await fetchTMEvent.mutateAsync({ url: importUrlValue.trim() });
-      handleSelectTmResult(result);
-      setImportUrlOpen(false);
-      setImportUrlValue("");
-    } catch {
-      // Error state surfaced via fetchTMEvent.isError in the UI
-    }
-  }, [importUrlValue, fetchTMEvent, handleSelectTmResult]);
-
-  const handlePdfImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setPdfImporting(true);
-    setPdfError(null);
-
-    try {
-      const reader = new FileReader();
-      const fileBase64 = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => {
-          const dataUrl = reader.result as string;
-          resolve(dataUrl.split(",")[1]!);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-
-      const result = await extractFromPdf.mutateAsync({ fileBase64 });
-
-      if (result.headliner) {
-        setHeadlinerName(result.headliner);
-        setHeadliner({ name: result.headliner });
-      }
-      if (result.venue_name) {
-        setVenue((prev) => ({
-          ...prev,
-          name: result.venue_name ?? prev.name,
-          city: result.venue_city ?? prev.city,
-          stateRegion: result.venue_state ?? prev.stateRegion,
-        }));
-        setVenueQuery(result.venue_name);
-      }
-      if (result.date) setDate(result.date);
-      if (result.seat) setSeat(result.seat);
-      if (result.price) setPricePaid(result.price);
-      if (result.ticket_count) setTicketCount(String(result.ticket_count));
-      if (result.production_name) setProductionName(result.production_name);
-      if (result.kind_hint) setKind(result.kind_hint);
-    } catch (err) {
-      setPdfError(err instanceof Error ? err.message : "Failed to extract from PDF");
-    } finally {
-      setPdfImporting(false);
-      if (pdfInputRef.current) pdfInputRef.current.value = "";
-    }
-  }, [extractFromPdf]);
-
-  // ── Festival poster / schedule upload ─────────────────────────
-  const [festivalModalOpen, setFestivalModalOpen] = useState(false);
-  const festivalFileInputRef = useRef<HTMLInputElement>(null);
-  const chatFestivalFileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleFestivalSubmit = useCallback(
-    async (artists: SelectedFestivalArtist[], meta: FestivalLineupMeta) => {
-      // Write back to form state so the user lands on the structured
-      // form with festival name, date(s), venue hint, and lineup
-      // pre-populated — they can edit the name and venue before the
-      // actual save click. Chat mode flips to Form so the user sees
-      // what's about to be created.
-      if (kind !== "festival") setKind("festival");
-      if (meta.festivalName) {
-        setProductionName((prev) => prev || meta.festivalName!);
-      }
-      if (meta.startDate) {
-        setDate((prev) => prev || meta.startDate!);
-      }
-      if (meta.endDate) {
-        setEndDate((prev) => prev || meta.endDate!);
-      }
-      if (meta.venueHint) {
-        setVenue((prev) =>
-          prev.name
-            ? prev
-            : { ...prev, name: meta.venueHint!, city: prev.city || "" },
-        );
-        setVenueQuery((prev) => prev || meta.venueHint!);
-      }
-      setPerformers(
-        artists.map((a) => ({
-          name: a.name,
-          role: a.role,
-          sortOrder: a.sortOrder,
-          tmAttractionId: a.tmAttractionId,
-          imageUrl: a.imageUrl,
-          musicbrainzId: a.musicbrainzId,
-        })),
-      );
-      setFestivalModalOpen(false);
-      if (mode === "Chat") setMode("Form");
-    },
-    [mode, kind],
-  );
-
-  const festivalFlow = useFestivalLineup({ onSubmit: handleFestivalSubmit });
-
-  const openFestivalPicker = useCallback(
-    async (file: File) => {
-      setFestivalModalOpen(true);
-      await festivalFlow.extractFromFile(file);
-    },
-    [festivalFlow],
-  );
-
-  const handleFestivalFileChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      // Reset the input so the same filename can be re-selected later.
-      e.target.value = "";
-      if (!file) return;
-      await openFestivalPicker(file);
-    },
-    [openFestivalPicker],
-  );
-
-  const handleChatFestivalFileChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      e.target.value = "";
-      if (!file) return;
-      setChatMessages((prev) => [
-        ...prev,
-        { role: "user", content: `📎 ${file.name}` },
-        { role: "assistant", content: "Reading poster — pick artists you saw…" },
-      ]);
-      await openFestivalPicker(file);
-    },
-    [openFestivalPicker],
-  );
-
-  const handlePlaybillUpload = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64 = (reader.result as string).split(",")[1];
-        if (!base64) return;
-        try {
-          const result = await extractCast.mutateAsync({ imageBase64: base64 });
-          setCastMembers(result.cast);
-          setPerformers(
-            result.cast.map((c: CastMember, i: number) => ({
-              name: c.actor,
-              role: "cast" as const,
-              characterName: c.role,
-              sortOrder: i + 1,
-            })),
-          );
-        } catch {
-          // Extraction failed silently; user can add manually
-        }
-      };
-      reader.readAsDataURL(file);
-    },
-    [extractCast],
-  );
-
-  const handleGmailImportClick = useCallback(() => {
-    if (!headlinerName || headlinerName.length < 2) {
-      setGmailShowResults(false);
-      return;
-    }
-    setGmailScanning(true);
-    setGmailShowResults(true);
-
-    const popup = window.open("/api/gmail", "gmail-auth", "width=500,height=600,popup=yes");
-
-    const handler = async (e: MessageEvent) => {
-      if (e.data?.type === "gmail-auth" && e.data.accessToken) {
-        window.removeEventListener("message", handler);
-        try {
-          const results = await scanGmailForShow.mutateAsync({
-            accessToken: e.data.accessToken,
-            headliner: headlinerName,
-            venue: venue.name || undefined,
-          });
-          setGmailResults(results);
-        } catch {
-          setGmailResults([]);
-        } finally {
-          setGmailScanning(false);
-        }
-      }
-      if (e.data?.type === "gmail-auth-error") {
-        window.removeEventListener("message", handler);
-        setGmailScanning(false);
-        setGmailResults([]);
-      }
-    };
-    window.addEventListener("message", handler);
-
-    const checkClosed = setInterval(() => {
-      if (popup?.closed) {
-        clearInterval(checkClosed);
-        window.removeEventListener("message", handler);
-        setGmailScanning(false);
-      }
-    }, 500);
-  }, [headlinerName, venue.name, scanGmailForShow]);
-
-  const handleSelectGmailResult = useCallback(
-    (result: (typeof gmailResults)[number]) => {
-      if (result.headliner) {
-        setHeadlinerName(result.headliner);
-        setHeadliner({ name: result.headliner });
-      }
-      if (result.venue_name) {
-        setVenue((prev) => ({
-          ...prev,
-          name: result.venue_name ?? prev.name,
-          city: result.venue_city ?? prev.city,
-          stateRegion: result.venue_state ?? prev.stateRegion,
-        }));
-      }
-      if (result.date) setDate(result.date);
-      if (result.seat) setSeat(result.seat);
-      if (result.price) setPricePaid(result.price);
-      if (result.ticket_count) setTicketCount(String(result.ticket_count));
-      if (result.production_name) setProductionName(result.production_name);
-      if (result.kind_hint) setKind(result.kind_hint);
-      setGmailShowResults(false);
-    },
-    [],
-  );
-
-  // Auto-fill headliner setlist + capture the resolved MusicBrainz ID when
-  // the query resolves. The MBID lands on the headliner row even if
-  // setlist.fm has no setlist for this date (in which case `data.setlist`
-  // is null) — without this, the Add flow loses every MBID for shows
-  // setlist.fm couldn't find a setlist for.
-  useEffect(() => {
-    if (!setlistQuery.data || !headliner.name) return;
-    const data = setlistQuery.data;
-    if (data.setlist) {
-      setSetlistsByPerformer((prev) => ({
-        ...prev,
-        [headliner.name]: data.setlist!,
-      }));
-    }
-    if (data.tourName) {
-      setTourName(data.tourName);
-    }
-    if (data.mbid) {
-      setHeadliner((prev) =>
-        prev.musicbrainzId === data.mbid
-          ? prev
-          : { ...prev, musicbrainzId: data.mbid },
-      );
-    }
-  }, [setlistQuery.data, headliner.name]);
-
-  // Auto-fetch support performer setlists for past concerts.
-  // Mirrors the headliner useQuery above but loops over the dynamic
-  // performers array. The Set tracks attempted name+date combos so we
-  // don't refetch on every render or clobber manual edits.
-  const supportSetlistAttemptedRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (!isPastConcert || !date) return;
-    for (const p of performers) {
-      if (p.role !== "support" || !p.name) continue;
-      const key = `${p.name} ${date}`;
-      if (supportSetlistAttemptedRef.current.has(key)) continue;
-      supportSetlistAttemptedRef.current.add(key);
-      const performerName = p.name;
-      setFetchingSetlistFor((prev) => ({ ...prev, [performerName]: true }));
-      utils.enrichment.fetchSetlist
-        .fetch({ performerName, date })
-        .then((result) => {
-          if (!result) return;
-          if (result.mbid) {
-            // Persist the resolved MBID on the matching support performer
-            // even when no setlist was returned. Match on name (the user
-            // can't have two support performers with the same name in
-            // one show — the form prevents it).
-            setPerformers((prev) =>
-              prev.map((pp) =>
-                pp.name === performerName && !pp.musicbrainzId
-                  ? { ...pp, musicbrainzId: result.mbid }
-                  : pp,
-              ),
-            );
-          }
-          if (result.setlist && setlistTotalSongs(result.setlist) > 0) {
-            setSetlistsByPerformer((prev) => ({
-              ...prev,
-              [performerName]: result.setlist!,
-            }));
-          }
-        })
-        .finally(() => {
-          setFetchingSetlistFor((prev) => ({ ...prev, [performerName]: false }));
-        });
-    }
-  }, [performers, date, isPastConcert, utils]);
-
-  const handleChatSend = useCallback(async () => {
-    if (!chatInput.trim()) return;
-
-    const userMessage = chatInput.trim();
-    setChatMessages((prev) => [...prev, { role: "user", content: userMessage }]);
-    setChatInput("");
-
-    try {
-      const result = await parseChat.mutateAsync({ freeText: userMessage });
-      setChatParsed(result);
-
-      const parts: string[] = [];
-      if (result.headliner) parts.push(`Headliner: ${result.headliner}`);
-      if (result.venue_hint) parts.push(`Venue: ${result.venue_hint}`);
-      if (result.date_hint) parts.push(`Date: ${result.date_hint}`);
-      if (result.seat_hint) parts.push(`Seat: ${result.seat_hint}`);
-      if (result.kind_hint) parts.push(`Type: ${result.kind_hint}`);
-
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: `Here's what I got:\n\n${parts.join("\n")}\n\nLook right? Click "Confirm & Save" to add this show, or tell me what to change.`,
-        },
-      ]);
-    } catch {
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content:
-            "Sorry, I had trouble understanding that. Could you try again with more details?",
-        },
-      ]);
-    }
-  }, [chatInput, parseChat]);
-
-  const handleChatConfirmSave = useCallback(async () => {
-    if (!chatParsed) return;
-    if (!chatParsed.headliner) {
-      // parseChat can resolve a date / kind without a name (e.g.
-      // "I saw something October 23, 2016"). Surface that gap as an
-      // assistant message and reset the confirm state instead of
-      // sending an empty `headliner.name` to a Zod-required field.
-      setChatConfirmed(false);
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content:
-            "Who was the headliner? Reply with the artist / production name and I'll fill in the rest.",
-        },
-      ]);
-      return;
-    }
-    const headlinerName = chatParsed.headliner;
-
-    const showKind = chatParsed.kind_hint ?? "concert";
-    const showDate =
-      chatParsed.date_hint ?? new Date().toISOString().split("T")[0]!;
-
-    try {
-      const created = await createShow.mutateAsync({
-        kind: showKind,
-        headliner: { name: headlinerName },
-        venue: {
-          name: chatParsed.venue_hint ?? "Unknown Venue",
-          city: "Unknown",
-        },
-        date: showDate,
-        seat: chatParsed.seat_hint ?? undefined,
-      });
-      router.push(created ? `/shows/${created.id}` : "/home");
-    } catch {
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: "There was an error saving the show. Please try again.",
-        },
-      ]);
-    }
-  }, [chatParsed, createShow, router]);
-
-  const handleFormSave = useCallback(async () => {
-    const needsHeadliner = kind !== "theatre" && kind !== "festival";
-    const needsProductionName = kind === "theatre" || kind === "festival";
-    if (!kind || !venue.name || !venue.city || !date) return;
-    if (needsHeadliner && !headliner.name) return;
-    if (needsProductionName && !productionName) return;
-
-    let allPerformers = [...performers];
-
-    if (kind === "comedy" && openerName.trim()) {
-      allPerformers = [
-        ...allPerformers,
-        {
-          name: openerName.trim(),
-          role: "support" as const,
-          sortOrder: allPerformers.length + 1,
-        },
-      ];
-    }
-
-    try {
-      let venueToSave = { ...venue };
-
-      if (venueToSave.lat == null && venueToSave.name && venueToSave.city) {
-        try {
-          const geo = await utils.enrichment.geocodeVenue.fetch({
-            venueName: venueToSave.name,
-            city: venueToSave.city,
-          });
-          if (geo) {
-            venueToSave = {
-              ...venueToSave,
-              lat: geo.lat,
-              lng: geo.lng,
-              stateRegion: venueToSave.stateRegion ?? geo.stateRegion,
-              country: venueToSave.country ?? geo.country,
-              googlePlaceId: venueToSave.googlePlaceId ?? geo.googlePlaceId,
-              photoUrl: venueToSave.photoUrl ?? geo.photoUrl,
-            };
-          }
-        } catch {
-          // Geocoding failed; save without coordinates
-        }
-      }
-
-      // Attach per-performer setlists to performers; headliner gets its own field
-      const headlinerSetlist = headliner.name ? setlistsByPerformer[headliner.name] : undefined;
-      const performersWithSetlists = allPerformers.map((p) => ({
-        ...p,
-        setlist: setlistsByPerformer[p.name] ?? undefined,
-      }));
-
-      const payload = {
-        kind,
-        headliner: headliner.name
-          ? { ...headliner, setlist: headlinerSetlist }
-          : { name: productionName || "Unknown" },
-        venue: venueToSave,
-        date,
-        endDate: endDate || undefined,
-        seat: kind === "festival" ? undefined : (seat || undefined),
-        pricePaid: pricePaid || undefined,
-        ticketCount: parseInt(ticketCount) || 1,
-        tourName: kind === "festival" ? undefined : (tourName || undefined),
-        productionName: productionName || undefined,
-        notes: notes || undefined,
-        performers: performersWithSetlists.length > 0 ? performersWithSetlists : undefined,
-      };
-
-      let targetShowId: string;
-      let targetShowPerformers: Array<{ performer?: { id?: string; name?: string } | null } | null | undefined>;
-      if (isEditMode && editId) {
-        const updated = await updateShow.mutateAsync({ showId: editId, ...payload });
-        targetShowId = editId;
-        targetShowPerformers = updated?.showPerformers ?? editQuery.data?.showPerformers ?? [];
-      } else {
-        const created = await createShow.mutateAsync(payload);
-        if (!created) {
-          router.push("/home");
-          return;
-        }
-        targetShowId = created.id;
-        targetShowPerformers = created.showPerformers ?? [];
-      }
-
-      if (stagedMedia.length === 0) {
-        router.push(`/shows/${targetShowId}`);
-        return;
-      }
-
-      // Map performer names (used in staging) → performer ids.
-      const nameToPerformerId = new Map<string, string>();
-      for (const sp of targetShowPerformers) {
-        if (sp?.performer?.name && sp.performer.id) {
-          nameToPerformerId.set(sp.performer.name, sp.performer.id);
-        }
-      }
-
-      const errors: string[] = [];
-      for (let i = 0; i < stagedMedia.length; i++) {
-        const item = stagedMedia[i]!;
-        setMediaUploadStatus(`Uploading ${i + 1} of ${stagedMedia.length}: ${item.file.name}`);
-        const performerIds = item.performerNames
-          .map((name) => nameToPerformerId.get(name))
-          .filter((id): id is string => Boolean(id));
-        try {
-          const opts = {
-            showId: targetShowId,
-            file: item.file,
-            performerIds: performerIds.length > 0 ? performerIds : undefined,
-            createIntent: (input: Parameters<typeof createUploadIntent.mutateAsync>[0]) =>
-              createUploadIntent.mutateAsync(input),
-            completeUpload: (input: { assetId: string }) =>
-              completeUpload.mutateAsync(input),
-          };
-          if (item.kind === "photo") {
-            await uploadPhotoForShow(opts);
-          } else {
-            await uploadVideoForShow(opts);
-          }
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : "Upload failed";
-          errors.push(`${item.file.name}: ${msg}`);
-        }
-      }
-      setMediaUploadStatus(null);
-      if (errors.length > 0) {
-        setMediaUploadErrors(errors);
-        // Show is saved; let user see the partial-failure summary before navigating.
-        return;
-      }
-      router.push(`/shows/${targetShowId}`);
-    } catch {
-      // Error is surfaced via mutation isError in the UI
-      setMediaUploadStatus(null);
-    }
-  }, [
-    kind,
-    headliner,
-    venue,
-    date,
-    endDate,
-    seat,
-    pricePaid,
-    ticketCount,
-    tourName,
-    productionName,
-    notes,
-    setlistsByPerformer,
-    performers,
-    openerName,
-    createShow,
-    updateShow,
-    isEditMode,
-    editId,
-    editQuery.data,
-    utils,
-    stagedMedia,
-    createUploadIntent,
-    completeUpload,
+  const form = useAddShowForm();
+  const {
     router,
-  ]);
+    mode, setMode,
+    isEditMode,
+    editQuery,
+    timeframe, setTimeframe, timeframeManuallySet,
+    kind, setKind,
+    headlinerName,
+    headliner, setHeadliner,
+    venue,
+    venueQuery,
+    debouncedVenueQuery,
+    date,
+    endDate, setEndDate,
+    tmEnriched, selectedTmEvent,
+    importUrlOpen, setImportUrlOpen,
+    importUrlValue, setImportUrlValue,
+    pdfImporting, pdfError, pdfInputRef,
+    setlistsByPerformer, setSetlistsByPerformer,
+    tourName, setTourName,
+    performers, setPerformers,
+    castMembers,
+    openerName, setOpenerName,
+    productionName, setProductionName,
+    notes, setNotes,
+    seat, setSeat,
+    pricePaid, setPricePaid,
+    ticketCount, setTicketCount,
+    showMoreDetails, setShowMoreDetails,
+    performerSearchInput,
+    debouncedPerformerQuery,
+    debouncedQuery,
+    utils,
+    tmSearch, festivalHeadlinerSearch, performerArtistSearch,
+    fetchTMEvent,
+    venueSearch,
+    setlistQuery,
+    createShow, updateShow,
+    extractCast,
+    parseChat,
+    scanGmailForShow,
+    isPastConcert, isPastEvent,
+    fetchingSetlistFor, setFetchingSetlistFor,
+    hasIdentity, canSave,
+    autoFilledCount, provenanceStatuses,
+    festivalFlow,
+    festivalModalOpen, setFestivalModalOpen,
+    festivalFileInputRef,
+    openFestivalPicker,
+    handleFestivalFileChange,
+    media,
+    handleHeadlinerInput, handleDateChange,
+    handleSelectTmResult,
+    handleImportFromUrl, handlePdfImport,
+    handlePlaybillUpload,
+    handleSelectGmailResult,
+    handleFormSave,
+    handleVenueInput, handleSelectPlace,
+    handlePerformerSearchInput,
+    handleAddPerformer,
+    handleSelectArtistAsPerformer,
+    handleSelectArtistAsHeadliner,
+    handleRemovePerformer,
+    handleTogglePerformerRole,
+    clearHeadlinerSearch,
+    useManualHeadliner,
+  } = form;
 
-  const handleVenueInput = useCallback((value: string) => {
-    setVenueQuery(value);
-    setVenue((v) => ({ ...v, name: value, city: v.city }));
-    if (venueSearchTimerRef.current) clearTimeout(venueSearchTimerRef.current);
-    if (value.length >= 2) {
-      venueSearchTimerRef.current = setTimeout(() => setDebouncedVenueQuery(value), 400);
-    } else {
-      setDebouncedVenueQuery("");
-    }
-  }, []);
-
-  const handleSelectPlace = useCallback(async (placeId: string) => {
-    try {
-      const details = await utils.enrichment.placeDetails.fetch({ placeId });
-      if (details) {
-        setVenue({
-          name: details.name,
-          city: details.city,
-          stateRegion: details.stateRegion ?? undefined,
-          country: details.country,
-          lat: details.latitude,
-          lng: details.longitude,
-          googlePlaceId: details.googlePlaceId,
-          photoUrl: details.photoUrl ?? undefined,
-        });
-        setVenueQuery(details.name);
-        setDebouncedVenueQuery("");
-      }
-    } catch { /* place details failed, user can enter manually */ }
-  }, [utils]);
-
-  const handlePerformerSearchInput = useCallback((value: string) => {
-    setPerformerSearchInput(value);
-    if (performerSearchTimerRef.current) clearTimeout(performerSearchTimerRef.current);
-    if (value.length >= 2) {
-      performerSearchTimerRef.current = setTimeout(() => {
-        setDebouncedPerformerQuery(value);
-      }, 500);
-    } else {
-      setDebouncedPerformerQuery("");
-    }
-  }, []);
-
-  const handleAddPerformer = useCallback(() => {
-    if (!performerSearchInput.trim()) return;
-    setPerformers((prev) => [
-      ...prev,
-      {
-        name: performerSearchInput.trim(),
-        role: "support",
-        sortOrder: prev.length + 1,
-      },
-    ]);
-    setPerformerSearchInput("");
-    setDebouncedPerformerQuery("");
-  }, [performerSearchInput]);
-
-  const handleSelectArtistAsPerformer = useCallback(
-    (artist: { tmAttractionId: string; name: string; imageUrl: string | null; musicbrainzId: string | null }) => {
-      setPerformers((prev) => [
-        ...prev,
-        {
-          name: artist.name,
-          role: "support",
-          sortOrder: prev.length + 1,
-          tmAttractionId: artist.tmAttractionId,
-          musicbrainzId: artist.musicbrainzId ?? undefined,
-          imageUrl: artist.imageUrl ?? undefined,
-        },
-      ]);
-      setPerformerSearchInput("");
-      setDebouncedPerformerQuery("");
-    },
-    [],
-  );
-
-  const handleSelectArtistAsHeadliner = useCallback(
-    (artist: { tmAttractionId: string; name: string; imageUrl: string | null; musicbrainzId: string | null }) => {
-      setHeadlinerName(artist.name);
-      setHeadliner({
-        name: artist.name,
-        tmAttractionId: artist.tmAttractionId,
-        musicbrainzId: artist.musicbrainzId ?? undefined,
-        imageUrl: artist.imageUrl ?? undefined,
-      });
-      setSelectedTmEvent(null);
-      setTmEnriched(false);
-      setDebouncedQuery("");
-    },
-    [],
-  );
-
-  const handleRemovePerformer = useCallback((index: number) => {
-    setPerformers((prev) => prev.filter((_, i) => i !== index));
-  }, []);
-
-  const handleTogglePerformerRole = useCallback((index: number) => {
-    setPerformers((prev) =>
-      prev.map((p, i) =>
-        i === index
-          ? { ...p, role: p.role === "headliner" ? "support" : "headliner" }
-          : p,
-      ),
-    );
-  }, []);
-
-  // Determine if form can save
-  const hasValidVenue = venue.name.length > 0 && venue.city.length > 0;
-  const hasIdentity = (kind === "theatre" || kind === "festival") ? productionName.length > 0 : headliner.name.length > 0;
-  const canSave = kind !== null && hasIdentity && hasValidVenue && date.length > 0;
-
-  // Provenance statuses derived from state
-  const provenanceStatuses = useMemo(() => {
-    return [
-      {
-        source: "setlist.fm",
-        what: (() => {
-          const total = Object.values(setlistsByPerformer).reduce(
-            (sum, sl) => sum + setlistTotalSongs(sl),
-            0,
-          );
-          return total > 0 ? `${total} songs${tourName ? ` · ${tourName}` : ""}` : "tour, setlist";
-        })(),
-        status: setlistQuery.isLoading ? "pending" : Object.keys(setlistsByPerformer).length > 0 ? "ok" : setlistQuery.isFetched ? "skipped" : isPastConcert ? "pending" : "skipped",
-      },
-      {
-        source: "ticketmaster",
-        what: "venue, date, seat, price",
-        status: tmEnriched ? "ok" : debouncedQuery.length >= 2 ? (tmSearch.isLoading ? "pending" : "skipped") : (venue.name && date ? "skipped" : "pending"),
-      },
-      {
-        source: "playbill",
-        what: "cast on this night",
-        status: castMembers.length > 0 ? "ok" : kind === "theatre" ? "pending" : "skipped",
-      },
-      {
-        source: "musicbrainz",
-        what: "artist disambiguation",
-        status: headliner.name ? "ok" : "pending",
-      },
-      {
-        source: "photos",
-        what: "local images",
-        status: "pending",
-      },
-    ];
-  }, [setlistsByPerformer, tourName, setlistQuery.isLoading, setlistQuery.isFetched, isPastConcert, tmEnriched, debouncedQuery, tmSearch.isLoading, castMembers, kind, headliner, venue.name, date]);
+  const gmail = useAddShowGmail({
+    scanGmailForShow,
+    getHeadlinerName: () => headlinerName,
+    getVenueName: () => venue.name,
+  });
 
   // Kind color helper
   const kindColor = (k: ShowKind) => `var(--kind-${k})`;
@@ -1302,7 +128,7 @@ export default function AddPage() {
         {/* Mode Tabs — hidden in edit mode */}
         {!isEditMode && (
           <div style={{ display: "inline-flex", border: `1px solid var(--rule-strong)` }}>
-            {(["Form", "Chat"] as Mode[]).map((m, i) => (
+            {(["Form", "Chat"] as const).map((m, i) => (
               <button
                 key={m}
                 type="button"
@@ -1331,7 +157,16 @@ export default function AddPage() {
         )}
       </div>
 
-      {mode === "Chat" ? renderChatMode() : renderFormFields()}
+      {mode === "Chat" ? (
+        <AddShowChat
+          parseChat={parseChat}
+          createShow={createShow}
+          festivalFlowPhase={festivalFlow.phase}
+          onFestivalFile={openFestivalPicker}
+        />
+      ) : (
+        renderFormFields()
+      )}
     </div>
   );
 
@@ -1346,14 +181,14 @@ export default function AddPage() {
               <div
                 key={src.tag}
                 onClick={
-                  src.tag === "mail" ? handleGmailImportClick
+                  src.tag === "mail" ? gmail.start
                   : src.tag === "url" ? () => setImportUrlOpen((v) => !v)
                   : src.tag === "pdf" ? () => pdfInputRef.current?.click()
                   : undefined
                 }
                 style={{
                   padding: "12px 14px",
-                  background: src.tag === "mail" && gmailScanning ? "var(--ink)"
+                  background: src.tag === "mail" && gmail.scanning ? "var(--ink)"
                     : src.tag === "url" && importUrlOpen ? "var(--ink)"
                     : src.tag === "pdf" && pdfImporting ? "var(--ink)"
                     : "var(--surface)",
@@ -1368,10 +203,10 @@ export default function AddPage() {
                   <div style={{
                     fontFamily: mono,
                     fontSize: 9.5,
-                    color: (src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--muted)",
+                    color: (src.tag === "mail" && gmail.scanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--muted)",
                     letterSpacing: ".1em",
                     padding: "2px 5px",
-                    border: `1px solid ${(src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--rule-strong)"}`,
+                    border: `1px solid ${(src.tag === "mail" && gmail.scanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--rule-strong)"}`,
                     textTransform: "uppercase",
                   }}>
                     {src.tag}
@@ -1380,16 +215,16 @@ export default function AddPage() {
                     fontFamily: sans,
                     fontSize: 13,
                     fontWeight: 500,
-                    color: (src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--ink)",
+                    color: (src.tag === "mail" && gmail.scanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--ink)",
                     letterSpacing: -0.1,
                   }}>
-                    {src.tag === "mail" && gmailScanning ? "Scanning..." : src.tag === "url" && fetchTMEvent.isPending ? "Importing..." : src.tag === "pdf" && pdfImporting ? "Extracting..." : src.label}
+                    {src.tag === "mail" && gmail.scanning ? "Scanning..." : src.tag === "url" && fetchTMEvent.isPending ? "Importing..." : src.tag === "pdf" && pdfImporting ? "Extracting..." : src.label}
                   </div>
                 </div>
                 <div style={{
                   fontFamily: mono,
                   fontSize: 10,
-                  color: (src.tag === "mail" && gmailScanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--faint)",
+                  color: (src.tag === "mail" && gmail.scanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--faint)",
                   letterSpacing: ".04em",
                 }}>
                   {src.sub}
@@ -1474,39 +309,11 @@ export default function AddPage() {
           )}
 
           {/* Gmail results dropdown */}
-          {gmailShowResults && (
-            <div style={{ marginTop: 8, border: "1px solid var(--rule-strong)", background: "var(--surface)" }}>
-              {gmailScanning && (
-                <div style={{ padding: "14px 16px", fontFamily: mono, fontSize: 11, color: "var(--muted)", letterSpacing: ".04em" }}>
-                  Scanning Gmail for &ldquo;{headlinerName}&rdquo;...
-                </div>
-              )}
-              {!gmailScanning && gmailResults.length === 0 && (
-                <div style={{ padding: "14px 16px", fontFamily: mono, fontSize: 11, color: "var(--faint)", letterSpacing: ".04em" }}>
-                  No ticket emails found
-                </div>
-              )}
-              {gmailResults.map((result, i) => (
-                <div
-                  key={i}
-                  onClick={() => handleSelectGmailResult(result)}
-                  style={{ padding: "10px 16px", cursor: "pointer", borderTop: i > 0 ? "1px solid var(--rule)" : "none", display: "flex", flexDirection: "column", gap: 3 }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                >
-                  <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 500, color: "var(--ink)", letterSpacing: -0.1 }}>
-                    {result.headliner}
-                  </div>
-                  <div style={{ fontFamily: mono, fontSize: 10.5, color: "var(--muted)", letterSpacing: ".04em", display: "flex", gap: 12 }}>
-                    {result.venue_name && <span>{result.venue_name}</span>}
-                    {result.date && <span>{result.date}</span>}
-                    {result.seat && <span>{result.seat}</span>}
-                    {result.price && <span>${result.price}</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <AddShowGmail
+            gmail={gmail}
+            headlinerName={headlinerName}
+            onSelect={handleSelectGmailResult}
+          />
 
           {/* Separator below import section */}
           <div style={{ borderBottom: "1px solid var(--rule)", margin: "22px 0 26px" }} />
@@ -1741,12 +548,7 @@ export default function AddPage() {
               {/* Manual entry option */}
               <button
                 type="button"
-                onClick={() => {
-                  setHeadliner({ name: headlinerName, tmAttractionId: undefined, musicbrainzId: undefined, imageUrl: undefined });
-                  setTmEnriched(false);
-                  setSelectedTmEvent(null);
-                  setDebouncedQuery("");
-                }}
+                onClick={useManualHeadliner}
                 style={{
                   width: "100%",
                   padding: "10px 16px",
@@ -1821,7 +623,7 @@ export default function AddPage() {
                       type="button"
                       onClick={() => {
                         handleSelectTmResult(result);
-                        setDebouncedQuery("");
+                        clearHeadlinerSearch();
                       }}
                       style={{
                         width: "100%",
@@ -2315,52 +1117,14 @@ export default function AddPage() {
       {isPastEvent && (
         <div style={{ marginBottom: 26 }}>
           <FieldLabel optional>Photos & videos</FieldLabel>
-          <AddShowMediaStaging
-            staged={stagedMedia}
-            onChange={setStagedMedia}
-            disabled={createShow.isPending || Boolean(mediaUploadStatus)}
+          <MediaUploadSection
+            media={media}
+            disabled={createShow.isPending}
             lineupNames={[
               ...(headliner.name ? [headliner.name] : []),
               ...performers.map((p) => p.name).filter(Boolean),
             ]}
           />
-          {mediaUploadStatus && (
-            <div
-              data-testid="add-show-media-status"
-              style={{ marginTop: 8, fontFamily: mono, fontSize: 12, color: "var(--muted)" }}
-            >
-              {mediaUploadStatus}…
-            </div>
-          )}
-          {mediaUploadErrors.length > 0 && (
-            <div
-              data-testid="add-show-media-errors"
-              style={{ marginTop: 8, fontFamily: mono, fontSize: 12, color: "#E63946" }}
-            >
-              <div>Some uploads failed; the show was saved.</div>
-              <ul style={{ margin: "4px 0 0 16px" }}>
-                {mediaUploadErrors.map((err, idx) => (
-                  <li key={idx}>{err}</li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                onClick={() => router.push(`/home`)}
-                style={{
-                  marginTop: 6,
-                  background: "transparent",
-                  border: "1px solid var(--rule-strong)",
-                  padding: "4px 8px",
-                  fontFamily: mono,
-                  fontSize: 11,
-                  cursor: "pointer",
-                  color: "var(--ink)",
-                }}
-              >
-                Go home
-              </button>
-            </div>
-          )}
         </div>
       )}
 
@@ -2711,7 +1475,7 @@ export default function AddPage() {
         <button
           type="button"
           onClick={handleFormSave}
-          disabled={!canSave || createShow.isPending || updateShow.isPending || Boolean(mediaUploadStatus)}
+          disabled={!canSave || createShow.isPending || updateShow.isPending || Boolean(media.mediaUploadStatus)}
           style={{
             padding: "9px 16px",
             background: canSave ? "var(--ink)" : "var(--surface2)",
@@ -2726,12 +1490,12 @@ export default function AddPage() {
             gap: 6,
             cursor: canSave ? "pointer" : "not-allowed",
             border: "none",
-            opacity: (createShow.isPending || updateShow.isPending || Boolean(mediaUploadStatus)) ? 0.6 : 1,
+            opacity: (createShow.isPending || updateShow.isPending || Boolean(media.mediaUploadStatus)) ? 0.6 : 1,
           }}
         >
           {(createShow.isPending || updateShow.isPending)
             ? "Saving..."
-            : mediaUploadStatus
+            : media.mediaUploadStatus
               ? "Uploading..."
               : isEditMode ? "Save changes" : "✓ Save to history"}
         </button>
@@ -2743,186 +1507,6 @@ export default function AddPage() {
         </div>
       )}
     </>
-  );
-
-  // ── Render: Chat Mode ──────────────────────────────────────
-
-  const renderChatMode = () => (
-    <div style={{
-      display: "flex",
-      flexDirection: "column",
-      gap: 16,
-      minHeight: 400,
-    }}>
-      <div style={{
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-        marginBottom: 16,
-      }}>
-        {chatMessages.map((msg, i) => (
-          <div
-            key={i}
-            style={{
-              maxWidth: "80%",
-              alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
-              padding: "12px 16px",
-              borderRadius: 12,
-              background: msg.role === "user" ? "var(--accent)" : "var(--surface)",
-              color: msg.role === "user" ? "var(--accent-text)" : "var(--ink)",
-              fontFamily: sans,
-              fontSize: 13,
-              lineHeight: 1.5,
-            }}
-          >
-            {msg.content.split("\n").map((line, j) => (
-              <div key={j}>{line || " "}</div>
-            ))}
-          </div>
-        ))}
-        {parseChat.isPending && (
-          <div style={{
-            alignSelf: "flex-start",
-            padding: "12px 16px",
-            borderRadius: 12,
-            background: "var(--surface)",
-            color: "var(--muted)",
-            fontFamily: mono,
-            fontSize: 12,
-          }}>
-            Thinking...
-          </div>
-        )}
-      </div>
-
-      {chatParsed && !chatConfirmed && (
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          <button
-            type="button"
-            style={{
-              padding: "9px 16px",
-              background: "var(--ink)",
-              color: "var(--bg)",
-              fontFamily: mono,
-              fontSize: 11,
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
-              fontWeight: 500,
-              border: "none",
-              cursor: "pointer",
-            }}
-            onClick={async () => {
-              setChatConfirmed(true);
-              await handleChatConfirmSave();
-            }}
-            disabled={createShow.isPending}
-          >
-            {createShow.isPending ? "Saving..." : "Confirm & Save"}
-          </button>
-          <button
-            type="button"
-            style={{
-              padding: "9px 14px",
-              border: `1px solid var(--rule-strong)`,
-              background: "transparent",
-              color: "var(--ink)",
-              fontFamily: mono,
-              fontSize: 11,
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
-              cursor: "pointer",
-            }}
-            onClick={() => {
-              setChatParsed(null);
-              setChatMessages((prev) => [
-                ...prev,
-                {
-                  role: "assistant",
-                  content: "No problem! Tell me what to change.",
-                },
-              ]);
-            }}
-          >
-            Edit
-          </button>
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: 8 }}>
-        <input
-          ref={chatFestivalFileInputRef}
-          type="file"
-          accept="image/*,application/pdf"
-          onChange={handleChatFestivalFileChange}
-          style={{ display: "none" }}
-        />
-        <button
-          type="button"
-          title="Attach a festival poster or schedule"
-          aria-label="Attach a festival poster or schedule"
-          onClick={() => chatFestivalFileInputRef.current?.click()}
-          disabled={festivalFlow.phase === "extracting"}
-          style={{
-            padding: "9px 12px",
-            background: "transparent",
-            color: "var(--muted)",
-            fontFamily: mono,
-            fontSize: 15,
-            border: `1px solid var(--rule-strong)`,
-            cursor: festivalFlow.phase === "extracting" ? "wait" : "pointer",
-            opacity: festivalFlow.phase === "extracting" ? 0.6 : 1,
-            lineHeight: 1,
-          }}
-        >
-          📎
-        </button>
-        <textarea
-          style={{
-            flex: 1,
-            padding: "12px 16px",
-            background: "var(--surface)",
-            border: `1px solid var(--rule-strong)`,
-            color: "var(--ink)",
-            fontFamily: sans,
-            fontSize: 13,
-            outline: "none",
-            resize: "none",
-            minHeight: 48,
-          }}
-          placeholder="Describe your show, or attach a festival poster..."
-          value={chatInput}
-          onChange={(e) => setChatInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleChatSend();
-            }
-          }}
-          rows={1}
-        />
-        <button
-          type="button"
-          style={{
-            padding: "9px 16px",
-            background: "var(--ink)",
-            color: "var(--bg)",
-            fontFamily: mono,
-            fontSize: 11,
-            letterSpacing: ".06em",
-            textTransform: "uppercase",
-            fontWeight: 500,
-            border: "none",
-            cursor: "pointer",
-            opacity: parseChat.isPending || !chatInput.trim() ? 0.4 : 1,
-          }}
-          onClick={handleChatSend}
-          disabled={parseChat.isPending || !chatInput.trim()}
-        >
-          Send
-        </button>
-      </div>
-    </div>
   );
 
   // ── Main Render ────────────────────────────────────────────
@@ -3027,7 +1611,7 @@ export default function AddPage() {
             ticketCount={ticketCount}
             tourName={tourName}
             setlistsByPerformer={setlistsByPerformer}
-            stagedMedia={stagedMedia}
+            stagedMedia={media.stagedMedia}
             provenanceStatuses={provenanceStatuses}
             isEditMode={isEditMode}
           />
@@ -3043,8 +1627,6 @@ export default function AddPage() {
     </>
   );
 }
-
-// ── PerformerSetlistBlock ─────────────────────────────────────
 
 // ── Sub-components ───────────────────────────────────────────
 

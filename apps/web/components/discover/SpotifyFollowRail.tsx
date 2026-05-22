@@ -3,7 +3,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Check, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { isFeatureOn } from "@showbook/shared";
 import "./spotify-follow-rail.css";
 
 /**
@@ -19,17 +18,14 @@ import "./spotify-follow-rail.css";
  *     same card never re-surfaces.
  *
  * Hides itself entirely when:
- *   - the SetlistIntelPreviews flag is OFF
  *   - the user hasn't connected Spotify
  *   - the diff is empty (everyone they follow on Spotify is
  *     already followed on Showbook)
  */
 export function SpotifyFollowRail() {
-  const flagOn = isFeatureOn("SetlistIntelPreviews");
   const utils = trpc.useUtils();
 
   const diffQuery = trpc.setlistIntel.spotifyFollowsDiff.useQuery(undefined, {
-    enabled: flagOn,
     staleTime: 5 * 60_000,
   });
 
@@ -147,7 +143,6 @@ export function SpotifyFollowRail() {
     }
   }, [actedOn, followOne, importMutation]);
 
-  if (!flagOn) return null;
   if (!diffQuery.data) return null;
   if (!diffQuery.data.connected) return null;
   if (visible.length === 0) return null;

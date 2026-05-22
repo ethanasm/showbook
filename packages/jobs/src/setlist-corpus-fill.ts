@@ -33,7 +33,7 @@ import {
   predictionCache,
   tourSetlists,
 } from '@showbook/db';
-import { fetchArtistSetlists } from '@showbook/api';
+import { fetchArtistSetlists, SetlistFmError } from '@showbook/api';
 
 const log = child({ component: 'jobs.setlist-corpus-fill' });
 
@@ -56,7 +56,7 @@ export interface SetlistCorpusFillResult {
   fetched: number;
   inserted: number;
   updated: number;
-  skipped: 'no_mbid' | null;
+  skipped: 'no_mbid' | 'rate_limited' | null;
 }
 
 const MS_PER_DAY = 86_400_000;
@@ -196,9 +196,39 @@ export async function runSetlistCorpusFill(
     }
 
     const maxPages = PAGES_FOR_MODE[input.mode];
-    const entries = await fetchArtistSetlists(performer.musicbrainzId, {
-      maxPages,
-    });
+    let entries: Awaited<ReturnType<typeof fetchArtistSetlists>>;
+    try {
+      entries = await fetchArtistSetlists(performer.musicbrainzId, {
+        maxPages,
+      });
+    } catch (err) {
+      // setlist.fm rate-limit is a transient external signal, not a job
+      // failure. Returning cleanly stops pg-boss from retrying (which would
+      // just hit the same 429 three more times) and stops these calls from
+      // piling 800+ rows into `pgboss.job` failed state during a quota
+      // exhaustion event. The next regular trigger (tour-watch every 3h,
+      // refresh cron at 04:45 ET, user open) re-attempts after the cooldown.
+      if (err instanceof SetlistFmError && err.status === 429) {
+        log.warn(
+          {
+            event: 'setlist.corpus_fill.rate_limited',
+            performerId: input.performerId,
+            mode: input.mode,
+            durationMs: Date.now() - startedAt,
+          },
+          'Corpus fill skipped — setlist.fm rate-limited',
+        );
+        return {
+          performerId: input.performerId,
+          mode: input.mode,
+          fetched: 0,
+          inserted: 0,
+          updated: 0,
+          skipped: 'rate_limited',
+        };
+      }
+      throw err;
+    }
 
     if (entries.length === 0) {
       log.info(

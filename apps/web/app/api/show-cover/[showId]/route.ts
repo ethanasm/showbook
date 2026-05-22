@@ -3,17 +3,22 @@ import { auth } from '@/auth';
 import { db, eq, shows, venues } from '@showbook/db';
 import { child } from '@showbook/observability';
 import {
+  pickAttractionImage,
   searchAttractions,
   searchEvents,
   selectBestImage,
 } from '@showbook/api';
 import { fetchUpstream, isProxyableUrl } from '@/lib/image-proxy';
+import { decodeMobileToken } from '@/lib/mobile-token';
+import { isEmailAllowed, readAllowlistFromEnv } from '@/lib/auth-allowlist';
+import { resolveTrpcSession } from '../../trpc/[trpc]/resolve-session';
 
 const log = child({ component: 'web.api.show-cover' });
 
-function normalizeName(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, ' ');
-}
+// Mirrors the tRPC handler so the mobile app — which authenticates with a
+// Bearer JWT minted via /api/auth/mobile-token rather than a NextAuth cookie
+// — can load show cover images through the same SSRF-guarded proxy the web uses.
+const AUTH_SECRET = process.env.AUTH_SECRET;
 
 interface ShowContext {
   productionName: string;
@@ -45,11 +50,14 @@ async function lookupTmImage(
     }
   }
 
-  // Path 2: attraction search by name with exact-match guard.
+  // Path 2: attraction search. `pickAttractionImage` walks every exact-
+  // name match first, then `"<name> (...)"` variants, so we don't get
+  // stuck on a stale TM record whose `images[]` is empty when a
+  // sibling record carries the real poster. See the matching comment
+  // in `packages/jobs/src/backfill-show-cover-images.ts`.
   const candidates = await searchAttractions(ctx.productionName);
-  const target = normalizeName(ctx.productionName);
-  const match = candidates.find((a) => normalizeName(a.name) === target);
-  if (match) return selectBestImage(match.images);
+  const match = pickAttractionImage(candidates, ctx.productionName);
+  if (match) return match;
 
   return null;
 }
@@ -62,10 +70,23 @@ async function persistCover(showId: string, coverImageUrl: string) {
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ showId: string }> },
 ) {
-  const session = await auth();
+  const session = await resolveTrpcSession({
+    authHeader: req.headers.get('authorization'),
+    secret: AUTH_SECRET,
+    decode: decodeMobileToken,
+    allowlist: readAllowlistFromEnv(),
+    isEmailAllowed,
+    getCookieSession: async () => {
+      const cookieSession = await auth();
+      return cookieSession?.user?.id
+        ? { user: { id: cookieSession.user.id } }
+        : null;
+    },
+    log,
+  });
   if (!session?.user?.id) {
     return new NextResponse('Unauthorized', { status: 401 });
   }

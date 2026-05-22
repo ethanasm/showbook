@@ -305,7 +305,7 @@ export function useShowContextMenu<T extends ShowForContextMenu>() {
             >
               <button
                 onClick={handleTransitionSubmit}
-                disabled={!transitionSeat || updateState.isPending}
+                disabled={updateState.isPending}
                 style={{
                   padding: "8px 16px",
                   borderRadius: 6,
@@ -317,8 +317,7 @@ export function useShowContextMenu<T extends ShowForContextMenu>() {
                   border: "none",
                   background: "var(--accent)",
                   color: "var(--accent-text)",
-                  opacity:
-                    !transitionSeat || updateState.isPending ? 0.5 : 1,
+                  opacity: updateState.isPending ? 0.5 : 1,
                 }}
               >
                 {updateState.isPending ? "Saving..." : "Confirm"}

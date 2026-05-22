@@ -1,5 +1,5 @@
 /**
- * Shows tab — Timeline / Month / Stats.
+ * Shows tab — Timeline / Calendar / Stats.
  *
  * Three modes share a single `shows.list` query (the procedure already
  * returns the venue + performer object graph we need). Per-mode views
@@ -8,8 +8,11 @@
  *   - Timeline: a flat, chronological feed grouped by year. Future shows
  *     first (soonest first), then past (most-recent first). Compact
  *     ShowCards reuse the existing component.
- *   - Month:    a custom 7×6 grid (CalendarGrid) plus a side list of
- *     events for the selected day / month. Hand-rolled — no calendar lib.
+ *   - Calendar: month and year sub-views. Month shows a custom 7×6 grid
+ *     (CalendarGrid) plus a side list of events for the selected day or
+ *     month. Year shows a 3×4 grid of MiniMonth tiles with per-day event
+ *     dots; tapping a tile drills into that month. Hand-rolled — no
+ *     calendar lib.
  *   - Stats:    headline counts (shows / spent / venues / artists), a
  *     by-kind mix bar, and top-5 lists for performers and venues. Derived
  *     from the same list — no separate `shows.stats` procedure exists yet.
@@ -30,12 +33,19 @@ import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
 import { SegmentedControl } from '../../components/SegmentedControl';
+import { FilterChipsRow, type FilterGroup } from '../../components/FilterChipsRow';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { EmptyState } from '../../components/EmptyState';
 import { EmptyStateHero } from '../../components/design-system';
 import { ShowCardListSkeleton } from '../../components/skeletons';
-import { CalendarGrid, type CalendarEvent } from '../../components/CalendarGrid';
+import {
+  CalendarGrid,
+  MiniMonth,
+  type CalendarEvent,
+  type CalendarSpan,
+} from '../../components/CalendarGrid';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
+import { MarkTicketedSheet } from '../../components/MarkTicketedSheet';
 import { useSelectedShow } from '../../components/ThreePaneLayout';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
@@ -43,6 +53,7 @@ import { trpc } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
 import { useAuth } from '../../lib/auth';
 import { headlinerDisplayName } from '../../lib/show-display';
+import { showCoverImageSource } from '../../lib/images';
 import {
   atMaxCursor,
   atMinCursor,
@@ -50,7 +61,8 @@ import {
   stepCursor,
 } from '../../lib/calendarBounds';
 
-type Mode = 'timeline' | 'month' | 'stats';
+type Mode = 'timeline' | 'calendar' | 'stats';
+type CalendarMode = 'month' | 'year';
 
 const MONTH_SHORT = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const MONTH_LONG = [
@@ -64,12 +76,15 @@ interface ShowRow {
   kind: Kind;
   state: ShowState;
   date: string | null;
+  endDate: string | null;
   seat: string | null;
   pricePaid: string | null;
   productionName: string | null;
+  coverImageUrl: string | null;
   ticketUrl: string | null;
-  venue: { name: string; city: string | null };
+  venue: { id: string; name: string; city: string | null };
   performers: {
+    id: string;
     name: string;
     role: 'headliner' | 'support' | 'cast';
     sortOrder: number;
@@ -124,9 +139,23 @@ function headlinerAvatarOf(row: ShowRow): string | null {
   return headlinerSp?.imageUrl ?? firstSp?.imageUrl ?? null;
 }
 
-function toShowCard(row: ShowRow): ShowCardShow {
+function toShowCard(row: ShowRow, token: string | null): ShowCardShow {
   const headliner = headlinerOf(row);
-  const avatarUrl = headlinerAvatarOf(row);
+  // Production shows (theatre + festival w/ productionName) prefer the
+  // TM-sourced cover image when the daily backfill or first-view
+  // lazy-resolve has populated it. When the row's `coverImageUrl` is
+  // still null the helper returns null and the avatar falls through to
+  // the legacy performer photo / monogram — same UX as before.
+  // Inline the production-label predicate to avoid hauling in a
+  // `ShowLike`-shaped object (this row uses `performers`, not `showPerformers`).
+  const isProductionLabeled =
+    (row.kind === 'theatre' || row.kind === 'festival') &&
+    Boolean(row.productionName);
+  const coverSource = isProductionLabeled
+    ? showCoverImageSource({ id: row.id, coverImageUrl: row.coverImageUrl }, token)
+    : null;
+  const avatarUrl = coverSource?.uri ?? headlinerAvatarOf(row);
+  const avatarHeaders = coverSource?.headers;
   if (row.date) {
     const d = parseLocalDate(row.date);
     return {
@@ -146,6 +175,7 @@ function toShowCard(row: ShowRow): ShowCardShow {
       seat: row.seat,
       price: row.pricePaid ? `$${row.pricePaid}` : null,
       avatarUrl,
+      avatarHeaders,
       ticketUrl: row.ticketUrl,
     };
   }
@@ -192,6 +222,7 @@ export default function ShowsScreen(): React.JSX.Element {
     id: string;
     state: ShowState;
   } | null>(null);
+  const [markTicketedForId, setMarkTicketedForId] = React.useState<string | null>(null);
 
   const showsQuery = useCachedQuery<ShowsListItem[]>({
     queryKey: ['mobile', 'shows.list'],
@@ -209,12 +240,15 @@ export default function ShowsScreen(): React.JSX.Element {
       kind: s.kind as Kind,
       state: s.state as ShowState,
       date: s.date,
+      endDate: s.endDate ?? null,
       seat: s.seat,
       pricePaid: s.pricePaid,
       productionName: s.productionName,
+      coverImageUrl: s.coverImageUrl,
       ticketUrl: s.ticketUrl,
-      venue: { name: s.venue.name, city: s.venue.city },
+      venue: { id: s.venue.id, name: s.venue.name, city: s.venue.city },
       performers: s.showPerformers.map((sp) => ({
+        id: sp.performer.id,
         name: sp.performer.name,
         role: sp.role,
         sortOrder: sp.sortOrder,
@@ -243,8 +277,8 @@ export default function ShowsScreen(): React.JSX.Element {
   const eyebrow =
     mode === 'timeline'
       ? `${bucketLabel} · TIMELINE`
-      : mode === 'month'
-        ? `${bucketLabel} · MONTH`
+      : mode === 'calendar'
+        ? `${bucketLabel} · CALENDAR`
         : `${bucketLabel} · STATS`;
 
   const refreshControl = useThemedRefreshControl(
@@ -261,7 +295,7 @@ export default function ShowsScreen(): React.JSX.Element {
   // On iPad three-pane the tap selects the row in the middle pane via
   // the SelectedShow context; on phone we fall back to the existing
   // `<Link>` push to /show/[id]. The branch is local to each row so
-  // the same TimelineView / MonthView code works in both layouts.
+  // the same TimelineView / CalendarView code works in both layouts.
   const { showId: selectedShowId, setShowId, isThreePane } = useSelectedShow();
 
   return (
@@ -286,11 +320,11 @@ export default function ShowsScreen(): React.JSX.Element {
             stateBucket === 'upcoming'
               ? [
                   { value: 'timeline', label: 'Timeline' },
-                  { value: 'month', label: 'Month' },
+                  { value: 'calendar', label: 'Calendar' },
                 ]
               : [
                   { value: 'timeline', label: 'Timeline' },
-                  { value: 'month', label: 'Month' },
+                  { value: 'calendar', label: 'Calendar' },
                   { value: 'stats', label: 'Stats' },
                 ]
           }
@@ -339,8 +373,8 @@ export default function ShowsScreen(): React.JSX.Element {
           selectedShowId={selectedShowId}
           onSelect={setShowId}
         />
-      ) : mode === 'month' ? (
-        <MonthView
+      ) : mode === 'calendar' ? (
+        <CalendarView
           rows={rows}
           stateBucket={stateBucket}
           refreshControl={refreshControl}
@@ -359,6 +393,14 @@ export default function ShowsScreen(): React.JSX.Element {
           onClose={() => setActionSheetFor(null)}
           showId={actionSheetFor.id}
           state={actionSheetFor.state}
+          onMarkTicketed={() => setMarkTicketedForId(actionSheetFor.id)}
+        />
+      ) : null}
+      {markTicketedForId ? (
+        <MarkTicketedSheet
+          open
+          onClose={() => setMarkTicketedForId(null)}
+          showId={markTicketedForId}
         />
       ) : null}
     </View>
@@ -505,7 +547,8 @@ function RowCard({
   onLongPress: () => void;
   compact?: boolean;
 }): React.JSX.Element {
-  const card = toShowCard(row);
+  const { token } = useAuth();
+  const card = toShowCard(row, token);
   if (isThreePane) {
     return (
       <ShowCard
@@ -526,10 +569,10 @@ function RowCard({
 }
 
 // ---------------------------------------------------------------------------
-// Month
+// Calendar (Month + Year)
 // ---------------------------------------------------------------------------
 
-function MonthView({
+function CalendarView({
   rows,
   stateBucket,
   refreshControl,
@@ -556,18 +599,38 @@ function MonthView({
   );
   const [cursor, setCursor] = React.useState(todayCursor);
   const [selected, setSelected] = React.useState<string | null>(null);
+  const [calendarMode, setCalendarMode] = React.useState<CalendarMode>('month');
 
   const eventsByDay = React.useMemo(() => {
     const map: Record<string, CalendarEvent[]> = {};
     for (const r of rows) {
       if (!r.date) continue;
+      // Multi-day events render as a spanning bar (see `spanEvents` below)
+      // instead of repeating a dot on every day of the run.
+      if (r.endDate && r.endDate > r.date) continue;
       const list = map[r.date] ?? (map[r.date] = []);
       list.push({ kind: r.kind, state: r.state });
     }
     return map;
   }, [rows]);
 
+  const spanEvents = React.useMemo<CalendarSpan[]>(() => {
+    const out: CalendarSpan[] = [];
+    for (const r of rows) {
+      if (!r.date || !r.endDate || r.endDate <= r.date) continue;
+      out.push({
+        id: r.id,
+        startISO: r.date,
+        endISO: r.endDate,
+        kind: r.kind,
+        state: r.state,
+      });
+    }
+    return out;
+  }, [rows]);
+
   const monthPrefix = `${cursor.year}-${pad2(cursor.month + 1)}-`;
+  const yearPrefix = `${cursor.year}-`;
   const rowsInMonth = React.useMemo(
     () =>
       rows
@@ -575,18 +638,33 @@ function MonthView({
         .sort((a, b) => (a.date! < b.date! ? -1 : 1)),
     [rows, monthPrefix],
   );
+  const rowsInYear = React.useMemo(
+    () =>
+      rows
+        .filter((r) => r.date && r.date.startsWith(yearPrefix))
+        .sort((a, b) => (a.date! < b.date! ? -1 : 1)),
+    [rows, yearPrefix],
+  );
 
-  const visibleRows = selected ? rowsInMonth.filter((r) => r.date === selected) : rowsInMonth;
+  const visibleRows = selected
+    ? rowsInMonth.filter((r) => {
+        if (!r.date) return false;
+        if (r.date === selected) return true;
+        if (r.endDate && r.date <= selected && selected <= r.endDate) return true;
+        return false;
+      })
+    : rowsInMonth;
 
+  const scopeRows = calendarMode === 'year' ? rowsInYear : rowsInMonth;
   const counts = React.useMemo(() => {
     let past = 0, ticketed = 0, watching = 0;
-    for (const r of rowsInMonth) {
+    for (const r of scopeRows) {
       if (r.state === 'past') past += 1;
       else if (r.state === 'ticketed') ticketed += 1;
       else watching += 1;
     }
     return { past, ticketed, watching };
-  }, [rowsInMonth]);
+  }, [scopeRows]);
 
   // Bounds: Jan of earliest show year through Dec of latest show year,
   // clamped so navigation can't cross the "today" boundary in the
@@ -617,12 +695,24 @@ function MonthView({
     });
   }, [bounds]);
 
-  const atMin = atMinCursor(cursor, bounds);
-  const atMax = atMaxCursor(cursor, bounds);
+  const atMinMonth = atMinCursor(cursor, bounds);
+  const atMaxMonth = atMaxCursor(cursor, bounds);
+  const atMinYear = cursor.year <= bounds.min.year;
+  const atMaxYear = cursor.year >= bounds.max.year;
+  const atMin = calendarMode === 'year' ? atMinYear : atMinMonth;
+  const atMax = calendarMode === 'year' ? atMaxYear : atMaxMonth;
 
   const step = (delta: number) => {
     setSelected(null);
-    setCursor((c) => stepCursor(c, delta, bounds));
+    if (calendarMode === 'year') {
+      setCursor((c) => {
+        const next = c.year + delta;
+        if (next < bounds.min.year || next > bounds.max.year) return c;
+        return { year: next, month: c.month };
+      });
+    } else {
+      setCursor((c) => stepCursor(c, delta, bounds));
+    }
   };
 
   const goToday = () => {
@@ -630,17 +720,48 @@ function MonthView({
     setCursor(todayCursor);
   };
 
+  const onSelectYearMonth = (month: number) => {
+    setSelected(null);
+    setCursor({ year: cursor.year, month });
+    setCalendarMode('month');
+  };
+
+  const isMonthInBounds = (month: number): boolean => {
+    if (cursor.year < bounds.min.year || cursor.year > bounds.max.year) return false;
+    if (cursor.year === bounds.min.year && month < bounds.min.month) return false;
+    if (cursor.year === bounds.max.year && month > bounds.max.month) return false;
+    return true;
+  };
+
   return (
     <ScrollView
       contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32, gap: 14 }}
       refreshControl={refreshControl}
     >
+      <SegmentedControl<CalendarMode>
+        value={calendarMode}
+        onChange={(v) => {
+          setSelected(null);
+          setCalendarMode(v);
+        }}
+        options={[
+          { value: 'month', label: 'Month' },
+          { value: 'year', label: 'Year' },
+        ]}
+      />
+
       <View style={styles.monthBar}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.monthTitle, { color: colors.ink }]}>
-            {MONTH_LONG[cursor.month]}{' '}
-            <Text style={{ color: colors.faint, fontWeight: '400' }}>{cursor.year}</Text>
-          </Text>
+          {calendarMode === 'year' ? (
+            <Text style={[styles.monthTitle, { color: colors.ink }]}>
+              {cursor.year}
+            </Text>
+          ) : (
+            <Text style={[styles.monthTitle, { color: colors.ink }]}>
+              {MONTH_LONG[cursor.month]}{' '}
+              <Text style={{ color: colors.faint, fontWeight: '400' }}>{cursor.year}</Text>
+            </Text>
+          )}
           <Text style={[styles.monthCount, { color: colors.muted }]}>
             {counts.past} past · {counts.ticketed} ticketed · {counts.watching} watching
           </Text>
@@ -649,7 +770,7 @@ function MonthView({
           <Pressable
             onPress={() => step(-1)}
             disabled={atMin}
-            accessibilityLabel="Previous month"
+            accessibilityLabel={calendarMode === 'year' ? 'Previous year' : 'Previous month'}
             accessibilityState={{ disabled: atMin }}
             style={[styles.monthNavBtn, { borderRightColor: colors.ruleStrong, borderRightWidth: StyleSheet.hairlineWidth, opacity: atMin ? 0.4 : 1 }]}
           >
@@ -665,7 +786,7 @@ function MonthView({
           <Pressable
             onPress={() => step(1)}
             disabled={atMax}
-            accessibilityLabel="Next month"
+            accessibilityLabel={calendarMode === 'year' ? 'Next year' : 'Next month'}
             accessibilityState={{ disabled: atMax }}
             style={[styles.monthNavBtn, { opacity: atMax ? 0.4 : 1 }]}
           >
@@ -674,38 +795,70 @@ function MonthView({
         </View>
       </View>
 
-      <CalendarGrid
-        year={cursor.year}
-        month={cursor.month}
-        events={eventsByDay}
-        todayISO={today}
-        selectedISO={selected}
-        onSelectDay={(iso) => setSelected((cur) => (cur === iso ? null : iso))}
-      />
+      {calendarMode === 'year' ? (
+        <View style={styles.yearGrid}>
+          {Array.from({ length: 12 }, (_, m) => (
+            <View key={m} style={styles.yearTileWrap}>
+              <MiniMonth
+                year={cursor.year}
+                month={m}
+                events={eventsByDay}
+                spans={spanEvents}
+                todayISO={today}
+                onPress={() => onSelectYearMonth(m)}
+                disabled={!isMonthInBounds(m)}
+              />
+            </View>
+          ))}
+        </View>
+      ) : (
+        <CalendarGrid
+          year={cursor.year}
+          month={cursor.month}
+          events={eventsByDay}
+          spans={spanEvents}
+          todayISO={today}
+          selectedISO={selected}
+          onSelectDay={(iso) => setSelected((cur) => (cur === iso ? null : iso))}
+        />
+      )}
 
-      <View style={{ gap: 8 }}>
-        <Text style={[styles.sectionLabelInline, { color: colors.muted }]}>
-          {selected
-            ? formatSelectedHeading(selected)
-            : `THIS MONTH · ${rowsInMonth.length}`}
-        </Text>
-        {visibleRows.length === 0 ? (
-          <Text style={{ color: colors.faint, fontFamily: 'Geist Sans', fontSize: 13 }}>
-            {selected ? 'No shows on this day.' : 'No shows this month.'}
+      {calendarMode === 'month' ? (
+        <View style={{ gap: 8 }}>
+          <Text style={[styles.sectionLabelInline, { color: colors.muted }]}>
+            {selected
+              ? formatSelectedHeading(selected)
+              : `THIS MONTH · ${rowsInMonth.length}`}
           </Text>
-        ) : (
-          visibleRows.map((row) => (
-            <RowCard
-              key={row.id}
-              row={row}
-              isThreePane={isThreePane}
-              selected={selectedShowId === row.id}
-              onSelect={onSelect}
-              onLongPress={() => onLongPressShow(row)}
-            />
-          ))
-        )}
-      </View>
+          {visibleRows.length === 0 ? (
+            <Text style={{ color: colors.faint, fontFamily: 'Geist Sans', fontSize: 13 }}>
+              {selected ? 'No shows on this day.' : 'No shows this month.'}
+            </Text>
+          ) : (
+            visibleRows.map((row) => (
+              <RowCard
+                key={row.id}
+                row={row}
+                isThreePane={isThreePane}
+                selected={selectedShowId === row.id}
+                onSelect={onSelect}
+                onLongPress={() => onLongPressShow(row)}
+              />
+            ))
+          )}
+        </View>
+      ) : (
+        <View style={{ gap: 8 }}>
+          <Text style={[styles.sectionLabelInline, { color: colors.muted }]}>
+            {`THIS YEAR · ${rowsInYear.length}`}
+          </Text>
+          {rowsInYear.length === 0 ? (
+            <Text style={{ color: colors.faint, fontFamily: 'Geist Sans', fontSize: 13 }}>
+              No shows this year.
+            </Text>
+          ) : null}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -725,30 +878,29 @@ interface Stats {
   venueCount: number;
   artistCount: number;
   byKind: { kind: Kind; count: number }[];
-  topPerformers: { name: string; count: number; kind: Kind }[];
-  topVenues: { name: string; city: string | null; count: number }[];
+  topPerformers: { id: string; name: string; count: number; kind: Kind }[];
+  topVenues: { id: string; name: string; city: string | null; count: number }[];
 }
 
 function buildStats(rows: ShowRow[]): Stats {
   let spent = 0;
-  const venueCounts = new Map<string, { name: string; city: string | null; count: number }>();
-  const performerCounts = new Map<string, { name: string; count: number; kind: Kind }>();
+  const venueCounts = new Map<string, { id: string; name: string; city: string | null; count: number }>();
+  const performerCounts = new Map<string, { id: string; name: string; count: number; kind: Kind }>();
   const kindCounts = new Map<Kind, number>();
 
   for (const r of rows) {
     spent += priceCents(r);
-    const venueKey = r.venue.name;
-    const v = venueCounts.get(venueKey);
+    const v = venueCounts.get(r.venue.id);
     if (v) v.count += 1;
-    else venueCounts.set(venueKey, { name: r.venue.name, city: r.venue.city, count: 1 });
+    else venueCounts.set(r.venue.id, { id: r.venue.id, name: r.venue.name, city: r.venue.city, count: 1 });
 
     kindCounts.set(r.kind, (kindCounts.get(r.kind) ?? 0) + 1);
 
     for (const p of r.performers) {
       if (p.role !== 'headliner') continue;
-      const cur = performerCounts.get(p.name);
+      const cur = performerCounts.get(p.id);
       if (cur) cur.count += 1;
-      else performerCounts.set(p.name, { name: p.name, count: 1, kind: r.kind });
+      else performerCounts.set(p.id, { id: p.id, name: p.name, count: 1, kind: r.kind });
     }
   }
 
@@ -780,15 +932,59 @@ function StatsView({
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
-  const stats = React.useMemo(() => buildStats(rows), [rows]);
+  const router = useRouter();
+  const [selectedYear, setSelectedYear] = React.useState<number | null>(null);
+
+  const yearGroups = React.useMemo<FilterGroup[]>(() => {
+    const counts = new Map<number, number>();
+    for (const r of rows) {
+      if (!r.date) continue;
+      const y = Number(r.date.slice(0, 4));
+      if (!Number.isFinite(y)) continue;
+      counts.set(y, (counts.get(y) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([year, count]) => ({
+        id: String(year),
+        name: String(year),
+        count,
+      }));
+  }, [rows]);
+
+  React.useEffect(() => {
+    if (selectedYear !== null && !yearGroups.some((g) => g.id === String(selectedYear))) {
+      setSelectedYear(null);
+    }
+  }, [yearGroups, selectedYear]);
+
+  const filteredRows = React.useMemo(() => {
+    if (selectedYear === null) return rows;
+    const prefix = `${selectedYear}-`;
+    return rows.filter((r) => r.date != null && r.date.startsWith(prefix));
+  }, [rows, selectedYear]);
+
+  const stats = React.useMemo(() => buildStats(filteredRows), [filteredRows]);
   const maxPerformer = stats.topPerformers[0]?.count ?? 1;
   const maxVenue = stats.topVenues[0]?.count ?? 1;
 
   return (
-    <ScrollView
-      contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32, gap: 16 }}
-      refreshControl={refreshControl}
-    >
+    <View style={{ flex: 1 }}>
+      {yearGroups.length > 1 ? (
+        <FilterChipsRow
+          groups={yearGroups}
+          selected={selectedYear !== null ? String(selectedYear) : null}
+          onSelect={(id) => setSelectedYear(id === null ? null : Number(id))}
+          totalCount={rows.length}
+          allLabel="All time"
+          variant="sub"
+          testIdPrefix="stats-year-chip"
+        />
+      ) : null}
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32, gap: 16 }}
+        refreshControl={refreshControl}
+      >
       <View style={[styles.statGrid, { backgroundColor: colors.rule }]}>
         <StatTile value={String(stats.total)} label="shows" />
         <StatTile value={formatMoney(stats.spent)} label="spent" />
@@ -841,7 +1037,17 @@ function StatsView({
           </Text>
         ) : (
           stats.topPerformers.map((p) => (
-            <View key={p.name} style={[styles.rankRow, { borderBottomColor: colors.rule }]}>
+            <Pressable
+              key={p.id}
+              onPress={() => router.push(`/artists/${p.id}`)}
+              accessibilityRole="link"
+              accessibilityLabel={`Open ${p.name}`}
+              style={({ pressed }) => [
+                styles.rankRow,
+                { borderBottomColor: colors.rule },
+                pressed && { opacity: 0.6 },
+              ]}
+            >
               <Text
                 style={[styles.rankName, { color: colors.ink }]}
                 numberOfLines={1}
@@ -858,7 +1064,7 @@ function StatsView({
                 />
               </View>
               <Text style={[styles.rankCount, { color: colors.ink }]}>{p.count}×</Text>
-            </View>
+            </Pressable>
           ))
         )}
       </View>
@@ -874,7 +1080,17 @@ function StatsView({
           </Text>
         ) : (
           stats.topVenues.map((v) => (
-            <View key={v.name} style={[styles.rankRow, { borderBottomColor: colors.rule }]}>
+            <Pressable
+              key={v.id}
+              onPress={() => router.push(`/venues/${v.id}`)}
+              accessibilityRole="link"
+              accessibilityLabel={`Open ${v.name}`}
+              style={({ pressed }) => [
+                styles.rankRow,
+                { borderBottomColor: colors.rule },
+                pressed && { opacity: 0.6 },
+              ]}
+            >
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={[styles.rankName, { color: colors.ink }]} numberOfLines={1}>
                   {v.name}
@@ -895,11 +1111,12 @@ function StatsView({
                 />
               </View>
               <Text style={[styles.rankCount, { color: colors.ink }]}>{v.count}</Text>
-            </View>
+            </Pressable>
           ))
         )}
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -978,6 +1195,15 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist Sans',
     fontSize: 13,
     fontWeight: '500',
+  },
+  yearGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -4,
+  },
+  yearTileWrap: {
+    width: '33.3333%',
+    padding: 4,
   },
   statGrid: {
     flexDirection: 'row',

@@ -8,18 +8,9 @@ import { HypePlaylistCard } from "./HypePlaylistCard";
 import { PredictedSetlistRow } from "./PredictedSetlistRow";
 import { EncoreDivider } from "./EncoreDivider";
 import { DiscoveredRail } from "./DiscoveredRail";
-import {
-  RotatingSetlistView,
-  RotatingGateBlocked,
-} from "./RotatingSetlistView";
-import {
-  TheatricalSetlistView,
-  TheatricalGateBlocked,
-} from "./TheatricalSetlistView";
-import {
-  ImprovisedSetlistView,
-  ImprovisedGateBlocked,
-} from "./ImprovisedSetlistView";
+import { RotatingSetlistView } from "./RotatingSetlistView";
+import { TheatricalSetlistView } from "./TheatricalSetlistView";
+import { ImprovisedSetlistView } from "./ImprovisedSetlistView";
 import type {
   ImprovisedPrediction,
   PredictedSetlistResult,
@@ -31,7 +22,7 @@ import type {
 } from "@showbook/api";
 import { SetCountStrip } from "./SetCountStrip";
 import { SpecialEventCard } from "./SpecialEventCard";
-import { formatSetlistNote } from "@showbook/shared";
+import { formatSetlistNote, type ActualSong } from "@showbook/shared";
 import "./show-tabs.css";
 
 const SPOILER_KEY_PREFIX = "showbook:setlist-tab:spoiler-shown:";
@@ -55,6 +46,9 @@ export type SetlistTrackPreviewMap = Record<
 
 interface SetlistTabProps {
   showId: string;
+  /** Performer the tab is rendering — the show's headliner for
+   *  single-artist concerts, the picked lineup artist on festivals. */
+  performerId: string;
   isPast: boolean;
   artistName: string;
   /** Predicted-setlist tRPC response. Null while loading. */
@@ -76,54 +70,12 @@ interface SetlistTabProps {
   onOpenSpoilerSettings?: () => void;
   /**
    * Phase 3 — when true, render the real Spotify-backed `HypePlaylistCard`
-   * in the top slot; otherwise fall back to the P1 placeholder. The
-   * `SetlistIntelHypePlaylist` flag gates this; the page level resolves
-   * the flag and passes it down.
+   * in the top slot; otherwise fall back to the P1 placeholder.
+   * Resolved at the page level via `isHypePlaylistVisible`.
    */
   hypePlaylistEnabled?: boolean;
   /** Phase 9 — cached preview/URI map for the row play buttons. */
   trackPreviews?: SetlistTrackPreviewMap | null;
-  /**
-   * Phase 5 — when true, the rotating-style display variant renders for
-   * `prediction.style === 'rotating'` payloads. Resolved at the page
-   * level from `SetlistIntelRotatingDisplay` && release-gate verdict.
-   */
-  rotatingDisplayEnabled?: boolean;
-  /**
-   * Phase 5 — when true, the rotating-display flag is wired ON but the
-   * calibration release-gate hasn't cleared, so the rotating subtree
-   * is replaced with the labeled placeholder ("model not calibrated").
-   */
-  rotatingGateBlocked?: boolean;
-  /**
-   * Phase 6 — when true, the theatrical-style display variant renders
-   * for `prediction.style === 'theatrical'` payloads. Resolved at the
-   * page level from `SetlistIntelTheatricalDisplay` && release-gate
-   * verdict.
-   */
-  theatricalDisplayEnabled?: boolean;
-  /**
-   * Phase 6 — when true, the theatrical flag is wired ON but the
-   * release-gate hasn't cleared, so the theatrical subtree is replaced
-   * with the labeled placeholder.
-   */
-  theatricalGateBlocked?: boolean;
-  /**
-   * Phase 6 — when true, the improvised-style display variant renders
-   * for `prediction.style === 'improvised'` payloads.
-   */
-  improvisedDisplayEnabled?: boolean;
-  /**
-   * Phase 6 — when true, the improvised flag is wired ON but the
-   * show-mode calibration check hasn't cleared.
-   */
-  improvisedGateBlocked?: boolean;
-  /**
-   * Phase 7 — when true, mount the DiscoveredRail (past variant)
-   * beneath the actual setlist. Gated by `SetlistIntelMusicLayerV2`
-   * + admin email bypass; resolved at the page level.
-   */
-  musicLayerV2Enabled?: boolean;
 }
 
 /** Resolve a row's title to (songId, badge) for the past variant. */
@@ -149,14 +101,7 @@ function resolvePreview(
   };
 }
 
-export interface ActualSong {
-  title: string;
-  sectionIndex: number;
-  songIndex: number;
-  isEncore: boolean;
-  isOpenerOrCloser?: boolean;
-  note?: string | null;
-}
+export type { ActualSong };
 
 export function SetlistTab(props: SetlistTabProps) {
   if (props.isPast) {
@@ -176,12 +121,6 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
     artistName,
     hypePlaylistEnabled,
     trackPreviews,
-    rotatingDisplayEnabled,
-    rotatingGateBlocked,
-    theatricalDisplayEnabled,
-    theatricalGateBlocked,
-    improvisedDisplayEnabled,
-    improvisedGateBlocked,
   } = props;
   const [spoilerShown, setSpoilerShown] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
@@ -231,16 +170,10 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
     // Per SI-05: HypePlaylistCard is hidden for rotating performers —
     // a 25-song hype playlist is low-relevance when the model can't
     // pick the next 25 songs confidently.
-    if (!rotatingDisplayEnabled || rotatingGateBlocked) {
-      return <RotatingGateBlocked />;
-    }
     return <RotatingSetlistView prediction={prediction} />;
   }
 
   if (prediction.style === "theatrical") {
-    if (!theatricalDisplayEnabled || theatricalGateBlocked) {
-      return <TheatricalGateBlocked />;
-    }
     // Theatrical KEEPS the hype playlist — the deterministic setlist
     // is hype-worthy and ordering-stable per Phase 6 §1.
     const totalCount =
@@ -253,6 +186,7 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
           <SectionFrame title="Hype playlist">
             <HypePlaylistCard
               showId={props.showId}
+              performerId={props.performerId}
               kind="hype"
               artist={artistName}
               trackCount={totalCount}
@@ -266,9 +200,6 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
   }
 
   if (prediction.style === "improvised") {
-    if (!improvisedDisplayEnabled || improvisedGateBlocked) {
-      return <ImprovisedGateBlocked />;
-    }
     // Per SI-05: HypePlaylistCard is HIDDEN for improvised — same
     // reasoning as rotating, the model can't pick the next 25 songs.
     return <ImprovisedSetlistView prediction={prediction} />;
@@ -319,6 +250,7 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
         {hypePlaylistEnabled ? (
           <HypePlaylistCard
             showId={props.showId}
+            performerId={props.performerId}
             kind="hype"
             artist={artistName}
             trackCount={hypeTotalCount}
@@ -586,8 +518,8 @@ function SetlistTabPast({
   artistName,
   actualSongs = [],
   hypePlaylistEnabled,
-  musicLayerV2Enabled,
   showId,
+  performerId,
   badgePayload,
   trackPreviews,
 }: SetlistTabProps) {
@@ -642,6 +574,7 @@ function SetlistTabPast({
         <SectionFrame title={`I Heard ${artistName}`}>
           <HypePlaylistCard
             showId={showId}
+            performerId={performerId}
             kind="heard"
             artist={artistName}
             trackCount={total}
@@ -649,7 +582,7 @@ function SetlistTabPast({
           />
         </SectionFrame>
       )}
-      {musicLayerV2Enabled && <DiscoveredRail showId={showId} />}
+      <DiscoveredRail showId={showId} />
       <SectionFrame title="Setlist" count={total}>
         <div className="predicted-grid" data-testid="actual-setlist-grid">
           {mainSet.map((song, idx) => {

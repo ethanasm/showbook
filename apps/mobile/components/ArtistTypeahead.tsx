@@ -25,7 +25,7 @@ import {
 } from 'react-native';
 import { Search } from 'lucide-react-native';
 import { useTheme } from '../lib/theme';
-import { useDebouncedValue } from '../lib/useDebouncedValue';
+import { useDebouncedValue } from '@showbook/shared/hooks';
 
 export interface ArtistSuggestion {
   /** Stable key for the FlatList row. */

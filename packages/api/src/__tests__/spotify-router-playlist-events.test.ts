@@ -17,6 +17,7 @@ interface LogCall {
   event?: string;
   userId?: string;
   showId?: string;
+  performerId?: string | null;
   playlistId?: string;
   trackCount?: number;
   missingCount?: number;
@@ -35,6 +36,14 @@ mock.module('@showbook/observability', {
     }),
   },
 });
+
+interface MockCall {
+  userId: string;
+  showId: string;
+  performerId?: string;
+}
+const HYPE_CALLS: MockCall[] = [];
+const HEARD_CALLS: MockCall[] = [];
 
 const HYPE_RESULT = {
   playlistId: 'pl_hype_abc',
@@ -61,8 +70,14 @@ let nextHeard = HEARD_RESULT;
 
 mock.module('../spotify-playlist.js', {
   namedExports: {
-    createHypePlaylist: async () => nextHype,
-    createHeardPlaylist: async () => nextHeard,
+    createHypePlaylist: async (input: MockCall) => {
+      HYPE_CALLS.push(input);
+      return nextHype;
+    },
+    createHeardPlaylist: async (input: MockCall) => {
+      HEARD_CALLS.push(input);
+      return nextHeard;
+    },
     getExistingPlaylist: async () => null,
   },
 });
@@ -88,6 +103,7 @@ function fakeCtxFor(userId: string) {
 }
 
 const SHOW_ID = '11111111-1111-4111-8111-111111111111';
+const PERFORMER_ID = '22222222-2222-4222-8222-222222222222';
 
 describe('spotify router — playlist mutation events', () => {
   it('emits spotify.playlist.hype_created with full payload on a fresh create', async () => {
@@ -155,5 +171,35 @@ describe('spotify router — playlist mutation events', () => {
     assert.ok(reused, 'expected heard_reused event');
     assert.equal(reused.playlistId, 'pl_heard_abc');
     assert.equal(reused.missingCount, undefined);
+  });
+
+  it('forwards a festival performerId to createHypePlaylist and tags the log line', async () => {
+    LOG_CALLS.length = 0;
+    HYPE_CALLS.length = 0;
+    nextHype = HYPE_RESULT;
+    const caller = spotifyRouter.createCaller(fakeCtxFor('user-5') as never);
+    await caller.createHypePlaylist({ showId: SHOW_ID, performerId: PERFORMER_ID });
+    assert.equal(HYPE_CALLS.length, 1);
+    assert.equal(HYPE_CALLS[0]!.performerId, PERFORMER_ID);
+    const created = LOG_CALLS.find(
+      (c) => c.event === 'spotify.playlist.hype_created',
+    );
+    assert.ok(created, 'expected hype_created event');
+    assert.equal(created.performerId, PERFORMER_ID);
+  });
+
+  it('forwards a festival performerId to createHeardPlaylist and tags the log line', async () => {
+    LOG_CALLS.length = 0;
+    HEARD_CALLS.length = 0;
+    nextHeard = HEARD_RESULT;
+    const caller = spotifyRouter.createCaller(fakeCtxFor('user-6') as never);
+    await caller.createHeardPlaylist({ showId: SHOW_ID, performerId: PERFORMER_ID });
+    assert.equal(HEARD_CALLS.length, 1);
+    assert.equal(HEARD_CALLS[0]!.performerId, PERFORMER_ID);
+    const created = LOG_CALLS.find(
+      (c) => c.event === 'spotify.playlist.heard_created',
+    );
+    assert.ok(created, 'expected heard_created event');
+    assert.equal(created.performerId, PERFORMER_ID);
   });
 });

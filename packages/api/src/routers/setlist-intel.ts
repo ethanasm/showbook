@@ -14,7 +14,6 @@
  *   heard this song live."
  *
  * Phase 7 (music layer v2):
- * - `musicLayerV2Feature()` — flag gate query (admin-bypass).
  * - `fanLoyalty({ showId })` — donut ring source data (past shows).
  * - `discoveredLive({ showId })` — list-row rail data (past shows).
  * - `saveDiscoveredSong({ songId })` — PUT /me/tracks mutation.
@@ -40,13 +39,10 @@ import {
   songs,
   userPerformerFollows,
   userSpotifySkippedArtists,
-  users,
 } from '@showbook/db';
 import {
   getHeadlinerId,
-  isFeatureOn,
   isProductionShow,
-  type FeatureFlagKey,
   type ShowLike,
 } from '@showbook/shared';
 import { child } from '@showbook/observability';
@@ -58,7 +54,12 @@ import {
   type ColdPrediction,
   type HotPrediction,
 } from '../setlist-predict';
-import { enqueueSetlistCorpusFill } from '../job-queue';
+import type { SetlistStyle } from '../setlist-style';
+import {
+  enqueueSetlistCorpusFill,
+  performersWithRecentCorpusFill,
+} from '../job-queue';
+import { isSetlistFmInCooldown } from '../setlistfm';
 import {
   evaluateReleaseGate,
   type ReleaseGateBreach,
@@ -87,7 +88,6 @@ import {
   saveDiscoveredSong,
   primingStatForShow,
 } from '../spotify-music-layer';
-import { isAdminEmail } from '../admin';
 import { ensureFreshUserToken } from '../spotify-tokens';
 import {
   getFollowedArtists,
@@ -125,24 +125,207 @@ const firstTimesInput = z
 const showIdOnly = z.object({ showId: z.string().uuid() });
 const saveDiscoveredInput = z.object({ songId: z.string().uuid() });
 
-const MUSIC_LAYER_V2_FLAG: FeatureFlagKey = 'SetlistIntelMusicLayerV2';
+interface ResolvedPerformer {
+  id: string;
+  name: string;
+  musicbrainzId: string | null;
+  setlistStyle: string | null;
+  setlistStyleOverride: string | null;
+}
+
+type PredictionShortCircuit =
+  | ColdPrediction
+  | SpecialEventPrediction;
+
+type PredictionGateResult =
+  | { kind: 'short_circuit'; prediction: PredictionShortCircuit }
+  | {
+      kind: 'ok';
+      perf: ResolvedPerformer;
+      effectiveStyle: SetlistStyle;
+      targetDate: string;
+      targetVenueName: string | null;
+    };
 
 /**
- * Resolves the Phase 7 music-layer-v2 gate for a user. The flag is OFF
- * globally; the `ADMIN_EMAILS` allowlist bypasses so the developer can
- * validate against a real Spotify connection before rollout.
+ * Resolves the Phase-1 eligibility gate for `predictedSetlist`: wrong
+ * kind, production show, missing date, missing headliner, no MBID, and
+ * the Phase-11 §15g special-event short-circuit. Returns either a
+ * short-circuit prediction the caller must return verbatim, or a
+ * `GateOk` carrying the resolved headliner, classified style, and
+ * target venue. Keeps the procedure body focused on dispatching to a
+ * predictor.
  */
-async function isMusicLayerV2EnabledForUser(
-  dbi: typeof import('@showbook/db').db,
-  userId: string,
-): Promise<boolean> {
-  if (isFeatureOn(MUSIC_LAYER_V2_FLAG)) return true;
-  const [user] = await dbi
-    .select({ email: users.email })
-    .from(users)
-    .where(eq(users.id, userId))
+async function resolvePredictionGates(opts: {
+  show: ShowLike & {
+    kind: string;
+    date: string | null;
+    venue?: { name?: string } | null;
+  };
+  showId: string;
+  db: typeof import('@showbook/db').db;
+}): Promise<PredictionGateResult> {
+  const { show, showId, db: dbi } = opts;
+
+  if (!SUPPORTED_KINDS.has(show.kind)) {
+    return { kind: 'short_circuit', prediction: coldPrediction('wrong_kind') };
+  }
+  if (isProductionShow(show)) {
+    return { kind: 'short_circuit', prediction: coldPrediction('production_show') };
+  }
+  if (!show.date) {
+    return { kind: 'short_circuit', prediction: coldPrediction('date_not_set') };
+  }
+  const headlinerId = getHeadlinerId(show);
+  if (!headlinerId) {
+    return { kind: 'short_circuit', prediction: coldPrediction('no_headliner') };
+  }
+
+  // No-MBID short-circuit (SI-04). The corpus-fill job is the
+  // primary writer; we additionally check here so a fresh
+  // performer with no corpus row yet doesn't burn a wasted query.
+  // Phase 5 — also pull the persisted style + override in this
+  // same select so the rotating branch below doesn't need a
+  // second round-trip.
+  const [perf] = await dbi
+    .select({
+      id: performers.id,
+      name: performers.name,
+      musicbrainzId: performers.musicbrainzId,
+      setlistStyle: performers.setlistStyle,
+      setlistStyleOverride: performers.setlistStyleOverride,
+    })
+    .from(performers)
+    .where(eq(performers.id, headlinerId))
     .limit(1);
-  return isAdminEmail(user?.email);
+  if (!perf) {
+    return { kind: 'short_circuit', prediction: coldPrediction('no_headliner') };
+  }
+  if (!perf.musicbrainzId) {
+    return { kind: 'short_circuit', prediction: coldPrediction('no_mbid', perf.name) };
+  }
+
+  const targetVenueName = show.venue?.name ?? null;
+
+  // Phase 11 §15g — special-event short-circuit. When a rule
+  // matches the (performer, date, venue) tuple, we never predict
+  // and the UI renders a SpecialEventCard with the rule's copy +
+  // prior matching events. The lookup is a single indexed query.
+  try {
+    const specialEvent = await lookupSpecialEventRule({
+      performerId: headlinerId,
+      targetDate: show.date,
+      venueName: targetVenueName,
+    });
+    if (specialEvent) {
+      return { kind: 'short_circuit', prediction: specialEvent };
+    }
+  } catch (err) {
+    log.error(
+      { event: 'setlist.special_event.lookup_failed', err, showId },
+      'special-event rule lookup failed; falling through',
+    );
+  }
+
+  // Phase 5 — style classifier branch. When the performer is
+  // rotating/theatrical/improvised-style, we dispatch to the matching
+  // predictor; anything else falls back to 'stable'.
+  const rawStyle =
+    perf.setlistStyleOverride ?? perf.setlistStyle ?? 'stable';
+  const effectiveStyle: SetlistStyle =
+    rawStyle === 'rotating' || rawStyle === 'theatrical' || rawStyle === 'improvised'
+      ? rawStyle
+      : 'stable';
+
+  return {
+    kind: 'ok',
+    perf,
+    effectiveStyle,
+    targetDate: show.date,
+    targetVenueName,
+  };
+}
+
+/**
+ * Stable-style branch of `predictedSetlist`. Wraps `predictedSetlistCached`
+ * with the Phase-11 §15e generalized multi-night anti-repeat detector
+ * (gated by a venue match) so residencies (Adele Caesars Palace,
+ * Bruno Mars Sphere) can penalize songs already played earlier in the
+ * run.
+ */
+async function runStablePrediction(opts: {
+  perf: ResolvedPerformer;
+  targetDate: string;
+  targetVenueName: string | null;
+  userId: string;
+  showId: string;
+  showKind: string;
+}): Promise<HotPrediction | ColdPrediction> {
+  const { perf, targetDate, targetVenueName, userId, showId, showKind } = opts;
+  try {
+    let stableRunContext: NonNullable<
+      Parameters<typeof predictedSetlistCached>[0]['runContext']
+    > | null = null;
+    if (targetVenueName) {
+      try {
+        const { setlists } = await loadCorpusForPrediction({
+          performerId: perf.id,
+          targetDate,
+        });
+        const runContext = detectMultiNightRun({
+          targetDate,
+          targetVenue: targetVenueName,
+          corpus: setlists,
+        });
+        if (runContext && runContext.priorNights >= 1) {
+          stableRunContext = {
+            venue: runContext.venue,
+            priorNights: runContext.priorNights,
+            songsAlreadyPlayed: runContext.songsAlreadyPlayed,
+            runStartDate: runContext.runStartDate,
+          };
+          log.info(
+            {
+              event: 'setlist.run_detection.matched',
+              performerId: perf.id,
+              showId,
+              venue: runContext.venue,
+              runIndex: runContext.runIndex,
+              priorNights: runContext.priorNights,
+              style: 'stable',
+            },
+            'multi-night run detected (stable)',
+          );
+        }
+      } catch (err) {
+        log.error(
+          {
+            event: 'setlist.run_detection.failed',
+            err,
+            showId,
+            style: 'stable',
+          },
+          'multi-night detection failed; falling through to stable predictor',
+        );
+      }
+    }
+    return await predictedSetlistCached({
+      performerId: perf.id,
+      targetDate,
+      snapshotContext: { userId, showId },
+      runContext: stableRunContext,
+      // Phase 11 §15r — when the target show is a festival
+      // appearance, prefer the artist's festival-corpus (shorter
+      // sets) over their headline-corpus.
+      prefer: showKind === 'festival' ? 'festival' : undefined,
+    });
+  } catch (err) {
+    log.error(
+      { event: 'setlist.predict.failed', err, showId, performerId: perf.id },
+      'predicted-setlist failed',
+    );
+    return coldPrediction('no_corpus', perf.name);
+  }
 }
 
 export const setlistIntelRouter = router({
@@ -172,314 +355,151 @@ export const setlistIntelRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
       }
 
-      if (!SUPPORTED_KINDS.has(show.kind)) {
-        return coldPrediction('wrong_kind');
-      }
-      if (isProductionShow(show as ShowLike)) {
-        return coldPrediction('production_show');
-      }
-      if (!show.date) {
-        return coldPrediction('date_not_set');
-      }
-      const headlinerId = getHeadlinerId(show as ShowLike);
-      if (!headlinerId) {
-        return coldPrediction('no_headliner');
+      const gate = await resolvePredictionGates({
+        show,
+        showId: input.showId,
+        db: ctx.db,
+      });
+      if (gate.kind === 'short_circuit') {
+        return gate.prediction;
       }
 
-      // No-MBID short-circuit (SI-04). The corpus-fill job is the
-      // primary writer; we additionally check here so a fresh
-      // performer with no corpus row yet doesn't burn a wasted query.
-      // Phase 5 — also pull the persisted style + override in this
-      // same select so the rotating branch below doesn't need a
-      // second round-trip.
-      const [perf] = await ctx.db
-        .select({
-          id: performers.id,
-          name: performers.name,
-          musicbrainzId: performers.musicbrainzId,
-          setlistStyle: performers.setlistStyle,
-          setlistStyleOverride: performers.setlistStyleOverride,
-        })
-        .from(performers)
-        .where(eq(performers.id, headlinerId))
-        .limit(1);
-      if (!perf) {
-        return coldPrediction('no_headliner');
-      }
-      if (!perf.musicbrainzId) {
-        return coldPrediction('no_mbid', perf.name);
+      const { perf, effectiveStyle, targetDate, targetVenueName } = gate;
+
+      if (effectiveStyle === 'stable') {
+        return runStablePrediction({
+          perf,
+          targetDate,
+          targetVenueName,
+          userId,
+          showId: input.showId,
+          showKind: show.kind,
+        });
       }
 
-      const targetVenueName =
-        (show as { venue?: { name?: string } | null }).venue?.name ?? null;
-
-      // Phase 11 §15g — special-event short-circuit. When a rule
-      // matches the (performer, date, venue) tuple, we never predict
-      // and the UI renders a SpecialEventCard with the rule's copy +
-      // prior matching events. The lookup is a single indexed query.
-      if (isFeatureOn('SetlistIntelSpecialEvents')) {
-        try {
-          const specialEvent = await lookupSpecialEventRule({
-            performerId: headlinerId,
-            targetDate: show.date,
-            venueName: targetVenueName,
-          });
-          if (specialEvent) {
-            return specialEvent;
-          }
-        } catch (err) {
-          log.error(
-            { event: 'setlist.special_event.lookup_failed', err, showId: input.showId },
-            'special-event rule lookup failed; falling through',
-          );
-        }
-      }
-
-      // Phase 5 — style classifier branch. When the §15b classifier
-      // is on AND the performer is rotating-style, we run the gap-
-      // based rotating model instead of §4c stable. The
-      // SetlistIntelStyleClassifier flag exists so we can fall every
-      // performer back to 'stable' if the classifier misbehaves.
-      const styleClassifierOn = isFeatureOn('SetlistIntelStyleClassifier');
-      const effectiveStyle = styleClassifierOn
-        ? (perf.setlistStyleOverride ?? perf.setlistStyle ?? 'stable')
-        : 'stable';
-
-      if (effectiveStyle === 'rotating') {
-        try {
-          const { setlists } = await loadCorpusForPrediction({
-            performerId: headlinerId,
-            targetDate: show.date,
-          });
-          if (setlists.length === 0) {
-            return coldPrediction('no_corpus', perf.name);
-          }
-          // Venue match for multi-night-run detection — the corpus
-          // rows carry `venueNameRaw` from setlist.fm; we compare the
-          // show's saved venue name against that. Fuzzy matching is
-          // future work; v1 uses exact string match. `targetVenueName`
-          // is the shared lookup computed once at the procedure top.
-          const runContext = detectMultiNightRun({
-            targetDate: show.date,
-            targetVenue: targetVenueName,
-            corpus: setlists,
-          });
-          const prediction = predictRotating({
-            performerId: headlinerId,
-            targetDate: show.date,
-            corpus: setlists,
-            multiNightRun: runContext,
-          });
-          if (runContext) {
-            log.info(
-              {
-                event: 'setlist.run_detection.matched',
-                performerId: headlinerId,
-                showId: input.showId,
-                venue: runContext.venue,
-                runIndex: runContext.runIndex,
-                priorNights: runContext.priorNights,
-              },
-              'multi-night run detected',
-            );
-          } else {
-            log.info(
-              {
-                event: 'setlist.run_detection.not_found',
-                performerId: headlinerId,
-                showId: input.showId,
-                targetVenue: targetVenueName,
-              },
-              'no multi-night run detected',
-            );
-          }
-          log.info(
-            {
-              event: 'setlist.predict.served',
-              performerId: headlinerId,
-              targetDate: show.date,
-              style: prediction.style,
-              confidence: prediction.confidence,
-              sampleSize: prediction.sampleSize,
-              cache: 'bypass',
-            },
-            'predicted-setlist served (rotating)',
-          );
-          return prediction;
-        } catch (err) {
-          log.error(
-            {
-              event: 'setlist.predict.failed',
-              err,
-              showId: input.showId,
-              performerId: headlinerId,
-              style: 'rotating',
-            },
-            'rotating predicted-setlist failed',
-          );
-          return coldPrediction('no_corpus', perf.name);
-        }
-      }
-
-      if (effectiveStyle === 'theatrical') {
-        try {
-          const { setlists } = await loadCorpusForPrediction({
-            performerId: headlinerId,
-            targetDate: show.date,
-          });
-          if (setlists.length === 0) {
-            return coldPrediction('no_corpus', perf.name);
-          }
-          const prediction = predictTheatrical({
-            performerId: headlinerId,
-            targetDate: show.date,
-            corpus: setlists,
-          });
-          log.info(
-            {
-              event: 'setlist.predict.served',
-              performerId: headlinerId,
-              targetDate: show.date,
-              style: prediction.style,
-              confidence: prediction.confidence,
-              sampleSize: prediction.sampleSize,
-              rotatingSlotCount: prediction.rotatingSlots.length,
-              deterministicCount: prediction.deterministicSetlist.length,
-              cache: 'bypass',
-            },
-            'predicted-setlist served (theatrical)',
-          );
-          return prediction;
-        } catch (err) {
-          log.error(
-            {
-              event: 'setlist.predict.failed',
-              err,
-              showId: input.showId,
-              performerId: headlinerId,
-              style: 'theatrical',
-            },
-            'theatrical predicted-setlist failed',
-          );
-          return coldPrediction('no_corpus', perf.name);
-        }
-      }
-
-      if (effectiveStyle === 'improvised') {
-        try {
-          const { setlists } = await loadCorpusForPrediction({
-            performerId: headlinerId,
-            targetDate: show.date,
-          });
-          if (setlists.length === 0) {
-            return coldPrediction('no_corpus', perf.name);
-          }
-          const prediction = predictImprovised({
-            performerId: headlinerId,
-            targetDate: show.date,
-            corpus: setlists,
-          });
-          log.info(
-            {
-              event: 'setlist.predict.served',
-              performerId: headlinerId,
-              targetDate: show.date,
-              style: prediction.style,
-              confidence: prediction.confidence,
-              sampleSize: prediction.sampleSize,
-              showModeCount: prediction.showModes.length,
-              topShowMode: prediction.showModes[0]?.label ?? null,
-              cache: 'bypass',
-            },
-            'predicted-setlist served (improvised)',
-          );
-          return prediction;
-        } catch (err) {
-          log.error(
-            {
-              event: 'setlist.predict.failed',
-              err,
-              showId: input.showId,
-              performerId: headlinerId,
-              style: 'improvised',
-            },
-            'improvised predicted-setlist failed',
-          );
-          return coldPrediction('no_corpus', perf.name);
-        }
-      }
-
+      // Dynamic styles (rotating / theatrical / improvised) share a
+      // corpus load and the same `no_corpus` short-circuit. Each one
+      // calls its own predictor; only rotating consumes the
+      // multi-night run context (residency anti-repeat is the
+      // stable-style story, handled above).
       try {
-        // Phase 11 §15e — generalize multi-night anti-repeat to
-        // stable-style residencies (Adele Caesars Palace, Bruno Mars
-        // Sphere). When the flag is ON and a venue match exists, run
-        // the detector against a quick corpus load and feed the
-        // resulting runContext through to the stable predictor so it
-        // can apply the 0.05 anti-repeat penalty on already-played
-        // songs. Skips the extra corpus load when there's no venue.
-        let stableRunContext: NonNullable<
-          Parameters<typeof predictedSetlistCached>[0]['runContext']
-        > | null = null;
-        if (
-          isFeatureOn('SetlistIntelMultiNightGeneralized') &&
-          targetVenueName
-        ) {
-          try {
-            const { setlists } = await loadCorpusForPrediction({
-              performerId: headlinerId,
-              targetDate: show.date,
-            });
+        const { setlists } = await loadCorpusForPrediction({
+          performerId: perf.id,
+          targetDate,
+        });
+        if (setlists.length === 0) {
+          return coldPrediction('no_corpus', perf.name);
+        }
+
+        switch (effectiveStyle) {
+          case 'rotating': {
+            // Venue match for multi-night-run detection — corpus rows
+            // carry `venueNameRaw` from setlist.fm; we compare the
+            // show's saved venue name against that. Fuzzy matching is
+            // future work; v1 uses exact string match.
             const runContext = detectMultiNightRun({
-              targetDate: show.date,
+              targetDate,
               targetVenue: targetVenueName,
               corpus: setlists,
             });
-            if (runContext && runContext.priorNights >= 1) {
-              stableRunContext = {
-                venue: runContext.venue,
-                priorNights: runContext.priorNights,
-                songsAlreadyPlayed: runContext.songsAlreadyPlayed,
-                runStartDate: runContext.runStartDate,
-              };
+            const prediction = predictRotating({
+              performerId: perf.id,
+              targetDate,
+              corpus: setlists,
+              multiNightRun: runContext,
+            });
+            if (runContext) {
               log.info(
                 {
                   event: 'setlist.run_detection.matched',
-                  performerId: headlinerId,
+                  performerId: perf.id,
                   showId: input.showId,
                   venue: runContext.venue,
                   runIndex: runContext.runIndex,
                   priorNights: runContext.priorNights,
-                  style: 'stable',
                 },
-                'multi-night run detected (stable)',
+                'multi-night run detected',
+              );
+            } else {
+              log.info(
+                {
+                  event: 'setlist.run_detection.not_found',
+                  performerId: perf.id,
+                  showId: input.showId,
+                  targetVenue: targetVenueName,
+                },
+                'no multi-night run detected',
               );
             }
-          } catch (err) {
-            log.error(
+            log.info(
               {
-                event: 'setlist.run_detection.failed',
-                err,
-                showId: input.showId,
-                style: 'stable',
+                event: 'setlist.predict.served',
+                performerId: perf.id,
+                targetDate,
+                style: prediction.style,
+                confidence: prediction.confidence,
+                sampleSize: prediction.sampleSize,
+                cache: 'bypass',
               },
-              'multi-night detection failed; falling through to stable predictor',
+              'predicted-setlist served (rotating)',
             );
+            return prediction;
+          }
+          case 'theatrical': {
+            const prediction = predictTheatrical({
+              performerId: perf.id,
+              targetDate,
+              corpus: setlists,
+            });
+            log.info(
+              {
+                event: 'setlist.predict.served',
+                performerId: perf.id,
+                targetDate,
+                style: prediction.style,
+                confidence: prediction.confidence,
+                sampleSize: prediction.sampleSize,
+                rotatingSlotCount: prediction.rotatingSlots.length,
+                deterministicCount: prediction.deterministicSetlist.length,
+                cache: 'bypass',
+              },
+              'predicted-setlist served (theatrical)',
+            );
+            return prediction;
+          }
+          case 'improvised': {
+            const prediction = predictImprovised({
+              performerId: perf.id,
+              targetDate,
+              corpus: setlists,
+            });
+            log.info(
+              {
+                event: 'setlist.predict.served',
+                performerId: perf.id,
+                targetDate,
+                style: prediction.style,
+                confidence: prediction.confidence,
+                sampleSize: prediction.sampleSize,
+                showModeCount: prediction.showModes.length,
+                topShowMode: prediction.showModes[0]?.label ?? null,
+                cache: 'bypass',
+              },
+              'predicted-setlist served (improvised)',
+            );
+            return prediction;
           }
         }
-        return await predictedSetlistCached({
-          performerId: headlinerId,
-          targetDate: show.date,
-          snapshotContext: { userId, showId: input.showId },
-          runContext: stableRunContext,
-          // Phase 11 §15r — when the target show is a festival
-          // appearance, prefer the artist's festival-corpus (shorter
-          // sets) over their headline-corpus.
-          prefer: show.kind === 'festival' ? 'festival' : undefined,
-        });
       } catch (err) {
         log.error(
-          { event: 'setlist.predict.failed', err, showId: input.showId, performerId: headlinerId },
-          'predicted-setlist failed',
+          {
+            event: 'setlist.predict.failed',
+            err,
+            showId: input.showId,
+            performerId: perf.id,
+            style: effectiveStyle,
+          },
+          `${effectiveStyle} predicted-setlist failed`,
         );
         return coldPrediction('no_corpus', perf.name);
       }
@@ -550,7 +570,6 @@ export const setlistIntelRouter = router({
         return { entries: [] };
       }
 
-      const styleClassifierOn = isFeatureOn('SetlistIntelStyleClassifier');
       const targetDate = show.date;
       const showId = input.showId;
 
@@ -589,9 +608,8 @@ export const setlistIntelRouter = router({
               };
             }
 
-            const effectiveStyle = styleClassifierOn
-              ? (perf.setlistStyleOverride ?? perf.setlistStyle ?? 'stable')
-              : 'stable';
+            const effectiveStyle =
+              perf.setlistStyleOverride ?? perf.setlistStyle ?? 'stable';
 
             if (effectiveStyle === 'rotating') {
               const { setlists } = await loadCorpusForPrediction({
@@ -716,17 +734,42 @@ export const setlistIntelRouter = router({
       // only walks headliners with upcoming watching/ticketed shows + the
       // top followed performers, so festival supports stuck on
       // "We're pulling recent setlists" never had a corpus-fill trigger.
-      // Enqueueing here means the next visit to the festival shows real
-      // data. `runSetlistCorpusFill` is idempotent (ON CONFLICT upsert)
-      // and short-circuits on `no_mbid`, so a duplicate enqueue is cheap.
+      //
+      // This fan-out is debounced. `predictedFestivalSetlists` isn't
+      // cached at the procedure level, so without a guard every festival
+      // page open re-enqueues a 3-page `predict` fill for every cold
+      // lineup artist — and it self-amplifies, because while setlist.fm
+      // is rate-limited the corpus stays empty so the same artists keep
+      // coming back `no_corpus`. On 2026-05-21 that put ~480 fills onto
+      // the 1440/day setlist.fm budget in one morning. Two backstops:
+      // skip the whole fan-out while setlist.fm is in a 429 cooldown, and
+      // skip any performer already enqueued in the last 6h.
       const noCorpusEntries = entries.filter(
         (e) =>
           e.prediction.style === 'cold' &&
           (e.prediction as ColdPrediction).reason === 'no_corpus',
       );
-      if (noCorpusEntries.length > 0) {
+      let enqueuedCount = 0;
+      if (noCorpusEntries.length > 0 && isSetlistFmInCooldown()) {
+        log.info(
+          {
+            event: 'setlist.predict_festival.corpus_fill_skipped',
+            showId,
+            reason: 'setlistfm_cooldown',
+            candidates: noCorpusEntries.length,
+          },
+          'festival corpus-fill fan-out skipped — setlist.fm in cooldown',
+        );
+      } else if (noCorpusEntries.length > 0) {
+        const recentlyFilled = await performersWithRecentCorpusFill(
+          noCorpusEntries.map((e) => e.performerId),
+        );
+        const toEnqueue = noCorpusEntries.filter(
+          (e) => !recentlyFilled.has(e.performerId),
+        );
+        enqueuedCount = toEnqueue.length;
         await Promise.all(
-          noCorpusEntries.map(async (e) => {
+          toEnqueue.map(async (e) => {
             try {
               await enqueueSetlistCorpusFill(e.performerId, 'predict');
             } catch (err) {
@@ -750,7 +793,8 @@ export const setlistIntelRouter = router({
           showId,
           lineupSize: lineup.length,
           coldCount: entries.filter((e) => e.prediction.style === 'cold').length,
-          coldCorpusFillsEnqueued: noCorpusEntries.length,
+          coldCorpusCandidates: noCorpusEntries.length,
+          coldCorpusFillsEnqueued: enqueuedCount,
         },
         'festival per-artist predictions served',
       );
@@ -987,13 +1031,6 @@ export const setlistIntelRouter = router({
       artists: SpotifyArtist[];
     }> => {
       const userId = ctx.session.user.id;
-      if (!isFeatureOn('SetlistIntelPreviews')) {
-        log.debug(
-          { event: 'spotify.follow_diff.empty', reason: 'flag_off', userId },
-          'follow-diff served empty (flag off)',
-        );
-        return { connected: false, artists: [] };
-      }
       const accessToken = await ensureFreshUserToken(userId);
       if (!accessToken) {
         return { connected: false, artists: [] };
@@ -1542,19 +1579,6 @@ export const setlistIntelRouter = router({
   // ───────────────────────────────────────────────────────────────────
 
   /**
-   * Gate query for the Phase 7 music-layer-v2 UI (fan loyalty ring,
-   * discovered-live rail, priming stat). Returns `{ enabled }` based
-   * on the global flag and the admin-email allowlist.
-   */
-  musicLayerV2Feature: protectedProcedure.query(async ({ ctx }) => {
-    const enabled = await isMusicLayerV2EnabledForUser(
-      ctx.db,
-      ctx.session.user.id,
-    );
-    return { enabled };
-  }),
-
-  /**
    * Fan-loyalty ring source data — past shows only. Walks the actual
    * setlist, asks Spotify which of those tracks the user has saved,
    * and returns the rolled-up count/percentage. Computed on demand;
@@ -1564,12 +1588,6 @@ export const setlistIntelRouter = router({
     .input(showIdOnly)
     .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      if (!(await isMusicLayerV2EnabledForUser(ctx.db, userId))) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'feature_disabled:SetlistIntelMusicLayerV2',
-        });
-      }
       try {
         return await fanLoyaltyForShow({
           db: ctx.db,
@@ -1603,12 +1621,6 @@ export const setlistIntelRouter = router({
     .input(showIdOnly)
     .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      if (!(await isMusicLayerV2EnabledForUser(ctx.db, userId))) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'feature_disabled:SetlistIntelMusicLayerV2',
-        });
-      }
       try {
         return await discoveredLiveForShow({
           db: ctx.db,
@@ -1641,12 +1653,6 @@ export const setlistIntelRouter = router({
     .input(saveDiscoveredInput)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      if (!(await isMusicLayerV2EnabledForUser(ctx.db, userId))) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'feature_disabled:SetlistIntelMusicLayerV2',
-        });
-      }
       const result = await saveDiscoveredSong({
         db: ctx.db,
         userId,
@@ -1694,11 +1700,6 @@ export const setlistIntelRouter = router({
     .input(showIdOnly)
     .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      if (!(await isMusicLayerV2EnabledForUser(ctx.db, userId))) {
-        // Quiet failure path — the UI hides the line entirely when the
-        // flag is off, no need to bubble an error.
-        return { prepCount: null, postCount: null };
-      }
       return primingStatForShow({
         db: ctx.db,
         userId,

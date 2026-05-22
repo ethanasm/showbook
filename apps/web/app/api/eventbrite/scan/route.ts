@@ -8,6 +8,7 @@ import {
   type EventbriteTicket,
 } from '@showbook/api';
 import { child } from '@showbook/observability';
+import { isFeatureOn } from '@showbook/shared';
 
 const log = child({ component: 'web.eventbrite.scan' });
 
@@ -16,6 +17,10 @@ export interface EventbriteReviewTicket extends EventbriteTicket {
 }
 
 export async function POST(request: Request) {
+  if (!isFeatureOn('EventbriteImportEnabled')) {
+    return new Response('Not Found', { status: 404 });
+  }
+
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) {

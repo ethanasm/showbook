@@ -12,7 +12,7 @@
 
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { X as XIcon } from 'lucide-react-native';
+import { Image as ImageIcon, X as XIcon } from 'lucide-react-native';
 
 import { SegmentedControl } from './SegmentedControl';
 import { FormField, FormRow } from './FormField';
@@ -77,6 +77,13 @@ export interface ShowFormFieldsProps {
    */
   errors?: ShowFormErrors;
   clearError?: (key: keyof ShowFormErrors) => void;
+  /**
+   * Festival-only entry into the poster OCR sheet. When provided and
+   * kind is "festival" the form renders an "Extract lineup from poster"
+   * pill above the lineup editor. The parent screen owns the sheet so
+   * the picker can navigate from the right route context.
+   */
+  onExtractLineup?: () => void;
 }
 
 export function ShowFormFields({
@@ -88,6 +95,7 @@ export function ShowFormFields({
   onSelectPlace,
   errors,
   clearError,
+  onExtractLineup,
 }: ShowFormFieldsProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -217,6 +225,24 @@ export function ShowFormFields({
         />
       ) : null}
 
+      {isFestival && onExtractLineup ? (
+        <Pressable
+          onPress={onExtractLineup}
+          accessibilityRole="button"
+          accessibilityLabel="Extract lineup from poster"
+          testID="extract-lineup-from-poster"
+          style={({ pressed }) => [
+            styles.extractBtn,
+            { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
+          ]}
+        >
+          <ImageIcon size={14} color={colors.accentText} strokeWidth={2} />
+          <Text style={[styles.extractBtnLabel, { color: colors.accentText }]}>
+            Extract lineup from poster
+          </Text>
+        </Pressable>
+      ) : null}
+
       <LineupEditor
         rows={values.performers}
         onChange={(rows: PerformerRow[]) => set('performers', rows)}
@@ -286,6 +312,20 @@ const styles = StyleSheet.create({
   venuePillText: {
     fontFamily: 'Geist Sans',
     fontSize: 12,
+    fontWeight: '600',
+  },
+  extractBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+  },
+  extractBtnLabel: {
+    fontFamily: 'Geist Sans',
+    fontSize: 13,
     fontWeight: '600',
   },
 });

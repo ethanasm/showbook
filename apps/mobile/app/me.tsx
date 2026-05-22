@@ -18,6 +18,9 @@
  *     (Comfortable / Compact). Density is persisted locally via
  *     useTheme().setDensity (see lib/theme.ts).
  *   - ACCOUNT section: Sign out (destructive).
+ *   - ADMIN section: operator-only, rendered only when `admin.amIAdmin`
+ *     returns true. Mirrors the web /admin page — the section + its
+ *     confirmation sheet live in components/AdminSection.tsx.
  *   - SHOWBOOK · vX footer (version read from expoConfig).
  *
  * Sign-out: confirmation Alert before clearing the SecureStore session.
@@ -51,6 +54,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { ScreenWrapper } from '../components/ScreenWrapper';
 import { SegmentedControl } from '../components/SegmentedControl';
+import { AdminSection } from '../components/AdminSection';
 import { useTheme, type ThemePreference, type Density } from '../lib/theme';
 import { useAuth } from '../lib/auth';
 import { trpc } from '../lib/trpc';
@@ -346,6 +350,10 @@ export default function MeScreen(): React.JSX.Element {
             <Text style={[styles.signOutLabel, { color: colors.danger }]}>Sign out</Text>
           </Pressable>
         </View>
+
+        {/* ADMIN — operator-only; AdminSection self-gates on admin.amIAdmin
+            and renders nothing for non-admins. */}
+        <AdminSection />
 
         <Text style={[styles.footer, { color: colors.faint }]}>
           SHOWBOOK · {APP_VERSION}

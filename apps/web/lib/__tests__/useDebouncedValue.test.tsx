@@ -1,7 +1,7 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderHook, act, cleanup } from '@testing-library/react';
-import { useDebouncedValue } from '../useDebouncedValue';
+import { useDebouncedValue } from '@showbook/shared/hooks';
 
 describe('useDebouncedValue', () => {
   it('returns the initial value immediately', () => {

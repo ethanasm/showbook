@@ -32,10 +32,6 @@ export interface NavItem {
   small?: boolean;
   /** Only render when the caller passes `isAdmin` to <Sidebar>. */
   adminOnly?: boolean;
-  /** Set the `FeatureFlag` key required to render the item.
-   *  Sidebar callers pass `isFeatureOn(...)` results in via the
-   *  `flags` prop. */
-  featureFlag?: string;
 }
 
 // Sidebar nav order encodes the verb flow: find → plan → log.
@@ -49,13 +45,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "map", label: "Map", icon: Map, section: "navigate" },
   { id: "venues", label: "Venues", icon: MapPin, section: "navigate" },
   { id: "artists", label: "Artists", icon: Music, section: "navigate" },
-  {
-    id: "songs",
-    label: "Songs",
-    icon: Disc3,
-    section: "navigate",
-    featureFlag: "SetlistIntelSongs",
-  },
+  { id: "songs", label: "Songs", icon: Disc3, section: "navigate" },
   { id: "preferences", label: "Preferences", icon: Settings, section: "settings", small: true },
   { id: "admin", label: "Admin", icon: ShieldCheck, section: "settings", small: true, adminOnly: true },
 ];
@@ -89,10 +79,6 @@ interface SidebarProps {
   syncStatus?: string;
   /** When false (or undefined), items flagged `adminOnly` are hidden. */
   isAdmin?: boolean;
-  /** Map of FeatureFlag key → bool. Items with `featureFlag` only
-   *  render when the corresponding flag is truthy (defaults to false
-   *  / hidden). */
-  flags?: Partial<Record<string, boolean>>;
 }
 
 export function Sidebar({
@@ -104,13 +90,11 @@ export function Sidebar({
   userInitials,
   syncStatus = "signed in",
   isAdmin = false,
-  flags,
 }: SidebarProps) {
   const displayName = userName ?? "…";
   const displayInitials = userInitials ?? "·";
   const visibleItems = NAV_ITEMS.filter((i) => {
     if (i.adminOnly && !isAdmin) return false;
-    if (i.featureFlag && !flags?.[i.featureFlag]) return false;
     return true;
   });
   const navItems = visibleItems.filter((i) => i.section === "navigate");

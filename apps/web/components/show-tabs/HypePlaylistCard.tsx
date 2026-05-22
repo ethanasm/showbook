@@ -10,6 +10,11 @@ import "./show-tabs.css";
 
 interface HypePlaylistCardProps {
   showId: string;
+  /** Performer whose songs the playlist is built from. The festival
+   *  Setlist tab passes the chip-rail selection so each lineup
+   *  artist gets its own playlist row; single-artist concerts pass
+   *  the headliner. */
+  performerId: string;
   artist: string;
   /** 'hype' (pre-show, predicted) or 'heard' (post-show, actual). */
   kind: "hype" | "heard";
@@ -42,6 +47,7 @@ interface PlaylistRow {
  */
 export function HypePlaylistCard({
   showId,
+  performerId,
   artist,
   kind,
   trackCount,
@@ -51,17 +57,18 @@ export function HypePlaylistCard({
   const existingQuery = trpc.spotify.existingPlaylist.useQuery({
     showId,
     kind,
+    performerId,
   });
   const utils = trpc.useUtils();
 
   const createHype = trpc.spotify.createHypePlaylist.useMutation({
     onSuccess: () => {
-      void utils.spotify.existingPlaylist.invalidate({ showId, kind });
+      void utils.spotify.existingPlaylist.invalidate({ showId, kind, performerId });
     },
   });
   const createHeard = trpc.spotify.createHeardPlaylist.useMutation({
     onSuccess: () => {
-      void utils.spotify.existingPlaylist.invalidate({ showId, kind });
+      void utils.spotify.existingPlaylist.invalidate({ showId, kind, performerId });
     },
   });
 
@@ -98,7 +105,7 @@ export function HypePlaylistCard({
     setScopeMissing([]);
     try {
       if (kind === "hype") {
-        const result = await createHype.mutateAsync({ showId });
+        const result = await createHype.mutateAsync({ showId, performerId });
         if (result.missing.length > 0) {
           setStatusMsg(
             `Created — ${result.trackCount} of ${result.requested} resolved`,
@@ -109,7 +116,7 @@ export function HypePlaylistCard({
           );
         }
       } else {
-        const result = await createHeard.mutateAsync({ showId });
+        const result = await createHeard.mutateAsync({ showId, performerId });
         setStatusMsg(
           result.missing.length > 0
             ? `Created — ${result.trackCount} of ${result.requested} resolved`
@@ -144,7 +151,7 @@ export function HypePlaylistCard({
       }
       setStatusMsg("Spotify export failed. Try again in a moment.");
     }
-  }, [kind, createHype, createHeard, showId]);
+  }, [kind, createHype, createHeard, showId, performerId]);
 
   const handleOpenClick = useCallback(async () => {
     if (existing) {

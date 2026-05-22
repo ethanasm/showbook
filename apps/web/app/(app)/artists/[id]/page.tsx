@@ -19,7 +19,7 @@ import {
 } from "@/components/design-system";
 import { EditableName } from "@/components/EditableName";
 import { MediaSection } from "@/components/media";
-import { formatDateMedium as formatDateLong, formatDateParts, isFeatureOn } from "@showbook/shared";
+import { formatDateMedium as formatDateLong, formatDateParts } from "@showbook/shared";
 import {
   getHeadliner,
   getHeadlinerId,
@@ -122,7 +122,6 @@ export default function ArtistDetailPage() {
   // request the top 25 frequencies. Hide the section when there are
   // no rows so artists with no setlist data don't render an empty
   // chrome.
-  const songsFlagOn = isFeatureOn("SetlistIntelSongs");
   const songsQuery = trpc.songs.list.useQuery(
     {
       performerId,
@@ -130,7 +129,7 @@ export default function ArtistDetailPage() {
       tourDebutOnly: false,
       limit: 25,
     },
-    { enabled: Boolean(performerId) && songsFlagOn, staleTime: 60_000 },
+    { enabled: Boolean(performerId), staleTime: 60_000 },
   );
 
   const followMutation = trpc.performers.follow.useMutation({
@@ -356,7 +355,7 @@ export default function ArtistDetailPage() {
       >
         <MediaSection scope="performer" performerId={performer.id} />
 
-        {songsFlagOn && (songsQuery.data?.length ?? 0) > 0 && (
+        {(songsQuery.data?.length ?? 0) > 0 && (
           <section data-testid="artist-songs-section">
             <SectionHeader
               label={`Songs you've heard live · ${songsQuery.data!.length}`}

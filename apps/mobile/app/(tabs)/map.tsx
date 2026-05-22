@@ -26,7 +26,7 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MapPin, RefreshCw, X } from 'lucide-react-native';
 import MapView, {
   Marker,
@@ -296,6 +296,13 @@ export default function MapScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
   const mapRef = React.useRef<MapView>(null);
+  const router = useRouter();
+  const params = useLocalSearchParams<{ focusVenueId?: string | string[] }>();
+  const focusVenueId = React.useMemo(() => {
+    const v = params.focusVenueId;
+    if (Array.isArray(v)) return v[0] ?? null;
+    return v ?? null;
+  }, [params.focusVenueId]);
 
   const utils = trpc.useUtils();
   const showsQuery = useCachedQuery<MapShow[]>({
@@ -344,6 +351,15 @@ export default function MapScreen(): React.JSX.Element {
     mapRef.current?.animateToRegion(focus.region, 400);
   }, []);
 
+  // The focus toggle wraps into rows of three. `chunkRegions` front-loads
+  // full rows, so the first row is always the widest; a shorter trailing
+  // row is right-aligned and inset from the container's left border.
+  const focusRows = React.useMemo(
+    () => chunkRegions(focusRegions, 3),
+    [focusRegions],
+  );
+  const widestFocusRow = focusRows[0]?.length ?? 0;
+
   const allShows = React.useMemo(
     () => (showsQuery.data ?? []) as MapShow[],
     [showsQuery.data],
@@ -363,9 +379,13 @@ export default function MapScreen(): React.JSX.Element {
   );
 
   // Fit camera to the user's venues once, on first successful load.
+  // Skipped when an inbound `focusVenueId` is going to override the
+  // camera anyway — otherwise the user would see a flash of the full
+  // collection before the focus animation lands.
   React.useEffect(() => {
     if (didFitOnce) return;
     if (!showsQuery.isSuccess) return;
+    if (focusVenueId) return;
     const allVenues = groupByVenue(allShows);
     if (allVenues.length === 0) return;
     const fit = fitRegion(allVenues);
@@ -373,7 +393,39 @@ export default function MapScreen(): React.JSX.Element {
     setLoadedRegion(fit);
     mapRef.current?.animateToRegion(fit, 400);
     setDidFitOnce(true);
-  }, [showsQuery.isSuccess, allShows, didFitOnce]);
+  }, [showsQuery.isSuccess, allShows, didFitOnce, focusVenueId]);
+
+  // External focus — e.g. the "Venue map" row on a past show's Media
+  // tab routes here with `?focusVenueId=<id>`. We resolve the venue
+  // out of the user's already-loaded show set, animate to a tight
+  // region around it, and pop the venue sheet so the user lands on
+  // the same UI they'd see after tapping the pin manually. The route
+  // param is cleared after consumption so a later tab refocus doesn't
+  // re-trigger the animation.
+  React.useEffect(() => {
+    if (!focusVenueId) return;
+    if (!showsQuery.isSuccess) return;
+    const allVenues = groupByVenue(allShows);
+    const target = allVenues.find((v) => v.venueId === focusVenueId);
+    if (!target) {
+      // Venue isn't in the user's show set (deleted, missing coords);
+      // drop the param so we don't keep re-evaluating on every render.
+      router.setParams({ focusVenueId: '' });
+      return;
+    }
+    const next: Region = {
+      latitude: target.lat,
+      longitude: target.lng,
+      latitudeDelta: 0.05,
+      longitudeDelta: 0.05,
+    };
+    setRegion(next);
+    setLoadedRegion(next);
+    mapRef.current?.animateToRegion(next, 400);
+    setDidFitOnce(true);
+    setSelectedClusterId(`v:${target.venueId}`);
+    router.setParams({ focusVenueId: '' });
+  }, [focusVenueId, showsQuery.isSuccess, allShows, router]);
 
   const onRegionChangeComplete = React.useCallback((next: Region) => {
     setRegion(next);
@@ -446,35 +498,32 @@ export default function MapScreen(): React.JSX.Element {
       >
         {KIND_FILTERS.map(({ k, label }) => {
           const active = k === kindFilter;
-          const dotColor = k === 'all' ? colors.ink : tokens.kindColor(k);
           return (
             <Pressable
               key={k}
               onPress={() => setKindFilter(k)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
               style={[
                 styles.filterChip,
                 {
-                  borderColor: active ? dotColor : colors.ruleStrong,
-                  backgroundColor:
-                    active && k === 'all' ? colors.ink : 'transparent',
+                  borderColor: active ? colors.ink : colors.ruleStrong,
+                  backgroundColor: active ? colors.ink : 'transparent',
                 },
               ]}
             >
               {k !== 'all' && (
                 <View
-                  style={[styles.filterDot, { backgroundColor: dotColor }]}
+                  style={[
+                    styles.filterDot,
+                    { backgroundColor: tokens.kindColor(k) },
+                  ]}
                 />
               )}
               <Text
                 style={[
                   styles.filterLabel,
-                  {
-                    color: active
-                      ? k === 'all'
-                        ? colors.bg
-                        : dotColor
-                      : colors.muted,
-                  },
+                  { color: active ? colors.bg : colors.muted },
                 ]}
               >
                 {label}
@@ -598,26 +647,36 @@ export default function MapScreen(): React.JSX.Element {
                   },
                 ]}
               >
-                {chunkRegions(focusRegions, 3).map((row, rowIdx) => (
+                {focusRows.map((row, rowIdx) => (
                   <View
                     key={rowIdx}
                     style={[
                       styles.focusToggleRow,
-                      rowIdx > 0 && {
-                        borderTopColor: colors.ruleStrong,
-                        borderTopWidth: 1,
+                      // Divider sits on the bottom of each non-last row.
+                      // Those rows span the full container width, so the
+                      // rule reaches across the inset area below; a
+                      // `borderTop` on the next row would only span that
+                      // shorter row and leave the gap above it open.
+                      rowIdx < focusRows.length - 1 && {
+                        borderBottomColor: colors.ruleStrong,
+                        borderBottomWidth: 1,
                       },
                     ]}
                   >
                     {row.map((focus, i) => {
                       const active = focus.id === activeFocusId;
+                      // A row shorter than the widest one is inset from the
+                      // container's left border, so its first cell needs its
+                      // own left border to stay visually enclosed.
+                      const needsLeftBorder =
+                        i > 0 || row.length < widestFocusRow;
                       return (
                         <Pressable
                           key={focus.id}
                           onPress={() => onFocusPress(focus)}
                           style={[
                             styles.focusToggleBtn,
-                            i > 0 && {
+                            needsLeftBorder && {
                               borderLeftColor: colors.ruleStrong,
                               borderLeftWidth: 1,
                             },
@@ -864,6 +923,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 11,
     borderWidth: 1,
+    borderRadius: 999,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
@@ -901,18 +961,16 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 16,
     right: 16,
-    maxWidth: '85%',
     flexDirection: 'column',
+    alignItems: 'flex-end',
     borderWidth: 1,
   },
   focusToggleRow: {
     flexDirection: 'row',
-    alignSelf: 'stretch',
   },
   focusToggleBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    flex: 1,
   },
   focusToggleLabel: {
     fontFamily: 'Geist Mono',

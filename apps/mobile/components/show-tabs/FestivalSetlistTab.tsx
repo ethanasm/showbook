@@ -54,9 +54,6 @@ export interface FestivalSetlistTabProps {
   badgePayload?: BadgePayload | null;
   trackPreviews?: PreviewMap | null;
   hypePlaylistEnabled?: boolean;
-  rotatingDisplayEnabled?: boolean;
-  theatricalDisplayEnabled?: boolean;
-  improvisedDisplayEnabled?: boolean;
 }
 
 export function FestivalSetlistTab(
@@ -140,6 +137,7 @@ export function FestivalSetlistTab(
       />
       <SetlistTab
         showId={props.showId}
+        performerId={selected.performerId}
         artistName={selected.performerName}
         isPast={isPast}
         prediction={selected.prediction}
@@ -148,9 +146,6 @@ export function FestivalSetlistTab(
         badgePayload={props.badgePayload}
         trackPreviews={props.trackPreviews}
         hypePlaylistEnabled={props.hypePlaylistEnabled}
-        rotatingDisplayEnabled={props.rotatingDisplayEnabled}
-        theatricalDisplayEnabled={props.theatricalDisplayEnabled}
-        improvisedDisplayEnabled={props.improvisedDisplayEnabled}
       />
     </View>
   );
