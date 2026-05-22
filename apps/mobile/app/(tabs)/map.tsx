@@ -351,6 +351,15 @@ export default function MapScreen(): React.JSX.Element {
     mapRef.current?.animateToRegion(focus.region, 400);
   }, []);
 
+  // The focus toggle wraps into rows of three. `chunkRegions` front-loads
+  // full rows, so the first row is always the widest; a shorter trailing
+  // row is right-aligned and inset from the container's left border.
+  const focusRows = React.useMemo(
+    () => chunkRegions(focusRegions, 3),
+    [focusRegions],
+  );
+  const widestFocusRow = focusRows[0]?.length ?? 0;
+
   const allShows = React.useMemo(
     () => (showsQuery.data ?? []) as MapShow[],
     [showsQuery.data],
@@ -489,35 +498,32 @@ export default function MapScreen(): React.JSX.Element {
       >
         {KIND_FILTERS.map(({ k, label }) => {
           const active = k === kindFilter;
-          const dotColor = k === 'all' ? colors.ink : tokens.kindColor(k);
           return (
             <Pressable
               key={k}
               onPress={() => setKindFilter(k)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
               style={[
                 styles.filterChip,
                 {
-                  borderColor: active ? dotColor : colors.ruleStrong,
-                  backgroundColor:
-                    active && k === 'all' ? colors.ink : 'transparent',
+                  borderColor: active ? colors.ink : colors.ruleStrong,
+                  backgroundColor: active ? colors.ink : 'transparent',
                 },
               ]}
             >
               {k !== 'all' && (
                 <View
-                  style={[styles.filterDot, { backgroundColor: dotColor }]}
+                  style={[
+                    styles.filterDot,
+                    { backgroundColor: tokens.kindColor(k) },
+                  ]}
                 />
               )}
               <Text
                 style={[
                   styles.filterLabel,
-                  {
-                    color: active
-                      ? k === 'all'
-                        ? colors.bg
-                        : dotColor
-                      : colors.muted,
-                  },
+                  { color: active ? colors.bg : colors.muted },
                 ]}
               >
                 {label}
@@ -641,7 +647,7 @@ export default function MapScreen(): React.JSX.Element {
                   },
                 ]}
               >
-                {chunkRegions(focusRegions, 3).map((row, rowIdx) => (
+                {focusRows.map((row, rowIdx) => (
                   <View
                     key={rowIdx}
                     style={[
@@ -654,13 +660,18 @@ export default function MapScreen(): React.JSX.Element {
                   >
                     {row.map((focus, i) => {
                       const active = focus.id === activeFocusId;
+                      // A row shorter than the widest one is inset from the
+                      // container's left border, so its first cell needs its
+                      // own left border to stay visually enclosed.
+                      const needsLeftBorder =
+                        i > 0 || row.length < widestFocusRow;
                       return (
                         <Pressable
                           key={focus.id}
                           onPress={() => onFocusPress(focus)}
                           style={[
                             styles.focusToggleBtn,
-                            i > 0 && {
+                            needsLeftBorder && {
                               borderLeftColor: colors.ruleStrong,
                               borderLeftWidth: 1,
                             },
@@ -907,6 +918,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 11,
     borderWidth: 1,
+    borderRadius: 999,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
