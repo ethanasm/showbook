@@ -184,7 +184,6 @@
   letter-spacing: 0.04em;
   padding: 7px 11px;
   gap: 6px;
-  color: var(--muted);
 }
 
 .map-filterbar .segmented-filter__btn--active,
