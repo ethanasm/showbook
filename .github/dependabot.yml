@@ -12,6 +12,27 @@ updates:
         patterns:
           - "@aws-sdk/*"
           - "@smithy/*"
+      # react peer-checks an exact version match between react and
+      # react-dom at startup ("Incompatible React versions" otherwise),
+      # so they must bump together in a single PR.
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+    ignore:
+      # ESLint 10 dropped `scopeManager.addGlobals`, which eslint-config-next
+      # 16 and eslint-config-expo 55 still call. Re-enable once both config
+      # packages ship ESLint-10-compatible releases.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      # babel-preset-expo / eslint-config-expo majors track the Expo SDK
+      # major. Bump them as part of an Expo SDK 55→56 migration PR, not
+      # via dependabot — see PR #163 / #77 for the JS/native mismatch
+      # post-mortems that drove the existing SDK 55 pin.
+      - dependency-name: "babel-preset-expo"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-config-expo"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
