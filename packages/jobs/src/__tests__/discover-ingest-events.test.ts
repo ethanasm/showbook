@@ -171,6 +171,10 @@ mock.module('@showbook/api', {
     selectBestImage: () => null,
     extractMusicbrainzId: () => null,
     extractFestivalName: (name: string) => name,
+    // Tests use minimal `https://tm/event` URLs that don't match the
+    // real slug-format regex; treat them all as primary so the pipeline
+    // assertions remain about event counts, not URL shape.
+    isPrimaryEventUrl: () => true,
     matchOrCreateVenue: async () => ({
       venue: { id: 'v1', name: 'Greek', city: 'Berkeley' },
       created: false,

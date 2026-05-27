@@ -464,6 +464,38 @@ export function extractMusicbrainzId(attraction: TMAttraction): string | undefin
   return attraction.externalLinks?.musicbrainz?.[0]?.id;
 }
 
+/**
+ * TM's Discovery API returns two events for a given physical show when both
+ * primary box-office tickets and resale-marketplace listings exist: a
+ * primary event whose `url` has the form
+ * `https://www.ticketmaster.com/<slug>/event/<id>`, and a resale event
+ * whose `url` is the bare `https://www.ticketmaster.com/event/<id>`.
+ * The bare-format URL renders "Page Not Found" on ticketmaster.com — it's
+ * only meaningful inside the resale flow. Filter to primary URLs before
+ * persisting as `ticket_url`.
+ */
+export function isPrimaryEventUrl(
+  url: string | null | undefined,
+): url is string {
+  if (!url) return false;
+  return /:\/\/[^/]+\/[^/]+\/event\//.test(url);
+}
+
+/**
+ * Walk a TM event list and return the URL of the first event whose `url`
+ * is a primary (slug-format) Ticketmaster link. Returns null when no
+ * candidate qualifies — callers should leave `ticket_url` null rather
+ * than store the resale-marketplace fallback.
+ */
+export function pickPrimaryEventUrl(
+  events: ReadonlyArray<{ url?: string }>,
+): string | null {
+  for (const e of events) {
+    if (isPrimaryEventUrl(e.url)) return e.url;
+  }
+  return null;
+}
+
 export function selectBestImage(images?: TMImage[]): string | null {
   if (!images || images.length === 0) return null;
 
