@@ -60,6 +60,7 @@ export const JOB_NAMES = {
   SETLIST_CORPUS_FILL_REFRESH: 'enrichment/setlist-corpus-fill-refresh',
   BACKFILL_PERFORMER_MBIDS: 'backfill/performer-mbids',
   BACKFILL_PERFORMER_TICKETMASTER_IDS: 'backfill/performer-ticketmaster-ids',
+  BACKFILL_PERFORMER_SPOTIFY_IDS: 'backfill/performer-spotify-ids',
 } as const;
 
 export type CorpusFillMode = 'predict' | 'deep' | 'refresh';
@@ -181,6 +182,31 @@ export async function enqueueBackfillPerformerTicketmasterIds(): Promise<
         queue: JOB_NAMES.BACKFILL_PERFORMER_TICKETMASTER_IDS,
       },
       'enqueueBackfillPerformerTicketmasterIds failed',
+    );
+    return null;
+  }
+}
+
+/**
+ * Trigger the performer-Spotify-id backfill outside its 06:30 ET cron —
+ * used by the admin "Backfill performer Spotify IDs" button to catch up
+ * the pre-existing backlog created before the fire-and-forget hook in
+ * `matchOrCreatePerformer` landed.
+ */
+export async function enqueueBackfillPerformerSpotifyIds(): Promise<
+  string | null
+> {
+  try {
+    const boss = await getSender();
+    return await boss.send(JOB_NAMES.BACKFILL_PERFORMER_SPOTIFY_IDS, {});
+  } catch (err) {
+    log.error(
+      {
+        err,
+        event: 'job_queue.enqueue.failed',
+        queue: JOB_NAMES.BACKFILL_PERFORMER_SPOTIFY_IDS,
+      },
+      'enqueueBackfillPerformerSpotifyIds failed',
     );
     return null;
   }

@@ -9,6 +9,10 @@ export {
 export { runDailyDigest } from './notifications';
 export { runPruneOrphanCatalog } from './prune-orphan-catalog';
 export { runBackfillShowCoverImages } from './backfill-show-cover-images';
+export {
+  runBackfillPerformerSpotifyIds,
+  type BackfillPerformerSpotifyIdsSummary,
+} from './backfill-performer-spotify-ids';
 export { runHealthCheck, type HealthCheckSummary } from './health-check';
 // Re-export from @showbook/api — the indexer lives in api so the tRPC
 // routers can call it inline on setlist writes without a circular

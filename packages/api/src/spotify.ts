@@ -500,6 +500,64 @@ export async function searchTrack(
   };
 }
 
+interface SpotifyArtistSearchResponse {
+  artists: {
+    items: SpotifyArtistRaw[];
+  };
+}
+
+/**
+ * Resolve a free-text artist name to a Spotify catalog artist via
+ * `/v1/search?type=artist`. Returns the top match, or null when Spotify
+ * has no result for the name. Used by:
+ *
+ *  - The fire-and-forget hook on `matchOrCreatePerformer` so every new
+ *    performer row gets a `spotify_artist_id` shortly after creation.
+ *  - The `backfill-performer-spotify-ids` nightly cron + admin one-shot.
+ *
+ * Disambiguation: Spotify's relevance ranking already biases toward the
+ * most-followed exact-name match, which is correct for ~all of our
+ * inputs (popular touring acts). We only override when the top result's
+ * name doesn't match the query case-insensitively AND a later result
+ * does — that catches cases where a tribute act outranks the original
+ * for an exact-name query.
+ *
+ * Auth: pass either an app-level `client_credentials` token (preferred
+ * for backfills) or a per-user OAuth token. Both work — this is public
+ * catalog data.
+ */
+export async function searchSpotifyArtist(
+  accessToken: string,
+  name: string,
+): Promise<SpotifyArtist | null> {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  const url = `${API_BASE}/search?type=artist&limit=5&q=${encodeURIComponent(trimmed)}`;
+  const res = await spotifyFetch(url, accessToken);
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new SpotifyError(
+      `Spotify artist search ${res.status}`,
+      res.status,
+      detail.slice(0, 500),
+    );
+  }
+  const data = (await res.json()) as SpotifyArtistSearchResponse;
+  const items = data.artists?.items ?? [];
+  if (items.length === 0) return null;
+
+  const target = trimmed.toLowerCase();
+  const exact = items.find((a) => a.name.trim().toLowerCase() === target);
+  const pick = exact ?? items[0]!;
+
+  return {
+    id: pick.id,
+    name: pick.name,
+    imageUrl: pickImage(pick.images),
+    genres: pick.genres ?? [],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Playlist mutations — create + add tracks
 // ---------------------------------------------------------------------------

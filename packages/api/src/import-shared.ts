@@ -152,6 +152,11 @@ export interface ImportArtistInput {
   name: string;
   imageUrl?: string;
   musicbrainzId?: string;
+  // When the source provider is Spotify, the followed-artist payload
+  // already carries the Spotify catalog id. Threading it through saves a
+  // redundant search call later — the inline hook in
+  // `matchOrCreatePerformer` will only fire when this is absent.
+  spotifyArtistId?: string;
 }
 
 /**
@@ -178,6 +183,7 @@ export async function importSelectedArtists(
         tmAttractionId: artist.tmAttractionId,
         imageUrl: artist.imageUrl,
         musicbrainzId: artist.musicbrainzId,
+        spotifyArtistId: artist.spotifyArtistId,
       });
       await db
         .insert(userPerformerFollows)

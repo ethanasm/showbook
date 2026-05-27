@@ -42,6 +42,7 @@ import {
   Disc3,
   IdCard,
   Hash,
+  Music,
   ChevronRight,
 } from 'lucide-react-native';
 
@@ -109,6 +110,8 @@ export function AdminSection(): React.JSX.Element | null {
   const performerMbids = trpc.admin.enqueueBackfillPerformerMbids.useMutation();
   const performerTicketmaster =
     trpc.admin.enqueueBackfillPerformerTicketmasterIds.useMutation();
+  const performerSpotify =
+    trpc.admin.enqueueBackfillPerformerSpotifyIds.useMutation();
 
   const [activeId, setActiveId] = React.useState<string | null>(null);
   const [performerQuery, setPerformerQuery] = React.useState('');
@@ -227,6 +230,20 @@ export function AdminSection(): React.JSX.Element | null {
       pending: performerTicketmaster.isPending,
       run: async () => {
         const r = await performerTicketmaster.mutateAsync();
+        return formatJobEnqueued(r.jobId);
+      },
+    },
+    {
+      id: 'performer-spotify',
+      title: 'Backfill performer Spotify IDs',
+      blurb: 'Resolve Spotify catalog IDs',
+      description:
+        'Enqueues the backfill-performer-spotify-ids job, which looks up a Spotify catalog artist ID via /v1/search?type=artist for every performer that is missing one. Never overwrites existing IDs. Also runs daily at 06:30 ET.',
+      confirmLabel: 'Enqueue backfill',
+      icon: Music,
+      pending: performerSpotify.isPending,
+      run: async () => {
+        const r = await performerSpotify.mutateAsync();
         return formatJobEnqueued(r.jobId);
       },
     },
