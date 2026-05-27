@@ -171,13 +171,14 @@ describe('searchSpotifyArtist', () => {
     }) as typeof globalThis.fetch;
 
     const result = await searchSpotifyArtist('token', 'Mystery Band');
-    assert.ok(capturedUrl);
+    const url = capturedUrl as string | null;
+    assert.ok(url);
     assert.ok(
-      capturedUrl!.includes('/search?type=artist'),
+      url.includes('/search?type=artist'),
       'hits /search?type=artist',
     );
     assert.ok(
-      capturedUrl!.includes('q=Mystery%20Band'),
+      url.includes('q=Mystery%20Band'),
       'URL-encodes the name into q',
     );
     assert.equal(result?.id, 'top-hit');
