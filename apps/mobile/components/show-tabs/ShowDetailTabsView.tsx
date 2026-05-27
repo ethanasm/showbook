@@ -158,9 +158,27 @@ export function ShowDetailTabsView({
     Boolean(show.ticketUrl) &&
     (show.state === 'watching' || show.state === 'ticketed');
 
-  const [active, setActive] = React.useState<ShowTabKey>(
-    parseShowTab(initialTab ?? null),
+  // Only concerts + festivals have rotating setlist semantics — other
+  // kinds drop the Setlist tab entirely (matches the web shell).
+  const hiddenTabs = React.useMemo<readonly ShowTabKey[]>(
+    () =>
+      show.kind === 'concert' || show.kind === 'festival' ? [] : ['setlist'],
+    [show.kind],
   );
+  const isTabHidden = React.useCallback(
+    (key: ShowTabKey) => hiddenTabs.includes(key),
+    [hiddenTabs],
+  );
+
+  const [active, setActive] = React.useState<ShowTabKey>(() => {
+    const parsed = parseShowTab(initialTab ?? null);
+    return hiddenTabs.includes(parsed) ? 'overview' : parsed;
+  });
+  // If the show kind changes such that the active tab gets hidden
+  // (e.g. user edits a concert to a theatre), fall back to overview.
+  React.useEffect(() => {
+    if (hiddenTabs.includes(active)) setActive('overview');
+  }, [active, hiddenTabs]);
   const [markTicketedOpen, setMarkTicketedOpen] = React.useState(false);
 
   const headliner = show.showPerformers.find((sp) => sp.role === 'headliner');
@@ -594,7 +612,12 @@ export function ShowDetailTabsView({
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
       <View style={styles.body}>
         <HeaderStrip show={show} onBack={onBack} onMore={onMore} />
-        <ShowTabBar active={active} badges={badges} onSelect={setActive} />
+        <ShowTabBar
+          active={active}
+          badges={badges}
+          onSelect={setActive}
+          hiddenTabs={hiddenTabs}
+        />
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scroll}
@@ -607,7 +630,7 @@ export function ShowDetailTabsView({
           }
         >
           {active === 'overview' ? overviewPanel : null}
-          {active === 'setlist' ? setlistPanel : null}
+          {active === 'setlist' && !isTabHidden('setlist') ? setlistPanel : null}
           {active === 'media' ? mediaPanel : null}
           {active === 'notes' ? notesPanel : null}
         </ScrollView>

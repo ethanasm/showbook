@@ -425,11 +425,11 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
     />
   );
 
-  // Theatre + comedy shows have no setlist concept — drop the tab
-  // entirely rather than routing every visit to a coming-soon
-  // placeholder.
+  // Only concerts + festivals have rotating setlist semantics — every
+  // other kind drops the tab entirely rather than routing every visit
+  // to a coming-soon placeholder.
   const hiddenTabs: ShowTabKey[] =
-    show.kind === "theatre" || show.kind === "comedy" ? ["setlist"] : [];
+    show.kind === "concert" || show.kind === "festival" ? [] : ["setlist"];
 
   const mediaPanel = (
     <MediaTab
