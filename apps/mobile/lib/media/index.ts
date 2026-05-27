@@ -15,3 +15,11 @@ export {
 } from './upload';
 export { pickMediaFromLibrary, captureMediaFromCamera, MAX_SELECTION } from './picker';
 export { looksLikeQuotaMessage } from './errors';
+export {
+  classifyPickedFiles,
+  summarizeShowCapacity,
+  summarizeBlocked,
+  type ClassifiedRow,
+  type ClassifiedReason,
+  type CapacitySummary,
+} from './quota';
