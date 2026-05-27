@@ -386,6 +386,13 @@
       "when": 1795968480000,
       "tag": "0054_drop_unknown_announcements",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1795968540000,
+      "tag": "0055_null_resale_ticket_urls",
+      "breakpoints": true
     }
   ]
 }

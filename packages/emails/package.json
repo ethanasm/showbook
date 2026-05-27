@@ -14,15 +14,15 @@
     "@react-email/components": "^1.0.12",
     "@react-email/render": "^2.0.8",
     "@react-email/tailwind": "^2.0.7",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
   },
   "devDependencies": {
-    "@types/node": "^25.8.0",
+    "@types/node": "^25.9.1",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
-    "react-email": "^6.1.4",
-    "tsx": "^4.22.0",
-    "typescript": "~5.9.2"
+    "react-email": "^6.3.0",
+    "tsx": "^4.22.3",
+    "typescript": "~6.0.3"
   }
 }

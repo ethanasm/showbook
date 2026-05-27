@@ -27,6 +27,8 @@ import type {
   searchAttractions as SearchAttractionsFn,
   selectBestImage as SelectBestImageFn,
   pickAttractionImage as PickAttractionImageFn,
+  isPrimaryEventUrl as IsPrimaryEventUrlFn,
+  pickPrimaryEventUrl as PickPrimaryEventUrlFn,
   extractMusicbrainzId as ExtractMusicbrainzIdFn,
   inferKind as InferKindFn,
   TMImage,
@@ -43,6 +45,8 @@ let searchVenues: typeof SearchVenuesFn;
 let searchAttractions: typeof SearchAttractionsFn;
 let selectBestImage: typeof SelectBestImageFn;
 let pickAttractionImage: typeof PickAttractionImageFn;
+let isPrimaryEventUrl: typeof IsPrimaryEventUrlFn;
+let pickPrimaryEventUrl: typeof PickPrimaryEventUrlFn;
 let extractMusicbrainzId: typeof ExtractMusicbrainzIdFn;
 let inferKind: typeof InferKindFn;
 let TMError: typeof TMErrorClass;
@@ -61,6 +65,8 @@ before(async () => {
   searchAttractions = mod.searchAttractions;
   selectBestImage = mod.selectBestImage;
   pickAttractionImage = mod.pickAttractionImage;
+  isPrimaryEventUrl = mod.isPrimaryEventUrl;
+  pickPrimaryEventUrl = mod.pickPrimaryEventUrl;
   extractMusicbrainzId = mod.extractMusicbrainzId;
   inferKind = mod.inferKind;
   TMError = mod.TMError;
@@ -473,6 +479,67 @@ test('pickAttractionImage: returns null when every candidate yields no usable im
   const a = attraction({ name: 'X', images: [img({ fallback: true })] });
   const b = attraction({ name: 'X (NY)', images: [img({ fallback: true })] });
   assert.equal(pickAttractionImage([a, b], 'X'), null);
+});
+
+// ── isPrimaryEventUrl / pickPrimaryEventUrl ────────────────────────────
+
+test('isPrimaryEventUrl: rejects bare /event/<id> (TM resale-marketplace shape)', () => {
+  // These are the URLs the Discovery API hands back for resale-only
+  // listings (outlets: tmMarketPlace, seatmap.staticUrl on
+  // content.resale.ticketmaster.com). They render Page Not Found in
+  // browsers — never persist them as ticket_url.
+  assert.equal(
+    isPrimaryEventUrl('https://www.ticketmaster.com/event/Z7r9jZ1A7qUAE'),
+    false,
+  );
+  assert.equal(
+    isPrimaryEventUrl('https://www.ticketmaster.com/event/Z7r9jZ1A7Opas'),
+    false,
+  );
+});
+
+test('isPrimaryEventUrl: accepts slug-format /<slug>/event/<id>', () => {
+  assert.equal(
+    isPrimaryEventUrl(
+      'https://www.ticketmaster.com/ragtime-new-york-new-york-06-03-2026/event/Z1r9uZruZqGZ17Jd8p',
+    ),
+    true,
+  );
+});
+
+test('isPrimaryEventUrl: rejects nullish / empty inputs', () => {
+  assert.equal(isPrimaryEventUrl(null), false);
+  assert.equal(isPrimaryEventUrl(undefined), false);
+  assert.equal(isPrimaryEventUrl(''), false);
+});
+
+test('pickPrimaryEventUrl: skips resale events to pick the primary one', () => {
+  // Mirrors the Discovery response shape for Ragtime at the Vivian
+  // Beaumont: TM lists the resale event first, then the primary one.
+  const events = [
+    { url: 'https://www.ticketmaster.com/event/Z7r9jZ1A7qUAE' },
+    {
+      url: 'https://www.ticketmaster.com/ragtime-new-york-new-york-06-03-2026/event/Z1r9uZruZqGZ17Jd8p',
+    },
+  ];
+  assert.equal(
+    pickPrimaryEventUrl(events),
+    'https://www.ticketmaster.com/ragtime-new-york-new-york-06-03-2026/event/Z1r9uZruZqGZ17Jd8p',
+  );
+});
+
+test('pickPrimaryEventUrl: returns null when the only candidates are resale', () => {
+  // Better to store null and let the daily backfill retry tomorrow
+  // (or hide the tickets-jump icon entirely) than to persist a URL
+  // that 404s in the browser.
+  const events = [
+    { url: 'https://www.ticketmaster.com/event/Z7r9jZ1A7qUAE' },
+  ];
+  assert.equal(pickPrimaryEventUrl(events), null);
+});
+
+test('pickPrimaryEventUrl: returns null on empty input', () => {
+  assert.equal(pickPrimaryEventUrl([]), null);
 });
 
 // ── extractMusicbrainzId ────────────────────────────────────────────────
