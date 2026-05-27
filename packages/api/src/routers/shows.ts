@@ -777,11 +777,15 @@ export const showsRouter = router({
       // down rather than silently swallowed. We also opportunistically
       // capture the TM event image as the show's cover (theatre playbills,
       // tour artwork) when the caller didn't supply one.
-      // We hit TM for `watching` (need ticket URL) and any production show
-      // (theatre/comedy) that's missing cover art — concerts already have a
-      // headliner image, festivals match poorly by name. Past shows skip the
-      // lookup; their coverImageUrl can be backfilled by the daily job.
-      const wantsTicketEnrichment = state === 'watching' && input.kind !== 'festival';
+      // We hit TM for any future show (watching OR ticketed) so the
+      // ShowCard's tickets-jump icon appears regardless of whether the
+      // user added the show with seat/price (ticketed) or without
+      // (watching) — Gmail / Eventbrite imports land as ticketed and were
+      // previously starved of the link. Festivals are excluded because TM
+      // matching is poor for multi-artist events. Past shows skip the
+      // lookup entirely; their coverImageUrl can be backfilled by the
+      // daily job and a stale link would just point at a dead listing.
+      const wantsTicketEnrichment = state !== 'past' && input.kind !== 'festival';
       const wantsCoverEnrichment =
         state !== 'past' &&
         !input.coverImageUrl &&

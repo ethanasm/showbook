@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, CalendarPlus } from "lucide-react";
+import { CalendarPlus } from "lucide-react";
+import { TicketmasterMark } from "@/components/BrandIcons";
 import { DISCOVER_KIND_ICONS as KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import { isNonWatchableKind } from "@showbook/shared";
 import {
@@ -199,12 +200,12 @@ export function AnnouncementRow({
             href={announcement.ticketUrl}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="Open ticket page in a new tab"
-            title="Tickets"
+            aria-label="Open tickets on Ticketmaster"
+            title="Open in Ticketmaster"
             className="discover-tix-btn discover-tix-btn--icon-only"
             onClick={(e) => e.stopPropagation()}
           >
-            <ArrowUpRight size={11} />
+            <TicketmasterMark size={12} />
           </a>
         )}
       </div>

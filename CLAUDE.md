@@ -40,6 +40,21 @@ When you're running in the Claude Code web sandbox, this checkout is a **shallow
 - After merging your PR to `main`, the branch you were working on is done. Treat the merge as success even if local refs still look out of date.
 - Only worry about divergence if `git log origin/<your-branch>..HEAD` or `git log HEAD..origin/<your-branch>` shows unexpected commits on the branch you actually pushed.
 
+**Docker and Postgres ARE available in this sandbox** — `.claude/hooks/session-start.sh` starts `dockerd` and the `showbook-dev-db` container automatically on session start. If `docker info` errors with "Cannot connect to the Docker daemon," dockerd has crashed/exited — *do not* conclude the sandbox lacks Docker. Restart it:
+
+```bash
+sudo rm -f /var/run/docker.pid                       # stale pid file
+sudo nohup dockerd > /var/log/dockerd2.log 2>&1 &
+sleep 5 && sudo docker info >/dev/null && echo "ok"
+sudo docker compose -f infra/docker-compose.yml up -d db
+until pg_isready -h localhost -p 5433 -U showbook >/dev/null 2>&1; do sleep 1; done
+pnpm dev:db:prepare:e2e                              # if you need the e2e DB
+```
+
+After that, web Playwright (`pr-screenshots`, `pnpm test:e2e`) works exactly as documented — webServer boots its own `next dev`, talks to Postgres on `localhost:5433`. Never tell the user "the sandbox has no Postgres" without first running the restart sequence above and confirming it failed. Same applies to "no Docker" — Docker is installed; if the daemon is down, restart it.
+
+What the sandbox actually *can't* do, for the avoidance of further wrong excuses: run iOS Simulator, run a KVM-backed Android emulator, reach external networks blocked by the environment's policy. Mobile capture in this sandbox is the Expo Web bundle via `apps/mobile/web-tests/*.spec.ts` (Playwright, tRPC mocked) — *not* the unreachable iOS/Android paths. For real native mobile capture, attach `mobile-visual` so the GitHub-Actions self-hosted Android runner picks it up.
+
 ## Project structure
 
 - `apps/web/` — Next.js 15 (App Router). See [`apps/web/CLAUDE.md`](apps/web/CLAUDE.md).
@@ -219,6 +234,7 @@ The stdout copy in the prod web container (`docker logs showbook-prod-web`) is a
 - `shows.nightly.summary`, `setlist.retry.summary` — nightly transition + setlist-retry jobs.
 - `shows.create.{tm_enrichment_failed,venue_place_backfill_failed,mbid_resolve_failed}` — `shows.create` non-blocking enrichments. `mbid_resolve_failed` fires when the inline setlist.fm MBID lookup for a future concert errors; the nightly backfill at 04:30 ET catches the gap.
 - `backfill.performer_images.summary`, `backfill.performer_mbids.summary`, `backfill.performer_ticketmaster_ids.summary`, `backfill.performer_spotify_ids.summary`, `backfill.venue_photos.summary` — scheduled backfill jobs (daily 05:30 / 04:30 / 06:00 / 06:30 / 05:45 ET). The MBID, TM-id, and Spotify-id summaries are also emitted on operator-triggered runs from the `/admin` page.
+- `backfill.show_ticket_urls.summary`, `show.ticket_url.{updated,no_match,no_keyword,failed,done,fatal}` — daily 06:45 ET `backfill/show-ticket-urls` cron (also enqueued on demand from the `/admin` page via `admin.backfill_show_ticket_urls.enqueue`). Fills `shows.ticket_url` for future watching / ticketed shows whose TM URL never landed at create time (Gmail / Eventbrite / setlist.fm imports). Festivals and past shows are excluded at the query level — a stale link is worse than no link, and the ShowCard already hides the icon when `state === 'past'`. `no_match` is "TM event search returned nothing for venue+date+keyword"; `no_keyword` is the (rare) case where the row has neither a headliner nor a productionName.
 - `performer.mbid.{updated,no_match,conflict,failed,done,fatal}`, `setlist_lookup.{mbid_resolved,mbid_conflict}` — performer MBID resolution events. Per-row outcomes from the `backfill-performer-mbids` cron (`updated` on a setlist.fm match write, `no_match` when search returns empty, `conflict` when another performer row already owns the MBID or the row was filled between SELECT and UPDATE — see `reason: 'other_row_owns_id'` vs `reason: 'row_already_filled'`, `failed` for unexpected errors). `setlist_lookup.mbid_resolved` is the same signal from the inline `resolvePerformerMbid` hop on `shows.create` and `fetchSetlistForPerformer`; `mbid_conflict` is the inline variant of the cron's `conflict` event.
 - `performer.ticketmaster_id.{updated,no_match,conflict,failed,done,fatal}` — per-row outcomes from the `backfill-performer-ticketmaster-ids` cron (daily 06:00 ET) and on-demand admin runs. `conflict` carries a `reason` field (`other_row_owns_id` | `row_already_filled`) matching the MBID job's race-guard split. The job also emits `performer.mbid.{conflict,failed}` for the TM-derived MBID side-effect path, with `reason: 'other_row_owns_id'` distinguishing TM-side conflicts.
 - `performer.spotify_id.{updated,no_match,conflict,failed,done,token_failed,fatal,resolve_inline_uncaught}` — Spotify catalog-id resolution events from the fire-and-forget hook in `matchOrCreatePerformer` and from the `backfill-performer-spotify-ids` cron (daily 06:30 ET) / admin trigger. `updated` fires on a successful UPDATE writing `spotify_artist_id`; `no_match` when `/v1/search?type=artist` returns empty for the performer's name; `conflict` carries `reason: 'other_row_owns_id'` (another performer already holds this Spotify id — duplicate-performer cleanup is an operator merge) vs `'row_already_filled'` (something filled the column between SELECT and UPDATE — usually the cron racing the inline hook). `token_failed` indicates the app-level `client_credentials` token exchange failed and the resolver bailed before any search; `resolve_inline_uncaught` is the defence-in-depth catch on the inline hook's `void resolve(...).catch(...)` chain.

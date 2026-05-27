@@ -15,6 +15,7 @@ import { runBackfillPerformerTicketmasterIds } from './backfill-performer-ticket
 import { runBackfillPerformerSpotifyIds } from './backfill-performer-spotify-ids';
 import { runBackfillVenuePhotos } from './backfill-venue-photos';
 import { runBackfillShowCoverImages } from './backfill-show-cover-images';
+import { runBackfillShowTicketUrls } from './backfill-show-ticket-urls';
 import { runPruneOrphanCatalog } from './prune-orphan-catalog';
 import { runPrunePastAnnouncements } from './prune-past-announcements';
 import { runHealthCheck } from './health-check';
@@ -51,6 +52,7 @@ export const JOBS = {
   BACKFILL_PERFORMER_SPOTIFY_IDS: 'backfill/performer-spotify-ids',
   BACKFILL_VENUE_PHOTOS: 'backfill/venue-photos',
   BACKFILL_SHOW_COVER_IMAGES: 'backfill/show-cover-images',
+  BACKFILL_SHOW_TICKET_URLS: 'backfill/show-ticket-urls',
   PRUNE_ORPHAN_CATALOG: 'prune/orphan-catalog',
   PRUNE_PAST_ANNOUNCEMENTS: 'prune/past-announcements',
   HEALTH_CHECK: 'health/morning-check',
@@ -526,6 +528,28 @@ const JOBS_TABLE: JobEntry[] = [
       summary: (r) => ({
         event: 'backfill.show_cover_images.summary',
         msg: 'Show cover image backfill complete',
+        total: r.total,
+        updated: r.updated,
+        missing: r.missing,
+        failed: r.failed,
+      }),
+    }),
+  },
+  // Slotted at 06:45 ET so it lands after backfill-show-cover-images
+  // (06:15) but before the discover-ingest weekly cron (Mon 06:00 → so
+  // most days the slot is empty). Fills `ticket_url` for future shows
+  // that landed via Gmail / Eventbrite / setlist.fm imports and missed
+  // the inline TM enrichment.
+  {
+    name: JOBS.BACKFILL_SHOW_TICKET_URLS,
+    queueOptions: LONG_BATCH_CRON,
+    schedule: '45 6 * * *',
+    handler: defineJobHandler({
+      name: JOBS.BACKFILL_SHOW_TICKET_URLS,
+      run: () => runBackfillShowTicketUrls(),
+      summary: (r) => ({
+        event: 'backfill.show_ticket_urls.summary',
+        msg: 'Show ticket URL backfill complete',
         total: r.total,
         updated: r.updated,
         missing: r.missing,

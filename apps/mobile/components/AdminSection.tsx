@@ -36,6 +36,7 @@ import {
 import {
   MapPin,
   Ticket,
+  TicketCheck,
   Trash2,
   ListMusic,
   MicVocal,
@@ -112,6 +113,8 @@ export function AdminSection(): React.JSX.Element | null {
     trpc.admin.enqueueBackfillPerformerTicketmasterIds.useMutation();
   const performerSpotify =
     trpc.admin.enqueueBackfillPerformerSpotifyIds.useMutation();
+  const showTicketUrls =
+    trpc.admin.enqueueBackfillShowTicketUrls.useMutation();
 
   const [activeId, setActiveId] = React.useState<string | null>(null);
   const [performerQuery, setPerformerQuery] = React.useState('');
@@ -244,6 +247,20 @@ export function AdminSection(): React.JSX.Element | null {
       pending: performerSpotify.isPending,
       run: async () => {
         const r = await performerSpotify.mutateAsync();
+        return formatJobEnqueued(r.jobId);
+      },
+    },
+    {
+      id: 'show-ticket-urls',
+      title: 'Backfill show ticket URLs',
+      blurb: 'Find a Ticketmaster link for upcoming shows',
+      description:
+        "Enqueues the backfill-show-ticket-urls job, which looks up a Ticketmaster event URL for every future watching / ticketed show whose ticket_url is null. Gmail / Eventbrite imports land without one. Festivals and past shows are excluded. Also runs daily at 06:45 ET.",
+      confirmLabel: 'Enqueue backfill',
+      icon: TicketCheck,
+      pending: showTicketUrls.isPending,
+      run: async () => {
+        const r = await showTicketUrls.mutateAsync();
         return formatJobEnqueued(r.jobId);
       },
     },

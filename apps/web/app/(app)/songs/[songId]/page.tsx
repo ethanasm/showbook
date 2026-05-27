@@ -3,9 +3,10 @@
 import { useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, ExternalLink, Music } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { CenteredMessage, QueryBoundary } from "@/components/design-system";
+import { SpotifyMark } from "@/components/BrandIcons";
 import { formatDateLong, formatDateMedium } from "@showbook/shared";
 
 export default function SongDetailPage() {
@@ -142,8 +143,7 @@ export default function SongDetailPage() {
                 gap: 6,
               }}
             >
-              <Music size={11} /> Open in Spotify
-              <ExternalLink size={10} />
+              <SpotifyMark size={12} /> Open in Spotify
             </a>
           )}
         </div>

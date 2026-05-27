@@ -18,9 +18,9 @@
 import React from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
-import { Music } from 'lucide-react-native';
 
 import { useTheme } from '../../lib/theme';
+import { SpotifyMark } from '../BrandIcons';
 import { RADII } from '../../lib/theme-utils';
 import { hapticSuccess } from '../../lib/haptics';
 import { trpc } from '../../lib/trpc';
@@ -285,7 +285,7 @@ export function HypePlaylistCard({
             },
           ]}
         >
-          <Music size={14} color={colors.accentText} />
+          <SpotifyMark size={16} />
           <Text style={[styles.primaryLabel, { color: colors.accentText }]}>
             {ctaLabel}
           </Text>

@@ -20,6 +20,7 @@ import {
   enqueueBackfillPerformerMbids,
   enqueueBackfillPerformerTicketmasterIds,
   enqueueBackfillPerformerSpotifyIds,
+  enqueueBackfillShowTicketUrls,
 } from '../job-queue';
 import { child } from '@showbook/observability';
 
@@ -434,4 +435,25 @@ export const adminRouter = router({
       return { jobId };
     },
   ),
+
+  /**
+   * Enqueue the `backfill/show-ticket-urls` cron on demand. Looks up
+   * a Ticketmaster event URL for every future watching / ticketed show
+   * that has no `ticket_url` yet. Already runs daily at 06:45 ET —
+   * this lets an operator trigger after a bulk Gmail / Eventbrite
+   * import rather than wait for the next cron window.
+   */
+  enqueueBackfillShowTicketUrls: adminProcedure.mutation(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const jobId = await enqueueBackfillShowTicketUrls();
+    log.info(
+      {
+        event: 'admin.backfill_show_ticket_urls.enqueue',
+        userId,
+        jobId,
+      },
+      'Admin enqueued backfill-show-ticket-urls job',
+    );
+    return { jobId };
+  }),
 });
