@@ -34,6 +34,7 @@ const ENV_KEYS = [
   'R2_ACCESS_KEY_ID',
   'R2_SECRET_ACCESS_KEY',
   'R2_BUCKET_NAME',
+  'NEXTAUTH_URL',
 ] as const;
 
 const originalEnv = new Map<string, string | undefined>();
@@ -195,21 +196,37 @@ test('getMediaReadUrl: returns local /media-uploads URL in local mode', async ()
   assert.equal(url, '/media-uploads/showbook/users/u1/x.jpg');
 });
 
-test('getMediaUploadUrl: returns presigned R2 URL in r2 mode', async () => {
+test('getMediaUploadUrl: returns proxy URL in r2 mode', async () => {
   process.env.MEDIA_STORAGE_MODE = 'r2';
   process.env.R2_ACCOUNT_ID = 'acct123';
   process.env.R2_ACCESS_KEY_ID = 'AK';
   process.env.R2_SECRET_ACCESS_KEY = 'SK';
   process.env.R2_BUCKET_NAME = 'showbook';
+  process.env.NEXTAUTH_URL = 'https://showbook.example.com';
   const url = await getMediaUploadUrl('showbook/x.jpg', 'image/jpeg');
-  // Path-style host (bucket in path, not subdomain) — required by R2.
-  assert.match(url, /^https:\/\/acct123\.r2\.cloudflarestorage\.com\/showbook\/showbook\/x\.jpg/);
-  assert.match(url, /X-Amz-Algorithm=AWS4-HMAC-SHA256/);
-  // R2 returns 403 if the URL carries SDK-default CRC32 checksum query params
-  // because they're computed against an empty body at sign time; the actual
-  // PUT body never matches. The R2 client config disables this — verify it.
-  assert.doesNotMatch(url, /x-amz-checksum-crc32/);
-  assert.doesNotMatch(url, /x-amz-sdk-checksum-algorithm/);
+  // r2 mode now routes through our own `/api/media/upload` endpoint
+  // instead of handing the mobile a presigned R2 URL — see the
+  // PR description for why (R2 PUTs were silently 403ing every
+  // mobile upload). The proxy URL must be absolute because RN's
+  // FileSystem.createUploadTask cannot prepend a base.
+  assert.equal(
+    url,
+    'https://showbook.example.com/api/media/upload?key=showbook%2Fx.jpg',
+  );
+});
+
+test('getMediaUploadUrl: r2 mode strips trailing slash from NEXTAUTH_URL', async () => {
+  process.env.MEDIA_STORAGE_MODE = 'r2';
+  process.env.R2_ACCOUNT_ID = 'acct123';
+  process.env.R2_ACCESS_KEY_ID = 'AK';
+  process.env.R2_SECRET_ACCESS_KEY = 'SK';
+  process.env.R2_BUCKET_NAME = 'showbook';
+  process.env.NEXTAUTH_URL = 'https://showbook.example.com/';
+  const url = await getMediaUploadUrl('showbook/y.jpg', 'image/jpeg');
+  assert.equal(
+    url,
+    'https://showbook.example.com/api/media/upload?key=showbook%2Fy.jpg',
+  );
 });
 
 test('getMediaReadUrl: returns presigned R2 URL in r2 mode', async () => {

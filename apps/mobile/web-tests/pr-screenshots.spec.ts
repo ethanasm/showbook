@@ -461,6 +461,64 @@ const ROUTES: RouteSpec[] = [
       'media.listForShow': [],
     },
   },
+  // Theatre show detail — covers the Setlist-tab visibility fix. Before
+  // the fix the tab bar showed Overview · Setlist · Media · Notes for
+  // theatre/comedy shows and tapping Setlist landed on the wrong_kind
+  // cold copy; after the fix the bar drops Setlist entirely.
+  {
+    name: '13-show-detail-theatre',
+    path: '/show/screenshot-show-theatre',
+    ready: /Oh, Mary|THEATRE/i,
+    trpcStubs: {
+      'shows.detail': {
+        id: 'screenshot-show-theatre',
+        userId: 'pr-screenshots-user',
+        kind: 'theatre',
+        state: 'ticketed',
+        date: '2026-06-01',
+        seat: 'Orch · D 12',
+        pricePaid: '189',
+        ticketCount: 1,
+        productionName: 'Oh, Mary!',
+        tourName: null,
+        notes: null,
+        rating: null,
+        source: 'manual',
+        ticketmasterId: null,
+        ticketUrl: null,
+        createdAt: '2026-04-01T18:00:00.000Z',
+        updatedAt: '2026-04-01T18:00:00.000Z',
+        venue: {
+          id: 'sb-venue-lyceum',
+          name: 'Lyceum Theatre',
+          city: 'New York',
+          stateRegion: 'NY',
+          country: 'US',
+          lat: 40.759,
+          lng: -73.984,
+          googlePlaceId: null,
+          photoUrl: null,
+        },
+        showPerformers: [
+          {
+            role: 'headliner',
+            sortOrder: 0,
+            characterName: null,
+            performer: { id: 'p-maya', name: 'Maya Rudolph', imageUrl: null },
+          },
+        ],
+        setlists: null,
+      },
+      'setlistIntel.predictedSetlist': {
+        style: 'cold',
+        reason: 'wrong_kind',
+        confidence: 0,
+      },
+      'shows.songBadges': { byPerformerId: {} },
+      'setlistIntel.trackPreviewsForShow': { previews: {} },
+      'media.listForShow': [],
+    },
+  },
 ];
 
 const variant = (process.env.PR_SCREENSHOT_VARIANT ?? 'after').toLowerCase();

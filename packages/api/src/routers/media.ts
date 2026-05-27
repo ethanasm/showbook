@@ -400,6 +400,41 @@ export const mediaRouter = router({
         })),
       );
 
+      // Structured log per intent so Axiom retains a record of which key /
+      // host / scheme the client was handed, even when mobile-side
+      // telemetry never round-trips back (the gap that's left this bug
+      // un-diagnosable for weeks). Signature query value stays
+      // server-only; only the URL host + path + scope shows up here.
+      for (const target of targets) {
+        let urlMeta: Record<string, unknown> = { parsed: false };
+        try {
+          const u = new URL(target.uploadUrl);
+          const scope = u.searchParams.get('X-Amz-Credential')?.split('/').slice(1).join('/');
+          urlMeta = {
+            parsed: true,
+            host: u.host,
+            path: u.pathname,
+            scope: scope ?? null,
+            expires: u.searchParams.get('X-Amz-Expires'),
+            signedHeaders: u.searchParams.get('X-Amz-SignedHeaders'),
+          };
+        } catch {
+          // Local-mode URLs are relative paths and don't parse — that's fine.
+          urlMeta = { parsed: false, raw: target.uploadUrl.slice(0, 80) };
+        }
+        log.info(
+          {
+            event: 'media.upload_intent.url_issued',
+            assetId,
+            variant: target.name,
+            mimeType: target.mimeType,
+            storageMode: config.storageMode,
+            ...urlMeta,
+          },
+          'Issued presigned upload URL',
+        );
+      }
+
       return {
         assetId,
         targets,

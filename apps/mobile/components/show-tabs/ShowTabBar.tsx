@@ -31,6 +31,8 @@ export interface ShowTabBarProps {
   active: ShowTabKey;
   badges: ShowTabBadges;
   onSelect: (next: ShowTabKey) => void;
+  /** Tabs to omit from the bar (e.g. `setlist` for non-concert shows). */
+  hiddenTabs?: readonly ShowTabKey[];
   testID?: string;
 }
 
@@ -38,10 +40,13 @@ export function ShowTabBar({
   active,
   badges,
   onSelect,
+  hiddenTabs,
   testID,
 }: ShowTabBarProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const hidden = new Set(hiddenTabs ?? []);
+  const visibleTabs = SHOW_TAB_KEYS.filter((key) => !hidden.has(key));
   return (
     <View
       testID={testID ?? 'show-tab-bar'}
@@ -55,7 +60,7 @@ export function ShowTabBar({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {SHOW_TAB_KEYS.map((key) => {
+        {visibleTabs.map((key) => {
           const isActive = key === active;
           const badge = badges[key];
           return (

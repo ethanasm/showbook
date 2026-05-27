@@ -817,6 +817,120 @@ describe('shows router', () => {
     );
   });
 
+  it('update preserves existing per-performer setlists when the lineup is edited without echoing them back', async () => {
+    // Regression for the Bottlerock bug: background `setlist-retry`
+    // enriches `shows.setlists` keyed by performerId asynchronously.
+    // When the user later edits the lineup (e.g. swaps a support
+    // artist) the mobile client doesn't echo the existing setlists in
+    // its update payload — and the route used to write `setlists =
+    // null` on every edit, blowing away the enriched data. Lineup
+    // members who survive the edit must keep their setlists; performers
+    // removed from the lineup lose theirs; freshly-added performers
+    // start without one and let setlist-retry enrich them.
+    const festivalId = fakeUuid(PREFIX, 'fest-preserve-setlists');
+    await createTestShow({
+      id: festivalId,
+      userId: USER,
+      venueId: VENUE,
+      kind: 'festival',
+      state: 'past',
+      date: '2099-05-22',
+    });
+    // Seed the initial lineup: Lorde (headliner) + Natasha (support).
+    const HEADLINER = `${PREFIX} Preserve Lorde`;
+    const REMOVED = `${PREFIX} Preserve Natasha`;
+    const ADDED = `${PREFIX} Preserve Chaka`;
+    await callerFor(USER).shows.update({
+      showId: festivalId,
+      kind: 'festival',
+      headliner: { name: `${PREFIX} Preserve Fest` },
+      venue: { name: `${PREFIX} Venue`, city: 'NYC' },
+      date: '2099-05-22',
+      ticketCount: 1,
+      productionName: `${PREFIX} Preserve Fest`,
+      performers: [
+        { name: HEADLINER, role: 'headliner', sortOrder: 1 },
+        { name: REMOVED, role: 'support', sortOrder: 2 },
+      ],
+    });
+
+    // Look up the performer IDs so we can simulate setlist-retry
+    // landing per-performer entries.
+    const lordeRow = await db
+      .select({ id: performers.id })
+      .from(performers)
+      .where(eq(performers.name, HEADLINER))
+      .limit(1);
+    const natashaRow = await db
+      .select({ id: performers.id })
+      .from(performers)
+      .where(eq(performers.name, REMOVED))
+      .limit(1);
+    assert.ok(lordeRow[0] && natashaRow[0]);
+    const lordeId = lordeRow[0].id;
+    const natashaId = natashaRow[0].id;
+
+    const lordeSetlist = {
+      sections: [
+        { kind: 'set' as const, songs: [{ title: 'Royals' }, { title: 'Green Light' }] },
+      ],
+    };
+    const natashaSetlist = {
+      sections: [
+        { kind: 'set' as const, songs: [{ title: 'Unwritten' }] },
+      ],
+    };
+    await db
+      .update(shows)
+      .set({
+        setlists: { [lordeId]: lordeSetlist, [natashaId]: natashaSetlist },
+      })
+      .where(eq(shows.id, festivalId));
+
+    // Now do the lineup swap: keep Lorde, drop Natasha, add Chaka Khan.
+    // The mobile client does not echo setlist data in this payload —
+    // it just sends the new lineup.
+    await callerFor(USER).shows.update({
+      showId: festivalId,
+      kind: 'festival',
+      headliner: { name: `${PREFIX} Preserve Fest` },
+      venue: { name: `${PREFIX} Venue`, city: 'NYC' },
+      date: '2099-05-22',
+      ticketCount: 1,
+      productionName: `${PREFIX} Preserve Fest`,
+      performers: [
+        { name: HEADLINER, role: 'headliner', sortOrder: 1 },
+        { name: ADDED, role: 'support', sortOrder: 2 },
+      ],
+    });
+
+    const [after] = await db
+      .select({ setlists: shows.setlists })
+      .from(shows)
+      .where(eq(shows.id, festivalId))
+      .limit(1);
+    assert.ok(after.setlists, 'setlists JSONB must survive the lineup swap');
+    assert.deepEqual(
+      after.setlists[lordeId],
+      lordeSetlist,
+      "Lorde's setlist must be preserved across the edit",
+    );
+    assert.ok(
+      !(natashaId in after.setlists),
+      "Natasha was removed from the lineup — her setlist key should be dropped",
+    );
+    const chakaRow = await db
+      .select({ id: performers.id })
+      .from(performers)
+      .where(eq(performers.name, ADDED))
+      .limit(1);
+    assert.ok(chakaRow[0]);
+    assert.ok(
+      !(chakaRow[0].id in after.setlists),
+      'newly-added performer must not have a setlist key — that gets filled by setlist-retry',
+    );
+  });
+
   it('update rejects unknown showId', async () => {
     await assert.rejects(
       () => callerFor(USER).shows.update({
