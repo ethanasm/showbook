@@ -1008,7 +1008,7 @@ export const showsRouter = router({
         : input.productionName ?? null;
 
       let resolvedHeadlinerId: string | null = null;
-      const setlistsMap: PerformerSetlistsMap = {};
+      const incomingSetlists: PerformerSetlistsMap = {};
       if (!isProductionKind) {
         const headlinerResult = await matchOrCreatePerformer({
           name: input.headliner.name,
@@ -1019,7 +1019,7 @@ export const showsRouter = router({
         resolvedHeadlinerId = headlinerResult.performer.id;
         if (input.headliner.setlist) {
           const cleaned = cleanSetlist(input.headliner.setlist);
-          if (cleaned) setlistsMap[resolvedHeadlinerId] = cleaned;
+          if (cleaned) incomingSetlists[resolvedHeadlinerId] = cleaned;
         }
       }
 
@@ -1038,9 +1038,31 @@ export const showsRouter = router({
           resolvedSupport.push({ id: result.performer.id, input: p });
           if (p.setlist) {
             const cleaned = cleanSetlist(p.setlist);
-            if (cleaned) setlistsMap[result.performer.id] = cleaned;
+            if (cleaned) incomingSetlists[result.performer.id] = cleaned;
           }
         }
+      }
+
+      // Preserve setlists for performers still in the lineup. Background
+      // enrichment (setlist-retry) lands per-performer entries
+      // asynchronously, so an edit that doesn't echo them back must not
+      // wipe the JSONB. Drop entries for performers removed from the
+      // lineup. Explicit setlists in the payload override the preserved
+      // copy.
+      const newLineupIds = new Set<string>();
+      if (resolvedHeadlinerId) newLineupIds.add(resolvedHeadlinerId);
+      for (const { id } of resolvedSupport) newLineupIds.add(id);
+
+      const mergedSetlists: PerformerSetlistsMap = {};
+      if (existing.setlists) {
+        for (const [performerId, setlist] of Object.entries(existing.setlists)) {
+          if (newLineupIds.has(performerId)) {
+            mergedSetlists[performerId] = setlist;
+          }
+        }
+      }
+      for (const [performerId, setlist] of Object.entries(incomingSetlists)) {
+        mergedSetlists[performerId] = setlist;
       }
 
       // Atomic: delete old performer rows, insert new ones, update show.
@@ -1089,7 +1111,8 @@ export const showsRouter = router({
             ticketCount: input.ticketCount,
             tourName: input.tourName ?? null,
             productionName,
-            setlists: Object.keys(setlistsMap).length > 0 ? setlistsMap : null,
+            setlists:
+              Object.keys(mergedSetlists).length > 0 ? mergedSetlists : null,
             notes: input.notes ?? null,
             sourceRefs: input.sourceRefs ?? null,
             updatedAt: new Date(),
