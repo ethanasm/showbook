@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
   bar: {
     width: 3,
     alignSelf: 'stretch',
-    borderRadius: 2,
+    borderRadius: RADII.pill,
   },
   date: {
     width: 44,

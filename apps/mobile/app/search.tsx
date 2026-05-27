@@ -40,6 +40,7 @@ import { EmptyState } from '../components/EmptyState';
 import { OfflineEmptyState } from '../components/OfflineEmptyState';
 import { KindBadge } from '../components/KindBadge';
 import { useTheme, type Kind } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 import { useAuth } from '../lib/auth';
 import { useNetwork } from '../lib/network';
 import { trpc } from '../lib/trpc';
@@ -466,7 +467,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingVertical: 10,
     paddingHorizontal: 14,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     borderWidth: StyleSheet.hairlineWidth,
   },
   searchInput: {
@@ -512,7 +513,7 @@ const styles = StyleSheet.create({
   row: {
     paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     borderLeftWidth: 0,
     gap: 4,
   },
@@ -557,7 +558,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: RADII.pill,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
     alignItems: 'center',
@@ -575,7 +576,7 @@ const styles = StyleSheet.create({
   venueIcon: {
     width: 36,
     height: 36,
-    borderRadius: 8,
+    borderRadius: RADII.md,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',

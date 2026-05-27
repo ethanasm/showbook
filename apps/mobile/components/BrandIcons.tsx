@@ -61,3 +61,22 @@ export function TicketmasterMark({ size = 14 }: MarkProps): React.JSX.Element {
     </Svg>
   );
 }
+
+export function SetlistfmMark({ size = 14 }: MarkProps): React.JSX.Element {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 32 32">
+      <Rect width={32} height={32} rx={6} fill="#0093C3" />
+      <SvgText
+        x={16}
+        y={22}
+        textAnchor="middle"
+        fontFamily="System"
+        fontWeight="800"
+        fontSize={15}
+        fill="#fff"
+      >
+        sf
+      </SvgText>
+    </Svg>
+  );
+}

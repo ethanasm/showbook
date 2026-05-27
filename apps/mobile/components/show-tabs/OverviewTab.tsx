@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
     borderRadius: RADII.lg,
   },
   lineupAvatar: {
-    borderRadius: 22,
+    borderRadius: RADII.pill,
   },
   lineupText: {
     flex: 1,

@@ -27,6 +27,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { QueryBoundary } from '../../components/QueryBoundary';
 import { Eyebrow, GradientEmphasis } from '../../components/design-system';
 import { useTheme } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import { useAuth } from '../../lib/auth';
 import { trpc, type RouterOutput } from '../../lib/trpc';
 
@@ -391,7 +392,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingRight: 12,
     borderLeftWidth: 2,
-    borderRadius: 8,
+    borderRadius: RADII.md,
   },
   timelineDate: {
     width: 64,
@@ -434,7 +435,7 @@ const styles = StyleSheet.create({
   },
   encoreChip: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     paddingVertical: 3,
     paddingHorizontal: 8,
   },

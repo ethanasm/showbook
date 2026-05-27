@@ -28,6 +28,7 @@ import { SpotifyConnectSheet } from '../../components/SpotifyConnectSheet';
 import { OfflineEmptyState } from '../../components/OfflineEmptyState';
 import { SpotifyImportPicker } from '../../components/spotify-import/SpotifyImportPicker';
 import { useTheme } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import { useNetwork } from '../../lib/network';
 import { useSpotifyConnection } from '../../lib/spotify-connection';
 import { useSpotifyImport } from '../../lib/spotify-import/useSpotifyImport';
@@ -171,7 +172,7 @@ export default function SpotifyIntegrationScreen(): React.JSX.Element {
             <SpotifyImportPicker flow={importFlow} />
             <View style={[styles.pickerFooter, { borderTopColor: colors.rule }]}>
               {importFlow.error ? (
-                <Text style={[styles.footerError, { color: '#E63946' }]} numberOfLines={2}>
+                <Text style={[styles.footerError, { color: colors.danger }]} numberOfLines={2}>
                   {importFlow.error}
                 </Text>
               ) : null}
@@ -261,12 +262,12 @@ export default function SpotifyIntegrationScreen(): React.JSX.Element {
               style={({ pressed }) => [
                 styles.secondaryButton,
                 {
-                  borderColor: '#E63946',
+                  borderColor: colors.danger,
                   opacity: disconnect.isPending ? 0.5 : pressed ? 0.85 : 1,
                 },
               ]}
             >
-              <Text style={[styles.secondaryLabel, { color: '#E63946' }]}>
+              <Text style={[styles.secondaryLabel, { color: colors.danger }]}>
                 {disconnect.isPending ? 'DISCONNECTING…' : 'DISCONNECT'}
               </Text>
             </Pressable>
@@ -321,6 +322,7 @@ const styles = StyleSheet.create({
     padding: 20,
     gap: 10,
     borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RADII.lg,
   },
   title: {
     fontFamily: 'Geist Sans',
@@ -337,6 +339,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingVertical: 12,
     paddingHorizontal: 18,
+    borderRadius: RADII.pill,
     alignItems: 'center',
   },
   primaryLabel: {
@@ -350,6 +353,7 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     paddingHorizontal: 18,
     borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RADII.pill,
     alignItems: 'center',
   },
   secondaryLabel: {
@@ -362,6 +366,8 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RADII.lg,
+    overflow: 'hidden',
   },
   pickerHeader: {
     flexDirection: 'row',

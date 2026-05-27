@@ -51,7 +51,7 @@ export const LIGHT_COLORS = {
 export const SPACING = [0, 2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48, 64] as const;
 
 /** Border radii */
-export const RADII = { none: 0, sm: 4, md: 8, lg: 12, xl: 16, pill: 999 } as const;
+export const RADII = { none: 0, xs: 2, sm: 4, md: 8, lg: 12, xl: 16, pill: 999 } as const;
 
 /**
  * Type ramp: absolute lineHeight (fontSize × multiplier, rounded).

@@ -34,6 +34,7 @@ import { useGmailConnection } from '../../lib/gmail-connection';
 import { useGmailImport } from '../../lib/gmail-import/useGmailImport';
 import { useNetwork } from '../../lib/network';
 import { useTheme } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import { trpc } from '../../lib/trpc';
 
 export default function GmailIntegrationScreen(): React.JSX.Element {
@@ -399,6 +400,7 @@ const styles = StyleSheet.create({
     padding: 20,
     gap: 10,
     borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RADII.lg,
   },
   cardTitle: {
     fontSize: 18,
@@ -413,6 +415,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingVertical: 12,
     paddingHorizontal: 18,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -426,6 +429,7 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     paddingHorizontal: 18,
     borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -466,15 +470,19 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginTop: 12,
     maxWidth: 280,
+    borderRadius: RADII.pill,
   },
   progressBar: {
     height: '100%',
+    borderRadius: RADII.pill,
   },
   pickerCard: {
     flex: 1,
     minHeight: 0,
     margin: 16,
     borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RADII.lg,
+    overflow: 'hidden',
   },
   pickerHeader: {
     flexDirection: 'row',
