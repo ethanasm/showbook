@@ -15,7 +15,10 @@ async function gotoRadioheadMSG(page: Page, tab?: string): Promise<string> {
   if (!id) throw new Error('Radiohead @ MSG show not seeded');
   const url = tab ? `/shows/${id}?tab=${tab}` : `/shows/${id}`;
   await page.goto(url);
-  await page.locator('text=Loading show…').waitFor({ state: 'detached', timeout: 15000 });
+  // Scope to <main>: Next 16 streaming SSR leaves the Suspense fallback
+  // (the same `Loading show…` markup) behind in a hidden `<div id="S:N">`
+  // outside <main>, which would trip strict-mode if we matched globally.
+  await page.locator('main').getByText('Loading show…').waitFor({ state: 'detached', timeout: 15000 });
   // Wait for the 4-tab shell to render so subsequent locator calls
   // aren't racing the initial paint.
   await expect(page.getByTestId('show-tab-bar')).toBeVisible({ timeout: 15000 });
@@ -66,7 +69,7 @@ test.describe('Show detail page', () => {
     });
     if (!id) throw new Error('LCD @ Brooklyn Steel show not seeded');
     await page.goto(`/shows/${id}?tab=setlist`);
-    await page.locator('text=Loading show…').waitFor({ state: 'detached', timeout: 15000 });
+    await page.locator('main').getByText('Loading show…').waitFor({ state: 'detached', timeout: 15000 });
     await expect(page.getByTestId('setlist-tab-past-empty')).toBeVisible({
       timeout: 15000,
     });

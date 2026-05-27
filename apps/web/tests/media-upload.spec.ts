@@ -18,7 +18,10 @@ async function gotoRadioheadMSG(page: Page): Promise<string> {
   // (`data-testid="media-section"`) is mounted. The 4-tab show page
   // defaults to Overview otherwise.
   await page.goto(`/shows/${id}?tab=media`);
-  await page.locator('text=Loading show…').waitFor({ state: 'detached', timeout: 120000 });
+  // Scope to <main>: Next 16 streaming SSR leaves the Suspense fallback
+  // (the same `Loading show…` markup) behind in a hidden `<div id="S:N">`
+  // outside <main>, which would trip strict-mode if we matched globally.
+  await page.locator('main').getByText('Loading show…').waitFor({ state: 'detached', timeout: 120000 });
   await expect(page.getByTestId('media-section')).toBeVisible({ timeout: 120000 });
   return id;
 }
