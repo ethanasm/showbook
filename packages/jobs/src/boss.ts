@@ -1,4 +1,4 @@
-import PgBoss from 'pg-boss';
+import { PgBoss, type StopOptions } from 'pg-boss';
 import { child } from '@showbook/observability';
 
 const log = child({ component: 'jobs.boss' });
@@ -31,7 +31,7 @@ export async function startBoss(): Promise<PgBoss> {
   return b;
 }
 
-export async function stopBoss(options?: PgBoss.StopOptions): Promise<void> {
+export async function stopBoss(options?: StopOptions): Promise<void> {
   if (boss) {
     await boss.stop(options);
     boss = null;

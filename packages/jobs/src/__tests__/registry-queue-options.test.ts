@@ -162,13 +162,14 @@ describe('registerAllJobs queue options', () => {
     }
   });
 
-  it('strips policy from the updateQueue payload (pg-boss v12 compat)', async () => {
-    // pg-boss v12's `Manager.updateQueue` throws "queue policy cannot
-    // be changed after creation" if `policy` is present in the
-    // payload, even when the new value matches what's already on the
-    // queue. Stripping `policy` lets the rest of the updatable
-    // options (retryLimit / retryDelay / retryBackoff /
-    // expireInSeconds) still get re-applied on every boot.
+  it('strips policy + name from the updateQueue payload (pg-boss v12 compat)', async () => {
+    // pg-boss v12 codifies the immutable-on-update fields at the type
+    // level (`UpdateQueueOptions = Omit<Queue, 'name' | 'partition' |
+    // 'policy'>`) and `Manager.updateQueue` throws "queue policy
+    // cannot be changed after creation" at runtime if `policy` slips
+    // through. Stripping both lets the rest of the updatable options
+    // (retryLimit / retryDelay / retryBackoff / expireInSeconds)
+    // still get re-applied on every boot.
     const { fakeBoss, updated } = makeFakeBoss();
     await registerAllJobs(fakeBoss as never);
 
@@ -178,6 +179,11 @@ describe('registerAllJobs queue options', () => {
         opts.policy,
         undefined,
         `${u.name}: policy must NOT appear on updateQueue (pg-boss v12 rejects it)`,
+      );
+      assert.equal(
+        opts.name,
+        undefined,
+        `${u.name}: name must NOT appear on updateQueue payload (v12 UpdateQueueOptions omits it)`,
       );
     }
   });
