@@ -104,6 +104,7 @@ mock.module('@showbook/api', {
     inferKind: () => 'theatre',
     selectBestImage: () => null,
     extractMusicbrainzId: () => null,
+    isPrimaryEventUrl: () => true,
     matchOrCreateVenue: async () => ({
       venue: { id: 'v1', name: 'Richard Rodgers', city: 'NYC' },
       created: false,

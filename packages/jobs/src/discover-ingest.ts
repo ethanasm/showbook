@@ -16,6 +16,7 @@ import {
   extractFestivalName,
   matchOrCreateVenue,
   matchOrCreatePerformer,
+  isPrimaryEventUrl,
   type TMEvent,
 } from '@showbook/api';
 import {
@@ -239,7 +240,9 @@ async function normalizeTmEvent(
     onSaleDate: parseOnSaleDate(event),
     onSaleStatus: determineOnSaleStatus(event),
     source: 'ticketmaster',
-    ticketUrl: event.url ?? null,
+    // Drop the resale-marketplace bare /event/<id> URL — it 404s in the
+    // browser. Primary-sale events always carry the slug-format URL.
+    ticketUrl: isPrimaryEventUrl(event.url) ? event.url : null,
   };
 }
 
@@ -469,7 +472,9 @@ async function refreshExistingFromTmEvent(
 ): Promise<{ venueId: string; productionName: string } | null> {
   const onSaleStatus = determineOnSaleStatus(event);
   const onSaleDate = parseOnSaleDate(event);
-  const ticketUrl = event.url ?? null;
+  // Same resale-URL filter as the normalize path — refresh must not
+  // overwrite an existing good URL with the broken bare format.
+  const ticketUrl = isPrimaryEventUrl(event.url) ? event.url : null;
   const kind = inferKind(event.classifications, { eventName: event.name });
 
   // If TM has degraded a previously-classified event back to "unknown" (lost

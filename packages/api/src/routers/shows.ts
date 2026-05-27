@@ -21,7 +21,11 @@ import {
 } from '../queries/show-queries';
 import { matchOrCreateVenue, type VenueInput } from '../venue-matcher';
 import { matchOrCreatePerformer } from '../performer-matcher';
-import { searchEvents, selectBestImage } from '../ticketmaster';
+import {
+  searchEvents,
+  selectBestImage,
+  pickPrimaryEventUrl,
+} from '../ticketmaster';
 import { geocodeVenue } from '../geocode';
 import { fetchSetlistForPerformer, resolvePerformerMbid } from '../setlist-lookup';
 import { runSongIndexRebuild } from '../song-index-rebuild';
@@ -797,18 +801,26 @@ export const showsRouter = router({
             input.kind === 'theatre'
               ? productionName ?? input.headliner.name
               : input.headliner.name;
+          // size > 1 because TM returns the resale-marketplace listing
+          // alongside the primary box-office event for the same physical
+          // show, and either can come first. Filtering by URL shape (see
+          // pickPrimaryEventUrl) needs both candidates visible.
           const { events } = await searchEvents({
             keyword: tmKeyword,
             venueId: tmVenueId ?? undefined,
             startDateTime: `${input.date}T00:00:00Z`,
             endDateTime: `${input.date}T23:59:59Z`,
-            size: 1,
+            size: 5,
           });
-          const tmEvent = events[0];
           const enrichment: Record<string, unknown> = {};
-          if (tmEvent?.url) enrichment.ticketUrl = tmEvent.url;
-          if (!input.coverImageUrl && tmEvent?.images) {
-            const cover = selectBestImage(tmEvent.images);
+          const primaryUrl = pickPrimaryEventUrl(events);
+          if (primaryUrl) enrichment.ticketUrl = primaryUrl;
+          // Image can come from either variant — TM mirrors artwork
+          // across the primary and resale listings, so any event is
+          // fine. We still prefer the primary when present.
+          const imageSource = events.find((e) => e.url === primaryUrl) ?? events[0];
+          if (!input.coverImageUrl && imageSource?.images) {
+            const cover = selectBestImage(imageSource.images);
             if (cover) enrichment.coverImageUrl = cover;
           }
           if (Object.keys(enrichment).length > 0) {

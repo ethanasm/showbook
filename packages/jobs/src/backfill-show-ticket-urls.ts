@@ -4,7 +4,7 @@ import './load-env-local';
 
 import { db, shows, venues, showPerformers, performers } from '@showbook/db';
 import { and, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm';
-import { searchEvents } from '@showbook/api';
+import { searchEvents, pickPrimaryEventUrl } from '@showbook/api';
 import { child, flushObservability } from '@showbook/observability';
 
 const log = child({ component: 'jobs.backfill-show-ticket-urls' });
@@ -123,14 +123,19 @@ export async function runBackfillShowTicketUrls(): Promise<BackfillShowTicketUrl
     }
 
     try {
+      // size > 1 because TM returns the resale-marketplace listing
+      // alongside the primary box-office event for the same physical
+      // show, and the resale variant's bare /event/<id> URL renders
+      // "Page Not Found" — pickPrimaryEventUrl filters it out, so we
+      // need both candidates in the response.
       const { events } = await searchEvents({
         keyword,
         venueId: row.tmVenueId ?? undefined,
         startDateTime: `${row.date}T00:00:00Z`,
         endDateTime: `${row.date}T23:59:59Z`,
-        size: 1,
+        size: 5,
       });
-      const tmUrl = events[0]?.url;
+      const tmUrl = pickPrimaryEventUrl(events);
       if (!tmUrl) {
         missing++;
         log.info(

@@ -133,6 +133,15 @@ mock.module('@showbook/api', {
       }
       return next ?? { events: [] };
     },
+    // Inlined to mirror the production regex — we don't import the real
+    // function because mock.module replaces the whole boundary; tests
+    // exercise this same shape directly in `ticketmaster.test.ts`.
+    pickPrimaryEventUrl: (events: Array<{ url?: string }>) => {
+      for (const e of events) {
+        if (e.url && /:\/\/[^/]+\/[^/]+\/event\//.test(e.url)) return e.url;
+      }
+      return null;
+    },
   },
 });
 
@@ -180,7 +189,13 @@ describe('runBackfillShowTicketUrls', () => {
       ],
       headliners: [{ showId: 'show-1', name: 'Passion Pit', sortOrder: 0 }],
       searchEventsResults: [
-        { events: [{ url: 'https://www.ticketmaster.com/event/abc' }] },
+        {
+          events: [
+            {
+              url: 'https://www.ticketmaster.com/passion-pit-tickets/event/abc',
+            },
+          ],
+        },
       ],
     });
     const result = await mod.runBackfillShowTicketUrls();
@@ -191,7 +206,7 @@ describe('runBackfillShowTicketUrls', () => {
     assert.equal(SCRIPT.updates[0].id, 'show-1');
     assert.equal(
       SCRIPT.updates[0].ticketUrl,
-      'https://www.ticketmaster.com/event/abc',
+      'https://www.ticketmaster.com/passion-pit-tickets/event/abc',
     );
     assert.equal(SCRIPT.searchEventsCalls[0].keyword, 'Passion Pit');
     assert.equal(SCRIPT.searchEventsCalls[0].venueId, 'tm-venue-1');
@@ -213,7 +228,13 @@ describe('runBackfillShowTicketUrls', () => {
       // map is empty for this row.
       headliners: [],
       searchEventsResults: [
-        { events: [{ url: 'https://www.ticketmaster.com/event/oh-mary' }] },
+        {
+          events: [
+            {
+              url: 'https://www.ticketmaster.com/oh-mary/event/oh-mary',
+            },
+          ],
+        },
       ],
     });
     const result = await mod.runBackfillShowTicketUrls();
@@ -221,7 +242,7 @@ describe('runBackfillShowTicketUrls', () => {
     assert.equal(SCRIPT.searchEventsCalls[0].keyword, 'Oh, Mary!');
     assert.equal(
       SCRIPT.updates[0].ticketUrl,
-      'https://www.ticketmaster.com/event/oh-mary',
+      'https://www.ticketmaster.com/oh-mary/event/oh-mary',
     );
   });
 
