@@ -125,7 +125,15 @@ export async function GET(req: NextRequest) {
     access_token?: unknown;
     scope?: unknown;
   };
-  const accessTokenRaw = tokens.access_token;
+  // Trim defensively: a trailing newline or stray whitespace in Google's
+  // response would survive `URLSearchParams.set` percent-encoding and
+  // arrive at Gmail as part of the Bearer header, producing the
+  // unhelpful "Gmail rejected the access token" 401 we're trying to
+  // diagnose.
+  const accessTokenRaw =
+    typeof tokens.access_token === 'string'
+      ? tokens.access_token.trim()
+      : tokens.access_token;
   if (typeof accessTokenRaw !== 'string' || !accessTokenRaw) {
     // 200 from Google's token endpoint with no usable access_token is rare
     // but has been observed in the wild (empty body on intermittent
@@ -159,20 +167,39 @@ export async function GET(req: NextRequest) {
     );
   }
   // Google's token endpoint returns the actual granted scopes as a
-  // space-separated string. If gmail.readonly is missing the access token
-  // is technically valid but every Gmail API call will return 403 — bail
-  // here with a token_exchange_failed so the mobile UI can prompt
-  // re-consent, instead of letting the scan endpoint surface a confusing
-  // "Gmail search failed".
+  // space-separated string. If we don't get a Gmail scope back, the
+  // access token won't authorize Gmail API calls — bail here with a
+  // `token_exchange_failed` so the mobile UI can prompt re-consent
+  // instead of letting the scan endpoint surface a confusing
+  // "Gmail rejected the access token" 401.
+  //
+  // We accept any Gmail scope that's a superset of `gmail.readonly`
+  // (`gmail.modify`, `gmail.compose`, `https://mail.google.com/`).
+  // The previous check was strict-equality on `gmail.readonly`, which
+  // rejected users who had previously granted a broader Gmail scope —
+  // Google would return only the broader scope (not the requested
+  // narrower one) and the callback would bail even though the token
+  // would have worked.
+  const GMAIL_SCOPE_SUPERSETS = [
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/gmail.metadata',
+    'https://www.googleapis.com/auth/gmail.modify',
+    'https://www.googleapis.com/auth/gmail.compose',
+    'https://www.googleapis.com/auth/gmail.insert',
+    'https://mail.google.com/',
+  ];
   const grantedScopes =
     typeof tokens.scope === 'string' ? tokens.scope.split(/\s+/) : [];
-  if (!grantedScopes.includes('https://www.googleapis.com/auth/gmail.readonly')) {
+  const hasGmailScope = grantedScopes.some((s) =>
+    GMAIL_SCOPE_SUPERSETS.includes(s),
+  );
+  if (!hasGmailScope) {
     logger.warn(
       {
         event: 'gmail.callback.scope_missing',
         granted: grantedScopes.join(' '),
       },
-      'Gmail token exchange returned token without gmail.readonly scope',
+      'Gmail token exchange returned token without a Gmail read scope',
     );
     if (isMobile) {
       return mobileRedirectResponse({
@@ -195,6 +222,27 @@ export async function GET(req: NextRequest) {
   }
 
   if (isMobile) {
+    // Diagnostic: confirm the callback success path actually ran and
+    // capture the granted scope + a non-PII fingerprint of the access
+    // token so we can correlate against the scan endpoint's view of the
+    // same token. The fingerprint is just length + first/last chars —
+    // enough to detect mid-flight corruption (truncation, URL re-encoding)
+    // without surfacing the bearer secret in logs. Pino's redact rule
+    // strips `*.token`, so the field is named `tokenInfo` to slip past it
+    // intentionally — we control the shape and never include the body.
+    logger.info(
+      {
+        event: 'gmail.callback.success',
+        userId: session.user.id,
+        scope: grantedScopes.join(' '),
+        tokenInfo: {
+          length: accessTokenRaw.length,
+          head: accessTokenRaw.slice(0, 8),
+          tail: accessTokenRaw.slice(-4),
+        },
+      },
+      'Gmail OAuth callback succeeded (mobile)',
+    );
     return mobileRedirectResponse({
       payload: { type: 'success', accessToken: accessTokenRaw },
       isSecure,

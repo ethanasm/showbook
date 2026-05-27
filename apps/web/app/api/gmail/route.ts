@@ -64,16 +64,27 @@ export async function GET(req: NextRequest) {
 
   const state = randomBytes(32).toString('base64url');
 
+  // `prompt: 'consent select_account'` forces Google to show both the
+  // account chooser AND the consent screen on every OAuth round-trip, even
+  // when the user has already granted gmail.readonly. This is the load-
+  // bearing fix for the rapid-second-scan failure mode that survived
+  // `preferEphemeralSession` in #337: without an explicit consent prompt,
+  // Google can hand back a token from a still-cached server-side session
+  // that the previous scan already burned, surfacing as a Gmail-side 401
+  // on the next API call. Forcing consent makes Google mint a fresh token
+  // bound to a fresh grant every time.
+  //
+  // `include_granted_scopes` was previously set to `true` to bundle prior
+  // grants into the new token; in practice this was empty for the gmail
+  // OAuth client (sign-in uses a separate client) and only widened the
+  // surface for stale-token interactions. Dropped here for simplicity.
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,
     redirect_uri: `${baseUrl}/api/gmail/callback`,
     response_type: 'code',
     scope: 'https://www.googleapis.com/auth/gmail.readonly',
     access_type: 'online',
-    prompt: 'select_account',
-    // Bundle previously-granted scopes so re-connecting can't accidentally
-    // narrow the token to a subset that lacks gmail.readonly.
-    include_granted_scopes: 'true',
+    prompt: 'consent select_account',
     state,
   });
   // Pre-fill the account chooser when we know which Google account the user
