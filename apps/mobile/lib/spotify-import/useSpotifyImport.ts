@@ -138,6 +138,7 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
         name: a.tmMatch!.name,
         imageUrl: a.tmMatch!.imageUrl ?? undefined,
         musicbrainzId: a.tmMatch!.musicbrainzId ?? undefined,
+        spotifyArtistId: a.spotifyId,
       }));
     if (payload.length === 0) return;
     importSelected.mutate({ artists: payload });

@@ -300,6 +300,12 @@ export function useSpotifyImport(opts: UseSpotifyImportOptions = {}) {
         name: a.tmMatch!.name,
         imageUrl: a.tmMatch!.imageUrl ?? undefined,
         musicbrainzId: a.tmMatch!.musicbrainzId ?? undefined,
+        // Spotify followed-artist payload already carries the catalog
+        // id; thread it through so the new performer row gets its
+        // `spotify_artist_id` set at create time without needing the
+        // fire-and-forget hook in matchOrCreatePerformer to search by
+        // name afterwards.
+        spotifyArtistId: a.spotifyId,
       }));
     if (payload.length === 0) return;
     importSelected.mutate({ artists: payload });

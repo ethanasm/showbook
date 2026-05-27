@@ -39,6 +39,7 @@ export { matchOrCreateVenue, isUniqueViolation } from './venue-matcher';
 export { geocodeVenue } from './geocode';
 export type { GeocodeResult } from './geocode';
 export { matchOrCreatePerformer } from './performer-matcher';
+export { resolvePerformerSpotifyId } from './resolve-performer-spotify-id';
 export {
   runSongIndexRebuild,
   type SongIndexRebuildScope,
@@ -84,6 +85,7 @@ export {
   refreshSpotifyToken,
   getCurrentUser,
   searchTrack,
+  searchSpotifyArtist,
   createPlaylist,
   addTracksToPlaylist,
   tracksContains,

@@ -1,6 +1,7 @@
 import { db, performers, type Database } from '@showbook/db';
 import { eq, sql } from 'drizzle-orm';
 import { child } from '@showbook/observability';
+import { resolvePerformerSpotifyId } from './resolve-performer-spotify-id';
 
 const log = child({ component: 'api.performer-matcher' });
 
@@ -12,6 +13,7 @@ export interface PerformerInput {
   name: string;
   tmAttractionId?: string;
   musicbrainzId?: string;
+  spotifyArtistId?: string;
   imageUrl?: string;
 }
 
@@ -29,7 +31,12 @@ type Tx = Database | Parameters<Parameters<Database['transaction']>[0]>[0];
 export function buildUpdate(
   existing: typeof performers.$inferSelect,
   input: PerformerInput,
-): Partial<Record<'imageUrl' | 'musicbrainzId' | 'ticketmasterAttractionId', string>> | null {
+): Partial<
+  Record<
+    'imageUrl' | 'musicbrainzId' | 'ticketmasterAttractionId' | 'spotifyArtistId',
+    string
+  >
+> | null {
   const updates: Record<string, string> = {};
 
   if (!existing.imageUrl && input.imageUrl) {
@@ -40,6 +47,9 @@ export function buildUpdate(
   }
   if (!existing.ticketmasterAttractionId && input.tmAttractionId) {
     updates.ticketmasterAttractionId = input.tmAttractionId;
+  }
+  if (!existing.spotifyArtistId && input.spotifyArtistId) {
+    updates.spotifyArtistId = input.spotifyArtistId;
   }
 
   return Object.keys(updates).length > 0 ? updates : null;
@@ -67,6 +77,39 @@ async function applyUpdates(
 // ---------------------------------------------------------------------------
 
 export async function matchOrCreatePerformer(
+  input: PerformerInput,
+): Promise<PerformerMatchResult> {
+  const result = await matchOrCreatePerformerInner(input);
+  // Fire-and-forget Spotify ID resolution for newly-created rows that
+  // didn't already get a Spotify ID from the caller. This is the single
+  // hook that covers every ingest path — Add Show form/chat, scrapers,
+  // discover ingest, festival lineup picker, Spotify follow import —
+  // because every create funnels through here. Caller never waits on it;
+  // the nightly `backfill-performer-spotify-ids` cron is the safety net
+  // for failures. Errors are logged at warn inside the resolver.
+  if (result.created && !result.performer.spotifyArtistId) {
+    void resolvePerformerSpotifyId(
+      result.performer.id,
+      result.performer.name,
+    ).catch((err) => {
+      // Defence-in-depth — `resolvePerformerSpotifyId` already catches
+      // its own errors and returns a tagged outcome. This catch is for
+      // the bug where the function itself throws (e.g. import failure
+      // during HMR).
+      log.warn(
+        {
+          err,
+          event: 'performer.spotify_id.resolve_inline_uncaught',
+          performerId: result.performer.id,
+        },
+        'Inline Spotify ID resolver threw',
+      );
+    });
+  }
+  return result;
+}
+
+async function matchOrCreatePerformerInner(
   input: PerformerInput,
 ): Promise<PerformerMatchResult> {
   // 1. TM attraction ID match. Backed by a partial UNIQUE index, so a
@@ -128,6 +171,7 @@ export async function matchOrCreatePerformer(
             name: input.name,
             ticketmasterAttractionId: input.tmAttractionId ?? null,
             musicbrainzId: input.musicbrainzId ?? null,
+            spotifyArtistId: input.spotifyArtistId ?? null,
             imageUrl: input.imageUrl ?? null,
           })
           .returning(),
@@ -143,6 +187,7 @@ export async function matchOrCreatePerformer(
           name: created.name,
           hasTm: !!input.tmAttractionId,
           hasMbid: !!input.musicbrainzId,
+          hasSpotify: !!input.spotifyArtistId,
           hasImage: !!input.imageUrl,
         },
         'Performer created',

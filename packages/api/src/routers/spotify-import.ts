@@ -112,6 +112,7 @@ export const spotifyImportRouter = router({
               name: z.string().min(1).max(200),
               imageUrl: z.string().url().optional(),
               musicbrainzId: z.string().optional(),
+              spotifyArtistId: z.string().min(1).max(64).optional(),
             }),
           )
           .min(1)

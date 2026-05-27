@@ -34,10 +34,16 @@ export const performers = pgTable(
     // where the auto-classifier disagrees with a seed-table entry. At
     // ≥3 the cron flips `setlistStyle` to `computedStyle`.
     styleDisagreementCount: integer('style_disagreement_count').notNull().default(0),
-    // Phase 11 (§15m) — Spotify catalog id. Backfilled lazily by the
-    // album-metadata-fill cron via `/v1/search?type=artist`; null until
-    // first resolution. Used to fetch `/v1/artists/{id}/albums` for
-    // the album-drop forward signal.
+    // Phase 11 (§15m) — Spotify catalog id. Populated at create time by
+    // the fire-and-forget `resolvePerformerSpotifyId` hook in
+    // `matchOrCreatePerformer` (so every ingest path — Add Show, scrapers,
+    // discover ingest, festival lineup picker, Spotify follow import —
+    // ends up filling it). The `backfill-performer-spotify-ids` cron at
+    // 06:30 ET (and operator-triggered admin button) is the catch-up
+    // safety net for hook failures and the pre-existing backlog. Used
+    // to fetch `/v1/artists/{id}/albums` for the album-drop forward
+    // signal and to render the "Open in Spotify" button on the artist
+    // detail page.
     spotifyArtistId: text('spotify_artist_id'),
     // Phase 11 (§15l) — dedup for the setlist-tour-watch cron. Updated
     // each time the every-3h job enqueues a corpus refresh for this
