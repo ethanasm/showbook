@@ -28,7 +28,13 @@ export type UploaderRowStatus =
   | 'uploading'
   | 'success'
   | 'failed'
-  | 'cancelled';
+  | 'cancelled'
+  // Set client-side by the upload screen when the picked file would
+  // exceed a per-show count cap (photo / video). The row stays visible
+  // in the sheet so the user can SEE which files won't upload —
+  // silently dropping them was the previous behaviour and got the
+  // "I tried to upload 5 and only 2 went, why?" report.
+  | 'blocked';
 
 export interface UploaderRow {
   id: string; // stable per-file id (uri + index works)
@@ -177,6 +183,17 @@ function StatusLine({ row }: { row: UploaderRow }): React.JSX.Element | null {
       return (
         <Text style={[styles.status, { color: colors.faint }]}>Cancelled</Text>
       );
+    case 'blocked':
+      // Distinct from `failed` (where the server actually rejected
+      // the bytes): blocked rows never started uploading because the
+      // selection alone would exceed the show's photo/video count
+      // cap. The errorMessage carries the user-facing reason set by
+      // the upload screen ("Show is at the 30-photo limit", etc.).
+      return (
+        <Text style={[styles.status, { color: colors.faint }]}>
+          {row.errorMessage ?? "Won't upload — limit reached"}
+        </Text>
+      );
     default:
       return null;
   }
@@ -201,7 +218,7 @@ function ProgressOverlay({
       </View>
     );
   }
-  if (status === 'failed') {
+  if (status === 'failed' || status === 'blocked') {
     return (
       <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.35)' }]}>
         <AlertCircle size={20} color="#fff" strokeWidth={2.5} />

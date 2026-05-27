@@ -851,8 +851,19 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
     await boss.createQueue(entry.name, opts);
     // create_queue is ON CONFLICT DO NOTHING, so existing queues keep
     // whatever options they were originally created with. Force-apply
-    // the current options every boot.
-    await boss.updateQueue(entry.name, opts);
+    // the current updatable options every boot — but strip `policy`
+    // and `name` first. pg-boss v12 codifies this at the type level
+    // (`UpdateQueueOptions = Omit<Queue, 'name' | 'partition' |
+    // 'policy'>`) and `Manager.updateQueue` throws
+    // `queue policy cannot be changed after creation` at runtime if
+    // `policy` slips through. Policy is set once at `createQueue`
+    // time; the rest (`retryLimit` / `retryDelay` / `retryBackoff` /
+    // `expireInSeconds`) can still be updated post-hoc and that's
+    // what this loop is for.
+    const { policy: _policy, name: _name, ...updatable } = opts;
+    void _policy;
+    void _name;
+    await boss.updateQueue(entry.name, updatable);
   }
 
   for (const entry of JOBS_TABLE) {

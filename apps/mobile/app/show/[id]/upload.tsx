@@ -22,7 +22,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Camera, ChevronLeft, Image as ImageIcon } from 'lucide-react-native';
+import { AlertCircle, Camera, ChevronLeft, Image as ImageIcon } from 'lucide-react-native';
 
 import { TopBar } from '../../../components/TopBar';
 import { EmptyState } from '../../../components/EmptyState';
@@ -39,6 +39,10 @@ import {
   OverQuotaError,
   UploadCancelledError,
   MAX_SELECTION,
+  classifyPickedFiles,
+  summarizeShowCapacity,
+  summarizeBlocked,
+  type ClassifiedRow,
   type SelectedFile,
   type UploadServer,
 } from '@/lib/media';
@@ -90,12 +94,42 @@ export default function UploadScreen(): React.JSX.Element {
   const [uploading, setUploading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Auto-pick on mount so the route opens straight into the system picker.
-  // The user can then re-pick via the empty-state CTA if they cancelled.
+  // The capacity gate: how many photo / video slots are left on THIS
+  // show. The picker can return up to MAX_SELECTION files; we slot
+  // them into the remaining capacity in input order and mark the rest
+  // `blocked` rather than letting the server reject them later.
+  const quotaQuery = trpc.media.getQuota.useQuery(
+    { showId },
+    { enabled: !!showId, staleTime: 5_000 },
+  );
+  const capacity = summarizeShowCapacity(quotaQuery.data);
+  // Account for rows already in the sheet — picking the same file
+  // twice still de-dupes by URI, but a user who picked 2, then picks 3
+  // more on a 28/30 show should still hit the cap on the 3rd
+  // increment, not the 5th.
+  const queuedNow = rows.filter(
+    (r) => r.status === 'queued' || r.status === 'uploading',
+  );
+  const photosRemainingForNextPick = Math.max(
+    0,
+    capacity.photosRemaining -
+      queuedNow.filter((r) => r.file.mediaType === 'photo').length,
+  );
+  const videosRemainingForNextPick = Math.max(
+    0,
+    capacity.videosRemaining -
+      queuedNow.filter((r) => r.file.mediaType === 'video').length,
+  );
+
+  // Auto-pick on mount UNLESS the show is at cap (no slot for any
+  // file). Opening the system picker just to immediately blocked-
+  // banner everything they pick is worse UX than rendering the
+  // at-cap state up front.
   useEffect(() => {
+    if (capacity.atCap) return;
     void runPicker();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [capacity.atCap]);
 
   const runPicker = useCallback(async () => {
     setPicking(true);
@@ -109,11 +143,26 @@ export default function UploadScreen(): React.JSX.Element {
         return;
       }
       if (res.cancelled) return;
-      setRows((prev) => mergeFiles(prev, res.files));
+      setRows((prev) =>
+        mergeFiles(
+          prev,
+          res.files,
+          photosRemainingForNextPick,
+          videosRemainingForNextPick,
+          capacity.photoLimit,
+          capacity.videoLimit,
+        ),
+      );
     } finally {
       setPicking(false);
     }
-  }, [showToast]);
+  }, [
+    showToast,
+    photosRemainingForNextPick,
+    videosRemainingForNextPick,
+    capacity.photoLimit,
+    capacity.videoLimit,
+  ]);
 
   const runCamera = useCallback(async () => {
     setPicking(true);
@@ -127,11 +176,26 @@ export default function UploadScreen(): React.JSX.Element {
         return;
       }
       if (res.cancelled) return;
-      setRows((prev) => mergeFiles(prev, res.files));
+      setRows((prev) =>
+        mergeFiles(
+          prev,
+          res.files,
+          photosRemainingForNextPick,
+          videosRemainingForNextPick,
+          capacity.photoLimit,
+          capacity.videoLimit,
+        ),
+      );
     } finally {
       setPicking(false);
     }
-  }, [showToast]);
+  }, [
+    showToast,
+    photosRemainingForNextPick,
+    videosRemainingForNextPick,
+    capacity.photoLimit,
+    capacity.videoLimit,
+  ]);
 
   const onCaptionChange = useCallback((rowId: string, caption: string) => {
     setRows((prev) =>
@@ -252,6 +316,46 @@ export default function UploadScreen(): React.JSX.Element {
   );
 
   const queuedCount = rows.filter((r) => r.status === 'queued').length;
+  // The reason is implied by the file type: the only count cap that
+  // applies to photos is `showMaxPhotos`, ditto videos. We don't need
+  // to store it separately on the row.
+  const blockedSummary = summarizeBlocked(
+    rows.map((r) =>
+      r.status === 'blocked'
+        ? {
+            file: r.file,
+            status: 'blocked',
+            reason: r.file.mediaType === 'video' ? 'video_cap' : 'photo_cap',
+          }
+        : { file: r.file, status: 'queued' },
+    ),
+  );
+  // Banner copy when the user picked more than the show can hold.
+  // We always show this when there's at least one blocked row so the
+  // experience of "I picked 5, only 2 went" is loud.
+  const blockedBanner = (() => {
+    if (blockedSummary.totalBlocked === 0) return null;
+    const parts: string[] = [];
+    if (blockedSummary.blockedPhotos > 0) {
+      parts.push(
+        `${blockedSummary.blockedPhotos} ${blockedSummary.blockedPhotos === 1 ? 'photo' : 'photos'}`,
+      );
+    }
+    if (blockedSummary.blockedVideos > 0) {
+      parts.push(
+        `${blockedSummary.blockedVideos} ${blockedSummary.blockedVideos === 1 ? 'video' : 'videos'}`,
+      );
+    }
+    const total = rows.length;
+    const willUpload = blockedSummary.queuedCount;
+    const photoLimitCopy = Number.isFinite(capacity.photoLimit)
+      ? `Limit is ${capacity.photoLimit} photos per show`
+      : 'Per-show photo limit reached';
+    return {
+      headline: `${willUpload} of ${total} will upload — ${parts.join(' + ')} won't`,
+      detail: `${photoLimitCopy} (you have ${capacity.photoUsed} on this show).`,
+    };
+  })();
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
@@ -260,7 +364,24 @@ export default function UploadScreen(): React.JSX.Element {
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 96 }}
       >
-        {rows.length === 0 ? (
+        {capacity.atCap ? (
+          // No remaining photo OR video capacity. The picker isn't
+          // auto-opened (gated by the useEffect above) and we render
+          // a dedicated empty state instead of the "pick or shoot"
+          // chooser. The CTA bounces back to show detail where the
+          // user can remove existing media.
+          <View style={styles.center}>
+            <EmptyState
+              title="Photo limit reached"
+              subtitle={`You've added the maximum ${
+                Number.isFinite(capacity.photoLimit) ? capacity.photoLimit : 30
+              } photos and ${
+                Number.isFinite(capacity.videoLimit) ? capacity.videoLimit : 2
+              } videos to this show. Remove a few to make room.`}
+              cta={{ label: 'Back to show', onPress: cancel }}
+            />
+          </View>
+        ) : rows.length === 0 ? (
           picking ? (
             <View style={styles.center}>
               <ActivityIndicator color={colors.muted} />
@@ -313,6 +434,31 @@ export default function UploadScreen(): React.JSX.Element {
           )
         ) : (
           <>
+            {blockedBanner ? (
+              <View
+                style={[
+                  styles.blockedBanner,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.danger,
+                  },
+                ]}
+                accessibilityRole="alert"
+                accessibilityLabel={`${blockedBanner.headline}. ${blockedBanner.detail}`}
+              >
+                <View style={styles.blockedBannerIcon}>
+                  <AlertCircle size={16} color={colors.danger} strokeWidth={2} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.blockedBannerHeadline, { color: colors.ink }]}>
+                    {blockedBanner.headline}
+                  </Text>
+                  <Text style={[styles.blockedBannerDetail, { color: colors.muted }]}>
+                    {blockedBanner.detail}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
             <Uploader
               rows={rows}
               onCaptionChange={onCaptionChange}
@@ -386,7 +532,9 @@ export default function UploadScreen(): React.JSX.Element {
               <Text style={[styles.primaryLabel, { color: colors.accentText }]}>
                 {queuedCount === 0
                   ? 'Done'
-                  : `Upload ${queuedCount}${queuedCount === 1 ? ' file' : ' files'}`}
+                  : blockedSummary.totalBlocked > 0
+                    ? `Upload ${queuedCount} of ${rows.length}`
+                    : `Upload ${queuedCount}${queuedCount === 1 ? ' file' : ' files'}`}
               </Text>
             )}
           </Pressable>
@@ -396,19 +544,52 @@ export default function UploadScreen(): React.JSX.Element {
   );
 }
 
-function mergeFiles(prev: UploaderRow[], files: SelectedFile[]): UploaderRow[] {
+function mergeFiles(
+  prev: UploaderRow[],
+  files: SelectedFile[],
+  photosRemaining: number,
+  videosRemaining: number,
+  photoLimit: number,
+  videoLimit: number,
+): UploaderRow[] {
   // De-dupe by URI so re-picking the same asset doesn't enqueue twice.
   const existingUris = new Set(prev.map((r) => r.file.uri));
+  const newFiles = files.filter((f) => !existingUris.has(f.uri));
+  // Honour the absolute selection cap (MAX_SELECTION = 12) BEFORE
+  // classifying — capacity-blocking the 13th file would be confusing
+  // since the picker shouldn't have returned that many in the first
+  // place, but iOS occasionally over-returns.
+  const headroom = Math.max(0, MAX_SELECTION - prev.length);
+  const trimmed = newFiles.slice(0, headroom);
+  const classified: ClassifiedRow[] = classifyPickedFiles({
+    files: trimmed,
+    photosRemaining,
+    videosRemaining,
+  });
   const next = [...prev];
-  for (const file of files) {
-    if (existingUris.has(file.uri)) continue;
-    if (next.length >= MAX_SELECTION) break;
-    next.push({
-      id: `${file.uri}#${next.length}`,
-      file,
-      status: 'queued',
-      progress: 0,
-    });
+  for (const c of classified) {
+    const id = `${c.file.uri}#${next.length}`;
+    if (c.status === 'queued') {
+      next.push({ id, file: c.file, status: 'queued', progress: 0 });
+    } else {
+      next.push({
+        id,
+        file: c.file,
+        status: 'blocked',
+        progress: 0,
+        // The errorMessage shows up in the row's status line — keep
+        // it specific so the user understands which cap (and at what
+        // number) is blocking the upload.
+        errorMessage:
+          c.reason === 'photo_cap'
+            ? Number.isFinite(photoLimit)
+              ? `Show is at the ${photoLimit}-photo limit`
+              : 'Show is at the photo limit'
+            : Number.isFinite(videoLimit)
+              ? `Show is at the ${videoLimit}-video limit`
+              : 'Show is at the video limit',
+      });
+    }
   }
   return next;
 }
@@ -469,5 +650,30 @@ const styles = StyleSheet.create({
   addMoreLabel: {
     fontFamily: 'Geist Sans 500',
     fontSize: 12,
+  },
+  blockedBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 12,
+    marginBottom: 12,
+    borderRadius: RADII.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  blockedBannerIcon: {
+    paddingTop: 1,
+  },
+  blockedBannerHeadline: {
+    fontFamily: 'Geist Sans',
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  blockedBannerDetail: {
+    marginTop: 2,
+    fontFamily: 'Geist Sans',
+    fontSize: 12,
+    fontWeight: '400',
+    lineHeight: 16,
   },
 });

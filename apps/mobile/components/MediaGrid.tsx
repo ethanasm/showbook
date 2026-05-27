@@ -20,6 +20,8 @@ import { MediaTile } from './MediaTile';
 import { EmptyState } from './EmptyState';
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
+import { trpc } from '@/lib/trpc';
+import { summarizeShowCapacity } from '@/lib/media';
 
 export interface MediaGridItem {
   id: string;
@@ -67,6 +69,35 @@ export function MediaGrid({
 
   const tileSize = useMemo(() => computeTileSize(), []);
 
+  // Gate the "Add photos" / "Add more" CTAs against the per-show
+  // count caps. Only queried when `canUpload` is true so non-past
+  // shows don't fire a wasted lookup. `keepPreviousData` keeps the
+  // CTA stable while a refetch is in flight after delete / upload.
+  const quota = trpc.media.getQuota.useQuery(
+    { showId },
+    { enabled: canUpload && Boolean(showId), staleTime: 5_000 },
+  );
+  const capacity = summarizeShowCapacity(quota.data);
+  const atCap = canUpload && capacity.atCap;
+  // Per-cap explanatory text when EITHER count is exhausted (used for
+  // a "Photos full · 30/30" subtitle even when videos still have
+  // room — the picker UX clarifies which medium is gated).
+  const capDetail = (() => {
+    if (!quota.data) return null;
+    const photoFull = capacity.photosRemaining === 0;
+    const videoFull = capacity.videosRemaining === 0;
+    if (photoFull && videoFull) {
+      return `${capacity.photoUsed}/${capacity.photoLimit} photos · ${capacity.videoUsed}/${capacity.videoLimit} videos`;
+    }
+    if (photoFull) {
+      return `${capacity.photoUsed}/${capacity.photoLimit} photos`;
+    }
+    if (videoFull) {
+      return `${capacity.videoUsed}/${capacity.videoLimit} videos`;
+    }
+    return null;
+  })();
+
   if (loading && items.length === 0) {
     return (
       <View style={[styles.placeholderCard, { backgroundColor: colors.surface, borderColor: colors.rule }]}>
@@ -91,6 +122,12 @@ export function MediaGrid({
   }
 
   if (items.length === 0) {
+    // Note: with items.length===0, atCap would mean the quota's
+    // showPhotos hit the cap without any READY rows — i.e. a pile of
+    // `pending` zombie rows is holding the slot. Treat that the same
+    // as the items>0 path so the user gets a clear reason instead of
+    // a CTA that disappears mysteriously.
+    const ctaLabel = atCap ? 'Photo limit reached' : 'Add photos';
     return (
       <View
         style={[styles.placeholderCard, { backgroundColor: colors.surface, borderColor: colors.rule }]}
@@ -100,13 +137,15 @@ export function MediaGrid({
           title={canUpload ? 'No photos yet' : 'Photos arrive after the show'}
           subtitle={
             canUpload
-              ? 'Add up to 12 photos or videos from your night out.'
+              ? atCap && capDetail
+                ? `This show is at the per-show limit — ${capDetail}. Remove media to make room.`
+                : 'Add up to 12 photos or videos from your night out.'
               : 'You can attach media once the show date passes.'
           }
           cta={
-            canUpload
+            canUpload && !atCap
               ? {
-                  label: 'Add photos',
+                  label: ctaLabel,
                   onPress: () => {
                     if (onAddPress) onAddPress();
                     else router.push(`/show/${showId}/upload`);
@@ -146,22 +185,42 @@ export function MediaGrid({
       </View>
 
       {canUpload ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Add more photos"
-          onPress={() => {
-            if (onAddPress) onAddPress();
-            else router.push(`/show/${showId}/upload`);
-          }}
-          style={({ pressed }) => [
-            styles.addRow,
-            { borderColor: colors.rule, backgroundColor: colors.surface },
-            pressed && { opacity: 0.85 },
-          ]}
-        >
-          <Plus size={16} color={colors.ink} strokeWidth={2} />
-          <Text style={[styles.addRowText, { color: colors.ink }]}>Add more</Text>
-        </Pressable>
+        atCap ? (
+          // At per-show cap → render an inert "limit reached" row in
+          // place of the add CTA. Visually disabled, no press handler,
+          // labels which cap is full so the user knows what to clear.
+          <View
+            accessibilityRole="text"
+            accessibilityLabel={`Photo limit reached. ${capDetail ?? ''}`}
+            style={[
+              styles.addRow,
+              styles.addRowDisabled,
+              { borderColor: colors.rule, backgroundColor: colors.surface },
+            ]}
+          >
+            <Text style={[styles.addRowText, { color: colors.faint }]}>
+              Photo limit reached
+              {capDetail ? ` · ${capDetail}` : ''}
+            </Text>
+          </View>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Add more photos"
+            onPress={() => {
+              if (onAddPress) onAddPress();
+              else router.push(`/show/${showId}/upload`);
+            }}
+            style={({ pressed }) => [
+              styles.addRow,
+              { borderColor: colors.rule, backgroundColor: colors.surface },
+              pressed && { opacity: 0.85 },
+            ]}
+          >
+            <Plus size={16} color={colors.ink} strokeWidth={2} />
+            <Text style={[styles.addRowText, { color: colors.ink }]}>Add more</Text>
+          </Pressable>
+        )
       ) : null}
     </View>
   );
@@ -203,5 +262,10 @@ const styles = StyleSheet.create({
   addRowText: {
     fontFamily: 'Geist Sans 600',
     fontSize: 13,
+  },
+  addRowDisabled: {
+    // Distinguishable-but-quiet treatment for the at-cap state. We
+    // don't use `opacity: 0.5` because the explanatory text (`Photo
+    // limit reached · 30/30 photos`) should still be readable.
   },
 });
