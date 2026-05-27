@@ -173,7 +173,12 @@ export function MediaGrid({
               size={tileSize}
               onPress={() => {
                 if (onItemPress) onItemPress(item);
-                else router.push(`/media/${item.id}`);
+                // The lightbox needs the showId to fetch sibling media
+                // via `media.listForShow`. Without it the query stays
+                // disabled and the screen renders "Media not found"
+                // even when the asset exists. Always include the
+                // showId since MediaGrid already has it as a prop.
+                else router.push(`/media/${item.id}?showId=${encodeURIComponent(showId)}`);
               }}
               onLongPress={() => {
                 if (onItemLongPress) onItemLongPress(item);
