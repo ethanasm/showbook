@@ -40,6 +40,21 @@ When you're running in the Claude Code web sandbox, this checkout is a **shallow
 - After merging your PR to `main`, the branch you were working on is done. Treat the merge as success even if local refs still look out of date.
 - Only worry about divergence if `git log origin/<your-branch>..HEAD` or `git log HEAD..origin/<your-branch>` shows unexpected commits on the branch you actually pushed.
 
+**Docker and Postgres ARE available in this sandbox** — `.claude/hooks/session-start.sh` starts `dockerd` and the `showbook-dev-db` container automatically on session start. If `docker info` errors with "Cannot connect to the Docker daemon," dockerd has crashed/exited — *do not* conclude the sandbox lacks Docker. Restart it:
+
+```bash
+sudo rm -f /var/run/docker.pid                       # stale pid file
+sudo nohup dockerd > /var/log/dockerd2.log 2>&1 &
+sleep 5 && sudo docker info >/dev/null && echo "ok"
+sudo docker compose -f infra/docker-compose.yml up -d db
+until pg_isready -h localhost -p 5433 -U showbook >/dev/null 2>&1; do sleep 1; done
+pnpm dev:db:prepare:e2e                              # if you need the e2e DB
+```
+
+After that, web Playwright (`pr-screenshots`, `pnpm test:e2e`) works exactly as documented — webServer boots its own `next dev`, talks to Postgres on `localhost:5433`. Never tell the user "the sandbox has no Postgres" without first running the restart sequence above and confirming it failed. Same applies to "no Docker" — Docker is installed; if the daemon is down, restart it.
+
+What the sandbox actually *can't* do, for the avoidance of further wrong excuses: run iOS Simulator, run a KVM-backed Android emulator, reach external networks blocked by the environment's policy. Mobile capture in this sandbox is the Expo Web bundle via `apps/mobile/web-tests/*.spec.ts` (Playwright, tRPC mocked) — *not* the unreachable iOS/Android paths. For real native mobile capture, attach `mobile-visual` so the GitHub-Actions self-hosted Android runner picks it up.
+
 ## Project structure
 
 - `apps/web/` — Next.js 15 (App Router). See [`apps/web/CLAUDE.md`](apps/web/CLAUDE.md).
