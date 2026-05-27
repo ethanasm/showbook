@@ -30,6 +30,7 @@ import { useCachedQuery } from '../cache';
 import {
   EMPTY_INGEST_SNAPSHOT,
   INGEST_POLL_INTERVAL_MS,
+  computeIsPolling,
   computeRefetchIntervals,
   totalPending,
   type FeedRefetchIntervals,
@@ -38,6 +39,7 @@ import {
 
 export {
   INGEST_POLL_INTERVAL_MS,
+  computeIsPolling,
   computeRefetchIntervals,
   totalPending,
   type FeedRefetchIntervals,
@@ -48,6 +50,14 @@ export interface UseIngestPollingResult {
   pending: IngestStatusSnapshot;
   isAnyPending: boolean;
   intervals: FeedRefetchIntervals;
+  /**
+   * True when the displayed count may still grow — either the initial
+   * `ingestStatus` query hasn't resolved yet (we don't yet know whether
+   * ingest is pending) or it has resolved with pending jobs. Lets the
+   * Discover screen render a single non-blocking spinner without having
+   * to compose two states in the JSX.
+   */
+  isPolling: boolean;
 }
 
 export function useIngestPolling({
@@ -72,5 +82,14 @@ export function useIngestPolling({
     pending,
     isAnyPending: totalPending(pending) > 0,
     intervals: computeRefetchIntervals(pending),
+    // `query.isLoading` covers the first-round-trip gap on cold open —
+    // without it the summary briefly reads "PULL TO REFRESH" before
+    // flipping to "discovering more shows…", which is the moment the
+    // count looks suspiciously low.
+    isPolling: computeIsPolling({
+      enabled,
+      statusLoading: query.isLoading,
+      snapshot: query.data,
+    }),
   };
 }

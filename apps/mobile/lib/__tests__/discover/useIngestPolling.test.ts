@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 
 import {
   INGEST_POLL_INTERVAL_MS,
+  computeIsPolling,
   computeRefetchIntervals,
   totalPending,
   type IngestStatusSnapshot,
@@ -89,5 +90,55 @@ describe('computeRefetchIntervals', () => {
     );
     assert.equal(r.nearby, 1234);
     assert.equal(r.artists, 1234);
+  });
+});
+
+describe('computeIsPolling', () => {
+  it('returns false when the hook is disabled, even if data says pending', () => {
+    // Signed-out / offline calls shouldn't drive a spinner on the screen.
+    assert.equal(
+      computeIsPolling({
+        enabled: false,
+        statusLoading: true,
+        snapshot: { ...EMPTY, regionIds: ['r1'] },
+      }),
+      false,
+    );
+  });
+
+  it('returns true while the initial status query is loading', () => {
+    // The cold-open gap: nearbyFeed has returned a small count but
+    // ingestStatus hasn't said "pending" yet. We want the spinner up so
+    // the user knows the number may still grow.
+    assert.equal(
+      computeIsPolling({
+        enabled: true,
+        statusLoading: true,
+        snapshot: undefined,
+      }),
+      true,
+    );
+  });
+
+  it('returns true when status has resolved with pending ingest', () => {
+    assert.equal(
+      computeIsPolling({
+        enabled: true,
+        statusLoading: false,
+        snapshot: { ...EMPTY, regionIds: ['r1'] },
+      }),
+      true,
+    );
+  });
+
+  it('returns false when status has resolved empty', () => {
+    assert.equal(
+      computeIsPolling({
+        enabled: true,
+        statusLoading: false,
+        snapshot: EMPTY,
+      }),
+      false,
+    );
   });
 });
