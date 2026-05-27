@@ -120,10 +120,7 @@ export const discoverRouter = router({
       return {
         items: rows.map((r) => ({
           ...r.announcement,
-          ticketUrl: r.announcement.ticketUrl
-            || (r.announcement.sourceEventId
-              ? `https://www.ticketmaster.com/event/${r.announcement.sourceEventId}`
-              : null),
+          ticketUrl: r.announcement.ticketUrl,
           venue: r.venue,
         })),
         nextCursor,
@@ -190,10 +187,7 @@ export const discoverRouter = router({
       return {
         items: rows.map((r) => ({
           ...r.announcement,
-          ticketUrl: r.announcement.ticketUrl
-            || (r.announcement.sourceEventId
-              ? `https://www.ticketmaster.com/event/${r.announcement.sourceEventId}`
-              : null),
+          ticketUrl: r.announcement.ticketUrl,
           venue: r.venue,
         })),
         nextCursor,
@@ -369,11 +363,7 @@ export const discoverRouter = router({
         });
         items.push({
           ...r.announcement,
-          ticketUrl:
-            r.announcement.ticketUrl ||
-            (r.announcement.sourceEventId
-              ? `https://www.ticketmaster.com/event/${r.announcement.sourceEventId}`
-              : null),
+          ticketUrl: r.announcement.ticketUrl,
           venue: r.venue,
           regionId: match.region.id,
           regionCityName: match.region.cityName,

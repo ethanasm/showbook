@@ -186,7 +186,7 @@ describe('discoverRouter (with mocked db)', () => {
   });
 
   describe('followedFeed pagination', () => {
-    it('emits null ticketUrl when neither stored nor sourceEventId is set', async () => {
+    it('emits null ticketUrl when the stored value is null', async () => {
       const a = {
         id: 'a',
         venueId: 'v1',
@@ -204,6 +204,30 @@ describe('discoverRouter (with mocked db)', () => {
         c.followedFeed({ limit: 10 }),
       );
       assert.equal(result.items.length, 1);
+      assert.equal(result.items[0]!.ticketUrl, null);
+    });
+
+    it('does not synthesise a /event/<sourceEventId> fallback', async () => {
+      // The old fallback constructed `ticketmaster.com/event/<id>` from
+      // sourceEventId, which collides with the TM resale-marketplace URL
+      // shape and 404s in the browser. Confirm we no longer do that — a
+      // null stored URL stays null even when sourceEventId is populated.
+      const a = {
+        id: 'a',
+        venueId: 'v1',
+        showDate: '2026-08-01',
+        ticketUrl: null,
+        sourceEventId: 'Z7r9jZ1A7qUAE',
+      };
+      reset({
+        selectResults: [
+          [{ venueId: 'v1' }],
+          [{ announcement: a, venue: { id: 'v1', name: 'V' } }],
+        ],
+      });
+      const result = await caller().call((c) =>
+        c.followedFeed({ limit: 10 }),
+      );
       assert.equal(result.items[0]!.ticketUrl, null);
     });
   });
