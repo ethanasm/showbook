@@ -12,6 +12,13 @@ updates:
         patterns:
           - "@aws-sdk/*"
           - "@smithy/*"
+      # react peer-checks an exact version match between react and
+      # react-dom at startup ("Incompatible React versions" otherwise),
+      # so they must bump together in a single PR.
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
     ignore:
       # ESLint 10 dropped `scopeManager.addGlobals`, which eslint-config-next
       # 16 and eslint-config-expo 55 still call. Re-enable once both config
@@ -26,14 +33,6 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "eslint-config-expo"
         update-types: ["version-update:semver-major"]
-      # react / react-dom are pinned via pnpm.overrides in the root
-      # package.json. Dependabot can't see the override block, so its
-      # bumps land the override and the per-app dep on different
-      # versions and pnpm --frozen-lockfile rejects the result with
-      # ERR_PNPM_LOCKFILE_CONFIG_MISMATCH. Bump them manually together
-      # with the override.
-      - dependency-name: "react"
-      - dependency-name: "react-dom"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
