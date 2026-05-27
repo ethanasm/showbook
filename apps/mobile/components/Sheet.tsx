@@ -8,8 +8,20 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import Animated, {
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
+
+const OPEN_DURATION_MS = 320;
+const CLOSE_DURATION_MS = 240;
+const OPEN_EASING = Easing.out(Easing.cubic);
+const CLOSE_EASING = Easing.in(Easing.cubic);
 
 export interface SheetProps {
   open: boolean;
@@ -23,17 +35,48 @@ export function Sheet({
   onClose,
   snapPoints = ['50%'],
   children,
-}: SheetProps): React.JSX.Element {
+}: SheetProps): React.JSX.Element | null {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const { height } = useWindowDimensions();
   const sheetHeight = resolveSnapPoint(snapPoints[0] ?? '50%', height);
 
+  const [mounted, setMounted] = React.useState(open);
+  const progress = useSharedValue(open ? 1 : 0);
+
+  React.useEffect(() => {
+    if (open) {
+      setMounted(true);
+      progress.value = withTiming(1, {
+        duration: OPEN_DURATION_MS,
+        easing: OPEN_EASING,
+      });
+    } else {
+      progress.value = withTiming(
+        0,
+        { duration: CLOSE_DURATION_MS, easing: CLOSE_EASING },
+        (finished) => {
+          if (finished) runOnJS(setMounted)(false);
+        },
+      );
+    }
+  }, [open, progress]);
+
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+  }));
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: (1 - progress.value) * sheetHeight }],
+  }));
+
+  if (!mounted) return null;
+
   return (
     <Modal
-      visible={open}
+      visible={mounted}
       transparent
-      animationType="slide"
+      animationType="none"
       onRequestClose={onClose}
       statusBarTranslucent
     >
@@ -41,24 +84,27 @@ export function Sheet({
         style={styles.root}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close sheet"
-          onPress={onClose}
-          style={styles.backdrop}
-        />
-        <View
+        <Animated.View style={[styles.backdrop, backdropStyle]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close sheet"
+            onPress={onClose}
+            style={StyleSheet.absoluteFill}
+          />
+        </Animated.View>
+        <Animated.View
           style={[
             styles.sheet,
             {
               height: sheetHeight,
               backgroundColor: colors.surfaceRaised,
             },
+            sheetStyle,
           ]}
         >
           <View style={[styles.handle, { backgroundColor: colors.ruleStrong }]} />
           {children}
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );

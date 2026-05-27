@@ -946,28 +946,6 @@ function AnnouncementRow({
         )}
         <View style={styles.cardBadge}>
           <KindBadge kind={item.kind as Kind} size="sm" />
-          {ticketUrl ? (
-            <Pressable
-              onPress={(e) => {
-                e.stopPropagation();
-                void hapticSelection();
-                Linking.openURL(ticketUrl).catch(() => {
-                  showToast({ kind: 'error', text: "Couldn't open Ticketmaster." });
-                });
-              }}
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel="Open tickets on Ticketmaster"
-              testID={`discover-row-tix-${item.id}`}
-              style={({ pressed }) => [
-                styles.tixPill,
-                { borderColor: colors.ruleStrong, backgroundColor: colors.surface },
-                pressed && { opacity: 0.6 },
-              ]}
-            >
-              <TicketmasterMark size={14} />
-            </Pressable>
-          ) : null}
         </View>
       </View>
 
@@ -1043,6 +1021,29 @@ function AnnouncementRow({
             {onSale}
           </Text>
         )}
+        {ticketUrl ? (
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation();
+              void hapticSelection();
+              Linking.openURL(ticketUrl).catch(() => {
+                showToast({ kind: 'error', text: "Couldn't open Ticketmaster." });
+              });
+            }}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel="Open tickets on Ticketmaster"
+            testID={`discover-row-tix-${item.id}`}
+            style={({ pressed }) => [
+              styles.tixPill,
+              styles.tixPillEnd,
+              { borderColor: colors.ruleStrong, backgroundColor: colors.surface },
+              pressed && { opacity: 0.6 },
+            ]}
+          >
+            <TicketmasterMark size={14} />
+          </Pressable>
+        ) : null}
       </View>
     </Pressable>
     <UpcomingAnnouncementActionSheet
@@ -1276,6 +1277,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     marginTop: 4,
+  },
+  tixPillEnd: {
+    marginLeft: 'auto',
   },
   statusBadge: {
     paddingVertical: 2,
