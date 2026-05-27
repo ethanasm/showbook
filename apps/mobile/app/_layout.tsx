@@ -30,16 +30,16 @@ import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Linking from 'expo-linking';
 
-import { ThemeProvider, useTheme } from '../lib/theme';
-import { AuthProvider, useAuth } from '../lib/auth';
-import { trpc, createQueryClient, createTrpcClient } from '../lib/trpc';
-import { setMobileTelemetryLogger } from '../lib/telemetry';
-import { CacheBridge } from '../lib/cache/CacheBridge';
-import { deleteCacheDatabase } from '../lib/cache';
-import { warmCacheForOfflineUse } from '../lib/cache/warmup';
-import { useForegroundWarmup } from '../lib/cache/useForegroundWarmup';
-import { loadAppFonts } from '../lib/fonts';
-import { FeedbackProvider, useFeedback } from '../lib/feedback';
+import { ThemeProvider, useTheme } from '@/lib/theme';
+import { AuthProvider, useAuth } from '@/lib/auth';
+import { trpc, createQueryClient, createTrpcClient } from '@/lib/trpc';
+import { setMobileTelemetryLogger } from '@/lib/telemetry';
+import { CacheBridge } from '@/lib/cache/CacheBridge';
+import { deleteCacheDatabase } from '@/lib/cache';
+import { warmCacheForOfflineUse } from '@/lib/cache/warmup';
+import { useForegroundWarmup } from '@/lib/cache/useForegroundWarmup';
+import { loadAppFonts } from '@/lib/fonts';
+import { FeedbackProvider, useFeedback } from '@/lib/feedback';
 import {
   NetworkProvider,
   OfflineSyncProvider,
@@ -47,15 +47,15 @@ import {
   useNetwork,
   type OutboxDispatch,
   type PendingMutation,
-} from '../lib/network';
+} from '@/lib/network';
 import { ToastHost } from '../components/Toast';
 import { BannerHost } from '../components/Banner';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { PendingWritesDrawer } from '../components/PendingWritesDrawer';
 import { PreviewMiniPlayer } from '../components/PreviewMiniPlayer';
-import { PreviewPlayerProvider } from '../lib/preview-player-provider';
-import { readAndParsePkpassUri } from '../lib/wallet/read-pkpass-uri';
+import { PreviewPlayerProvider } from '@/lib/preview-player-provider';
+import { readAndParsePkpassUri } from '@/lib/wallet/read-pkpass-uri';
 
 // Keep the splash screen up until fonts are ready. Errors here are
 // non-fatal — if preventAutoHideAsync rejects, the splash hides on its

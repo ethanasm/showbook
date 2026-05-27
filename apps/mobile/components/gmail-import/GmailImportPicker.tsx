@@ -15,10 +15,10 @@ import {
 } from 'react-native';
 import { Check, Search, X } from 'lucide-react-native';
 
-import { useTheme } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
-import type { GmailImportFlow } from '../../lib/gmail-import/useGmailImport';
-import type { GmailTicket } from '../../lib/gmail-import/types';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import type { GmailImportFlow } from '@/lib/gmail-import/useGmailImport';
+import type { GmailTicket } from '@/lib/gmail-import/types';
 
 interface GmailImportPickerProps {
   flow: GmailImportFlow;

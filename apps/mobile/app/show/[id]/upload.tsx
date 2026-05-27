@@ -27,11 +27,11 @@ import { Camera, ChevronLeft, Image as ImageIcon } from 'lucide-react-native';
 import { TopBar } from '../../../components/TopBar';
 import { EmptyState } from '../../../components/EmptyState';
 import { Uploader, type UploaderRow } from '../../../components/Uploader';
-import { useTheme } from '../../../lib/theme';
-import { RADII } from '../../../lib/theme-utils';
-import { trpc } from '../../../lib/trpc';
-import { useAuth } from '../../../lib/auth';
-import { useFeedback } from '../../../lib/feedback';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { trpc } from '@/lib/trpc';
+import { useAuth } from '@/lib/auth';
+import { useFeedback } from '@/lib/feedback';
 import {
   pickMediaFromLibrary,
   captureMediaFromCamera,
@@ -41,7 +41,7 @@ import {
   MAX_SELECTION,
   type SelectedFile,
   type UploadServer,
-} from '../../../lib/media';
+} from '@/lib/media';
 
 function makeUploadServer(
   client: ReturnType<typeof trpc.useUtils>['client'],

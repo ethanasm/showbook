@@ -30,20 +30,20 @@ import { Image as ExpoImage } from 'expo-image';
 import { ChevronLeft, Image as ImageIcon, RefreshCcw } from 'lucide-react-native';
 
 import { TopBar } from '../../components/TopBar';
-import { useTheme } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
-import { useFeedback } from '../../lib/feedback';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { useFeedback } from '@/lib/feedback';
 import {
   useFestivalLineup,
   type FestivalLineupMeta,
   type SelectedFestivalArtist,
-} from '../../lib/festival-lineup/useFestivalLineup';
-import { parseFestivalVenue } from '../../lib/festival-lineup/parseFestivalVenue';
+} from '@/lib/festival-lineup/useFestivalLineup';
+import { parseFestivalVenue } from '@/lib/festival-lineup/parseFestivalVenue';
 import {
   pickFestivalImage,
   type PickedFestivalImage,
-} from '../../lib/festival-lineup/pickFestivalImage';
-import { consumePendingFestivalPoster } from '../../lib/festival-lineup/posterHandoff';
+} from '@/lib/festival-lineup/pickFestivalImage';
+import { consumePendingFestivalPoster } from '@/lib/festival-lineup/posterHandoff';
 import { FestivalLineupPicker } from '../../components/festival-lineup/FestivalLineupPicker';
 import { Eyebrow, GlowBackdrop } from '../../components/design-system';
 

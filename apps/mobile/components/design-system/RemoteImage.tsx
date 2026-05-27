@@ -19,8 +19,8 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
-import { useTheme, type Kind } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
+import { useTheme, type Kind } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 
 type Size = 'thumb' | 'card' | 'hero' | 'custom';
 type Aspect = '1/1' | '3/2' | '16/9';

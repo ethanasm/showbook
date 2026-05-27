@@ -28,8 +28,8 @@ import {
 } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { EmptyState } from '../../components/EmptyState';
-import { useTheme } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 
 type IntegrationId = 'gmail' | 'ticketmaster' | 'google-places' | 'spotify';
 

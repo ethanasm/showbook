@@ -39,11 +39,11 @@ import { ScreenWrapper } from '../components/ScreenWrapper';
 import { EmptyState } from '../components/EmptyState';
 import { OfflineEmptyState } from '../components/OfflineEmptyState';
 import { KindBadge } from '../components/KindBadge';
-import { useTheme, type Kind } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
-import { useAuth } from '../lib/auth';
-import { useNetwork } from '../lib/network';
-import { trpc } from '../lib/trpc';
+import { useTheme, type Kind } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { useAuth } from '@/lib/auth';
+import { useNetwork } from '@/lib/network';
+import { trpc } from '@/lib/trpc';
 import { useDebouncedValue } from '@showbook/shared/hooks';
 import {
   extractHighlight,
@@ -56,7 +56,7 @@ import {
   type SearchPerformer,
   type SearchShow,
   type SearchVenue,
-} from '../lib/search';
+} from '@/lib/search';
 
 const SEARCH_DEBOUNCE_MS = 250;
 

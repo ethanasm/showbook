@@ -12,8 +12,8 @@ import { View, StyleSheet, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { FirstRunStep, heroTitleStyle } from './_components';
-import { useTheme } from '../../../lib/theme';
-import { RADII } from '../../../lib/theme-utils';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 
 export default function FirstRunLocation(): React.JSX.Element {
   const { tokens } = useTheme();

@@ -16,9 +16,9 @@ import {
 import { ShieldCheck } from 'lucide-react-native';
 
 import { Sheet } from './Sheet';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
-import { API_URL } from '../lib/env';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { API_URL } from '@/lib/env';
 
 export interface GmailConsentSheetProps {
   open: boolean;

@@ -53,7 +53,7 @@ import {
   Ticket,
   Users,
 } from 'lucide-react-native';
-import { useFeedback } from '../../lib/feedback';
+import { useFeedback } from '@/lib/feedback';
 import { formatDateParts, isNonWatchableKind } from '@showbook/shared';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
 import { SegmentedControl } from '../../components/SegmentedControl';
@@ -63,19 +63,19 @@ import { OfflineEmptyState } from '../../components/OfflineEmptyState';
 import { KindBadge } from '../../components/KindBadge';
 import { TicketmasterMark } from '../../components/BrandIcons';
 import { FilterChipsRow, type FilterGroup } from '../../components/FilterChipsRow';
-import { useTheme, type Kind } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
-import { useAuth } from '../../lib/auth';
-import { useNetwork } from '../../lib/network';
-import { hapticSelection } from '../../lib/haptics';
-import { trpc, type RouterOutput } from '../../lib/trpc';
-import { useCachedQuery } from '../../lib/cache';
-import { useIngestPolling } from '../../lib/discover/useIngestPolling';
+import { useTheme, type Kind } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { useAuth } from '@/lib/auth';
+import { useNetwork } from '@/lib/network';
+import { hapticSelection } from '@/lib/haptics';
+import { trpc, type RouterOutput } from '@/lib/trpc';
+import { useCachedQuery } from '@/lib/cache';
+import { useIngestPolling } from '@/lib/discover/useIngestPolling';
 import {
   WATCHED_IDS_CACHE_KEY,
   useToggleWatch,
   type WatchToggle,
-} from '../../lib/discover-watch';
+} from '@/lib/discover-watch';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
 import { PickPerformanceDateSheet } from '../../components/PickPerformanceDateSheet';

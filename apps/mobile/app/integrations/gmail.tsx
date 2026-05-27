@@ -28,14 +28,14 @@ import { GmailConsentSheet } from '../../components/GmailConsentSheet';
 import { GmailImportPicker } from '../../components/gmail-import/GmailImportPicker';
 import { OfflineEmptyState } from '../../components/OfflineEmptyState';
 import { TopBar } from '../../components/TopBar';
-import { useAuth } from '../../lib/auth';
-import { useFeedback } from '../../lib/feedback';
-import { useGmailConnection } from '../../lib/gmail-connection';
-import { useGmailImport } from '../../lib/gmail-import/useGmailImport';
-import { useNetwork } from '../../lib/network';
-import { useTheme } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
-import { trpc } from '../../lib/trpc';
+import { useAuth } from '@/lib/auth';
+import { useFeedback } from '@/lib/feedback';
+import { useGmailConnection } from '@/lib/gmail-connection';
+import { useGmailImport } from '@/lib/gmail-import/useGmailImport';
+import { useNetwork } from '@/lib/network';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { trpc } from '@/lib/trpc';
 
 export default function GmailIntegrationScreen(): React.JSX.Element {
   const { tokens } = useTheme();

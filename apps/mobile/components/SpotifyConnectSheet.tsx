@@ -13,8 +13,8 @@ import { Music } from 'lucide-react-native';
 
 import { ExternalSourceDisclaimer } from './ExternalSourceDisclaimer';
 import { Sheet } from './Sheet';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 
 export interface SpotifyConnectSheetProps {
   open: boolean;

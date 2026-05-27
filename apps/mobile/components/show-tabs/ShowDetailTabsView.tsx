@@ -35,18 +35,18 @@ import {
   Ticket,
 } from 'lucide-react-native';
 
-import { hapticSelection } from '../../lib/haptics';
-import { useFeedback } from '../../lib/feedback';
+import { hapticSelection } from '@/lib/haptics';
+import { useFeedback } from '@/lib/feedback';
 
-import { useAuth } from '../../lib/auth';
-import { showCoverImageSource, venueImageSource } from '../../lib/images';
-import { useTheme, type Kind, type ShowState } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
-import { trpc } from '../../lib/trpc';
-import { CACHE_DEFAULTS } from '../../lib/cache';
+import { useAuth } from '@/lib/auth';
+import { showCoverImageSource, venueImageSource } from '@/lib/images';
+import { useTheme, type Kind, type ShowState } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { trpc } from '@/lib/trpc';
+import { CACHE_DEFAULTS } from '@/lib/cache';
 import { useQueryClient } from '@tanstack/react-query';
-import { runOptimisticMutation } from '../../lib/mutations';
-import { getCacheOutbox } from '../../lib/cache/db';
+import { runOptimisticMutation } from '@/lib/mutations';
+import { getCacheOutbox } from '@/lib/cache/db';
 import { ShowTabBar } from './ShowTabBar';
 import { MarkTicketedSheet } from '../MarkTicketedSheet';
 import { OverviewTab, type OverviewLineupEntry } from './OverviewTab';
@@ -67,8 +67,8 @@ import {
   parseShowTab,
   shouldRenderHypePlaylistCard,
   type ShowTabKey,
-} from '../../lib/setlist-intel';
-import { useBreakpoint } from '../../lib/responsive';
+} from '@/lib/setlist-intel';
+import { useBreakpoint } from '@/lib/responsive';
 import {
   buildActualSongsFromSetlist,
   buildFestivalLineupEntries,

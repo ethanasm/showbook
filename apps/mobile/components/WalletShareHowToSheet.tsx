@@ -21,8 +21,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ticket } from 'lucide-react-native';
 
 import { Sheet } from './Sheet';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 
 export interface WalletShareHowToSheetProps {
   open: boolean;

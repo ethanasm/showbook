@@ -10,7 +10,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { useTheme } from '../../lib/theme';
+import { useTheme } from '@/lib/theme';
 import { SectionFrame } from './SectionFrame';
 
 export interface RightRailSlots {

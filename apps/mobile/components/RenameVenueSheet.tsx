@@ -17,13 +17,13 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { Sheet } from './Sheet';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
-import { trpc } from '../lib/trpc';
-import { useFeedback } from '../lib/feedback';
-import { toUserMessage } from '../lib/errors';
-import { runOptimisticMutation } from '../lib/mutations';
-import { getCacheOutbox } from '../lib/cache';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { trpc } from '@/lib/trpc';
+import { useFeedback } from '@/lib/feedback';
+import { toUserMessage } from '@/lib/errors';
+import { runOptimisticMutation } from '@/lib/mutations';
+import { getCacheOutbox } from '@/lib/cache';
 
 export interface RenameVenueSheetProps {
   open: boolean;

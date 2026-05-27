@@ -11,9 +11,9 @@ import { View, Text, Pressable, StyleSheet, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Bell, Image as ImageIcon, MapPin, Mail } from 'lucide-react-native';
-import { useTheme } from '../../../lib/theme';
-import { RADII } from '../../../lib/theme-utils';
-import { useAuth } from '../../../lib/auth';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { useAuth } from '@/lib/auth';
 
 interface AgendaRow {
   Icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;

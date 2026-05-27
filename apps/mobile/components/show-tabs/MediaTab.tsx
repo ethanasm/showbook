@@ -24,10 +24,10 @@ import { useRouter } from 'expo-router';
 import { ChevronRight, MapPin, Music, Ticket } from 'lucide-react-native';
 import { SpotifyMark } from '../BrandIcons';
 
-import { useTheme } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
-import { trpc } from '../../lib/trpc';
-import { buildSpotifyOpenPlan } from '../../lib/setlist-intel';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { trpc } from '@/lib/trpc';
+import { buildSpotifyOpenPlan } from '@/lib/setlist-intel';
 import { SectionFrame } from './SectionFrame';
 import { WalletShareHowToSheet } from '../WalletShareHowToSheet';
 

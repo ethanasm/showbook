@@ -22,9 +22,9 @@ import {
   ShowDetailTabsView,
   type ShowDetail as TabbedShowDetail,
 } from '../../components/show-tabs/ShowDetailTabsView';
-import { useTheme, type ShowState } from '../../lib/theme';
-import { trpc } from '../../lib/trpc';
-import { CACHE_DEFAULTS } from '../../lib/cache';
+import { useTheme, type ShowState } from '@/lib/theme';
+import { trpc } from '@/lib/trpc';
+import { CACHE_DEFAULTS } from '@/lib/cache';
 
 interface ShowDetailVenue {
   id: string;

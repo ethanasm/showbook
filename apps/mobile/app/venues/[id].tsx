@@ -45,25 +45,25 @@ import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
 import { RenameVenueSheet } from '../../components/RenameVenueSheet';
 import { GoogleMapsMark } from '../../components/BrandIcons';
-import { buildGoogleMapsOpenPlan } from '../../lib/google-maps-deep-link';
+import { buildGoogleMapsOpenPlan } from '@/lib/google-maps-deep-link';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
-import { useTheme, type Kind, type ShowState } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
-import { hapticSelection, hapticImpactMedium } from '../../lib/haptics';
+import { useTheme, type Kind, type ShowState } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { hapticSelection, hapticImpactMedium } from '@/lib/haptics';
 import { isNonWatchableKind } from '@showbook/shared';
-import { useAuth } from '../../lib/auth';
-import { trpc, type RouterOutput } from '../../lib/trpc';
-import { useCachedQuery } from '../../lib/cache';
+import { useAuth } from '@/lib/auth';
+import { trpc, type RouterOutput } from '@/lib/trpc';
+import { useCachedQuery } from '@/lib/cache';
 import { useQueryClient } from '@tanstack/react-query';
-import { runOptimisticMutation } from '../../lib/mutations';
-import { getCacheOutbox } from '../../lib/cache/db';
-import { useFeedback } from '../../lib/feedback';
+import { runOptimisticMutation } from '@/lib/mutations';
+import { getCacheOutbox } from '@/lib/cache/db';
+import { useFeedback } from '@/lib/feedback';
 import {
   WATCHED_IDS_CACHE_KEY,
   useToggleWatch,
   type WatchToggle,
-} from '../../lib/discover-watch';
-import { venueImageSource } from '../../lib/images';
+} from '@/lib/discover-watch';
+import { venueImageSource } from '@/lib/images';
 
 // Derive screen types from the tRPC vanilla client so drift in the server
 // contract is caught at the call site instead of papered over with casts.

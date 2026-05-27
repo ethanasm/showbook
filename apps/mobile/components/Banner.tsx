@@ -9,9 +9,9 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
-import { useTheme } from '../lib/theme';
-import { useFeedback } from '../lib/feedback';
-import { feedbackVariantColors } from '../lib/toast-colors';
+import { useTheme } from '@/lib/theme';
+import { useFeedback } from '@/lib/feedback';
+import { feedbackVariantColors } from '@/lib/toast-colors';
 
 export function BannerHost(): React.JSX.Element | null {
   const { banners, dismissBanner } = useFeedback();

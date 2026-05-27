@@ -14,7 +14,7 @@
 import React from 'react';
 import { View, Text, Pressable, TextInput, StyleSheet } from 'react-native';
 import { GripVertical, X } from 'lucide-react-native';
-import { useTheme } from '../lib/theme';
+import { useTheme } from '@/lib/theme';
 
 export interface SetlistRowProps {
   trackNumber: number;

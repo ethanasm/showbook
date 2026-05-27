@@ -14,11 +14,11 @@ import { useRouter } from 'expo-router';
 import { Image as ImageIcon } from 'lucide-react-native';
 
 import { Sheet } from './Sheet';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
-import { useFeedback } from '../lib/feedback';
-import { pickFestivalImage } from '../lib/festival-lineup/pickFestivalImage';
-import { setPendingFestivalPoster } from '../lib/festival-lineup/posterHandoff';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { useFeedback } from '@/lib/feedback';
+import { pickFestivalImage } from '@/lib/festival-lineup/pickFestivalImage';
+import { setPendingFestivalPoster } from '@/lib/festival-lineup/posterHandoff';
 
 export interface FestivalPosterHowToSheetProps {
   open: boolean;

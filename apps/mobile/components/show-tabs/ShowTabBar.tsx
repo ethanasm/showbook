@@ -12,13 +12,13 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { useTheme } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 import {
   SHOW_TAB_KEYS,
   type ShowTabBadges,
   type ShowTabKey,
-} from '../../lib/setlist-intel';
+} from '@/lib/setlist-intel';
 
 const TAB_LABELS: Record<ShowTabKey, string> = {
   overview: 'Overview',

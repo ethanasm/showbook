@@ -19,8 +19,8 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
 import { ArrowRight, Compass, Mail, Music, Plus, X } from 'lucide-react-native';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 import { Eyebrow, GlowBackdrop, GradientEmphasis } from './design-system';
 
 const STORAGE_KEY = 'showbook.get-started.dismissed';

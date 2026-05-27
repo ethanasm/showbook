@@ -44,13 +44,13 @@ import type {
 import { TopBar } from '../../../components/TopBar';
 import { SetlistRow } from '../../../components/SetlistRow';
 import { EmptyState } from '../../../components/EmptyState';
-import { useTheme } from '../../../lib/theme';
-import { RADII } from '../../../lib/theme-utils';
-import { hapticSelection } from '../../../lib/haptics';
-import { trpc } from '../../../lib/trpc';
-import { useFeedback } from '../../../lib/feedback';
-import { runOptimisticMutation } from '../../../lib/mutations';
-import { getCacheOutbox } from '../../../lib/cache';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { hapticSelection } from '@/lib/haptics';
+import { trpc } from '@/lib/trpc';
+import { useFeedback } from '@/lib/feedback';
+import { runOptimisticMutation } from '@/lib/mutations';
+import { getCacheOutbox } from '@/lib/cache';
 
 interface ShowDetailLike {
   id: string;

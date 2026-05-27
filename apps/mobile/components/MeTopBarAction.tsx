@@ -12,7 +12,7 @@ import React from 'react';
 import { Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { User } from 'lucide-react-native';
-import { useTheme } from '../lib/theme';
+import { useTheme } from '@/lib/theme';
 
 export function MeTopBarAction(): React.JSX.Element {
   const { tokens } = useTheme();

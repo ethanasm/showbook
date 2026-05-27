@@ -15,15 +15,15 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, Linking } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
-import { hapticImpactMedium, hapticSelection } from '../lib/haptics';
-import { useFeedback } from '../lib/feedback';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { hapticImpactMedium, hapticSelection } from '@/lib/haptics';
+import { useFeedback } from '@/lib/feedback';
 import { KindBadge } from './KindBadge';
 import { StateChip } from './StateChip';
 import { RemoteImage } from './design-system/RemoteImage';
 import { TicketmasterMark } from './BrandIcons';
-import type { Kind, ShowState } from '../lib/theme';
+import type { Kind, ShowState } from '@/lib/theme';
 
 export interface ShowCardShow {
   id: string;

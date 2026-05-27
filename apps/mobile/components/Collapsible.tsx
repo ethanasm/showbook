@@ -16,7 +16,7 @@ import {
   UIManager,
 } from 'react-native';
 import { ChevronDown, ChevronRight } from 'lucide-react-native';
-import { useTheme } from '../lib/theme';
+import { useTheme } from '@/lib/theme';
 
 // Android requires opting-in to LayoutAnimation at process start.
 if (

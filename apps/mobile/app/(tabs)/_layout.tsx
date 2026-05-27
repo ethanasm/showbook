@@ -41,10 +41,10 @@ import {
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, List, Plus, MapPin, Compass } from 'lucide-react-native';
-import { useTheme } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
-import { useBreakpoint } from '../../lib/responsive';
-import { hapticSelection } from '../../lib/haptics';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { useBreakpoint } from '@/lib/responsive';
+import { hapticSelection } from '@/lib/haptics';
 import { ThreePaneLayout, useSelectedShow } from '../../components/ThreePaneLayout';
 import { EmptyState } from '../../components/EmptyState';
 import ShowsScreen from './shows';

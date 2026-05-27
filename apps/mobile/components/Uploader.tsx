@@ -19,9 +19,9 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Check, X, AlertCircle } from 'lucide-react-native';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
-import type { SelectedFile } from '../lib/media';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import type { SelectedFile } from '@/lib/media';
 
 export type UploaderRowStatus =
   | 'queued'

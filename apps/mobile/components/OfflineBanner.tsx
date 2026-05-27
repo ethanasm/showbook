@@ -12,8 +12,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WifiOff } from 'lucide-react-native';
 
-import { useTheme } from '../lib/theme';
-import { useNetwork } from '../lib/network';
+import { useTheme } from '@/lib/theme';
+import { useNetwork } from '@/lib/network';
 
 export function OfflineBanner(): React.JSX.Element | null {
   const { online } = useNetwork();

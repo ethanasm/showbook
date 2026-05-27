@@ -9,10 +9,10 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
-import { useAuth } from '../lib/auth';
-import { venueImageSource } from '../lib/images';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { useAuth } from '@/lib/auth';
+import { venueImageSource } from '@/lib/images';
 import { RemoteImage } from './design-system/RemoteImage';
 import { formatVenueLocation } from '@showbook/shared';
 

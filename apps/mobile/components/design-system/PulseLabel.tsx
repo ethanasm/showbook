@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle, type StyleProp } from 'react-native';
-import { useTheme } from '../../lib/theme';
+import { useTheme } from '@/lib/theme';
 import { PulseDot } from './PulseDot';
 
 interface PulseLabelProps {

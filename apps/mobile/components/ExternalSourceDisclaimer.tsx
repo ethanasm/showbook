@@ -10,7 +10,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Database, Shield, Sparkles } from 'lucide-react-native';
 
-import { useTheme } from '../lib/theme';
+import { useTheme } from '@/lib/theme';
 
 export type ExternalSource = 'spotify' | 'setlistfm' | 'gmail' | 'eventbrite';
 

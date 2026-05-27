@@ -12,7 +12,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { formatSetlistNote } from '@showbook/shared';
-import { useTheme } from '../../lib/theme';
+import { useTheme } from '@/lib/theme';
 import { SectionFrame } from './SectionFrame';
 import { HypePlaylistCard } from './HypePlaylistCard';
 import { StableSetlistView } from './StableSetlistView';
@@ -40,7 +40,7 @@ import {
   shouldRenderHypePlaylistCard,
   type BadgePayload,
   type PreviewMap,
-} from '../../lib/setlist-intel';
+} from '@/lib/setlist-intel';
 
 // Canonical shape lives in `@showbook/shared` — re-exported here so
 // existing `import { type ActualSong } from './SetlistTab'` call

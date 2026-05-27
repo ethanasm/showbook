@@ -15,7 +15,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { useTheme } from '../../lib/theme';
+import { useTheme } from '@/lib/theme';
 import { FilterChipsRow, type FilterGroup } from '../FilterChipsRow';
 import {
   SetlistTab,
@@ -26,7 +26,7 @@ import {
   sortFestivalLineup,
   type BadgePayload,
   type PreviewMap,
-} from '../../lib/setlist-intel';
+} from '@/lib/setlist-intel';
 
 export interface FestivalLineupSetlistEntry {
   performerId: string;

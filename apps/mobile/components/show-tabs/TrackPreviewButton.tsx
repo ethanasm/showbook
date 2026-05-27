@@ -18,13 +18,13 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
-import { useTheme } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
-import type { PreviewHandle } from '../../lib/setlist-intel';
-import { usePreviewPlayer } from '../../lib/preview-player-provider';
-import { trpc } from '../../lib/trpc';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import type { PreviewHandle } from '@/lib/setlist-intel';
+import { usePreviewPlayer } from '@/lib/preview-player-provider';
+import { trpc } from '@/lib/trpc';
 
-export { PreviewPlayerProvider } from '../../lib/preview-player-provider';
+export { PreviewPlayerProvider } from '@/lib/preview-player-provider';
 
 export interface TrackPreviewButtonProps {
   showId: string;

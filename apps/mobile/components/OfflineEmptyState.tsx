@@ -13,8 +13,8 @@ import { Text, View, StyleSheet } from 'react-native';
 import { WifiOff } from 'lucide-react-native';
 
 import { EmptyState } from './EmptyState';
-import { useTheme } from '../lib/theme';
-import { useNetwork } from '../lib/network';
+import { useTheme } from '@/lib/theme';
+import { useNetwork } from '@/lib/network';
 
 export interface OfflineEmptyStateProps {
   title?: string;

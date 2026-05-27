@@ -35,14 +35,14 @@ import { GripVertical, Plus, X, Star } from 'lucide-react-native';
 import NestableDraggableFlatListImport, {
   type RenderItemParams,
 } from 'react-native-draggable-flatlist';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
-import { trpc } from '../lib/trpc';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { trpc } from '@/lib/trpc';
 import { useDebouncedValue } from '@showbook/shared/hooks';
-import { hapticSelection } from '../lib/haptics';
+import { hapticSelection } from '@/lib/haptics';
 import { ArtistTypeahead, type ArtistSuggestion } from './ArtistTypeahead';
 import { FormField } from './FormField';
-import type { PerformerRow, ShowFormKind } from '../lib/showForm';
+import type { PerformerRow, ShowFormKind } from '@/lib/showForm';
 
 // react-native-draggable-flatlist's CJS interop sometimes resolves the
 // default export under `.default`; both Metro and TS-node paths land

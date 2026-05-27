@@ -8,7 +8,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { useTheme } from '../../lib/theme';
+import { useTheme } from '@/lib/theme';
 
 export interface SectionFrameProps {
   title: string;

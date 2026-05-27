@@ -17,7 +17,7 @@
 
 import React from 'react';
 import Svg, { G, Path, Text } from 'react-native-svg';
-import { useTheme } from '../lib/theme';
+import { useTheme } from '@/lib/theme';
 
 export interface BrandMarkProps {
   size?: number;

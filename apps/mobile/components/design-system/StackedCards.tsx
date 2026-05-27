@@ -19,8 +19,8 @@ import Animated, {
   Easing,
   useReducedMotion,
 } from 'react-native-reanimated';
-import { useTheme, type Kind } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
+import { useTheme, type Kind } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 
 export type StackedCardState = 'ticketed' | 'watching' | 'seen';
 

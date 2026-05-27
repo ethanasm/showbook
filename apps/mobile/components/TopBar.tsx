@@ -12,7 +12,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { useTheme } from '../lib/theme';
+import { useTheme } from '@/lib/theme';
 
 export interface TopBarProps {
   title: string;

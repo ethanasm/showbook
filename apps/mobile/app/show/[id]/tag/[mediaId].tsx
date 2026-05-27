@@ -25,11 +25,11 @@ import { ChevronLeft, Check, AlertCircle } from 'lucide-react-native';
 
 import { TopBar } from '../../../../components/TopBar';
 import { EmptyState } from '../../../../components/EmptyState';
-import { useTheme } from '../../../../lib/theme';
-import { trpc } from '../../../../lib/trpc';
-import { CACHE_DEFAULTS } from '../../../../lib/cache';
-import { RADII } from '../../../../lib/theme-utils';
-import { useFeedback } from '../../../../lib/feedback';
+import { useTheme } from '@/lib/theme';
+import { trpc } from '@/lib/trpc';
+import { CACHE_DEFAULTS } from '@/lib/cache';
+import { RADII } from '@/lib/theme-utils';
+import { useFeedback } from '@/lib/feedback';
 
 interface ShowPerformer {
   performerId: string;

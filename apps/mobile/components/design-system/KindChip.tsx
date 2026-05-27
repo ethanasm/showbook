@@ -6,8 +6,8 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { useTheme, type Kind } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
+import { useTheme, type Kind } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 
 interface KindChipProps {
   kind: Kind;

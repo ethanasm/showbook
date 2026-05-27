@@ -21,17 +21,17 @@ import { Check, GripVertical, Pencil, Search, X } from 'lucide-react-native';
 import DraggableFlatListImport, {
   type RenderItemParams,
 } from 'react-native-draggable-flatlist';
-import { useTheme } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 import { RemoteImage } from '../design-system';
-import { trpc } from '../../lib/trpc';
+import { trpc } from '@/lib/trpc';
 import { useDebouncedValue } from '@showbook/shared/hooks';
 import type {
   FestivalArtistTier,
   FestivalLineupFlow,
   FestivalLineupRow,
   FestivalLineupTmMatch,
-} from '../../lib/festival-lineup/useFestivalLineup';
+} from '@/lib/festival-lineup/useFestivalLineup';
 
 // Standalone draggable list (manages its own scrolling). We use this
 // rather than `NestableDraggableFlatList` because the picker is the

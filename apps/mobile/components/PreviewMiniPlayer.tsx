@@ -11,9 +11,9 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
-import { usePreviewPlayer } from '../lib/preview-player-provider';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { usePreviewPlayer } from '@/lib/preview-player-provider';
 
 export function PreviewMiniPlayer(): React.JSX.Element | null {
   const ctx = usePreviewPlayer();

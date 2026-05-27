@@ -18,7 +18,7 @@
 
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { useTheme } from '../lib/theme';
+import { useTheme } from '@/lib/theme';
 
 const LEFT_WIDTH = 320;
 const RIGHT_WIDTH = 360;
