@@ -490,7 +490,7 @@ function coldReasonCopy(
     case "wrong_kind":
       return {
         title: "Predicted setlists are for concerts + festivals",
-        body: "Comedy, theatre, sports, and film shows don't have rotating setlist semantics — we skip the prediction for these.",
+        body: "Comedy and theatre shows don't have rotating setlist semantics — we skip the prediction for these.",
       };
     case "production_show":
       return {
