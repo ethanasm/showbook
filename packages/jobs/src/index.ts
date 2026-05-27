@@ -10,6 +10,10 @@ export { runDailyDigest } from './notifications';
 export { runPruneOrphanCatalog } from './prune-orphan-catalog';
 export { runBackfillShowCoverImages } from './backfill-show-cover-images';
 export {
+  runBackfillShowTicketUrls,
+  type BackfillShowTicketUrlsSummary,
+} from './backfill-show-ticket-urls';
+export {
   runBackfillPerformerSpotifyIds,
   type BackfillPerformerSpotifyIdsSummary,
 } from './backfill-performer-spotify-ids';
