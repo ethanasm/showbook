@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { decodeMobileToken } from "@/lib/mobile-token";
+import { isEmailAllowed, readAllowlistFromEnv } from "@/lib/auth-allowlist";
+import { resolveTrpcSession } from "../../trpc/[trpc]/resolve-session";
 import {
   getMediaConfig,
   storeLocalObject,
@@ -8,6 +11,34 @@ import {
 import { child } from "@showbook/observability";
 
 const log = child({ component: "web.api.media-upload" });
+
+const AUTH_SECRET = process.env.AUTH_SECRET;
+
+/**
+ * Resolve the calling user. The mobile app authenticates with
+ * `Authorization: Bearer <jwt>` (per the tRPC mount in
+ * `app/api/trpc/[trpc]/route.ts`); the web app uses NextAuth cookies.
+ * Reusing `resolveTrpcSession` keeps the two paths in sync — if a
+ * removed-from-allowlist user can't hit tRPC, they can't hit this
+ * route either.
+ */
+async function resolveUserId(req: Request): Promise<string | null> {
+  const session = await resolveTrpcSession({
+    authHeader: req.headers.get("authorization"),
+    secret: AUTH_SECRET,
+    decode: decodeMobileToken,
+    allowlist: readAllowlistFromEnv(),
+    isEmailAllowed,
+    getCookieSession: async () => {
+      const cookieSession = await auth();
+      return cookieSession?.user?.id
+        ? { user: { id: cookieSession.user.id } }
+        : null;
+    },
+    log,
+  });
+  return session?.user?.id ?? null;
+}
 
 /**
  * PUT /api/media/upload?key=<storage-key>
@@ -44,8 +75,7 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  const session = await auth();
-  const userId = session?.user?.id;
+  const userId = await resolveUserId(request);
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
