@@ -31,6 +31,18 @@ export function SpotifyMark({ size = 14 }: MarkProps): React.JSX.Element {
   );
 }
 
+export function GoogleMapsMark({ size = 14 }: MarkProps): React.JSX.Element {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        fill="#EA4335"
+        d="M12 0C7.31 0 3.5 3.81 3.5 8.5c0 6.38 8.5 15.5 8.5 15.5s8.5-9.12 8.5-15.5C20.5 3.81 16.69 0 12 0z"
+      />
+      <Circle cx={12} cy={8.5} r={3} fill="#fff" />
+    </Svg>
+  );
+}
+
 export function TicketmasterMark({ size = 14 }: MarkProps): React.JSX.Element {
   return (
     <Svg width={size} height={size} viewBox="0 0 32 32">
