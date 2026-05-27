@@ -260,14 +260,12 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   rowName: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 15,
-    fontWeight: '600',
   },
   rowMeta: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 10,
-    fontWeight: '500',
     letterSpacing: 1,
   },
   checkbox: {
@@ -290,8 +288,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 15,
-    fontWeight: '600',
   },
 });

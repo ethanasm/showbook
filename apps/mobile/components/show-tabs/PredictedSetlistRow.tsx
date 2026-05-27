@@ -139,9 +139,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   title: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 14,
-    fontWeight: '500',
     letterSpacing: -0.2,
     flexShrink: 1,
   },
@@ -152,9 +151,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   badgeText: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 9.5,
-    fontWeight: '600',
     letterSpacing: 0.6,
   },
 });

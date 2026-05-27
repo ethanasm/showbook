@@ -431,9 +431,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 15,
-    fontWeight: '600',
   },
   chooserRow: {
     marginTop: 16,
@@ -449,9 +448,8 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
   },
   chooserLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 14,
-    fontWeight: '600',
   },
   addMoreRow: {
     marginTop: 12,
@@ -469,8 +467,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   addMoreLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 12,
-    fontWeight: '500',
   },
 });

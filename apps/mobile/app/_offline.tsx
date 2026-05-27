@@ -92,23 +92,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   title: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 22,
-    fontWeight: '700',
     textAlign: 'center',
   },
   subtitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 14,
-    fontWeight: '400',
     textAlign: 'center',
     lineHeight: 20,
     maxWidth: 320,
   },
   meta: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11,
-    fontWeight: '500',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     marginTop: 4,
@@ -123,9 +120,8 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
   },
   ctaLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 14,
-    fontWeight: '600',
   },
   pressed: {
     opacity: 0.85,

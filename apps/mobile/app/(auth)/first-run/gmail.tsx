@@ -138,20 +138,17 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   emailFrom: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10,
-    fontWeight: '600',
   },
   emailSubj: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 9,
-    fontWeight: '400',
     marginTop: 1,
   },
   matchTag: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 8,
-    fontWeight: '700',
     letterSpacing: 0.8,
   },
   disclaimerFooter: {

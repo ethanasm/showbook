@@ -122,9 +122,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   chipText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 0.2,
   },
   captionBar: {
@@ -136,8 +135,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   captionText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11,
-    fontWeight: '500',
   },
 });

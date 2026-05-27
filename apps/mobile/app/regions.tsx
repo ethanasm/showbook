@@ -588,9 +588,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   counter: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11,
-    fontWeight: '500',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
@@ -626,9 +625,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   rowLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 14,
-    fontWeight: '500',
   },
   rowSub: {
     fontFamily: 'Geist Sans',
@@ -652,9 +650,8 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   addButtonLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 12,
-    fontWeight: '600',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
@@ -672,9 +669,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   formLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 0.9,
     textTransform: 'uppercase',
   },
@@ -697,9 +693,8 @@ const styles = StyleSheet.create({
     borderRadius: RADII.md,
   },
   suggestionName: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 13,
-    fontWeight: '600',
   },
   suggestionMeta: {
     fontFamily: 'Geist Sans',
@@ -726,9 +721,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   radiusChipLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 0.4,
   },
   formError: {
@@ -749,9 +743,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryButtonLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 13,
-    fontWeight: '700',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
@@ -764,9 +757,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   secondaryButtonLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 13,
-    fontWeight: '600',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },

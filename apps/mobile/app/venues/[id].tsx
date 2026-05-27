@@ -896,14 +896,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   heroLocationText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 13,
-    fontWeight: '400',
   },
   heroSummary: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 12.5,
-    fontWeight: '400',
     lineHeight: 18,
   },
   heroActions: {
@@ -920,9 +918,8 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
   },
   followLabel: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 0.6,
   },
   mapsButton: {
@@ -935,9 +932,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   mapsLabel: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 0.6,
   },
   section: {
@@ -951,9 +947,8 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   sectionTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11,
-    fontWeight: '500',
     letterSpacing: 11 * 0.08,
     textTransform: 'uppercase',
   },
@@ -976,22 +971,19 @@ const styles = StyleSheet.create({
     paddingLeft: 12,
   },
   upcomingMonth: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 1.05,
     textTransform: 'uppercase',
   },
   upcomingDay: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 22,
-    fontWeight: '700',
     lineHeight: 26,
   },
   upcomingDow: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 10,
-    fontWeight: '400',
     textTransform: 'uppercase',
   },
   upcomingContent: {
@@ -1004,9 +996,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   upcomingTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 15,
-    fontWeight: '600',
     lineHeight: 19,
   },
   upcomingTixPill: {

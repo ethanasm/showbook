@@ -19,9 +19,8 @@ export function Eyebrow({ children, style, color }: EyebrowProps): React.JSX.Ele
     <Text
       style={[
         {
-          fontFamily: 'Geist Mono',
+          fontFamily: 'Geist Mono 500',
           fontSize: 11,
-          fontWeight: '500',
           letterSpacing: 2.4,
           textTransform: 'uppercase',
           color: color ?? tokens.colors.accent,

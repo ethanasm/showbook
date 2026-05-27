@@ -311,9 +311,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   venuePillText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 12,
-    fontWeight: '600',
   },
   extractBtn: {
     flexDirection: 'row',
@@ -325,8 +324,7 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
   },
   extractBtnLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 13,
-    fontWeight: '600',
   },
 });

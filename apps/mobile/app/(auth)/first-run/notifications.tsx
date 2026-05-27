@@ -90,8 +90,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   tagText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11,
-    fontWeight: '500',
   },
 });

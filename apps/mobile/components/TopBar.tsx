@@ -101,17 +101,15 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   eyebrow: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 10.5 * 0.1, // 0.1em per design
     textTransform: 'uppercase',
     marginBottom: 2,
   },
   titleRegular: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 17,
-    fontWeight: '600',
     lineHeight: 21,
   },
   titleLarge: {
@@ -119,9 +117,8 @@ const styles = StyleSheet.create({
     // Matches the design source (showbook-appheader.jsx) where AppHeader's
     // large variant uses 'Geist', not Fraunces. Fraunces is reserved for
     // serif headlines on detail screens (heroTitle / headliner type ramp).
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 28,
-    fontWeight: '700',
     lineHeight: 31, // 28 × 1.1
     letterSpacing: -0.28, // -0.01em
   },

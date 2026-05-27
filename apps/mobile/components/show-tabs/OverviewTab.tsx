@@ -209,9 +209,8 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   statValue: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 17,
-    fontWeight: '600',
     letterSpacing: -0.4,
   },
   statSub: {
@@ -244,9 +243,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
   },
   lineupName: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 18,
-    fontWeight: '600',
     letterSpacing: -0.4,
     marginTop: 2,
   },

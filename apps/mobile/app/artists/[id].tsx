@@ -646,9 +646,8 @@ const styles = StyleSheet.create({
     letterSpacing: -0.6,
   },
   heroSummary: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 13,
-    fontWeight: '400',
     lineHeight: 18,
   },
   heroActions: {
@@ -665,9 +664,8 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
   },
   followLabel: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 0.6,
   },
   spotifyButton: {
@@ -680,9 +678,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   spotifyLabel: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 0.6,
   },
   setlistfmButton: {
@@ -695,9 +692,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   setlistfmLabel: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 0.6,
   },
   section: {
@@ -711,9 +707,8 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   sectionTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11,
-    fontWeight: '500',
     letterSpacing: 11 * 0.08,
     textTransform: 'uppercase',
   },

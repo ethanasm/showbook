@@ -46,9 +46,8 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
   },
   label: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 1.26,
     textTransform: 'uppercase',
   },

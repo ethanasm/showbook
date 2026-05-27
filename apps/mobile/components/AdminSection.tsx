@@ -524,9 +524,8 @@ function AdminActionSheet({
 
 const styles = StyleSheet.create({
   sectionLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 1.05,
     textTransform: 'uppercase',
     paddingHorizontal: 20,
@@ -554,14 +553,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   rowLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 14,
-    fontWeight: '500',
   },
   rowSub: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 11,
-    fontWeight: '400',
     marginTop: 2,
   },
   pressed: {
@@ -596,30 +593,26 @@ const sheetStyles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 17,
-    fontWeight: '700',
     letterSpacing: -0.2,
   },
   description: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 13.5,
-    fontWeight: '400',
     lineHeight: 20,
   },
   field: {
     gap: 6,
   },
   fieldLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 1.05,
   },
   input: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 15,
-    fontWeight: '400',
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: RADII.lg,
     paddingHorizontal: 12,
@@ -635,15 +628,13 @@ const sheetStyles = StyleSheet.create({
   },
   noteText: {
     flex: 1,
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 12,
-    fontWeight: '400',
     lineHeight: 17,
   },
   status: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 12,
-    fontWeight: '400',
     lineHeight: 17,
   },
   footer: {

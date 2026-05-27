@@ -454,9 +454,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   coldTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 18,
-    fontWeight: '600',
     textAlign: 'center',
   },
   coldBody: {

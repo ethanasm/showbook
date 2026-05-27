@@ -232,28 +232,24 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   dateMonth: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11,
-    fontWeight: '500',
     textTransform: 'uppercase',
     letterSpacing: 11 * 0.05,
   },
   dateDay: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 22,
-    fontWeight: '700',
     lineHeight: 26,
   },
   dateDow: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 10,
-    fontWeight: '400',
     textTransform: 'uppercase',
   },
   dateYear: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 9,
-    fontWeight: '400',
     letterSpacing: 0.3,
     marginTop: 1,
   },
@@ -269,15 +265,13 @@ const styles = StyleSheet.create({
     flexWrap: 'nowrap',
   },
   headliner: {
-    fontFamily: 'Geist Sans', // sans-serif per design source — NOT Fraunces
+    fontFamily: 'Geist Sans 700', // sans-serif per design source — NOT Fraunces
     fontSize: 16,
-    fontWeight: '700',
     lineHeight: 21,
   },
   venue: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 13,
-    fontWeight: '400',
     lineHeight: 18,
   },
   chevronContainer: {

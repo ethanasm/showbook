@@ -85,9 +85,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   wordmark: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 22,
-    fontWeight: '700',
     letterSpacing: -0.5,
     lineHeight: 26,
   },

@@ -138,9 +138,8 @@ export function FirstRunStep({
  * accent-colored span (e.g. <Text>Don't miss the <Text color=accent>on-sale.</Text></Text>).
  */
 export const heroTitleStyle = {
-  fontFamily: 'Geist Sans',
+  fontFamily: 'Geist Sans 700',
   fontSize: 30,
-  fontWeight: '700' as const,
   lineHeight: 33,
   letterSpacing: -0.3,
 };
@@ -169,9 +168,8 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
   },
   skipText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 13,
-    fontWeight: '500',
   },
   center: {
     flex: 1,
@@ -193,17 +191,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   eyebrow: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 1.54, // 0.14em on 11pt
     textTransform: 'uppercase',
   },
   title: heroTitleStyle,
   body: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 14,
-    fontWeight: '400',
     lineHeight: 22,
     textAlign: 'center',
     maxWidth: 320,
@@ -218,18 +214,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 14,
-    fontWeight: '700',
   },
   secondary: {
     paddingVertical: 12,
     alignItems: 'center',
   },
   secondaryLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 13,
-    fontWeight: '500',
   },
   pressed: {
     opacity: 0.85,

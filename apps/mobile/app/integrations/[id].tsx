@@ -199,9 +199,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   backLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 12,
-    fontWeight: '500',
   },
   scroll: {
     padding: 16,
@@ -223,9 +222,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   heroTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 20,
-    fontWeight: '700',
     marginTop: 4,
   },
   statusRow: {
@@ -234,9 +232,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   statusLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 0.9,
   },
   blurb: {
@@ -248,9 +245,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   sectionLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 1.05,
     textTransform: 'uppercase',
     paddingHorizontal: 4,

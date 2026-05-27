@@ -183,8 +183,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   monogram: {
-    fontFamily: 'Geist Sans',
-    fontWeight: '700',
+    fontFamily: 'Geist Sans 700',
     letterSpacing: 0,
     textTransform: 'uppercase',
   },

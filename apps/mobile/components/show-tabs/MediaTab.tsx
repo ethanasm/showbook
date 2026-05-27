@@ -293,9 +293,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   title: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 13.5,
-    fontWeight: '500',
   },
   sub: {
     fontFamily: 'Geist Sans',

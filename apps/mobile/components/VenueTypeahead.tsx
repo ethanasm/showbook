@@ -222,9 +222,8 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 15,
-    fontWeight: '400',
     padding: 0,
   },
   list: {
@@ -240,14 +239,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   rowName: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 14,
-    fontWeight: '600',
   },
   rowMeta: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 12,
-    fontWeight: '400',
     marginTop: 2,
   },
 });

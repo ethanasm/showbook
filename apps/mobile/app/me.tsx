@@ -500,29 +500,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 22,
-    fontWeight: '700',
   },
   userText: {
     flex: 1,
     minWidth: 0,
   },
   userName: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 17,
-    fontWeight: '700',
   },
   userSub: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 12,
-    fontWeight: '400',
     marginTop: 2,
   },
   sectionLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 1.05,
     textTransform: 'uppercase',
     paddingHorizontal: 20,
@@ -540,9 +536,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   cardEyebrow: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 0.88,
     textTransform: 'uppercase',
     marginBottom: 8,
@@ -562,14 +557,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   rowLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 14,
-    fontWeight: '500',
   },
   rowSub: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 11,
-    fontWeight: '400',
     marginTop: 2,
   },
   signOutRow: {
@@ -579,17 +572,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   signOutLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 14,
-    fontWeight: '500',
   },
   pressed: {
     opacity: 0.85,
   },
   footer: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 1.05,
     textAlign: 'center',
     paddingTop: 24,

@@ -147,9 +147,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   title: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 17,
-    fontWeight: '600',
     letterSpacing: -0.2,
   },
   hint: {
@@ -181,16 +180,14 @@ const styles = StyleSheet.create({
     borderRadius: RADII.lg,
   },
   rowDow: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 0.8,
     width: 32,
   },
   rowLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 14.5,
-    fontWeight: '500',
     flex: 1,
   },
   cancelBtn: {
@@ -202,8 +199,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   cancelLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 13,
-    fontWeight: '500',
   },
 });

@@ -76,9 +76,8 @@ function DefaultErrorFallback({
       <Text
         style={{
           color: colors.ink,
-          fontFamily: 'Geist Sans',
+          fontFamily: 'Geist Sans 600',
           fontSize: 17,
-          fontWeight: '600',
           marginTop: 16,
           textAlign: 'center',
         }}
@@ -107,9 +106,8 @@ function DefaultErrorFallback({
         <Text
           style={{
             color: colors.accentText,
-            fontFamily: 'Geist Sans',
+            fontFamily: 'Geist Sans 600',
             fontSize: 14,
-            fontWeight: '600',
           }}
         >
           Try again

@@ -115,8 +115,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   label: {
-    fontFamily: 'Geist Sans',
-    fontWeight: '600',
+    fontFamily: 'Geist Sans 600',
     textTransform: 'uppercase',
   },
 });

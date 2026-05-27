@@ -98,9 +98,8 @@ export default function TabsLayout(): React.JSX.Element {
           height: TAB_BAR_BASE_HEIGHT + bottomPad,
         },
         tabBarLabelStyle: {
-          fontFamily: 'Geist Sans',
+          fontFamily: 'Geist Sans 500',
           fontSize: 10,
-          fontWeight: '500',
           letterSpacing: 0.2,
         },
       }}

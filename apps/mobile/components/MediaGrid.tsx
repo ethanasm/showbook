@@ -201,8 +201,7 @@ const styles = StyleSheet.create({
     borderRadius: RADII.md,
   },
   addRowText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 13,
-    fontWeight: '600',
   },
 });

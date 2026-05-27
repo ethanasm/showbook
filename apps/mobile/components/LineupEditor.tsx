@@ -484,14 +484,12 @@ const styles = StyleSheet.create({
   },
   chipName: {
     flex: 1,
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 14,
-    fontWeight: '600',
   },
   chipMeta: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 9,
-    fontWeight: '600',
     letterSpacing: 0.8,
   },
   tierPill: {
@@ -504,9 +502,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   tierPillText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 9.5,
-    fontWeight: '700',
     letterSpacing: 0.9,
   },
   removeBtn: {
@@ -523,16 +520,14 @@ const styles = StyleSheet.create({
     marginLeft: 26, // align under the input column (drag handle + small gap)
   },
   characterLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10,
-    fontWeight: '600',
     letterSpacing: 1,
   },
   characterInput: {
     flex: 1,
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 13,
-    fontWeight: '400',
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: RADII.md,
     paddingHorizontal: 10,
@@ -549,8 +544,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   addBtnText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 13,
-    fontWeight: '600',
   },
 });

@@ -70,8 +70,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   label: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 12,
-    fontWeight: '600',
   },
 });

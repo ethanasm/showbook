@@ -654,9 +654,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   selectAll: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 500',
     fontSize: 10,
-    fontWeight: '500',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
@@ -671,9 +670,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statValue: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 12,
-    fontWeight: '600',
   },
   statLabel: {
     fontFamily: 'Geist Mono',
@@ -726,9 +724,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   name: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 14,
-    fontWeight: '500',
     letterSpacing: -0.1,
   },
   sub: {
@@ -748,9 +745,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   editLabel: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 9,
-    fontWeight: '600',
     letterSpacing: 0.8,
   },
   tierToggle: {
@@ -767,9 +763,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   tierLabel: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 9.5,
-    fontWeight: '600',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
@@ -801,9 +796,8 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   useTypedLabel: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 9,
-    fontWeight: '600',
     letterSpacing: 0.7,
   },
   cancelBtn: {

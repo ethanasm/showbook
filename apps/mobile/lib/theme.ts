@@ -65,8 +65,8 @@ export interface ColorTokens {
 
 export interface TypeStyle {
   fontSize: number;
-  fontWeight: '400' | '500' | '600' | '700';
   fontFamily: string;
+  fontWeight?: '400' | '500' | '600' | '700';
   lineHeight: number;
   letterSpacing?: number;
   textTransform?: 'uppercase' | 'capitalize' | 'lowercase' | 'none';

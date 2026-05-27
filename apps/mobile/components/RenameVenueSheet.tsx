@@ -191,9 +191,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   title: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 17,
-    fontWeight: '600',
     letterSpacing: -0.2,
   },
   hint: {
@@ -206,15 +205,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   label: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 1.05,
   },
   input: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 15,
-    fontWeight: '400',
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: RADII.lg,
     paddingHorizontal: 12,
@@ -233,9 +230,8 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
   },
   cancelLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 13,
-    fontWeight: '500',
   },
   confirmBtn: {
     paddingVertical: 10,
@@ -243,8 +239,7 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
   },
   confirmLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 13,
-    fontWeight: '600',
   },
 });

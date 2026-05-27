@@ -112,15 +112,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   name: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 16,
-    fontWeight: '600',
     lineHeight: 21,
   },
   subtitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 12.5,
-    fontWeight: '400',
     lineHeight: 17,
   },
   chevron: {

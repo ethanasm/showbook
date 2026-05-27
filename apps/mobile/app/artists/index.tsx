@@ -197,9 +197,8 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
   },
   listLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 1.05,
     textTransform: 'uppercase',
     paddingHorizontal: 4,

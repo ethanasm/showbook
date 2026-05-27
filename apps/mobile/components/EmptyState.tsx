@@ -64,15 +64,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 17,
-    fontWeight: '600',
     textAlign: 'center',
   },
   subtitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 14,
-    fontWeight: '400',
     textAlign: 'center',
     maxWidth: 260,
     lineHeight: 20,
@@ -87,8 +85,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   ctaLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 14,
-    fontWeight: '600',
   },
 });

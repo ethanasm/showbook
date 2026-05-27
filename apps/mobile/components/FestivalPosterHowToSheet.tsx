@@ -131,10 +131,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   eyebrow: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 11,
     letterSpacing: 1.4,
-    fontWeight: '600',
   },
   title: {
     fontFamily: 'Fraunces',
@@ -168,9 +167,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   ctaLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 14,
-    fontWeight: '600',
     letterSpacing: 0.1,
   },
   hint: {

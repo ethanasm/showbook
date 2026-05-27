@@ -220,14 +220,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   title: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 18,
-    fontWeight: '700',
   },
   subtitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 12,
-    fontWeight: '400',
     marginTop: 2,
   },
   retryAll: {
@@ -239,9 +237,8 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
   },
   retryAllLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 13,
-    fontWeight: '600',
   },
   scroll: {
     paddingHorizontal: 16,
@@ -264,20 +261,17 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   rowLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 14,
-    fontWeight: '600',
   },
   rowMeta: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 11,
-    fontWeight: '400',
     marginTop: 2,
   },
   rowError: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11,
-    fontWeight: '500',
     marginTop: 4,
   },
   discardBtn: {

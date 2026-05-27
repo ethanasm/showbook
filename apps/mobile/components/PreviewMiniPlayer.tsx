@@ -93,9 +93,8 @@ const styles = StyleSheet.create({
     borderRadius: RADII.xs,
   },
   label: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 13,
-    fontWeight: '500',
     flexShrink: 1,
   },
 });

@@ -309,9 +309,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   fallback: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 14,
-    fontWeight: '500',
   },
   topBar: {
     position: 'absolute',
@@ -340,10 +339,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   caption: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 14,
     color: '#fff',
-    fontWeight: '500',
   },
   bottomActions: {
     flexDirection: 'row',
@@ -360,15 +358,13 @@ const styles = StyleSheet.create({
   },
   tagBtnText: {
     color: '#fff',
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 12,
-    fontWeight: '600',
   },
   counter: {
     color: 'rgba(255,255,255,0.7)',
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11,
-    fontWeight: '500',
     letterSpacing: 1,
   },
   page: {

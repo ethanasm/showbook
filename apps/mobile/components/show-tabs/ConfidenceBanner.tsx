@@ -126,15 +126,13 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   number: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 32,
-    fontWeight: '600',
     letterSpacing: -1,
   },
   pct: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 500',
     fontSize: 15,
-    fontWeight: '500',
   },
   smallLabel: {
     fontFamily: 'Geist Mono',
@@ -142,9 +140,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   smallValue: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 0.7,
   },
   source: {

@@ -1119,9 +1119,8 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   summaryText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11,
-    fontWeight: '500',
     letterSpacing: 11 * 0.06,
     textTransform: 'uppercase',
   },
@@ -1149,9 +1148,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   loadMoreLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 13,
-    fontWeight: '600',
     letterSpacing: -0.1,
   },
   loadMoreMeta: {
@@ -1170,9 +1168,8 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
   },
   regionHeaderName: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 15,
-    fontWeight: '600',
     letterSpacing: -0.1,
   },
   regionHeaderMeta: {
@@ -1208,35 +1205,30 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   dateRunRange: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 15,
-    fontWeight: '700',
     letterSpacing: -0.1,
   },
   dateRunSub: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 1.05,
     textTransform: 'uppercase',
   },
   dateMonth: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 1.05,
     textTransform: 'uppercase',
   },
   dateDay: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 22,
-    fontWeight: '700',
     lineHeight: 24,
   },
   dateYear: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11,
-    fontWeight: '500',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
@@ -1254,22 +1246,19 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   cardTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 16,
-    fontWeight: '700',
     lineHeight: 20,
     marginTop: 2,
   },
   cardSupport: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 12.5,
-    fontWeight: '400',
     lineHeight: 17,
   },
   cardVenue: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 12.5,
-    fontWeight: '400',
     lineHeight: 17,
   },
   metaRow: {
@@ -1287,16 +1276,14 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
   },
   statusLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 10.5 * 0.06,
     textTransform: 'uppercase',
   },
   onSaleText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11.5,
-    fontWeight: '500',
     letterSpacing: 0.3,
   },
 });
