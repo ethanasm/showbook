@@ -18,6 +18,7 @@ import { ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../lib/theme';
 import { hapticImpactMedium, hapticSelection } from '../lib/haptics';
 import { useFeedback } from '../lib/feedback';
+import { openTicketmasterUrl } from '../lib/ticketmaster-deep-link';
 import { KindBadge } from './KindBadge';
 import { StateChip } from './StateChip';
 import { RemoteImage } from './design-system/RemoteImage';
@@ -168,7 +169,7 @@ export function ShowCard({
         <Pressable
           onPress={() => {
             void hapticSelection();
-            Linking.openURL(show.ticketUrl as string).catch(() => {
+            openTicketmasterUrl(show.ticketUrl as string, Linking.openURL).catch(() => {
               showToast({ kind: 'error', text: "Couldn't open Ticketmaster." });
             });
           }}

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { auth } from "@/auth";
 import { decodeMobileToken } from "@/lib/mobile-token";
 import { isEmailAllowed, readAllowlistFromEnv } from "@/lib/auth-allowlist";
@@ -9,6 +10,12 @@ import {
   uploadToR2,
 } from "@showbook/api";
 import { child } from "@showbook/observability";
+
+// Force the route onto the Node runtime + dynamic so Next.js doesn't try
+// to statically optimise it, and the `auth()` / AWS SDK calls run on a
+// real Node process every request.
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const log = child({ component: "web.api.media-upload" });
 
@@ -41,62 +48,91 @@ async function resolveUserId(req: Request): Promise<string | null> {
 }
 
 /**
+ * Plain-text response with explicit Content-Length and `Connection: close`.
+ *
+ * iOS NSURLSession background upload tasks (which is what
+ * `expo-file-system`'s `createUploadTask` uses for ≥ a few MB) parse the
+ * server response through `LocalDownloadTask`, which has been observed to
+ * reject `NextResponse.json()` chunked-encoded responses with
+ * `NSURLErrorCannotParseResponse (-1017)` when the connection is HTTP/2
+ * via Cloudflare Tunnel. A small `text/plain` body with explicit
+ * Content-Length and a directive to close the connection sidesteps that
+ * parser. Same shape on success and on errors so the iOS side never has
+ * to negotiate a content-type mid-response.
+ */
+function plainResponse(
+  status: number,
+  body: string,
+): NextResponse {
+  const bytes = Buffer.byteLength(body, "utf8");
+  return new NextResponse(body, {
+    status,
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Content-Length": String(bytes),
+      "Cache-Control": "no-store",
+      Connection: "close",
+    },
+  });
+}
+
+/**
  * PUT /api/media/upload?key=<storage-key>
  *
- * Server-side upload landing pad for the mobile + web clients. In r2
- * mode this used to short-circuit to a 404 (clients were expected to
- * PUT directly to a presigned R2 URL), but that path silently 403'd
- * for every mobile upload — 29 pending media_assets piled up in prod
- * across two months without a single one reaching `ready`, and the
- * mobile-side telemetry meant to capture R2's response body never
- * round-tripped back. Routing the bytes through this endpoint instead:
+ * Server-side upload landing pad for the mobile + web clients. Writes the
+ * request body to R2 (or to local disk in `local` storage mode) using the
+ * AWS SDK — the same transport that already works in prod for
+ * `headFromR2` / `deleteFromR2`. The previous direct-to-R2 presigned URL
+ * path silently 403'd every mobile upload for two months (#397).
  *
- *   1. Uses `uploadToR2` (AWS SDK `PutObjectCommand`) which travels the
- *      same transport as `headFromR2` / `deleteFromR2` — i.e. the
- *      operations that already work in prod.
- *   2. Eliminates every variable in the presigned-URL chain (SDK
- *      middleware, `x-id=PutObject` query param, mobile NSURLSession
- *      header quirks, Cloudflare WAF rules on `*.r2.cloudflarestorage.com`).
- *   3. Lets the server SEE upload failures and log them. The mobile
- *      previously couldn't report 403s back because client telemetry
- *      wasn't reaching us; the server has no such gap.
- *
- * Trade-off: bandwidth doubles (mobile→server→R2 instead of mobile→R2),
- * but for ≤5 MB photos and ≤150 MB videos on a self-hosted box with
- * free R2 egress this is fine. We'll route around it if it ever becomes
- * a bottleneck.
+ * The body is read in full BEFORE the storage write so we never half-close
+ * an iOS background URLSession's upload stream with an early failure
+ * response — iOS treats that as an unparseable response and surfaces
+ * `NSURLErrorCannotParseResponse (-1017)`, which masks the real error.
  */
 export async function PUT(request: NextRequest) {
+  const requestId = randomUUID();
+  const startedAt = Date.now();
+
+  // Unconditional entry log so we always have evidence the route was
+  // reached, independent of where it later fails. The mobile-side
+  // telemetry sink has been silent in prod for 30+ days, so this is
+  // our only signal that the upload made it to the server.
+  log.info(
+    {
+      event: "media.upload.request",
+      requestId,
+      contentLengthHeader: request.headers.get("content-length"),
+      contentTypeHeader: request.headers.get("content-type"),
+      userAgent: request.headers.get("user-agent"),
+    },
+    "Upload request received",
+  );
+
   const config = getMediaConfig();
   if (config.storageMode === "disabled") {
-    return NextResponse.json(
-      { error: "Media uploads are disabled" },
-      { status: 404 },
-    );
+    return plainResponse(404, "media uploads are disabled");
   }
 
   const userId = await resolveUserId(request);
   if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return plainResponse(401, "unauthorized");
   }
 
   const key = request.nextUrl.searchParams.get("key");
   if (!key) {
-    return NextResponse.json({ error: "Missing key" }, { status: 400 });
+    return plainResponse(400, "missing key");
   }
 
-  // Keys are issued by createUploadIntent under `showbook/<userId>/...`.
-  // Re-check the prefix here so an authenticated user can't PUT into
-  // someone else's folder by hand-crafting the key.
   if (!key.startsWith(`showbook/${userId}/`)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return plainResponse(403, "forbidden");
   }
 
   const contentType = (request.headers.get("content-type") ?? "").toLowerCase();
   const isImage = config.allowedImageTypes.includes(contentType);
   const isVideo = config.allowedVideoTypes.includes(contentType);
   if (!isImage && !isVideo) {
-    return NextResponse.json({ error: "Unsupported content type" }, { status: 415 });
+    return plainResponse(415, `unsupported content type: ${contentType}`);
   }
 
   const maxBytes = isVideo ? config.videoMaxBytes : config.photoMaxSourceBytes;
@@ -105,41 +141,39 @@ export async function PUT(request: NextRequest) {
     10,
   );
   if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
-    return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+    return plainResponse(413, "payload too large");
   }
 
+  // Drain the request body to completion BEFORE doing anything that could
+  // fail. iOS NSURLSession background upload tasks treat an early server
+  // response (mid-upload) as a protocol error and surface it as
+  // `NSURLErrorCannotParseResponse (-1017)`, masking whatever real error
+  // the server tried to communicate. Keeping the body read at the top
+  // means the server only responds once the upload stream is fully
+  // consumed.
   let body: Buffer;
   try {
     body = Buffer.from(await request.arrayBuffer());
   } catch (err) {
     log.error(
-      { event: "media.upload.read_body_failed", err, key, userId },
+      { event: "media.upload.read_body_failed", err, key, userId, requestId },
       "Failed reading upload body",
     );
-    return NextResponse.json({ error: "Upload failed" }, { status: 400 });
+    return plainResponse(400, "failed to read upload body");
   }
   if (body.length > maxBytes) {
-    return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+    return plainResponse(413, "payload too large");
   }
 
-  const started = Date.now();
   try {
     if (config.storageMode === "local") {
       await storeLocalObject(key, body);
     } else if (config.storageMode === "r2") {
       await uploadToR2(key, body, contentType);
     } else {
-      return NextResponse.json(
-        { error: `Unknown storage mode: ${config.storageMode}` },
-        { status: 500 },
-      );
+      return plainResponse(500, `unknown storage mode: ${config.storageMode}`);
     }
   } catch (err) {
-    // Bubble up R2 / S3 SDK error details so the client sees something
-    // actionable instead of a generic "Upload failed". Mobile clients
-    // surface `message` directly in the upload sheet — keep it short
-    // but specific enough to spot credentials drift vs. transient
-    // network failures.
     const code =
       err && typeof err === "object" && "name" in err
         ? (err as { name?: string }).name
@@ -155,20 +189,18 @@ export async function PUT(request: NextRequest) {
         err,
         key,
         userId,
+        requestId,
         contentType,
         bytes: body.length,
         code,
         httpStatus,
-        elapsedMs: Date.now() - started,
+        elapsedMs: Date.now() - startedAt,
         storageMode: config.storageMode,
       },
-      "R2 upload failed",
+      "Object storage write failed",
     );
     const detail = err instanceof Error ? err.message : String(err);
-    return NextResponse.json(
-      { error: "Upload failed", detail, code, httpStatus },
-      { status: 502 },
-    );
+    return plainResponse(502, `upload failed: ${code ?? "error"}: ${detail}`);
   }
 
   log.info(
@@ -176,13 +208,25 @@ export async function PUT(request: NextRequest) {
       event: "media.upload.ok",
       key,
       userId,
+      requestId,
       contentType,
       bytes: body.length,
-      elapsedMs: Date.now() - started,
+      elapsedMs: Date.now() - startedAt,
       storageMode: config.storageMode,
     },
     "Upload landed in object storage",
   );
 
-  return NextResponse.json({ ok: true });
+  // 204 No Content keeps the response body empty so iOS NSURLSession has
+  // nothing to parse beyond the headers — the simplest possible shape
+  // for a successful upload, which is exactly what flaky HTTP/2 + iOS
+  // upload-task combos need.
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Content-Length": "0",
+      "Cache-Control": "no-store",
+      Connection: "close",
+    },
+  });
 }
