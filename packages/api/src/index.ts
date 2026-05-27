@@ -163,7 +163,13 @@ export {
   deleteMediaObject,
 } from './media-storage';
 export { getMediaConfig } from './media-config';
-export { uploadToR2, deleteFromR2, headFromR2, getR2Client } from './r2';
+export {
+  uploadToR2,
+  deleteFromR2,
+  headFromR2,
+  getR2Client,
+  getPresignedUploadUrl,
+} from './r2';
 export { enforceRateLimit, isRateLimited } from './rate-limit';
 export { parseAdminEmails, isAdminEmail } from './admin';
 export {

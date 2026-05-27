@@ -41,7 +41,7 @@ import { randomUUID, timingSafeEqual } from 'node:crypto';
 import {
   deleteFromR2,
   getMediaConfig,
-  getMediaUploadUrl,
+  getPresignedUploadUrl,
   headFromR2,
   isRateLimited,
   uploadToR2,
@@ -132,7 +132,15 @@ async function presignedPut(key: string): Promise<StepResult> {
   const started = Date.now();
   let uploadUrl: string;
   try {
-    uploadUrl = await getMediaUploadUrl(key, PUT_CONTENT_TYPE);
+    // Probe the raw R2 presigning path — i.e. the one we just moved
+    // production uploads OFF, but which we still want a live signal
+    // for so we know whether direct-to-R2 starts working again.
+    const config = getMediaConfig();
+    uploadUrl = await getPresignedUploadUrl(
+      key,
+      PUT_CONTENT_TYPE,
+      config.uploadUrlTtlSeconds,
+    );
   } catch (err) {
     return {
       ok: false,
