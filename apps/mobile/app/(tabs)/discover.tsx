@@ -67,7 +67,6 @@ import { useTheme, type Kind } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { useNetwork } from '../../lib/network';
 import { hapticSelection } from '../../lib/haptics';
-import { openTicketmasterUrl } from '../../lib/ticketmaster-deep-link';
 import { trpc, type RouterOutput } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
 import { useIngestPolling } from '../../lib/discover/useIngestPolling';
@@ -950,7 +949,7 @@ function AnnouncementRow({
               onPress={(e) => {
                 e.stopPropagation();
                 void hapticSelection();
-                openTicketmasterUrl(ticketUrl, Linking.openURL).catch(() => {
+                Linking.openURL(ticketUrl).catch(() => {
                   showToast({ kind: 'error', text: "Couldn't open Ticketmaster." });
                 });
               }}

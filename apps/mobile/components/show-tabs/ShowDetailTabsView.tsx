@@ -37,7 +37,6 @@ import {
 
 import { hapticSelection } from '../../lib/haptics';
 import { useFeedback } from '../../lib/feedback';
-import { openTicketmasterUrl } from '../../lib/ticketmaster-deep-link';
 
 import { useAuth } from '../../lib/auth';
 import { showCoverImageSource, venueImageSource } from '../../lib/images';
@@ -448,14 +447,12 @@ export function ShowDetailTabsView({
                 icon: <Ticket size={14} color={colors.ink} strokeWidth={2} />,
                 onPress: () => {
                   void hapticSelection();
-                  openTicketmasterUrl(show.ticketUrl as string, Linking.openURL).catch(
-                    () => {
-                      showToast({
-                        kind: 'error',
-                        text: "Couldn't open Ticketmaster.",
-                      });
-                    },
-                  );
+                  Linking.openURL(show.ticketUrl as string).catch(() => {
+                    showToast({
+                      kind: 'error',
+                      text: "Couldn't open Ticketmaster.",
+                    });
+                  });
                 },
               },
             ]
