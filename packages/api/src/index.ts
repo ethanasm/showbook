@@ -29,6 +29,8 @@ export {
   extractMusicbrainzId,
   selectBestImage,
   pickAttractionImage,
+  isPrimaryEventUrl,
+  pickPrimaryEventUrl,
   normalizeFestivalText,
   extractFestivalName,
   type TMEvent,
