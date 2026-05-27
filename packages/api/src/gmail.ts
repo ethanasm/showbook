@@ -76,7 +76,27 @@ async function rateLimitedFetch(
     return rateLimitedFetch(url, headers);
   }
   if (!response.ok) {
-    log.warn({ event: 'gmail.request.error', status: response.status, durationMs }, 'Gmail non-OK response');
+    // Clone so the caller can still `.text()` the body to build a
+    // `GmailError.detail`. Without `.clone()` the body stream is
+    // consumed once and the caller's read returns empty. We peek the
+    // first 500 chars to log Google's actual rejection reason — the
+    // bare `status: 401` warning doesn't tell us whether the token was
+    // malformed, expired, revoked, or scope-mismatched.
+    let bodyPeek: string | undefined;
+    try {
+      bodyPeek = (await response.clone().text()).slice(0, 500);
+    } catch {
+      bodyPeek = undefined;
+    }
+    log.warn(
+      {
+        event: 'gmail.request.error',
+        status: response.status,
+        durationMs,
+        body: bodyPeek,
+      },
+      'Gmail non-OK response',
+    );
   } else {
     log.debug({ event: 'gmail.request.ok', status: response.status, durationMs }, 'Gmail request');
   }

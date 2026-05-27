@@ -244,10 +244,32 @@ export async function POST(request: Request) {
     return new Response('Too Many Requests', { status: 429 });
   }
 
-  const { accessToken } = await request.json();
-  if (!accessToken) {
+  const { accessToken: accessTokenRaw } = await request.json();
+  if (!accessTokenRaw || typeof accessTokenRaw !== 'string') {
     return new Response('Missing accessToken', { status: 400 });
   }
+  // Trim defensively in case the URL-transport round trip from the
+  // OAuth callback re-attached whitespace (no-op when clean). The
+  // mobile redirect URL goes through ASWebAuthenticationSession's
+  // OS-level handler, which can normalize encoding subtly.
+  const accessToken = accessTokenRaw.trim();
+
+  // Diagnostic: log a non-PII fingerprint of the access token the scan
+  // received, so it can be cross-referenced against
+  // `gmail.callback.success.tokenInfo` to detect mid-flight corruption.
+  // Same field-name convention as the callback log.
+  log.info(
+    {
+      event: 'gmail.scan.start',
+      userId,
+      tokenInfo: {
+        length: accessToken.length,
+        head: accessToken.slice(0, 8),
+        tail: accessToken.slice(-4),
+      },
+    },
+    'Gmail scan started',
+  );
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
