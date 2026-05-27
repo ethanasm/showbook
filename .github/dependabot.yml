@@ -12,6 +12,31 @@ updates:
         patterns:
           - "@aws-sdk/*"
           - "@smithy/*"
+    ignore:
+      # TypeScript 6 turns the `baseUrl` deprecation into a hard tsc error
+      # (TS5101), which breaks @showbook/emails:build and the Next.js
+      # build until every tsconfig is migrated. Bump manually.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # ESLint 10 removed `scopeManager.addGlobals`, which eslint-config-next
+      # 16 and eslint-config-expo 55 still depend on. Bump in lockstep
+      # with the matching eslint-config-* releases.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      # babel-preset-expo / eslint-config-expo majors track the Expo SDK
+      # major; bump them together with `expo` itself, not via dependabot.
+      - dependency-name: "babel-preset-expo"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-config-expo"
+        update-types: ["version-update:semver-major"]
+      # react / react-dom are pinned via pnpm.overrides in the root
+      # package.json. Dependabot can't see the override block, so its
+      # bumps land the override and the per-app dep on different
+      # versions and pnpm --frozen-lockfile rejects the result with
+      # ERR_PNPM_LOCKFILE_CONFIG_MISMATCH. Bump them manually together
+      # with the override.
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
