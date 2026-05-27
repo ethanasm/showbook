@@ -20,7 +20,7 @@
  * synthetic rows boosting them to ~0.3 probability.
  */
 
-import { and, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte } from 'drizzle-orm';
 import type { PgTransaction } from 'drizzle-orm/pg-core';
 import { albums, songs } from '@showbook/db';
 import { child } from '@showbook/observability';
@@ -90,7 +90,7 @@ export async function synthesizeAlbumDropRows(
     .where(
       and(
         eq(songs.performerId, opts.performerId),
-        sql`${songs.spotifyTrackId} = ANY(${Array.from(trackIdSet)})`,
+        inArray(songs.spotifyTrackId, Array.from(trackIdSet)),
       ),
     );
 
