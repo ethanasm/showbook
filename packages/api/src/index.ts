@@ -155,8 +155,15 @@ export {
   parseScrapeConfig,
   type ScrapeConfig,
 } from './scrape-config';
-export { storeLocalObject } from './media-storage';
+export {
+  storeLocalObject,
+  getMediaUploadUrl,
+  getMediaReadUrl,
+  headMediaObject,
+  deleteMediaObject,
+} from './media-storage';
 export { getMediaConfig } from './media-config';
+export { uploadToR2, deleteFromR2, headFromR2, getR2Client } from './r2';
 export { enforceRateLimit, isRateLimited } from './rate-limit';
 export { parseAdminEmails, isAdminEmail } from './admin';
 export {
