@@ -30,6 +30,7 @@ import { Uploader, type UploaderRow } from '../../../components/Uploader';
 import { useTheme } from '../../../lib/theme';
 import { RADII } from '../../../lib/theme-utils';
 import { trpc } from '../../../lib/trpc';
+import { useAuth } from '../../../lib/auth';
 import { useFeedback } from '../../../lib/feedback';
 import {
   pickMediaFromLibrary,
@@ -75,6 +76,15 @@ export default function UploadScreen(): React.JSX.Element {
   const showId = typeof params.id === 'string' ? params.id : '';
 
   const utils = trpc.useUtils();
+  const auth = useAuth();
+  // tRPC attaches the Bearer JWT via its httpBatchLink headers callback,
+  // but the upload pipeline talks to `/api/media/upload` directly via
+  // expo-file-system's native upload task — bypassing tRPC — so we have
+  // to plumb the token through to the PUT explicitly. Reading it via a
+  // ref so a refresh that happens mid-upload is picked up on the next
+  // attempt.
+  const authRef = useRef(auth);
+  authRef.current = auth;
   const [rows, setRows] = useState<UploaderRow[]>([]);
   const [picking, setPicking] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -157,6 +167,7 @@ export default function UploadScreen(): React.JSX.Element {
           server,
           showId,
           signal: controller.signal,
+          getAuthToken: () => authRef.current.token,
           onProgress: (fraction) => {
             setRows((prev) =>
               prev.map((r) =>
