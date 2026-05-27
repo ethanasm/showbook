@@ -66,11 +66,18 @@ export interface PutResult {
  * The PUT step is abstracted behind this interface so tests can replace
  * the native upload task with a deterministic stub. Production wires
  * `defaultPutFile` (expo-file-system createUploadTask) at call time.
+ *
+ * `authToken` is forwarded when the target URL points at our own
+ * `/api/media/upload` proxy (which requires Bearer auth). When the
+ * target URL is a presigned R2 URL the auth is in the signature
+ * itself and the bearer would be redundant — but it does no harm to
+ * forward it either way, so callers can hand the same value in.
  */
 export type PutFileFn = (args: {
   target: UploadTarget;
   fileUri: string;
   signal: AbortSignal | undefined;
+  authToken: string | null;
 }) => Promise<PutResult>;
 
 export interface UploadOptions {
@@ -78,6 +85,16 @@ export interface UploadOptions {
   showId: string;
   /** Performer ids to attach when calling `createUploadIntent`. */
   performerIds?: string[];
+  /**
+   * Getter for the current Showbook JWT — invoked once per PUT attempt
+   * so a token refresh between createUploadIntent and the upload is
+   * picked up. The proxy upload route (`/api/media/upload`) requires
+   * `Authorization: Bearer <jwt>`; without this the PUT 401s and
+   * `Upload step put failed: HTTP 401` surfaces in the UI. Required
+   * for r2-mode uploads in prod; tests + the local-storage-mode path
+   * can omit it.
+   */
+  getAuthToken?: () => string | null;
   /** Cancel signal. When aborted, in-flight PUTs cancel and an UploadCancelledError throws. */
   signal?: AbortSignal;
   /** Per-file progress: monotonically non-decreasing, 0..1 inclusive. */
@@ -246,14 +263,24 @@ async function defaultPutFile(args: {
   target: UploadTarget;
   fileUri: string;
   signal: AbortSignal | undefined;
+  authToken: string | null;
 }): Promise<PutResult> {
   if (!cachedDefaultPut) {
     const FileSystem = await import('expo-file-system/legacy');
-    cachedDefaultPut = async ({ target, fileUri, signal }) => {
+    cachedDefaultPut = async ({ target, fileUri, signal, authToken }) => {
+      const headers: Record<string, string> = {
+        'Content-Type': target.mimeType,
+      };
+      // The proxy upload route (`POST /api/media/upload`) requires a
+      // Bearer JWT — same shape as tRPC. Presigned R2 URLs ignore
+      // unrecognised headers, so attaching the token unconditionally
+      // when we have one is safe and removes the need to branch on
+      // URL shape here.
+      if (authToken) headers.Authorization = `Bearer ${authToken}`;
       const task = FileSystem.createUploadTask(target.uploadUrl, fileUri, {
         httpMethod: 'PUT',
         uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-        headers: { 'Content-Type': target.mimeType },
+        headers,
       });
       let cancelled = false;
       const onAbort = () => {
@@ -304,10 +331,11 @@ async function putToS3(
   fileUri: string,
   put: PutFileFn,
   signal: AbortSignal | undefined,
+  authToken: string | null,
 ): Promise<void> {
   let res: PutResult;
   try {
-    res = await put({ target, fileUri, signal });
+    res = await put({ target, fileUri, signal, authToken });
   } catch (err) {
     if (err instanceof UploadCancelledError) throw err;
     if (isAbortError(err)) throw new UploadCancelledError();
@@ -449,7 +477,16 @@ export async function uploadFile(
     const target = intent.targets[i]!;
     try {
       await withRetry(
-        () => putToS3(target, file.uri, put, opts.signal),
+        // Resolve the token per attempt so a refresh that happens while
+        // the upload is in-flight is picked up on the next retry.
+        () =>
+          putToS3(
+            target,
+            file.uri,
+            put,
+            opts.signal,
+            opts.getAuthToken?.() ?? null,
+          ),
         retryDeps,
       );
     } catch (err) {
