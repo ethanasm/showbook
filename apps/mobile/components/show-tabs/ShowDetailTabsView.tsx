@@ -710,9 +710,7 @@ function HeaderStrip({
   const venueImage = venueImageSource(show.venue, token);
   const backgroundImage = coverImage ?? venueImage;
 
-  const eyebrow =
-    `${show.kind === 'theatre' ? 'THEATRE' : show.kind.toUpperCase()}` +
-    (date ? ` · ${date.toUpperCase()}` : '');
+  const eyebrow = date ? date.toUpperCase() : '';
 
   const heroHeight = insets.top + HERO_BODY_HEIGHT;
 
