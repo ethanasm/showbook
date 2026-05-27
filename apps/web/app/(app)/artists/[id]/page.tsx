@@ -6,6 +6,7 @@ import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft } from "lucide-react";
 import { FollowButton } from "@/components/FollowButton";
+import { useSpotifyConnection } from "@/components/spotify/useSpotifyConnection";
 import { useIsMobile } from "@/lib/useIsMobile";
 import {
   CenteredMessage,
@@ -107,6 +108,7 @@ export default function ArtistDetailPage() {
   const performerId = params?.id ?? "";
 
   const utils = trpc.useUtils();
+  const { connection } = useSpotifyConnection();
 
   const detailQuery = trpc.performers.detail.useQuery(
     { performerId },
@@ -309,12 +311,27 @@ export default function ArtistDetailPage() {
           </div>
         </div>
 
-        <div style={{ alignSelf: isMobile ? "flex-start" : "auto" }}>
+        <div
+          style={{
+            alignSelf: isMobile ? "flex-start" : "auto",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "wrap",
+          }}
+        >
           <FollowButton
             isFollowed={performer.isFollowed}
             isLoading={followBusy}
             onToggle={toggleFollow}
           />
+          {performer.spotifyArtistId &&
+            connection.status === "connected" && (
+              <OpenInSpotifyButton
+                spotifyArtistId={performer.spotifyArtistId}
+                performerName={performer.name}
+              />
+            )}
         </div>
       </div>
 
@@ -550,6 +567,58 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
         {value}
       </div>
     </div>
+  );
+}
+
+function OpenInSpotifyButton({
+  spotifyArtistId,
+  performerName,
+}: {
+  spotifyArtistId: string;
+  performerName: string;
+}) {
+  return (
+    <a
+      href={`https://open.spotify.com/artist/${spotifyArtistId}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`Open ${performerName} on Spotify`}
+      data-testid="artist-open-in-spotify"
+      style={{
+        padding: "8px 14px",
+        border: "1px solid var(--rule-strong)",
+        background: "transparent",
+        color: "var(--ink)",
+        fontFamily: "var(--font-geist-sans), sans-serif",
+        fontSize: 12.5,
+        fontWeight: 500,
+        textDecoration: "none",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+      }}
+    >
+      <SpotifyMark size={14} />
+      Open in Spotify
+    </a>
+  );
+}
+
+function SpotifyMark({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 168 168"
+      width={size}
+      height={size}
+      aria-hidden="true"
+    >
+      <circle fill="#1DB954" cx="84" cy="84" r="84" />
+      <path
+        fill="#fff"
+        d="M119.27 119.7c-1.6 2.62-5.04 3.45-7.66 1.84-21-12.84-47.43-15.74-78.57-8.62-2.99.68-5.97-1.19-6.66-4.18-.68-2.99 1.19-5.97 4.18-6.66 34.04-7.78 63.27-4.42 86.86 9.97 2.62 1.6 3.45 5.04 1.85 7.66zm9.92-22.06c-2.01 3.27-6.29 4.3-9.55 2.29-24.04-14.78-60.7-19.06-89.13-10.43-3.67 1.11-7.55-.96-8.66-4.62-1.11-3.67.96-7.54 4.62-8.66 32.49-9.86 72.89-5.08 100.5 11.87 3.27 2.01 4.3 6.29 2.29 9.56zm.85-22.97c-28.83-17.12-76.39-18.7-103.93-10.34-4.4 1.34-9.05-1.15-10.39-5.55-1.34-4.4 1.15-9.05 5.55-10.39 31.6-9.59 84.04-7.74 117.21 11.95 3.96 2.35 5.26 7.46 2.91 11.42-2.35 3.96-7.46 5.26-11.42 2.91z"
+      />
+    </svg>
   );
 }
 

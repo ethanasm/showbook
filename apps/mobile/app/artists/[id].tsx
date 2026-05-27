@@ -21,7 +21,10 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Link } from 'expo-router';
 import { ChevronLeft, AlertCircle, Image as ImageIcon, Music } from 'lucide-react-native';
@@ -36,6 +39,7 @@ import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { hapticSelection } from '../../lib/haptics';
 import { isNonWatchableKind } from '@showbook/shared';
 import { useAuth } from '../../lib/auth';
+import { useSpotifyConnection } from '../../lib/spotify-connection';
 import { headlinerDisplayName } from '../../lib/show-display';
 import { trpc, type RouterOutput } from '../../lib/trpc';
 import { useCachedQuery } from '../../lib/cache';
@@ -261,9 +265,87 @@ function Hero({
           </GradientEmphasis>
         </Text>
         {summary ? <Text style={[styles.heroSummary, { color: colors.muted }]}>{summary}</Text> : null}
-        <FollowArtistButton performerId={performerId} isFollowed={performer.isFollowed} />
+        <View style={styles.heroActions}>
+          <FollowArtistButton performerId={performerId} isFollowed={performer.isFollowed} />
+          <OpenInSpotifyButton
+            spotifyArtistId={performer.spotifyArtistId}
+            performerName={performer.name}
+          />
+        </View>
       </View>
     </View>
+  );
+}
+
+function OpenInSpotifyButton({
+  spotifyArtistId,
+  performerName,
+}: {
+  spotifyArtistId: string | null;
+  performerName: string;
+}): React.JSX.Element | null {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+  const { connection } = useSpotifyConnection();
+
+  if (!spotifyArtistId) return null;
+  if (connection.status !== 'connected') return null;
+
+  const open = async (): Promise<void> => {
+    void hapticSelection();
+    const nativeUrl = `spotify://artist/${spotifyArtistId}`;
+    const webUrl = `https://open.spotify.com/artist/${spotifyArtistId}`;
+    // Mirrors HypePlaylistCard: try the native scheme first and fall back
+    // when the Spotify app isn't installed. `Linking.canOpenURL` requires
+    // an iOS LSApplicationQueriesSchemes / Android <queries> declaration
+    // which we don't keep in sync, so the openURL rejection is the signal.
+    try {
+      await Linking.openURL(nativeUrl);
+      return;
+    } catch {
+      // Spotify app not installed — fall through to the web URL.
+    }
+    try {
+      await WebBrowser.openBrowserAsync(webUrl);
+    } catch {
+      await Linking.openURL(webUrl);
+    }
+  };
+
+  return (
+    <Pressable
+      onPress={() => {
+        void open();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${performerName} on Spotify`}
+      testID="artist-open-in-spotify"
+      style={({ pressed }) => [
+        styles.spotifyButton,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.rule,
+          opacity: pressed ? 0.7 : 1,
+        },
+      ]}
+    >
+      <SpotifyLogo size={14} />
+      <Text style={[styles.spotifyLabel, { color: colors.ink }]}>
+        OPEN IN SPOTIFY
+      </Text>
+    </Pressable>
+  );
+}
+
+function SpotifyLogo({ size = 14 }: { size?: number }): React.JSX.Element {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 168 168">
+      <Circle cx={84} cy={84} r={84} fill="#1DB954" />
+      <Path
+        fill="#fff"
+        d="M119.27 119.7c-1.6 2.62-5.04 3.45-7.66 1.84-21-12.84-47.43-15.74-78.57-8.62-2.99.68-5.97-1.19-6.66-4.18-.68-2.99 1.19-5.97 4.18-6.66 34.04-7.78 63.27-4.42 86.86 9.97 2.62 1.6 3.45 5.04 1.85 7.66zm9.92-22.06c-2.01 3.27-6.29 4.3-9.55 2.29-24.04-14.78-60.7-19.06-89.13-10.43-3.67 1.11-7.55-.96-8.66-4.62-1.11-3.67.96-7.54 4.62-8.66 32.49-9.86 72.89-5.08 100.5 11.87 3.27 2.01 4.3 6.29 2.29 9.56zm.85-22.97c-28.83-17.12-76.39-18.7-103.93-10.34-4.4 1.34-9.05-1.15-10.39-5.55-1.34-4.4 1.15-9.05 5.55-10.39 31.6-9.59 84.04-7.74 117.21 11.95 3.96 2.35 5.26 7.46 2.91 11.42-2.35 3.96-7.46 5.26-11.42 2.91z"
+      />
+    </Svg>
   );
 }
 
@@ -526,14 +608,35 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     lineHeight: 18,
   },
-  followButton: {
+  heroActions: {
     marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  followButton: {
     paddingVertical: 9,
     paddingHorizontal: 24,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 999,
   },
   followLabel: {
+    fontFamily: 'Geist Mono',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.6,
+  },
+  spotifyButton: {
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  spotifyLabel: {
     fontFamily: 'Geist Mono',
     fontSize: 11,
     fontWeight: '600',
