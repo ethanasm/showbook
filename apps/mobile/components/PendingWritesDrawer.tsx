@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     padding: 12,
-    borderRadius: 10,
+    borderRadius: RADII.lg,
     borderWidth: 1,
   },
   rowText: {

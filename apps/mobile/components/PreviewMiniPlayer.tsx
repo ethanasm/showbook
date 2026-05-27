@@ -12,6 +12,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 import { usePreviewPlayer } from '../lib/preview-player-provider';
 
 export function PreviewMiniPlayer(): React.JSX.Element | null {
@@ -76,7 +77,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     borderWidth: StyleSheet.hairlineWidth,
     maxWidth: '90%',
     // Subtle elevation so the capsule reads as floating above content.
@@ -89,7 +90,7 @@ const styles = StyleSheet.create({
   stopGlyph: {
     width: 12,
     height: 12,
-    borderRadius: 2,
+    borderRadius: RADII.xs,
   },
   label: {
     fontFamily: 'Geist Sans',

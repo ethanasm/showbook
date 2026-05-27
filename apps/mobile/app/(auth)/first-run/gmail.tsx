@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { FirstRunStep, heroTitleStyle } from './_components';
 import { ExternalSourceDisclaimer } from '../../../components/ExternalSourceDisclaimer';
 import { useTheme } from '../../../lib/theme';
+import { RADII } from '../../../lib/theme-utils';
 import { useAuth } from '../../../lib/auth';
 
 interface MockEmail {
@@ -124,13 +125,13 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 7,
     paddingHorizontal: 10,
-    borderRadius: 8,
+    borderRadius: RADII.md,
     borderWidth: 1,
   },
   emailDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: RADII.pill,
   },
   emailBody: {
     flex: 1,

@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import * as MediaLibrary from 'expo-media-library';
 import { FirstRunStep, heroTitleStyle } from './_components';
 import { useTheme } from '../../../lib/theme';
+import { RADII } from '../../../lib/theme-utils';
 
 export default function FirstRunPhotos(): React.JSX.Element {
   const { tokens } = useTheme();
@@ -94,7 +95,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 76,
     height: 100,
-    borderRadius: 6,
+    borderRadius: RADII.md,
     borderWidth: 2,
   },
 });

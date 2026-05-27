@@ -16,6 +16,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet, Linking } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 import { hapticImpactMedium, hapticSelection } from '../lib/haptics';
 import { useFeedback } from '../lib/feedback';
 import { KindBadge } from './KindBadge';
@@ -201,7 +202,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   card: {
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     paddingVertical: 14,
     paddingRight: 12,
   },
@@ -216,7 +217,7 @@ const styles = StyleSheet.create({
   stateBar: {
     width: 3,
     alignSelf: 'stretch',
-    borderRadius: 2,
+    borderRadius: RADII.pill,
     marginRight: 12,
   },
   dateBlock: {
@@ -287,7 +288,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: 30,
     height: 30,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',

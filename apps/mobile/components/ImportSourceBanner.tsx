@@ -12,6 +12,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Ticket } from 'lucide-react-native';
 
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 
 export type ImportSourceVariant = 'wallet';
 
@@ -62,6 +63,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RADII.lg,
     alignItems: 'flex-start',
   },
   icon: {

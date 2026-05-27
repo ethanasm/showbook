@@ -64,6 +64,7 @@ import { KindBadge } from '../../components/KindBadge';
 import { TicketmasterMark } from '../../components/BrandIcons';
 import { FilterChipsRow, type FilterGroup } from '../../components/FilterChipsRow';
 import { useTheme, type Kind } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import { useAuth } from '../../lib/auth';
 import { useNetwork } from '../../lib/network';
 import { hapticSelection } from '../../lib/haptics';
@@ -1229,7 +1230,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     borderWidth: StyleSheet.hairlineWidth,
   },
   loadMoreLabel: {
@@ -1267,7 +1268,7 @@ const styles = StyleSheet.create({
   },
   card: {
     padding: 14,
-    borderRadius: 14,
+    borderRadius: RADII.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderLeftWidth: 3,
     gap: 6,
@@ -1334,7 +1335,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 3,
     paddingHorizontal: 5,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     borderWidth: StyleSheet.hairlineWidth,
   },
   cardTitle: {
@@ -1374,7 +1375,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     borderWidth: StyleSheet.hairlineWidth,
   },
   iconLabel: {
@@ -1387,7 +1388,7 @@ const styles = StyleSheet.create({
   statusBadge: {
     paddingVertical: 2,
     paddingHorizontal: 8,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
   },
   statusLabel: {
     fontFamily: 'Geist Sans',

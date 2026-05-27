@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 
 export interface SheetProps {
   open: boolean;
@@ -88,8 +89,8 @@ const styles = StyleSheet.create({
   },
   sheet: {
     width: '100%',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: RADII.xl,
+    borderTopRightRadius: RADII.xl,
     paddingTop: 10,
     paddingBottom: 18,
     overflow: 'hidden',
@@ -98,7 +99,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: 38,
     height: 4,
-    borderRadius: 2,
+    borderRadius: RADII.pill,
     marginBottom: 8,
   },
 });

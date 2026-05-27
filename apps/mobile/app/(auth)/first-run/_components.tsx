@@ -11,6 +11,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../../lib/theme';
+import { RADII } from '../../../lib/theme-utils';
 
 export interface FirstRunStepProps {
   step: number; // 1-based step index among `total`
@@ -165,7 +166,7 @@ const styles = StyleSheet.create({
   },
   progressTick: {
     height: 4,
-    borderRadius: 2,
+    borderRadius: RADII.pill,
   },
   skipText: {
     fontFamily: 'Geist Sans',
@@ -182,7 +183,7 @@ const styles = StyleSheet.create({
   iconBlock: {
     width: 96,
     height: 96,
-    borderRadius: 28,
+    borderRadius: RADII.xl,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -211,7 +212,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   primary: {
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',

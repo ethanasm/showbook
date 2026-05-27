@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Bell, Image as ImageIcon, MapPin, Mail } from 'lucide-react-native';
 import { useTheme } from '../../../lib/theme';
+import { RADII } from '../../../lib/theme-utils';
 import { useAuth } from '../../../lib/auth';
 
 interface AgendaRow {
@@ -139,7 +140,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 80,
     height: 80,
-    borderRadius: 40,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -154,14 +155,14 @@ const styles = StyleSheet.create({
     right: -2,
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   googleBadge: {
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: RADII.pill,
     // Google brand white. Intentionally hardcoded — the user identifies
     // this as the Google badge regardless of app theme, so the brand
     // colors don't theme-swap. (Same reasoning for googleBadgeLetter
@@ -217,13 +218,13 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 10,
     paddingHorizontal: 14,
-    borderRadius: 10,
+    borderRadius: RADII.lg,
     borderWidth: 1,
   },
   agendaIcon: {
     width: 28,
     height: 28,
-    borderRadius: 6,
+    borderRadius: RADII.md,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -241,7 +242,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   cta: {
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',

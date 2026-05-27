@@ -42,6 +42,7 @@ import {
 
 import { TopBar } from '../../components/TopBar';
 import { useTheme } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import { trpc } from '../../lib/trpc';
 import { useFeedback } from '../../lib/feedback';
 import { toUserMessage } from '../../lib/errors';
@@ -485,7 +486,7 @@ const styles = StyleSheet.create({
   },
   suggestion: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
+    borderRadius: RADII.md,
     paddingVertical: 12,
     paddingHorizontal: 14,
   },
@@ -515,7 +516,7 @@ const styles = StyleSheet.create({
   sendBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -524,14 +525,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     paddingVertical: 14,
     paddingHorizontal: 14,
   },
   posterIcon: {
     width: 36,
     height: 36,
-    borderRadius: 8,
+    borderRadius: RADII.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -555,14 +556,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     paddingVertical: 14,
     paddingHorizontal: 14,
   },
   confirmIcon: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 1,

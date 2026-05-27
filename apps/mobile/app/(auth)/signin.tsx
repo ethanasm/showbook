@@ -26,6 +26,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Redirect } from 'expo-router';
 import { useTheme } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import { useAuth } from '../../lib/auth';
 import { BrandMark } from '../../components/BrandMark';
 import { KindBadge } from '../../components/KindBadge';
@@ -145,7 +146,7 @@ const styles = StyleSheet.create({
   dot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: RADII.pill,
   },
   eyebrow: {
     fontFamily: 'Geist Sans',
@@ -192,7 +193,7 @@ const styles = StyleSheet.create({
   },
   errorBanner: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     padding: 12,
   },
   errorText: {
@@ -203,7 +204,7 @@ const styles = StyleSheet.create({
   },
   signInButton: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     paddingVertical: 14,
     paddingHorizontal: 16,
     flexDirection: 'row',
@@ -218,7 +219,7 @@ const styles = StyleSheet.create({
   googleLogo: {
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: RADII.pill,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',

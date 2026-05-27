@@ -26,6 +26,7 @@ import * as Location from 'expo-location';
 import { MapPin } from 'lucide-react-native';
 import { FirstRunStep, heroTitleStyle } from './_components';
 import { useTheme } from '../../../lib/theme';
+import { RADII } from '../../../lib/theme-utils';
 import { trpc } from '../../../lib/trpc';
 
 type Mode =
@@ -299,7 +300,7 @@ const styles = StyleSheet.create({
   },
   detectedCard: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     paddingVertical: 16,
     paddingHorizontal: 16,
     alignItems: 'center',
@@ -325,7 +326,7 @@ const styles = StyleSheet.create({
   radiusChip: {
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     borderWidth: 1,
   },
   radiusChipLabel: {
@@ -336,7 +337,7 @@ const styles = StyleSheet.create({
   },
   pickerCard: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     padding: 12,
     gap: 8,
   },
@@ -346,7 +347,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: RADII.md,
   },
   pickerOption: {
     paddingVertical: 8,

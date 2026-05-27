@@ -41,6 +41,7 @@ import { useFeedback } from '../../lib/feedback';
 import { useAuth } from '../../lib/auth';
 import { showCoverImageSource, venueImageSource } from '../../lib/images';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import { trpc } from '../../lib/trpc';
 import { CACHE_DEFAULTS } from '../../lib/cache';
 import { useQueryClient } from '@tanstack/react-query';
@@ -896,7 +897,7 @@ const heroStyles = StyleSheet.create({
   glassBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: RADII.pill,
     backgroundColor: 'rgba(0,0,0,0.38)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.18)',
@@ -913,7 +914,7 @@ const heroStyles = StyleSheet.create({
     gap: 5,
     height: 26,
     paddingHorizontal: 10,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     borderWidth: StyleSheet.hairlineWidth,
   },
   statePillText: {
@@ -929,7 +930,7 @@ const heroStyles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.55)',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     flexShrink: 1,
   },
   eyebrow: {

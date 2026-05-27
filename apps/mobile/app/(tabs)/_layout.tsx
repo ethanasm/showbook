@@ -42,6 +42,7 @@ import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, List, Plus, MapPin, Compass } from 'lucide-react-native';
 import { useTheme } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import { useBreakpoint } from '../../lib/responsive';
 import { hapticSelection } from '../../lib/haptics';
 import { ThreePaneLayout, useSelectedShow } from '../../components/ThreePaneLayout';
@@ -244,7 +245,7 @@ const styles = StyleSheet.create({
   addFab: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: RADII.pill,
     justifyContent: 'center',
     alignItems: 'center',
     // Raise the FAB above the tab bar baseline so it visually pops out,

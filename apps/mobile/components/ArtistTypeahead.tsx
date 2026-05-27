@@ -25,6 +25,7 @@ import {
 } from 'react-native';
 import { Search } from 'lucide-react-native';
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 import { useDebouncedValue } from '@showbook/shared/hooks';
 
 export interface ArtistSuggestion {
@@ -175,7 +176,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
@@ -188,7 +189,7 @@ const styles = StyleSheet.create({
   },
   list: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     // Cap the dropdown so it never extends past the screen edge when
     // the active row sits near the bottom of the lineup. ~5 rows fit
     // before the user has to scroll within the dropdown.
@@ -204,7 +205,7 @@ const styles = StyleSheet.create({
   thumb: {
     width: 32,
     height: 32,
-    borderRadius: 4,
+    borderRadius: RADII.sm,
     borderWidth: StyleSheet.hairlineWidth,
   },
   thumbPlaceholder: {},

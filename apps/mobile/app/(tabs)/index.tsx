@@ -28,10 +28,10 @@
  */
 
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Link, useRouter } from 'expo-router';
-import { Calendar } from 'lucide-react-native';
+import { Calendar, ChevronRight } from 'lucide-react-native';
 import { HomeHeader } from '../../components/HomeHeader';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
 import { EmptyState } from '../../components/EmptyState';
@@ -357,7 +357,11 @@ export default function HomeScreen(): React.JSX.Element {
             ) : null}
 
             {sections.upcoming.length > 0 ? (
-              <Section title="Upcoming">
+              <Section
+                title="Upcoming"
+                href={{ pathname: '/(tabs)/shows', params: { bucket: 'upcoming' } }}
+                hrefA11yLabel="See all upcoming shows"
+              >
                 {sections.upcoming.map((s) => (
                   <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
                 ))}
@@ -365,7 +369,11 @@ export default function HomeScreen(): React.JSX.Element {
             ) : null}
 
             {sections.recent.length > 0 ? (
-              <Section title="Recently attended">
+              <Section
+                title="Recently attended"
+                href={{ pathname: '/(tabs)/shows', params: { bucket: 'past' } }}
+                hrefA11yLabel="See all past shows"
+              >
                 {sections.recent.map((s) => (
                   <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
                 ))}
@@ -418,19 +426,40 @@ function Section({
   title,
   children,
   paddingTop,
+  href,
+  hrefA11yLabel,
 }: {
   title: string;
   children: React.ReactNode;
   /** Override the default section top padding (18). The hero block uses
    * a tighter inset so it sits closer to the greeting block above. */
   paddingTop?: number;
+  /** When set, renders a chevron next to the title and makes the header
+   * tappable, deep-linking into the named route (typically the Shows tab
+   * pre-filtered to a specific bucket). */
+  href?: React.ComponentProps<typeof Link>['href'];
+  hrefA11yLabel?: string;
 }): React.JSX.Element {
   const { tokens } = useTheme();
+  const labelStyle = [styles.sectionLabel, { color: tokens.colors.muted }];
+  const header = href ? (
+    <Link href={href} asChild>
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel={hrefA11yLabel ?? `See all ${title}`}
+        hitSlop={8}
+        style={({ pressed }) => [styles.sectionHeaderRow, pressed && styles.sectionHeaderPressed]}
+      >
+        <Text style={labelStyle}>{title.toUpperCase()}</Text>
+        <ChevronRight size={16} color={tokens.colors.faint} strokeWidth={2} />
+      </Pressable>
+    </Link>
+  ) : (
+    <Text style={labelStyle}>{title.toUpperCase()}</Text>
+  );
   return (
     <View style={[styles.section, paddingTop !== undefined && { paddingTop }]}>
-      <Text style={[styles.sectionLabel, { color: tokens.colors.muted }]}>
-        {title.toUpperCase()}
-      </Text>
+      {header}
       <View style={styles.sectionList}>{children}</View>
     </View>
   );
@@ -475,6 +504,15 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     paddingHorizontal: 20,
     paddingBottom: 8,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: 20,
+  },
+  sectionHeaderPressed: {
+    opacity: 0.6,
   },
   sectionList: {
     paddingHorizontal: 16,

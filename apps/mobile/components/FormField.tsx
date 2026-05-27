@@ -13,6 +13,7 @@
 import React from 'react';
 import { View, Text, TextInput, StyleSheet, type TextInputProps } from 'react-native';
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 
 export interface FormFieldProps extends Omit<TextInputProps, 'style'> {
   label: string;
@@ -85,7 +86,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '400',
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },

@@ -48,6 +48,7 @@ import { GoogleMapsMark } from '../../components/BrandIcons';
 import { buildGoogleMapsOpenPlan } from '../../lib/google-maps-deep-link';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import { hapticSelection, hapticImpactMedium } from '../../lib/haptics';
 import { isNonWatchableKind } from '@showbook/shared';
 import { useAuth } from '../../lib/auth';
@@ -911,7 +912,7 @@ const styles = StyleSheet.create({
   renameIconBtn: {
     width: 30,
     height: 30,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
@@ -943,7 +944,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 24,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
   },
   followLabel: {
     fontFamily: 'Geist Mono',
@@ -991,7 +992,7 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     paddingVertical: 12,
     paddingRight: 12,
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     borderLeftWidth: 3,
     gap: 12,
   },
@@ -1049,7 +1050,7 @@ const styles = StyleSheet.create({
   upcomingIconCircle: {
     width: 32,
     height: 32,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,

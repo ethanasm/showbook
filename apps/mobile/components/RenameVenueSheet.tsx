@@ -18,6 +18,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { Sheet } from './Sheet';
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 import { trpc } from '../lib/trpc';
 import { useFeedback } from '../lib/feedback';
 import { toUserMessage } from '../lib/errors';
@@ -215,7 +216,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '400',
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
+    borderRadius: RADII.lg,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -229,7 +230,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
+    borderRadius: RADII.pill,
   },
   cancelLabel: {
     fontFamily: 'Geist Sans',
@@ -239,7 +240,7 @@ const styles = StyleSheet.create({
   confirmBtn: {
     paddingVertical: 10,
     paddingHorizontal: 18,
-    borderRadius: 8,
+    borderRadius: RADII.pill,
   },
   confirmLabel: {
     fontFamily: 'Geist Sans',
