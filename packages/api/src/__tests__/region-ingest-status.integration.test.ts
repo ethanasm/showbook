@@ -15,11 +15,15 @@ import { isRegionIngestPending, JOB_NAMES } from '../job-queue';
 const REGION_ID = '00000000-0000-0000-0000-0000000000aa';
 
 async function ensurePartitionExists() {
-  // pg-boss partitions the job table by name. Create the partition for our
-  // job name if it doesn't exist yet, so we can insert directly.
-  // pg-boss creates these on first send; we mimic that here.
+  // pg-boss v12 added a FK from `pgboss.job_common.name` to `pgboss.queue.name`
+  // (`q_fkey`). Direct `INSERT INTO pgboss.job` now requires the queue row to
+  // exist first. v12 also changed `create_queue` to take a `(name, options jsonb)`
+  // pair — and the `policy` column on `pgboss.queue` is NOT NULL, so we have
+  // to pass at least `{"policy": "standard"}` (the default we'd get from
+  // `boss.createQueue` with no options). The function is `ON CONFLICT DO NOTHING`,
+  // so calling it repeatedly is safe.
   await db.execute(
-    sql`SELECT pgboss.create_queue(${JOB_NAMES.INGEST_REGION}, NULL)`,
+    sql`SELECT pgboss.create_queue(${JOB_NAMES.INGEST_REGION}, '{"policy": "standard"}'::jsonb)`,
   );
 }
 
