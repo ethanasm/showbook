@@ -24,7 +24,6 @@ import {
   Linking,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
-import Svg, { Circle, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Link } from 'expo-router';
 import { ChevronLeft, AlertCircle, Image as ImageIcon, Music } from 'lucide-react-native';
@@ -33,6 +32,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { Eyebrow, GradientEmphasis, RemoteImage } from '../../components/design-system';
 import { QueryBoundary } from '../../components/QueryBoundary';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
+import { SpotifyMark } from '../../components/BrandIcons';
 import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
@@ -329,23 +329,11 @@ function OpenInSpotifyButton({
         },
       ]}
     >
-      <SpotifyLogo size={14} />
+      <SpotifyMark size={14} />
       <Text style={[styles.spotifyLabel, { color: colors.ink }]}>
         OPEN IN SPOTIFY
       </Text>
     </Pressable>
-  );
-}
-
-function SpotifyLogo({ size = 14 }: { size?: number }): React.JSX.Element {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 168 168">
-      <Circle cx={84} cy={84} r={84} fill="#1DB954" />
-      <Path
-        fill="#fff"
-        d="M119.27 119.7c-1.6 2.62-5.04 3.45-7.66 1.84-21-12.84-47.43-15.74-78.57-8.62-2.99.68-5.97-1.19-6.66-4.18-.68-2.99 1.19-5.97 4.18-6.66 34.04-7.78 63.27-4.42 86.86 9.97 2.62 1.6 3.45 5.04 1.85 7.66zm9.92-22.06c-2.01 3.27-6.29 4.3-9.55 2.29-24.04-14.78-60.7-19.06-89.13-10.43-3.67 1.11-7.55-.96-8.66-4.62-1.11-3.67.96-7.54 4.62-8.66 32.49-9.86 72.89-5.08 100.5 11.87 3.27 2.01 4.3 6.29 2.29 9.56zm.85-22.97c-28.83-17.12-76.39-18.7-103.93-10.34-4.4 1.34-9.05-1.15-10.39-5.55-1.34-4.4 1.15-9.05 5.55-10.39 31.6-9.59 84.04-7.74 117.21 11.95 3.96 2.35 5.26 7.46 2.91 11.42-2.35 3.96-7.46 5.26-11.42 2.91z"
-      />
-    </Svg>
   );
 }
 

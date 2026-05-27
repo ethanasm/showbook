@@ -2,14 +2,9 @@
 
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  ArrowUpRight,
-  Check,
-  Pencil,
-  Ticket,
-  Trash2,
-} from "lucide-react";
+import { Check, Pencil, Ticket, Trash2 } from "lucide-react";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
+import { TicketmasterMark } from "@/components/BrandIcons";
 import { trpc } from "@/lib/trpc";
 import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
 import { STATE_TRANSITIONS } from "@/lib/show-state";
@@ -149,7 +144,7 @@ export function useShowContextMenu<T extends ShowForContextMenu>() {
       if (show.ticketUrl) {
         items.push({
           label: "Open in Ticketmaster",
-          icon: <ArrowUpRight size={13} />,
+          icon: <TicketmasterMark size={13} />,
           onClick: () =>
             window.open(show.ticketUrl!, "_blank", "noopener,noreferrer"),
         });

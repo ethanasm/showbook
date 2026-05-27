@@ -6,6 +6,7 @@ import {
   SpotifyConnectModal,
   useSpotifyConnection,
 } from "@/components/spotify";
+import { SpotifyMark } from "@/components/BrandIcons";
 import "./show-tabs.css";
 
 interface HypePlaylistCardProps {
@@ -202,7 +203,7 @@ export function HypePlaylistCard({
                   : `Create ${createKindLabel} on Spotify`
               }
             >
-              <SpotifyGlyph size={12} /> {ctaLabel}
+              <SpotifyMark size={13} /> {ctaLabel}
             </button>
             <button
               type="button"
@@ -244,31 +245,3 @@ export function HypePlaylistCard({
   );
 }
 
-function SpotifyGlyph({ size = 14 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-    >
-      <circle
-        cx="8"
-        cy="8"
-        r="7.5"
-        fill="currentColor"
-        fillOpacity="0.001"
-        stroke="currentColor"
-        strokeOpacity=".25"
-      />
-      <path
-        d="M3.6 6.4 c2.4-.8 6.4-.6 8.8.8 M4 8.4 c2-.6 5.4-.4 7.4.8 M4.4 10.4 c1.8-.5 4.4-.3 6 .6"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        fill="none"
-      />
-    </svg>
-  );
-}
