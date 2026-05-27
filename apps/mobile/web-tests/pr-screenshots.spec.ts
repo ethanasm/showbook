@@ -519,6 +519,40 @@ const ROUTES: RouteSpec[] = [
       'media.listForShow': [],
     },
   },
+  // Artist detail hero — covers the Follow + Open-in-Spotify +
+  // Open-in-setlist.fm action row. Stubs `spotify.connectionStatus`
+  // to "connected" so the Spotify button renders alongside the
+  // setlist.fm button. The performer payload mirrors the full venue
+  // row + the isFollowed / showCount stats the screen reads.
+  {
+    name: '14-artist-detail',
+    path: '/artists/screenshot-artist',
+    ready: /ARTIST|Phoebe Bridgers/i,
+    trpcStubs: {
+      'spotify.connectionStatus': {
+        connected: true,
+        displayName: 'Screenshot Shim',
+        product: 'premium',
+        spotifyUserId: 'shim',
+      },
+      'performers.detail': {
+        id: 'screenshot-artist',
+        name: 'Phoebe Bridgers',
+        imageUrl: null,
+        musicbrainzId: 'b46752ad-7f01-4f30-9b1d-77a9eb1ed4d8',
+        ticketmasterAttractionId: null,
+        spotifyArtistId: '1r1uxoy19fzMxunt3ONAkG',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+        isFollowed: true,
+        showCount: 3,
+        firstSeen: '2018-09-12',
+        lastSeen: '2024-05-04',
+      },
+      'performers.userShows': [],
+      'media.listForPerformer': [],
+    },
+  },
 ];
 
 const variant = (process.env.PR_SCREENSHOT_VARIANT ?? 'after').toLowerCase();
