@@ -130,9 +130,8 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   label: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 10.5 * 0.06, // 0.06em
     textTransform: 'uppercase',
   },

@@ -237,8 +237,7 @@ const styles = StyleSheet.create({
   doorTitle: {
     flex: 1,
     fontSize: 14,
-    fontFamily: 'Geist Sans',
-    fontWeight: '600',
+    fontFamily: 'Geist Sans 600',
     letterSpacing: 0.4,
   },
   doorSubtitle: {

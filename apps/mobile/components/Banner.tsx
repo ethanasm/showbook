@@ -52,9 +52,8 @@ export function BannerHost(): React.JSX.Element | null {
             <Text
               style={{
                 color: variant.text,
-                fontFamily: 'Geist Sans',
+                fontFamily: 'Geist Sans 500',
                 fontSize: 13,
-                fontWeight: '500',
                 flex: 1,
               }}
             >
@@ -65,9 +64,8 @@ export function BannerHost(): React.JSX.Element | null {
                 <Text
                   style={{
                     color: actionColor,
-                    fontFamily: 'Geist Sans',
+                    fontFamily: 'Geist Sans 700',
                     fontSize: 13,
-                    fontWeight: '700',
                     marginLeft: 12,
                   }}
                 >

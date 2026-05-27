@@ -169,9 +169,8 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
   },
   countdownText: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 10.5,
-    fontWeight: '600',
     color: '#fff',
     letterSpacing: 0.6,
   },
@@ -180,9 +179,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   dateLine: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 11,
-    fontWeight: '600',
     color: 'rgba(255,255,255,0.85)',
     textTransform: 'uppercase',
     letterSpacing: 11 * 0.08,
@@ -195,9 +193,8 @@ const styles = StyleSheet.create({
     lineHeight: 30,
   },
   venue: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 13,
-    fontWeight: '500',
     color: 'rgba(255,255,255,0.88)',
   },
 });

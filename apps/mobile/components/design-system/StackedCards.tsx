@@ -244,9 +244,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dateDay: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 18,
-    fontWeight: '600',
     lineHeight: 22,
   },
   dateMonth: {
@@ -260,15 +259,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   title: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 14,
-    fontWeight: '600',
     lineHeight: 18,
   },
   venue: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 11.5,
-    fontWeight: '400',
     lineHeight: 15,
     marginTop: 2,
   },
@@ -278,9 +275,8 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
   },
   chipLabel: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 9,
-    fontWeight: '600',
     letterSpacing: 1.08,
     textTransform: 'uppercase',
   },

@@ -230,9 +230,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   actLabel: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 500',
     fontSize: 10,
-    fontWeight: '500',
     letterSpacing: 1.8,
   },
   actRule: {
@@ -318,9 +317,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   gateBlockedTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 16,
-    fontWeight: '600',
     textAlign: 'center',
   },
   gateBlockedBody: {

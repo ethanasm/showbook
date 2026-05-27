@@ -148,9 +148,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   badgeText: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 10,
-    fontWeight: '600',
     letterSpacing: 0.3,
   },
 });

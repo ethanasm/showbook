@@ -542,9 +542,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   posterTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 14,
-    fontWeight: '600',
   },
   posterSub: {
     fontFamily: 'Geist Sans',
@@ -588,9 +587,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   confirmActionText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 12,
-    fontWeight: '600',
     letterSpacing: 0.3,
   },
   confirmDismiss: {

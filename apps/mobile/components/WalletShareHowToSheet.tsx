@@ -166,9 +166,8 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   stepBadgeText: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 11,
-    fontWeight: '600',
   },
   stepBody: {
     flex: 1,
@@ -176,9 +175,8 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   stepTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 14,
-    fontWeight: '600',
   },
   stepText: {
     fontFamily: 'Geist Sans',
@@ -192,9 +190,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ctaLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 14,
-    fontWeight: '600',
     letterSpacing: 0.1,
   },
 });

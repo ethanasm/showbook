@@ -192,13 +192,11 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
   chipSublabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 11,
-    fontWeight: '400',
   },
   chipCount: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 400',
     fontSize: 10,
-    fontWeight: '400',
   },
 });

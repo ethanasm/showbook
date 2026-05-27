@@ -325,9 +325,8 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   performerName: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 15,
-    fontWeight: '500',
   },
   statRow: {
     flexDirection: 'row',
@@ -354,9 +353,8 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   statValue: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 22,
-    fontWeight: '700',
     letterSpacing: -0.4,
     lineHeight: 26,
   },
@@ -402,9 +400,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   timelineDay: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 18,
-    fontWeight: '700',
     lineHeight: 20,
   },
   timelineMonth: {
@@ -424,9 +421,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   timelineVenue: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 14,
-    fontWeight: '500',
   },
   timelineCity: {
     fontFamily: 'Geist Sans',
@@ -440,9 +436,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   encoreChipLabel: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 9,
-    fontWeight: '600',
     letterSpacing: 0.8,
   },
 });

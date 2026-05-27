@@ -307,14 +307,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   detectedCity: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 18,
-    fontWeight: '700',
   },
   detectedSub: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 12,
-    fontWeight: '400',
   },
   radiusRow: {
     flexDirection: 'row',
@@ -330,9 +328,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   radiusChipLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 0.4,
   },
   pickerCard: {
@@ -355,14 +352,12 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   pickerOptionName: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 13,
-    fontWeight: '600',
   },
   pickerOptionMeta: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 10.5,
-    fontWeight: '400',
     marginTop: 1,
   },
   pickerHint: {

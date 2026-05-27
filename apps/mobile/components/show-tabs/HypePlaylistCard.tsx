@@ -320,9 +320,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   headline: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 14,
-    fontWeight: '600',
     letterSpacing: -0.1,
   },
   sub: {

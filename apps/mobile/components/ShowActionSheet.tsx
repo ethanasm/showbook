@@ -251,8 +251,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   label: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 15,
-    fontWeight: '500',
   },
 });

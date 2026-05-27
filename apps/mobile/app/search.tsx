@@ -472,9 +472,8 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 15,
-    fontWeight: '400',
     paddingVertical: 0,
   },
   scrollContent: {
@@ -500,9 +499,8 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   groupTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11,
-    fontWeight: '500',
     letterSpacing: 11 * 0.08,
     textTransform: 'uppercase',
   },
@@ -537,21 +535,18 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   rowTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 15,
-    fontWeight: '600',
     lineHeight: 19,
   },
   rowSubtitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 12.5,
-    fontWeight: '400',
     lineHeight: 17,
   },
   rowMeta: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11.5,
-    fontWeight: '500',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
@@ -569,9 +564,8 @@ const styles = StyleSheet.create({
     height: 36,
   },
   avatarInitial: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 15,
-    fontWeight: '600',
   },
   venueIcon: {
     width: 36,

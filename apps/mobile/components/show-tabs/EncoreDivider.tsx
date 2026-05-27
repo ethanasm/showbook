@@ -35,9 +35,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   label: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 10,
-    fontWeight: '600',
     letterSpacing: 1.6,
   },
   rule: {

@@ -211,9 +211,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
   },
   cardHeadline: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 14,
-    fontWeight: '500',
   },
   chipRow: {
     flexDirection: 'row',
@@ -293,9 +292,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   gateBlockedTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 16,
-    fontWeight: '600',
     textAlign: 'center',
   },
   gateBlockedBody: {

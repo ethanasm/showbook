@@ -145,9 +145,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarLetter: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 32,
-    fontWeight: '700',
   },
   googleBadgeOuter: {
     position: 'absolute',
@@ -172,9 +171,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   googleBadgeLetter: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 13,
-    fontWeight: '700',
     // Google brand blue (#4285F4). Intentionally hardcoded for brand
     // recognition — not a theme token.
     color: '#4285F4',
@@ -184,24 +182,21 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   eyebrow: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 1.54,
     textTransform: 'uppercase',
   },
   title: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 36,
-    fontWeight: '700',
     lineHeight: 38,
     letterSpacing: -0.72,
     textAlign: 'center',
   },
   body: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 14,
-    fontWeight: '400',
     lineHeight: 22,
     textAlign: 'center',
     maxWidth: 300,
@@ -231,14 +226,12 @@ const styles = StyleSheet.create({
   },
   agendaLabel: {
     flex: 1,
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 13,
-    fontWeight: '500',
   },
   agendaSub: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 10.5,
-    fontWeight: '400',
     letterSpacing: 0.6,
   },
   cta: {
@@ -248,9 +241,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ctaLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 14,
-    fontWeight: '700',
   },
   pressed: {
     opacity: 0.85,

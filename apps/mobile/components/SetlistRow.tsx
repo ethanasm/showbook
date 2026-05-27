@@ -115,9 +115,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   trackNumber: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 12,
-    fontWeight: '500',
     width: 22,
     textAlign: 'right',
     letterSpacing: 0.4,
@@ -127,9 +126,8 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 15,
-    fontWeight: '500',
     padding: 0,
   },
   handle: {

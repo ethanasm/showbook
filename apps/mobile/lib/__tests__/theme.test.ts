@@ -145,8 +145,7 @@ describe('type ramp', () => {
 
   it('screenTitle: 24pt Geist Sans 700', () => {
     assert.equal(TYPE_RAMP.screenTitle.fontSize, 24);
-    assert.equal(TYPE_RAMP.screenTitle.fontWeight, '700');
-    assert.equal(TYPE_RAMP.screenTitle.fontFamily, 'Geist Sans');
+    assert.equal(TYPE_RAMP.screenTitle.fontFamily, 'Geist Sans 700');
   });
 
   it('body: 15pt 400, lineHeight 23', () => {

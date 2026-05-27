@@ -300,9 +300,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   multiNightTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 14,
-    fontWeight: '600',
   },
   multiNightSub: {
     fontFamily: 'Geist Mono',
@@ -436,9 +435,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   gateBlockedTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 16,
-    fontWeight: '600',
     textAlign: 'center',
   },
   gateBlockedBody: {

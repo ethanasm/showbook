@@ -487,9 +487,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   performerChipLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 12,
-    fontWeight: '600',
   },
   borrowBanner: {
     flexDirection: 'row',
@@ -509,9 +508,8 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   borrowAction: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 12,
-    fontWeight: '700',
   },
   sectionLabel: {
     flexDirection: 'row',
@@ -521,9 +519,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   sectionLabelText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 1.05,
   },
   footer: {
@@ -542,8 +539,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addBtnText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 13,
-    fontWeight: '600',
   },
 });

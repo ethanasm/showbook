@@ -182,9 +182,8 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 14,
-    fontWeight: '400',
     padding: 0,
   },
   list: {
@@ -210,14 +209,12 @@ const styles = StyleSheet.create({
   },
   thumbPlaceholder: {},
   rowName: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 14,
-    fontWeight: '600',
   },
   rowMeta: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 11,
-    fontWeight: '400',
     marginTop: 1,
     textTransform: 'uppercase',
     letterSpacing: 0.7,

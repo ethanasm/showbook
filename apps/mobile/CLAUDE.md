@@ -285,10 +285,6 @@ fast; let Maestro be the gate.
 
 ## Known limitations
 
-- **Geist font is a no-op loader.** `lib/fonts.ts` resolves
-  immediately and the system sans falls back. On iOS this looks
-  very close to Geist; the real font wires up in a later polish
-  pass.
 - **Asset placeholders are 1x1 PNGs.** Splash, icon, and adaptive
   icon need real artwork before TestFlight / Play Store submission.
 - **Push notifications are not yet delivered.** The toggle in

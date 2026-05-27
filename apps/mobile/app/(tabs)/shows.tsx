@@ -1157,20 +1157,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   sectionLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 1.1,
   },
   sectionCount: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11,
-    fontWeight: '500',
   },
   sectionLabelInline: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 1.1,
   },
   monthBar: {
@@ -1179,9 +1176,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   monthTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 22,
-    fontWeight: '700',
     letterSpacing: -0.4,
   },
   monthCount: {
@@ -1204,9 +1200,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   monthNavLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 13,
-    fontWeight: '500',
   },
   yearGrid: {
     flexDirection: 'row',
@@ -1232,15 +1227,13 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   statValue: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 28,
-    fontWeight: '700',
     letterSpacing: -0.6,
   },
   statLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10,
-    fontWeight: '600',
     letterSpacing: 1,
     marginTop: 6,
   },
@@ -1256,9 +1249,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   cardTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 11,
-    fontWeight: '700',
     letterSpacing: 1.1,
     marginBottom: 4,
   },
@@ -1273,15 +1265,13 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   kindLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 0.8,
   },
   kindCount: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 12,
-    fontWeight: '500',
   },
   barTrack: {
     height: 6,
@@ -1297,9 +1287,8 @@ const styles = StyleSheet.create({
   },
   rankName: {
     flex: 1,
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 14,
-    fontWeight: '500',
     minWidth: 0,
   },
   rankSub: {
@@ -1314,9 +1303,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   rankCount: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 12,
-    fontWeight: '600',
     minWidth: 26,
     textAlign: 'right',
   },

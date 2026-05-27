@@ -193,9 +193,8 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
   },
   primaryBtnLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 14,
-    fontWeight: '600',
   },
   secondaryBtn: {
     paddingVertical: 10,
@@ -204,9 +203,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   secondaryBtnLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 14,
-    fontWeight: '500',
   },
   visual: {
     paddingTop: 6,

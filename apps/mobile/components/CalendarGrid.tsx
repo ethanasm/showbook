@@ -324,9 +324,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dowText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10,
-    fontWeight: '600',
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
@@ -358,9 +357,8 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
   },
   moreText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 10,
-    fontWeight: '500',
   },
   spanBar: {
     position: 'absolute',
@@ -555,9 +553,8 @@ const miniStyles = StyleSheet.create({
     gap: 6,
   },
   monthLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 12,
-    fontWeight: '700',
     letterSpacing: 0.2,
   },
   weekRow: {

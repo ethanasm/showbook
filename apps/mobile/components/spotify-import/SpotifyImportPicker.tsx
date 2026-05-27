@@ -284,9 +284,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   selectAll: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 500',
     fontSize: 10,
-    fontWeight: '500',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
@@ -301,9 +300,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statValue: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 12,
-    fontWeight: '600',
   },
   statLabel: {
     fontFamily: 'Geist Mono',
@@ -345,9 +343,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   name: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 14,
-    fontWeight: '500',
     letterSpacing: -0.1,
   },
   sub: {

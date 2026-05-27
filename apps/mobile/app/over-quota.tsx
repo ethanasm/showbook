@@ -149,9 +149,8 @@ const styles = StyleSheet.create({
     lineHeight: 30,
   },
   subtitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 14,
-    fontWeight: '400',
     lineHeight: 20,
     textAlign: 'center',
     paddingHorizontal: 8,
@@ -165,15 +164,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   usageLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 10,
-    fontWeight: '500',
     letterSpacing: 1.2,
   },
   usageValue: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 16,
-    fontWeight: '600',
   },
   primaryBtn: {
     marginTop: 14,
@@ -183,9 +180,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 15,
-    fontWeight: '600',
   },
   secondaryBtn: {
     paddingVertical: 12,
@@ -193,8 +189,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   secondaryLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 14,
-    fontWeight: '500',
   },
 });

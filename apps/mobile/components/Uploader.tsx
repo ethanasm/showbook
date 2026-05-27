@@ -296,29 +296,25 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   metaLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 9.5,
-    fontWeight: '500',
     letterSpacing: 1,
   },
   metaSize: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 11,
-    fontWeight: '400',
   },
   captionInput: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 13,
-    fontWeight: '400',
     paddingVertical: 6,
     paddingHorizontal: 8,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: RADII.sm,
   },
   status: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11,
-    fontWeight: '500',
   },
   retryBtn: {
     alignSelf: 'flex-start',
@@ -328,9 +324,8 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
   },
   retryText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 12,
-    fontWeight: '600',
   },
   closeBtn: {
     alignSelf: 'flex-start',

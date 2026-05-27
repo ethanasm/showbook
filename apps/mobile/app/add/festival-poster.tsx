@@ -369,9 +369,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   splashBtnLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 14,
-    fontWeight: '600',
   },
   splashHint: {
     fontFamily: 'Geist Mono',
@@ -393,9 +392,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   extractingTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 17,
-    fontWeight: '600',
   },
   extractingBody: {
     fontFamily: 'Geist Sans',
@@ -412,9 +410,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   errorTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 17,
-    fontWeight: '600',
   },
   errorBody: {
     fontFamily: 'Geist Sans',
@@ -434,9 +431,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   errorBtnLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 13,
-    fontWeight: '500',
   },
   footer: {
     paddingHorizontal: 16,
@@ -472,8 +468,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   saveLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 14,
-    fontWeight: '600',
   },
 });

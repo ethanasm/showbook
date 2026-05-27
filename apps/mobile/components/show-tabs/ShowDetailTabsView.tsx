@@ -918,9 +918,8 @@ const heroStyles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   statePillText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 10.5 * 0.08,
     textTransform: 'uppercase',
   },
@@ -934,9 +933,8 @@ const heroStyles = StyleSheet.create({
     flexShrink: 1,
   },
   eyebrow: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 11 * 0.14,
     textTransform: 'uppercase',
     color: '#1a1a1a',

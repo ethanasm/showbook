@@ -76,15 +76,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   label: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 1.05,
   },
   input: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 15,
-    fontWeight: '400',
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: RADII.lg,
     paddingHorizontal: 14,
@@ -95,9 +93,8 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   error: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 12,
-    fontWeight: '400',
   },
   row: {
     flexDirection: 'row',

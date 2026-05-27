@@ -149,9 +149,8 @@ const styles = StyleSheet.create({
     borderRadius: RADII.pill,
   },
   eyebrow: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 10.5,
-    fontWeight: '600',
     letterSpacing: 1.05,
     textTransform: 'uppercase',
   },
@@ -168,22 +167,19 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   wordmark: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 22,
-    fontWeight: '700',
     letterSpacing: -0.5,
   },
   heroLine: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 32,
-    fontWeight: '700',
     lineHeight: 34,
     letterSpacing: -0.32,
   },
   subtitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 13,
-    fontWeight: '400',
     lineHeight: 20,
   },
   badgeRow: {
@@ -197,9 +193,8 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   errorText: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 13,
-    fontWeight: '500',
     lineHeight: 18,
   },
   signInButton: {
@@ -225,19 +220,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   googleLetter: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 700',
     fontSize: 11,
-    fontWeight: '700',
   },
   signInLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 15,
-    fontWeight: '600',
   },
   footer: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 400',
     fontSize: 11,
-    fontWeight: '400',
     lineHeight: 16,
   },
 });

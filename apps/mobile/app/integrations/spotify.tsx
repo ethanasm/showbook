@@ -325,9 +325,8 @@ const styles = StyleSheet.create({
     borderRadius: RADII.lg,
   },
   title: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 18,
-    fontWeight: '600',
     letterSpacing: -0.4,
   },
   body3: {
@@ -343,9 +342,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryLabel: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 0.7,
   },
   secondaryButton: {
@@ -357,9 +355,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   secondaryLabel: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 600',
     fontSize: 11,
-    fontWeight: '600',
     letterSpacing: 0.7,
   },
   pickerCard: {
@@ -378,14 +375,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   pickerTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 15,
-    fontWeight: '600',
   },
   pickerCancel: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 500',
     fontSize: 10.5,
-    fontWeight: '500',
     letterSpacing: 0.7,
     textTransform: 'uppercase',
   },

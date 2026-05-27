@@ -1213,20 +1213,18 @@ const styles = StyleSheet.create({
   },
   filterDot: { width: 5, height: 5, borderRadius: RADII.pill },
   filterLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11,
-    fontWeight: '500',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
   filterCount: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 400',
     fontSize: 10,
-    fontWeight: '400',
   },
   pinOuter: { alignItems: 'center', justifyContent: 'center' },
   pinInner: { alignItems: 'center', justifyContent: 'center' },
-  pinCount: { fontFamily: 'Geist Sans', fontWeight: '600' },
+  pinCount: { fontFamily: 'Geist Sans 600' },
   searchAreaButton: {
     position: 'absolute',
     top: 12,
@@ -1240,9 +1238,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   searchAreaLabel: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 12,
-    fontWeight: '600',
   },
   focusToggle: {
     position: 'absolute',
@@ -1260,9 +1257,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   focusToggleLabel: {
-    fontFamily: 'Geist Mono',
+    fontFamily: 'Geist Mono 500',
     fontSize: 10.5,
-    fontWeight: '500',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
@@ -1281,9 +1277,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   sheetEyebrow: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 10,
-    fontWeight: '500',
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
@@ -1314,9 +1309,8 @@ const styles = StyleSheet.create({
   statDivider: { width: 1 },
   statCell: { flex: 1, paddingVertical: 10, paddingHorizontal: 12 },
   statValue: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 600',
     fontSize: 17,
-    fontWeight: '600',
   },
   statLabel: {
     fontFamily: 'Geist Sans',
@@ -1334,9 +1328,8 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   visitsTitle: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11,
-    fontWeight: '500',
     letterSpacing: 0.9,
     textTransform: 'uppercase',
   },
@@ -1353,9 +1346,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   visitDate: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 13.5,
-    fontWeight: '500',
   },
   kindDot: {
     width: 6,
@@ -1364,9 +1356,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   visitArtist: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 13,
-    fontWeight: '500',
   },
   visitSeat: {
     fontFamily: 'Geist Sans',
@@ -1374,8 +1365,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   visitPrice: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 11,
-    fontWeight: '500',
   },
 });

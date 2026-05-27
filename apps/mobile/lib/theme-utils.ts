@@ -59,18 +59,17 @@ export const RADII = { none: 0, xs: 2, sm: 4, md: 8, lg: 12, xl: 16, pill: 999 }
  */
 export const TYPE_RAMP = {
   heroTitle: { fontSize: 32, fontWeight: '700' as const, fontFamily: 'Fraunces', lineHeight: 35 },
-  screenTitle: { fontSize: 24, fontWeight: '700' as const, fontFamily: 'Geist Sans', lineHeight: 29 },
-  sectionTitle: { fontSize: 18, fontWeight: '600' as const, fontFamily: 'Geist Sans', lineHeight: 23 },
-  body: { fontSize: 15, fontWeight: '400' as const, fontFamily: 'Geist Sans', lineHeight: 23 },
-  bodySmall: { fontSize: 13, fontWeight: '400' as const, fontFamily: 'Geist Sans', lineHeight: 18 },
+  screenTitle: { fontSize: 24, fontFamily: 'Geist Sans 700', lineHeight: 29 },
+  sectionTitle: { fontSize: 18, fontFamily: 'Geist Sans 600', lineHeight: 23 },
+  body: { fontSize: 15, fontFamily: 'Geist Sans 400', lineHeight: 23 },
+  bodySmall: { fontSize: 13, fontFamily: 'Geist Sans 400', lineHeight: 18 },
   caption: {
     fontSize: 11.5,
-    fontWeight: '500' as const,
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     lineHeight: 15,
     letterSpacing: 0.9,
     textTransform: 'uppercase' as const,
   },
   headliner: { fontSize: 22, fontWeight: '700' as const, fontFamily: 'Fraunces', lineHeight: 25 },
-  stat: { fontSize: 28, fontWeight: '700' as const, fontFamily: 'Geist Sans', lineHeight: 31 },
+  stat: { fontSize: 28, fontFamily: 'Geist Sans 700', lineHeight: 31 },
 } as const;

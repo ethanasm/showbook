@@ -70,9 +70,8 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   title: {
-    fontFamily: 'Geist Sans',
+    fontFamily: 'Geist Sans 500',
     fontSize: 13.5,
-    fontWeight: '500',
   },
   body: {
     fontFamily: 'Geist Sans',
