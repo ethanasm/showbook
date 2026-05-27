@@ -38,6 +38,7 @@ import type { Kind } from '@showbook/shared';
 import { TopBar } from '../../components/TopBar';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
 import { EmptyState } from '../../components/EmptyState';
+import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { Sheet } from '../../components/Sheet';
 import { useTheme } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
@@ -108,6 +109,23 @@ const DEFAULT_REGION: Region = {
   longitudeDelta: 50,
 };
 
+// Hard cap on markers handed to the native map at once. The Discoverable
+// layer can resolve into thousands of announcements spread nationwide
+// and Apple Maps (iOS PROVIDER_DEFAULT) becomes unstable when many
+// custom-view markers churn in a single render. Viewport culling alone
+// isn't enough at continental zoom, so we additionally cap by marker
+// count — clusters are ranked by `count` so the densest venues survive.
+const MAX_VISIBLE_MARKERS = 60;
+
+// Clamp Region deltas to something Apple Maps reliably renders. A
+// global fit (e.g. announcements in both Hawaii and the East Coast)
+// can otherwise compute a 100°+ longitude delta, which combined with
+// dozens of marker creations in the same render has been observed to
+// hard-crash the native map. 60° latitude × 120° longitude still
+// shows the continental US end-to-end.
+const MAX_REGION_LAT_DELTA = 60;
+const MAX_REGION_LNG_DELTA = 120;
+
 const KIND_FILTERS: readonly { k: 'all' | Kind; label: string }[] = [
   { k: 'all', label: 'all' },
   { k: 'concert', label: 'concert' },
@@ -140,12 +158,39 @@ function toNumber(value: number | string | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// Stricter than `Number.isFinite`: rejects coordinates that fall outside
+// the WGS84 valid range. A bad row in the discoverable feed (e.g. an
+// announcement whose venue still has placeholder lat/lng like 0/0 from
+// a partial geocode, or values out of bounds from a stale import) would
+// otherwise skew `fitRegion` into an unrenderable delta and feed Apple
+// Maps a coordinate it refuses to plot.
+function isPlottableCoord(lat: number, lng: number): boolean {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -85 &&
+    lat <= 85 &&
+    lng >= -180 &&
+    lng <= 180 &&
+    // Treat exact 0/0 as "no coords yet" — Null Island is almost
+    // always a placeholder rather than a real venue, and it
+    // dramatically widens fitRegion when mixed with US venues.
+    !(lat === 0 && lng === 0)
+  );
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(Math.max(value, min), max);
+}
+
 function groupByVenue(shows: MapShow[]): VenueGroup[] {
   const byId = new Map<string, VenueGroup>();
   for (const show of shows) {
     const lat = toNumber(show.venue.latitude);
     const lng = toNumber(show.venue.longitude);
     if (lat === null || lng === null) continue;
+    if (!isPlottableCoord(lat, lng)) continue;
     const existing = byId.get(show.venue.id);
     if (existing) {
       existing.shows.push(show);
@@ -183,9 +228,14 @@ function dominantKind(shows: MapShow[]): Kind {
  * Grid bucketing. Cell size scales with the current longitude delta so
  * pins cluster at low zoom and split apart at high zoom. Clusters are
  * placed at the centroid of their member venues.
+ *
+ * The divisor (`/ 6`) is intentionally smaller than what looks "right"
+ * at high zoom — at low zoom we want aggressive clustering so the
+ * native map never sees more than a couple dozen markers, which is
+ * what was crashing the iOS Discoverable layer.
  */
 function clusterVenues(venues: VenueGroup[], region: Region): Cluster[] {
-  const cellSize = Math.max(region.longitudeDelta / 10, 0.0008);
+  const cellSize = Math.max(region.longitudeDelta / 6, 0.0008);
   const cells = new Map<string, VenueGroup[]>();
   for (const v of venues) {
     const key = `${Math.floor(v.lat / cellSize)}:${Math.floor(v.lng / cellSize)}`;
@@ -218,21 +268,34 @@ function clusterVenues(venues: VenueGroup[], region: Region): Cluster[] {
 }
 
 /**
- * Viewport cull. The `discoverable` layer can resolve into hundreds of
- * venues spread nationwide; handing a marker for every one to the native
- * map at once is what crashed the app on that layer. Off-screen pins are
- * never visible anyway, so only clusters inside a lightly-padded box around
- * the current region are kept — bounding the rendered marker count to what
- * actually fits on screen (the grid clustering caps per-viewport density).
+ * Viewport cull + hard cap. The `discoverable` layer can resolve into
+ * thousands of announcements spread nationwide; handing a marker for
+ * every one to the native map is what crashed the app on that layer.
+ *
+ * 1) Drop clusters outside a lightly-padded box around the current
+ *    region — off-screen pins are never visible anyway.
+ * 2) Sort the survivors by show count (densest venues first) and keep
+ *    at most `MAX_VISIBLE_MARKERS`. The cap matters because at low
+ *    zoom the padded viewport can still contain every cluster, and
+ *    Apple Maps becomes unstable past a few dozen custom-view markers
+ *    churning between renders (which is what happens on a layer
+ *    switch).
  */
-function clustersInRegion(clusters: Cluster[], region: Region): Cluster[] {
+function visibleClustersFor(clusters: Cluster[], region: Region): Cluster[] {
   const latPad = region.latitudeDelta * 0.6 + 0.0005;
   const lngPad = region.longitudeDelta * 0.6 + 0.0005;
-  return clusters.filter(
+  const inView = clusters.filter(
     (c) =>
       Math.abs(c.lat - region.latitude) <= latPad &&
       Math.abs(c.lng - region.longitude) <= lngPad,
   );
+  if (inView.length <= MAX_VISIBLE_MARKERS) return inView;
+  // Densest clusters survive. Each surviving cluster has a stable id,
+  // so React-Native-Maps' marker reconciliation isn't disrupted by
+  // arbitrary slice ordering.
+  return [...inView]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, MAX_VISIBLE_MARKERS);
 }
 
 function fitRegion(venues: VenueGroup[]): Region {
@@ -247,8 +310,11 @@ function fitRegion(venues: VenueGroup[]): Region {
     if (v.lng < minLng) minLng = v.lng;
     if (v.lng > maxLng) maxLng = v.lng;
   }
-  const latDelta = Math.max((maxLat - minLat) * 1.4, 0.05);
-  const lngDelta = Math.max((maxLng - minLng) * 1.4, 0.05);
+  // Clamp deltas — a nationwide-spread discoverable feed can otherwise
+  // produce a region wide enough to destabilise Apple Maps when the
+  // marker set churns. See MAX_REGION_*_DELTA notes above.
+  const latDelta = clamp((maxLat - minLat) * 1.4, 0.05, MAX_REGION_LAT_DELTA);
+  const lngDelta = clamp((maxLng - minLng) * 1.4, 0.05, MAX_REGION_LNG_DELTA);
   return {
     latitude: (minLat + maxLat) / 2,
     longitude: (minLng + maxLng) / 2,
@@ -450,10 +516,11 @@ export default function MapScreen(): React.JSX.Element {
     [venues, region],
   );
 
-  // Only the markers inside the viewport are handed to the native map —
-  // see `clustersInRegion` for why (the Discoverable-layer crash).
+  // Only the markers inside the viewport (and capped to a safe count)
+  // are handed to the native map — see `visibleClustersFor` for why
+  // (the Discoverable-layer crash).
   const visibleClusters = React.useMemo(
-    () => clustersInRegion(clusters, region),
+    () => visibleClustersFor(clusters, region),
     [clusters, region],
   );
 
@@ -721,16 +788,44 @@ export default function MapScreen(): React.JSX.Element {
             }
           />
         ) : (
-          <>
+          // Local boundary so a render-time failure inside MapView /
+          // Marker children (e.g. a bad coordinate that snuck past our
+          // sanitisers) shows the recovery card on this tab instead of
+          // crashing the whole app like the Discoverable layer used to.
+          <ErrorBoundary
+            fallback={({ reset }) => (
+              <EmptyState
+                icon={<MapPin size={40} color={colors.faint} strokeWidth={1.5} />}
+                title="Map failed to load"
+                subtitle="Try switching layers or tap below to retry."
+                cta={{ label: 'Try again', onPress: reset }}
+              />
+            )}
+          >
+            {/*
+              * `key={layer}` remounts the MapView whenever the layer
+              * pill changes. That gives Apple Maps (iOS PROVIDER_DEFAULT)
+              * a clean teardown of every native marker between layers,
+              * so a switch into Discoverable doesn't have to reconcile
+              * dozens of past-layer markers + dozens of new ones in a
+              * single render — which is what was crashing the app even
+              * after the viewport cull was added.
+              */}
             <MapView
+              key={layer}
               ref={mapRef}
               style={StyleSheet.absoluteFill}
               provider={
                 Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT
               }
-              initialRegion={DEFAULT_REGION}
+              initialRegion={region}
               onRegionChangeComplete={onRegionChangeComplete}
-              customMapStyle={mode === 'dark' ? darkStyle : lightStyle}
+              // Apple Maps silently ignores customMapStyle, so only
+              // pass it on Android (Google Maps) where it actually
+              // applies — avoids a known iOS instability path.
+              {...(Platform.OS === 'android'
+                ? { customMapStyle: mode === 'dark' ? darkStyle : lightStyle }
+                : null)}
               showsCompass={false}
               showsPointsOfInterests={false}
               toolbarEnabled={false}
@@ -872,7 +967,7 @@ export default function MapScreen(): React.JSX.Element {
                 ))}
               </View>
             )}
-          </>
+          </ErrorBoundary>
         )}
       </View>
 
