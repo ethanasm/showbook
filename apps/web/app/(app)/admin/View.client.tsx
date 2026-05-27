@@ -67,6 +67,8 @@ export default function AdminView() {
     trpc.admin.enqueueBackfillPerformerTicketmasterIds.useMutation();
   const performerSpotifyMutation =
     trpc.admin.enqueueBackfillPerformerSpotifyIds.useMutation();
+  const showTicketUrlsMutation =
+    trpc.admin.enqueueBackfillShowTicketUrls.useMutation();
 
   const [performerQuery, setPerformerQuery] = useState("");
 
@@ -105,6 +107,11 @@ export default function AdminView() {
   const performerSpotifyResult = performerSpotifyMutation.data
     ? performerSpotifyMutation.data.jobId
       ? `Enqueued job ${performerSpotifyMutation.data.jobId}`
+      : 'Enqueue returned no job id (likely a duplicate already queued)'
+    : null;
+  const showTicketUrlsResult = showTicketUrlsMutation.data
+    ? showTicketUrlsMutation.data.jobId
+      ? `Enqueued job ${showTicketUrlsMutation.data.jobId}`
       : 'Enqueue returned no job id (likely a duplicate already queued)'
     : null;
 
@@ -172,6 +179,17 @@ export default function AdminView() {
               errorMessage={setlistMutation.error?.message ?? null}
               resultLine={setlistResult}
               onRun={() => setlistMutation.mutate()}
+            />
+
+            <BackfillCard
+              title="Backfill show ticket URLs"
+              description="Enqueue the backfill-show-ticket-urls job. Looks up a Ticketmaster event URL for every future watching / ticketed show whose ticket_url is null — Gmail / Eventbrite imports land without one. Festivals and past shows are excluded. Already runs daily at 06:45 ET; use this after a bulk import. Results land in Axiom (event backfill.show_ticket_urls.summary)."
+              buttonLabel="Enqueue ticket-URL backfill"
+              confirmText="Enqueue the show-ticket-URL backfill? It calls TM Discovery once per future show without a ticket URL."
+              isPending={showTicketUrlsMutation.isPending}
+              errorMessage={showTicketUrlsMutation.error?.message ?? null}
+              resultLine={showTicketUrlsResult}
+              onRun={() => showTicketUrlsMutation.mutate()}
             />
           </div>
 

@@ -61,6 +61,7 @@ export const JOB_NAMES = {
   BACKFILL_PERFORMER_MBIDS: 'backfill/performer-mbids',
   BACKFILL_PERFORMER_TICKETMASTER_IDS: 'backfill/performer-ticketmaster-ids',
   BACKFILL_PERFORMER_SPOTIFY_IDS: 'backfill/performer-spotify-ids',
+  BACKFILL_SHOW_TICKET_URLS: 'backfill/show-ticket-urls',
 } as const;
 
 export type CorpusFillMode = 'predict' | 'deep' | 'refresh';
@@ -207,6 +208,34 @@ export async function enqueueBackfillPerformerSpotifyIds(): Promise<
         queue: JOB_NAMES.BACKFILL_PERFORMER_SPOTIFY_IDS,
       },
       'enqueueBackfillPerformerSpotifyIds failed',
+    );
+    return null;
+  }
+}
+
+/**
+ * Trigger the show-ticket-URL backfill outside its 06:45 ET cron — used
+ * by the admin "Backfill show ticket URLs" button to catch the backlog
+ * of future watching / ticketed shows whose `ticket_url` is null. The
+ * inline `shows.create` TM enrichment now covers both watching and
+ * ticketed shows, but rows imported before that change still need a
+ * sweep, and the cron is the durable safety net for any future
+ * ingestion path that doesn't write the column directly.
+ */
+export async function enqueueBackfillShowTicketUrls(): Promise<
+  string | null
+> {
+  try {
+    const boss = await getSender();
+    return await boss.send(JOB_NAMES.BACKFILL_SHOW_TICKET_URLS, {});
+  } catch (err) {
+    log.error(
+      {
+        err,
+        event: 'job_queue.enqueue.failed',
+        queue: JOB_NAMES.BACKFILL_SHOW_TICKET_URLS,
+      },
+      'enqueueBackfillShowTicketUrls failed',
     );
     return null;
   }
