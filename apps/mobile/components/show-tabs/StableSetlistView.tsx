@@ -8,7 +8,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { useTheme } from '../../lib/theme';
+import { useTheme } from '@/lib/theme';
 import { ConfidenceBanner } from './ConfidenceBanner';
 import { SectionFrame } from './SectionFrame';
 import { PredictedSetlistRow } from './PredictedSetlistRow';
@@ -16,7 +16,7 @@ import { EncoreDivider } from './EncoreDivider';
 import {
   resolvePreview,
   type PreviewMap,
-} from '../../lib/setlist-intel';
+} from '@/lib/setlist-intel';
 
 export interface StablePredictionLike {
   style: 'stable';

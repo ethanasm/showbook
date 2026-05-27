@@ -33,23 +33,23 @@ import { Eyebrow, GradientEmphasis, RemoteImage } from '../../components/design-
 import { QueryBoundary } from '../../components/QueryBoundary';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { SetlistfmMark, SpotifyMark } from '../../components/BrandIcons';
-import { buildSetlistfmOpenPlan } from '../../lib/setlistfm-deep-link';
+import { buildSetlistfmOpenPlan } from '@/lib/setlistfm-deep-link';
 import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
-import { useTheme, type Kind, type ShowState } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
-import { hapticSelection } from '../../lib/haptics';
+import { useTheme, type Kind, type ShowState } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { hapticSelection } from '@/lib/haptics';
 import { isNonWatchableKind } from '@showbook/shared';
-import { useAuth } from '../../lib/auth';
-import { useSpotifyConnection } from '../../lib/spotify-connection';
-import { headlinerDisplayName } from '../../lib/show-display';
-import { trpc, type RouterOutput } from '../../lib/trpc';
-import { useCachedQuery } from '../../lib/cache';
+import { useAuth } from '@/lib/auth';
+import { useSpotifyConnection } from '@/lib/spotify-connection';
+import { headlinerDisplayName } from '@/lib/show-display';
+import { trpc, type RouterOutput } from '@/lib/trpc';
+import { useCachedQuery } from '@/lib/cache';
 import { useQueryClient } from '@tanstack/react-query';
-import { runOptimisticMutation } from '../../lib/mutations';
-import { getCacheOutbox } from '../../lib/cache/db';
-import { useFeedback } from '../../lib/feedback';
-import { performerImageSource } from '../../lib/images';
+import { runOptimisticMutation } from '@/lib/mutations';
+import { getCacheOutbox } from '@/lib/cache/db';
+import { useFeedback } from '@/lib/feedback';
+import { performerImageSource } from '@/lib/images';
 
 // Derive screen types from the tRPC vanilla client so drift in the server
 // contract is caught at the call site instead of papered over with casts.

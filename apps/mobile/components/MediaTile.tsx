@@ -13,8 +13,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 import {
   getMediaTilePressableProps,
   getMediaTileVm,

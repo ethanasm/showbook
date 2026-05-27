@@ -15,9 +15,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Music, Drama, Smile, Tent, Trophy, Film, HelpCircle } from 'lucide-react-native';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
-import type { Kind } from '../lib/theme';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import type { Kind } from '@/lib/theme';
 
 interface KindBadgeProps {
   kind: Kind;

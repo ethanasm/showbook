@@ -10,8 +10,8 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTheme } from '../../../lib/theme';
-import { RADII } from '../../../lib/theme-utils';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 
 export interface FirstRunStepProps {
   step: number; // 1-based step index among `total`

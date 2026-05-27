@@ -11,7 +11,7 @@
 import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { EmptyState } from './EmptyState';
-import { useTheme } from '../lib/theme';
+import { useTheme } from '@/lib/theme';
 
 type QueryLike<TData> = {
   isLoading: boolean;

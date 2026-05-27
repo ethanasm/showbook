@@ -16,9 +16,9 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
-import { hapticImpactMedium } from '../lib/haptics';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { hapticImpactMedium } from '@/lib/haptics';
 import { KindBadge } from './KindBadge';
 import { StateChip } from './StateChip';
 import { RemoteImage } from './design-system/RemoteImage';

@@ -27,13 +27,13 @@ import { TopBar } from '../../components/TopBar';
 import { SpotifyConnectSheet } from '../../components/SpotifyConnectSheet';
 import { OfflineEmptyState } from '../../components/OfflineEmptyState';
 import { SpotifyImportPicker } from '../../components/spotify-import/SpotifyImportPicker';
-import { useTheme } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
-import { useNetwork } from '../../lib/network';
-import { useSpotifyConnection } from '../../lib/spotify-connection';
-import { useSpotifyImport } from '../../lib/spotify-import/useSpotifyImport';
-import { useFeedback } from '../../lib/feedback';
-import { trpc } from '../../lib/trpc';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { useNetwork } from '@/lib/network';
+import { useSpotifyConnection } from '@/lib/spotify-connection';
+import { useSpotifyImport } from '@/lib/spotify-import/useSpotifyImport';
+import { useFeedback } from '@/lib/feedback';
+import { trpc } from '@/lib/trpc';
 
 export default function SpotifyIntegrationScreen(): React.JSX.Element {
   const { tokens } = useTheme();

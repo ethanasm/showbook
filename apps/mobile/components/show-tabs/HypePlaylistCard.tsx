@@ -18,18 +18,18 @@ import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'r
 import { ChevronRight } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
 
-import { useTheme } from '../../lib/theme';
+import { useTheme } from '@/lib/theme';
 import { SpotifyMark } from '../BrandIcons';
-import { RADII } from '../../lib/theme-utils';
-import { hapticSuccess } from '../../lib/haptics';
-import { trpc } from '../../lib/trpc';
-import { useNetwork } from '../../lib/network';
-import { useSpotifyConnection } from '../../lib/spotify-connection';
+import { RADII } from '@/lib/theme-utils';
+import { hapticSuccess } from '@/lib/haptics';
+import { trpc } from '@/lib/trpc';
+import { useNetwork } from '@/lib/network';
+import { useSpotifyConnection } from '@/lib/spotify-connection';
 import { SpotifyConnectSheet } from '../SpotifyConnectSheet';
-import { buildSpotifyOpenPlan } from '../../lib/setlist-intel';
+import { buildSpotifyOpenPlan } from '@/lib/setlist-intel';
 import { useQueryClient } from '@tanstack/react-query';
-import { runOptimisticMutation } from '../../lib/mutations';
-import { getCacheOutbox } from '../../lib/cache/db';
+import { runOptimisticMutation } from '@/lib/mutations';
+import { getCacheOutbox } from '@/lib/cache/db';
 
 export interface HypePlaylistCardProps {
   showId: string;

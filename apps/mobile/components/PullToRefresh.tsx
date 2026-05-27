@@ -21,8 +21,8 @@ import {
   type ScrollView,
   type ScrollViewProps,
 } from 'react-native';
-import { useTheme } from '../lib/theme';
-import { useRefreshHaptics } from '../lib/useRefreshHaptics';
+import { useTheme } from '@/lib/theme';
+import { useRefreshHaptics } from '@/lib/useRefreshHaptics';
 
 export interface PullToRefreshProps {
   refreshing: boolean;

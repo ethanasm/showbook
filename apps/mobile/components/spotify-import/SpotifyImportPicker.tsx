@@ -15,13 +15,13 @@ import {
   View,
 } from 'react-native';
 import { Check, Search, X } from 'lucide-react-native';
-import { useTheme } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 import { RemoteImage } from '../design-system';
 import type {
   SpotifyImportArtist,
   SpotifyImportFlow,
-} from '../../lib/spotify-import/useSpotifyImport';
+} from '@/lib/spotify-import/useSpotifyImport';
 
 interface SpotifyImportPickerProps {
   flow: SpotifyImportFlow;

@@ -31,11 +31,11 @@ import {
 } from 'lucide-react-native';
 
 import { Sheet } from './Sheet';
-import { useTheme, type ShowState } from '../lib/theme';
-import { trpc } from '../lib/trpc';
-import { useFeedback } from '../lib/feedback';
-import { runOptimisticMutation } from '../lib/mutations';
-import { getCacheOutbox, invalidateShowsList } from '../lib/cache';
+import { useTheme, type ShowState } from '@/lib/theme';
+import { trpc } from '@/lib/trpc';
+import { useFeedback } from '@/lib/feedback';
+import { runOptimisticMutation } from '@/lib/mutations';
+import { getCacheOutbox, invalidateShowsList } from '@/lib/cache';
 
 export interface ShowActionSheetProps {
   open: boolean;

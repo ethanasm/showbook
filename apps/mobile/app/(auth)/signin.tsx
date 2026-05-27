@@ -25,9 +25,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Redirect } from 'expo-router';
-import { useTheme } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
-import { useAuth } from '../../lib/auth';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { useAuth } from '@/lib/auth';
 import { BrandMark } from '../../components/BrandMark';
 import { KindBadge } from '../../components/KindBadge';
 import { StackedCards } from '../../components/design-system';

@@ -18,10 +18,10 @@ import { useRouter } from 'expo-router';
 import { ChevronLeft, AlertCircle } from 'lucide-react-native';
 
 import { TopBar } from '../components/TopBar';
-import { useTheme } from '../lib/theme';
-import { trpc } from '../lib/trpc';
-import { CACHE_DEFAULTS } from '../lib/cache';
-import { RADII } from '../lib/theme-utils';
+import { useTheme } from '@/lib/theme';
+import { trpc } from '@/lib/trpc';
+import { CACHE_DEFAULTS } from '@/lib/cache';
+import { RADII } from '@/lib/theme-utils';
 
 function formatGigabytes(bytes: number): string {
   if (bytes >= 1024 * 1024 * 1024) {

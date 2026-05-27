@@ -24,8 +24,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Search } from 'lucide-react-native';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 import { useDebouncedValue } from '@showbook/shared/hooks';
 
 export interface ArtistSuggestion {

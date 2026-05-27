@@ -8,7 +8,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, type DimensionValue } from 'react-native';
-import { useTheme } from '../lib/theme';
+import { useTheme } from '@/lib/theme';
 
 export interface SkeletonProps {
   width: number | string;

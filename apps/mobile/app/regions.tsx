@@ -31,19 +31,19 @@ import {
 import { useRouter } from 'expo-router';
 import { ChevronLeft, MapPin, Plus, X, Check } from 'lucide-react-native';
 import { ScreenWrapper } from '../components/ScreenWrapper';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
-import { trpc } from '../lib/trpc';
-import { useFeedback } from '../lib/feedback';
-import { runOptimisticMutation } from '../lib/mutations';
-import { getCacheOutbox } from '../lib/cache';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { trpc } from '@/lib/trpc';
+import { useFeedback } from '@/lib/feedback';
+import { runOptimisticMutation } from '@/lib/mutations';
+import { getCacheOutbox } from '@/lib/cache';
 import {
   MAX_REGIONS,
   DEFAULT_RADIUS_MILES,
   RADIUS_OPTIONS,
   canAddRegion,
   parseRegionInput,
-} from '../lib/regions';
+} from '@/lib/regions';
 
 interface RegionRow {
   id: string;

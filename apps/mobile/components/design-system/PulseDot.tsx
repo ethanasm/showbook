@@ -14,7 +14,7 @@ import Animated, {
   Easing,
   useReducedMotion,
 } from 'react-native-reanimated';
-import { useTheme } from '../../lib/theme';
+import { useTheme } from '@/lib/theme';
 
 interface PulseDotProps {
   size?: number;

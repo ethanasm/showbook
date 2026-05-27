@@ -15,12 +15,12 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { Sheet } from './Sheet';
 import { Button } from './design-system';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
-import { trpc } from '../lib/trpc';
-import { useFeedback } from '../lib/feedback';
-import { runOptimisticMutation } from '../lib/mutations';
-import { getCacheOutbox, invalidateShowsList } from '../lib/cache';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { trpc } from '@/lib/trpc';
+import { useFeedback } from '@/lib/feedback';
+import { runOptimisticMutation } from '@/lib/mutations';
+import { getCacheOutbox, invalidateShowsList } from '@/lib/cache';
 
 export interface MarkTicketedSheetProps {
   open: boolean;

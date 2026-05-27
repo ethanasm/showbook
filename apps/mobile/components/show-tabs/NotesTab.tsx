@@ -7,8 +7,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { useTheme } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 import { SectionFrame } from './SectionFrame';
 
 const PROMPTS_PRE = [

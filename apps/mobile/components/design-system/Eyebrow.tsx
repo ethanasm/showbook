@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { Text, type TextStyle, type StyleProp } from 'react-native';
-import { useTheme } from '../../lib/theme';
+import { useTheme } from '@/lib/theme';
 
 interface EyebrowProps {
   children: React.ReactNode;

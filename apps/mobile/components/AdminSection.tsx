@@ -49,18 +49,18 @@ import {
 
 import { Sheet } from './Sheet';
 import { Button } from './design-system';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
-import { useAuth } from '../lib/auth';
-import { useFeedback } from '../lib/feedback';
-import { useNetwork } from '../lib/network';
-import { trpc } from '../lib/trpc';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { useAuth } from '@/lib/auth';
+import { useFeedback } from '@/lib/feedback';
+import { useNetwork } from '@/lib/network';
+import { trpc } from '@/lib/trpc';
 import {
   formatJobEnqueued,
   formatVenueBackfill,
   formatSetlistRetry,
   formatCorpusFill,
-} from '../lib/admin-actions';
+} from '@/lib/admin-actions';
 
 type IconComponent = React.ComponentType<{
   size?: number;

@@ -21,9 +21,9 @@
 import React from 'react';
 import { Redirect } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '../lib/auth';
-import { useNetwork } from '../lib/network';
-import { isE2EMode } from '../lib/auth-helpers';
+import { useAuth } from '@/lib/auth';
+import { useNetwork } from '@/lib/network';
+import { isE2EMode } from '@/lib/auth-helpers';
 import OfflineScreen from './_offline';
 
 export default function Index(): React.JSX.Element | null {

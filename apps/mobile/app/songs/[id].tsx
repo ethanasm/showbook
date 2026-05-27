@@ -26,10 +26,10 @@ import { TopBar } from '../../components/TopBar';
 import { EmptyState } from '../../components/EmptyState';
 import { QueryBoundary } from '../../components/QueryBoundary';
 import { Eyebrow, GradientEmphasis } from '../../components/design-system';
-import { useTheme } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
-import { useAuth } from '../../lib/auth';
-import { trpc, type RouterOutput } from '../../lib/trpc';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { useAuth } from '@/lib/auth';
+import { trpc, type RouterOutput } from '@/lib/trpc';
 
 type UtilsClient = ReturnType<typeof trpc.useUtils>['client'];
 type SongDetail = RouterOutput<UtilsClient['songs']['byId']['query']>;

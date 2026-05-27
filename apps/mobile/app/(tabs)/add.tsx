@@ -41,18 +41,18 @@ import {
 } from 'lucide-react-native';
 
 import { TopBar } from '../../components/TopBar';
-import { useTheme } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
-import { trpc } from '../../lib/trpc';
-import { useFeedback } from '../../lib/feedback';
-import { toUserMessage } from '../../lib/errors';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { trpc } from '@/lib/trpc';
+import { useFeedback } from '@/lib/feedback';
+import { toUserMessage } from '@/lib/errors';
 import { WalletShareHowToSheet } from '../../components/WalletShareHowToSheet';
 import { FestivalPosterHowToSheet } from '../../components/FestivalPosterHowToSheet';
 import {
   appendRecent,
   isConversationKind,
   type SessionRecentShow,
-} from '../../lib/conversationMemory';
+} from '@/lib/conversationMemory';
 
 const SUGGESTIONS = [
   'Phoebe Bridgers at the Greek 8/15 GA',

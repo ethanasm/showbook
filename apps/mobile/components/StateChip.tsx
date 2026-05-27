@@ -11,8 +11,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Check, Eye, Bookmark } from 'lucide-react-native';
-import { useTheme, type ColorTokens, type ShowState } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
+import { useTheme, type ColorTokens, type ShowState } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 
 // Extended state includes wishlist for UI display
 type ChipState = ShowState | 'wishlist';

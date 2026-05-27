@@ -8,10 +8,10 @@
 import React from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '../lib/theme';
-import { useFeedback } from '../lib/feedback';
-import { feedbackVariantColors } from '../lib/toast-colors';
-import { RADII } from '../lib/theme-utils';
+import { useTheme } from '@/lib/theme';
+import { useFeedback } from '@/lib/feedback';
+import { feedbackVariantColors } from '@/lib/toast-colors';
+import { RADII } from '@/lib/theme-utils';
 
 export function ToastHost(): React.JSX.Element | null {
   const { toasts, dismissToast } = useFeedback();

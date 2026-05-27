@@ -42,12 +42,12 @@ import { ShowCardListSkeleton } from '../../components/skeletons';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
 import { MarkTicketedSheet } from '../../components/MarkTicketedSheet';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
-import { useTheme, type Kind, type ShowState } from '../../lib/theme';
+import { useTheme, type Kind, type ShowState } from '@/lib/theme';
 import { hasProductionLabel, isNonWatchableKind } from '@showbook/shared';
-import { useAuth } from '../../lib/auth';
-import { trpc } from '../../lib/trpc';
-import { useCachedQuery } from '../../lib/cache';
-import { showCoverImageSource, venueImageSource } from '../../lib/images';
+import { useAuth } from '@/lib/auth';
+import { trpc } from '@/lib/trpc';
+import { useCachedQuery } from '@/lib/cache';
+import { showCoverImageSource, venueImageSource } from '@/lib/images';
 
 // Derive the per-row shape from the tRPC vanilla client to avoid pulling in
 // `@trpc/server` types directly. This stays in lockstep with `shows.list`'s

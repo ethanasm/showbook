@@ -29,7 +29,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
-import { RADII } from '../../lib/theme-utils';
+import { RADII } from '@/lib/theme-utils';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
@@ -49,18 +49,18 @@ import { ShowActionSheet } from '../../components/ShowActionSheet';
 import { MarkTicketedSheet } from '../../components/MarkTicketedSheet';
 import { useSelectedShow } from '../../components/ThreePaneLayout';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
-import { useTheme, type Kind, type ShowState } from '../../lib/theme';
-import { trpc } from '../../lib/trpc';
-import { useCachedQuery } from '../../lib/cache';
-import { useAuth } from '../../lib/auth';
-import { headlinerDisplayName } from '../../lib/show-display';
-import { showCoverImageSource } from '../../lib/images';
+import { useTheme, type Kind, type ShowState } from '@/lib/theme';
+import { trpc } from '@/lib/trpc';
+import { useCachedQuery } from '@/lib/cache';
+import { useAuth } from '@/lib/auth';
+import { headlinerDisplayName } from '@/lib/show-display';
+import { showCoverImageSource } from '@/lib/images';
 import {
   atMaxCursor,
   atMinCursor,
   computeMonthBounds,
   stepCursor,
-} from '../../lib/calendarBounds';
+} from '@/lib/calendarBounds';
 
 type Mode = 'timeline' | 'calendar' | 'stats';
 type CalendarMode = 'month' | 'year';

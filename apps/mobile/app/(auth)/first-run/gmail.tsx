@@ -13,9 +13,9 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { FirstRunStep, heroTitleStyle } from './_components';
 import { ExternalSourceDisclaimer } from '../../../components/ExternalSourceDisclaimer';
-import { useTheme } from '../../../lib/theme';
-import { RADII } from '../../../lib/theme-utils';
-import { useAuth } from '../../../lib/auth';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { useAuth } from '@/lib/auth';
 
 interface MockEmail {
   from: string;

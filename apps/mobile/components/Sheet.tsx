@@ -8,8 +8,8 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 
 export interface SheetProps {
   open: boolean;

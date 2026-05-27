@@ -18,9 +18,9 @@ import { Inbox, RefreshCw, Trash2 } from 'lucide-react-native';
 
 import { Sheet } from './Sheet';
 import { EmptyState } from './EmptyState';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
-import type { PendingWrite, PendingMutation } from '../lib/network';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import type { PendingWrite, PendingMutation } from '@/lib/network';
 
 export interface PendingWritesDrawerProps {
   open: boolean;

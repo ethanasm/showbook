@@ -10,8 +10,8 @@ import { View, StyleSheet, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as MediaLibrary from 'expo-media-library';
 import { FirstRunStep, heroTitleStyle } from './_components';
-import { useTheme } from '../../../lib/theme';
-import { RADII } from '../../../lib/theme-utils';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 
 export default function FirstRunPhotos(): React.JSX.Element {
   const { tokens } = useTheme();

@@ -25,9 +25,9 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Location from 'expo-location';
 import { MapPin } from 'lucide-react-native';
 import { FirstRunStep, heroTitleStyle } from './_components';
-import { useTheme } from '../../../lib/theme';
-import { RADII } from '../../../lib/theme-utils';
-import { trpc } from '../../../lib/trpc';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { trpc } from '@/lib/trpc';
 
 type Mode =
   | { kind: 'idle' }

@@ -36,10 +36,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import { ChevronLeft, Tag, AlertCircle } from 'lucide-react-native';
 
-import { useTheme } from '../../lib/theme';
-import { trpc } from '../../lib/trpc';
-import { CACHE_DEFAULTS } from '../../lib/cache';
-import { RADII } from '../../lib/theme-utils';
+import { useTheme } from '@/lib/theme';
+import { trpc } from '@/lib/trpc';
+import { CACHE_DEFAULTS } from '@/lib/cache';
+import { RADII } from '@/lib/theme-utils';
 
 interface MediaListItem {
   id: string;

@@ -19,14 +19,14 @@ import { FormField, FormRow } from './FormField';
 import { VenueTypeahead, type VenueSuggestion } from './VenueTypeahead';
 import { LineupEditor } from './LineupEditor';
 import { Collapsible } from './Collapsible';
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
-import { normalizeDashes } from '../lib/dateInput';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { normalizeDashes } from '@/lib/dateInput';
 import type {
   PerformerRow,
   ShowFormKind,
   ShowFormValues,
-} from '../lib/showForm';
+} from '@/lib/showForm';
 
 export interface ShowFormErrors {
   title?: string;

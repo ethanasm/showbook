@@ -29,20 +29,20 @@ import {
   ShowFormFields,
   type ShowFormErrors,
 } from '../../../components/ShowFormFields';
-import { useTheme } from '../../../lib/theme';
-import { trpc } from '../../../lib/trpc';
-import { useFeedback } from '../../../lib/feedback';
-import { toUserMessage } from '../../../lib/errors';
-import { runOptimisticMutation } from '../../../lib/mutations';
-import { getCacheOutbox, invalidateShowsList } from '../../../lib/cache';
+import { useTheme } from '@/lib/theme';
+import { trpc } from '@/lib/trpc';
+import { useFeedback } from '@/lib/feedback';
+import { toUserMessage } from '@/lib/errors';
+import { runOptimisticMutation } from '@/lib/mutations';
+import { getCacheOutbox, invalidateShowsList } from '@/lib/cache';
 import {
   buildShowFormFromDetail,
   serializeShowFormForKind,
   type ShowDetailLite,
   type ShowFormValues,
-} from '../../../lib/showForm';
-import { isYmd, normalizeDateInput } from '../../../lib/dateInput';
-import { useVenueSearch } from '../../../lib/useVenueSearch';
+} from '@/lib/showForm';
+import { isYmd, normalizeDateInput } from '@/lib/dateInput';
+import { useVenueSearch } from '@/lib/useVenueSearch';
 import { newPerformerRowId } from '../../../components/LineupEditor';
 import { FestivalPosterHowToSheet } from '../../../components/FestivalPosterHowToSheet';
 

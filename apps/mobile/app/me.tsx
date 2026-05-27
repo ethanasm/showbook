@@ -55,17 +55,17 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ScreenWrapper } from '../components/ScreenWrapper';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { AdminSection } from '../components/AdminSection';
-import { useTheme, type ThemePreference, type Density } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
-import { useAuth } from '../lib/auth';
-import { trpc } from '../lib/trpc';
-import { useNetwork, useOfflineSync } from '../lib/network';
-import { useFeedback } from '../lib/feedback';
-import { useSpotifyConnection } from '../lib/spotify-connection';
+import { useTheme, type ThemePreference, type Density } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { useAuth } from '@/lib/auth';
+import { trpc } from '@/lib/trpc';
+import { useNetwork, useOfflineSync } from '@/lib/network';
+import { useFeedback } from '@/lib/feedback';
+import { useSpotifyConnection } from '@/lib/spotify-connection';
 import {
   readLastWarmup,
   warmCacheForOfflineUse,
-} from '../lib/cache/warmup';
+} from '@/lib/cache/warmup';
 
 interface IntegrationRow {
   id: 'gmail' | 'ticketmaster' | 'google-places' | 'spotify';

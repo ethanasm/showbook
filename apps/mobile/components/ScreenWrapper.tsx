@@ -19,7 +19,7 @@ import React from 'react';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TopBar, type TopBarProps } from './TopBar';
-import { useTheme } from '../lib/theme';
+import { useTheme } from '@/lib/theme';
 
 export interface ScreenWrapperProps extends Pick<TopBarProps, 'title' | 'eyebrow' | 'rightAction' | 'leading' | 'large'> {
   children: React.ReactNode;

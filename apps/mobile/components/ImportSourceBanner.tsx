@@ -11,8 +11,8 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ticket } from 'lucide-react-native';
 
-import { useTheme } from '../lib/theme';
-import { RADII } from '../lib/theme-utils';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
 
 export type ImportSourceVariant = 'wallet';
 

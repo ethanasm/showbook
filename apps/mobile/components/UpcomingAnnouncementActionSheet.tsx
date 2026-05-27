@@ -19,9 +19,9 @@ import { BookmarkCheck, BookmarkPlus, Ticket } from 'lucide-react-native';
 
 import { Sheet } from './Sheet';
 import { TicketmasterMark } from './BrandIcons';
-import { useTheme } from '../lib/theme';
-import { useFeedback } from '../lib/feedback';
-import { hapticSelection } from '../lib/haptics';
+import { useTheme } from '@/lib/theme';
+import { useFeedback } from '@/lib/feedback';
+import { hapticSelection } from '@/lib/haptics';
 
 export interface UpcomingAnnouncementActionSheetProps {
   open: boolean;

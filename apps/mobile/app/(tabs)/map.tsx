@@ -40,11 +40,11 @@ import { MeTopBarAction } from '../../components/MeTopBarAction';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { Sheet } from '../../components/Sheet';
-import { useTheme } from '../../lib/theme';
-import { RADII } from '../../lib/theme-utils';
-import { trpc } from '../../lib/trpc';
-import { useAuth } from '../../lib/auth';
-import { useCachedQuery } from '../../lib/cache';
+import { useTheme } from '@/lib/theme';
+import { RADII } from '@/lib/theme-utils';
+import { trpc } from '@/lib/trpc';
+import { useAuth } from '@/lib/auth';
+import { useCachedQuery } from '@/lib/cache';
 import darkStyle from './map-style-dark.json';
 import lightStyle from './map-style-light.json';
 

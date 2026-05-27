@@ -27,10 +27,10 @@ import { EmptyState } from '../../components/EmptyState';
 import { ArtistCard, type ArtistCardArtist } from '../../components/ArtistCard';
 import { RowSkeleton } from '../../components/skeletons';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
-import { useTheme } from '../../lib/theme';
-import { useAuth } from '../../lib/auth';
-import { trpc, type RouterOutput } from '../../lib/trpc';
-import { useCachedQuery } from '../../lib/cache';
+import { useTheme } from '@/lib/theme';
+import { useAuth } from '@/lib/auth';
+import { trpc, type RouterOutput } from '@/lib/trpc';
+import { useCachedQuery } from '@/lib/cache';
 
 type UtilsClient = ReturnType<typeof trpc.useUtils>['client'];
 type PerformerListRow = RouterOutput<UtilsClient['performers']['list']['query']>[number];

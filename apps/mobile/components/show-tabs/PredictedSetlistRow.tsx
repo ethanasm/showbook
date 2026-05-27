@@ -13,9 +13,9 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { useTheme } from '../../lib/theme';
+import { useTheme } from '@/lib/theme';
 import { TrackPreviewButton } from './TrackPreviewButton';
-import type { SongBadge } from '../../lib/setlist-intel';
+import type { SongBadge } from '@/lib/setlist-intel';
 
 export type RowRole = 'opener' | 'closer' | 'encore_open' | 'encore_close' | 'core';
 

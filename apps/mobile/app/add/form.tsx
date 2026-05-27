@@ -37,23 +37,23 @@ import {
   ShowFormFields,
   type ShowFormErrors,
 } from '../../components/ShowFormFields';
-import { useTheme } from '../../lib/theme';
-import { useFormState } from '../../lib/useFormState';
-import { trpc } from '../../lib/trpc';
-import { useFeedback } from '../../lib/feedback';
-import { toUserMessage } from '../../lib/errors';
-import { runOptimisticMutation } from '../../lib/mutations';
-import { getCacheOutbox, invalidateShowsList } from '../../lib/cache';
+import { useTheme } from '@/lib/theme';
+import { useFormState } from '@/lib/useFormState';
+import { trpc } from '@/lib/trpc';
+import { useFeedback } from '@/lib/feedback';
+import { toUserMessage } from '@/lib/errors';
+import { runOptimisticMutation } from '@/lib/mutations';
+import { getCacheOutbox, invalidateShowsList } from '@/lib/cache';
 import {
   emptyShowFormValues,
   serializeShowFormForKind,
   type PerformerRow,
   type ShowFormKind,
   type ShowFormValues,
-} from '../../lib/showForm';
+} from '@/lib/showForm';
 import { newPerformerRowId } from '../../components/LineupEditor';
-import { isYmd, normalizeDateInput } from '../../lib/dateInput';
-import { useVenueSearch } from '../../lib/useVenueSearch';
+import { isYmd, normalizeDateInput } from '@/lib/dateInput';
+import { useVenueSearch } from '@/lib/useVenueSearch';
 import { FestivalPosterHowToSheet } from '../../components/FestivalPosterHowToSheet';
 
 const SCREEN_OPTIONS = { presentation: 'modal', gestureEnabled: true } as const;
