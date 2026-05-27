@@ -114,4 +114,45 @@ describe('serializeErr', () => {
     assert.equal(serializeErr(42), 42);
     assert.equal(serializeErr(null), null);
   });
+
+  it('drops DOMException constant fields so they do not become Axiom columns', () => {
+    // DOMException-like errors (RN, Web Crypto, fetch on Node 22) carry
+    // ~24 inherited constants — ABORT_ERR, DATA_CLONE_ERR, etc. Pino's
+    // default serializer flattens each into its own log field, and
+    // Axiom promotes each unique field to a dataset column. That's how
+    // showbook-prod hit its 257-column cap and started silently
+    // rejecting mobile telemetry events. Allowlist guards against the
+    // regression.
+    const err = Object.assign(new Error('aborted'), {
+      ABORT_ERR: 20,
+      DATA_CLONE_ERR: 25,
+      HIERARCHY_REQUEST_ERR: 3,
+      INDEX_SIZE_ERR: 1,
+      NETWORK_ERR: 19,
+      // …a real one we DO want
+      code: 23,
+    });
+    const serialized = serializeErr(err) as Record<string, unknown>;
+    assert.equal(serialized.message, 'aborted');
+    assert.equal(serialized.code, 23);
+    assert.equal(serialized.ABORT_ERR, undefined);
+    assert.equal(serialized.DATA_CLONE_ERR, undefined);
+    assert.equal(serialized.HIERARCHY_REQUEST_ERR, undefined);
+    assert.equal(serialized.INDEX_SIZE_ERR, undefined);
+    assert.equal(serialized.NETWORK_ERR, undefined);
+  });
+
+  it('drops unknown ad-hoc fields so a one-off throw cannot pollute the schema', () => {
+    // Anything we didn't explicitly allowlist gets dropped — a callsite
+    // that attaches a temporary field shouldn't widen the Axiom schema
+    // forever.
+    const err = Object.assign(new Error('boom'), {
+      randomAttachedField: 'whatever',
+      anotherJunkField: { nested: true },
+    });
+    const serialized = serializeErr(err) as Record<string, unknown>;
+    assert.equal(serialized.randomAttachedField, undefined);
+    assert.equal(serialized.anotherJunkField, undefined);
+    assert.equal(serialized.message, 'boom');
+  });
 });

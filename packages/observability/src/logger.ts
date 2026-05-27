@@ -7,25 +7,90 @@ const level: Level = (process.env.LOG_LEVEL ?? (process.env.NODE_ENV === 'produc
 const isProd = process.env.NODE_ENV === 'production';
 
 /**
- * Custom err serializer. Pino's stdSerializer flattens an Error into
- * `{ type, message, stack, code? }`, but it does NOT carry `err.cause`.
- * That matters for any thrown wrapped postgres error: Drizzle / postgres-js
- * surface the SQLSTATE code (e.g. `23505` for unique violations) and the
- * server-side `detail` only on `err.cause`. Without this, Axiom shows
- * `Failed query: …` with no way to tell why it failed. Walk the cause chain
- * and surface `code` + `detail` from any level so production errors stay
- * debuggable.
+ * Custom err serializer.
+ *
+ * Pino's `stdSerializers.err` walks every enumerable property on the
+ * Error object via `for (const key in err)`. That's a problem for two
+ * categories of error our code actually sees:
+ *
+ *   1. DOMException-like errors (RN / Web Crypto / fetch on Node 22)
+ *      ship with ~24 inherited constant properties — `ABORT_ERR`,
+ *      `DATA_CLONE_ERR`, `HIERARCHY_REQUEST_ERR`, `INDEX_SIZE_ERR`, …
+ *      Pino flattens each one into its own log field, and Axiom
+ *      promotes each unique field to a dataset column. We hit the
+ *      257-column cap on the `showbook-prod` dataset that way, after
+ *      which Axiom started rejecting every event that introduced a new
+ *      field with `adding 'mediaType' and 2 other fields to dataset
+ *      fields would exceed the column limit of 257`. The mobile
+ *      `mobile.upload.*` events were the casualties and that's the
+ *      reason every "fix" for mobile media upload over the past two
+ *      months flew blind in Axiom — only docker stdout retained the
+ *      lifecycle events.
+ *
+ *   2. Anything wrapping a `PostgresError`: Drizzle / postgres-js
+ *      surface the SQLSTATE `code` + server-side `detail` only on
+ *      `err.cause`, so we must walk the cause chain (pino's
+ *      stdSerializer does not).
+ *
+ * Solution: allowlist the fields we actually want — the standard Error
+ * tuple plus the postgres-js / AWS SDK / HTTP shapes that surface in
+ * production — and ignore everything else. Cause chain is walked
+ * recursively the same way as before.
+ *
+ * Add fields below as needed when a new error source appears.
  */
+const ALLOWED_ERROR_FIELDS = [
+  // Standard Error shape (matches pino's stdSerializer output).
+  'name',
+  'message',
+  'stack',
+  'type',
+  // postgres-js / Drizzle structured fields.
+  'code',
+  'detail',
+  'hint',
+  'position',
+  'severity',
+  'severity_local',
+  'file',
+  'line',
+  'routine',
+  'schema_name',
+  'table_name',
+  'column_name',
+  'constraint_name',
+  'data_type_name',
+  'query',
+  // AWS SDK / HTTP client.
+  'status',
+  '$metadata',
+] as const;
+
 export function serializeErr(err: unknown): unknown {
-  if (!(err instanceof Error)) return pino.stdSerializers.err(err as never);
-  const base = pino.stdSerializers.err(err) as Record<string, unknown>;
-  const e = err as Error & { code?: unknown; detail?: unknown; cause?: unknown };
-  if (e.code !== undefined) base.code = e.code;
-  if (e.detail !== undefined) base.detail = e.detail;
-  if (e.cause !== undefined && e.cause !== null) {
-    base.cause = serializeErr(e.cause);
+  if (err === null || err === undefined) return err;
+  if (!(err instanceof Error)) {
+    // Defer to pino for non-Error inputs (handles primitives + plain
+    // objects without surprises).
+    return pino.stdSerializers.err(err as never);
   }
-  return base;
+  const out: Record<string, unknown> = {
+    type: err.constructor?.name ?? err.name ?? 'Error',
+    name: err.name,
+    message: err.message,
+    stack: err.stack,
+  };
+  const anyErr = err as unknown as Record<string, unknown>;
+  for (const key of ALLOWED_ERROR_FIELDS) {
+    const value = anyErr[key];
+    if (value !== undefined && out[key] === undefined) {
+      out[key] = value;
+    }
+  }
+  const cause = (err as Error & { cause?: unknown }).cause;
+  if (cause !== undefined && cause !== null) {
+    out.cause = serializeErr(cause);
+  }
+  return out;
 }
 
 const baseOptions: LoggerOptions = {

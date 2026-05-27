@@ -45,12 +45,9 @@ import {
 import Svg, { Line } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import {
-  BookmarkCheck,
-  BookmarkPlus,
   Calendar,
   MapPin,
   Search,
-  Ticket,
   Users,
 } from 'lucide-react-native';
 import { useFeedback } from '@/lib/feedback';
@@ -62,6 +59,7 @@ import { EmptyStateHero } from '../../components/design-system';
 import { OfflineEmptyState } from '../../components/OfflineEmptyState';
 import { KindBadge } from '../../components/KindBadge';
 import { TicketmasterMark } from '../../components/BrandIcons';
+import { UpcomingAnnouncementActionSheet } from '../../components/UpcomingAnnouncementActionSheet';
 import { FilterChipsRow, type FilterGroup } from '../../components/FilterChipsRow';
 import { useTheme, type Kind } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
@@ -849,6 +847,7 @@ function AnnouncementRow({
   const performanceDates = item.performanceDates ?? [];
   const performanceCount = performanceDates.length;
   const [pickDateOpen, setPickDateOpen] = React.useState(false);
+  const [sheetOpen, setSheetOpen] = React.useState(false);
   const [cardSize, setCardSize] = React.useState<{ w: number; h: number }>({
     w: 0,
     h: 0,
@@ -888,19 +887,21 @@ function AnnouncementRow({
       ? item.headlinerPerformerId
       : null;
 
-  const onPress = () => {
-    // We don't have an announcement detail screen on mobile yet; for now
-    // a tap is a no-op (the row is informational). Long-press could later
-    // open a sheet with Add-to-Watchlist + Tickets actions.
-  };
-
   const canWatch = !isNonWatchableKind(item.kind);
+
+  const onPress = () => {
+    void hapticSelection();
+    setSheetOpen(true);
+  };
 
   return (
     <>
     <Pressable
       onPress={onPress}
       onLayout={isSoldOut ? onCardLayout : undefined}
+      accessibilityRole="button"
+      accessibilityLabel={`${title} — open actions`}
+      testID={`discover-row-${item.id}`}
       style={({ pressed }) => [
         styles.card,
         {
@@ -1043,55 +1044,29 @@ function AnnouncementRow({
           </Text>
         )}
       </View>
-      {canWatch && (
-        <View style={styles.actionsRow}>
-          <LabeledIconAction
-            label={isWatching ? 'Watching' : 'Watch'}
-            onPress={() => {
-              void hapticSelection();
-              void onToggleWatch(item.id, isWatching);
-            }}
-            accessibilityLabel={
-              isWatching ? 'Stop watching this event' : 'Add to watching'
-            }
-            testID={`discover-row-watch-${item.id}`}
-            active={isWatching}
-            accent={accent}
-            colors={colors}
-          >
-            {isWatching ? (
-              <BookmarkCheck size={15} color={accent} strokeWidth={2} />
-            ) : (
-              <BookmarkPlus size={15} color={colors.muted} strokeWidth={2} />
-            )}
-          </LabeledIconAction>
-          {!isWatching && (
-            <LabeledIconAction
-              label="Got ticket"
-              onPress={() => {
-                void hapticSelection();
-                // Multi-night runs (theatre / comedy / concert) need
-                // the user to pick which night they have tickets for
-                // before we open the form — otherwise we'd silently
-                // default to runStartDate. Festivals are one
-                // experience over a date range, so they skip the
-                // picker and pre-fill the start date as before.
-                if (isDatePickingRun && performanceDates.length > 1) {
-                  setPickDateOpen(true);
-                  return;
-                }
-                navigateToAddForm(item.showDate);
-              }}
-              accessibilityLabel="Add as ticketed show"
-              testID={`discover-row-ticketed-${item.id}`}
-              colors={colors}
-            >
-              <Ticket size={15} color={colors.muted} strokeWidth={2} />
-            </LabeledIconAction>
-          )}
-        </View>
-      )}
     </Pressable>
+    <UpcomingAnnouncementActionSheet
+      open={sheetOpen}
+      onClose={() => setSheetOpen(false)}
+      canWatch={canWatch}
+      isWatching={isWatching}
+      ticketUrl={ticketUrl}
+      onToggleWatch={() => {
+        void onToggleWatch(item.id, isWatching);
+      }}
+      onMarkTicketed={() => {
+        // Multi-night runs (theatre / comedy / concert) need the user
+        // to pick which night they have tickets for before we open the
+        // form — otherwise we'd silently default to runStartDate.
+        // Festivals are one experience over a date range, so they skip
+        // the picker and pre-fill the start date as before.
+        if (isDatePickingRun && performanceDates.length > 1) {
+          setPickDateOpen(true);
+          return;
+        }
+        navigateToAddForm(item.showDate);
+      }}
+    />
     {isDatePickingRun && (
       <PickPerformanceDateSheet
         open={pickDateOpen}
@@ -1102,67 +1077,6 @@ function AnnouncementRow({
       />
     )}
     </>
-  );
-}
-
-/**
- * Inline icon + caption pill used by each announcement row. The visible
- * caption (WATCH / WATCHING / GOT TICKET) disambiguates what the two
- * affordances do — without it the bookmark / ticket icons read as
- * interchangeable and the ticket icon was easy to mistake for "open
- * external ticket page". Horizontal pill (vs. stacked icon-circle +
- * caption) keeps the affordance compact alongside the on-sale chip.
- */
-function LabeledIconAction({
-  label,
-  onPress,
-  accessibilityLabel,
-  testID,
-  active,
-  accent,
-  colors,
-  children,
-}: {
-  label: string;
-  onPress: () => void;
-  accessibilityLabel: string;
-  testID?: string;
-  active?: boolean;
-  accent?: string;
-  colors: ReturnType<typeof useTheme>['tokens']['colors'];
-  children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <Pressable
-      onPress={(e) => {
-        e.stopPropagation();
-        onPress();
-      }}
-      hitSlop={8}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      testID={testID}
-      style={({ pressed }) => [
-        styles.iconAction,
-        {
-          backgroundColor:
-            active && accent ? `${accent}1f` : 'transparent',
-          borderColor:
-            active && accent ? `${accent}55` : colors.ruleStrong,
-          opacity: pressed ? 0.6 : 1,
-        },
-      ]}
-    >
-      {children}
-      <Text
-        style={[
-          styles.iconLabel,
-          { color: active && accent ? accent : colors.muted },
-        ]}
-      >
-        {label.toUpperCase()}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -1362,28 +1276,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     marginTop: 4,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
-  },
-  iconAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: RADII.pill,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  iconLabel: {
-    fontFamily: 'Geist Mono',
-    fontSize: 10.5,
-    fontWeight: '600',
-    letterSpacing: 0.7,
-    textTransform: 'uppercase',
   },
   statusBadge: {
     paddingVertical: 2,

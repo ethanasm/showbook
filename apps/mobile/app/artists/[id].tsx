@@ -32,7 +32,8 @@ import { EmptyState } from '../../components/EmptyState';
 import { Eyebrow, GradientEmphasis, RemoteImage } from '../../components/design-system';
 import { QueryBoundary } from '../../components/QueryBoundary';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
-import { SpotifyMark } from '../../components/BrandIcons';
+import { SetlistfmMark, SpotifyMark } from '../../components/BrandIcons';
+import { buildSetlistfmOpenPlan } from '@/lib/setlistfm-deep-link';
 import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '@/lib/theme';
@@ -272,6 +273,7 @@ function Hero({
             spotifyArtistId={performer.spotifyArtistId}
             performerName={performer.name}
           />
+          <OpenInSetlistfmButton performerName={performer.name} />
         </View>
       </View>
     </View>
@@ -333,6 +335,58 @@ function OpenInSpotifyButton({
       <SpotifyMark size={14} />
       <Text style={[styles.spotifyLabel, { color: colors.ink }]}>
         OPEN IN SPOTIFY
+      </Text>
+    </Pressable>
+  );
+}
+
+function OpenInSetlistfmButton({
+  performerName,
+}: {
+  performerName: string;
+}): React.JSX.Element | null {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+
+  const plan = React.useMemo(
+    () => buildSetlistfmOpenPlan(performerName),
+    [performerName],
+  );
+
+  if (!plan) return null;
+
+  const open = async (): Promise<void> => {
+    void hapticSelection();
+    // setlist.fm has no native URL scheme, so we go straight to the
+    // in-app browser with the universal name-search URL. `Linking`
+    // is the fallback when WebBrowser fails to mount.
+    try {
+      await WebBrowser.openBrowserAsync(plan.url);
+    } catch {
+      await Linking.openURL(plan.url);
+    }
+  };
+
+  return (
+    <Pressable
+      onPress={() => {
+        void open();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${performerName} on setlist.fm`}
+      testID="artist-open-in-setlistfm"
+      style={({ pressed }) => [
+        styles.setlistfmButton,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.rule,
+          opacity: pressed ? 0.7 : 1,
+        },
+      ]}
+    >
+      <SetlistfmMark size={14} />
+      <Text style={[styles.setlistfmLabel, { color: colors.ink }]}>
+        OPEN IN SETLIST.FM
       </Text>
     </Pressable>
   );
@@ -626,6 +680,21 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   spotifyLabel: {
+    fontFamily: 'Geist Mono',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.6,
+  },
+  setlistfmButton: {
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  setlistfmLabel: {
     fontFamily: 'Geist Mono',
     fontSize: 11,
     fontWeight: '600',
