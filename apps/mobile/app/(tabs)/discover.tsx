@@ -549,8 +549,17 @@ export default function DiscoverScreen(): React.JSX.Element {
             <View style={styles.summaryRow}>
               <SummaryIcon tab={tab} color={colors.muted} />
               <Text style={[styles.summaryText, { color: colors.muted }]}>
-                {filterCount} upcoming · {ingestPolling.isAnyPending ? 'discovering more shows…' : 'pull to refresh'}
+                {filterCount} upcoming · {ingestPolling.isPolling ? 'discovering more shows…' : 'pull to refresh'}
               </Text>
+              {ingestPolling.isPolling && (
+                <ActivityIndicator
+                  size="small"
+                  color={colors.muted}
+                  style={styles.summarySpinner}
+                  testID="discover-ingest-spinner"
+                  accessibilityLabel="Discovering more shows"
+                />
+              )}
             </View>
             {tab === 'regions' && !selectedGroupId ? (
               <RegionGroupedList
@@ -1199,6 +1208,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 11 * 0.06,
     textTransform: 'uppercase',
+  },
+  // iOS renders ActivityIndicator size="small" at 20pt — scale it down
+  // to sit next to the 11pt summary text without dominating the row.
+  summarySpinner: {
+    transform: [{ scale: 0.7 }],
   },
   list: {
     paddingHorizontal: 16,

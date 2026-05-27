@@ -53,3 +53,25 @@ export function computeRefetchIntervals(
     artists: artistsPending ? intervalMs : false,
   };
 }
+
+/**
+ * "The displayed Discover count may still grow." True when the hook is
+ * enabled AND either the initial `ingestStatus` query hasn't returned
+ * yet (we don't yet know whether ingest is pending) or it has returned
+ * with pending jobs. Used by the Discover screen to render an inline,
+ * non-blocking spinner next to the "N upcoming" summary so the user
+ * knows the small initial number isn't final.
+ */
+export function computeIsPolling({
+  enabled,
+  statusLoading,
+  snapshot,
+}: {
+  enabled: boolean;
+  statusLoading: boolean;
+  snapshot: IngestStatusSnapshot | undefined | null;
+}): boolean {
+  if (!enabled) return false;
+  if (statusLoading) return true;
+  return totalPending(snapshot) > 0;
+}
