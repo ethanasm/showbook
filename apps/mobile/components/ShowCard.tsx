@@ -14,7 +14,7 @@
 
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, Linking } from 'react-native';
-import { ChevronRight, Ticket } from 'lucide-react-native';
+import { ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../lib/theme';
 import { hapticImpactMedium, hapticSelection } from '../lib/haptics';
 import { useFeedback } from '../lib/feedback';
@@ -22,6 +22,7 @@ import { openTicketmasterUrl } from '../lib/ticketmaster-deep-link';
 import { KindBadge } from './KindBadge';
 import { StateChip } from './StateChip';
 import { RemoteImage } from './design-system/RemoteImage';
+import { TicketmasterMark } from './BrandIcons';
 import type { Kind, ShowState } from '../lib/theme';
 
 export interface ShowCardShow {
@@ -182,7 +183,7 @@ export function ShowCard({
             pressed && { opacity: 0.6 },
           ]}
         >
-          <Ticket size={14} color={colors.muted} strokeWidth={2} />
+          <TicketmasterMark size={16} />
         </Pressable>
       ) : null}
 

@@ -61,6 +61,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { EmptyStateHero } from '../../components/design-system';
 import { OfflineEmptyState } from '../../components/OfflineEmptyState';
 import { KindBadge } from '../../components/KindBadge';
+import { TicketmasterMark } from '../../components/BrandIcons';
 import { FilterChipsRow, type FilterGroup } from '../../components/FilterChipsRow';
 import { useTheme, type Kind } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
@@ -963,8 +964,7 @@ function AnnouncementRow({
                 pressed && { opacity: 0.6 },
               ]}
             >
-              <Ticket size={11} color={colors.muted} strokeWidth={2} />
-              <Text style={[styles.tixLabel, { color: colors.muted }]}>TIX</Text>
+              <TicketmasterMark size={14} />
             </Pressable>
           ) : null}
         </View>
@@ -1333,17 +1333,10 @@ const styles = StyleSheet.create({
   tixPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
     paddingVertical: 3,
-    paddingHorizontal: 8,
+    paddingHorizontal: 5,
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
-  },
-  tixLabel: {
-    fontFamily: 'Geist Mono',
-    fontSize: 9.5,
-    fontWeight: '600',
-    letterSpacing: 0.8,
   },
   cardTitle: {
     fontFamily: 'Geist Sans',

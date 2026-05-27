@@ -22,6 +22,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
 import { ChevronRight, MapPin, Music, Ticket } from 'lucide-react-native';
+import { SpotifyMark } from '../BrandIcons';
 
 import { useTheme } from '../../lib/theme';
 import { trpc } from '../../lib/trpc';
@@ -135,7 +136,7 @@ function PastNightRows({
       />
       {playlistShown ? (
         <NightRow
-          icon={Music}
+          icon={existing && existing.spotifyUrl ? SpotifyMark : Music}
           title="I Heard playlist"
           sub={
             existing && existing.spotifyUrl
