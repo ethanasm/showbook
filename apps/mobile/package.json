@@ -79,14 +79,14 @@
     "@playwright/test": "^1.60.0",
     "@showbook/api": "workspace:*",
     "@testing-library/react-native": "^13.3.3",
-    "@types/node": "^25.8.0",
+    "@types/node": "^25.9.1",
     "@types/react": "^19.1.0",
     "babel-preset-expo": "~55.0.21",
     "eslint": "^9.39.4",
     "eslint-config-expo": "~55.0.1",
     "react-test-renderer": "^19.2.6",
-    "tsx": "^4.22.0",
-    "typescript": "~5.9.2",
+    "tsx": "^4.22.3",
+    "typescript": "~6.0.3",
     "yaml": "^2.9.0"
   },
   "expo": {

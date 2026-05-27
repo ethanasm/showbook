@@ -13,18 +13,15 @@ updates:
           - "@aws-sdk/*"
           - "@smithy/*"
     ignore:
-      # TypeScript 6 turns the `baseUrl` deprecation into a hard tsc error
-      # (TS5101), which breaks @showbook/emails:build and the Next.js
-      # build until every tsconfig is migrated. Bump manually.
-      - dependency-name: "typescript"
-        update-types: ["version-update:semver-major"]
-      # ESLint 10 removed `scopeManager.addGlobals`, which eslint-config-next
-      # 16 and eslint-config-expo 55 still depend on. Bump in lockstep
-      # with the matching eslint-config-* releases.
+      # ESLint 10 dropped `scopeManager.addGlobals`, which eslint-config-next
+      # 16 and eslint-config-expo 55 still call. Re-enable once both config
+      # packages ship ESLint-10-compatible releases.
       - dependency-name: "eslint"
         update-types: ["version-update:semver-major"]
       # babel-preset-expo / eslint-config-expo majors track the Expo SDK
-      # major; bump them together with `expo` itself, not via dependabot.
+      # major. Bump them as part of an Expo SDK 55→56 migration PR, not
+      # via dependabot — see PR #163 / #77 for the JS/native mismatch
+      # post-mortems that drove the existing SDK 55 pin.
       - dependency-name: "babel-preset-expo"
         update-types: ["version-update:semver-major"]
       - dependency-name: "eslint-config-expo"
