@@ -22,6 +22,7 @@ import {
 
 import { Sheet } from './Sheet';
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 
 export interface PickPerformanceDateSheetProps {
   open: boolean;
@@ -177,7 +178,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
+    borderRadius: RADII.lg,
   },
   rowDow: {
     fontFamily: 'Geist Mono',
@@ -196,7 +197,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
+    borderRadius: RADII.pill,
     alignSelf: 'center',
     marginTop: 4,
   },

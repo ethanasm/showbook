@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { FirstRunStep, heroTitleStyle } from './_components';
 import { useTheme } from '../../../lib/theme';
+import { RADII } from '../../../lib/theme-utils';
 
 export default function FirstRunLocation(): React.JSX.Element {
   const { tokens } = useTheme();
@@ -71,7 +72,7 @@ export default function FirstRunLocation(): React.JSX.Element {
       <View
         style={[
           styles.ring,
-          { top: '34%', left: '46%', width: 64, height: 64, borderRadius: 32, backgroundColor: colors.accent, opacity: 0.12 },
+          { top: '34%', left: '46%', width: 64, height: 64, borderRadius: RADII.pill, backgroundColor: colors.accent, opacity: 0.12 },
         ]}
       />
       {/* Pin */}
@@ -114,7 +115,7 @@ const styles = StyleSheet.create({
   map: {
     width: 180,
     height: 130,
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     borderWidth: 1,
     overflow: 'hidden',
     position: 'relative',
@@ -133,7 +134,7 @@ const styles = StyleSheet.create({
   },
   block: {
     position: 'absolute',
-    borderRadius: 2,
+    borderRadius: RADII.xs,
   },
   ring: {
     position: 'absolute',
@@ -142,7 +143,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: RADII.pill,
     borderWidth: 3,
   },
 });

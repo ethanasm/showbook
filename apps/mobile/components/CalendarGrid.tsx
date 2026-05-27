@@ -17,6 +17,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme, type Kind } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 
 export interface CalendarEvent {
   kind: Kind;
@@ -310,7 +311,7 @@ export function CalendarGrid({
 const styles = StyleSheet.create({
   container: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
+    borderRadius: RADII.md,
     overflow: 'hidden',
   },
   dowRow: {
@@ -354,7 +355,7 @@ const styles = StyleSheet.create({
   dot: {
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: RADII.pill,
   },
   moreText: {
     fontFamily: 'Geist Sans',
@@ -549,7 +550,7 @@ export function MiniMonth({
 
 const miniStyles = StyleSheet.create({
   tile: {
-    borderRadius: 8,
+    borderRadius: RADII.md,
     padding: 8,
     gap: 6,
   },
@@ -582,7 +583,7 @@ const miniStyles = StyleSheet.create({
   dot: {
     width: 4.5,
     height: 4.5,
-    borderRadius: 2.5,
+    borderRadius: RADII.pill,
   },
   spanBar: {
     position: 'absolute',

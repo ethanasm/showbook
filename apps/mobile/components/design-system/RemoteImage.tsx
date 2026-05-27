@@ -81,7 +81,7 @@ export function RemoteImage({
   if (size === 'thumb') {
     frameStyle = { width: 32, height: 32 };
     monogramFontSize = 13;
-    borderRadius = 16;
+    borderRadius = RADII.pill;
   } else if (size === 'card') {
     const w = width ?? 96;
     frameStyle = { width: w, aspectRatio: aspectRatio(aspect) };

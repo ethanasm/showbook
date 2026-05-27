@@ -32,6 +32,7 @@ import { useRouter } from 'expo-router';
 import { ChevronLeft, MapPin, Plus, X, Check } from 'lucide-react-native';
 import { ScreenWrapper } from '../components/ScreenWrapper';
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 import { trpc } from '../lib/trpc';
 import { useFeedback } from '../lib/feedback';
 import { runOptimisticMutation } from '../lib/mutations';
@@ -594,7 +595,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   card: {
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     borderWidth: 1,
     padding: 16,
   },
@@ -646,7 +647,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     borderWidth: 1,
     borderStyle: 'dashed',
   },
@@ -665,7 +666,7 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   formCard: {
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     borderWidth: 1,
     padding: 16,
     gap: 6,
@@ -683,7 +684,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: RADII.lg,
   },
   suggestions: {
     gap: 4,
@@ -693,7 +694,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: RADII.md,
   },
   suggestionName: {
     fontFamily: 'Geist Sans',
@@ -721,7 +722,7 @@ const styles = StyleSheet.create({
   radiusChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     borderWidth: 1,
   },
   radiusChipLabel: {
@@ -743,7 +744,7 @@ const styles = StyleSheet.create({
   primaryButton: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -757,7 +758,7 @@ const styles = StyleSheet.create({
   secondaryButton: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: RADII.pill,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',

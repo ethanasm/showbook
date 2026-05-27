@@ -56,6 +56,7 @@ import { ScreenWrapper } from '../components/ScreenWrapper';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { AdminSection } from '../components/AdminSection';
 import { useTheme, type ThemePreference, type Density } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 import { useAuth } from '../lib/auth';
 import { trpc } from '../lib/trpc';
 import { useNetwork, useOfflineSync } from '../lib/network';
@@ -494,7 +495,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: RADII.pill,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -530,7 +531,7 @@ const styles = StyleSheet.create({
   },
   card: {
     marginHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     borderWidth: 1,
     padding: 16,
   },

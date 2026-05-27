@@ -16,6 +16,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Sheet } from './Sheet';
 import { Button } from './design-system';
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 import { trpc } from '../lib/trpc';
 import { useFeedback } from '../lib/feedback';
 import { runOptimisticMutation } from '../lib/mutations';
@@ -247,7 +248,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '400',
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },

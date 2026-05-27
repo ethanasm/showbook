@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import { MapPin, Search } from 'lucide-react-native';
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 import { useDebouncedValue } from '@showbook/shared/hooks';
 
 export interface VenueSuggestion {
@@ -215,7 +216,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
@@ -228,7 +229,7 @@ const styles = StyleSheet.create({
   },
   list: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     overflow: 'hidden',
   },
   row: {

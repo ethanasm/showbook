@@ -17,6 +17,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 import { hapticImpactMedium } from '../lib/haptics';
 import { KindBadge } from './KindBadge';
 import { StateChip } from './StateChip';
@@ -133,7 +134,7 @@ export function HeroShowCard({
 const styles = StyleSheet.create({
   container: {
     height: 220,
-    borderRadius: 16,
+    borderRadius: RADII.xl,
     overflow: 'hidden',
     justifyContent: 'space-between',
   },
@@ -159,13 +160,13 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 4,
     paddingHorizontal: 10,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
   countdownDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: RADII.pill,
   },
   countdownText: {
     fontFamily: 'Geist Mono',

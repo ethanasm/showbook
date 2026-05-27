@@ -14,6 +14,7 @@ import { Music } from 'lucide-react-native';
 import { ExternalSourceDisclaimer } from './ExternalSourceDisclaimer';
 import { Sheet } from './Sheet';
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 
 export interface SpotifyConnectSheetProps {
   open: boolean;
@@ -73,7 +74,7 @@ export function SpotifyConnectSheet({
         {error ? (
           <Text
             accessibilityRole="alert"
-            style={[styles.error, { color: '#E63946', fontFamily: 'Geist Mono' }]}
+            style={[styles.error, { color: colors.danger, fontFamily: 'Geist Mono' }]}
           >
             {error}
           </Text>
@@ -121,6 +122,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingVertical: 14,
     paddingHorizontal: 18,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },

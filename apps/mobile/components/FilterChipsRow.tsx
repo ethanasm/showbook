@@ -10,6 +10,7 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 
 export interface FilterGroup {
   id: string;
@@ -182,7 +183,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     maxWidth: 220,
   },
   chipLabel: {

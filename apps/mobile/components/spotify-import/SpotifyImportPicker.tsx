@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { Check, Search, X } from 'lucide-react-native';
 import { useTheme } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import { RemoteImage } from '../design-system';
 import type {
   SpotifyImportArtist,
@@ -331,13 +332,13 @@ const styles = StyleSheet.create({
   checkbox: {
     width: 18,
     height: 18,
-    borderRadius: 3,
+    borderRadius: RADII.xs,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   thumb: {
-    borderRadius: 4,
+    borderRadius: RADII.sm,
   },
   body: {
     flex: 1,

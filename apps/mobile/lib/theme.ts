@@ -75,7 +75,7 @@ export interface TypeStyle {
 export interface Tokens {
   colors: ColorTokens;
   spacing: readonly number[];
-  radii: { none: 0; sm: 4; md: 8; lg: 12; xl: 16; pill: 999 };
+  radii: { none: 0; xs: 2; sm: 4; md: 8; lg: 12; xl: 16; pill: 999 };
   type: {
     heroTitle: TypeStyle;
     screenTitle: TypeStyle;
