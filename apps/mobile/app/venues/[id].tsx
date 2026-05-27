@@ -32,8 +32,6 @@ import {
   Calendar,
   Music,
   Image as ImageIcon,
-  BookmarkPlus,
-  Ticket,
   Pencil,
 } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
@@ -44,7 +42,8 @@ import { KindBadge } from '../../components/KindBadge';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
 import { RenameVenueSheet } from '../../components/RenameVenueSheet';
-import { GoogleMapsMark } from '../../components/BrandIcons';
+import { GoogleMapsMark, TicketmasterMark } from '../../components/BrandIcons';
+import { UpcomingAnnouncementActionSheet } from '../../components/UpcomingAnnouncementActionSheet';
 import { buildGoogleMapsOpenPlan } from '../../lib/google-maps-deep-link';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
@@ -588,6 +587,11 @@ function Upcoming({
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const router = useRouter();
+  const [sheetItem, setSheetItem] = React.useState<UpcomingAnnouncement | null>(
+    null,
+  );
+  const closeSheet = React.useCallback(() => setSheetItem(null), []);
   return (
     <Section title="Upcoming" icon={<Calendar size={13} color={colors.ink} strokeWidth={2} />}>
       {loading && items.length === 0 ? (
@@ -608,38 +612,69 @@ function Upcoming({
             <UpcomingRow
               key={a.id}
               item={a}
-              onToggleWatch={onToggleWatch}
-              venueName={venueName}
+              onOpenSheet={() => setSheetItem(a)}
             />
           ))}
         </View>
       )}
+      <UpcomingAnnouncementActionSheet
+        open={sheetItem !== null}
+        onClose={closeSheet}
+        canWatch={sheetItem ? !isNonWatchableKind(sheetItem.kind) : false}
+        // The server already filters out announcements that the user
+        // is watching from this list, so a row in the upcoming feed is
+        // never in a "currently watching" state.
+        isWatching={false}
+        ticketUrl={sheetItem?.ticketUrl ?? null}
+        onToggleWatch={() => {
+          if (!sheetItem) return;
+          void onToggleWatch(sheetItem.id, false);
+        }}
+        onMarkTicketed={() => {
+          if (!sheetItem) return;
+          router.push({
+            pathname: '/add/form',
+            params: {
+              kindHint: sheetItem.kind,
+              headliner: sheetItem.productionName ?? sheetItem.headliner,
+              venueHint: venueName,
+              dateHint: sheetItem.showDate,
+            },
+          });
+        }}
+      />
     </Section>
   );
 }
 
 function UpcomingRow({
   item,
-  onToggleWatch,
-  venueName,
+  onOpenSheet,
 }: {
   item: UpcomingAnnouncement;
-  onToggleWatch: WatchToggle;
-  venueName: string;
+  onOpenSheet: () => void;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
-  const router = useRouter();
+  const { showToast } = useFeedback();
   const { month, day, dow } = parseDate(item.showDate);
   const accent = tokens.kindColor(item.kind);
   const title = item.productionName ?? item.headliner;
-  const canWatch = !isNonWatchableKind(item.kind);
+  const ticketUrl = item.ticketUrl;
 
   return (
-    <View
-      style={[
+    <Pressable
+      onPress={() => {
+        void hapticSelection();
+        onOpenSheet();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`${title} — open actions`}
+      testID={`venue-upcoming-row-${item.id}`}
+      style={({ pressed }) => [
         styles.upcomingRow,
         { backgroundColor: colors.surface, borderLeftColor: accent },
+        pressed && { opacity: 0.85 },
       ]}
     >
       <View style={styles.upcomingDate}>
@@ -659,90 +694,28 @@ function UpcomingRow({
           {title}
         </Text>
       </View>
-      {canWatch && (
-        <View style={styles.upcomingActions}>
-          <LabeledIconAction
-            label="Watch"
-            onPress={() => {
-              void hapticSelection();
-              void onToggleWatch(item.id, false);
-            }}
-            accessibilityLabel="Add to watching"
-            testID={`venue-upcoming-watch-${item.id}`}
-            colors={colors}
-          >
-            <BookmarkPlus size={14} color={colors.muted} strokeWidth={2} />
-          </LabeledIconAction>
-          <LabeledIconAction
-            label="Got ticket"
-            onPress={() => {
-              void hapticSelection();
-              router.push({
-                pathname: '/add/form',
-                params: {
-                  kindHint: item.kind,
-                  headliner: item.productionName ?? item.headliner,
-                  venueHint: venueName,
-                  dateHint: item.showDate,
-                },
-              });
-            }}
-            accessibilityLabel="Add as ticketed show"
-            testID={`venue-upcoming-ticketed-${item.id}`}
-            colors={colors}
-          >
-            <Ticket size={14} color={colors.muted} strokeWidth={2} />
-          </LabeledIconAction>
-        </View>
-      )}
-    </View>
-  );
-}
-
-/**
- * Stacked icon + caption used by the Upcoming row. The text label
- * disambiguates the bookmark / ticket affordances — without it, the
- * two circular icons looked interchangeable and the ticket icon was
- * easy to mistake for "open external ticket page".
- */
-function LabeledIconAction({
-  label,
-  onPress,
-  accessibilityLabel,
-  testID,
-  colors,
-  children,
-}: {
-  label: string;
-  onPress: () => void;
-  accessibilityLabel: string;
-  testID?: string;
-  colors: ReturnType<typeof useTheme>['tokens']['colors'];
-  children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={8}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      testID={testID}
-      style={({ pressed }) => [
-        styles.upcomingIconAction,
-        { opacity: pressed ? 0.6 : 1 },
-      ]}
-    >
-      <View
-        style={[
-          styles.upcomingIconCircle,
-          { backgroundColor: colors.surface, borderColor: colors.rule },
-        ]}
-      >
-        {children}
-      </View>
-      <Text style={[styles.upcomingIconLabel, { color: colors.muted }]}>
-        {label.toUpperCase()}
-      </Text>
+      {ticketUrl ? (
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation();
+            void hapticSelection();
+            Linking.openURL(ticketUrl).catch(() => {
+              showToast({ kind: 'error', text: "Couldn't open Ticketmaster." });
+            });
+          }}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Open tickets on Ticketmaster"
+          testID={`venue-upcoming-tix-${item.id}`}
+          style={({ pressed }) => [
+            styles.upcomingTixPill,
+            { borderColor: colors.ruleStrong, backgroundColor: colors.surface },
+            pressed && { opacity: 0.6 },
+          ]}
+        >
+          <TicketmasterMark size={14} />
+        </Pressable>
+      ) : null}
     </Pressable>
   );
 }
@@ -1035,31 +1008,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 19,
   },
-  upcomingActions: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  upcomingTixPill: {
     alignSelf: 'center',
-    gap: 10,
-  },
-  upcomingIconAction: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    minWidth: 40,
-  },
-  upcomingIconCircle: {
-    width: 32,
-    height: 32,
+    paddingVertical: 3,
+    paddingHorizontal: 5,
     borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-  },
-  upcomingIconLabel: {
-    fontFamily: 'Geist Mono',
-    fontSize: 8.5,
-    fontWeight: '600',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
   },
   showsList: {
     gap: 8,
