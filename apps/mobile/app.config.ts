@@ -96,9 +96,11 @@ const config: ExpoConfig = {
       // declared here, otherwise the call returns false even when the
       // target app is installed. `spotify` powers the native handoff
       // from the Hype / Heard playlist cards via `buildSpotifyOpenPlan`
-      // (`spotify://playlist/{id}`); without it iOS silently falls
-      // back to the in-app browser.
-      LSApplicationQueriesSchemes: ['spotify'],
+      // (`spotify://playlist/{id}`); `ticketmaster` does the same for
+      // the TIX / Tickets affordances via `buildTicketmasterOpenPlan`
+      // (`ticketmaster://event/{id}`). Without the declaration iOS
+      // silently sends every tap to the in-app browser.
+      LSApplicationQueriesSchemes: ['spotify', 'ticketmaster'],
     },
   },
   android: {
