@@ -15,15 +15,9 @@ async function gotoRadioheadMSG(page: Page, tab?: string): Promise<string> {
   if (!id) throw new Error('Radiohead @ MSG show not seeded');
   const url = tab ? `/shows/${id}?tab=${tab}` : `/shows/${id}`;
   await page.goto(url);
-  // Wait for the 4-tab shell to render — this is the real "loading
-  // done" signal and the only one that matters for subsequent
-  // assertions. The previous `text=Loading show…` waitFor was both
-  // redundant (show-tab-bar is gated on the same `detailQuery.isLoading`
-  // turning false) and strict-mode flaky: Next.js's route transition
-  // briefly keeps the previous route's `<CenteredMessage>Loading
-  // show…</CenteredMessage>` in the DOM while the new one mounts, so
-  // a bare `text=` locator resolved to two elements (one hidden, one
-  // visible) and the strict-mode `waitFor(detached)` blew up.
+  await page.locator('text=Loading show…').waitFor({ state: 'detached', timeout: 15000 });
+  // Wait for the 4-tab shell to render so subsequent locator calls
+  // aren't racing the initial paint.
   await expect(page.getByTestId('show-tab-bar')).toBeVisible({ timeout: 15000 });
   return id;
 }
@@ -72,10 +66,7 @@ test.describe('Show detail page', () => {
     });
     if (!id) throw new Error('LCD @ Brooklyn Steel show not seeded');
     await page.goto(`/shows/${id}?tab=setlist`);
-    // setlist-tab-past-empty is gated on the same `detailQuery.isLoading`
-    // flag as the Loading show… placeholder, so waiting for it covers
-    // the load. The bare text= locator hit the same strict-mode flake
-    // as gotoRadioheadMSG (two elements during route transition).
+    await page.locator('text=Loading show…').waitFor({ state: 'detached', timeout: 15000 });
     await expect(page.getByTestId('setlist-tab-past-empty')).toBeVisible({
       timeout: 15000,
     });
