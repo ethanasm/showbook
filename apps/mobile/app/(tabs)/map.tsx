@@ -648,7 +648,7 @@ export default function MapScreen(): React.JSX.Element {
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
       <TopBar
         title="Map"
-        eyebrow={`VENUES · ${venues.length} · ${filteredShows.length} SHOWS`}
+        eyebrow={`${venues.length} ${venues.length === 1 ? 'VENUE' : 'VENUES'}`}
         rightAction={<MeTopBarAction />}
         large
       />

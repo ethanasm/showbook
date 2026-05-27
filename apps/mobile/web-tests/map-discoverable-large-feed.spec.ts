@@ -198,11 +198,11 @@ test('Map tab survives switching to Discoverable with a 2.5k-row feed', async ({
   await discoverablePill.click();
 
   // After the layer flip, the eyebrow at the top of the screen
-  // reflects the discoverable totals (`VENUES · N · 2502 SHOWS`).
-  // Wait on the show count there to confirm the layer change
-  // propagated through the cluster/visibleClusters pipeline without
-  // throwing.
-  await expect(page.getByText(/·\s*2502\s+SHOWS/i)).toBeVisible({
+  // shows the discoverable layer's venue count (`800 VENUES` for the
+  // 800 unique venue ids in the fixture). Wait on it to confirm the
+  // layer change propagated through the cluster/visibleClusters
+  // pipeline without throwing.
+  await expect(page.getByText(/^800 VENUES$/)).toBeVisible({
     timeout: 5_000,
   });
 
