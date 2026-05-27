@@ -8,6 +8,19 @@
  * `Linking.openURL` with the same try/catch pattern as the Spotify
  * button — see `setlist-intel/spotify-deep-link.ts` for the sibling
  * implementation.
+ *
+ * URL strategy (the user's expectation is "open the venue's place
+ * page with reviews/photos", not "drop a pin at coordinates"):
+ *
+ * - **Web fallback** uses Google's documented Maps URL API and pins
+ *   the result to the venue's place card with `query_place_id` when
+ *   we have a Google Places id, so the user lands on the place page
+ *   with reviews, photos, hours, etc. `query` is required by the
+ *   API even when `query_place_id` is set.
+ * - **Native iOS scheme** (`comgooglemaps://`) has no documented
+ *   `place_id` parameter, so we pass the venue name (+ city) to `q`.
+ *   That performs a search that lands on the place card for the
+ *   venue — passing lat/lng would just drop a pin without place info.
  */
 
 export interface VenueLocationInput {
@@ -37,15 +50,21 @@ function hasCoords(v: VenueLocationInput): v is VenueLocationInput & {
   );
 }
 
-function buildQuery(v: VenueLocationInput): string {
+function buildSearchQuery(v: VenueLocationInput): string | null {
+  const nameCity = [v.name, v.city]
+    .filter((p): p is string => Boolean(p))
+    .join(', ');
+  if (nameCity) return nameCity;
+  // Last-resort fallback when the venue row has no name (shouldn't
+  // happen — `venues.name.notNull()` — but the input type allows it).
   if (hasCoords(v)) return `${v.latitude},${v.longitude}`;
-  return [v.name, v.city].filter((p): p is string => Boolean(p)).join(', ');
+  return null;
 }
 
 /**
  * Build the open-in-Google-Maps plan for a venue. Returns null when
- * we have no useful identifier (no coords, no place id, no name) — the
- * button should be hidden in that case.
+ * we have nothing to look up — the button should be hidden in that
+ * case.
  *
  * Caller pattern (mirrors `HypePlaylistCard.openExisting`):
  *
@@ -58,23 +77,11 @@ function buildQuery(v: VenueLocationInput): string {
 export function buildGoogleMapsOpenPlan(
   v: VenueLocationInput,
 ): GoogleMapsOpenPlan | null {
-  const coordsAvailable = hasCoords(v);
-  if (!coordsAvailable && !v.googlePlaceId && !v.name) return null;
+  const query = buildSearchQuery(v);
+  if (!query) return null;
 
-  const query = buildQuery(v);
+  const primary = `comgooglemaps://?q=${encodeURIComponent(query)}`;
 
-  // Native iOS Google Maps app scheme. We always pass coords when we
-  // have them so the pin lands on the venue rather than a fuzzy text
-  // search result.
-  const nativeQuery = coordsAvailable
-    ? `${v.latitude},${v.longitude}`
-    : encodeURIComponent(query);
-  const primary = `comgooglemaps://?q=${nativeQuery}`;
-
-  // Universal Google Maps URL — works in mobile browsers and is
-  // claimed by the Google Maps Android app via App Links. `query` is
-  // required by the search URL API; `query_place_id` pins the result
-  // to the exact venue when we have a Place id.
   const params = new URLSearchParams();
   params.set('api', '1');
   params.set('query', query);
