@@ -20,9 +20,11 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Link } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import {
   ChevronLeft,
   AlertCircle,
@@ -42,6 +44,8 @@ import { KindBadge } from '../../components/KindBadge';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
 import { RenameVenueSheet } from '../../components/RenameVenueSheet';
+import { GoogleMapsMark } from '../../components/BrandIcons';
+import { buildGoogleMapsOpenPlan } from '../../lib/google-maps-deep-link';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
 import { hapticSelection, hapticImpactMedium } from '../../lib/haptics';
@@ -374,7 +378,10 @@ function Hero({
           </View>
         ) : null}
         {summary ? <Text style={[styles.heroSummary, { color: colors.muted }]}>{summary}</Text> : null}
-        <FollowVenueButton venueId={venueId} isFollowed={venue.isFollowed} />
+        <View style={styles.heroActions}>
+          <FollowVenueButton venueId={venueId} isFollowed={venue.isFollowed} />
+          <OpenInGoogleMapsButton venue={venue} />
+        </View>
       </View>
       {canRename ? (
         <RenameVenueSheet
@@ -496,6 +503,73 @@ function FollowVenueButton({
         ]}
       >
         {isFollowed ? 'FOLLOWING' : 'FOLLOW'}
+      </Text>
+    </Pressable>
+  );
+}
+
+function OpenInGoogleMapsButton({
+  venue,
+}: {
+  venue: VenueDetail;
+}): React.JSX.Element | null {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+
+  const plan = React.useMemo(
+    () =>
+      buildGoogleMapsOpenPlan({
+        name: venue.name,
+        latitude: venue.latitude,
+        longitude: venue.longitude,
+        googlePlaceId: venue.googlePlaceId,
+        city: venue.city,
+      }),
+    [venue.name, venue.latitude, venue.longitude, venue.googlePlaceId, venue.city],
+  );
+
+  if (!plan) return null;
+
+  const open = async (): Promise<void> => {
+    void hapticSelection();
+    // Mirrors HypePlaylistCard / OpenInSpotifyButton: try the native
+    // scheme first, fall back to the universal web URL when the Google
+    // Maps app isn't installed. `Linking.canOpenURL` requires an iOS
+    // LSApplicationQueriesSchemes / Android <queries> declaration we
+    // don't keep in sync, so the openURL rejection is the signal.
+    try {
+      await Linking.openURL(plan.primary);
+      return;
+    } catch {
+      // Google Maps app not installed — fall through to the web URL.
+    }
+    try {
+      await WebBrowser.openBrowserAsync(plan.fallback);
+    } catch {
+      await Linking.openURL(plan.fallback);
+    }
+  };
+
+  return (
+    <Pressable
+      onPress={() => {
+        void open();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${venue.name} in Google Maps`}
+      testID="venue-open-in-google-maps"
+      style={({ pressed }) => [
+        styles.mapsButton,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.rule,
+          opacity: pressed ? 0.7 : 1,
+        },
+      ]}
+    >
+      <GoogleMapsMark size={14} />
+      <Text style={[styles.mapsLabel, { color: colors.ink }]}>
+        OPEN IN GOOGLE MAPS
       </Text>
     </Pressable>
   );
@@ -858,14 +932,35 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     lineHeight: 18,
   },
-  followButton: {
+  heroActions: {
     marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  followButton: {
     paddingVertical: 9,
     paddingHorizontal: 24,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 999,
   },
   followLabel: {
+    fontFamily: 'Geist Mono',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.6,
+  },
+  mapsButton: {
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  mapsLabel: {
     fontFamily: 'Geist Mono',
     fontSize: 11,
     fontWeight: '600',

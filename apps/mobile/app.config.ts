@@ -96,9 +96,11 @@ const config: ExpoConfig = {
       // declared here, otherwise the call returns false even when the
       // target app is installed. `spotify` powers the native handoff
       // from the Hype / Heard playlist cards via `buildSpotifyOpenPlan`
-      // (`spotify://playlist/{id}`); without it iOS silently falls
+      // (`spotify://playlist/{id}`); `comgooglemaps` powers the "Open
+      // in Google Maps" button on the venue detail hero
+      // (`buildGoogleMapsOpenPlan`); without these iOS silently falls
       // back to the in-app browser.
-      LSApplicationQueriesSchemes: ['spotify'],
+      LSApplicationQueriesSchemes: ['spotify', 'comgooglemaps'],
     },
   },
   android: {
