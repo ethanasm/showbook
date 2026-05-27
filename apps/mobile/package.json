@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "@expo-google-fonts/fraunces": "^0.4.1",
-    "@expo/metro-runtime": "~55.0.11",
+    "@expo/metro-runtime": "~56.0.13",
     "@react-native-community/netinfo": "^11.4.1",
     "@react-native-masked-view/masked-view": "0.3.2",
     "@showbook/shared": "workspace:*",
