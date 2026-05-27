@@ -450,8 +450,8 @@ function Section({
         hitSlop={8}
         style={({ pressed }) => [styles.sectionHeaderRow, pressed && styles.sectionHeaderPressed]}
       >
-        <Text style={labelStyle}>{title.toUpperCase()}</Text>
-        <ChevronRight size={16} color={tokens.colors.faint} strokeWidth={2} />
+        <Text style={[labelStyle, styles.sectionLabelInRow]}>{title.toUpperCase()}</Text>
+        <ChevronRight size={14} color={tokens.colors.faint} strokeWidth={2.25} />
       </Pressable>
     </Link>
   ) : (
@@ -508,8 +508,14 @@ const styles = StyleSheet.create({
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingRight: 20,
+    alignSelf: 'flex-start',
+    gap: 4,
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
+  sectionLabelInRow: {
+    paddingHorizontal: 0,
+    paddingBottom: 0,
   },
   sectionHeaderPressed: {
     opacity: 0.6,
