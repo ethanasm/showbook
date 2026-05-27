@@ -114,10 +114,10 @@ export function PlayedCountBanner({ total }: PlayedCountBannerProps): React.JSX.
 const styles = StyleSheet.create({
   banner: {
     paddingHorizontal: 20,
-    paddingVertical: 18,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   lead: {
@@ -127,13 +127,13 @@ const styles = StyleSheet.create({
   },
   number: {
     fontFamily: 'Geist Sans',
-    fontSize: 44,
+    fontSize: 32,
     fontWeight: '600',
-    letterSpacing: -1.5,
+    letterSpacing: -1,
   },
   pct: {
     fontFamily: 'Geist Mono',
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '500',
   },
   smallLabel: {

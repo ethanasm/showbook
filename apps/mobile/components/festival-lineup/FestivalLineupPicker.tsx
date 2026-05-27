@@ -22,6 +22,7 @@ import DraggableFlatListImport, {
   type RenderItemParams,
 } from 'react-native-draggable-flatlist';
 import { useTheme } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import { RemoteImage } from '../design-system';
 import { trpc } from '../../lib/trpc';
 import { useDebouncedValue } from '@showbook/shared/hooks';
@@ -712,13 +713,13 @@ const styles = StyleSheet.create({
   checkbox: {
     width: 18,
     height: 18,
-    borderRadius: 3,
+    borderRadius: RADII.xs,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   thumb: {
-    borderRadius: 4,
+    borderRadius: RADII.sm,
   },
   body: {
     flex: 1,
@@ -742,7 +743,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 4,
+    borderRadius: RADII.sm,
     paddingHorizontal: 5,
     paddingVertical: 4,
   },
@@ -755,7 +756,7 @@ const styles = StyleSheet.create({
   tierToggle: {
     flexDirection: 'row',
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 4,
+    borderRadius: RADII.sm,
     overflow: 'hidden',
   },
   tierDivider: {
@@ -776,7 +777,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
     marginBottom: 10,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 6,
+    borderRadius: RADII.md,
     overflow: 'hidden',
   },
   searchPanelInputRow: {
@@ -795,7 +796,7 @@ const styles = StyleSheet.create({
   },
   useTypedBtn: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 4,
+    borderRadius: RADII.sm,
     paddingHorizontal: 6,
     paddingVertical: 3,
   },
@@ -836,13 +837,13 @@ const styles = StyleSheet.create({
   searchResultThumb: {
     width: 26,
     height: 26,
-    borderRadius: 3,
+    borderRadius: RADII.sm,
     borderWidth: StyleSheet.hairlineWidth,
   },
   searchResultThumbPlaceholder: {
     width: 26,
     height: 26,
-    borderRadius: 3,
+    borderRadius: RADII.sm,
     borderWidth: StyleSheet.hairlineWidth,
   },
   searchResultName: {

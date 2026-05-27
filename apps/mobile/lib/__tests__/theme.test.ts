@@ -202,4 +202,8 @@ describe('radii', () => {
   it('md = 8', () => {
     assert.equal(RADII.md, 8);
   });
+
+  it('xs = 2 for thin bars and indicators', () => {
+    assert.equal(RADII.xs, 2);
+  });
 });

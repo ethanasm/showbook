@@ -36,6 +36,7 @@ import NestableDraggableFlatListImport, {
   type RenderItemParams,
 } from 'react-native-draggable-flatlist';
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 import { trpc } from '../lib/trpc';
 import { useDebouncedValue } from '@showbook/shared/hooks';
 import { hapticSelection } from '../lib/haptics';
@@ -446,7 +447,7 @@ const styles = StyleSheet.create({
   },
   rowWrap: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
+    borderRadius: RADII.md,
     paddingVertical: 8,
     paddingHorizontal: 8,
     gap: 6,
@@ -471,14 +472,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
+    borderRadius: RADII.md,
     paddingVertical: 6,
     paddingHorizontal: 8,
   },
   chipThumb: {
     width: 22,
     height: 22,
-    borderRadius: 3,
+    borderRadius: RADII.sm,
     borderWidth: StyleSheet.hairlineWidth,
   },
   chipName: {
@@ -498,7 +499,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     paddingVertical: 5,
     paddingHorizontal: 8,
   },
@@ -511,7 +512,7 @@ const styles = StyleSheet.create({
   removeBtn: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -533,7 +534,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '400',
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 6,
+    borderRadius: RADII.md,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
@@ -544,7 +545,7 @@ const styles = StyleSheet.create({
     gap: 6,
     borderWidth: StyleSheet.hairlineWidth,
     borderStyle: 'dashed',
-    borderRadius: 8,
+    borderRadius: RADII.md,
     paddingVertical: 10,
   },
   addBtnText: {

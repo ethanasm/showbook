@@ -45,6 +45,7 @@ import { TopBar } from '../../../components/TopBar';
 import { SetlistRow } from '../../../components/SetlistRow';
 import { EmptyState } from '../../../components/EmptyState';
 import { useTheme } from '../../../lib/theme';
+import { RADII } from '../../../lib/theme-utils';
 import { hapticSelection } from '../../../lib/haptics';
 import { trpc } from '../../../lib/trpc';
 import { useFeedback } from '../../../lib/feedback';
@@ -482,7 +483,7 @@ const styles = StyleSheet.create({
   performerChip: {
     paddingVertical: 6,
     paddingHorizontal: 10,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     borderWidth: StyleSheet.hairlineWidth,
   },
   performerChipLabel: {
@@ -498,7 +499,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingVertical: 10,
     paddingHorizontal: 14,
-    borderRadius: 8,
+    borderRadius: RADII.lg,
     borderWidth: 1,
   },
   borrowText: {
@@ -537,7 +538,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
+    borderRadius: RADII.pill,
     justifyContent: 'center',
   },
   addBtnText: {

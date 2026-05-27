@@ -1,22 +1,21 @@
 /**
- * HypePlaylistCard (mobile) — Phase 10 Part B4 port of the web
- * `apps/web/components/show-tabs/HypePlaylistCard.tsx`.
+ * HypePlaylistCard (mobile) — single-row compact card. The whole card is
+ * the tap target; no fake album-art tile, no separate CTA button below.
  *
- * Behavior parity:
- *  - Branded album-art tile + headline copy stacked over a full-width
- *    "Open in Spotify" CTA.
+ * Behavior parity with web:
  *  - First tap without a Spotify connection slides up the
  *    `SpotifyConnectSheet` and resumes the action on success.
- *  - When an existing playlist row exists, tapping "Open in Spotify"
- *    hands off to the native Spotify app via `spotify://playlist/{id}`
- *    when installed; falls back to the in-app browser on the web URL.
+ *  - When an existing playlist row exists, tapping hands off to the
+ *    native Spotify app via `spotify://playlist/{id}` when installed;
+ *    falls back to the in-app browser on the web URL.
  *  - SI-05 hide rule (rotating / improvised pre-show) is enforced at
  *    the caller — `pickSetlistView` + `shouldRenderHypePlaylistCard`
  *    already gate this card out of the layout.
  */
 
 import React from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ChevronRight } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
 
 import { useTheme } from '../../lib/theme';
@@ -90,14 +89,19 @@ export function HypePlaylistCard({
   const [isCreating, setIsCreating] = React.useState(false);
 
   const isQueued = existing?.pending === true;
-  const headlineText =
-    kind === 'hype'
+  const hasPlaylist = Boolean(existing && existing.spotifyUrl);
+  const headlineText = hasPlaylist
+    ? kind === 'hype'
+      ? 'Open hype playlist'
+      : 'Open in Spotify'
+    : kind === 'hype'
       ? `Spin up ${trackCount} song${trackCount === 1 ? '' : 's'} you'll hear`
       : `Save ${trackCount} song${trackCount === 1 ? '' : 's'} to Spotify`;
-  const subCopy =
-    approxMinutes != null
-      ? `~${approxMinutes} min · in show order · drops onto your Spotify`
-      : 'In show order · drops onto your Spotify';
+  const subCopy = isQueued
+    ? "Queued — we'll create it when you're back online"
+    : approxMinutes != null
+      ? `~${approxMinutes} min · in show order`
+      : 'In show order';
 
   const performCreate = React.useCallback(async () => {
     setStatusMsg(null);
@@ -227,78 +231,55 @@ export function HypePlaylistCard({
     await requireConnection(performCreate);
   }, [existing, isQueued, openExisting, performCreate, requireConnection]);
 
-  const ctaLabel = isQueued
-    ? "Will create when you're online"
-    : existing && existing.spotifyUrl
-      ? 'Open in Spotify'
-      : isCreating
-        ? 'Working…'
-        : kind === 'hype'
-          ? 'Open in Spotify'
-          : 'Save to Spotify';
+  const trailing = (() => {
+    if (isCreating) {
+      return <ActivityIndicator size="small" color={colors.accentText} />;
+    }
+    if (isQueued) return null;
+    return <ChevronRight size={18} color={colors.accentText} strokeWidth={2.25} />;
+  })();
+
+  const cardOpacity = isQueued ? 0.7 : 1;
 
   return (
     <View testID={`hype-playlist-card-${kind}`}>
-      <View
-        style={[
+      <Pressable
+        testID={`hype-card-${kind}-primary`}
+        accessibilityRole="button"
+        accessibilityLabel={headlineText}
+        onPress={() => {
+          void handlePrimaryPress();
+        }}
+        disabled={isCreating || isQueued}
+        style={({ pressed }) => [
           styles.card,
           {
-            backgroundColor: colors.surface,
-            borderColor: colors.rule,
+            backgroundColor: colors.accent,
+            opacity: pressed ? 0.88 : cardOpacity,
           },
         ]}
       >
-        <View style={styles.topRow}>
-          <View
-            style={[styles.cover, { backgroundColor: colors.ink }]}
-            accessibilityElementsHidden
-          >
-            <Text style={[styles.coverBrand, { color: colors.accent }]}>
-              SHOWBOOK
-            </Text>
-            <Text style={[styles.coverTitle, { color: colors.bg }]}>
-              {kind === 'hype' ? 'hype' : 'heard'}{'\n'}
-              {artist.toLowerCase().split(' ')[0] ?? ''}
-            </Text>
-            <View style={[styles.coverBar, { backgroundColor: colors.accent }]} />
-          </View>
-          <View style={styles.copy}>
-            <Text style={[styles.headline, { color: colors.ink }]}>
-              {headlineText}
-            </Text>
-            <Text style={[styles.sub, { color: colors.muted }]}>{subCopy}</Text>
-          </View>
+        <View style={[styles.iconCircle, { backgroundColor: colors.accentText }]}>
+          <SpotifyMark size={18} />
         </View>
-        <Pressable
-          testID={`hype-card-${kind}-primary`}
-          accessibilityRole="button"
-          accessibilityLabel={ctaLabel}
-          onPress={() => {
-            void handlePrimaryPress();
-          }}
-          disabled={isCreating || isQueued}
-          style={({ pressed }) => [
-            styles.primaryButton,
-            {
-              backgroundColor: colors.accent,
-              opacity: isCreating || isQueued ? 0.6 : pressed ? 0.85 : 1,
-            },
-          ]}
+        <View style={styles.copy}>
+          <Text style={[styles.headline, { color: colors.accentText }]} numberOfLines={1}>
+            {headlineText}
+          </Text>
+          <Text style={[styles.sub, { color: colors.accentText }]} numberOfLines={1}>
+            {subCopy}
+          </Text>
+        </View>
+        {trailing}
+      </Pressable>
+      {statusMsg ? (
+        <Text
+          testID={`hype-card-${kind}-status`}
+          style={[styles.status, { color: colors.muted }]}
         >
-          <SpotifyMark size={16} />
-          <Text style={[styles.primaryLabel, { color: colors.accentText }]}>
-            {ctaLabel}
-          </Text>
-        </Pressable>
-        {statusMsg ? (
-          <Text
-            testID={`hype-card-${kind}-status`}
-            style={[styles.status, { color: colors.muted }]}
-          >
-            {isCreating ? 'Building playlist on Spotify…' : statusMsg}
-          </Text>
-        ) : null}
-      </View>
+          {isCreating ? 'Building playlist on Spotify…' : statusMsg}
+        </Text>
+      ) : null}
       <SpotifyConnectSheet
         open={sheetOpen}
         ctaLabel={
@@ -320,81 +301,43 @@ export function HypePlaylistCard({
 const styles = StyleSheet.create({
   card: {
     marginHorizontal: 20,
-    padding: 14,
-    borderRadius: RADII.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
-  topRow: {
     flexDirection: 'row',
-    gap: 14,
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: RADII.pill,
   },
-  cover: {
-    width: 72,
-    height: 86,
-    borderRadius: RADII.md,
-    paddingHorizontal: 8,
-    paddingVertical: 9,
-    justifyContent: 'space-between',
-  },
-  coverBrand: {
-    fontFamily: 'Geist Mono',
-    fontSize: 8,
-    fontWeight: '600',
-    letterSpacing: 1.2,
-  },
-  coverTitle: {
-    fontFamily: 'Geist Sans',
-    fontSize: 15,
-    fontWeight: '700',
-    lineHeight: 17,
-    letterSpacing: -0.4,
-  },
-  coverBar: {
-    height: 2,
-    width: 24,
-    borderRadius: 1,
+  iconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: RADII.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   copy: {
     flex: 1,
-    paddingTop: 2,
-    gap: 4,
+    minWidth: 0,
   },
   headline: {
     fontFamily: 'Geist Sans',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    letterSpacing: -0.25,
-    lineHeight: 21,
+    letterSpacing: -0.1,
   },
   sub: {
     fontFamily: 'Geist Mono',
-    fontSize: 11,
-    letterSpacing: 0.25,
-    lineHeight: 15,
-  },
-  primaryButton: {
-    marginTop: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: RADII.lg,
-  },
-  primaryLabel: {
-    fontFamily: 'Geist Sans',
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 0.1,
+    fontSize: 10.5,
+    letterSpacing: 0.3,
+    marginTop: 1,
+    opacity: 0.72,
   },
   status: {
     fontFamily: 'Geist Mono',
     fontSize: 11,
     letterSpacing: 0.3,
-    marginTop: 10,
+    marginTop: 8,
+    marginHorizontal: 20,
     textAlign: 'center',
   },
 });

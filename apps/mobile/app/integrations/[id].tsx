@@ -29,6 +29,7 @@ import {
 import { TopBar } from '../../components/TopBar';
 import { EmptyState } from '../../components/EmptyState';
 import { useTheme } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 
 type IntegrationId = 'gmail' | 'ticketmaster' | 'google-places' | 'spotify';
 
@@ -208,7 +209,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   heroCard: {
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     borderWidth: 1,
     padding: 20,
     alignItems: 'center',
@@ -217,7 +218,7 @@ const styles = StyleSheet.create({
   heroIcon: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -256,7 +257,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   card: {
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     borderWidth: 1,
     padding: 16,
   },

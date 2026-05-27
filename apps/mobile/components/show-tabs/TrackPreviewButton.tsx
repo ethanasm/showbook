@@ -19,6 +19,7 @@ import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { useTheme } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import type { PreviewHandle } from '../../lib/setlist-intel';
 import { usePreviewPlayer } from '../../lib/preview-player-provider';
 import { trpc } from '../../lib/trpc';
@@ -172,7 +173,7 @@ const styles = StyleSheet.create({
   button: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: RADII.pill,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',

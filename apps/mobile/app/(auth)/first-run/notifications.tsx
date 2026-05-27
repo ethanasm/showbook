@@ -13,6 +13,7 @@ import * as Notifications from 'expo-notifications';
 import { Bell } from 'lucide-react-native';
 import { FirstRunStep, heroTitleStyle } from './_components';
 import { useTheme } from '../../../lib/theme';
+import { RADII } from '../../../lib/theme-utils';
 
 const TAGS = ['On-sale alerts', 'Tour announcements', 'Doors at 7'];
 
@@ -84,7 +85,7 @@ const styles = StyleSheet.create({
   },
   tagChip: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     paddingVertical: 4,
     paddingHorizontal: 10,
   },

@@ -50,6 +50,7 @@ import {
 import { Sheet } from './Sheet';
 import { Button } from './design-system';
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 import { useAuth } from '../lib/auth';
 import { useFeedback } from '../lib/feedback';
 import { useNetwork } from '../lib/network';
@@ -534,7 +535,7 @@ const styles = StyleSheet.create({
   },
   card: {
     marginHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     borderWidth: 1,
   },
   cardNoPad: {
@@ -589,7 +590,7 @@ const sheetStyles = StyleSheet.create({
   iconWrap: {
     width: 38,
     height: 38,
-    borderRadius: 11,
+    borderRadius: RADII.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -620,7 +621,7 @@ const sheetStyles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '400',
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
+    borderRadius: RADII.lg,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -629,7 +630,7 @@ const sheetStyles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
+    borderRadius: RADII.lg,
     padding: 10,
   },
   noteText: {
