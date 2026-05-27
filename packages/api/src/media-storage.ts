@@ -1,11 +1,6 @@
 import { mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import {
-  deleteFromR2,
-  getPresignedReadUrl,
-  getPresignedUploadUrl,
-  headFromR2,
-} from './r2';
+import { deleteFromR2, getPresignedReadUrl, headFromR2 } from './r2';
 import { getMediaConfig } from './media-config';
 
 // Allowed key shape: `showbook/<segment>/.../<segment>` where each segment
@@ -73,15 +68,37 @@ export async function readLocalObject(key: string): Promise<Buffer> {
   return readFile(localPathForKey(key));
 }
 
+function publicBaseUrl(): string {
+  // Mobile clients PUT to the URL we return from createUploadIntent
+  // verbatim — they cannot prepend a base, so r2-mode URLs must be
+  // absolute. Web clients are fine with either, but going through
+  // the same shape keeps the two paths in sync. NEXTAUTH_URL is the
+  // canonical public-facing origin (it's what the auth callback URLs
+  // and Cloudflare Tunnel ingress agree on); falling back to empty
+  // gives a server-relative URL for the dev flow that doesn't set it.
+  const raw = process.env.NEXTAUTH_URL ?? '';
+  return raw.replace(/\/+$/, '');
+}
+
 export async function getMediaUploadUrl(
   key: string,
-  contentType: string,
+  _contentType: string,
 ): Promise<string> {
   const config = getMediaConfig();
   if (config.storageMode === 'local') {
+    // Local mode is used by the Playwright dev harness — clients on the
+    // same origin can hit a server-relative URL.
     return `/api/media/upload?key=${encodeURIComponent(key)}`;
   }
-  return getPresignedUploadUrl(key, contentType, config.uploadUrlTtlSeconds);
+  // R2 mode previously returned a presigned R2 URL so clients PUT
+  // directly to `*.r2.cloudflarestorage.com`. That path failed with 403
+  // for every mobile upload (29 stuck-pending media_assets, zero ever
+  // ready) and the mobile telemetry that was supposed to capture R2's
+  // response never reached us. We now proxy through `/api/media/upload`
+  // and let the server `uploadToR2` (AWS SDK direct send — the same
+  // call path that already works for HEAD / DELETE in prod). Trade-off
+  // is bandwidth doubled vs. direct-to-R2, which is fine at our scale.
+  return `${publicBaseUrl()}/api/media/upload?key=${encodeURIComponent(key)}`;
 }
 
 export async function getMediaReadUrl(key: string): Promise<string> {
