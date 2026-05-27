@@ -19,6 +19,7 @@ import {
   enqueueSetlistCorpusFillRefresh,
   enqueueBackfillPerformerMbids,
   enqueueBackfillPerformerTicketmasterIds,
+  enqueueBackfillPerformerSpotifyIds,
 } from '../job-queue';
 import { child } from '@showbook/observability';
 
@@ -407,6 +408,28 @@ export const adminRouter = router({
           jobId,
         },
         'Admin enqueued backfill-performer-ticketmaster-ids job',
+      );
+      return { jobId };
+    },
+  ),
+
+  /**
+   * Enqueue the `backfill/performer-spotify-ids` cron on demand. Looks
+   * up Spotify catalog ids for every performer without one. Already
+   * runs daily at 06:30 ET. Use this after a bulk import (or to catch
+   * up the backlog created before the inline resolver hook landed).
+   */
+  enqueueBackfillPerformerSpotifyIds: adminProcedure.mutation(
+    async ({ ctx }) => {
+      const userId = ctx.session.user.id;
+      const jobId = await enqueueBackfillPerformerSpotifyIds();
+      log.info(
+        {
+          event: 'admin.backfill_performer_spotify_ids.enqueue',
+          userId,
+          jobId,
+        },
+        'Admin enqueued backfill-performer-spotify-ids job',
       );
       return { jobId };
     },

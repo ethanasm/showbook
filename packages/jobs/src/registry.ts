@@ -12,6 +12,7 @@ import { runShowsNightly } from './shows-nightly';
 import { runBackfillPerformerImages } from './backfill-performer-images';
 import { runBackfillPerformerMbids } from './backfill-performer-mbids';
 import { runBackfillPerformerTicketmasterIds } from './backfill-performer-ticketmaster-ids';
+import { runBackfillPerformerSpotifyIds } from './backfill-performer-spotify-ids';
 import { runBackfillVenuePhotos } from './backfill-venue-photos';
 import { runBackfillShowCoverImages } from './backfill-show-cover-images';
 import { runPruneOrphanCatalog } from './prune-orphan-catalog';
@@ -47,6 +48,7 @@ export const JOBS = {
   BACKFILL_PERFORMER_IMAGES: 'backfill/performer-images',
   BACKFILL_PERFORMER_MBIDS: 'backfill/performer-mbids',
   BACKFILL_PERFORMER_TICKETMASTER_IDS: 'backfill/performer-ticketmaster-ids',
+  BACKFILL_PERFORMER_SPOTIFY_IDS: 'backfill/performer-spotify-ids',
   BACKFILL_VENUE_PHOTOS: 'backfill/venue-photos',
   BACKFILL_SHOW_COVER_IMAGES: 'backfill/show-cover-images',
   PRUNE_ORPHAN_CATALOG: 'prune/orphan-catalog',
@@ -484,6 +486,28 @@ const JOBS_TABLE: JobEntry[] = [
       summary: (r) => ({
         event: 'backfill.performer_ticketmaster_ids.summary',
         msg: 'Performer Ticketmaster ID backfill complete',
+        total: r.total,
+        updated: r.updated,
+        missing: r.missing,
+        skipped: r.skipped,
+        failed: r.failed,
+      }),
+    }),
+  },
+  // Catches up Spotify catalog ids for any performer whose inline
+  // fire-and-forget resolver (in matchOrCreatePerformer) failed or never
+  // ran. Scheduled at 06:30 ET — after the TM-id backfill so any
+  // TM-derived MBIDs are in place, before the morning digest at 08:00 ET.
+  {
+    name: JOBS.BACKFILL_PERFORMER_SPOTIFY_IDS,
+    queueOptions: LONG_BATCH_CRON,
+    schedule: '30 6 * * *',
+    handler: defineJobHandler({
+      name: JOBS.BACKFILL_PERFORMER_SPOTIFY_IDS,
+      run: () => runBackfillPerformerSpotifyIds(),
+      summary: (r) => ({
+        event: 'backfill.performer_spotify_ids.summary',
+        msg: 'Performer Spotify ID backfill complete',
         total: r.total,
         updated: r.updated,
         missing: r.missing,

@@ -65,6 +65,8 @@ export default function AdminView() {
     trpc.admin.enqueueBackfillPerformerMbids.useMutation();
   const performerTmMutation =
     trpc.admin.enqueueBackfillPerformerTicketmasterIds.useMutation();
+  const performerSpotifyMutation =
+    trpc.admin.enqueueBackfillPerformerSpotifyIds.useMutation();
 
   const [performerQuery, setPerformerQuery] = useState("");
 
@@ -98,6 +100,11 @@ export default function AdminView() {
   const performerTmResult = performerTmMutation.data
     ? performerTmMutation.data.jobId
       ? `Enqueued job ${performerTmMutation.data.jobId}`
+      : 'Enqueue returned no job id (likely a duplicate already queued)'
+    : null;
+  const performerSpotifyResult = performerSpotifyMutation.data
+    ? performerSpotifyMutation.data.jobId
+      ? `Enqueued job ${performerSpotifyMutation.data.jobId}`
       : 'Enqueue returned no job id (likely a duplicate already queued)'
     : null;
 
@@ -194,6 +201,17 @@ export default function AdminView() {
               errorMessage={performerTmMutation.error?.message ?? null}
               resultLine={performerTmResult}
               onRun={() => performerTmMutation.mutate()}
+            />
+
+            <BackfillCard
+              title="Backfill performer Spotify IDs"
+              description="Enqueue the backfill-performer-spotify-ids job. Looks up Spotify catalog IDs via /v1/search?type=artist for every performer without one — never overwrites an existing ID. Already runs daily at 06:30 ET; use this after a bulk import or to catch up the pre-existing backlog. Results land in Axiom (event backfill.performer_spotify_ids.summary)."
+              buttonLabel="Enqueue Spotify-id backfill"
+              confirmText="Enqueue the performer-Spotify-id backfill? It calls Spotify search once per performer with no Spotify id."
+              isPending={performerSpotifyMutation.isPending}
+              errorMessage={performerSpotifyMutation.error?.message ?? null}
+              resultLine={performerSpotifyResult}
+              onRun={() => performerSpotifyMutation.mutate()}
             />
           </div>
 

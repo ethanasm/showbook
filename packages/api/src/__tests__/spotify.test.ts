@@ -5,7 +5,7 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { SpotifyError, getFollowedArtists } from '../spotify';
+import { SpotifyError, getFollowedArtists, searchSpotifyArtist } from '../spotify';
 
 let origFetch: typeof globalThis.fetch;
 
@@ -148,5 +148,92 @@ describe('getFollowedArtists', () => {
 
     const result = await getFollowedArtists('t');
     assert.equal(result.length, 1000);
+  });
+});
+
+describe('searchSpotifyArtist', () => {
+  it('returns the top hit when no exact-name match is in the top 5', async () => {
+    let capturedUrl: string | null = null;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      capturedUrl = String(input);
+      return jsonResponse({
+        artists: {
+          items: [
+            {
+              id: 'top-hit',
+              name: 'Some Other Band',
+              images: [{ url: 'https://img/top.jpg', width: 320 }],
+              genres: ['indie'],
+            },
+          ],
+        },
+      });
+    }) as typeof globalThis.fetch;
+
+    const result = await searchSpotifyArtist('token', 'Mystery Band');
+    assert.ok(capturedUrl);
+    assert.ok(
+      capturedUrl!.includes('/search?type=artist'),
+      'hits /search?type=artist',
+    );
+    assert.ok(
+      capturedUrl!.includes('q=Mystery%20Band'),
+      'URL-encodes the name into q',
+    );
+    assert.equal(result?.id, 'top-hit');
+    assert.equal(result?.name, 'Some Other Band');
+    assert.equal(result?.imageUrl, 'https://img/top.jpg');
+    assert.deepEqual(result?.genres, ['indie']);
+  });
+
+  it('prefers an exact case-insensitive name match over Spotify ranking', async () => {
+    globalThis.fetch = (async () =>
+      jsonResponse({
+        artists: {
+          items: [
+            { id: 'tribute', name: 'The Beatles Tribute', images: [] },
+            { id: 'real', name: 'The Beatles', images: [] },
+            { id: 'cover', name: 'beatles cover band', images: [] },
+          ],
+        },
+      })) as typeof globalThis.fetch;
+
+    const result = await searchSpotifyArtist('token', 'the beatles');
+    assert.equal(
+      result?.id,
+      'real',
+      'should pick exact name match (case-insensitive) over Spotify top result',
+    );
+  });
+
+  it('returns null when Spotify has no hits', async () => {
+    globalThis.fetch = (async () =>
+      jsonResponse({ artists: { items: [] } })) as typeof globalThis.fetch;
+
+    const result = await searchSpotifyArtist('token', 'Nobody Anywhere');
+    assert.equal(result, null);
+  });
+
+  it('returns null for whitespace-only input without hitting the network', async () => {
+    let called = false;
+    globalThis.fetch = (async () => {
+      called = true;
+      return jsonResponse({ artists: { items: [] } });
+    }) as typeof globalThis.fetch;
+
+    const result = await searchSpotifyArtist('token', '   ');
+    assert.equal(result, null);
+    assert.equal(called, false, 'should short-circuit before fetch');
+  });
+
+  it('throws SpotifyError on non-2xx response', async () => {
+    globalThis.fetch = (async () =>
+      new Response('bad', { status: 500 })) as typeof globalThis.fetch;
+
+    await assert.rejects(searchSpotifyArtist('token', 'Whoever'), (err: unknown) => {
+      assert.ok(err instanceof SpotifyError);
+      assert.equal((err as SpotifyError).status, 500);
+      return true;
+    });
   });
 });
