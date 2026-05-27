@@ -85,7 +85,11 @@ describe('registerAllJobs queue options', () => {
       assert.equal(opts.retryLimit, 3, `${name}: retryLimit = 3`);
       assert.equal(opts.retryDelay, 60, `${name}: retryDelay = 60`);
       assert.equal(opts.retryBackoff, true, `${name}: retryBackoff = true`);
-      assert.deepEqual(u!.opts, c!.opts, `${name}: update opts match create opts`);
+      const uOpts = u!.opts as Record<string, unknown>;
+      assert.equal(uOpts.expireInSeconds, opts.expireInSeconds);
+      assert.equal(uOpts.retryLimit, opts.retryLimit);
+      assert.equal(uOpts.retryDelay, opts.retryDelay);
+      assert.equal(uOpts.retryBackoff, opts.retryBackoff);
     }
   });
 
@@ -152,7 +156,29 @@ describe('registerAllJobs queue options', () => {
       assert.ok(u, `updateQueue called for ${name}`);
       const opts = c!.opts as Record<string, unknown>;
       assert.equal(opts.policy, 'singleton', `${name}: policy = 'singleton'`);
-      assert.deepEqual(u!.opts, c!.opts, `${name}: update opts match create opts`);
+      // policy is intentionally stripped from the update payload — see
+      // the "strips policy + name from the updateQueue payload" test
+      // below for why.
+    }
+  });
+
+  it('strips policy from the updateQueue payload (pg-boss v12 compat)', async () => {
+    // pg-boss v12's `Manager.updateQueue` throws "queue policy cannot
+    // be changed after creation" if `policy` is present in the
+    // payload, even when the new value matches what's already on the
+    // queue. Stripping `policy` lets the rest of the updatable
+    // options (retryLimit / retryDelay / retryBackoff /
+    // expireInSeconds) still get re-applied on every boot.
+    const { fakeBoss, updated } = makeFakeBoss();
+    await registerAllJobs(fakeBoss as never);
+
+    for (const u of updated) {
+      const opts = u.opts as Record<string, unknown>;
+      assert.equal(
+        opts.policy,
+        undefined,
+        `${u.name}: policy must NOT appear on updateQueue (pg-boss v12 rejects it)`,
+      );
     }
   });
 

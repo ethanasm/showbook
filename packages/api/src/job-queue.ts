@@ -6,7 +6,7 @@
  * from the API are picked up by handlers registered by the worker.
  */
 
-import { PgBoss } from 'pg-boss';
+import PgBoss from 'pg-boss';
 import { db, sql } from '@showbook/db';
 import { child } from '@showbook/observability';
 

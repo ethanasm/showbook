@@ -1,4 +1,4 @@
-import { PgBoss, type Job, type WorkHandler } from 'pg-boss';
+import PgBoss from 'pg-boss';
 import { child, withTrace, flushObservability } from '@showbook/observability';
 import {
   runDiscoverIngest,
@@ -135,7 +135,7 @@ const SCHEDULE_TZ = { tz: 'America/New_York' } as const;
  */
 async function runJob<T = unknown>(
   jobName: string,
-  job: Job<T>,
+  job: PgBoss.Job<T>,
   fn: () => Promise<unknown>,
 ): Promise<void> {
   const child = log.child({ job: jobName, jobId: job.id });
@@ -191,11 +191,11 @@ type SummaryPayload = { event: string; msg: string } & Record<string, unknown>;
  */
 function defineJobHandler<TData = unknown, TResult = unknown>(spec: {
   name: string;
-  run: (job: Job<TData>) => Promise<TResult>;
+  run: (job: PgBoss.Job<TData>) => Promise<TResult>;
   summary?: (result: TResult) => SummaryPayload;
-  skipWhen?: (job: Job<TData>) => boolean;
-}): WorkHandler<TData> {
-  return async (jobs: Job<TData>[]) => {
+  skipWhen?: (job: PgBoss.Job<TData>) => boolean;
+}): PgBoss.WorkHandler<TData> {
+  return async (jobs: PgBoss.Job<TData>[]) => {
     for (const job of jobs) {
       if (spec.skipWhen?.(job)) continue;
       await runJob(spec.name, job, async () => {
@@ -210,12 +210,12 @@ function defineJobHandler<TData = unknown, TResult = unknown>(spec: {
   };
 }
 
-// `WorkHandler<T>` is invariant in `T`, so a table of mixed
+// `PgBoss.WorkHandler<T>` is invariant in `T`, so a table of mixed
 // per-job-data shapes can't tighten the storage type beyond `any` — we
 // rely on the per-entry `defineJobHandler` call to keep `run`/`summary`
 // type-safe inside each entry.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyWorkHandler = WorkHandler<any>;
+type AnyWorkHandler = PgBoss.WorkHandler<any>;
 
 type JobEntry = {
   name: string;
@@ -851,8 +851,17 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
     await boss.createQueue(entry.name, opts);
     // create_queue is ON CONFLICT DO NOTHING, so existing queues keep
     // whatever options they were originally created with. Force-apply
-    // the current options every boot.
-    await boss.updateQueue(entry.name, opts);
+    // the current updatable options every boot — but strip `policy`
+    // first. pg-boss v12's `Manager.updateQueue` throws
+    // `queue policy cannot be changed after creation` if `policy` is
+    // present in the payload, even when the new value matches the
+    // existing one. Policy is set once at `createQueue` time; the
+    // rest (`retryLimit` / `retryDelay` / `retryBackoff` /
+    // `expireInSeconds`) can still be updated post-hoc and that's
+    // what this loop is for.
+    const { policy: _policy, ...updatable } = opts;
+    void _policy;
+    await boss.updateQueue(entry.name, updatable);
   }
 
   for (const entry of JOBS_TABLE) {
