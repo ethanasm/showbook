@@ -189,16 +189,14 @@ function SetlistTabUpcoming(props: SetlistTabProps): React.JSX.Element {
       <SetCountStrip prediction={setCountPrediction ?? null} />
       {showHype && hypeMeta ? (
         <View style={styles.hypeSection}>
-          <SectionFrame title="Hype playlist">
-            <HypePlaylistCard
-              showId={showId}
-              performerId={performerId}
-              artist={artistName}
-              kind="hype"
-              trackCount={hypeMeta.count}
-              approxMinutes={hypeMeta.approxMinutes}
-            />
-          </SectionFrame>
+          <HypePlaylistCard
+            showId={showId}
+            performerId={performerId}
+            artist={artistName}
+            kind="hype"
+            trackCount={hypeMeta.count}
+            approxMinutes={hypeMeta.approxMinutes}
+          />
         </View>
       ) : null}
       {view === 'stable' && prediction.style === 'stable' ? (
@@ -274,7 +272,7 @@ function SetlistTabPast({
     <View>
       <PlayedCountBanner total={total} />
       {hypePlaylistEnabled ? (
-        <SectionFrame title={`I Heard ${artistName}`}>
+        <View style={styles.hypeSection}>
           <HypePlaylistCard
             showId={showId}
             performerId={performerId}
@@ -283,7 +281,7 @@ function SetlistTabPast({
             trackCount={total}
             approxMinutes={approxMinutes}
           />
-        </SectionFrame>
+        </View>
       ) : null}
       <SectionFrame title="Setlist" count={total}>
         <View testID="actual-setlist-grid">
@@ -437,7 +435,8 @@ function coldCopy(
 
 const styles = StyleSheet.create({
   hypeSection: {
-    marginBottom: 12,
+    marginTop: 16,
+    marginBottom: 4,
   },
   lockNote: {
     fontFamily: 'Geist Mono',

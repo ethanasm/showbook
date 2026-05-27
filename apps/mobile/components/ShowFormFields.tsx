@@ -20,6 +20,7 @@ import { VenueTypeahead, type VenueSuggestion } from './VenueTypeahead';
 import { LineupEditor } from './LineupEditor';
 import { Collapsible } from './Collapsible';
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 import { normalizeDashes } from '../lib/dateInput';
 import type {
   PerformerRow,
@@ -306,7 +307,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 5,
     paddingHorizontal: 10,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     marginTop: 4,
   },
   venuePillText: {
@@ -321,7 +322,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
   },
   extractBtnLabel: {
     fontFamily: 'Geist Sans',

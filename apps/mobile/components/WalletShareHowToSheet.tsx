@@ -22,6 +22,7 @@ import { Ticket } from 'lucide-react-native';
 
 import { Sheet } from './Sheet';
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 
 export interface WalletShareHowToSheetProps {
   open: boolean;
@@ -129,7 +130,7 @@ const styles = StyleSheet.create({
   iconBubble: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -158,7 +159,7 @@ const styles = StyleSheet.create({
   stepBadge: {
     width: 26,
     height: 26,
-    borderRadius: 13,
+    borderRadius: RADII.pill,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
@@ -186,7 +187,7 @@ const styles = StyleSheet.create({
   },
   cta: {
     paddingVertical: 12,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },

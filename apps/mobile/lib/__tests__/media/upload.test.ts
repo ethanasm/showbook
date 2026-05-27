@@ -112,6 +112,7 @@ interface PutCall {
   target: UploadTarget;
   fileUri: string;
   signal: AbortSignal | undefined;
+  authToken: string | null;
 }
 
 type PutHandler = (call: PutCall) => Promise<PutResult> | PutResult;
@@ -128,11 +129,21 @@ function makePut(handlers: PutHandler[]): {
   const calls: PutCall[] = [];
   let i = 0;
   const putImpl: PutFileFn = async (args) => {
-    calls.push({ target: args.target, fileUri: args.fileUri, signal: args.signal });
+    calls.push({
+      target: args.target,
+      fileUri: args.fileUri,
+      signal: args.signal,
+      authToken: args.authToken,
+    });
     const handler = handlers[Math.min(i, handlers.length - 1)];
     i++;
     if (!handler) throw new Error('no put handler');
-    return handler({ target: args.target, fileUri: args.fileUri, signal: args.signal });
+    return handler({
+      target: args.target,
+      fileUri: args.fileUri,
+      signal: args.signal,
+      authToken: args.authToken,
+    });
   };
   return { putImpl, calls };
 }
@@ -181,6 +192,9 @@ describe('uploadFile — happy path', () => {
     assert.equal(calls[0]?.fileUri, 'file:///private/photo.jpg');
     assert.equal(calls[0]?.target.uploadUrl, 'https://s3.example.com/upload?sig=abc');
     assert.equal(calls[0]?.target.mimeType, 'image/jpeg');
+    // No getAuthToken supplied → put step sees a null bearer. Presigned
+    // R2 URLs don't need one; this exercises the "test default" path.
+    assert.equal(calls[0]?.authToken, null);
 
     // Confirm
     assert.equal(server.completeCalls.length, 1);
@@ -188,6 +202,31 @@ describe('uploadFile — happy path', () => {
 
     assert.equal(result.id, 'asset-1');
     assert.equal(result.status, 'ready');
+  });
+
+  it('forwards the Bearer JWT into the PUT step when getAuthToken is supplied', async () => {
+    // The proxy upload route (`/api/media/upload`) requires Authorization:
+    // Bearer <jwt> — same as tRPC — but expo-file-system's native upload
+    // task bypasses the tRPC client. Without this plumbing every mobile
+    // PUT 401s with "unauthorized", which is what shipped in #404 before
+    // this commit.
+    const server = stubServer();
+    const { putImpl, calls } = makePut([okPut()]);
+    let tokenCalls = 0;
+    await uploadFile(fakePhoto(), {
+      server,
+      showId: 'show-1',
+      putImpl,
+      sleepImpl: async () => undefined,
+      getAuthToken: () => {
+        tokenCalls++;
+        return 'jwt-abc.def.ghi';
+      },
+    });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.authToken, 'jwt-abc.def.ghi');
+    // Token getter invoked exactly once for the single PUT attempt.
+    assert.equal(tokenCalls, 1);
   });
 
   it('passes HEIC photos straight through to the upload intent without JS-side re-encode', async () => {

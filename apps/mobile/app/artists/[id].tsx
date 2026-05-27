@@ -37,6 +37,7 @@ import { buildSetlistfmOpenPlan } from '../../lib/setlistfm-deep-link';
 import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import { hapticSelection } from '../../lib/haptics';
 import { isNonWatchableKind } from '@showbook/shared';
 import { useAuth } from '../../lib/auth';
@@ -661,7 +662,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 24,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
   },
   followLabel: {
     fontFamily: 'Geist Mono',
@@ -673,7 +674,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,

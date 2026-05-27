@@ -25,6 +25,7 @@ import { ChevronRight, MapPin, Music, Ticket } from 'lucide-react-native';
 import { SpotifyMark } from '../BrandIcons';
 
 import { useTheme } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import { trpc } from '../../lib/trpc';
 import { buildSpotifyOpenPlan } from '../../lib/setlist-intel';
 import { SectionFrame } from './SectionFrame';
@@ -282,7 +283,7 @@ const styles = StyleSheet.create({
   iconBubble: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },

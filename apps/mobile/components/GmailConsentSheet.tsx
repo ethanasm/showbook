@@ -17,6 +17,7 @@ import { ShieldCheck } from 'lucide-react-native';
 
 import { Sheet } from './Sheet';
 import { useTheme } from '../lib/theme';
+import { RADII } from '../lib/theme-utils';
 import { API_URL } from '../lib/env';
 
 export interface GmailConsentSheetProps {
@@ -154,6 +155,7 @@ const styles = StyleSheet.create({
   primaryButton: {
     paddingVertical: 12,
     paddingHorizontal: 18,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 160,
@@ -167,6 +169,7 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     paddingHorizontal: 18,
     borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },

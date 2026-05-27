@@ -31,6 +31,7 @@ import { ChevronLeft, Image as ImageIcon, RefreshCcw } from 'lucide-react-native
 
 import { TopBar } from '../../components/TopBar';
 import { useTheme } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import { useFeedback } from '../../lib/feedback';
 import {
   useFestivalLineup,
@@ -364,7 +365,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 12,
     paddingHorizontal: 18,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     marginTop: 8,
   },
   splashBtnLabel: {
@@ -388,7 +389,7 @@ const styles = StyleSheet.create({
   extractingPoster: {
     width: 160,
     height: 220,
-    borderRadius: 8,
+    borderRadius: RADII.md,
     marginBottom: 8,
   },
   extractingTitle: {
@@ -428,7 +429,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     borderWidth: StyleSheet.hairlineWidth,
     marginTop: 4,
   },
@@ -466,7 +467,7 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     paddingVertical: 12,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },

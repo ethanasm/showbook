@@ -28,7 +28,8 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Link, useRouter } from 'expo-router';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
+import { RADII } from '../../lib/theme-utils';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
@@ -217,7 +218,18 @@ export default function ShowsScreen(): React.JSX.Element {
   // the web /upcoming + /logbook split. Mobile keeps the single tab so
   // the 5-tab budget stays intact (per the IA cleanup plan); the
   // segmented control is the in-screen substitute.
-  const [stateBucket, setStateBucket] = React.useState<'upcoming' | 'past'>('past');
+  //
+  // `?bucket=upcoming|past` lets other screens (home page section
+  // arrows) deep-link straight to the right segment.
+  const params = useLocalSearchParams<{ bucket?: string }>();
+  const initialBucket: 'upcoming' | 'past' =
+    params.bucket === 'upcoming' ? 'upcoming' : 'past';
+  const [stateBucket, setStateBucket] = React.useState<'upcoming' | 'past'>(initialBucket);
+  React.useEffect(() => {
+    if (params.bucket === 'upcoming' || params.bucket === 'past') {
+      setStateBucket(params.bucket);
+    }
+  }, [params.bucket]);
   const [actionSheetFor, setActionSheetFor] = React.useState<{
     id: string;
     state: ShowState;
@@ -1181,7 +1193,7 @@ const styles = StyleSheet.create({
   monthNav: {
     flexDirection: 'row',
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 6,
+    borderRadius: RADII.md,
     overflow: 'hidden',
   },
   monthNavBtn: {
@@ -1209,7 +1221,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: StyleSheet.hairlineWidth,
-    borderRadius: 8,
+    borderRadius: RADII.md,
     overflow: 'hidden',
   },
   statTile: {
@@ -1233,7 +1245,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   card: {
-    borderRadius: 12,
+    borderRadius: RADII.lg,
     padding: 16,
     gap: 4,
   },
@@ -1273,7 +1285,7 @@ const styles = StyleSheet.create({
   },
   barTrack: {
     height: 6,
-    borderRadius: 3,
+    borderRadius: RADII.pill,
     overflow: 'hidden',
   },
   rankRow: {
@@ -1298,7 +1310,7 @@ const styles = StyleSheet.create({
   rankBarTrack: {
     width: 100,
     height: 8,
-    borderRadius: 2,
+    borderRadius: RADII.pill,
     overflow: 'hidden',
   },
   rankCount: {

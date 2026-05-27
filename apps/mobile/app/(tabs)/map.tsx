@@ -41,6 +41,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { Sheet } from '../../components/Sheet';
 import { useTheme } from '../../lib/theme';
+import { RADII } from '../../lib/theme-utils';
 import { trpc } from '../../lib/trpc';
 import { useAuth } from '../../lib/auth';
 import { useCachedQuery } from '../../lib/cache';
@@ -1204,13 +1205,13 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 11,
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     flexShrink: 0,
   },
-  filterDot: { width: 5, height: 5, borderRadius: 999 },
+  filterDot: { width: 5, height: 5, borderRadius: RADII.pill },
   filterLabel: {
     fontFamily: 'Geist Sans',
     fontSize: 11,
@@ -1233,7 +1234,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -1300,7 +1301,7 @@ const styles = StyleSheet.create({
   closeButton: {
     width: 28,
     height: 28,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -1359,7 +1360,7 @@ const styles = StyleSheet.create({
   kindDot: {
     width: 6,
     height: 6,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     marginTop: 4,
   },
   visitArtist: {
