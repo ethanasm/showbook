@@ -19,12 +19,14 @@ const RN_STUB = path.join(STUB_DIR, '_rn-stub.cjs');
 const ICON_STUB = path.join(STUB_DIR, '_icons-stub.cjs');
 const SAFE_AREA_STUB = path.join(STUB_DIR, '_safe-area-stub.cjs');
 const SECURE_STORE_STUB = path.join(STUB_DIR, '_secure-store-stub.cjs');
+const REANIMATED_STUB = path.join(STUB_DIR, '_reanimated-stub.cjs');
 
 const REPLACEMENTS = new Map([
   ['react-native', RN_STUB],
   ['lucide-react-native', ICON_STUB],
   ['react-native-safe-area-context', SAFE_AREA_STUB],
   ['expo-secure-store', SECURE_STORE_STUB],
+  ['react-native-reanimated', REANIMATED_STUB],
 ]);
 
 const origResolve = Module._resolveFilename;
