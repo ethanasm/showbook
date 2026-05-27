@@ -1,4 +1,4 @@
-import PgBoss from 'pg-boss';
+import { PgBoss, type StopOptions } from 'pg-boss';
 import { child } from '@showbook/observability';
 
 const log = child({ component: 'jobs.boss' });
@@ -8,16 +8,16 @@ let started = false;
 
 export function getBoss(): PgBoss {
   if (!boss) {
-    // pg-boss v10 ignores constructor-level retry / expiration options
-    // when queues are created via `createQueue` — those land on the
-    // queue row at INSERT time and the constructor values never reach
-    // them (plans.js, create_queue function). Per-queue retry/expire
-    // options live in `registry.ts` (`QUEUE_OPTIONS`); only options
-    // that genuinely apply at the boss level belong here.
+    // pg-boss v12 removed the boss-level `archiveCompletedAfterSeconds`
+    // / `deleteAfterDays` knobs along with the archive table itself;
+    // retention is now per-queue via `deleteAfterSeconds` (default 7 d,
+    // which matches what we used to set). Per-queue retry / expire
+    // options live in `registry.ts` (`QUEUE_OPTIONS`) because
+    // constructor-level values don't reach queues created via
+    // `createQueue` (plans.js create_queue inserts the queue row from
+    // the options arg).
     boss = new PgBoss({
       connectionString: process.env.DATABASE_URL!,
-      archiveCompletedAfterSeconds: 86400,
-      deleteAfterDays: 7,
     });
   }
   return boss;
@@ -31,7 +31,7 @@ export async function startBoss(): Promise<PgBoss> {
   return b;
 }
 
-export async function stopBoss(options?: PgBoss.StopOptions): Promise<void> {
+export async function stopBoss(options?: StopOptions): Promise<void> {
   if (boss) {
     await boss.stop(options);
     boss = null;

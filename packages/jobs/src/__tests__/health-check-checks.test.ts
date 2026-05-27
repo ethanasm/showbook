@@ -278,7 +278,7 @@ describe('checkMissedSchedules', () => {
     // Mirror Drizzle's `DrizzleQueryError`: wrapper message is opaque,
     // the actual SQLSTATE + message live on .cause.
     class FakeDrizzleErr extends Error {
-      cause: unknown;
+      override cause: unknown;
       constructor(message: string, cause: unknown) {
         super(message);
         this.cause = cause;

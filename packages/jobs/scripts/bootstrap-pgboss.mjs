@@ -8,7 +8,7 @@
  * once and stop. The schema is owned by pg-boss; subsequent runs
  * (re-using a DB) are no-ops.
  */
-import PgBoss from 'pg-boss';
+import { PgBoss } from 'pg-boss';
 
 const url = process.env.DATABASE_URL;
 if (!url) {

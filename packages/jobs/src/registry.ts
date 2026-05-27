@@ -1,4 +1,4 @@
-import PgBoss from 'pg-boss';
+import { PgBoss, type Job, type WorkHandler } from 'pg-boss';
 import { child, withTrace, flushObservability } from '@showbook/observability';
 import {
   runDiscoverIngest,
@@ -135,7 +135,7 @@ const SCHEDULE_TZ = { tz: 'America/New_York' } as const;
  */
 async function runJob<T = unknown>(
   jobName: string,
-  job: PgBoss.Job<T>,
+  job: Job<T>,
   fn: () => Promise<unknown>,
 ): Promise<void> {
   const child = log.child({ job: jobName, jobId: job.id });
@@ -191,11 +191,11 @@ type SummaryPayload = { event: string; msg: string } & Record<string, unknown>;
  */
 function defineJobHandler<TData = unknown, TResult = unknown>(spec: {
   name: string;
-  run: (job: PgBoss.Job<TData>) => Promise<TResult>;
+  run: (job: Job<TData>) => Promise<TResult>;
   summary?: (result: TResult) => SummaryPayload;
-  skipWhen?: (job: PgBoss.Job<TData>) => boolean;
-}): PgBoss.WorkHandler<TData> {
-  return async (jobs: PgBoss.Job<TData>[]) => {
+  skipWhen?: (job: Job<TData>) => boolean;
+}): WorkHandler<TData> {
+  return async (jobs: Job<TData>[]) => {
     for (const job of jobs) {
       if (spec.skipWhen?.(job)) continue;
       await runJob(spec.name, job, async () => {
@@ -210,12 +210,12 @@ function defineJobHandler<TData = unknown, TResult = unknown>(spec: {
   };
 }
 
-// `PgBoss.WorkHandler<T>` is invariant in `T`, so a table of mixed
+// `WorkHandler<T>` is invariant in `T`, so a table of mixed
 // per-job-data shapes can't tighten the storage type beyond `any` — we
 // rely on the per-entry `defineJobHandler` call to keep `run`/`summary`
 // type-safe inside each entry.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyWorkHandler = PgBoss.WorkHandler<any>;
+type AnyWorkHandler = WorkHandler<any>;
 
 type JobEntry = {
   name: string;

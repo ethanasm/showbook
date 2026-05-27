@@ -23,7 +23,7 @@
     "@showbook/scrapers": "workspace:*",
     "@showbook/shared": "workspace:*",
     "drizzle-orm": "^0.45.2",
-    "pg-boss": "^10.1.0",
+    "pg-boss": "^12.18.2",
     "resend": "^6.12.4"
   },
   "devDependencies": {
