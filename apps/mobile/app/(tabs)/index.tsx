@@ -441,19 +441,23 @@ function Section({
   hrefA11yLabel?: string;
 }): React.JSX.Element {
   const { tokens } = useTheme();
+  const router = useRouter();
   const labelStyle = [styles.sectionLabel, { color: tokens.colors.muted }];
+  // Drive navigation via `router.push` rather than `<Link asChild>`. On
+  // web, Link wraps the Pressable in an `<a>` and strips the
+  // Pressable's `flexDirection: 'row'`, which dropped the chevron onto
+  // its own line below the label. The Pressable owns the row layout.
   const header = href ? (
-    <Link href={href} asChild>
-      <Pressable
-        accessibilityRole="link"
-        accessibilityLabel={hrefA11yLabel ?? `See all ${title}`}
-        hitSlop={8}
-        style={({ pressed }) => [styles.sectionHeaderRow, pressed && styles.sectionHeaderPressed]}
-      >
-        <Text style={labelStyle}>{title.toUpperCase()}</Text>
-        <ChevronRight size={16} color={tokens.colors.faint} strokeWidth={2} />
-      </Pressable>
-    </Link>
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={hrefA11yLabel ?? `See all ${title}`}
+      hitSlop={8}
+      onPress={() => router.push(href)}
+      style={({ pressed }) => [styles.sectionHeaderRow, pressed && styles.sectionHeaderPressed]}
+    >
+      <Text style={[labelStyle, styles.sectionLabelInRow]}>{title.toUpperCase()}</Text>
+      <ChevronRight size={14} color={tokens.colors.faint} strokeWidth={2.25} />
+    </Pressable>
   ) : (
     <Text style={labelStyle}>{title.toUpperCase()}</Text>
   );
@@ -508,8 +512,14 @@ const styles = StyleSheet.create({
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingRight: 20,
+    alignSelf: 'flex-start',
+    gap: 4,
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
+  sectionLabelInRow: {
+    paddingHorizontal: 0,
+    paddingBottom: 0,
   },
   sectionHeaderPressed: {
     opacity: 0.6,

@@ -110,22 +110,9 @@ const nextConfig: NextConfig = {
     // node_modules at runtime.
     "unpdf",
   ],
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      config.externals.push(
-        "sharp",
-        "playwright",
-        "playwright-core",
-        "chromium-bidi",
-        "pino",
-        "pino-pretty",
-        "thread-stream",
-        "@axiomhq/pino",
-        "unpdf",
-      );
-    }
-    return config;
-  },
+  // Next 16 defaults to Turbopack; the previous `webpack(config, { isServer })`
+  // hook was a stale duplicate of `serverExternalPackages` above, so dropping
+  // it lets the Turbopack build proceed.
 };
 
 export default nextConfig;
