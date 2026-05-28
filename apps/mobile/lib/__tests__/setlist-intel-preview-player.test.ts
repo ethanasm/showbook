@@ -221,3 +221,64 @@ describe('NoopPlaybackDriver', () => {
     assert.equal(driver.stops, 1);
   });
 });
+
+describe('PreviewPlayerController full-track driver branch', () => {
+  it('hasFullTrackDriver flips when one is set or cleared', () => {
+    const { controller } = makeController();
+    assert.equal(controller.hasFullTrackDriver(), false);
+    controller.setFullTrackDriver({
+      play: async () => undefined,
+      stop: async () => undefined,
+    });
+    assert.equal(controller.hasFullTrackDriver(), true);
+    controller.setFullTrackDriver(null);
+    assert.equal(controller.hasFullTrackDriver(), false);
+  });
+
+  it('playFullTrack rejects when no driver is mounted', async () => {
+    const { controller } = makeController();
+    await assert.rejects(
+      () => controller.playFullTrack('2QsoVMTKj5m5kgztTOep98'),
+      /no full-track driver/,
+    );
+  });
+
+  it('playFullTrack hands the id to the driver and stops the preview driver first', async () => {
+    const { driver, controller } = makeController();
+    // Pre-play a preview so we can prove `playFullTrack` stops it.
+    await controller.play({
+      key: 'row-1',
+      previewUrl: 'https://preview.mp3',
+      spotifyTrackId: null,
+    });
+    assert.equal(driver.stops, 1, 'one stop from internal play()');
+    const calls: string[] = [];
+    controller.setFullTrackDriver({
+      play: async (trackId) => {
+        calls.push(trackId);
+      },
+      stop: async () => undefined,
+    });
+    await controller.playFullTrack('2QsoVMTKj5m5kgztTOep98');
+    assert.deepEqual(calls, ['2QsoVMTKj5m5kgztTOep98']);
+    // SDK playback runs in Spotify, not in-app — controller state
+    // stays idle so the mini-player doesn't fight the SDK for the
+    // active row.
+    assert.equal(controller.getState().currentTrackKey, null);
+    assert.equal(driver.stops, 2, 'preview driver stopped before SDK play');
+  });
+
+  it('playFullTrack propagates driver rejections so the caller can fall through', async () => {
+    const { controller } = makeController();
+    controller.setFullTrackDriver({
+      play: async () => {
+        throw new Error('SDK not connected');
+      },
+      stop: async () => undefined,
+    });
+    await assert.rejects(
+      () => controller.playFullTrack('2QsoVMTKj5m5kgztTOep98'),
+      /SDK not connected/,
+    );
+  });
+});

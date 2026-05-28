@@ -1,0 +1,9 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": {
+    "modules": ["ShowbookSpotifyModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.showbookspotify.ShowbookSpotifyModule"]
+  }
+}

@@ -55,6 +55,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { PendingWritesDrawer } from '../components/PendingWritesDrawer';
 import { PreviewMiniPlayer } from '../components/PreviewMiniPlayer';
 import { PreviewPlayerProvider } from '@/lib/preview-player-provider';
+import { SpotifySdkMount } from '../components/SpotifySdkMount';
 import { readAndParsePkpassUri } from '@/lib/wallet/read-pkpass-uri';
 
 // Keep the splash screen up until fonts are ready. Errors here are
@@ -93,6 +94,16 @@ export default function RootLayout(): React.JSX.Element {
                     <NetworkProvider>
                       <OfflineBridge>
                         <PreviewPlayerProvider>
+                          {/*
+                           * Premium-gated mount of the native Spotify
+                           * App Remote SDK. Renders nothing; registers
+                           * a `FullTrackDriver` on the preview-player
+                           * controller once `spotify.connectionStatus`
+                           * reports `connected + product === premium`.
+                           * Free / disconnected / no-app users skip
+                           * this entirely and tap → deep-link instead.
+                           */}
+                          <SpotifySdkMount />
                           <BannerHost />
                           <OfflineBanner />
                           <WalletShareBridge />

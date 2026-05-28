@@ -1,0 +1,14 @@
+{
+  "name": "showbook-spotify-sdk",
+  "version": "0.1.0",
+  "description": "Showbook's Expo Module wrapper around the Spotify iOS SDK (SPTAppRemote v5.0.1) and Spotify Android SDK (AppRemote v0.8.0). Exposes connect/play/pause/disconnect for the in-app preview player driver chain — Premium-only for on-demand playback, Free users get the shuffle fallback the App Remote SDK itself enforces.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "private": true,
+  "dependencies": {},
+  "peerDependencies": {
+    "expo-modules-core": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

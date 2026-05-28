@@ -281,6 +281,16 @@ jobs:
           # crashes on the Shows tab with "Invalid URL: /api/trpc/..."
           # (React Native's fetch rejects relative URLs).
           EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
+          # Spotify App Remote SDK client id — consumed at prebuild
+          # time by `apps/mobile/modules/showbook-spotify-sdk/plugin/
+          # index.js` which writes it into Info.plist (iOS) and
+          # strings.xml (Android). Unset is non-fatal: the native side
+          # rejects `connect()` with ERR_NO_CLIENT_ID and the
+          # `SpotifySdkMount` short-circuit leaves the rest of the app
+          # working. The CI runner still needs `com.spotify.music`
+          # installed on the AVD for `play()` to do anything; one-time
+          # setup tracked in `scripts/setup-runner-android.sh`.
+          EXPO_PUBLIC_SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
         shell: bash
         run: |
           set -euo pipefail

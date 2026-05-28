@@ -50,6 +50,10 @@ const WEB_SHIMS = {
   'expo-notifications': path.resolve(projectRoot, 'web-shims/expo-notifications.js'),
   'expo-haptics': path.resolve(projectRoot, 'web-shims/expo-haptics.js'),
   'react-native-maps': path.resolve(projectRoot, 'web-shims/react-native-maps.js'),
+  'showbook-spotify-sdk': path.resolve(
+    projectRoot,
+    'web-shims/showbook-spotify-sdk.js',
+  ),
 };
 
 const defaultResolveRequest = config.resolver.resolveRequest;
