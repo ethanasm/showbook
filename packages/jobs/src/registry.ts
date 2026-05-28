@@ -17,6 +17,7 @@ import { runBackfillVenuePhotos } from './backfill-venue-photos';
 import { runBackfillShowCoverImages } from './backfill-show-cover-images';
 import { runBackfillShowTicketUrls } from './backfill-show-ticket-urls';
 import { runPruneOrphanCatalog } from './prune-orphan-catalog';
+import { runPruneOrphanMedia } from './prune-orphan-media';
 import { runPrunePastAnnouncements } from './prune-past-announcements';
 import { runHealthCheck } from './health-check';
 import {
@@ -54,6 +55,7 @@ export const JOBS = {
   BACKFILL_SHOW_COVER_IMAGES: 'backfill/show-cover-images',
   BACKFILL_SHOW_TICKET_URLS: 'backfill/show-ticket-urls',
   PRUNE_ORPHAN_CATALOG: 'prune/orphan-catalog',
+  PRUNE_ORPHAN_MEDIA: 'prune/orphan-media',
   PRUNE_PAST_ANNOUNCEMENTS: 'prune/past-announcements',
   HEALTH_CHECK: 'health/morning-check',
   SETLIST_CORPUS_FILL: 'enrichment/setlist-corpus-fill',
@@ -261,6 +263,29 @@ const JOBS_TABLE: JobEntry[] = [
         announcements: r.announcements,
         venues: r.venues,
         performers: r.performers,
+      }),
+    }),
+  },
+  // Sweep terminal-but-stuck media_assets rows (status='failed' or
+  // status='pending' >24h) and their R2 blobs. Slotted at 02:45 ET so
+  // the orphan-catalog sweep at 02:30 ET has already settled — that
+  // sweep doesn't touch media_assets directly, but a show-delete it
+  // performs cascades into pending media rows whose blobs we then
+  // collect here.
+  {
+    name: JOBS.PRUNE_ORPHAN_MEDIA,
+    queueOptions: LONG_BATCH_CRON,
+    schedule: '45 2 * * *',
+    handler: defineJobHandler({
+      name: JOBS.PRUNE_ORPHAN_MEDIA,
+      run: () => runPruneOrphanMedia(),
+      summary: (r) => ({
+        event: 'prune.orphan_media.summary',
+        msg: 'Orphan media prune complete',
+        scanned: r.scanned,
+        rowsDeleted: r.rowsDeleted,
+        objectsDeleted: r.objectsDeleted,
+        objectDeleteFailures: r.objectDeleteFailures,
       }),
     }),
   },

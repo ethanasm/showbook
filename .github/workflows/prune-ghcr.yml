@@ -1,0 +1,22 @@
+name: Prune GHCR
+
+on:
+  schedule:
+    - cron: '0 6 * * 0'
+  workflow_dispatch:
+
+jobs:
+  prune:
+    name: Delete old container versions
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Prune showbook-web
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: showbook-web
+          package-type: container
+          min-versions-to-keep: 25
+          delete-only-untagged-versions: false
+          ignore-versions: '^latest$'
