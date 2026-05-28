@@ -24,10 +24,10 @@ export interface PickFestivalImageResult {
 }
 
 export async function pickFestivalImage(): Promise<PickFestivalImageResult> {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
-    return { image: null, cancelled: false, permissionDenied: true };
-  }
+  // The system photo picker on Android 13+ / iOS 14+ owns the picker UI
+  // and only returns the URI the user selected, so the legacy library
+  // permission isn't needed. See `lib/media/picker.ts` for the same
+  // rationale on the multi-select path.
 
   const res = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],

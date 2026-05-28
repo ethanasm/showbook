@@ -272,9 +272,9 @@ export default function FirstRunRegion(): React.JSX.Element {
 
   return (
     <FirstRunStep
-      step={4}
-      total={5}
-      eyebrow="STEP 4 OF 5"
+      step={3}
+      total={4}
+      eyebrow="STEP 3 OF 4"
       title={
         <Text style={[heroTitleStyle, { color: colors.ink, textAlign: 'center' }]}>
           Your <Text style={{ color: colors.accent }}>home base.</Text>

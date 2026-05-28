@@ -90,9 +90,9 @@ export default function FirstRunGmail(): React.JSX.Element {
 
   return (
     <FirstRunStep
-      step={5}
-      total={5}
-      eyebrow="STEP 5 OF 5 · OPTIONAL"
+      step={4}
+      total={4}
+      eyebrow="STEP 4 OF 4 · OPTIONAL"
       title={
         <Text style={[heroTitleStyle, { color: colors.ink, textAlign: 'center' }]}>
           Pull in <Text style={{ color: colors.accent }}>past tickets.</Text>

@@ -61,10 +61,13 @@ export interface PickResult {
 }
 
 export async function pickMediaFromLibrary(): Promise<PickResult> {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
-    return { files: [], cancelled: false, permissionDenied: true };
-  }
+  // No library-wide permission request: on Android 13+ the system photo
+  // picker handles selection inside the OS and returns only the items
+  // the user explicitly chose, so READ_MEDIA_* would be redundant.
+  // expo-image-picker v15 routes launchImageLibraryAsync through the
+  // system picker on Android 13+ and through the equivalent PHPicker on
+  // iOS 14+. Both surfaces own the picker UI; the app never enumerates
+  // the underlying library.
   const res = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images', 'videos'],
     allowsMultipleSelection: true,
