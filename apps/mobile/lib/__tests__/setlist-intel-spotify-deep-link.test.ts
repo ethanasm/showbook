@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   buildNativeDeepLink,
   buildSpotifyOpenPlan,
+  buildSpotifyTrackOpenPlan,
   buildWebUrl,
   extractPlaylistId,
 } from '../setlist-intel/spotify-deep-link';
@@ -87,5 +88,37 @@ describe('buildSpotifyOpenPlan', () => {
     const plan = buildSpotifyOpenPlan(null);
     assert.equal(plan.primary, '');
     assert.equal(plan.fallback, '');
+  });
+});
+
+describe('buildSpotifyTrackOpenPlan', () => {
+  it('returns the native + web plan for a real track id', () => {
+    const plan = buildSpotifyTrackOpenPlan('2QsoVMTKj5m5kgztTOep98');
+    assert.deepEqual(plan, {
+      primary: 'spotify:track:2QsoVMTKj5m5kgztTOep98',
+      fallback: 'https://open.spotify.com/track/2QsoVMTKj5m5kgztTOep98',
+    });
+  });
+
+  it('trims surrounding whitespace', () => {
+    const plan = buildSpotifyTrackOpenPlan('  abc123  ');
+    assert.equal(plan?.primary, 'spotify:track:abc123');
+  });
+
+  it('returns null for the __none__ sentinel from the resolver cache', () => {
+    assert.equal(buildSpotifyTrackOpenPlan('__none__'), null);
+  });
+
+  it('returns null for null / undefined / empty', () => {
+    assert.equal(buildSpotifyTrackOpenPlan(null), null);
+    assert.equal(buildSpotifyTrackOpenPlan(undefined), null);
+    assert.equal(buildSpotifyTrackOpenPlan(''), null);
+    assert.equal(buildSpotifyTrackOpenPlan('   '), null);
+  });
+
+  it('refuses non-alphanumeric ids — guards against URL injection', () => {
+    assert.equal(buildSpotifyTrackOpenPlan('abc/../foo'), null);
+    assert.equal(buildSpotifyTrackOpenPlan('abc?si=x'), null);
+    assert.equal(buildSpotifyTrackOpenPlan('javascript:alert(1)'), null);
   });
 });
