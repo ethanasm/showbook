@@ -68,6 +68,14 @@ const UIManager = {
   hasViewManagerConfig: () => null,
 };
 
+// Minimal Keyboard stub: components register show/hide listeners at
+// mount; the stub returns a removable subscription so the effect's
+// cleanup path doesn't crash. Tests don't simulate keyboard events.
+const Keyboard = {
+  addListener: () => ({ remove() {} }),
+  dismiss() {},
+};
+
 module.exports = {
   View,
   Text,
@@ -86,5 +94,6 @@ module.exports = {
   Appearance,
   Dimensions,
   UIManager,
+  Keyboard,
   useWindowDimensions,
 };
