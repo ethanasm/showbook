@@ -73,7 +73,7 @@ interface ScheduledExpectation {
   /** Human-readable label for the scheduled run. */
   label: string;
   /** pg-boss queue name — must match a value in `JOBS` (registry.ts).
-   *  Used to look up firings in `pgboss.job` / `pgboss.archive`. */
+   *  Used to look up firings in `pgboss.job`. */
   queueName: string;
   /** Lookback window in hours. Defaults to 24 for daily jobs. Weekly
    *  jobs widen this so a single missed cron firing (e.g. a deploy that
@@ -111,15 +111,18 @@ interface ScheduleLatestRow {
 }
 
 /**
- * Source of truth: `pgboss.job` (live) and `pgboss.archive` (completed
- * jobs roll off `pgboss.job` after ~12h). For every expected scheduled
- * queue, look up the most recent firing in either table and flag those
- * whose latest run is outside the per-schedule window. This replaces the
- * previous Axiom-log-based check, which produced false positives when
- * per-handler logs were lost in transit (the `job.start` log made it but
- * the `*.summary` line did not). The DB-backed check answers the
- * narrower question — "did pg-boss fire the cron?" — independent of
- * whether the resulting log line reached Axiom.
+ * Source of truth: `pgboss.job`. pg-boss v10 removed the separate
+ * `pgboss.archive` table — completed and failed jobs now stay in
+ * `pgboss.job` (subject to the per-queue `retention_seconds`, defaulting
+ * to 14 days) until the maintenance loop deletes them. The old UNION
+ * against `pgboss.archive` therefore raised `relation "pgboss.archive"
+ * does not exist` (SQLSTATE 42P01) on every health-check run after the
+ * v12 upgrade, surfacing as a `missed_schedules` warn on the daily
+ * health email. For every expected scheduled queue, look up the most
+ * recent firing and flag those whose latest run is outside the
+ * per-schedule window. The DB-backed check answers the narrower
+ * question — "did pg-boss fire the cron?" — independent of whether the
+ * resulting log line reached Axiom.
  */
 export async function checkMissedSchedules(
   now: Date = new Date(),
@@ -163,15 +166,8 @@ export async function checkMissedSchedules(
   try {
     const result = await db.execute(sql`
       SELECT name, MAX(created_on) AS latest
-      FROM (
-        SELECT name, created_on
-        FROM pgboss.job
-        WHERE name = ANY(${queueNamesSql}) AND created_on > ${sinceThresholdIso}
-        UNION ALL
-        SELECT name, created_on
-        FROM pgboss.archive
-        WHERE name = ANY(${queueNamesSql}) AND created_on > ${sinceThresholdIso}
-      ) j
+      FROM pgboss.job
+      WHERE name = ANY(${queueNamesSql}) AND created_on > ${sinceThresholdIso}
       GROUP BY name
     `);
     rows =
@@ -180,7 +176,7 @@ export async function checkMissedSchedules(
   } catch (err) {
     log.error(
       { err, event: 'health.check.missed_schedules.query_failed' },
-      'pgboss.job/archive query failed',
+      'pgboss.job query failed',
     );
     return {
       name: 'missed_schedules',

@@ -97,6 +97,8 @@ export {
   replacePlaylistItems,
   diffScopes,
   getAppAccessToken,
+  invalidateAppAccessToken,
+  withAppToken,
   getArtistAlbums,
   getAlbumTracks,
 } from './spotify';

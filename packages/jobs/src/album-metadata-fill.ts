@@ -26,6 +26,7 @@ import {
   getAlbumTracks,
   getArtistAlbums,
   SpotifyError,
+  withAppToken,
 } from '@showbook/api';
 import { child } from '@showbook/observability';
 
@@ -55,9 +56,13 @@ export async function runAlbumMetadataFill(): Promise<AlbumMetadataFillSummary> 
   let albumsUpserted = 0;
   let failed = 0;
 
-  let accessToken: string;
+  // Probe the app-level token once up front so a credentials misconfig
+  // surfaces as `token_failed` (and skips the cron) rather than as a
+  // per-performer `performer_failed` cascade. The per-call token is
+  // sourced inside `withAppToken` below so the cron survives mid-loop
+  // expiry of a cached token.
   try {
-    accessToken = await getAppAccessToken();
+    await getAppAccessToken();
   } catch (err) {
     log.error(
       { event: 'album_metadata_fill.token_failed', err },
@@ -70,16 +75,18 @@ export async function runAlbumMetadataFill(): Promise<AlbumMetadataFillSummary> 
     if (!performer.spotifyArtistId) continue;
     attempted += 1;
     try {
-      const fetched = await getArtistAlbums(
-        performer.spotifyArtistId,
-        accessToken,
-        { limit: ALBUMS_PER_PERFORMER },
+      const fetched = await withAppToken((token) =>
+        getArtistAlbums(performer.spotifyArtistId!, token, {
+          limit: ALBUMS_PER_PERFORMER,
+        }),
       );
       if (fetched.length === 0) continue;
       let perPerformerUpserts = 0;
       for (const album of fetched) {
         try {
-          const tracks = await getAlbumTracks(album.id, accessToken);
+          const tracks = await withAppToken((token) =>
+            getAlbumTracks(album.id, token),
+          );
           if (tracks.trackIds.length === 0) continue;
           await db
             .insert(albums)

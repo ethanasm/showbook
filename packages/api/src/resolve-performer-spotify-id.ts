@@ -1,7 +1,12 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { db, performers } from '@showbook/db';
 import { child } from '@showbook/observability';
-import { getAppAccessToken, searchSpotifyArtist, SpotifyError } from './spotify';
+import {
+  getAppAccessToken,
+  searchSpotifyArtist,
+  SpotifyError,
+  withAppToken,
+} from './spotify';
 import { isUniqueViolation } from './venue-matcher';
 
 const log = child({ component: 'api.resolve-performer-spotify-id' });
@@ -48,9 +53,12 @@ export async function resolvePerformerSpotifyId(
     };
   }
 
-  let token: string;
+  // Probe the app-level token up front so a credentials misconfig
+  // surfaces as `token_failed`. The per-call token is sourced inside
+  // `withAppToken` so a 401 mid-batch (cached token expired Spotify-side)
+  // retries with a fresh token instead of failing the lookup.
   try {
-    token = await getAppAccessToken();
+    await getAppAccessToken();
   } catch (err) {
     log.error(
       { err, event: 'performer.spotify_id.token_failed', performerId },
@@ -61,7 +69,7 @@ export async function resolvePerformerSpotifyId(
 
   let hit;
   try {
-    hit = await searchSpotifyArtist(token, performerName);
+    hit = await withAppToken((token) => searchSpotifyArtist(token, performerName));
   } catch (err) {
     log.error(
       {

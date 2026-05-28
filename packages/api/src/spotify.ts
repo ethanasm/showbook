@@ -236,9 +236,10 @@ export async function refreshSpotifyToken(
 
 /**
  * Module-level cache for the app-level access token. Spotify hands out
- * 1-hour tokens for the `client_credentials` grant; we cache for 50
- * minutes so the next refresh fires before expiry. The token is
- * harmless if leaked — it grants only public catalog reads.
+ * ~1-hour tokens for the `client_credentials` grant. The cache `expiresAt`
+ * is derived from Spotify's `expires_in` minus a small safety margin
+ * (clock skew + the time it takes a long loop to reach its last call).
+ * The token is harmless if leaked — it grants only public catalog reads.
  */
 let cachedAppToken: { token: string; expiresAt: number } | null = null;
 
@@ -249,7 +250,6 @@ let cachedAppToken: { token: string; expiresAt: number } | null = null;
  * any user's refresh token.
  */
 export async function getAppAccessToken(): Promise<string> {
-  const APP_TOKEN_TTL_MS = 50 * 60 * 1000;
   if (cachedAppToken && cachedAppToken.expiresAt > Date.now()) {
     return cachedAppToken.token;
   }
@@ -271,11 +271,57 @@ export async function getAppAccessToken(): Promise<string> {
     );
   }
   const data = (await res.json()) as SpotifyTokenResponse;
+  // Trust Spotify's `expires_in` minus a 60s safety margin instead of
+  // a hard-coded 50-minute TTL. The hard-coded TTL was reused across
+  // runs of the album-metadata-fill cron and could outlive the actual
+  // Spotify-side expiry by ~10 minutes when a job started near the
+  // tail of the cached window, surfacing as a wave of 401s mid-loop.
+  const ttlMs = Math.max(60_000, (data.expires_in - 60) * 1000);
   cachedAppToken = {
     token: data.access_token,
-    expiresAt: Date.now() + APP_TOKEN_TTL_MS,
+    expiresAt: Date.now() + ttlMs,
   };
   return data.access_token;
+}
+
+/**
+ * Drop the cached app-level token so the next `getAppAccessToken()` call
+ * re-fetches. Use after observing a 401 from a Spotify endpoint that took
+ * an app-level token — the cache entry may still be within its computed
+ * TTL but Spotify already considers the underlying token invalid (early
+ * server-side expiry, key rotation, etc.).
+ */
+export function invalidateAppAccessToken(): void {
+  cachedAppToken = null;
+}
+
+/**
+ * Run `fn` with a fresh app-level token, retrying once on a 401 after
+ * dropping the cache. The retry covers two cases that cropped up in the
+ * album-metadata-fill cron: (1) a long loop that picked up a cached
+ * token near its tail and outlived the Spotify-side expiry, (2) Spotify
+ * returning the cached token to early server-side expiry. Other Spotify
+ * errors (4xx/5xx/network) bubble unchanged so per-call handling and
+ * error logs stay accurate.
+ */
+export async function withAppToken<T>(
+  fn: (accessToken: string) => Promise<T>,
+): Promise<T> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const token = await getAppAccessToken();
+    try {
+      return await fn(token);
+    } catch (err) {
+      if (attempt === 0 && err instanceof SpotifyError && err.status === 401) {
+        invalidateAppAccessToken();
+        continue;
+      }
+      throw err;
+    }
+  }
+  // The for-loop above always returns or throws; this is unreachable
+  // but TypeScript can't see that.
+  throw new SpotifyError('withAppToken: exhausted retries', 0);
 }
 
 export interface SpotifyAlbum {

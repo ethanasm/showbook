@@ -269,8 +269,8 @@ describe('checkMissedSchedules', () => {
         typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v),
     );
     assert.ok(
-      isoValues.length >= 2,
-      `expected two ISO timestamp params, got ${isoValues.length}`,
+      isoValues.length >= 1,
+      `expected an ISO timestamp param, got ${isoValues.length}`,
     );
   });
 
@@ -286,12 +286,12 @@ describe('checkMissedSchedules', () => {
     }
     EXECUTE.shouldThrow = new FakeDrizzleErr(
       'Failed query: SELECT … params: …',
-      { code: '42P01', message: 'relation "pgboss.archive" does not exist' },
+      { code: '57P03', message: 'cannot connect now' },
     );
     const r = await checks.checkMissedSchedules(tuesdayMorning);
     assert.equal(r.status, 'warn');
-    assert.match(r.summary, /relation "pgboss.archive" does not exist/);
-    assert.match(r.summary, /42P01/);
+    assert.match(r.summary, /cannot connect now/);
+    assert.match(r.summary, /57P03/);
   });
 });
 
