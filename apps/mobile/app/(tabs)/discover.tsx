@@ -61,6 +61,7 @@ import { KindBadge } from '../../components/KindBadge';
 import { TicketmasterMark } from '../../components/BrandIcons';
 import { UpcomingAnnouncementActionSheet } from '../../components/UpcomingAnnouncementActionSheet';
 import { FilterChipsRow, type FilterGroup } from '../../components/FilterChipsRow';
+import { AddToDiscoverSheet } from '../../components/discover/AddToDiscoverSheet';
 import { useTheme, type Kind } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { useAuth } from '@/lib/auth';
@@ -171,6 +172,11 @@ export default function DiscoverScreen(): React.JSX.Element {
   const utils = trpc.useUtils();
   const [tab, setTab] = React.useState<DiscoverTab>('venues');
   const [selectedGroupId, setSelectedGroupId] = React.useState<string | null>(null);
+  // Controls the inline add-typeahead sheet that mirrors web's
+  // VenueSearchModal / FollowArtistSearch / RegionSearchModal. Stored
+  // as the target tab (or null) so the sheet body can stay rendered
+  // through the close animation against whichever tab opened it.
+  const [addSheetTab, setAddSheetTab] = React.useState<DiscoverTab | null>(null);
   // Secondary venue filter for the Regions tab — mirrors the web rail's
   // region → venue drill-down. Always reset when switching tabs or
   // regions so the chip row stays predictable.
@@ -455,6 +461,7 @@ export default function DiscoverScreen(): React.JSX.Element {
   const hasMore = remainingCount > 0;
 
   return (
+    <>
     <ScreenWrapper
       title="Discover"
       eyebrow="WHAT'S COMING UP"
@@ -479,6 +486,12 @@ export default function DiscoverScreen(): React.JSX.Element {
           selected={selectedGroupId}
           onSelect={setSelectedGroupId}
           totalCount={items.length}
+          leadingAction={{
+            label: addChipLabel(tab),
+            onPress: () => setAddSheetTab(tab),
+            testID: `discover-add-chip-${tab}`,
+            accessibilityLabel: addChipAccessibilityLabel(tab),
+          }}
         />
       )}
 
@@ -540,9 +553,7 @@ export default function DiscoverScreen(): React.JSX.Element {
           <EmptyForTab
             tab={tab}
             hasRegions={nearbyHasRegions}
-            onOpenVenues={() => router.push('/venues')}
-            onOpenArtists={() => router.push('/artists')}
-            onOpenMe={() => router.push('/me')}
+            onOpenAdd={(t) => setAddSheetTab(t)}
           />
         ) : (
           <>
@@ -594,6 +605,12 @@ export default function DiscoverScreen(): React.JSX.Element {
         )}
       </ScrollView>
     </ScreenWrapper>
+    <AddToDiscoverSheet
+      tab={addSheetTab ?? tab}
+      open={addSheetTab !== null}
+      onClose={() => setAddSheetTab(null)}
+    />
+    </>
   );
 }
 
@@ -716,15 +733,11 @@ function SummaryIcon({
 function EmptyForTab({
   tab,
   hasRegions,
-  onOpenVenues,
-  onOpenArtists,
-  onOpenMe,
+  onOpenAdd,
 }: {
   tab: DiscoverTab;
   hasRegions: boolean | null;
-  onOpenVenues: () => void;
-  onOpenArtists: () => void;
-  onOpenMe: () => void;
+  onOpenAdd: (tab: DiscoverTab) => void;
 }): React.JSX.Element {
   if (tab === 'venues') {
     return (
@@ -732,8 +745,8 @@ function EmptyForTab({
         <EmptyStateHero
           kind="venues"
           title="Follow a venue"
-          body="Follow a hall, theatre, or dive bar from its detail screen and its upcoming announcements land here as soon as they go on sale."
-          action={{ label: 'Open Venues', onPress: onOpenVenues }}
+          body="Search a hall, theatre, or dive bar and follow it — upcoming announcements land here as soon as they go on sale."
+          action={{ label: 'Search venues', onPress: () => onOpenAdd('venues') }}
         />
       </View>
     );
@@ -744,8 +757,8 @@ function EmptyForTab({
         <EmptyStateHero
           kind="artists"
           title="Follow an artist"
-          body="Follow an artist to see their tour announcements the moment they go on sale — Spotify import is the fastest way to seed your follow list."
-          action={{ label: 'Open Artists', onPress: onOpenArtists }}
+          body="Search for an artist and follow them to see their tour announcements the moment they go on sale."
+          action={{ label: 'Search artists', onPress: () => onOpenAdd('artists') }}
         />
       </View>
     );
@@ -755,9 +768,9 @@ function EmptyForTab({
       <View style={styles.emptyHeroWrap}>
         <EmptyStateHero
           kind="discover"
-          title="Set your region"
-          body="Add a region to surface nearby announcements and power your daily email digest. Up to five fit; start with the city you live in."
-          action={{ label: 'Open Settings', onPress: onOpenMe }}
+          title="Add a region"
+          body="Pick a city + radius to surface nearby announcements and power your daily email digest. Up to five fit; start with the city you live in."
+          action={{ label: 'Pick a city', onPress: () => onOpenAdd('regions') }}
         />
       </View>
     );
@@ -768,6 +781,18 @@ function EmptyForTab({
       subtitle="No new announcements in your saved regions yet. Check back after the next ingest."
     />
   );
+}
+
+function addChipLabel(tab: DiscoverTab): string {
+  if (tab === 'venues') return 'Follow venue';
+  if (tab === 'artists') return 'Follow artist';
+  return 'Add region';
+}
+
+function addChipAccessibilityLabel(tab: DiscoverTab): string {
+  if (tab === 'venues') return 'Follow a venue';
+  if (tab === 'artists') return 'Follow an artist';
+  return 'Add a region';
 }
 
 /**

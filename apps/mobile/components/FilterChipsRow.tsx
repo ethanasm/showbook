@@ -9,6 +9,7 @@
 
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Plus } from 'lucide-react-native';
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 
@@ -23,6 +24,13 @@ export interface FilterGroup {
   badgeText?: string;
 }
 
+export interface FilterChipsLeadingAction {
+  label: string;
+  onPress: () => void;
+  testID?: string;
+  accessibilityLabel?: string;
+}
+
 export function FilterChipsRow({
   groups,
   selected,
@@ -32,6 +40,7 @@ export function FilterChipsRow({
   showAll = true,
   variant = 'primary',
   testIdPrefix,
+  leadingAction,
 }: {
   groups: FilterGroup[];
   selected: string | null;
@@ -46,6 +55,10 @@ export function FilterChipsRow({
   /** `sub` renders a slightly tighter row used as a second-level filter. */
   variant?: 'primary' | 'sub';
   testIdPrefix?: string;
+  /** Action "+" chip rendered at the head of the row so it's visible
+   *  without horizontal scroll. Suppressed automatically when
+   *  `variant === 'sub'`. */
+  leadingAction?: FilterChipsLeadingAction;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -60,6 +73,33 @@ export function FilterChipsRow({
       style={styles.chipsScroll}
       testID={testIdPrefix ? `${testIdPrefix}-row` : undefined}
     >
+      {leadingAction && variant !== 'sub' ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={leadingAction.accessibilityLabel ?? leadingAction.label}
+          onPress={leadingAction.onPress}
+          testID={leadingAction.testID}
+          style={({ pressed }) => [
+            styles.chip,
+            {
+              backgroundColor: 'transparent',
+              borderColor: colors.accent,
+              opacity: pressed ? 0.7 : 1,
+            },
+          ]}
+        >
+          <Plus size={12} color={colors.accent} strokeWidth={2.5} />
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.chipLabel,
+              { color: colors.accent, fontWeight: '600' },
+            ]}
+          >
+            {leadingAction.label}
+          </Text>
+        </Pressable>
+      ) : null}
       {showAll ? (
         <FilterChip
           label={allLabel}
