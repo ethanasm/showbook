@@ -109,6 +109,20 @@ const config: ExpoConfig = {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#0C0C0C',
     },
+    // Strip the legacy library-wide read permissions from the autolinked
+    // manifest. expo-image-picker still declares them for Android <= 12
+    // compatibility, but Showbook's flow only invokes the system photo
+    // picker (Android 13+ PhotoPicker / iOS PHPicker), which returns
+    // URIs scoped to the user's explicit selection and doesn't need a
+    // library-wide grant. Play's Photo and Video Permissions policy
+    // rejects READ_MEDIA_* for one-time / infrequent attach flows like
+    // ours; blocking here keeps the manifest aligned with how the app
+    // actually behaves at runtime.
+    blockedPermissions: [
+      'android.permission.READ_MEDIA_IMAGES',
+      'android.permission.READ_MEDIA_VIDEO',
+      'android.permission.READ_EXTERNAL_STORAGE',
+    ],
     config: GOOGLE_MAPS_API_KEY
       ? { googleMaps: { apiKey: GOOGLE_MAPS_API_KEY } }
       : undefined,

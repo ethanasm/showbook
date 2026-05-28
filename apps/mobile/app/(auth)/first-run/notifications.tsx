@@ -24,7 +24,7 @@ export default function FirstRunNotifications(): React.JSX.Element {
   const [pending, setPending] = React.useState(false);
 
   const advance = React.useCallback(() => {
-    router.push('/(auth)/first-run/photos');
+    router.push('/(auth)/first-run/location');
   }, [router]);
 
   const onPrimary = React.useCallback(async () => {
@@ -45,8 +45,8 @@ export default function FirstRunNotifications(): React.JSX.Element {
   return (
     <FirstRunStep
       step={1}
-      total={5}
-      eyebrow="STEP 1 OF 5"
+      total={4}
+      eyebrow="STEP 1 OF 4"
       title={
         <Text style={[heroTitleStyle, { color: colors.ink, textAlign: 'center' }]}>
           Don&apos;t miss the <Text style={{ color: colors.accent }}>on-sale.</Text>

@@ -92,9 +92,9 @@ export default function FirstRunLocation(): React.JSX.Element {
 
   return (
     <FirstRunStep
-      step={3}
-      total={5}
-      eyebrow="STEP 3 OF 5"
+      step={2}
+      total={4}
+      eyebrow="STEP 2 OF 4"
       title={
         <Text style={[heroTitleStyle, { color: colors.ink, textAlign: 'center' }]}>
           Shows <Text style={{ color: colors.accent }}>near you.</Text>
