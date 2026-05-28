@@ -158,6 +158,20 @@ export function TrackPreviewButton({
     });
   };
 
+  // Try the full-track SDK if available + track id known. Returns true
+  // on success (Spotify is now playing in-app) so the caller can skip
+  // the preview / deep-link fallbacks. Mirrors web's `FullTrackDriver`
+  // call site at `apps/web/lib/preview-player.tsx:200`.
+  const tryFullTrack = async (trackId: string): Promise<boolean> => {
+    if (!ctx.controller.hasFullTrackDriver()) return false;
+    try {
+      await ctx.controller.playFullTrack(trackId);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const onPress = async () => {
     if (isActive) {
       await ctx.controller.stop();
@@ -165,9 +179,13 @@ export function TrackPreviewButton({
     }
     if (disabled) return;
 
-    // Fast paths: we already have either a preview URL or a track id
-    // cached (from the prefetched `trackPreviewsForShow` map or a prior
-    // mid-session resolve). Route immediately, no spinner.
+    // Fast paths: route immediately when something is cached. Fallback
+    // chain is SDK (Premium full-track) → preview URL (30s clip) →
+    // deep-link (Spotify app handoff for any other state with a known
+    // track id). `unavailable` is only set when every branch fails.
+    if (effectiveSpotifyId && (await tryFullTrack(effectiveSpotifyId))) {
+      return;
+    }
     if (effectivePreviewUrl) {
       await playPreview(effectivePreviewUrl, effectiveSpotifyId);
       return;
@@ -183,6 +201,9 @@ export function TrackPreviewButton({
     try {
       const next = await resolveMutation.mutateAsync({ showId, title });
       cacheResolved(next);
+      if (next.spotifyTrackId && (await tryFullTrack(next.spotifyTrackId))) {
+        return;
+      }
       if (next.previewUrl) {
         await playPreview(next.previewUrl, next.spotifyTrackId);
         return;

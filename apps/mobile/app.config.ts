@@ -151,6 +151,11 @@ const config: ExpoConfig = {
           'Showbook needs access to your camera so you can capture moments from shows you\'ve attended.',
       },
     ],
+    // Local Expo Module wrapping the Spotify App Remote SDK. The plugin
+    // injects `SpotifyClientID` into Info.plist, pins the SpotifyiOS
+    // pod, and declares `com.spotify.music` in `<queries>` for Android
+    // API 30+. Module source lives in `modules/showbook-spotify-sdk/`.
+    './modules/showbook-spotify-sdk/plugin/index.js',
   ],
   experiments: {
     typedRoutes: true,

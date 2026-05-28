@@ -36,6 +36,22 @@ export interface PlaybackDriver {
   dispose(): Promise<void>;
 }
 
+/**
+ * Optional full-track driver that plays a specific Spotify track id
+ * through an external runtime (Spotify App Remote SDK on mobile, Web
+ * Playback SDK on web). Mirrors `apps/web/lib/preview-player.tsx`'s
+ * `FullTrackDriver` shape so the controller's branching logic stays
+ * cross-platform-isomorphic. The controller consults this driver
+ * before falling back to the 30s preview URL — `play(spotifyTrackId)`
+ * either resolves (the SDK is connected, the user is Premium, the
+ * track id is in Spotify's catalog) or throws and the controller falls
+ * through to the deep-link / preview-URL path.
+ */
+export interface FullTrackDriver {
+  play(spotifyTrackId: string): Promise<void>;
+  stop(): Promise<void>;
+}
+
 export interface PreviewPlayerState {
   /** Key of the currently-playing row, or null if nothing is playing. */
   currentTrackKey: string | null;
@@ -69,6 +85,7 @@ export interface PreviewPlayerControllerOptions {
   onStateChange?: (state: PreviewPlayerState) => void;
 }
 
+
 const INITIAL_STATE: PreviewPlayerState = {
   currentTrackKey: null,
   loadingKey: null,
@@ -78,6 +95,7 @@ const INITIAL_STATE: PreviewPlayerState = {
 
 export class PreviewPlayerController {
   private driver: PlaybackDriver;
+  private fullTrackDriver: FullTrackDriver | null = null;
   private onStateChange?: (state: PreviewPlayerState) => void;
   private state: PreviewPlayerState = { ...INITIAL_STATE };
 
@@ -88,6 +106,22 @@ export class PreviewPlayerController {
 
   getState(): PreviewPlayerState {
     return this.state;
+  }
+
+  /**
+   * Inject (or clear) the full-track driver. Called from
+   * `FullTrackDriverMount` on `app/_layout.tsx` once the Spotify SDK
+   * has handshaken successfully — gated on
+   * `spotify.connectionStatus.product === 'premium'`. Pass `null` on
+   * tear-down (component unmount, SDK fatal error, user disconnect) so
+   * subsequent taps fall back to the preview-URL path.
+   */
+  setFullTrackDriver(driver: FullTrackDriver | null): void {
+    this.fullTrackDriver = driver;
+  }
+
+  hasFullTrackDriver(): boolean {
+    return this.fullTrackDriver !== null;
   }
 
   /**
@@ -148,6 +182,27 @@ export class PreviewPlayerController {
       this.setState({ ...INITIAL_STATE });
       options.onUnavailable?.();
     }
+  }
+
+  /**
+   * Hand a Spotify track id directly to the full-track driver (App
+   * Remote SDK on mobile, Web Playback SDK on web). Resolves on
+   * success, rejects on failure — the caller (`TrackPreviewButton`)
+   * decides whether to fall through to deep-link / preview-URL paths.
+   * The controller deliberately does NOT flip `currentTrackKey`: SDK
+   * playback runs in the Spotify app, not in-app, so the mini-player
+   * stays idle. A future polish pass can wire a "Playing on Spotify"
+   * indicator into the controller's state.
+   */
+  async playFullTrack(spotifyTrackId: string): Promise<void> {
+    if (!this.fullTrackDriver) {
+      throw new Error('PreviewPlayerController: no full-track driver mounted');
+    }
+    // Stop any in-flight preview clip + reset state so the mini-player
+    // doesn't keep a stale "playing" UI while audio is now in Spotify.
+    await this.driver.stop().catch(() => undefined);
+    this.setState({ ...INITIAL_STATE });
+    await this.fullTrackDriver.play(spotifyTrackId);
   }
 
   async stop(): Promise<void> {
