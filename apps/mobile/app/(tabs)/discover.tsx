@@ -486,7 +486,7 @@ export default function DiscoverScreen(): React.JSX.Element {
           selected={selectedGroupId}
           onSelect={setSelectedGroupId}
           totalCount={items.length}
-          trailingAction={{
+          leadingAction={{
             label: addChipLabel(tab),
             onPress: () => setAddSheetTab(tab),
             testID: `discover-add-chip-${tab}`,
@@ -746,7 +746,7 @@ function EmptyForTab({
           kind="venues"
           title="Follow a venue"
           body="Search a hall, theatre, or dive bar and follow it — upcoming announcements land here as soon as they go on sale."
-          action={{ label: 'Follow a venue', onPress: () => onOpenAdd('venues') }}
+          action={{ label: 'Search venues', onPress: () => onOpenAdd('venues') }}
         />
       </View>
     );
@@ -758,7 +758,7 @@ function EmptyForTab({
           kind="artists"
           title="Follow an artist"
           body="Search for an artist and follow them to see their tour announcements the moment they go on sale."
-          action={{ label: 'Follow an artist', onPress: () => onOpenAdd('artists') }}
+          action={{ label: 'Search artists', onPress: () => onOpenAdd('artists') }}
         />
       </View>
     );
@@ -770,7 +770,7 @@ function EmptyForTab({
           kind="discover"
           title="Add a region"
           body="Pick a city + radius to surface nearby announcements and power your daily email digest. Up to five fit; start with the city you live in."
-          action={{ label: 'Add a region', onPress: () => onOpenAdd('regions') }}
+          action={{ label: 'Pick a city', onPress: () => onOpenAdd('regions') }}
         />
       </View>
     );
