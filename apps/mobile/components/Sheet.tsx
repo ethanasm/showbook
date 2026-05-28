@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -22,6 +23,13 @@ const OPEN_DURATION_MS = 320;
 const CLOSE_DURATION_MS = 240;
 const OPEN_EASING = Easing.out(Easing.cubic);
 const CLOSE_EASING = Easing.in(Easing.cubic);
+// When the keyboard is up the sheet shrinks to fit the visible area
+// above it. Leave this much breathing room at the top of the screen
+// so the sheet doesn't slam into the status bar / notch.
+const KEYBOARD_TOP_MARGIN = 56;
+// Floor on the keyboard-shrunk height so a tiny landscape keyboard
+// can't collapse the sheet to a sliver.
+const MIN_SHEET_HEIGHT = 240;
 
 export interface SheetProps {
   open: boolean;
@@ -39,7 +47,36 @@ export function Sheet({
   const { tokens } = useTheme();
   const { colors } = tokens;
   const { height } = useWindowDimensions();
-  const sheetHeight = resolveSnapPoint(snapPoints[0] ?? '50%', height);
+
+  // Track the on-screen keyboard so we can shrink the sheet to fit the
+  // visible area above it. Without this, a tall sheet (e.g. the
+  // Discover add-typeahead at 72%) plus iOS's KAV `padding` behavior
+  // pushes the top of the sheet — header + input — above the status
+  // bar, so the user can't see what they're typing into.
+  const [keyboardHeight, setKeyboardHeight] = React.useState(0);
+  React.useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const snapHeight = resolveSnapPoint(snapPoints[0] ?? '50%', height);
+  const sheetHeight =
+    keyboardHeight > 0
+      ? Math.max(
+          MIN_SHEET_HEIGHT,
+          Math.min(snapHeight, height - keyboardHeight - KEYBOARD_TOP_MARGIN),
+        )
+      : snapHeight;
 
   const [mounted, setMounted] = React.useState(open);
   const progress = useSharedValue(open ? 1 : 0);
