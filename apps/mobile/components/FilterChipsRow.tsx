@@ -9,6 +9,7 @@
 
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Plus } from 'lucide-react-native';
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 
@@ -23,6 +24,13 @@ export interface FilterGroup {
   badgeText?: string;
 }
 
+export interface FilterChipsTrailingAction {
+  label: string;
+  onPress: () => void;
+  testID?: string;
+  accessibilityLabel?: string;
+}
+
 export function FilterChipsRow({
   groups,
   selected,
@@ -32,6 +40,7 @@ export function FilterChipsRow({
   showAll = true,
   variant = 'primary',
   testIdPrefix,
+  trailingAction,
 }: {
   groups: FilterGroup[];
   selected: string | null;
@@ -46,6 +55,10 @@ export function FilterChipsRow({
   /** `sub` renders a slightly tighter row used as a second-level filter. */
   variant?: 'primary' | 'sub';
   testIdPrefix?: string;
+  /** Trailing "+" chip rendered after the group chips. Suppressed
+   *  automatically when `variant === 'sub'` so the second-level row
+   *  doesn't pick up an add-affordance it has no use for. */
+  trailingAction?: FilterChipsTrailingAction;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -88,6 +101,33 @@ export function FilterChipsRow({
           testID={testIdPrefix ? `${testIdPrefix}-${g.id}` : undefined}
         />
       ))}
+      {trailingAction && variant !== 'sub' ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={trailingAction.accessibilityLabel ?? trailingAction.label}
+          onPress={trailingAction.onPress}
+          testID={trailingAction.testID}
+          style={({ pressed }) => [
+            styles.chip,
+            {
+              backgroundColor: 'transparent',
+              borderColor: colors.accent,
+              opacity: pressed ? 0.7 : 1,
+            },
+          ]}
+        >
+          <Plus size={12} color={colors.accent} strokeWidth={2.5} />
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.chipLabel,
+              { color: colors.accent, fontWeight: '600' },
+            ]}
+          >
+            {trailingAction.label}
+          </Text>
+        </Pressable>
+      ) : null}
     </ScrollView>
   );
 }
