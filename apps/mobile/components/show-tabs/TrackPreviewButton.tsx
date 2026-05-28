@@ -1,13 +1,25 @@
 /**
  * TrackPreviewButton (mobile) — 24pt ▶ button that lives in the third
- * column of every setlist row. Mirrors the web `TrackPreview`:
+ * column of every setlist row. Mirrors the web `TrackPreview`, with one
+ * key divergence: when the resolver returns a `spotify_track_id` but no
+ * 30-second `preview_url` (the common post-deprecation case), the tap
+ * hands off to the Spotify app via `spotify:track:<id>` instead of
+ * silently marking the row unavailable. See
+ * `lib/setlist-intel/spotify-deep-link.ts` for the open-plan helper.
  *
  *  - idle ▶ when a preview URL (or Spotify track id) is already cached
+ *  - on tap with preview URL → plays the 30-second clip inline
+ *  - on tap with only a track id → opens the track in the Spotify app
+ *    (falls back to `open.spotify.com` when the app isn't installed)
  *  - on tap with neither cached: spins while `resolveTrackPreview`
- *    runs, then plays the resolved URL (or marks the row unavailable)
- *  - active: hairline-thick disc with the controller's playback flag
- *  - disabled (cursor-not-allowed semantics) only when we tried to
- *    resolve and got nothing
+ *    runs, then routes to one of the two branches above (or marks
+ *    unavailable when both come back null)
+ *  - active: hairline-thick disc with the controller's playback flag —
+ *    only set when in-app preview is playing; deep-link taps leave the
+ *    button idle since the user is now in Spotify
+ *  - disabled only when both `preview_url` and `spotify_track_id` are
+ *    confirmed null (either resolver short-circuit OR no Spotify match
+ *    found at resolve time)
  *
  * The `PreviewPlayerProvider` itself lives in
  * `apps/mobile/lib/preview-player-provider.tsx` and is mounted by
@@ -16,11 +28,15 @@
  */
 
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
-import type { PreviewHandle } from '@/lib/setlist-intel';
+import {
+  buildSpotifyTrackOpenPlan,
+  type PreviewHandle,
+} from '@/lib/setlist-intel';
 import { usePreviewPlayer } from '@/lib/preview-player-provider';
 import { trpc } from '@/lib/trpc';
 
@@ -46,6 +62,7 @@ export function TrackPreviewButton({
   const resolveMutation = trpc.setlistIntel.resolveTrackPreview.useMutation();
 
   const [unavailable, setUnavailable] = React.useState(false);
+  const [resolving, setResolving] = React.useState(false);
   // Local override for the cached preview URL — when the resolver
   // returns one mid-session, hold onto it so a second tap on the same
   // row plays immediately without bouncing back through the cache.
@@ -59,7 +76,7 @@ export function TrackPreviewButton({
 
   const key = `${showId}:${title.toLowerCase()}`;
   const isActive = ctx?.state.currentTrackKey === key;
-  const isLoading = ctx?.state.loadingKey === key;
+  const isLoading = ctx?.state.loadingKey === key || resolving;
 
   // When mounted outside a provider (defensive), render a static slot
   // so the row's grid stays aligned.
@@ -75,11 +92,70 @@ export function TrackPreviewButton({
 
   const disabled = unavailable;
 
-  const handle: PreviewHandle = {
-    key,
-    previewUrl: effectivePreviewUrl,
-    spotifyTrackId: effectiveSpotifyId,
-    label: title,
+  // Hand off a `spotify_track_id` to the Spotify app via the
+  // native deep-link, falling back to `open.spotify.com` in
+  // the in-app browser when the app isn't installed. Mirrors the
+  // pattern in `HypePlaylistCard.openExisting` — don't gate on
+  // `canOpenURL` (silently misroutes when the scheme isn't declared);
+  // try `openURL(primary)` and fall through on rejection.
+  const openInSpotify = async (trackId: string): Promise<boolean> => {
+    const plan = buildSpotifyTrackOpenPlan(trackId);
+    if (!plan) return false;
+    try {
+      await Linking.openURL(plan.primary);
+      return true;
+    } catch {
+      // Spotify app not installed — fall through to the web URL.
+    }
+    try {
+      await WebBrowser.openBrowserAsync(plan.fallback);
+      return true;
+    } catch {
+      try {
+        await Linking.openURL(plan.fallback);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  };
+
+  const cacheResolved = (next: {
+    previewUrl: string | null;
+    spotifyTrackId: string | null;
+  }) => {
+    setResolved(next);
+    // Update the cached previews map so other rows for this
+    // performer (and a return visit to this show) see the
+    // freshly-resolved values without re-hitting the resolver.
+    utils.setlistIntel.trackPreviewsForShow.setData(
+      { showId },
+      (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          previews: {
+            ...prev.previews,
+            [title.toLowerCase()]: {
+              previewUrl: next.previewUrl,
+              spotifyTrackId: next.spotifyTrackId,
+            },
+          },
+        };
+      },
+    );
+  };
+
+  const playPreview = async (handlePreviewUrl: string, trackId: string | null) => {
+    const handle: PreviewHandle = {
+      key,
+      previewUrl: handlePreviewUrl,
+      spotifyTrackId: trackId,
+      label: title,
+    };
+    await ctx.controller.play(handle, {
+      onUnavailable: () => setUnavailable(true),
+    });
   };
 
   const onPress = async () => {
@@ -89,38 +165,39 @@ export function TrackPreviewButton({
     }
     if (disabled) return;
 
-    await ctx.controller.play(handle, {
-      resolve: effectivePreviewUrl
-        ? undefined
-        : async () => {
-            const next = await resolveMutation.mutateAsync({
-              showId,
-              title,
-            });
-            setResolved(next);
-            // Update the cached previews map so other rows for this
-            // performer (and a return visit to this show) see the
-            // freshly-resolved URL without re-hitting the resolver.
-            utils.setlistIntel.trackPreviewsForShow.setData(
-              { showId },
-              (prev) => {
-                if (!prev) return prev;
-                return {
-                  ...prev,
-                  previews: {
-                    ...prev.previews,
-                    [title.toLowerCase()]: {
-                      previewUrl: next.previewUrl,
-                      spotifyTrackId: next.spotifyTrackId,
-                    },
-                  },
-                };
-              },
-            );
-            return next;
-          },
-      onUnavailable: () => setUnavailable(true),
-    });
+    // Fast paths: we already have either a preview URL or a track id
+    // cached (from the prefetched `trackPreviewsForShow` map or a prior
+    // mid-session resolve). Route immediately, no spinner.
+    if (effectivePreviewUrl) {
+      await playPreview(effectivePreviewUrl, effectiveSpotifyId);
+      return;
+    }
+    if (effectiveSpotifyId) {
+      const opened = await openInSpotify(effectiveSpotifyId);
+      if (!opened) setUnavailable(true);
+      return;
+    }
+
+    // Cold path: nothing cached. Run the resolver, then route.
+    setResolving(true);
+    try {
+      const next = await resolveMutation.mutateAsync({ showId, title });
+      cacheResolved(next);
+      if (next.previewUrl) {
+        await playPreview(next.previewUrl, next.spotifyTrackId);
+        return;
+      }
+      if (next.spotifyTrackId) {
+        const opened = await openInSpotify(next.spotifyTrackId);
+        if (!opened) setUnavailable(true);
+        return;
+      }
+      setUnavailable(true);
+    } catch {
+      setUnavailable(true);
+    } finally {
+      setResolving(false);
+    }
   };
 
   return (
