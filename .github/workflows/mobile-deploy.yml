@@ -2,21 +2,35 @@ name: Mobile Deploy (preview)
 
 # Continuous mobile deployment. Every CI-green push to `main` runs
 # `eas update --branch preview`, which pushes a fresh JS bundle to
-# the preview channel. Installed preview IPAs pick it up on next
+# the preview channel. Installed preview builds pick it up on next
 # cold start.
 #
 # For changes that need a new native binary (added Expo plugin, new
 # native dep, new permission string), use the workflow_dispatch
-# button with mode=build to kick off a full `eas build` instead.
-# That produces a new IPA you have to install on the phone again.
+# button with mode=build to kick off a full `eas build`. Native dep
+# changes detected against the parent commit also auto-promote a
+# workflow_run trigger from OTA to build.
 #
-# Runs on a GitHub-hosted runner — EAS Build/Update both execute in
-# Expo's cloud, so there's nothing to host locally. The prod box is
-# not involved.
+# **Android builds auto-submit to the Play Console internal testing
+# track** (via `eas submit`) using the service account JSON in the
+# `PLAY_SERVICE_ACCOUNT_JSON` secret. Testers on Play Internal pick
+# up the new build through the Play Store once Google finishes
+# processing the upload — no sideload, no Advanced Protection
+# friction. iOS still produces a plain preview IPA; auto-submit on
+# the iOS side waits on an Apple Developer account.
 #
-# Required secret: EXPO_TOKEN (Settings → Secrets → Actions). Create
-# via `eas-cli token:create` or expo.dev → Account Settings → Access
-# Tokens.
+# Runs on a GitHub-hosted runner — EAS Build/Submit/Update all
+# execute in Expo's cloud, so there's nothing to host locally. The
+# prod box is not involved.
+#
+# Required secrets (Settings → Secrets → Actions):
+#  - EXPO_TOKEN — `eas-cli token:create` or expo.dev → Account
+#    Settings → Access Tokens. Drives `eas update` + `eas build`.
+#  - PLAY_SERVICE_ACCOUNT_JSON — full JSON contents of the Google
+#    service-account key with Play Console "Manage testing track
+#    releases" permission on the Showbook app. Without it the
+#    Android submit step fails fast (intentionally — better than
+#    silently shipping nothing).
 
 on:
   workflow_run:
@@ -26,7 +40,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "update (OTA JS) or build (new IPA)"
+        description: "update (OTA JS) or build (new native binary; Android auto-submits to Play internal)"
         type: choice
         options:
           - update
@@ -39,7 +53,7 @@ on:
           - ios
           - android
           - all
-        default: ios
+        default: android
 
 permissions:
   contents: read
@@ -60,7 +74,10 @@ jobs:
            github.event.workflow_run.head_branch == 'main' &&
            github.event.workflow_run.event != 'pull_request') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # 45 min covers a fresh Android build (~10-15 min on EAS) plus the
+    # synchronous submit step (~1-2 min) plus an iOS build kickoff
+    # (--no-wait). 25 min was the fire-and-forget-only budget.
+    timeout-minutes: 45
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:
@@ -130,22 +147,66 @@ jobs:
             --message "$MSG" \
             --non-interactive
 
-      - name: Build native IPA / APK
-        # Two ways to land here:
-        #   1. Manual workflow_dispatch with mode=build (user chose the platform).
-        #   2. Auto-detected native dep change on a workflow_run trigger — we
-        #      can't pick a single platform safely in that case, so we build
-        #      both so neither phone falls behind.
+      # Android build + Play submit are split into two steps so we can fail
+      # the submit independently of the build (e.g. missing service account
+      # secret) and so the build's --wait keeps the artifact handle around
+      # for `eas submit --latest` to find. The `preview-store` build profile
+      # produces an AAB (`buildType: app-bundle`, `distribution: store`) that
+      # Play accepts, while inheriting the `preview` channel + OAuth env from
+      # `preview` so OTA updates still reach Play-installed copies.
+      - name: Build Android AAB (preview-store profile)
+        id: build-android
         if: >-
-          (github.event_name == 'workflow_dispatch' && inputs.mode == 'build')
+          (github.event_name == 'workflow_dispatch' && inputs.mode == 'build'
+            && (inputs.platform == 'android' || inputs.platform == 'all'))
           || (github.event_name == 'workflow_run' && steps.detect-native.outputs.needs_build == 'true')
         working-directory: apps/mobile
+        run: |
+          pnpm dlx eas-cli build \
+            --profile preview-store \
+            --platform android \
+            --non-interactive \
+            --wait
+
+      - name: Submit Android AAB to Play internal track
+        # Gate on build-android succeeding so a build failure doesn't leak
+        # a misleading "submit failed" line. `if: always()` would also catch
+        # skipped — guard explicitly on outcome.
+        if: steps.build-android.outcome == 'success'
+        working-directory: apps/mobile
         env:
-          AUTO_PLATFORM: ${{ steps.detect-native.outputs.needs_build == 'true' && 'all' || inputs.platform }}
+          PLAY_SA_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "${PLAY_SA_JSON:-}" ]; then
+            echo "PLAY_SERVICE_ACCOUNT_JSON secret is not set — cannot submit to Play." >&2
+            echo "See workflow header comment for setup." >&2
+            exit 1
+          fi
+          SA="$RUNNER_TEMP/play-sa.json"
+          # printf, not echo, so a trailing newline doesn't break JSON parsing
+          # on EAS's side. The file is on the ephemeral runner only.
+          printf '%s' "$PLAY_SA_JSON" > "$SA"
+          chmod 600 "$SA"
+          pnpm dlx eas-cli submit \
+            --profile preview-store \
+            --platform android \
+            --latest \
+            --non-interactive \
+            --key "$SA"
+
+      - name: Build iOS IPA (preview profile)
+        # iOS keeps the fire-and-forget --no-wait pattern: no auto-submit
+        # path yet (needs an Apple Developer account + App Store Connect
+        # API key), so there's nothing for the runner to do after kickoff.
+        if: >-
+          (github.event_name == 'workflow_dispatch' && inputs.mode == 'build'
+            && (inputs.platform == 'ios' || inputs.platform == 'all'))
+          || (github.event_name == 'workflow_run' && steps.detect-native.outputs.needs_build == 'true')
+        working-directory: apps/mobile
         run: |
           pnpm dlx eas-cli build \
             --profile preview \
-            --platform "$AUTO_PLATFORM" \
+            --platform ios \
             --non-interactive \
             --no-wait
 
