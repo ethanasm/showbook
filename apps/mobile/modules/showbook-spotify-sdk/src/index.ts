@@ -23,6 +23,16 @@
  * The web bundle picks up `index.web.ts` via Metro's platform-extension
  * resolution; that file returns a no-op so the Playwright smoke loop
  * doesn't drag native module loaders into the browser context.
+ *
+ * Native implementation status: the Kotlin (`expo.modules.showbookspotify`)
+ * and Swift (`ShowbookSpotifyModule`) classes are not yet authored. Until
+ * they land, every native lookup throws `Cannot find native module …`,
+ * which previously crashed the app at module-eval time because the
+ * `requireNativeModule` call below ran at top level. We now defer the
+ * lookup to first use and fall back to a no-op stub on failure, so the
+ * `SpotifySdkMount` gate (`status.data.connected && product === premium`
+ * → `isAvailable()` returns `false`) naturally routes every Premium tap
+ * through the deep-link path until the native side is shipped.
  */
 
 import { requireNativeModule } from 'expo-modules-core';
@@ -62,7 +72,46 @@ export interface ShowbookSpotifySDK {
   disconnect(): Promise<void>;
 }
 
-// `requireNativeModule` throws when the native side isn't linked,
-// which is exactly what we want on the web bundle (Metro's platform
-// resolution will pick `index.web.ts` for that target instead).
-export default requireNativeModule<ShowbookSpotifySDK>('ShowbookSpotifyModule');
+const UNAVAILABLE_MESSAGE =
+  'showbook-spotify-sdk: native module unavailable on this platform';
+
+const STUB: ShowbookSpotifySDK = {
+  isAvailable: async () => false,
+  connect: async () => {
+    throw new Error(UNAVAILABLE_MESSAGE);
+  },
+  play: async () => {
+    throw new Error(UNAVAILABLE_MESSAGE);
+  },
+  pause: async () => {},
+  disconnect: async () => {},
+};
+
+// Defer the native lookup until first access so a missing module
+// (no Kotlin / Swift class registered) doesn't crash app startup.
+// The previous top-level `requireNativeModule(...)` ran at module-eval
+// time and threw "Cannot find native module 'ShowbookSpotifyModule'"
+// during root-layout import, killing the process before any UI could
+// render. Falling back to STUB keeps `SpotifySdkMount`'s "leave the
+// driver unmounted on failure" branch on the table.
+let resolved: ShowbookSpotifySDK | null = null;
+
+function resolveModule(): ShowbookSpotifySDK {
+  if (resolved) return resolved;
+  try {
+    resolved = requireNativeModule<ShowbookSpotifySDK>('ShowbookSpotifyModule');
+  } catch {
+    resolved = STUB;
+  }
+  return resolved;
+}
+
+const proxy: ShowbookSpotifySDK = {
+  isAvailable: (...args) => resolveModule().isAvailable(...args),
+  connect: (...args) => resolveModule().connect(...args),
+  play: (...args) => resolveModule().play(...args),
+  pause: (...args) => resolveModule().pause(...args),
+  disconnect: (...args) => resolveModule().disconnect(...args),
+};
+
+export default proxy;
