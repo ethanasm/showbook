@@ -8,6 +8,7 @@ import { computePerformerAnnouncementsToDelete } from './preferences';
 import { searchAttractions, selectBestImage, extractMusicbrainzId } from '../ticketmaster';
 import { matchOrCreatePerformer } from '../performer-matcher';
 import { enforceRateLimit } from '../rate-limit';
+import { assertUnderFollowCap } from '../follow-caps';
 import { child } from '@showbook/observability';
 
 const log = child({ component: 'api.performers' });
@@ -167,6 +168,11 @@ export const performersRouter = router({
         imageUrl: input.imageUrl,
         musicbrainzId: input.musicbrainzId,
       });
+      const followed = await ctx.db
+        .select({ performerId: userPerformerFollows.performerId })
+        .from(userPerformerFollows)
+        .where(eq(userPerformerFollows.userId, userId));
+      assertUnderFollowCap('artists', followed.map((f) => f.performerId), performer.id);
       await ctx.db
         .insert(userPerformerFollows)
         .values({ userId, performerId: performer.id })
@@ -182,6 +188,12 @@ export const performersRouter = router({
     .input(z.object({ performerId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+
+      const followed = await ctx.db
+        .select({ performerId: userPerformerFollows.performerId })
+        .from(userPerformerFollows)
+        .where(eq(userPerformerFollows.userId, userId));
+      assertUnderFollowCap('artists', followed.map((f) => f.performerId), input.performerId);
 
       await ctx.db
         .insert(userPerformerFollows)

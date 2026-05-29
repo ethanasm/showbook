@@ -13,6 +13,7 @@ import {
   userPerformerFollows,
   userRegions,
   venues,
+  performers,
 } from '@showbook/db';
 import { isNonWatchableKind, KIND_LABELS, regionBbox } from '@showbook/shared';
 import { matchOrCreatePerformer } from '../performer-matcher';
@@ -104,9 +105,11 @@ export const discoverRouter = router({
         .select({
           announcement: announcements,
           venue: venues,
+          headlinerImageUrl: performers.imageUrl,
         })
         .from(announcements)
         .innerJoin(venues, eq(announcements.venueId, venues.id))
+        .leftJoin(performers, eq(announcements.headlinerPerformerId, performers.id))
         .where(and(...conditions))
         .orderBy(asc(announcements.showDate), asc(announcements.id))
         .limit(limit + 1);
@@ -121,6 +124,7 @@ export const discoverRouter = router({
         items: rows.map((r) => ({
           ...r.announcement,
           ticketUrl: r.announcement.ticketUrl,
+          headlinerImageUrl: r.headlinerImageUrl ?? null,
           venue: r.venue,
         })),
         nextCursor,
@@ -171,9 +175,14 @@ export const discoverRouter = router({
       }
 
       const rows = await db
-        .select({ announcement: announcements, venue: venues })
+        .select({
+          announcement: announcements,
+          venue: venues,
+          headlinerImageUrl: performers.imageUrl,
+        })
         .from(announcements)
         .innerJoin(venues, eq(announcements.venueId, venues.id))
+        .leftJoin(performers, eq(announcements.headlinerPerformerId, performers.id))
         .where(and(...conditions))
         .orderBy(asc(announcements.showDate), asc(announcements.id))
         .limit(limit + 1);
@@ -188,6 +197,7 @@ export const discoverRouter = router({
         items: rows.map((r) => ({
           ...r.announcement,
           ticketUrl: r.announcement.ticketUrl,
+          headlinerImageUrl: r.headlinerImageUrl ?? null,
           venue: r.venue,
         })),
         nextCursor,
@@ -279,9 +289,14 @@ export const discoverRouter = router({
       );
 
       const rows = await db
-        .select({ announcement: announcements, venue: venues })
+        .select({
+          announcement: announcements,
+          venue: venues,
+          headlinerImageUrl: performers.imageUrl,
+        })
         .from(announcements)
         .innerJoin(venues, eq(announcements.venueId, venues.id))
+        .leftJoin(performers, eq(announcements.headlinerPerformerId, performers.id))
         .where(and(...conditions))
         .orderBy(asc(announcements.showDate), asc(announcements.id))
         .limit(globalLimit);
@@ -324,6 +339,7 @@ export const discoverRouter = router({
       const items: Array<
         (typeof announcements.$inferSelect) & {
           ticketUrl: string | null;
+          headlinerImageUrl: string | null;
           venue: typeof venues.$inferSelect;
           regionId: string | null;
           regionCityName: string | null;
@@ -364,6 +380,7 @@ export const discoverRouter = router({
         items.push({
           ...r.announcement,
           ticketUrl: r.announcement.ticketUrl,
+          headlinerImageUrl: r.headlinerImageUrl ?? null,
           venue: r.venue,
           regionId: match.region.id,
           regionCityName: match.region.cityName,

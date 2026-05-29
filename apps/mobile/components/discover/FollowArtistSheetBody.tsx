@@ -30,13 +30,18 @@ import { invalidateDiscoverFeeds } from '@/lib/cache';
 import { useNetwork } from '@/lib/network';
 import { useFeedback } from '@/lib/feedback';
 import { useDebouncedValue } from '@showbook/shared/hooks';
+import { entityLimitReachedHint } from '@showbook/shared';
 
 export function FollowArtistSheetBody({
   onFollowed,
   onClose,
+  atCap = false,
 }: {
   onFollowed: () => void;
   onClose: () => void;
+  /** When true the user is at the followed-artist cap: the search UI is
+   *  replaced by a persistent cap message, mirroring the region sheet. */
+  atCap?: boolean;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -89,6 +94,15 @@ export function FollowArtistSheetBody({
         <Text style={[styles.title, { color: colors.ink }]}>Follow an artist</Text>
       </View>
 
+      {atCap ? (
+        <Text
+          style={[styles.capMessage, { color: colors.danger }]}
+          testID="discover-artist-cap-message"
+        >
+          {entityLimitReachedHint('artists')}
+        </Text>
+      ) : (
+      <>
       <View
         style={[
           styles.searchRow,
@@ -184,6 +198,9 @@ export function FollowArtistSheetBody({
             </Text>
           ) : null}
         </ScrollView>
+      )}
+
+      </>
       )}
 
       <Pressable
@@ -291,6 +308,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist Sans',
     fontSize: 12,
     fontStyle: 'italic',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  capMessage: {
+    fontFamily: 'Geist Sans',
+    fontSize: 12,
     paddingVertical: 8,
     paddingHorizontal: 4,
   },

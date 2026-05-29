@@ -46,6 +46,7 @@ import Svg, { Line } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import {
   Calendar,
+  ChevronRight,
   MapPin,
   Search,
   Users,
@@ -58,6 +59,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { EmptyStateHero } from '../../components/design-system';
 import { OfflineEmptyState } from '../../components/OfflineEmptyState';
 import { KindBadge } from '../../components/KindBadge';
+import { RemoteImage } from '../../components/design-system/RemoteImage';
 import { TicketmasterMark } from '../../components/BrandIcons';
 import { UpcomingAnnouncementActionSheet } from '../../components/UpcomingAnnouncementActionSheet';
 import { FilterChipsRow, type FilterGroup } from '../../components/FilterChipsRow';
@@ -115,10 +117,15 @@ function isRun(item: AnnouncementItem | NearbyAnnouncementItem): boolean {
   );
 }
 
-function formatRunRange(start: string, end: string): string {
-  const a = formatDateParts(start);
+/**
+ * Compact run-end label for the narrow left date column. The start date
+ * renders in the same stacked MONTH / DAY format a single-date row uses;
+ * this line sits under the day to close the range — e.g. "– JUN 27".
+ * The en-dash is load-bearing for the discover-runs web-test assertion.
+ */
+function formatRunEnd(end: string): string {
   const b = formatDateParts(end);
-  return `${a.month} ${a.day} – ${b.month} ${b.day}`;
+  return `– ${b.month} ${b.day}`;
 }
 
 function formatOnSale(value: string | Date | null): string | null {
@@ -1024,10 +1031,8 @@ function AnnouncementRow({
   const ticketUrl = item.ticketUrl;
   const isSoldOut = item.onSaleStatus === 'sold_out';
   const runMode = isRun(item);
-  const runRangeLabel =
-    runMode && item.runStartDate && item.runEndDate
-      ? formatRunRange(item.runStartDate, item.runEndDate)
-      : null;
+  const runEndLabel =
+    runMode && item.runEndDate ? formatRunEnd(item.runEndDate) : null;
   // Festivals are a single experience over a date range; multi-night
   // theatre / comedy / concert runs are N separate performances and
   // need a date pick. Mirrors `discover.watchlist`'s `isDatePickingRun`
@@ -1093,11 +1098,7 @@ function AnnouncementRow({
       testID={`discover-row-${item.id}`}
       style={({ pressed }) => [
         styles.card,
-        {
-          backgroundColor: colors.surface,
-          borderColor: colors.rule,
-          borderLeftColor: accent,
-        },
+        { backgroundColor: colors.surface },
         isSoldOut && styles.cardSoldOut,
         pressed && { opacity: 0.9 },
       ]}
@@ -1109,130 +1110,149 @@ function AnnouncementRow({
           height={cardSize.h}
         />
       )}
-      <View style={styles.cardHeaderRow}>
-        {runMode && runRangeLabel ? (
-          <View
-            style={styles.dateBlockRun}
-            testID={`discover-row-run-${item.id}`}
-          >
-            <Text style={[styles.dateRunRange, { color: colors.ink }]}>
-              {runRangeLabel}
-            </Text>
-            <Text style={[styles.dateRunSub, { color: colors.muted }]}>
-              {performanceCount > 0
-                ? `${performanceCount} dates · ${year}`
-                : year}
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.dateBlock}>
-            <Text style={[styles.dateMonth, { color: colors.muted }]}>{month}</Text>
-            <Text style={[styles.dateDay, { color: colors.ink }]}>{day}</Text>
-            <Text style={[styles.dateYear, { color: colors.muted }]}>
-              {dow ? `${dow} · ${year}` : year}
-            </Text>
-          </View>
-        )}
-        <View style={styles.cardBadge}>
-          <KindBadge kind={item.kind as Kind} size="sm" />
-        </View>
-      </View>
 
-      {headlinerLinkId ? (
-        <Text
-          onPress={() => router.push(`/artists/${headlinerLinkId}`)}
-          accessibilityRole="link"
-          accessibilityLabel={`Open ${title}`}
-          style={[styles.cardTitle, { color: colors.ink }]}
-          numberOfLines={2}
-          ellipsizeMode="tail"
-        >
-          {title}
-        </Text>
-      ) : (
-        <Text
-          style={[styles.cardTitle, { color: colors.ink }]}
-          numberOfLines={2}
-          ellipsizeMode="tail"
-        >
-          {title}
-        </Text>
-      )}
-      {support && (
-        <Text
-          style={[styles.cardSupport, { color: colors.muted }]}
-          numberOfLines={1}
-          ellipsizeMode="tail"
-        >
-          {support}
-        </Text>
-      )}
-      {item.venue.id ? (
-        <Text
-          onPress={() => router.push(`/venues/${item.venue.id}`)}
-          accessibilityRole="link"
-          accessibilityLabel={`Open ${item.venue.name}`}
-          style={[styles.cardVenue, { color: colors.muted }]}
-          numberOfLines={2}
-          ellipsizeMode="tail"
-        >
-          {venueLabel}
-        </Text>
-      ) : (
-        <Text
-          style={[styles.cardVenue, { color: colors.muted }]}
-          numberOfLines={2}
-          ellipsizeMode="tail"
-        >
-          {venueLabel}
-        </Text>
-      )}
+      {/* Left edge bar — kind-coloured, mirrors the Shows-tab ShowCard so
+          discover rows read as the same row family. */}
+      <View style={[styles.stateBar, { backgroundColor: accent }]} />
 
-      <View style={styles.metaRow}>
-        <View
-          style={[
-            styles.statusBadge,
-            {
-              backgroundColor: accent + '22',
-            },
-          ]}
-        >
-          <Text style={[styles.statusLabel, { color: accent }]}>
-            {onSaleLabel}
+      {/* Date column — single-date rows stack MONTH / DAY / DOW / YEAR;
+          multi-night runs reuse the same narrow column, closing the range
+          with a compact "– END" line and an "N dates" count. */}
+      {runMode && runEndLabel ? (
+        <View style={styles.dateBlock} testID={`discover-row-run-${item.id}`}>
+          <Text style={[styles.dateMonth, { color: colors.muted }]}>{month}</Text>
+          <Text style={[styles.dateDay, { color: colors.ink }]}>{day}</Text>
+          <Text style={[styles.dateRunEnd, { color: colors.ink }]}>
+            {runEndLabel}
+          </Text>
+          <Text style={[styles.dateDow, { color: colors.faint }]}>
+            {performanceCount > 0 ? `${performanceCount} dates` : year}
           </Text>
         </View>
+      ) : (
+        <View style={styles.dateBlock}>
+          <Text style={[styles.dateMonth, { color: colors.muted }]}>{month}</Text>
+          <Text style={[styles.dateDay, { color: colors.ink }]}>{day}</Text>
+          {dow ? (
+            <Text style={[styles.dateDow, { color: colors.faint }]}>{dow}</Text>
+          ) : null}
+          <Text style={[styles.dateYear, { color: colors.faint }]}>{year}</Text>
+        </View>
+      )}
+
+      {/* Headliner artwork — joined from the performer record. Falls back
+          to the kind-coloured monogram when the announcement has no matched
+          performer (most theatre / festival productions). */}
+      <RemoteImage
+        uri={item.headlinerImageUrl ?? null}
+        name={title}
+        kind={item.kind as Kind}
+        size="thumb"
+        style={styles.avatar}
+      />
+
+      {/* Content column */}
+      <View style={styles.content}>
+        <View style={styles.badgeRow}>
+          <KindBadge kind={item.kind as Kind} size="sm" />
+          <View
+            style={[styles.statusBadge, { backgroundColor: accent + '22' }]}
+          >
+            <Text style={[styles.statusLabel, { color: accent }]}>
+              {onSaleLabel}
+            </Text>
+          </View>
+        </View>
+
+        {headlinerLinkId ? (
+          <Text
+            onPress={() => router.push(`/artists/${headlinerLinkId}`)}
+            accessibilityRole="link"
+            accessibilityLabel={`Open ${title}`}
+            style={[styles.cardTitle, { color: colors.ink }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {title}
+          </Text>
+        ) : (
+          <Text
+            style={[styles.cardTitle, { color: colors.ink }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {title}
+          </Text>
+        )}
+
+        {support && (
+          <Text
+            style={[styles.cardSupport, { color: colors.muted }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {support}
+          </Text>
+        )}
+
+        {item.venue.id ? (
+          <Text
+            onPress={() => router.push(`/venues/${item.venue.id}`)}
+            accessibilityRole="link"
+            accessibilityLabel={`Open ${item.venue.name}`}
+            style={[styles.cardVenue, { color: colors.muted }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {venueLabel}
+          </Text>
+        ) : (
+          <Text
+            style={[styles.cardVenue, { color: colors.muted }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {venueLabel}
+          </Text>
+        )}
+
         {onSale && (
           <Text
-            style={[styles.onSaleText, { color: colors.muted }]}
+            style={[styles.onSaleText, { color: colors.faint }]}
             numberOfLines={1}
           >
-            {item.onSaleStatus === 'on_sale' ? 'Since ' : 'On sale '}
+            {item.onSaleStatus === 'on_sale' ? 'On sale since ' : 'On sale '}
             {onSale}
           </Text>
         )}
-        {ticketUrl ? (
-          <Pressable
-            onPress={(e) => {
-              e.stopPropagation();
-              void hapticSelection();
-              Linking.openURL(ticketUrl).catch(() => {
-                showToast({ kind: 'error', text: "Couldn't open Ticketmaster." });
-              });
-            }}
-            hitSlop={6}
-            accessibilityRole="button"
-            accessibilityLabel="Open tickets on Ticketmaster"
-            testID={`discover-row-tix-${item.id}`}
-            style={({ pressed }) => [
-              styles.tixPill,
-              styles.tixPillEnd,
-              { borderColor: colors.ruleStrong, backgroundColor: colors.surface },
-              pressed && { opacity: 0.6 },
-            ]}
-          >
-            <TicketmasterMark size={14} />
-          </Pressable>
-        ) : null}
+      </View>
+
+      {/* Right column — Ticketmaster jump + chevron, mirroring ShowCard. */}
+      {ticketUrl ? (
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation();
+            void hapticSelection();
+            Linking.openURL(ticketUrl).catch(() => {
+              showToast({ kind: 'error', text: "Couldn't open Ticketmaster." });
+            });
+          }}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel="Open tickets on Ticketmaster"
+          testID={`discover-row-tix-${item.id}`}
+          style={({ pressed }) => [
+            styles.tixPill,
+            { borderColor: colors.ruleStrong, backgroundColor: colors.surface },
+            pressed && { opacity: 0.6 },
+          ]}
+        >
+          <TicketmasterMark size={16} />
+        </Pressable>
+      ) : null}
+
+      <View style={styles.chevronContainer}>
+        <ChevronRight size={16} color={colors.faint} strokeWidth={2} />
       </View>
     </Pressable>
     <UpcomingAnnouncementActionSheet
@@ -1378,41 +1398,28 @@ const styles = StyleSheet.create({
     textTransform: 'lowercase',
   },
   card: {
-    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    overflow: 'hidden',
     borderRadius: RADII.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderLeftWidth: 3,
-    gap: 6,
+    paddingVertical: 12,
+    paddingRight: 12,
   },
   cardSoldOut: {
     overflow: 'hidden',
   },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
+  stateBar: {
+    width: 3,
+    alignSelf: 'stretch',
+    borderRadius: RADII.pill,
+    marginRight: 12,
   },
   dateBlock: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
-  },
-  dateBlockRun: {
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: 2,
-  },
-  dateRunRange: {
-    fontFamily: 'Geist Sans 700',
-    fontSize: 15,
-    letterSpacing: -0.1,
-  },
-  dateRunSub: {
-    fontFamily: 'Geist Sans 600',
-    fontSize: 10.5,
-    letterSpacing: 1.05,
-    textTransform: 'uppercase',
+    minWidth: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginRight: 12,
   },
   dateMonth: {
     fontFamily: 'Geist Sans 600',
@@ -1423,51 +1430,71 @@ const styles = StyleSheet.create({
   dateDay: {
     fontFamily: 'Geist Sans 700',
     fontSize: 22,
-    lineHeight: 24,
+    lineHeight: 26,
   },
-  dateYear: {
-    fontFamily: 'Geist Sans 500',
-    fontSize: 11,
-    letterSpacing: 0.4,
+  dateDow: {
+    fontFamily: 'Geist Sans 400',
+    fontSize: 10,
+    letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
-  cardBadge: {
+  dateYear: {
+    fontFamily: 'Geist Sans 400',
+    fontSize: 9,
+    letterSpacing: 0.3,
+    marginTop: 1,
+  },
+  dateRunEnd: {
+    fontFamily: 'Geist Sans 600',
+    fontSize: 10.5,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+    marginTop: 1,
+  },
+  avatar: {
+    alignSelf: 'center',
+    marginRight: 10,
+  },
+  content: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+    justifyContent: 'center',
+  },
+  badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexWrap: 'nowrap',
   },
   tixPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 3,
-    paddingHorizontal: 5,
+    alignSelf: 'center',
+    width: 30,
+    height: 30,
     borderRadius: RADII.pill,
     borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  chevronContainer: {
+    justifyContent: 'center',
+    paddingLeft: 8,
   },
   cardTitle: {
     fontFamily: 'Geist Sans 700',
     fontSize: 16,
-    lineHeight: 20,
-    marginTop: 2,
+    lineHeight: 21,
   },
   cardSupport: {
     fontFamily: 'Geist Sans 400',
-    fontSize: 12.5,
-    lineHeight: 17,
+    fontSize: 13,
+    lineHeight: 18,
   },
   cardVenue: {
     fontFamily: 'Geist Sans 400',
-    fontSize: 12.5,
-    lineHeight: 17,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 4,
-  },
-  tixPillEnd: {
-    marginLeft: 'auto',
+    fontSize: 13,
+    lineHeight: 18,
   },
   statusBadge: {
     paddingVertical: 2,

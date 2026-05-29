@@ -29,18 +29,20 @@ export const EntityLimit = {
     max: 100,
     nounPlural: 'venues',
     description:
-      'Followed venues per user. NOT yet enforced — the cap is declared ' +
-      'here so the number has a single home, but the `venues.follow` ' +
-      'server guard and the matching disabled-state UI land in a ' +
-      'follow-up PR.',
+      'Followed venues per user. Enforced server-side in `venues.follow` ' +
+      '(via `assertUnderFollowCap`) and surfaced as a disabled "Follow a ' +
+      'venue" state on the web Discover rail + Preferences and the mobile ' +
+      'Discover follow sheet.',
   },
   artists: {
     max: 250,
     nounPlural: 'artists',
     description:
-      'Followed artists per user. NOT yet enforced — see the `venues` ' +
-      'note above; the `performers.follow` / `followAttraction` guard and ' +
-      'its UI ship in the same follow-up PR.',
+      'Followed artists per user. Enforced server-side in ' +
+      '`performers.follow` and `performers.followAttraction` (via ' +
+      '`assertUnderFollowCap`) and surfaced as a disabled "Follow an ' +
+      'artist" state on the web Discover rail + Preferences and the ' +
+      'mobile Discover follow sheet.',
   },
 } as const satisfies Record<
   string,

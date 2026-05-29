@@ -23,6 +23,7 @@ import { scrapeConfigSchema, parseScrapeConfig } from '../scrape-config';
 import { venueScrapeRuns } from '@showbook/db';
 import { computeVenueUnfollowAnnouncementsToDelete } from './preferences';
 import { enforceRateLimit } from '../rate-limit';
+import { assertUnderFollowCap } from '../follow-caps';
 import { child } from '@showbook/observability';
 
 const log = child({ component: 'api.venues' });
@@ -161,6 +162,12 @@ export const venuesRouter = router({
     .input(z.object({ venueId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+
+      const followed = await ctx.db
+        .select({ venueId: userVenueFollows.venueId })
+        .from(userVenueFollows)
+        .where(eq(userVenueFollows.userId, userId));
+      assertUnderFollowCap('venues', followed.map((f) => f.venueId), input.venueId);
 
       await ctx.db
         .insert(userVenueFollows)
