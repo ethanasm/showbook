@@ -632,6 +632,8 @@ export default function DiscoverScreen(): React.JSX.Element {
           onSelect={setSelectedGroupId}
           onLongPress={handleChipLongPress}
           totalCount={items.length}
+          testIdPrefix="discover-group"
+          pickerTitle={groupPickerTitle(tab)}
           leadingAction={{
             label: addChipLabel(tab),
             onPress: () => setAddSheetTab(tab),
@@ -950,6 +952,12 @@ function addChipLabel(tab: DiscoverTab): string {
   if (tab === 'venues') return 'Follow venue';
   if (tab === 'artists') return 'Follow artist';
   return 'Add region';
+}
+
+function groupPickerTitle(tab: DiscoverTab): string {
+  if (tab === 'venues') return 'All venues';
+  if (tab === 'artists') return 'All artists';
+  return 'All regions';
 }
 
 function addChipAccessibilityLabel(tab: DiscoverTab): string {

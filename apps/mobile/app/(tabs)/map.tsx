@@ -355,14 +355,6 @@ function pinRadius(count: number): number {
   return Math.max(8, Math.min(22, 7 + count * 1.4));
 }
 
-function chunkRegions(regions: FocusRegion[], size: number): FocusRegion[][] {
-  const rows: FocusRegion[][] = [];
-  for (let i = 0; i < regions.length; i += size) {
-    rows.push(regions.slice(i, i + size));
-  }
-  return rows;
-}
-
 /**
  * Convert a saved region (lat/lng + radius in miles) into a react-native-maps
  * `Region` framed so the radius fits horizontally with a little padding.
@@ -455,15 +447,6 @@ export default function MapScreen(): React.JSX.Element {
     setActiveFocusId(focus.id);
     mapRef.current?.animateToRegion(focus.region, 400);
   }, []);
-
-  // The focus toggle wraps into rows of three. `chunkRegions` front-loads
-  // full rows, so the first row is always the widest; a shorter trailing
-  // row is right-aligned and inset from the container's left border.
-  const focusRows = React.useMemo(
-    () => chunkRegions(focusRegions, 3),
-    [focusRegions],
-  );
-  const widestFocusRow = focusRows[0]?.length ?? 0;
 
   const loggedShows = React.useMemo(
     () => (showsQuery.data ?? []) as MapShow[],
@@ -914,58 +897,42 @@ export default function MapScreen(): React.JSX.Element {
                   },
                 ]}
               >
-                {focusRows.map((row, rowIdx) => (
-                  <View
-                    key={rowIdx}
-                    style={[
-                      styles.focusToggleRow,
-                      // Divider sits on the bottom of each non-last row.
-                      // Those rows span the full container width, so the
-                      // rule reaches across the inset area below; a
-                      // `borderTop` on the next row would only span that
-                      // shorter row and leave the gap above it open.
-                      rowIdx < focusRows.length - 1 && {
-                        borderBottomColor: colors.ruleStrong,
-                        borderBottomWidth: 1,
-                      },
-                    ]}
-                  >
-                    {row.map((focus, i) => {
-                      const active = focus.id === activeFocusId;
-                      // A row shorter than the widest one is inset from the
-                      // container's left border, so its first cell needs its
-                      // own left border to stay visually enclosed.
-                      const needsLeftBorder =
-                        i > 0 || row.length < widestFocusRow;
-                      return (
-                        <Pressable
-                          key={focus.id}
-                          onPress={() => onFocusPress(focus)}
-                          style={[
-                            styles.focusToggleBtn,
-                            needsLeftBorder && {
-                              borderLeftColor: colors.ruleStrong,
-                              borderLeftWidth: 1,
-                            },
-                            active && { backgroundColor: colors.ink },
-                          ]}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Focus map on ${focus.label}`}
-                        >
-                          <Text
-                            style={[
-                              styles.focusToggleLabel,
-                              { color: active ? colors.bg : colors.muted },
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {focus.label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                ))}
+                {focusRegions.map((focus, i) => {
+                  const active = focus.id === activeFocusId;
+                  return (
+                    <Pressable
+                      key={focus.id}
+                      onPress={() => onFocusPress(focus)}
+                      style={({ pressed }) => [
+                        styles.focusToggleBtn,
+                        i > 0 && {
+                          borderTopColor: colors.rule,
+                          borderTopWidth: StyleSheet.hairlineWidth,
+                        },
+                        active && { backgroundColor: colors.ink },
+                        pressed && !active && { backgroundColor: colors.surfaceRaised },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      accessibilityLabel={`Focus map on ${focus.label}`}
+                    >
+                      <MapPin
+                        size={12}
+                        color={active ? colors.bg : colors.faint}
+                        strokeWidth={2}
+                      />
+                      <Text
+                        style={[
+                          styles.focusToggleLabel,
+                          { color: active ? colors.bg : colors.muted },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {focus.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             )}
           </ErrorBoundary>
@@ -1246,17 +1213,22 @@ const styles = StyleSheet.create({
     bottom: 16,
     right: 16,
     flexDirection: 'column',
-    alignItems: 'flex-end',
+    alignItems: 'stretch',
+    minWidth: 140,
+    maxWidth: 220,
     borderWidth: 1,
-  },
-  focusToggleRow: {
-    flexDirection: 'row',
+    borderRadius: RADII.lg,
+    overflow: 'hidden',
   },
   focusToggleBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
   },
   focusToggleLabel: {
+    flexShrink: 1,
     fontFamily: 'Geist Mono 500',
     fontSize: 10.5,
     letterSpacing: 0.6,

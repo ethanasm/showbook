@@ -727,7 +727,7 @@ function HeaderStrip({
         onPress={() => router.push(`/venues/${show.venue.id}`)}
         accessibilityRole="link"
         accessibilityLabel={show.venue.name}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
       >
         <RemoteImage
           uri={backgroundImage?.uri ?? null}
@@ -736,7 +736,7 @@ function HeaderStrip({
           kind={show.kind as Kind}
           size="custom"
           height={heroHeight}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
         />
       </Pressable>
 
@@ -752,7 +752,7 @@ function HeaderStrip({
           'rgba(0,0,0,0.82)',
         ]}
         locations={[0, 0.18, 0.42, 0.70, 1]}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
 

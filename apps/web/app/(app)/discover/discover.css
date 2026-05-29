@@ -1216,26 +1216,42 @@ a.discover-row__headliner-link:hover {
   }
 
   .discover-chips {
-    display: flex;
-    gap: 6px;
-    overflow-x: auto;
+    display: block;
+    position: relative;
     padding: 8px var(--page-pad-x) 10px;
     border-bottom: 1px solid var(--rule);
     flex-shrink: 0;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
   }
 
-  .discover-chips::-webkit-scrollbar {
-    display: none;
+  /* Single line — chips that fit render here, the rest collapse into the
+     trailing "+N" dropdown. `overflow: hidden` clips any sub-pixel
+     spillover during a resize re-measure rather than introducing a
+     scrollbar. */
+  .discover-chips__row {
+    display: flex;
+    gap: 6px;
+    overflow: hidden;
+  }
+
+  /* Off-screen measuring row used to decide what fits. */
+  .discover-chips__measure {
+    position: absolute;
+    top: 0;
+    left: var(--page-pad-x);
+    display: flex;
+    gap: 6px;
+    visibility: hidden;
+    pointer-events: none;
+    white-space: nowrap;
   }
 
   .discover-chip {
     flex-shrink: 0;
-    padding: 6px 10px;
-    background: transparent;
+    padding: 7px 12px;
+    background: var(--surface);
     color: var(--ink);
-    border: 1px solid var(--rule-strong);
+    border: 1px solid var(--rule);
+    border-radius: 999px;
     font-family: var(--font-geist-sans), sans-serif;
     font-size: 11.5px;
     font-weight: 500;
@@ -1245,7 +1261,10 @@ a.discover-row__headliner-link:hover {
     align-items: center;
     gap: 5px;
     white-space: nowrap;
-    transition: all 0.12s;
+    transition:
+      background 0.12s,
+      color 0.12s,
+      border-color 0.12s;
   }
 
   .discover-chip--active {
@@ -1253,6 +1272,26 @@ a.discover-row__headliner-link:hover {
     color: var(--bg);
     border-color: var(--ink);
     font-weight: 600;
+  }
+
+  .discover-chip--more {
+    color: var(--ink);
+    font-weight: 600;
+    gap: 3px;
+  }
+
+  .discover-chip--more svg {
+    color: var(--muted);
+  }
+
+  .discover-chip__sub {
+    color: var(--muted);
+    font-weight: 400;
+  }
+
+  .discover-chip--active .discover-chip__sub {
+    color: var(--bg);
+    opacity: 0.75;
   }
 
   .discover-chip__count {
@@ -1267,6 +1306,79 @@ a.discover-row__headliner-link:hover {
   }
 
   .discover-chip:not(.discover-chip--active) .discover-chip__count {
+    color: var(--faint);
+  }
+
+  /* Overflow dropdown picker. */
+  .discover-chips__menu {
+    position: absolute;
+    z-index: 40;
+    top: calc(100% - 4px);
+    right: var(--page-pad-x);
+    min-width: 220px;
+    max-width: calc(100vw - 2 * var(--page-pad-x));
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 6px;
+    background: var(--surface);
+    border: 1px solid var(--rule-strong);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  }
+
+  .discover-chips__menu-title {
+    font-family: var(--font-geist-sans), sans-serif;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 6px 8px 8px;
+  }
+
+  .discover-chips__menu-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 9px 8px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    color: var(--ink);
+    font-family: var(--font-geist-sans), sans-serif;
+    font-size: 13.5px;
+    font-weight: 500;
+  }
+
+  .discover-chips__menu-row:hover {
+    background: var(--surface2);
+  }
+
+  .discover-chips__menu-row--active {
+    background: var(--accent-faded);
+    font-weight: 600;
+  }
+
+  .discover-chips__menu-check {
+    display: inline-flex;
+    width: 16px;
+    flex-shrink: 0;
+    color: var(--accent);
+  }
+
+  .discover-chips__menu-label {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .discover-chips__menu-count {
+    font-family: var(--font-geist-mono), monospace;
+    font-size: 11px;
     color: var(--faint);
   }
 

@@ -84,7 +84,7 @@ export function HeroShowCard({
         size="custom"
         width={undefined}
         height={undefined}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         accessibilityLabel={`${show.headliner} photo`}
       />
 
@@ -95,7 +95,7 @@ export function HeroShowCard({
       <LinearGradient
         colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.15)', 'rgba(0,0,0,0.78)']}
         locations={[0, 0.45, 1]}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
 
