@@ -129,14 +129,38 @@ export async function runAlbumMetadataFill(): Promise<AlbumMetadataFillSummary> 
       }
     } catch (err) {
       failed += 1;
-      const isSpotifyErr = err instanceof SpotifyError;
+      const status = err instanceof SpotifyError ? err.status : undefined;
+      // A 401 here means the app-level token was rejected by the catalog
+      // API even after `withAppToken`'s fresh-token retry. That's a
+      // run-wide authorization failure (revoked/restricted credentials),
+      // not a per-performer problem — every remaining performer would
+      // 401 identically. Abort the loop and log once rather than
+      // emitting one error per performer: the May 2026 incident logged
+      // 1145 `performer_failed` errors in a single run, tripping the
+      // error_volume health check and grinding the job past its 30-min
+      // pg-boss expiry into a `failed` state (which then tripped the
+      // pgboss_queue check too). Returning cleanly lets pg-boss mark the
+      // run complete; the single error keeps the credential problem
+      // visible without burying genuine per-performer failures.
+      if (status === 401) {
+        log.error(
+          {
+            event: 'album_metadata_fill.auth_rejected',
+            err,
+            attempted,
+            failed,
+          },
+          'app-level token rejected by Spotify catalog API (401); aborting run',
+        );
+        break;
+      }
       log.error(
         {
           event: 'album_metadata_fill.performer_failed',
           err,
           performerId: performer.id,
           performerName: performer.name,
-          status: isSpotifyErr ? err.status : undefined,
+          status,
         },
         'album metadata fill failed for performer',
       );
