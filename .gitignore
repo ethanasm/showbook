@@ -3,6 +3,12 @@
 # Dependencies
 node_modules/
 
+# EAS submit credentials — Google Play service-account JSON written at
+# CI submit time from the PLAY_SERVICE_ACCOUNT_JSON secret. Never check
+# this in; it's a write-access credential to the Play Console release
+# track.
+apps/mobile/play-service-account.json
+
 # Next.js
 .next/
 out/

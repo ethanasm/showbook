@@ -182,17 +182,27 @@ jobs:
             echo "See workflow header comment for setup." >&2
             exit 1
           fi
-          SA="$RUNNER_TEMP/play-sa.json"
+          # eas-cli doesn't accept --key / --service-account-key-path as a
+          # submit flag in current versions — the path has to come from the
+          # submit profile in eas.json (`serviceAccountKeyPath`, relative to
+          # eas.json itself). We write the secret to that exact relative path
+          # in the working directory (which is `apps/mobile/`), chmod it, and
+          # let `eas submit --profile preview-store` resolve the path the
+          # standard way.
+          SA="./play-service-account.json"
           # printf, not echo, so a trailing newline doesn't break JSON parsing
-          # on EAS's side. The file is on the ephemeral runner only.
+          # on EAS's side. The file is on the ephemeral runner only and is
+          # gitignored at the repo level so a misconfigured `git add` can't
+          # commit it.
           printf '%s' "$PLAY_SA_JSON" > "$SA"
           chmod 600 "$SA"
           pnpm dlx eas-cli submit \
             --profile preview-store \
             --platform android \
             --latest \
-            --non-interactive \
-            --key "$SA"
+            --non-interactive
+          # Best-effort cleanup; runner is ephemeral anyway.
+          rm -f "$SA"
 
       - name: Build iOS IPA (preview profile)
         # iOS keeps the fire-and-forget --no-wait pattern: no auto-submit
