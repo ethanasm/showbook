@@ -76,11 +76,14 @@ test.describe('Add page — per-performer setlist input', () => {
     });
     if (!id) throw new Error('Radiohead @ MSG show not seeded');
     await page.goto(`/add?editId=${id}`);
-    // Wait for the edit prefill to finish (Loading… is replaced by the form).
-    await page.locator('text=Loading show...').waitFor({ state: 'detached', timeout: 15000 });
-
-    // The setlist section should show the prefilled setlist
-    await expect(page.getByTestId('setlist-section')).toBeVisible({ timeout: 5000 });
+    // Wait for the edit prefill to finish. Don't wait on the transient
+    // "Loading show..." placeholder to detach: during the route transition
+    // it can resolve to more than one node (the failures showed one inside
+    // <main> plus a sibling), which trips Playwright strict mode and throws
+    // instead of waiting — a race that flaked this spec on unrelated PRs.
+    // Wait for the positive loaded signal instead: the prefilled setlist
+    // section only mounts once the show query resolves.
+    await expect(page.getByTestId('setlist-section')).toBeVisible({ timeout: 15000 });
 
     await page.screenshot({
       path: 'test-results/screenshots/add-setlist-edit-prefill.png',
