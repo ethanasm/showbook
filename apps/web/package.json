@@ -34,7 +34,7 @@
     "drizzle-orm": "^0.45.2",
     "geist": "^1.7.1",
     "google-auth-library": "^10.6.2",
-    "heic-to": "^1.4.2",
+    "heic-to": "^1.5.2",
     "langfuse": "^3.38.4",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.17.0",
