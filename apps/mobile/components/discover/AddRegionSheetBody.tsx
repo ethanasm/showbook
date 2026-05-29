@@ -30,6 +30,7 @@ import {
   RADIUS_OPTIONS,
   parseRegionInput,
 } from '@/lib/regions';
+import { entityLimitReachedHint } from '@showbook/shared';
 
 export interface AddRegionInput {
   cityName: string;
@@ -42,10 +43,20 @@ export function AddRegionSheetBody({
   onCancel,
   onSubmit,
   submitLabel = 'Add region',
+  atCap = false,
 }: {
   onCancel: () => void;
   onSubmit: (input: AddRegionInput) => Promise<void>;
   submitLabel?: string;
+  /**
+   * When true the user has already hit the region cap. The submit control
+   * is disabled and a persistent cap hint replaces the transient validation
+   * error, so the sheet explains why "Add region" is unavailable instead of
+   * letting the user fill out a form that would 400 on submit. The regions
+   * editor (`app/regions.tsx`) never renders this body at cap, so it leaves
+   * the default `false`.
+   */
+  atCap?: boolean;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -107,6 +118,7 @@ export function AddRegionSheetBody({
   );
 
   const onSubmitPressed = React.useCallback(async () => {
+    if (atCap) return;
     if (!resolved) {
       setError('Pick a city from the suggestions first.');
       return;
@@ -129,7 +141,7 @@ export function AddRegionSheetBody({
     } finally {
       setSubmitting(false);
     }
-  }, [resolved, radius, onSubmit]);
+  }, [atCap, resolved, radius, onSubmit]);
 
   return (
     <View
@@ -229,22 +241,30 @@ export function AddRegionSheetBody({
         })}
       </View>
 
-      {error ? (
+      {atCap ? (
+        <Text
+          style={[styles.formError, { color: colors.danger }]}
+          testID="regions-add-cap-message"
+        >
+          {entityLimitReachedHint('regions')}
+        </Text>
+      ) : error ? (
         <Text style={[styles.formError, { color: colors.danger }]}>{error}</Text>
       ) : null}
 
       <View style={styles.formActions}>
         <Pressable
           onPress={() => void onSubmitPressed()}
-          disabled={submitting || !resolved}
+          disabled={submitting || !resolved || atCap}
           accessibilityRole="button"
           accessibilityLabel={submitLabel}
+          accessibilityState={{ disabled: submitting || !resolved || atCap }}
           testID="regions-add-submit"
           style={({ pressed }) => [
             styles.primaryButton,
             {
               backgroundColor: colors.accent,
-              opacity: submitting || !resolved ? 0.5 : 1,
+              opacity: submitting || !resolved || atCap ? 0.5 : 1,
             },
             pressed && styles.pressed,
           ]}

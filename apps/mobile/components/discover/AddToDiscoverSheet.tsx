@@ -15,6 +15,7 @@ import { useFeedback } from '@/lib/feedback';
 import { runOptimisticMutation } from '@/lib/mutations';
 import { getCacheOutbox } from '@/lib/cache';
 import { trpc } from '@/lib/trpc';
+import { canAddRegion } from '@/lib/regions';
 import { FollowVenueSheetBody } from './FollowVenueSheetBody';
 import { FollowArtistSheetBody } from './FollowArtistSheetBody';
 import { AddRegionSheetBody } from './AddRegionSheetBody';
@@ -32,6 +33,15 @@ export function AddToDiscoverSheet({
 }): React.JSX.Element {
   const utils = trpc.useUtils();
   const { showToast } = useFeedback();
+
+  // The region cap mirrors the server guard in `preferences.addRegion`. We
+  // only need the count when the regions tab is actually open, so the query
+  // stays gated to avoid a needless round-trip on the venues / artists tabs.
+  const prefs = trpc.preferences.get.useQuery(undefined, {
+    enabled: open && tab === 'regions',
+    staleTime: 60_000,
+  });
+  const regionsAtCap = !canAddRegion(prefs.data?.regions?.length ?? 0);
 
   const onRegionSubmit = React.useCallback(
     async (input: {
@@ -72,7 +82,11 @@ export function AddToDiscoverSheet({
       ) : tab === 'artists' ? (
         <FollowArtistSheetBody onFollowed={onClose} onClose={onClose} />
       ) : (
-        <AddRegionSheetBody onCancel={onClose} onSubmit={onRegionSubmit} />
+        <AddRegionSheetBody
+          onCancel={onClose}
+          onSubmit={onRegionSubmit}
+          atCap={regionsAtCap}
+        />
       )}
     </Sheet>
   );

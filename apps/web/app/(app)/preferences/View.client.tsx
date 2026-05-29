@@ -15,6 +15,11 @@ import { AddRegionForm } from "@/components/preferences/AddRegionForm";
 import { RegionChip } from "@/components/preferences/RegionChip";
 import { VenueFollowModal } from "@/components/preferences/VenueFollowModal";
 import { setlistSpoilersConverter, themeConverter } from "@/lib/enum-converters";
+import {
+  entityLimit,
+  canAddEntity,
+  entityLimitReachedHint,
+} from "@showbook/shared";
 
 // ── Data Source Row ────────────────────────────────────────
 
@@ -318,8 +323,8 @@ export default function PreferencesView() {
                 where to look for nearby shows · powers your daily digest
               </div>
             </div>
-            <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: regions.length >= 5 ? "#E63946" : "var(--muted)", letterSpacing: ".04em", marginLeft: "auto" }}>
-              {regions.length} / 5 regions
+            <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: !canAddEntity("regions", regions.length) ? "#E63946" : "var(--muted)", letterSpacing: ".04em", marginLeft: "auto" }}>
+              {regions.length} / {entityLimit("regions")} regions
             </div>
           </div>
           <div style={{ ...styles.card, padding: "16px 20px", marginBottom: 36 }}>
@@ -352,11 +357,11 @@ export default function PreferencesView() {
                     marginTop: 12,
                   }}
                 >
-                  {regions.length < 5 ? (
+                  {canAddEntity("regions", regions.length) ? (
                     <AddRegionForm onAdd={() => prefsQuery.refetch()} />
                   ) : (
                     <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)", letterSpacing: ".04em", marginTop: 12 }}>
-                      Maximum 5 regions — remove one to add another
+                      {entityLimitReachedHint("regions")}
                     </div>
                   )}
                   <div

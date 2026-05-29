@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
+import { entityLimit, canAddEntity } from "@showbook/shared";
 import { SortHeader } from "@/components/SortHeader";
 import { EmptyState } from "@/components/design-system";
 import { Music } from "lucide-react";
@@ -307,7 +308,7 @@ function FeedSection({
     />
   );
   const totalRegionCount = regionCount ?? activeRegions?.length ?? 0;
-  const regionLimitReached = totalRegionCount >= 5;
+  const regionLimitReached = !canAddEntity("regions", totalRegionCount);
 
   const venueRail = (
     <VenueRail
@@ -323,7 +324,7 @@ function FeedSection({
       showAddRegion={isNearby}
       onAddRegion={() => setShowRegionModal(true)}
       addRegionDisabled={regionLimitReached}
-      addRegionHint={regionLimitReached ? "Maximum 5 regions" : `${totalRegionCount} / 5 regions`}
+      addRegionHint={regionLimitReached ? `Maximum ${entityLimit("regions")} regions` : `${totalRegionCount} / ${entityLimit("regions")} regions`}
       onUnfollowRegion={isNearby ? (regionId) => removeRegionMutation.mutate({ regionId }) : undefined}
       showArtistSearch={isArtists}
       pendingItemIds={pendingGroupIds}
