@@ -58,7 +58,19 @@ const config: ExpoConfig = {
   name: 'Showbook',
   slug: 'showbook',
   owner: 'ethanasm',
-  version: '0.1.0',
+  // `runtimeVersion: { policy: 'appVersion' }` (below) derives the
+  // expo-updates runtime version from this string. Bumped 0.1.0 -> 0.1.1
+  // with the SDK 55 -> 56 upgrade in #465 (which would otherwise leave the
+  // version unchanged across an incompatible native ABI break): the
+  // unbumped runtime meant OTA bundles compiled against SDK 56 APIs were
+  // being shipped to SDK-55 native binaries still installed on devices
+  // (iOS preview installs that hadn't been resubmitted, since iOS auto-
+  // submit isn't wired). Bumping the version flips the runtime, so
+  // expo-updates on the old binary refuses the incompatible bundle and
+  // falls back to its embedded JS — a stale-but-consistent state instead
+  // of a half-broken cross-SDK overlay. New SDK 56 builds land on 0.1.1
+  // and pick up OTAs normally.
+  version: '0.1.1',
   orientation: 'portrait',
   icon: './assets/icon.png',
   scheme: ANDROID_GOOGLE_OAUTH_SCHEME
