@@ -314,7 +314,7 @@ export default function ShowsScreen(): React.JSX.Element {
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
       <TopBar title="Shows" eyebrow={eyebrow} rightAction={<MeTopBarAction />} large />
 
-      <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
+      <View style={{ paddingHorizontal: 20, paddingBottom: 12 }}>
         <SegmentedControl<'upcoming' | 'past'>
           value={stateBucket}
           onChange={setStateBucket}
@@ -859,18 +859,11 @@ function CalendarView({
             ))
           )}
         </View>
-      ) : (
-        <View style={{ gap: 8 }}>
-          <Text style={[styles.sectionLabelInline, { color: colors.muted }]}>
-            {`THIS YEAR · ${rowsInYear.length}`}
-          </Text>
-          {rowsInYear.length === 0 ? (
-            <Text style={{ color: colors.faint, fontFamily: 'Geist Sans', fontSize: 13 }}>
-              No shows this year.
-            </Text>
-          ) : null}
-        </View>
-      )}
+      ) : rowsInYear.length === 0 ? (
+        <Text style={{ color: colors.faint, fontFamily: 'Geist Sans', fontSize: 13 }}>
+          No shows this year.
+        </Text>
+      ) : null}
     </ScrollView>
   );
 }
