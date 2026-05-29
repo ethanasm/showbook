@@ -56,9 +56,12 @@ updates:
       # split. They previously leaked out as standalone PRs (#461
       # reanimated, #462 worklets) that died at `pnpm install
       # --frozen-lockfile` because the root package.json `pnpm.overrides`
-      # pin them and dependabot can't edit overrides. Keep them grouped;
-      # an SDK bump is still a manual finish (bump the matching
-      # `pnpm.overrides` + `expo install --fix` on the branch).
+      # pin them and dependabot can't edit overrides. The grouping keeps the
+      # non-override-pinned ones (svg, maps, web, netinfo, masked-view)
+      # moving with `expo`; the five that ARE override-pinned are additionally
+      # `ignore`d below — grouping alone still produced failing, SDK-
+      # overshooting PRs (#475: gesture-handler 3.0.0 / reanimated 4.4.0 on an
+      # SDK-56 host). They move only via a manual `expo install --fix` SDK bump.
       expo-sdk:
         patterns:
           - "expo"
@@ -76,6 +79,22 @@ updates:
       # packages ship ESLint-10-compatible releases.
       - dependency-name: "eslint"
         update-types: ["version-update:semver-major"]
+      # These native modules are version-locked by the Expo SDK
+      # (bundledNativeModules.json) AND hard-pinned in the root package.json
+      # `pnpm.overrides`. Dependabot can't edit overrides, so every bump it
+      # raises (a) contradicts the override and dies at `pnpm install
+      # --frozen-lockfile`, and (b) overshoots the current SDK's blessed
+      # version — e.g. #475 offered gesture-handler 3.0.0 / reanimated 4.4.0 /
+      # worklets 0.9.1 on an SDK-56 host (which bundles 2.31.1 / 4.3.1 /
+      # 0.8.3), the partial-upgrade native-init crash class. They move only as
+      # part of a manual `expo install --fix` SDK upgrade (see #465), so
+      # Dependabot leaves them alone. Update this list if the override set in
+      # the root package.json changes.
+      - dependency-name: "react-native-reanimated"
+      - dependency-name: "react-native-worklets"
+      - dependency-name: "react-native-screens"
+      - dependency-name: "react-native-gesture-handler"
+      - dependency-name: "react-native-safe-area-context"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
