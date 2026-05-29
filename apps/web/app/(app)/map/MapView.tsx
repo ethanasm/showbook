@@ -14,7 +14,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { trpc } from "@/lib/trpc";
 import { EmptyState, RemoteImage, type ShowKind } from "@/components/design-system";
-import { ArrowUpRight, Plus, X } from "lucide-react";
+import { ArrowUpRight, MapPin, Plus, X } from "lucide-react";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import "./map.css";
 import "@/components/design-system/segmented-filter.css";
@@ -446,7 +446,8 @@ function ViewToggle({
           onClick={() => setActiveView(i)}
           type="button"
         >
-          {v.label}
+          <MapPin size={12} strokeWidth={2} className="map-overlay-viewtoggle__pin" />
+          <span>{v.label}</span>
         </button>
       ))}
     </div>

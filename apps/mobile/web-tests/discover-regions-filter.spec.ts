@@ -173,34 +173,37 @@ test.describe('mobile web — discover regions venue filter', () => {
     // Switch to the Regions sub-tab. The SegmentedControl renders as a
     // Pressable with accessibilityLabel="Regions".
     await page.getByRole('button', { name: 'Regions' }).first().click();
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(500);
 
-    // Region row should now show both followed regions plus "All".
-    await expect(page.getByText('New York').first()).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByText('San Francisco').first()).toBeVisible();
+    // The region rail is the redesigned overflow rail: chips that fit
+    // render inline, the rest live behind the trailing "+N" dropdown.
+    // The rail picks a single id from the followed regions; assert both
+    // are reachable (inline or via the dropdown picker) by id.
+    await expect(filterOptionExists(page, 'discover-group', 'region-nyc')).resolves.toBe(true);
+    await expect(filterOptionExists(page, 'discover-group', 'region-bay')).resolves.toBe(true);
 
-    // Venue row underneath shows every venue surfaced by the nearby
+    // The venue sub-rail underneath surfaces every venue from the nearby
     // feed: Bowery (NYC), MSG (NYC), Fillmore (SF).
-    await expect(page.getByText('Bowery Ballroom').first()).toBeVisible();
-    await expect(page.getByText('Madison Square Garden').first()).toBeVisible();
-    await expect(page.getByText('The Fillmore').first()).toBeVisible();
+    await expect(filterOptionExists(page, 'discover-venue-chip', 'venue-bowery')).resolves.toBe(true);
+    await expect(filterOptionExists(page, 'discover-venue-chip', 'venue-msg')).resolves.toBe(true);
+    await expect(filterOptionExists(page, 'discover-venue-chip', 'venue-fillmore')).resolves.toBe(true);
 
-    // Snapshot — two-tier filter row visible, all venues listed.
-    await page.waitForTimeout(400);
+    // Snapshot — two-tier overflow rail, no horizontal scroll.
+    await page.waitForTimeout(300);
     await page.screenshot({
       path: join(OUT_DIR, '12-discover-regions-filter-all-after.png'),
       fullPage: true,
       animations: 'disabled',
     });
 
-    // Pick the New York region — the venue row narrows to NYC venues
-    // only (Bowery + MSG) and the Fillmore disappears.
-    await page.getByRole('button', { name: 'New York 30mi' }).first().click();
+    // Pick the New York region — the venue rail narrows to NYC venues
+    // only (Bowery + MSG) and the Fillmore disappears entirely.
+    await pickFilter(page, 'discover-group', 'region-nyc');
     await page.waitForTimeout(400);
 
-    await expect(page.getByText('The Fillmore').first()).toBeHidden();
-    await expect(page.getByText('Bowery Ballroom').first()).toBeVisible();
-    await expect(page.getByText('Madison Square Garden').first()).toBeVisible();
+    await expect(filterOptionExists(page, 'discover-venue-chip', 'venue-fillmore')).resolves.toBe(false);
+    await expect(filterOptionExists(page, 'discover-venue-chip', 'venue-bowery')).resolves.toBe(true);
+    await expect(filterOptionExists(page, 'discover-venue-chip', 'venue-msg')).resolves.toBe(true);
 
     await page.screenshot({
       path: join(OUT_DIR, '13-discover-regions-filter-nyc-after.png'),
@@ -210,12 +213,12 @@ test.describe('mobile web — discover regions venue filter', () => {
 
     // Pick Bowery — announcement list should narrow to the two Bowery
     // shows. MSG-only headliners (John Mulaney) drop out.
-    await page.getByRole('button', { name: 'Bowery Ballroom New York' }).first().click();
+    await pickFilter(page, 'discover-venue-chip', 'venue-bowery');
     await page.waitForTimeout(400);
 
     await expect(page.getByText('Phoebe Bridgers').first()).toBeVisible();
     await expect(page.getByText('Black Country, New Road').first()).toBeVisible();
-    await expect(page.getByText('John Mulaney').first()).toBeHidden();
+    await expect(page.getByText('John Mulaney')).toHaveCount(0);
 
     await page.screenshot({
       path: join(OUT_DIR, '14-discover-regions-filter-nyc-bowery-after.png'),
@@ -224,3 +227,42 @@ test.describe('mobile web — discover regions venue filter', () => {
     });
   });
 });
+
+/**
+ * Resolve whether a filter option is reachable in the redesigned rail —
+ * either rendered inline as a chip, or listed in the overflow dropdown
+ * sheet behind the trailing "+N" button. The off-screen measuring pass
+ * the rail uses to decide what fits carries no testIDs, so chip / sheet
+ * testIDs are unambiguous.
+ */
+async function filterOptionExists(
+  page: import('@playwright/test').Page,
+  prefix: string,
+  id: string,
+): Promise<boolean> {
+  if ((await page.getByTestId(`${prefix}-${id}`).count()) > 0) return true;
+  const more = page.getByTestId(`${prefix}-more`);
+  if ((await more.count()) === 0) return false;
+  await more.first().click();
+  const present = (await page.getByTestId(`${prefix}-sheet-${id}`).count()) > 0;
+  // Close the sheet via the backdrop so the next interaction starts clean.
+  await page.getByRole('button', { name: 'Close sheet' }).first().click();
+  await page.waitForTimeout(250);
+  return present;
+}
+
+/** Select a filter option, clicking the inline chip when present and
+ *  falling back to the overflow dropdown otherwise. */
+async function pickFilter(
+  page: import('@playwright/test').Page,
+  prefix: string,
+  id: string,
+): Promise<void> {
+  const inline = page.getByTestId(`${prefix}-${id}`);
+  if ((await inline.count()) > 0) {
+    await inline.first().click();
+    return;
+  }
+  await page.getByTestId(`${prefix}-more`).first().click();
+  await page.getByTestId(`${prefix}-sheet-${id}`).first().click();
+}

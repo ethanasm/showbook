@@ -68,7 +68,8 @@ import { useAuth } from '@/lib/auth';
 import { useNetwork } from '@/lib/network';
 import { hapticSelection } from '@/lib/haptics';
 import { trpc, type RouterOutput } from '@/lib/trpc';
-import { useCachedQuery } from '@/lib/cache';
+import { useCachedQuery, getCacheOutbox } from '@/lib/cache';
+import { runOptimisticMutation } from '@/lib/mutations';
 import { useIngestPolling } from '@/lib/discover/useIngestPolling';
 import {
   WATCHED_IDS_CACHE_KEY,
@@ -170,6 +171,7 @@ export default function DiscoverScreen(): React.JSX.Element {
   const { token } = useAuth();
   const network = useNetwork();
   const utils = trpc.useUtils();
+  const { showToast } = useFeedback();
   const [tab, setTab] = React.useState<DiscoverTab>('venues');
   const [selectedGroupId, setSelectedGroupId] = React.useState<string | null>(null);
   // Controls the inline add-typeahead sheet that mirrors web's
@@ -426,6 +428,100 @@ export default function DiscoverScreen(): React.JSX.Element {
     });
   }, [items, selectedGroupId, tab]);
 
+  // Long-press / dropdown removal of a followed venue / artist / region
+  // straight from the chip rail. Only entries the user actually follows
+  // are removable — announcement-only chips (a group that exists purely
+  // because the nearby feed surfaced it) have nothing to unfollow.
+  const followedVenueIdSet = React.useMemo(
+    () => new Set((followedVenuesList.data ?? []).map((v) => v.id)),
+    [followedVenuesList.data],
+  );
+  const followedRegionIdSet = React.useMemo(
+    () =>
+      new Set(
+        (preferencesQuery.data?.regions ?? [])
+          .filter((r) => r.active !== false)
+          .map((r) => r.id),
+      ),
+    [preferencesQuery.data?.regions],
+  );
+
+  const canRemoveGroup = React.useCallback(
+    (group: FilterGroup) => {
+      if (tab === 'venues') return followedVenueIdSet.has(group.id);
+      if (tab === 'artists')
+        return followedArtistIdSet?.has(group.id) ?? false;
+      return followedRegionIdSet.has(group.id);
+    },
+    [tab, followedVenueIdSet, followedArtistIdSet, followedRegionIdSet],
+  );
+
+  const removeActionLabel =
+    tab === 'venues'
+      ? 'Unfollow venue'
+      : tab === 'artists'
+        ? 'Unfollow artist'
+        : 'Remove region';
+
+  const onRemoveGroup = React.useCallback(
+    async (group: FilterGroup) => {
+      // Clear the filter if the removed group was the active one so the
+      // feed doesn't sit empty on a now-gone selection.
+      setSelectedGroupId((cur) => (cur === group.id ? null : cur));
+      try {
+        if (tab === 'venues') {
+          await runOptimisticMutation({
+            mutation: 'venues.unfollow',
+            input: { venueId: group.id },
+            outbox: getCacheOutbox(),
+            call: (i) => utils.client.venues.unfollow.mutate(i),
+            reconcile: () => {
+              void followedVenuesList.refetch();
+              void activeQuery.refetch();
+            },
+          });
+        } else if (tab === 'artists') {
+          await runOptimisticMutation({
+            mutation: 'performers.unfollow',
+            input: { performerId: group.id },
+            outbox: getCacheOutbox(),
+            call: (i) => utils.client.performers.unfollow.mutate(i),
+            reconcile: () => {
+              void followedArtistsList.refetch();
+              void activeQuery.refetch();
+            },
+          });
+        } else {
+          await runOptimisticMutation({
+            mutation: 'preferences.removeRegion',
+            input: { regionId: group.id },
+            outbox: getCacheOutbox(),
+            call: (i) => utils.client.preferences.removeRegion.mutate(i),
+            reconcile: () => {
+              void preferencesQuery.refetch();
+              void activeQuery.refetch();
+            },
+          });
+        }
+        showToast({ kind: 'success', text: `Removed ${group.name}` });
+      } catch (err) {
+        showToast({
+          kind: 'error',
+          text: err instanceof Error ? err.message : 'Could not remove',
+        });
+      }
+    },
+    [
+      tab,
+      utils.client,
+      followedVenuesList,
+      followedArtistsList,
+      preferencesQuery,
+      activeQuery,
+      showToast,
+    ],
+  );
+
   const filteredItems = React.useMemo(() => {
     let result = items;
     if (selectedGroupId) {
@@ -486,6 +582,11 @@ export default function DiscoverScreen(): React.JSX.Element {
           selected={selectedGroupId}
           onSelect={setSelectedGroupId}
           totalCount={items.length}
+          testIdPrefix="discover-group"
+          pickerTitle={groupPickerTitle(tab)}
+          canRemove={canRemoveGroup}
+          onRemove={(g) => void onRemoveGroup(g)}
+          removeActionLabel={removeActionLabel}
           leadingAction={{
             label: addChipLabel(tab),
             onPress: () => setAddSheetTab(tab),
@@ -787,6 +888,12 @@ function addChipLabel(tab: DiscoverTab): string {
   if (tab === 'venues') return 'Follow venue';
   if (tab === 'artists') return 'Follow artist';
   return 'Add region';
+}
+
+function groupPickerTitle(tab: DiscoverTab): string {
+  if (tab === 'venues') return 'All venues';
+  if (tab === 'artists') return 'All artists';
+  return 'All regions';
 }
 
 function addChipAccessibilityLabel(tab: DiscoverTab): string {
