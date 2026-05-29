@@ -8,6 +8,8 @@ import {
   regionBbox as sharedRegionBbox,
   isPointInRegion as sharedIsPointInRegion,
   type RegionBbox as SharedRegionBbox,
+  entityLimit,
+  entityLimitExceededError,
 } from '@showbook/shared';
 
 // ---------------------------------------------------------------------------
@@ -215,10 +217,10 @@ export const preferencesRouter = router({
         .from(userRegions)
         .where(eq(userRegions.userId, userId));
 
-      if (existing.length >= 5) {
+      if (existing.length >= entityLimit('regions')) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: 'You can have at most 5 regions.',
+          message: entityLimitExceededError('regions'),
         });
       }
 
