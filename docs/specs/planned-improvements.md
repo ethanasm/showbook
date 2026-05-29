@@ -45,6 +45,7 @@ playlists.
 - **`media.setPerformers` show-ownership check.** Validates asset ownership but not the show's; tighten the join.
 - **Discover feed dedup math.** `nearbyFeed` per-region 250-row cap can drop announcements at the edge of overlapping regions.
 - **Test pyramid.** ~30 Playwright e2e specs vs. 7 unit tests. Adding unit coverage for `performer-matcher`, `venue-matcher`, and the digest math would let us refactor faster.
+- **Web Discover headliner thumbnails (cross-surface parity).** The mobile Discover rows now show a headliner avatar (joined `performers.imageUrl`, exposed as `headlinerImageUrl` on `discover.followedFeed` / `followedArtistsFeed` / `nearbyFeed`). The web `AnnouncementRow` grid doesn't render it yet — the field is already on the shared procedures, so this is a CSS-column-plus-`RemoteImage` follow-up to bring the web rows to parity.
 
 ---
 
