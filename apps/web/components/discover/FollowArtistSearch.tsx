@@ -12,14 +12,20 @@ interface FollowArtistSearchProps {
    *  larger button (empty state). */
   variant?: "rail" | "cta";
   onFollowed?: () => void;
+  /** When true the user is at the followed-artist cap: the trigger is
+   *  disabled and `capHint` is shown, mirroring the region rail. */
+  atCap?: boolean;
+  capHint?: string;
 }
 
 export function FollowArtistSearch({
   defaultOpen = false,
   variant = "rail",
   onFollowed,
+  atCap = false,
+  capHint,
 }: FollowArtistSearchProps) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(defaultOpen && !atCap);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
@@ -49,21 +55,34 @@ export function FollowArtistSearch({
   if (!open) {
     if (variant === "cta") {
       return (
-        <button type="button" onClick={() => setOpen(true)} style={ctaButtonStyle}>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          disabled={atCap}
+          title={atCap ? capHint : undefined}
+          style={atCap ? { ...ctaButtonStyle, opacity: 0.5, cursor: "not-allowed" } : ctaButtonStyle}
+        >
           <Plus size={13} />
           Follow an Artist
         </button>
       );
     }
     return (
-      <button
-        type="button"
-        className="discover-rail__follow-link"
-        onClick={() => setOpen(true)}
-      >
-        <Plus size={11} />
-        Follow another artist
-      </button>
+      <>
+        <button
+          type="button"
+          className="discover-rail__follow-link"
+          onClick={() => setOpen(true)}
+          disabled={atCap}
+          title={atCap ? capHint : undefined}
+        >
+          <Plus size={11} />
+          Follow another artist
+        </button>
+        {atCap && capHint && (
+          <div className="discover-rail__follow-hint">{capHint}</div>
+        )}
+      </>
     );
   }
 

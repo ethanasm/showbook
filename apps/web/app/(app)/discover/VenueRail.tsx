@@ -27,6 +27,8 @@ export function VenueRail({
   totalCount,
   showFollowLink,
   onFollowVenue,
+  addVenueDisabled,
+  addVenueHint,
   onUnfollowItem,
   showAddRegion,
   onAddRegion,
@@ -34,6 +36,8 @@ export function VenueRail({
   addRegionHint,
   onUnfollowRegion,
   showArtistSearch,
+  addArtistDisabled,
+  addArtistHint,
   pendingItemIds,
   pendingRegionIds,
 }: {
@@ -55,6 +59,8 @@ export function VenueRail({
   totalCount: number;
   showFollowLink: boolean;
   onFollowVenue?: () => void;
+  addVenueDisabled?: boolean;
+  addVenueHint?: string;
   onUnfollowItem?: (id: string) => void;
   showAddRegion?: boolean;
   onAddRegion?: () => void;
@@ -62,6 +68,8 @@ export function VenueRail({
   addRegionHint?: string;
   onUnfollowRegion?: (regionId: string) => void;
   showArtistSearch?: boolean;
+  addArtistDisabled?: boolean;
+  addArtistHint?: string;
   pendingItemIds?: Set<string>;
   pendingRegionIds?: Set<string>;
 }) {
@@ -80,10 +88,19 @@ export function VenueRail({
 
       {showFollowLink && (
         <div className="discover-rail__follow discover-rail__follow--top">
-          <button type="button" className="discover-rail__follow-link" onClick={onFollowVenue}>
+          <button
+            type="button"
+            className="discover-rail__follow-link"
+            onClick={onFollowVenue}
+            disabled={addVenueDisabled}
+            title={addVenueHint}
+          >
             <Plus size={11} />
             Follow another venue
           </button>
+          {addVenueHint && (
+            <div className="discover-rail__follow-hint">{addVenueHint}</div>
+          )}
         </div>
       )}
 
@@ -108,7 +125,11 @@ export function VenueRail({
       {/* "Follow another artist" affordance */}
       {showArtistSearch && (
         <div className="discover-rail__follow discover-rail__follow--top">
-          <FollowArtistSearch variant="rail" />
+          <FollowArtistSearch
+            variant="rail"
+            atCap={addArtistDisabled}
+            capHint={addArtistHint}
+          />
         </div>
       )}
 

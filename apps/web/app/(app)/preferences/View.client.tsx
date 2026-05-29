@@ -481,21 +481,32 @@ export default function PreferencesView() {
                 You&apos;re not following any venues yet
               </p>
             )}
-            <div
-              onClick={() => setShowFollowModal(true)}
-              style={{
-                padding: "12px 0",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontFamily: "var(--font-geist-mono)",
-                fontSize: 10.5,
-                color: "var(--accent)",
-                letterSpacing: ".04em",
-                cursor: "pointer",
-              }}
-            >
-              <Plus size={11} color="var(--accent)" /> Follow a venue
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              {canAddEntity("venues", venues.length) ? (
+                <div
+                  onClick={() => setShowFollowModal(true)}
+                  style={{
+                    padding: "12px 0",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontFamily: "var(--font-geist-mono)",
+                    fontSize: 10.5,
+                    color: "var(--accent)",
+                    letterSpacing: ".04em",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Plus size={11} color="var(--accent)" /> Follow a venue
+                </div>
+              ) : (
+                <div style={{ padding: "12px 0", fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)", letterSpacing: ".04em" }}>
+                  {entityLimitReachedHint("venues")}
+                </div>
+              )}
+              <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: !canAddEntity("venues", venues.length) ? "#E63946" : "var(--faint)", letterSpacing: ".04em" }}>
+                {venues.length} / {entityLimit("venues")} venues
+              </div>
             </div>
           </div>
 
@@ -591,21 +602,32 @@ export default function PreferencesView() {
                 You&apos;re not following any artists yet
               </p>
             )}
-            <div
-              onClick={() => setShowArtistFollowModal(true)}
-              style={{
-                padding: "12px 0",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontFamily: "var(--font-geist-mono)",
-                fontSize: 10.5,
-                color: "var(--accent)",
-                letterSpacing: ".04em",
-                cursor: "pointer",
-              }}
-            >
-              <Plus size={11} color="var(--accent)" /> Follow an artist
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              {canAddEntity("artists", followedArtists.length) ? (
+                <div
+                  onClick={() => setShowArtistFollowModal(true)}
+                  style={{
+                    padding: "12px 0",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontFamily: "var(--font-geist-mono)",
+                    fontSize: 10.5,
+                    color: "var(--accent)",
+                    letterSpacing: ".04em",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Plus size={11} color="var(--accent)" /> Follow an artist
+                </div>
+              ) : (
+                <div style={{ padding: "12px 0", fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)", letterSpacing: ".04em" }}>
+                  {entityLimitReachedHint("artists")}
+                </div>
+              )}
+              <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: !canAddEntity("artists", followedArtists.length) ? "#E63946" : "var(--faint)", letterSpacing: ".04em" }}>
+                {followedArtists.length} / {entityLimit("artists")} artists
+              </div>
             </div>
           </div>
 
