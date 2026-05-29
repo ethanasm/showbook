@@ -38,6 +38,7 @@ import { useFeedback } from '@/lib/feedback';
 import { runOptimisticMutation } from '@/lib/mutations';
 import { getCacheOutbox } from '@/lib/cache';
 import { MAX_REGIONS, canAddRegion } from '@/lib/regions';
+import { entityLimitReachedHint } from '@showbook/shared';
 
 interface RegionRow {
   id: string;
@@ -215,7 +216,7 @@ export default function RegionsScreen(): React.JSX.Element {
 
         {atCap ? (
           <Text style={[styles.helper, { color: colors.faint }]}>
-            Maximum {MAX_REGIONS} regions — remove one to add another.
+            {entityLimitReachedHint('regions')}
           </Text>
         ) : adding ? (
           <AddRegionSheetBody
