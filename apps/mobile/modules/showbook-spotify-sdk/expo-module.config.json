@@ -1,9 +1,4 @@
 {
-  "platforms": ["ios", "android"],
-  "ios": {
-    "modules": ["ShowbookSpotifyModule"]
-  },
-  "android": {
-    "modules": ["expo.modules.showbookspotify.ShowbookSpotifyModule"]
-  }
+  "_status": "JS-only stub until the native iOS / Android classes are authored. `platforms` is intentionally empty so Expo autolinking does NOT try to register `expo.modules.showbookspotify.ShowbookSpotifyModule` (Android) or `ShowbookSpotifyModule` (iOS) — both classes exist nowhere in the repo, and declaring them previously caused the native registry to throw at app process start, crashing every launch before JS could run. When the Kotlin / Swift sources land, re-add `ios`/`android` to `platforms` and reinstate the `modules` entries.",
+  "platforms": []
 }
