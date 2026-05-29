@@ -33,6 +33,20 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "eslint-config-expo"
         update-types: ["version-update:semver-major"]
+      # Every `expo-*` and `@expo/*` runtime package is coupled to the
+      # host `expo` SDK major. Mixing SDK 56 packages into an SDK 55
+      # host links against expo-modules-core 3.x while the runtime
+      # ships expo-modules-core 2.x, which crashes native-module-
+      # registry init with NoClassDefFoundError before any JS runs —
+      # this is what killed every cold launch on 2026-05-29 after PRs
+      # #423 (expo-audio), #424 (@expo/metro-runtime), #447 (linear-
+      # gradient), and #448 (expo-haptics) layered SDK 56 packages on.
+      # Hold majors for the SDK-bump PR. Minors/patches inside the
+      # current SDK line are still fair game and continue to auto-PR.
+      - dependency-name: "expo*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@expo/*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
