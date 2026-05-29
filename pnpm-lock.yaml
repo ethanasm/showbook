@@ -238,8 +238,8 @@ importers:
         specifier: ^1.11.2
         version: 1.11.2
       '@axiomhq/pino':
-        specifier: ^1.5.0
-        version: 1.6.0
+        specifier: ^1.6.1
+        version: 1.6.1
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -525,8 +525,8 @@ importers:
   packages/observability:
     dependencies:
       '@axiomhq/pino':
-        specifier: ^1.5.0
-        version: 1.6.0
+        specifier: ^1.6.1
+        version: 1.6.1
       langfuse:
         specifier: ^3.38.4
         version: 3.38.20
@@ -747,12 +747,12 @@ packages:
     resolution: {integrity: sha512-iY8yvjE0y651BixKNPgmv1WrQc+GZ142sb0z4gYnChDDY2YqI4P/jsSopBWrKfAt7LOJAkOXt7rC/hms+WclQQ==}
     engines: {node: '>=18.0.0'}
 
-  '@axiomhq/js@1.6.0':
-    resolution: {integrity: sha512-qm0ObduIpI6PJUOYwakH5WV3E7IF0qXE/wh5N1JWGAzxKtCZryk+YwA0aW3lPZSGPQeLHyEzN+9pXsOIjoPiRg==}
+  '@axiomhq/js@1.6.1':
+    resolution: {integrity: sha512-iNWOnGvP+R2lIWYk9jkfvRI/rfhOR9hlWJOBJhMKwZ9mfpE0KdnFnG2XPLoMcrbyrOBKj6Jw0hpIH5GhPucLog==}
     engines: {node: '>=20'}
 
-  '@axiomhq/pino@1.6.0':
-    resolution: {integrity: sha512-JLTeoH8d9Hk4IZ1SoPl9ejeRCaDtf9gtnsvScSx1zRE/9tyYAM7y0OQGWAbsLJdtcZCI64ehGlb+hd1xGc+jrw==}
+  '@axiomhq/pino@1.6.1':
+    resolution: {integrity: sha512-T5mdwsrbPOkPu7dkBU/HnQvO8EoiVEO4HpqvGliDEgYv2bTVwE/ELiHep02UMVze/Gv3DEgQ/GQSIjbOqTAzYw==}
     engines: {node: '>=20'}
 
   '@babel/code-frame@7.29.0':
@@ -7366,13 +7366,13 @@ snapshots:
 
   '@aws/lambda-invoke-store@0.2.4': {}
 
-  '@axiomhq/js@1.6.0':
+  '@axiomhq/js@1.6.1':
     dependencies:
       fetch-retry: 6.0.0
 
-  '@axiomhq/pino@1.6.0':
+  '@axiomhq/pino@1.6.1':
     dependencies:
-      '@axiomhq/js': 1.6.0
+      '@axiomhq/js': 1.6.1
       pino-abstract-transport: 1.2.0
 
   '@babel/code-frame@7.29.0':
