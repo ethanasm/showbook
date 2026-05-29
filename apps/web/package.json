@@ -37,7 +37,7 @@
     "heic-to": "^1.4.2",
     "langfuse": "^3.38.4",
     "leaflet": "^1.9.4",
-    "lucide-react": "^1.9.0",
+    "lucide-react": "^1.17.0",
     "next": "^16.2.6",
     "next-auth": "5.0.0-beta.31",
     "pino": "^10.3.1",
