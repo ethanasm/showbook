@@ -22,7 +22,7 @@ export {
   type UseForegroundWarmupOptions,
 } from './useForegroundWarmup';
 export { CACHE_DEFAULTS, useCachedQuery, type CachedQueryOptions } from './useCachedQuery';
-export { invalidateShowsList } from './invalidate';
+export { invalidateShowsList, invalidateDiscoverFeeds } from './invalidate';
 export {
   warmCacheForOfflineUse,
   readLastWarmup,

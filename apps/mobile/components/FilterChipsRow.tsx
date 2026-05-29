@@ -35,6 +35,7 @@ export function FilterChipsRow({
   groups,
   selected,
   onSelect,
+  onLongPress,
   totalCount,
   allLabel = 'All',
   showAll = true,
@@ -45,6 +46,10 @@ export function FilterChipsRow({
   groups: FilterGroup[];
   selected: string | null;
   onSelect: (id: string | null) => void;
+  /** Long-press a group chip — used by Discover to open an unfollow
+   *  action sheet. Wired to per-group chips only (never "All" or the
+   *  leading "+" action). */
+  onLongPress?: (id: string) => void;
   /** Count rendered in the "All" chip; ignored when `showAll` is false. */
   totalCount?: number;
   allLabel?: string;
@@ -124,6 +129,7 @@ export function FilterChipsRow({
           onPress={() =>
             onSelect(selected === g.id ? (showAll ? null : g.id) : g.id)
           }
+          onLongPress={onLongPress ? () => onLongPress(g.id) : undefined}
           colors={colors}
           testID={testIdPrefix ? `${testIdPrefix}-${g.id}` : undefined}
         />
@@ -139,6 +145,7 @@ function FilterChip({
   badgeText,
   active,
   onPress,
+  onLongPress,
   colors,
   testID,
 }: {
@@ -148,6 +155,7 @@ function FilterChip({
   badgeText?: string;
   active: boolean;
   onPress: () => void;
+  onLongPress?: () => void;
   colors: ReturnType<typeof useTheme>['tokens']['colors'];
   testID?: string;
 }): React.JSX.Element {
@@ -159,6 +167,8 @@ function FilterChip({
       accessibilityState={{ selected: active }}
       accessibilityLabel={`${label}${sublabel ? ` ${sublabel}` : ''}`}
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={350}
       testID={testID}
       style={({ pressed }) => [
         styles.chip,

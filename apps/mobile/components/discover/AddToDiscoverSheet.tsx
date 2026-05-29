@@ -10,10 +10,11 @@
  */
 
 import React from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Sheet } from '../Sheet';
 import { useFeedback } from '@/lib/feedback';
 import { runOptimisticMutation } from '@/lib/mutations';
-import { getCacheOutbox } from '@/lib/cache';
+import { getCacheOutbox, invalidateDiscoverFeeds } from '@/lib/cache';
 import { trpc } from '@/lib/trpc';
 import { FollowVenueSheetBody } from './FollowVenueSheetBody';
 import { FollowArtistSheetBody } from './FollowArtistSheetBody';
@@ -31,6 +32,7 @@ export function AddToDiscoverSheet({
   onClose: () => void;
 }): React.JSX.Element {
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
   const { showToast } = useFeedback();
 
   const onRegionSubmit = React.useCallback(
@@ -46,11 +48,9 @@ export function AddToDiscoverSheet({
           input,
           outbox: getCacheOutbox(),
           call: (i) => utils.client.preferences.addRegion.mutate(i),
-          reconcile: () => {
-            void utils.preferences.get.invalidate();
-            void utils.discover.nearbyFeed.invalidate();
-            void utils.discover.ingestStatus.invalidate();
-          },
+          // Discover reads under `['mobile', …]` keys — fan out so the new
+          // region chip appears and its scoped ingest poll arms immediately.
+          reconcile: () => invalidateDiscoverFeeds(queryClient),
         });
         showToast({ kind: 'success', text: `Added ${input.cityName}` });
         onClose();
@@ -62,7 +62,7 @@ export function AddToDiscoverSheet({
         throw err;
       }
     },
-    [utils, showToast, onClose],
+    [utils, queryClient, showToast, onClose],
   );
 
   return (
