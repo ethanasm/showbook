@@ -1,13 +1,11 @@
 /**
  * Config plugin for the `showbook-spotify-sdk` local Expo Module.
  *
- *  - **iOS**: appends `pod 'SpotifyiOS', :git => …, :tag => v5.0.1` to
- *    the host Podfile so EAS Build / `expo prebuild` doesn't need a
- *    manual download step. Injects `SpotifyClientID` into Info.plist
- *    from `EXPO_PUBLIC_SPOTIFY_CLIENT_ID` so the native side can
- *    instantiate `SPTConfiguration` without round-tripping through JS.
- *    `LSApplicationQueriesSchemes` already declares `spotify` in
- *    `apps/mobile/app.config.ts:103`.
+ *  - **iOS**: injects `SpotifyClientID` into Info.plist from
+ *    `EXPO_PUBLIC_SPOTIFY_CLIENT_ID` so the native side (when
+ *    authored) can instantiate `SPTConfiguration` without
+ *    round-tripping through JS. `LSApplicationQueriesSchemes`
+ *    already declares `spotify` in `apps/mobile/app.config.ts:103`.
  *
  *  - **Android**: adds a `<package>` element to `<queries>` so
  *    `PackageManager.getPackageInfo("com.spotify.music", 0)` works on
@@ -15,23 +13,33 @@
  *    the client id into `strings.xml` as `showbook_spotify_client_id`
  *    (the resource the Kotlin side reads).
  *
+ *  - **iOS Podfile pod 'SpotifyiOS' injection is intentionally
+ *    skipped.** Spotify ships the iOS SDK as a downloadable
+ *    framework, not as a podspec'd CocoaPod, so `pod 'SpotifyiOS',
+ *    :git => 'https://github.com/spotify/ios-sdk.git', :tag =>
+ *    'v5.0.1'` fails CocoaPods resolution with "Unable to find a
+ *    specification for 'SpotifyiOS'". Every iOS EAS build from PR
+ *    #442 through 2026-05-29 silently failed at this exact step;
+ *    `eas build --no-wait` doesn't surface async build failures in
+ *    the GitHub workflow, so it went unnoticed. The Kotlin / Swift
+ *    sources this pod would link against don't exist anywhere in
+ *    the repo either (we set `platforms: []` on the Expo Module
+ *    config in #456 for the same reason), so the pod injection is
+ *    config-prepared-but-unwired anyway. Reinstate when the iOS
+ *    Swift native module + a proper integration with the
+ *    framework-distribution model lands.
+ *
  * Written in plain JS to keep prebuild simple (no ts-node, no build
  * step). Local plugins under `apps/mobile/modules/` are picked up by
  * Expo's plugin resolver via the `app.config.ts` plugins array.
  */
 
-const fs = require('node:fs');
-const path = require('node:path');
 const {
-  withDangerousMod,
   withInfoPlist,
   withStringsXml,
   withAndroidManifest,
   AndroidConfig,
 } = require('expo/config-plugins');
-
-const IOS_SDK_GIT = 'https://github.com/spotify/ios-sdk.git';
-const IOS_SDK_TAG = 'v5.0.1';
 
 function withShowbookSpotifySdk(config, props) {
   const clientId =
@@ -52,30 +60,6 @@ function withShowbookSpotifySdk(config, props) {
     cfg.modResults.SpotifyClientID = clientId;
     return cfg;
   });
-
-  config = withDangerousMod(config, [
-    'ios',
-    async (cfg) => {
-      const podfilePath = path.join(
-        cfg.modRequest.platformProjectRoot,
-        'Podfile',
-      );
-      let podfile = await fs.promises.readFile(podfilePath, 'utf8');
-      const marker = "pod 'SpotifyiOS'";
-      if (!podfile.includes(marker)) {
-        const targetEnd = podfile.lastIndexOf('end');
-        if (targetEnd === -1) {
-          throw new Error(
-            '[showbook-spotify-sdk] could not find Podfile target end',
-          );
-        }
-        const pin = `  pod 'SpotifyiOS', :git => '${IOS_SDK_GIT}', :tag => '${IOS_SDK_TAG}'\n`;
-        podfile = podfile.slice(0, targetEnd) + pin + podfile.slice(targetEnd);
-        await fs.promises.writeFile(podfilePath, podfile, 'utf8');
-      }
-      return cfg;
-    },
-  ]);
 
   // --- Android ---
   config = withAndroidManifest(config, (cfg) => {
