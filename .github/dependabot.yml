@@ -8,6 +8,18 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: "development"
+        # babel-preset-expo / eslint-config-expo are devDependencies, but
+        # their majors track the Expo SDK major and MUST move with the
+        # expo-sdk group (below). Dependabot assigns each dependency to the
+        # FIRST group it matches in definition order, and this group is
+        # defined first — so without this exclusion these two get pulled
+        # into the dev-dependencies PR and bumped to the next SDK
+        # independently of `expo` / `react-native` (exactly the partial
+        # SDK-boundary split the expo-sdk group exists to prevent — it
+        # shipped as #458 bumping both to SDK 56 on their own).
+        exclude-patterns:
+          - "babel-preset-expo"
+          - "eslint-config-expo"
       aws-sdk:
         patterns:
           - "@aws-sdk/*"
@@ -33,12 +45,29 @@ updates:
       # coordinated change. babel-preset-expo / eslint-config-expo are
       # in the group too — their majors also track the SDK major and
       # need to move with `expo`.
+      #
+      # The `react-native-*` / `@react-native-community/*` /
+      # `@react-native-masked-view/*` native modules are pinned per SDK
+      # release in expo's bundledNativeModules.json (reanimated, worklets,
+      # gesture-handler, safe-area-context, screens, svg, maps, web,
+      # netinfo, masked-view, ...). They compile against the RN/SDK ABI,
+      # so a bump in isolation lands an SDK-N module on an SDK-(N±1) host
+      # and crashes native init — the same failure class as the expo-*
+      # split. They previously leaked out as standalone PRs (#461
+      # reanimated, #462 worklets) that died at `pnpm install
+      # --frozen-lockfile` because the root package.json `pnpm.overrides`
+      # pin them and dependabot can't edit overrides. Keep them grouped;
+      # an SDK bump is still a manual finish (bump the matching
+      # `pnpm.overrides` + `expo install --fix` on the branch).
       expo-sdk:
         patterns:
           - "expo"
           - "expo-*"
           - "@expo/*"
           - "react-native"
+          - "react-native-*"
+          - "@react-native-community/*"
+          - "@react-native-masked-view/*"
           - "babel-preset-expo"
           - "eslint-config-expo"
     ignore:
@@ -51,3 +80,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # History is a steady stream of one-off action-bump PRs (#369-373,
+    # #413, #128/#127/#126, #13/#12/#11/#10). They're low-risk and fully
+    # CI-gated, so bundle them into one weekly PR to cut review noise.
+    groups:
+      github-actions:
+        patterns:
+          - "*"
