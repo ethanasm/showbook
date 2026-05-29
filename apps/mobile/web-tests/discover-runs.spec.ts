@@ -154,9 +154,12 @@ test.describe('mobile web — discover multi-night runs', () => {
       animations: 'disabled',
     });
 
-    // Tap "Got ticket" — the pick-date sheet should open with every
-    // performance date as its own button.
-    await page.locator('[data-testid="discover-row-ticketed-a-phantom"]').first().click();
+    // Tap the row to open the action sheet, then "Mark as ticketed" — the
+    // pick-date sheet should open with every performance date as its own
+    // button.
+    await page.locator('[data-testid="discover-row-a-phantom"]').first().click();
+    await page.waitForTimeout(300);
+    await page.locator('[data-testid="announcement-action-ticketed"]').first().click();
     await page.waitForTimeout(400);
 
     for (const date of PERFORMANCE_DATES) {
