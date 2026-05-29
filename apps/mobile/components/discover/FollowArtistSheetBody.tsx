@@ -22,9 +22,11 @@ import {
 } from 'react-native';
 import { Plus, Search } from 'lucide-react-native';
 import { Image } from 'expo-image';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { trpc } from '@/lib/trpc';
+import { invalidateDiscoverFeeds } from '@/lib/cache';
 import { useNetwork } from '@/lib/network';
 import { useFeedback } from '@/lib/feedback';
 import { useDebouncedValue } from '@showbook/shared/hooks';
@@ -44,6 +46,7 @@ export function FollowArtistSheetBody({
   const { tokens } = useTheme();
   const { colors } = tokens;
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
   const network = useNetwork();
   const { showToast } = useFeedback();
 
@@ -58,10 +61,10 @@ export function FollowArtistSheetBody({
 
   const followAttraction = trpc.performers.followAttraction.useMutation({
     onSuccess: (_, vars) => {
-      void utils.discover.followedArtistsFeed.invalidate();
-      void utils.performers.followed.invalidate();
       void utils.performers.list.invalidate();
-      void utils.discover.ingestStatus.invalidate();
+      // Discover reads under `['mobile', …]` keys — fan out so the new
+      // artist chip appears and its scoped ingest poll arms immediately.
+      invalidateDiscoverFeeds(queryClient);
       showToast({ kind: 'success', text: `Following ${vars.name}` });
       onFollowed();
     },

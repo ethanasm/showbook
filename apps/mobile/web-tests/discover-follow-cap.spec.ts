@@ -70,11 +70,11 @@ test.beforeAll(() => {
   mkdirSync(OUT_DIR, { recursive: true });
 });
 
-function installMocks(
+async function installMocks(
   page: import('@playwright/test').Page,
   opts: { venueCount: number; artistCount: number },
 ): Promise<void> {
-  return page.route('**/api/trpc/**', async (route) => {
+  await page.route('**/api/trpc/**', async (route) => {
     const url = new URL(route.request().url());
     const baseProcedure = (url.pathname.split('/api/trpc/')[1] ?? '').split('?')[0] ?? '';
     const isBatch = url.searchParams.get('batch') === '1';

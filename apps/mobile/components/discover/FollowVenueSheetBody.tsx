@@ -29,7 +29,7 @@ import { trpc } from '@/lib/trpc';
 import { useNetwork } from '@/lib/network';
 import { useFeedback } from '@/lib/feedback';
 import { runOptimisticMutation } from '@/lib/mutations';
-import { getCacheOutbox } from '@/lib/cache';
+import { getCacheOutbox, invalidateDiscoverFeeds } from '@/lib/cache';
 import { useVenueSearch } from '@/lib/useVenueSearch';
 import { useDebouncedValue } from '@showbook/shared/hooks';
 import { entityLimitReachedHint } from '@showbook/shared';
@@ -96,11 +96,12 @@ export function FollowVenueSheetBody({
             },
           },
           reconcile: () => {
-            void utils.venues.followed.invalidate();
             void utils.venues.list.invalidate();
-            void utils.discover.followedFeed.invalidate();
-            void utils.discover.nearbyFeed.invalidate();
-            void utils.discover.ingestStatus.invalidate();
+            // The Discover tab reads feeds / followed-lists / ingestStatus
+            // under `['mobile', …]` keys, not these tRPC-native ones —
+            // fan out across them so the just-followed venue appears and
+            // the scoped ingest poll arms without a pull-to-refresh.
+            invalidateDiscoverFeeds(queryClient);
           },
         });
         showToast({ kind: 'success', text: `Following ${displayName}` });
