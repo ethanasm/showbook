@@ -2,18 +2,25 @@
  * Pure helpers for the user's saved regions.
  *
  * The web Preferences page (`apps/web/app/(app)/preferences/View.client.tsx`)
- * enforces the same 5-region cap server-side via `preferences.addRegion`. The
+ * enforces the same region cap server-side via `preferences.addRegion`. The
  * mobile Regions screen mirrors those rules, so the checks live here as pure
  * functions that both first-run and the in-app editor can call without
- * duplicating constants or input parsing.
+ * duplicating the input parsing.
+ *
+ * The cap itself is NOT duplicated here — it lives in the shared
+ * `EntityLimit` registry (`@showbook/shared`) alongside the venue / artist
+ * caps so the number is defined exactly once. These exports are thin
+ * region-flavoured wrappers kept for call-site ergonomics.
  */
 
+import { entityLimit, canAddEntity } from '@showbook/shared';
+
 /**
- * Server-enforced cap on saved regions per user, mirroring the `>= 5` guard
- * in `preferences.addRegion`. Surface it to the client so the Add button can
+ * Server-enforced cap on saved regions per user, mirroring the guard in
+ * `preferences.addRegion`. Surfaced to the client so the Add control can
  * disable before round-tripping a request that would 400.
  */
-export const MAX_REGIONS = 5;
+export const MAX_REGIONS = entityLimit('regions');
 
 /** Default radius shown when the picker first opens. */
 export const DEFAULT_RADIUS_MILES = 25;
@@ -40,8 +47,7 @@ export function formatRegionSummary(region: RegionSummary): string {
  * source of truth — this is a UI hint, not a security boundary).
  */
 export function canAddRegion(currentCount: number): boolean {
-  if (!Number.isFinite(currentCount) || currentCount < 0) return true;
-  return currentCount < MAX_REGIONS;
+  return canAddEntity('regions', currentCount);
 }
 
 /**

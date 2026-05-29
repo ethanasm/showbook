@@ -62,13 +62,15 @@ import { TicketmasterMark } from '../../components/BrandIcons';
 import { UpcomingAnnouncementActionSheet } from '../../components/UpcomingAnnouncementActionSheet';
 import { FilterChipsRow, type FilterGroup } from '../../components/FilterChipsRow';
 import { AddToDiscoverSheet } from '../../components/discover/AddToDiscoverSheet';
+import { UnfollowChipSheet } from '../../components/discover/UnfollowChipSheet';
 import { useTheme, type Kind } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { useAuth } from '@/lib/auth';
 import { useNetwork } from '@/lib/network';
 import { hapticSelection } from '@/lib/haptics';
+import { useQueryClient } from '@tanstack/react-query';
 import { trpc, type RouterOutput } from '@/lib/trpc';
-import { useCachedQuery, getCacheOutbox } from '@/lib/cache';
+import { useCachedQuery, getCacheOutbox, invalidateDiscoverFeeds } from '@/lib/cache';
 import { runOptimisticMutation } from '@/lib/mutations';
 import { useIngestPolling } from '@/lib/discover/useIngestPolling';
 import {
@@ -171,6 +173,7 @@ export default function DiscoverScreen(): React.JSX.Element {
   const { token } = useAuth();
   const network = useNetwork();
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
   const { showToast } = useFeedback();
   const [tab, setTab] = React.useState<DiscoverTab>('venues');
   const [selectedGroupId, setSelectedGroupId] = React.useState<string | null>(null);
@@ -179,6 +182,14 @@ export default function DiscoverScreen(): React.JSX.Element {
   // as the target tab (or null) so the sheet body can stay rendered
   // through the close animation against whichever tab opened it.
   const [addSheetTab, setAddSheetTab] = React.useState<DiscoverTab | null>(null);
+  // Long-press target for the unfollow action sheet. Captures the tab the
+  // chip belonged to so the sheet stays correct through its close
+  // animation even if the user switches tabs underneath it.
+  const [unfollowChip, setUnfollowChip] = React.useState<{
+    tab: DiscoverTab;
+    id: string;
+    name: string;
+  } | null>(null);
   // Secondary venue filter for the Regions tab — mirrors the web rail's
   // region → venue drill-down. Always reset when switching tabs or
   // regions so the chip row stays predictable.
@@ -428,100 +439,6 @@ export default function DiscoverScreen(): React.JSX.Element {
     });
   }, [items, selectedGroupId, tab]);
 
-  // Long-press / dropdown removal of a followed venue / artist / region
-  // straight from the chip rail. Only entries the user actually follows
-  // are removable — announcement-only chips (a group that exists purely
-  // because the nearby feed surfaced it) have nothing to unfollow.
-  const followedVenueIdSet = React.useMemo(
-    () => new Set((followedVenuesList.data ?? []).map((v) => v.id)),
-    [followedVenuesList.data],
-  );
-  const followedRegionIdSet = React.useMemo(
-    () =>
-      new Set(
-        (preferencesQuery.data?.regions ?? [])
-          .filter((r) => r.active !== false)
-          .map((r) => r.id),
-      ),
-    [preferencesQuery.data?.regions],
-  );
-
-  const canRemoveGroup = React.useCallback(
-    (group: FilterGroup) => {
-      if (tab === 'venues') return followedVenueIdSet.has(group.id);
-      if (tab === 'artists')
-        return followedArtistIdSet?.has(group.id) ?? false;
-      return followedRegionIdSet.has(group.id);
-    },
-    [tab, followedVenueIdSet, followedArtistIdSet, followedRegionIdSet],
-  );
-
-  const removeActionLabel =
-    tab === 'venues'
-      ? 'Unfollow venue'
-      : tab === 'artists'
-        ? 'Unfollow artist'
-        : 'Remove region';
-
-  const onRemoveGroup = React.useCallback(
-    async (group: FilterGroup) => {
-      // Clear the filter if the removed group was the active one so the
-      // feed doesn't sit empty on a now-gone selection.
-      setSelectedGroupId((cur) => (cur === group.id ? null : cur));
-      try {
-        if (tab === 'venues') {
-          await runOptimisticMutation({
-            mutation: 'venues.unfollow',
-            input: { venueId: group.id },
-            outbox: getCacheOutbox(),
-            call: (i) => utils.client.venues.unfollow.mutate(i),
-            reconcile: () => {
-              void followedVenuesList.refetch();
-              void activeQuery.refetch();
-            },
-          });
-        } else if (tab === 'artists') {
-          await runOptimisticMutation({
-            mutation: 'performers.unfollow',
-            input: { performerId: group.id },
-            outbox: getCacheOutbox(),
-            call: (i) => utils.client.performers.unfollow.mutate(i),
-            reconcile: () => {
-              void followedArtistsList.refetch();
-              void activeQuery.refetch();
-            },
-          });
-        } else {
-          await runOptimisticMutation({
-            mutation: 'preferences.removeRegion',
-            input: { regionId: group.id },
-            outbox: getCacheOutbox(),
-            call: (i) => utils.client.preferences.removeRegion.mutate(i),
-            reconcile: () => {
-              void preferencesQuery.refetch();
-              void activeQuery.refetch();
-            },
-          });
-        }
-        showToast({ kind: 'success', text: `Removed ${group.name}` });
-      } catch (err) {
-        showToast({
-          kind: 'error',
-          text: err instanceof Error ? err.message : 'Could not remove',
-        });
-      }
-    },
-    [
-      tab,
-      utils.client,
-      followedVenuesList,
-      followedArtistsList,
-      preferencesQuery,
-      activeQuery,
-      showToast,
-    ],
-  );
-
   const filteredItems = React.useMemo(() => {
     let result = items;
     if (selectedGroupId) {
@@ -543,10 +460,36 @@ export default function DiscoverScreen(): React.JSX.Element {
     followedArtistIdSet,
   ]);
 
+  // Does the user follow anything on this tab yet? Seeds the decision to
+  // keep the onboarding hero vs. drop into the chip-rail + "discovering
+  // more shows…" state. A freshly-followed entity (venue/artist/region)
+  // has a chip with count 0 before its first ingest lands, so we want the
+  // rail + status row rather than the first-run hero in that window.
+  const hasFollowedEntities =
+    tab === 'venues'
+      ? (followedVenuesList.data?.length ?? 0) > 0
+      : tab === 'artists'
+        ? (followedArtistsList.data?.length ?? 0) > 0
+        : (preferencesQuery.data?.regions?.filter((r) => r.active !== false)
+            .length ?? 0) > 0;
+
   const showOfflineEmpty = !network.online && !activeQuery.data;
   const isLoading = activeQuery.isLoading;
   const isErrored = !isLoading && activeQuery.isError && !activeQuery.data;
-  const isEmpty = !isLoading && !isErrored && items.length === 0;
+  // Reserve the full-bleed onboarding hero for true first-run: no
+  // announcements AND nothing followed on this tab AND no ingest job
+  // actually pending. Once the user follows something (chip seeded) or
+  // an ingest is reported in flight, we render the chip rail + summary so
+  // the just-added entity and the "discovering more shows…" status are
+  // visible immediately. We key off `isAnyPending` (a reported pending
+  // job) rather than `isPolling` (which is also true during the initial
+  // ingestStatus round-trip) so the hero doesn't flicker on cold open.
+  const isEmpty =
+    !isLoading &&
+    !isErrored &&
+    items.length === 0 &&
+    !hasFollowedEntities &&
+    !ingestPolling.isAnyPending;
   const filterCount = filteredItems.length;
 
   const visibleItems = React.useMemo(
@@ -555,6 +498,105 @@ export default function DiscoverScreen(): React.JSX.Element {
   );
   const remainingCount = Math.max(0, filterCount - visibleItems.length);
   const hasMore = remainingCount > 0;
+
+  // Long-press a chip → open the unfollow sheet for that group. The "All"
+  // chip and the leading "+" action don't get this affordance (handled in
+  // FilterChipsRow, which only wires onLongPress to per-group chips).
+  const handleChipLongPress = (id: string): void => {
+    const group = groupList.find((g) => g.id === id);
+    void hapticSelection();
+    setUnfollowChip({ tab, id, name: group?.name ?? '' });
+  };
+
+  const handleUnfollowConfirm = async (): Promise<void> => {
+    if (!unfollowChip) return;
+    const { tab: target, id, name } = unfollowChip;
+    // Drop the filter if it pointed at the chip we're removing so the feed
+    // doesn't get stuck filtered to a now-gone group.
+    setSelectedGroupId((prev) => (prev === id ? null : prev));
+    try {
+      if (target === 'venues') {
+        const key = ['mobile', 'venues', 'followed'];
+        await runOptimisticMutation({
+          mutation: 'venues.unfollow',
+          input: { venueId: id },
+          outbox: getCacheOutbox(),
+          call: (input) => utils.client.venues.unfollow.mutate(input),
+          optimistic: {
+            snapshot: () => queryClient.getQueryData<{ id: string }[]>(key),
+            apply: () => {
+              queryClient.setQueryData<{ id: string }[]>(key, (prev) =>
+                (prev ?? []).filter((v) => v.id !== id),
+              );
+            },
+            rollback: (snap) => queryClient.setQueryData(key, snap),
+          },
+          reconcile: () => {
+            invalidateDiscoverFeeds(queryClient);
+            void utils.venues.list.invalidate();
+          },
+        });
+      } else if (target === 'artists') {
+        const key = ['mobile', 'artists', 'followed'];
+        await runOptimisticMutation({
+          mutation: 'performers.unfollow',
+          input: { performerId: id },
+          outbox: getCacheOutbox(),
+          call: (input) => utils.client.performers.unfollow.mutate(input),
+          optimistic: {
+            snapshot: () => queryClient.getQueryData<{ id: string }[]>(key),
+            apply: () => {
+              queryClient.setQueryData<{ id: string }[]>(key, (prev) =>
+                (prev ?? []).filter((a) => a.id !== id),
+              );
+            },
+            rollback: (snap) => queryClient.setQueryData(key, snap),
+          },
+          reconcile: () => {
+            invalidateDiscoverFeeds(queryClient);
+            void utils.performers.list.invalidate();
+          },
+        });
+      } else {
+        const key = ['mobile', 'preferences', 'get'];
+        await runOptimisticMutation({
+          mutation: 'preferences.removeRegion',
+          input: { regionId: id },
+          outbox: getCacheOutbox(),
+          call: (input) => utils.client.preferences.removeRegion.mutate(input),
+          optimistic: {
+            snapshot: () => queryClient.getQueryData<PreferencesPayload>(key),
+            apply: () => {
+              queryClient.setQueryData<PreferencesPayload>(key, (prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      regions: (prev.regions ?? []).filter((r) => r.id !== id),
+                    }
+                  : prev,
+              );
+            },
+            rollback: (snap) => queryClient.setQueryData(key, snap),
+          },
+          reconcile: () => invalidateDiscoverFeeds(queryClient),
+        });
+      }
+      showToast({
+        kind: 'success',
+        text:
+          target === 'regions'
+            ? `Removed ${name}`
+            : `Unfollowed ${name}`,
+      });
+    } catch {
+      // The outbox owns the queued unfollow; the offline-sync provider
+      // replays it. Keep the user informed without alarming them.
+      showToast({
+        kind: 'info',
+        text: "We'll update Discover when you're back online.",
+      });
+    }
+  };
 
   return (
     <>
@@ -581,12 +623,10 @@ export default function DiscoverScreen(): React.JSX.Element {
           groups={groupList}
           selected={selectedGroupId}
           onSelect={setSelectedGroupId}
+          onLongPress={handleChipLongPress}
           totalCount={items.length}
           testIdPrefix="discover-group"
           pickerTitle={groupPickerTitle(tab)}
-          canRemove={canRemoveGroup}
-          onRemove={(g) => void onRemoveGroup(g)}
-          removeActionLabel={removeActionLabel}
           leadingAction={{
             label: addChipLabel(tab),
             onPress: () => setAddSheetTab(tab),
@@ -673,7 +713,15 @@ export default function DiscoverScreen(): React.JSX.Element {
                 />
               )}
             </View>
-            {tab === 'regions' && !selectedGroupId ? (
+            {filterCount === 0 ? (
+              <View style={styles.inlineEmpty}>
+                <Text style={[styles.inlineEmptyText, { color: colors.muted }]}>
+                  {ingestPolling.isPolling
+                    ? 'Hang tight — pulling in shows for what you just followed.'
+                    : 'No upcoming announcements yet. New ones land here automatically.'}
+                </Text>
+              </View>
+            ) : tab === 'regions' && !selectedGroupId ? (
               <RegionGroupedList
                 items={visibleItems as NearbyAnnouncementItem[]}
                 groups={groupList}
@@ -710,6 +758,15 @@ export default function DiscoverScreen(): React.JSX.Element {
       tab={addSheetTab ?? tab}
       open={addSheetTab !== null}
       onClose={() => setAddSheetTab(null)}
+    />
+    <UnfollowChipSheet
+      open={unfollowChip !== null}
+      onClose={() => setUnfollowChip(null)}
+      tab={unfollowChip?.tab ?? tab}
+      name={unfollowChip?.name ?? null}
+      onConfirm={() => {
+        void handleUnfollowConfirm();
+      }}
     />
     </>
   );
@@ -1264,6 +1321,16 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: 16,
     gap: 10,
+  },
+  inlineEmpty: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 24,
+  },
+  inlineEmptyText: {
+    fontFamily: 'Geist Sans 400',
+    fontSize: 13,
+    lineHeight: 19,
   },
   loadMoreWrap: {
     paddingHorizontal: 16,

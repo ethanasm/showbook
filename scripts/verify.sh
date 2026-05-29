@@ -82,6 +82,12 @@ skip_step() {
 # ── Steps ────────────────────────────────────────────────────────────────
 run_step "Build"      build      pnpm build
 run_step "Lint"       lint       pnpm lint
+# `pnpm build` type-checks the web app via `next build`, but the mobile
+# app is never type-checked by build / lint / unit — so a `tsc`-level
+# break (e.g. an Expo SDK bump dropping an API like
+# StyleSheet.absoluteFillObject) slips straight through. Run the mobile
+# compiler explicitly here.
+run_step "Typecheck (mobile)" typecheck-mobile pnpm mobile:typecheck
 run_step "Unit tests" unit-tests pnpm exec nx run-many -t test
 
 if [ "$RUN_E2E" = "1" ]; then

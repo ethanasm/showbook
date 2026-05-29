@@ -62,7 +62,7 @@ export function GlowBackdrop(_props: GlowBackdropProps = {}): React.JSX.Element 
         colors={[colors.surface, colors.bg]}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
       />
 
       {/* Gold blob, top-left. Diagonal LinearGradient at low alpha
@@ -71,7 +71,7 @@ export function GlowBackdrop(_props: GlowBackdropProps = {}): React.JSX.Element 
         colors={[goldEdge, transparent]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0.7 }}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
 
@@ -80,7 +80,7 @@ export function GlowBackdrop(_props: GlowBackdropProps = {}): React.JSX.Element 
         colors={[transparent, blueEdge]}
         start={{ x: 0.3, y: 0.5 }}
         end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
     </View>
@@ -89,7 +89,11 @@ export function GlowBackdrop(_props: GlowBackdropProps = {}): React.JSX.Element 
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     overflow: 'hidden',
   },
 });

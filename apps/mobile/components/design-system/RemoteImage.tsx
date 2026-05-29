@@ -160,7 +160,7 @@ export function RemoteImage({
       {uri && !failed ? (
         <Image
           source={{ uri, headers }}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           contentFit="cover"
           contentPosition={contentPosition}
           transition={200}

@@ -26,7 +26,6 @@ import {
 import { Check, ChevronDown, Plus, Trash2 } from 'lucide-react-native';
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
-import { hapticImpactMedium } from '@/lib/haptics';
 import { Sheet } from './Sheet';
 
 export interface FilterGroup {
@@ -61,6 +60,7 @@ export function FilterChipsRow({
   groups,
   selected,
   onSelect,
+  onLongPress,
   totalCount,
   allLabel = 'All',
   showAll = true,
@@ -68,13 +68,15 @@ export function FilterChipsRow({
   testIdPrefix,
   leadingAction,
   pickerTitle = 'All filters',
-  onRemove,
-  canRemove,
-  removeActionLabel = 'Remove',
 }: {
   groups: FilterGroup[];
   selected: string | null;
   onSelect: (id: string | null) => void;
+  /** Long-press a group chip (or tap its trash affordance in the overflow
+   *  dropdown picker) — used by Discover to open the unfollow action
+   *  sheet. Wired to per-group entries only (never "All" or the leading
+   *  "+" action). The parent owns the confirm sheet + mutation. */
+  onLongPress?: (id: string) => void;
   /** Count rendered in the "All" chip; ignored when `showAll` is false. */
   totalCount?: number;
   allLabel?: string;
@@ -90,23 +92,10 @@ export function FilterChipsRow({
   leadingAction?: FilterChipsLeadingAction;
   /** Heading shown above the overflow dropdown picker. */
   pickerTitle?: string;
-  /** Confirmed-removal handler. When provided alongside `canRemove`,
-   *  long-pressing a removable chip (or tapping its trash affordance in
-   *  the dropdown picker) opens a confirm action sheet that calls this. */
-  onRemove?: (group: FilterGroup) => void;
-  /** Per-group predicate for whether the remove affordance is offered.
-   *  Defaults to none — Stats / festival rails stay non-removable. */
-  canRemove?: (group: FilterGroup) => boolean;
-  /** Label of the destructive button in the confirm sheet, e.g.
-   *  "Unfollow artist" / "Remove region". */
-  removeActionLabel?: string;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const [sheetOpen, setSheetOpen] = React.useState(false);
-  const [confirmGroup, setConfirmGroup] = React.useState<FilterGroup | null>(
-    null,
-  );
   const [availWidth, setAvailWidth] = React.useState<number | null>(null);
   const [widths, setWidths] = React.useState<Record<string, number>>({});
 
@@ -162,18 +151,15 @@ export function FilterChipsRow({
     [onSelect, selected, showAll],
   );
 
-  const removable = React.useCallback(
-    (g: FilterGroup) => Boolean(onRemove && canRemove?.(g)),
-    [onRemove, canRemove],
-  );
-
+  // The overflow dropdown's trash affordance routes through the same
+  // parent long-press handler the inline chips use. Close the picker
+  // first so the parent's confirm sheet isn't stacked on top of it.
   const requestRemove = React.useCallback(
-    (g: FilterGroup) => {
-      void hapticImpactMedium();
+    (id: string) => {
       setSheetOpen(false);
-      setConfirmGroup(g);
+      onLongPress?.(id);
     },
-    [],
+    [onLongPress],
   );
 
   return (
@@ -268,7 +254,7 @@ export function FilterChipsRow({
             onPress={() =>
               onSelect(selected === g.id ? (showAll ? null : g.id) : g.id)
             }
-            onLongPress={removable(g) ? () => requestRemove(g) : undefined}
+            onLongPress={onLongPress ? () => onLongPress(g.id) : undefined}
             colors={colors}
             testID={testIdPrefix ? `${testIdPrefix}-${g.id}` : undefined}
           />
@@ -324,7 +310,7 @@ export function FilterChipsRow({
                 badgeText={g.badgeText}
                 active={selected === g.id}
                 onPress={() => handlePick(g.id)}
-                onRemove={removable(g) ? () => requestRemove(g) : undefined}
+                onRemove={onLongPress ? () => requestRemove(g.id) : undefined}
                 colors={colors}
                 testID={
                   testIdPrefix ? `${testIdPrefix}-sheet-${g.id}` : undefined
@@ -333,62 +319,6 @@ export function FilterChipsRow({
             ))}
           </ScrollView>
         </View>
-      </Sheet>
-
-      <Sheet
-        open={confirmGroup !== null}
-        onClose={() => setConfirmGroup(null)}
-        snapPoints={['40%']}
-      >
-        {confirmGroup ? (
-          <View style={styles.confirm}>
-            <Text style={[styles.confirmName, { color: colors.ink }]}>
-              {confirmGroup.name}
-            </Text>
-            {confirmGroup.sublabel ? (
-              <Text style={[styles.confirmSub, { color: colors.muted }]}>
-                {confirmGroup.sublabel}
-              </Text>
-            ) : null}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={removeActionLabel}
-              testID={
-                testIdPrefix ? `${testIdPrefix}-remove-confirm` : undefined
-              }
-              onPress={() => {
-                const target = confirmGroup;
-                setConfirmGroup(null);
-                onRemove?.(target);
-              }}
-              style={({ pressed }) => [
-                styles.confirmDestructive,
-                {
-                  backgroundColor: colors.danger,
-                  opacity: pressed ? 0.8 : 1,
-                },
-              ]}
-            >
-              <Trash2 size={16} color={colors.bg} strokeWidth={2.25} />
-              <Text style={[styles.confirmDestructiveLabel, { color: colors.bg }]}>
-                {removeActionLabel}
-              </Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Cancel"
-              onPress={() => setConfirmGroup(null)}
-              style={({ pressed }) => [
-                styles.confirmCancel,
-                { borderColor: colors.ruleStrong, opacity: pressed ? 0.7 : 1 },
-              ]}
-            >
-              <Text style={[styles.confirmCancelLabel, { color: colors.ink }]}>
-                Cancel
-              </Text>
-            </Pressable>
-          </View>
-        ) : null}
       </Sheet>
     </View>
   );
@@ -786,47 +716,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 2,
-  },
-  confirm: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 6,
-  },
-  confirmName: {
-    fontFamily: 'Fraunces',
-    fontWeight: '700',
-    fontSize: 22,
-    lineHeight: 26,
-  },
-  confirmSub: {
-    fontFamily: 'Geist Sans 400',
-    fontSize: 13,
-    marginTop: 2,
-    marginBottom: 18,
-  },
-  confirmDestructive: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 18,
-    paddingVertical: 14,
-    borderRadius: RADII.md,
-  },
-  confirmDestructiveLabel: {
-    fontFamily: 'Geist Sans 600',
-    fontSize: 15,
-  },
-  confirmCancel: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
-    paddingVertical: 14,
-    borderRadius: RADII.md,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  confirmCancelLabel: {
-    fontFamily: 'Geist Sans 500',
-    fontSize: 15,
   },
 });

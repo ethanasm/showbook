@@ -65,15 +65,10 @@ const config: ExpoConfig = {
     ? ['showbook', ANDROID_GOOGLE_OAUTH_SCHEME]
     : 'showbook',
   userInterfaceStyle: 'automatic',
-  // The legacy `splash` block stays as the iOS fallback for SDKs that
-  // haven't migrated to the plugin yet. The expo-splash-screen plugin
-  // below is the canonical wiring on SDK 55 and supports the dark
-  // variant the design calls for.
-  splash: {
-    image: './assets/splash.png',
-    resizeMode: 'cover',
-    backgroundColor: '#0C0C0C',
-  },
+  // Splash is configured via the `expo-splash-screen` plugin below (the
+  // canonical wiring as of SDK 56, which dropped the legacy top-level
+  // `splash` key from ExpoConfig). The plugin carries the same image /
+  // backgroundColor plus the dark variant.
   ios: {
     bundleIdentifier: 'me.ethanasm.showbook',
     supportsTablet: true,

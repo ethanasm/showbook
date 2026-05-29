@@ -8,6 +8,18 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: "development"
+        # babel-preset-expo / eslint-config-expo are devDependencies, but
+        # their majors track the Expo SDK major and MUST move with the
+        # expo-sdk group (below). Dependabot assigns each dependency to the
+        # FIRST group it matches in definition order, and this group is
+        # defined first — so without this exclusion these two get pulled
+        # into the dev-dependencies PR and bumped to the next SDK
+        # independently of `expo` / `react-native` (exactly the partial
+        # SDK-boundary split the expo-sdk group exists to prevent — it
+        # shipped as #458 bumping both to SDK 56 on their own).
+        exclude-patterns:
+          - "babel-preset-expo"
+          - "eslint-config-expo"
       aws-sdk:
         patterns:
           - "@aws-sdk/*"
@@ -33,12 +45,32 @@ updates:
       # coordinated change. babel-preset-expo / eslint-config-expo are
       # in the group too — their majors also track the SDK major and
       # need to move with `expo`.
+      #
+      # The `react-native-*` / `@react-native-community/*` /
+      # `@react-native-masked-view/*` native modules are pinned per SDK
+      # release in expo's bundledNativeModules.json (reanimated, worklets,
+      # gesture-handler, safe-area-context, screens, svg, maps, web,
+      # netinfo, masked-view, ...). They compile against the RN/SDK ABI,
+      # so a bump in isolation lands an SDK-N module on an SDK-(N±1) host
+      # and crashes native init — the same failure class as the expo-*
+      # split. They previously leaked out as standalone PRs (#461
+      # reanimated, #462 worklets) that died at `pnpm install
+      # --frozen-lockfile` because the root package.json `pnpm.overrides`
+      # pin them and dependabot can't edit overrides. The grouping keeps the
+      # non-override-pinned ones (svg, maps, web, netinfo, masked-view)
+      # moving with `expo`; the five that ARE override-pinned are additionally
+      # `ignore`d below — grouping alone still produced failing, SDK-
+      # overshooting PRs (#475: gesture-handler 3.0.0 / reanimated 4.4.0 on an
+      # SDK-56 host). They move only via a manual `expo install --fix` SDK bump.
       expo-sdk:
         patterns:
           - "expo"
           - "expo-*"
           - "@expo/*"
           - "react-native"
+          - "react-native-*"
+          - "@react-native-community/*"
+          - "@react-native-masked-view/*"
           - "babel-preset-expo"
           - "eslint-config-expo"
     ignore:
@@ -47,7 +79,30 @@ updates:
       # packages ship ESLint-10-compatible releases.
       - dependency-name: "eslint"
         update-types: ["version-update:semver-major"]
+      # These native modules are version-locked by the Expo SDK
+      # (bundledNativeModules.json) AND hard-pinned in the root package.json
+      # `pnpm.overrides`. Dependabot can't edit overrides, so every bump it
+      # raises (a) contradicts the override and dies at `pnpm install
+      # --frozen-lockfile`, and (b) overshoots the current SDK's blessed
+      # version — e.g. #475 offered gesture-handler 3.0.0 / reanimated 4.4.0 /
+      # worklets 0.9.1 on an SDK-56 host (which bundles 2.31.1 / 4.3.1 /
+      # 0.8.3), the partial-upgrade native-init crash class. They move only as
+      # part of a manual `expo install --fix` SDK upgrade (see #465), so
+      # Dependabot leaves them alone. Update this list if the override set in
+      # the root package.json changes.
+      - dependency-name: "react-native-reanimated"
+      - dependency-name: "react-native-worklets"
+      - dependency-name: "react-native-screens"
+      - dependency-name: "react-native-gesture-handler"
+      - dependency-name: "react-native-safe-area-context"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    # History is a steady stream of one-off action-bump PRs (#369-373,
+    # #413, #128/#127/#126, #13/#12/#11/#10). They're low-risk and fully
+    # CI-gated, so bundle them into one weekly PR to cut review noise.
+    groups:
+      github-actions:
+        patterns:
+          - "*"
