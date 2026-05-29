@@ -19,33 +19,33 @@ updates:
         patterns:
           - "react"
           - "react-dom"
+      # The Expo SDK is a tightly-coupled package set: every `expo-*` /
+      # `@expo/*` runtime package compiles against the `expo-modules-core`
+      # major that ships inside the matching `expo` host, and
+      # `react-native` is pinned by the SDK release notes. Mixing
+      # versions across an SDK boundary crashes native-module-registry
+      # init with NoClassDefFoundError before any JS runs — what killed
+      # every cold launch on 2026-05-29 after PRs #423 (expo-audio),
+      # #424 (@expo/metro-runtime), #447 (linear-gradient), and #448
+      # (expo-haptics) layered SDK 56 packages onto an SDK 55 host
+      # (see #457 post-mortem). Bundle every SDK-coupled package into a
+      # single dependabot PR so an SDK 55 -> 56 bump lands as one
+      # coordinated change. babel-preset-expo / eslint-config-expo are
+      # in the group too — their majors also track the SDK major and
+      # need to move with `expo`.
+      expo-sdk:
+        patterns:
+          - "expo"
+          - "expo-*"
+          - "@expo/*"
+          - "react-native"
+          - "babel-preset-expo"
+          - "eslint-config-expo"
     ignore:
       # ESLint 10 dropped `scopeManager.addGlobals`, which eslint-config-next
       # 16 and eslint-config-expo 55 still call. Re-enable once both config
       # packages ship ESLint-10-compatible releases.
       - dependency-name: "eslint"
-        update-types: ["version-update:semver-major"]
-      # babel-preset-expo / eslint-config-expo majors track the Expo SDK
-      # major. Bump them as part of an Expo SDK 55→56 migration PR, not
-      # via dependabot — see PR #163 / #77 for the JS/native mismatch
-      # post-mortems that drove the existing SDK 55 pin.
-      - dependency-name: "babel-preset-expo"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "eslint-config-expo"
-        update-types: ["version-update:semver-major"]
-      # Every `expo-*` and `@expo/*` runtime package is coupled to the
-      # host `expo` SDK major. Mixing SDK 56 packages into an SDK 55
-      # host links against expo-modules-core 3.x while the runtime
-      # ships expo-modules-core 2.x, which crashes native-module-
-      # registry init with NoClassDefFoundError before any JS runs —
-      # this is what killed every cold launch on 2026-05-29 after PRs
-      # #423 (expo-audio), #424 (@expo/metro-runtime), #447 (linear-
-      # gradient), and #448 (expo-haptics) layered SDK 56 packages on.
-      # Hold majors for the SDK-bump PR. Minors/patches inside the
-      # current SDK line are still fair game and continue to auto-PR.
-      - dependency-name: "expo*"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "@expo/*"
         update-types: ["version-update:semver-major"]
   - package-ecosystem: "github-actions"
     directory: "/"
