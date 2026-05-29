@@ -100,26 +100,54 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Native deps (anything that runs Expo autolinking on iOS/Android) can't
-      # be shipped via `eas update` — those updates only swap the JS bundle.
-      # If `apps/mobile/package.json` deps changed between this commit and its
-      # parent, we promote a workflow_run trigger from OTA to a full
-      # `eas build` so the preview channel actually ships the new binary.
-      - name: Detect native dep changes
+      # Native changes (anything that gets baked into the iOS/Android binary)
+      # can't be shipped via `eas update` — OTA only swaps the JS bundle, so
+      # any new permission, plugin config, autolinked module, embedded asset,
+      # or local Expo Module source has to ride a fresh `eas build`. We watch
+      # the paths that actually flow into the native binary; everything else
+      # under `apps/mobile/` (app/, components/, lib/, web-shims/, web-tests/,
+      # e2e/, tests/, docs) is OTA-shippable.
+      #
+      # Paths that force a build:
+      #   - apps/mobile/package.json       — npm deps incl. native autolinking
+      #   - apps/mobile/app.config.ts      — plugin list, permissions, version,
+      #                                      android.blockedPermissions, etc.
+      #   - apps/mobile/eas.json           — env / build profile / channel
+      #   - apps/mobile/modules/**         — local Expo Module sources (their
+      #                                      JS is embedded into the AAB)
+      #   - apps/mobile/assets/**          — icon / splash / adaptive-icon
+      #                                      get bundled into the binary
+      #
+      # Why widen this: when `apps/mobile/modules/showbook-spotify-sdk/src/`
+      # was patched (PR #454) to stop crashing at startup, the previous
+      # narrow check only looked at apps/mobile/package.json, so the deploy
+      # took the OTA path. The OTA-shipped bundle never reached devices
+      # because the embedded broken bundle crashed before expo-updates could
+      # apply the swap. Watching apps/mobile/modules/ catches that class of
+      # change.
+      - name: Detect native changes
         id: detect-native
         run: |
-          # Compare apps/mobile/package.json dependencies between HEAD and its
-          # parent commit. If any dependency line changed, force build mode.
-          # `git diff -U0` keeps the diff tight; we filter to the dependencies
-          # block by looking for the standard "  \"package-name\":" pattern.
           if git rev-parse HEAD~1 >/dev/null 2>&1; then
-            DIFF=$(git diff HEAD~1 HEAD -- apps/mobile/package.json || true)
+            CHANGED=$(git diff --name-only HEAD~1 HEAD -- \
+              'apps/mobile/package.json' \
+              'apps/mobile/app.config.ts' \
+              'apps/mobile/eas.json' \
+              'apps/mobile/modules/' \
+              'apps/mobile/assets/' \
+              || true)
           else
-            DIFF=""
+            CHANGED=""
           fi
-          if echo "$DIFF" | grep -qE '^[-+]\s*"[^"]+":\s*"'; then
+          if [ -n "$CHANGED" ]; then
             echo "needs_build=true" >> "$GITHUB_OUTPUT"
-            echo "Native deps changed in apps/mobile/package.json — forcing build." >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "### Native-affecting paths changed — forcing build"
+              echo ""
+              echo '```'
+              echo "$CHANGED"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "needs_build=false" >> "$GITHUB_OUTPUT"
           fi
@@ -182,17 +210,27 @@ jobs:
             echo "See workflow header comment for setup." >&2
             exit 1
           fi
-          SA="$RUNNER_TEMP/play-sa.json"
+          # eas-cli doesn't accept --key / --service-account-key-path as a
+          # submit flag in current versions — the path has to come from the
+          # submit profile in eas.json (`serviceAccountKeyPath`, relative to
+          # eas.json itself). We write the secret to that exact relative path
+          # in the working directory (which is `apps/mobile/`), chmod it, and
+          # let `eas submit --profile preview-store` resolve the path the
+          # standard way.
+          SA="./play-service-account.json"
           # printf, not echo, so a trailing newline doesn't break JSON parsing
-          # on EAS's side. The file is on the ephemeral runner only.
+          # on EAS's side. The file is on the ephemeral runner only and is
+          # gitignored at the repo level so a misconfigured `git add` can't
+          # commit it.
           printf '%s' "$PLAY_SA_JSON" > "$SA"
           chmod 600 "$SA"
           pnpm dlx eas-cli submit \
             --profile preview-store \
             --platform android \
             --latest \
-            --non-interactive \
-            --key "$SA"
+            --non-interactive
+          # Best-effort cleanup; runner is ephemeral anyway.
+          rm -f "$SA"
 
       - name: Build iOS IPA (preview profile)
         # iOS keeps the fire-and-forget --no-wait pattern: no auto-submit
