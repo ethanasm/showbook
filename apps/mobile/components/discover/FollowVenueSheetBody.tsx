@@ -32,17 +32,22 @@ import { runOptimisticMutation } from '@/lib/mutations';
 import { getCacheOutbox } from '@/lib/cache';
 import { useVenueSearch } from '@/lib/useVenueSearch';
 import { useDebouncedValue } from '@showbook/shared/hooks';
+import { entityLimitReachedHint } from '@showbook/shared';
 import type { VenueSuggestion } from '../VenueTypeahead';
 
 export function FollowVenueSheetBody({
   onFollowed,
   onClose,
+  atCap = false,
 }: {
   /** Called after a successful follow lands so the parent can dismiss
    *  the sheet. The sheet stays mounted on cancel to preserve in-flight
    *  state. */
   onFollowed: () => void;
   onClose: () => void;
+  /** When true the user is at the followed-venue cap: the search UI is
+   *  replaced by a persistent cap message, mirroring the region sheet. */
+  atCap?: boolean;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -155,6 +160,15 @@ export function FollowVenueSheetBody({
         <Text style={[styles.title, { color: colors.ink }]}>Follow a venue</Text>
       </View>
 
+      {atCap ? (
+        <Text
+          style={[styles.capMessage, { color: colors.danger }]}
+          testID="discover-venue-cap-message"
+        >
+          {entityLimitReachedHint('venues')}
+        </Text>
+      ) : (
+      <>
       <View
         style={[
           styles.searchRow,
@@ -228,6 +242,9 @@ export function FollowVenueSheetBody({
             </Text>
           ) : null}
         </ScrollView>
+      )}
+
+      </>
       )}
 
       <Pressable
@@ -387,6 +404,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist Sans',
     fontSize: 12,
     fontStyle: 'italic',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  capMessage: {
+    fontFamily: 'Geist Sans',
+    fontSize: 12,
     paddingVertical: 8,
     paddingHorizontal: 4,
   },

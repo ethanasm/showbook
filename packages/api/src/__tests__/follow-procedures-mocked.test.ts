@@ -6,6 +6,7 @@
 
 import { describe, it, before, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { TRPCError } from '@trpc/server';
 
 mock.module('../job-queue.js', {
   namedExports: {
@@ -78,7 +79,31 @@ const PERFORMER_ID = '22222222-2222-4222-8222-222222222222';
 
 describe('performersRouter.follow / followAttraction (mocked)', () => {
   it('follow returns success', async () => {
-    const db = makeFakeDb();
+    // selectResults: [followed-performers cap check].
+    const db = makeFakeDb({ selectResults: [[]] });
+    const result = await performersRouter
+      .createCaller(fakeCtx(db) as never)
+      .follow({ performerId: PERFORMER_ID });
+    assert.deepEqual(result, { success: true, performerId: PERFORMER_ID });
+  });
+
+  it('follow rejects once the artist cap is reached', async () => {
+    // 250 existing follows, none matching the target → over cap.
+    const followed = Array.from({ length: 250 }, (_, i) => ({ performerId: `p-${i}` }));
+    const db = makeFakeDb({ selectResults: [followed] });
+    await assert.rejects(
+      () =>
+        performersRouter
+          .createCaller(fakeCtx(db) as never)
+          .follow({ performerId: PERFORMER_ID }),
+      (err: unknown) => err instanceof TRPCError && err.code === 'BAD_REQUEST',
+    );
+  });
+
+  it('follow at cap is still idempotent for an already-followed artist', async () => {
+    const followed = Array.from({ length: 250 }, (_, i) => ({ performerId: `p-${i}` }));
+    followed[0] = { performerId: PERFORMER_ID };
+    const db = makeFakeDb({ selectResults: [followed] });
     const result = await performersRouter
       .createCaller(fakeCtx(db) as never)
       .follow({ performerId: PERFORMER_ID });
@@ -86,7 +111,8 @@ describe('performersRouter.follow / followAttraction (mocked)', () => {
   });
 
   it('followAttraction resolves a TM attraction → performer + follow', async () => {
-    const db = makeFakeDb();
+    // selectResults: [followed-performers cap check].
+    const db = makeFakeDb({ selectResults: [[]] });
     const result = await performersRouter
       .createCaller(fakeCtx(db) as never)
       .followAttraction({
@@ -95,12 +121,28 @@ describe('performersRouter.follow / followAttraction (mocked)', () => {
       });
     assert.equal(result.performerId, 'perf-Phoebe');
   });
+
+  it('followAttraction rejects once the artist cap is reached', async () => {
+    // matchOrCreatePerformer is mocked to return perf-Phoebe; 250 other
+    // follows means adding this new one would breach the cap.
+    const followed = Array.from({ length: 250 }, (_, i) => ({ performerId: `p-${i}` }));
+    const db = makeFakeDb({ selectResults: [followed] });
+    await assert.rejects(
+      () =>
+        performersRouter
+          .createCaller(fakeCtx(db) as never)
+          .followAttraction({ tmAttractionId: 'tm-1', name: 'Phoebe' }),
+      (err: unknown) => err instanceof TRPCError && err.code === 'BAD_REQUEST',
+    );
+  });
 });
 
 describe('venuesRouter.follow / createFromPlace (mocked)', () => {
   it('follow inserts and lazy-backfills with no Place id update', async () => {
+    // selectResults: [followed-venues cap check, venue row for backfill].
     const db = makeFakeDb({
       selectResults: [
+        [],
         [{ name: 'V', city: 'C', stateRegion: null, googlePlaceId: 'have', photoUrl: 'have' }],
       ],
     });
@@ -108,6 +150,18 @@ describe('venuesRouter.follow / createFromPlace (mocked)', () => {
       .createCaller(fakeCtx(db) as never)
       .follow({ venueId: VENUE_ID });
     assert.deepEqual(result, { success: true });
+  });
+
+  it('follow rejects once the venue cap is reached', async () => {
+    const followed = Array.from({ length: 100 }, (_, i) => ({ venueId: `v-${i}` }));
+    const db = makeFakeDb({ selectResults: [followed] });
+    await assert.rejects(
+      () =>
+        venuesRouter
+          .createCaller(fakeCtx(db) as never)
+          .follow({ venueId: VENUE_ID }),
+      (err: unknown) => err instanceof TRPCError && err.code === 'BAD_REQUEST',
+    );
   });
 
   it('createFromPlace returns the matched venue', async () => {

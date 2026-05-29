@@ -54,6 +54,8 @@ function FeedSection({
   pendingIngestPerformerIds,
   activeRegions,
   regionCount,
+  followedVenueCount,
+  followedArtistCount,
   onRegionAdded,
   onSpotifyImported,
 }: {
@@ -73,6 +75,8 @@ function FeedSection({
   pendingIngestPerformerIds?: Set<string>;
   activeRegions?: { id: string; cityName: string; radiusMiles: number }[];
   regionCount?: number;
+  followedVenueCount?: number;
+  followedArtistCount?: number;
   onRegionAdded?: (regionId: string) => void;
   onSpotifyImported?: (result: { count: number; performerIds: string[] }) => void;
 }) {
@@ -309,6 +313,10 @@ function FeedSection({
   );
   const totalRegionCount = regionCount ?? activeRegions?.length ?? 0;
   const regionLimitReached = !canAddEntity("regions", totalRegionCount);
+  const venueFollowCount = followedVenueCount ?? 0;
+  const venueLimitReached = !canAddEntity("venues", venueFollowCount);
+  const artistFollowCount = followedArtistCount ?? 0;
+  const artistLimitReached = !canAddEntity("artists", artistFollowCount);
 
   const venueRail = (
     <VenueRail
@@ -320,6 +328,8 @@ function FeedSection({
       totalCount={isNearby ? totalRegionCount : totalCount}
       showFollowLink={isFollowed}
       onFollowVenue={handleFollowVenue}
+      addVenueDisabled={venueLimitReached}
+      addVenueHint={venueLimitReached ? `Maximum ${entityLimit("venues")} venues` : `${venueFollowCount} / ${entityLimit("venues")} venues`}
       onUnfollowItem={(isFollowed || isArtists) ? handleUnfollowItem : undefined}
       showAddRegion={isNearby}
       onAddRegion={() => setShowRegionModal(true)}
@@ -327,6 +337,8 @@ function FeedSection({
       addRegionHint={regionLimitReached ? `Maximum ${entityLimit("regions")} regions` : `${totalRegionCount} / ${entityLimit("regions")} regions`}
       onUnfollowRegion={isNearby ? (regionId) => removeRegionMutation.mutate({ regionId }) : undefined}
       showArtistSearch={isArtists}
+      addArtistDisabled={artistLimitReached}
+      addArtistHint={artistLimitReached ? `Maximum ${entityLimit("artists")} artists` : `${artistFollowCount} / ${entityLimit("artists")} artists`}
       pendingItemIds={pendingGroupIds}
       pendingRegionIds={isNearby ? pendingIngestRegionIds : undefined}
     />
@@ -1009,6 +1021,7 @@ export default function DiscoverView() {
           onVenueFollowed={handleVenueFollowed}
           groupBy="venue"
           allFollowedVenues={followedVenuesList.data}
+          followedVenueCount={followedVenueCount}
           pendingIngestVenueIds={pendingIngest.venueIds}
           onSpotifyImported={handleSpotifyImported}
         />
@@ -1027,6 +1040,7 @@ export default function DiscoverView() {
             onVenueFollowed={handleVenueFollowed}
             groupBy="artist"
             allFollowedArtists={followedArtistsList.data}
+            followedArtistCount={artistsCount}
             pendingIngestPerformerIds={pendingIngest.performerIds}
             onSpotifyImported={handleSpotifyImported}
           />

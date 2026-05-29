@@ -16,6 +16,7 @@ import { runOptimisticMutation } from '@/lib/mutations';
 import { getCacheOutbox } from '@/lib/cache';
 import { trpc } from '@/lib/trpc';
 import { canAddRegion } from '@/lib/regions';
+import { canAddEntity } from '@showbook/shared';
 import { FollowVenueSheetBody } from './FollowVenueSheetBody';
 import { FollowArtistSheetBody } from './FollowArtistSheetBody';
 import { AddRegionSheetBody } from './AddRegionSheetBody';
@@ -34,14 +35,25 @@ export function AddToDiscoverSheet({
   const utils = trpc.useUtils();
   const { showToast } = useFeedback();
 
-  // The region cap mirrors the server guard in `preferences.addRegion`. We
-  // only need the count when the regions tab is actually open, so the query
-  // stays gated to avoid a needless round-trip on the venues / artists tabs.
+  // Each cap mirrors the matching server guard (`preferences.addRegion`,
+  // `venues.follow`, `performers.follow*`). We only fetch the count for the
+  // tab that's actually open, so the venues / artists tabs don't pay for the
+  // region prefs round-trip and vice-versa.
   const prefs = trpc.preferences.get.useQuery(undefined, {
     enabled: open && tab === 'regions',
     staleTime: 60_000,
   });
+  const followedVenues = trpc.venues.followed.useQuery(undefined, {
+    enabled: open && tab === 'venues',
+    staleTime: 60_000,
+  });
+  const followedArtists = trpc.performers.followed.useQuery(undefined, {
+    enabled: open && tab === 'artists',
+    staleTime: 60_000,
+  });
   const regionsAtCap = !canAddRegion(prefs.data?.regions?.length ?? 0);
+  const venuesAtCap = !canAddEntity('venues', followedVenues.data?.length ?? 0);
+  const artistsAtCap = !canAddEntity('artists', followedArtists.data?.length ?? 0);
 
   const onRegionSubmit = React.useCallback(
     async (input: {
@@ -78,9 +90,9 @@ export function AddToDiscoverSheet({
   return (
     <Sheet open={open} onClose={onClose} snapPoints={['72%']}>
       {tab === 'venues' ? (
-        <FollowVenueSheetBody onFollowed={onClose} onClose={onClose} />
+        <FollowVenueSheetBody onFollowed={onClose} onClose={onClose} atCap={venuesAtCap} />
       ) : tab === 'artists' ? (
-        <FollowArtistSheetBody onFollowed={onClose} onClose={onClose} />
+        <FollowArtistSheetBody onFollowed={onClose} onClose={onClose} atCap={artistsAtCap} />
       ) : (
         <AddRegionSheetBody
           onCancel={onClose}
