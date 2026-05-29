@@ -19,6 +19,41 @@ import type { ExpoConfig } from 'expo/config';
 
 const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
 
+// Google OAuth on native uses the *reversed* client ID as a custom URI scheme
+// for the redirect back from Chrome / SFSafariViewController:
+//   "222563763412-noa3...apps.googleusercontent.com"
+//      → scheme "com.googleusercontent.apps.222563763412-noa3..."
+//      → redirect URI "com.googleusercontent.apps.222563763412-noa3...:/oauth2redirect"
+// Android needs an intent-filter on the main activity that claims this scheme,
+// otherwise Chrome can't hand the OAuth callback back to the app and the
+// system falls through to the launcher home screen — which is exactly what
+// happened to Brandon's Play install on 2026-05-29: Google sign-in completed,
+// Chrome tried to redirect, Android had nothing registered to receive it, and
+// the in-app browser session was lost. iOS hits the same wall via
+// CFBundleURLTypes; Expo's `ios.config.googleSignIn.reservedClientId` is the
+// canonical place to register that.
+//
+// Reading the client IDs from env at config-resolution time keeps the
+// account-specific values out of source and matches how `eas.json`'s build
+// profiles already inject them.
+const GOOGLE_OAUTH_CLIENT_ID_ANDROID =
+  process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID ?? '';
+const GOOGLE_OAUTH_CLIENT_ID_IOS =
+  process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS ?? '';
+
+function toReversedClientIdScheme(clientId: string): string | null {
+  const suffix = '.apps.googleusercontent.com';
+  if (!clientId.endsWith(suffix)) return null;
+  return `com.googleusercontent.apps.${clientId.slice(0, -suffix.length)}`;
+}
+
+const ANDROID_GOOGLE_OAUTH_SCHEME = toReversedClientIdScheme(
+  GOOGLE_OAUTH_CLIENT_ID_ANDROID,
+);
+const IOS_GOOGLE_OAUTH_RESERVED_CLIENT_ID = toReversedClientIdScheme(
+  GOOGLE_OAUTH_CLIENT_ID_IOS,
+);
+
 const config: ExpoConfig = {
   name: 'Showbook',
   slug: 'showbook',
@@ -26,7 +61,9 @@ const config: ExpoConfig = {
   version: '0.1.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
-  scheme: 'showbook',
+  scheme: ANDROID_GOOGLE_OAUTH_SCHEME
+    ? ['showbook', ANDROID_GOOGLE_OAUTH_SCHEME]
+    : 'showbook',
   userInterfaceStyle: 'automatic',
   // The legacy `splash` block stays as the iOS fallback for SDKs that
   // haven't migrated to the plugin yet. The expo-splash-screen plugin
@@ -48,6 +85,13 @@ const config: ExpoConfig = {
     config: {
       usesNonExemptEncryption: false,
       ...(GOOGLE_MAPS_API_KEY ? { googleMapsApiKey: GOOGLE_MAPS_API_KEY } : {}),
+      ...(IOS_GOOGLE_OAUTH_RESERVED_CLIENT_ID
+        ? {
+            googleSignIn: {
+              reservedClientId: IOS_GOOGLE_OAUTH_RESERVED_CLIENT_ID,
+            },
+          }
+        : {}),
     },
     // iPhone stays portrait-locked (matches the top-level `orientation`
     // above); iPad gets all four orientations so the M6.C three-pane
