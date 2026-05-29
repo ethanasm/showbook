@@ -21,6 +21,16 @@
  * system sans (polish pass).
  */
 
+// MUST be the first import in this file. `crash-reporter` has a side
+// effect at module load — it installs `global.ErrorUtils.setGlobalHandler`
+// + an `unhandledrejection` listener so uncaught JS errors at cold
+// launch POST to /api/mobile/crash-report with their message + stack.
+// Without this, RN's native handler logs only the bridge wrapper to
+// Play Console (the JS message is lost), which is what made the
+// post-SDK-56 boot-time JavascriptException impossible to diagnose
+// from the crash reports. See `lib/crash-reporter.ts` header.
+import '@/lib/crash-reporter';
+
 import React from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
