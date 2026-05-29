@@ -85,6 +85,14 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # `Detect native changes` diffs HEAD against HEAD~1 to decide
+          # OTA vs. build. actions/checkout defaults to fetch-depth: 1,
+          # which is a single-commit shallow clone — HEAD~1 doesn't
+          # resolve, the guard falls through to CHANGED="", and every
+          # workflow_run trigger silently took the OTA path no matter
+          # what the merge actually touched (PR #457 / package.json was
+          # the case that surfaced this). Two commits is the minimum.
+          fetch-depth: 2
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -136,20 +144,34 @@ jobs:
               'apps/mobile/modules/' \
               'apps/mobile/assets/' \
               || true)
+            if [ -n "$CHANGED" ]; then
+              echo "needs_build=true" >> "$GITHUB_OUTPUT"
+              {
+                echo "### Native-affecting paths changed — forcing build"
+                echo ""
+                echo '```'
+                echo "$CHANGED"
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "needs_build=false" >> "$GITHUB_OUTPUT"
+            fi
           else
-            CHANGED=""
-          fi
-          if [ -n "$CHANGED" ]; then
+            # No parent commit available — checkout was shallower than
+            # expected. Fail-safe to a build: skipping a needed binary
+            # ships a broken update (PR #457 post-mortem), shipping an
+            # unnecessary one costs ~15 min of EAS time. Asymmetric
+            # cost argues for build.
             echo "needs_build=true" >> "$GITHUB_OUTPUT"
             {
-              echo "### Native-affecting paths changed — forcing build"
+              echo "### HEAD~1 unresolvable — defaulting to build"
               echo ""
-              echo '```'
-              echo "$CHANGED"
-              echo '```'
+              echo "The Checkout step's fetch-depth left no parent commit to diff"
+              echo "against, so the OTA-vs-build decision can't be made from the"
+              echo "diff. Falling through to build so a needed native change can't"
+              echo "silently ship as OTA. Investigate the Checkout step's"
+              echo "fetch-depth if this fires on a routine push."
             } >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "needs_build=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Push OTA update
