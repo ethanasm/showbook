@@ -132,15 +132,27 @@ const baseOptions: LoggerOptions = {
 const MOBILE_COMPONENT = 'mobile.telemetry';
 
 /**
- * Cheap predicate over a serialized pino line: is this a mobile-telemetry
- * record? pino flattens the child's bound `component` field into every line,
- * so a substring check is enough — no JSON parse per log line. Used to fan
- * mobile telemetry to `AXIOM_MOBILE_DATASET` and keep it out of the
- * server dataset (which has its own column budget — see
- * docs/specs/operations/axiom-dataset-cutover.md).
+ * Is this serialized pino line a mobile-telemetry record? pino flattens the
+ * child's bound `component` field onto the top level of every line, so we
+ * route on that.
+ *
+ * We parse and check the **top-level** `component` rather than substring-
+ * matching the raw line: server logs can legitimately *embed* a mobile row
+ * inside their payload (e.g. the `error_volume` health check lists
+ * `{event:"mobile.trpc.error", component:"mobile.telemetry"}` among its top
+ * offenders), and a loose `line.includes('"component":"mobile.telemetry"')`
+ * misroutes those server rollups into the mobile dataset. The line is
+ * already JSON we're about to ship over the network, so the parse cost is
+ * negligible. A malformed line (shouldn't happen from pino) is treated as
+ * non-mobile so it still lands in the server dataset rather than vanishing.
  */
 function isMobileRecord(line: string): boolean {
-  return line.includes(`"component":"${MOBILE_COMPONENT}"`);
+  try {
+    const parsed = JSON.parse(line) as { component?: unknown };
+    return parsed.component === MOBILE_COMPONENT;
+  } catch {
+    return false;
+  }
 }
 
 function buildStreams(): StreamEntry[] {
@@ -179,7 +191,7 @@ function buildAxiomStream(
     .then((axiomStream) => {
       const filter = new Transform({
         transform(chunk, _enc, cb) {
-          // pino writes one full JSON line per chunk.
+          // pino writes one full JSON line per chunk; `keep` parses it.
           if (keep(chunk.toString())) this.push(chunk);
           cb();
         },
