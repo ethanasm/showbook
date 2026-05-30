@@ -56,7 +56,7 @@ export default function OAuthRedirectRoute(): React.JSX.Element {
   const state = firstParam(params.state);
   const oauthError = firstParam(params.error);
 
-  const { user, completeOAuthCallback, error: authError } = useAuth();
+  const { user, isSigningIn, completeOAuthCallback, error: authError } = useAuth();
   const { tokens } = useTheme();
   const [done, setDone] = React.useState(false);
 
@@ -66,6 +66,17 @@ export default function OAuthRedirectRoute(): React.JSX.Element {
       setDone(true);
       return;
     }
+    // Android race-with-polyfill guard: when expo-web-browser's polyfill
+    // already caught the URL (the happy path on Android when the Linking
+    // event beats AppState), `isSigningIn` stays true from the moment
+    // `signIn` was called through to `exchangeAndPersist` completing.
+    // The same URL is also routed here by expo-router, but we don't want
+    // to redeem the authorization code twice — Google's token endpoint
+    // returns `invalid_grant` on the second exchange. Skip our manual
+    // path entirely; the response useEffect in AuthProvider will set
+    // `user` once exchangeAndPersist finishes and the `if (user)` branch
+    // below redirects to `(tabs)`.
+    if (isSigningIn) return;
     if (typeof code === 'string' && typeof state === 'string') {
       void completeOAuthCallback({ code, state }).finally(() => setDone(true));
       return;
@@ -73,7 +84,7 @@ export default function OAuthRedirectRoute(): React.JSX.Element {
     // No usable params (someone opened the deep link manually, or the
     // callback URL was malformed). Bounce to sign-in.
     setDone(true);
-  }, [code, state, oauthError, completeOAuthCallback, done]);
+  }, [code, state, oauthError, completeOAuthCallback, done, isSigningIn]);
 
   if (user) return <Redirect href="/(tabs)" />;
   if (done) return <Redirect href="/(auth)/signin" />;
