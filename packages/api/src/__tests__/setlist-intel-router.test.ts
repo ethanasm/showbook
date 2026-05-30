@@ -88,14 +88,6 @@ describe('predictedSetlist — eligibility gate', () => {
     if (result.style === 'cold') assert.equal(result.reason, 'wrong_kind');
   });
 
-  test('returns "wrong_kind" for sports', async () => {
-    const db = makeRouterDb(showFixture({ kind: 'sports' }), 'mbid-123');
-    const caller = setlistIntelRouter.createCaller(fakeCtx(db, USER_ID) as any);
-    const result = await caller.predictedSetlist({ showId: fakeUuid('s', '1') });
-    assert.equal(result.style, 'cold');
-    if (result.style === 'cold') assert.equal(result.reason, 'wrong_kind');
-  });
-
   test('returns "wrong_kind" for film', async () => {
     const db = makeRouterDb(showFixture({ kind: 'film' }), 'mbid-123');
     const caller = setlistIntelRouter.createCaller(fakeCtx(db, USER_ID) as any);

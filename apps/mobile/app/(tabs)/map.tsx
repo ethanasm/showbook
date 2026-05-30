@@ -133,7 +133,6 @@ const KIND_FILTERS: readonly { k: 'all' | Kind; label: string }[] = [
   { k: 'theatre', label: 'theatre' },
   { k: 'comedy', label: 'comedy' },
   { k: 'festival', label: 'festival' },
-  { k: 'sports', label: 'sports' },
 ];
 
 // Which layer of shows the map plots. `all` / `past` / `upcoming` split the
@@ -685,16 +684,11 @@ export default function MapScreen(): React.JSX.Element {
         })}
       </ScrollView>
 
-      {/* Kind filter strip */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterScroll}
-        contentContainerStyle={[
-          styles.filterStrip,
-          { borderBottomColor: colors.rule },
-        ]}
-      >
+      {/* Kind filter strip — the five chips share the row width (each
+          flexes equally) so they all fit on one line without horizontal
+          scrolling. The per-kind count is dropped here to keep the labels
+          legible at this width; the mode strip above carries the totals. */}
+      <View style={[styles.kindStrip, { borderBottomColor: colors.rule }]}>
         {KIND_FILTERS.map(({ k, label }) => {
           const active = k === kindFilter;
           const count = kindCounts[k] ?? 0;
@@ -707,6 +701,7 @@ export default function MapScreen(): React.JSX.Element {
               accessibilityLabel={`${label} (${count})`}
               style={[
                 styles.filterChip,
+                styles.kindChip,
                 {
                   borderColor: active ? colors.ink : colors.ruleStrong,
                   backgroundColor: active ? colors.ink : 'transparent',
@@ -722,6 +717,7 @@ export default function MapScreen(): React.JSX.Element {
                 />
               )}
               <Text
+                numberOfLines={1}
                 style={[
                   styles.filterLabel,
                   { color: active ? colors.bg : colors.muted },
@@ -729,21 +725,10 @@ export default function MapScreen(): React.JSX.Element {
               >
                 {label}
               </Text>
-              <Text
-                style={[
-                  styles.filterCount,
-                  {
-                    color: active ? colors.bg : colors.muted,
-                    opacity: active ? 0.7 : 1,
-                  },
-                ]}
-              >
-                {count}
-              </Text>
             </Pressable>
           );
         })}
-      </ScrollView>
+      </View>
 
       {/* Map area */}
       <View style={{ flex: 1, backgroundColor: colors.surfaceRaised }}>
@@ -1168,6 +1153,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
   },
+  // Non-scrolling variant of the strip: a single flex row whose chips
+  // divide the available width so all of them fit without scrolling.
+  kindStrip: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    gap: 6,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    borderBottomWidth: 1,
+  },
   filterChip: {
     paddingVertical: 6,
     paddingHorizontal: 11,
@@ -1177,6 +1172,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     flexShrink: 0,
+  },
+  // Kind chips share the row equally and shrink to fit (overrides the
+  // fixed-width / flexShrink:0 behaviour of the scrolling mode chips).
+  kindChip: {
+    flex: 1,
+    flexShrink: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    gap: 4,
   },
   filterDot: { width: 5, height: 5, borderRadius: RADII.pill },
   filterLabel: {

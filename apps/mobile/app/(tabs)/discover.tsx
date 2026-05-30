@@ -47,6 +47,7 @@ import { useRouter } from 'expo-router';
 import {
   Calendar,
   ChevronRight,
+  Filter,
   MapPin,
   Search,
   Users,
@@ -83,6 +84,7 @@ import {
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
 import { PickPerformanceDateSheet } from '../../components/PickPerformanceDateSheet';
+import { KindFilterMenu, type KindFilterValue } from '../../components/KindFilterMenu';
 
 type UtilsClient = ReturnType<typeof trpc.useUtils>['client'];
 type FollowedFeed = RouterOutput<UtilsClient['discover']['followedFeed']['query']>;
@@ -204,6 +206,12 @@ export default function DiscoverScreen(): React.JSX.Element {
     string | null
   >(null);
 
+  // Kind filter — `all` shows everything the feed surfaces; the four
+  // watchable kinds narrow the list. Driven by the dropdown opened from the
+  // filter button next to search.
+  const [kindFilter, setKindFilter] = React.useState<KindFilterValue>('all');
+  const [kindMenuOpen, setKindMenuOpen] = React.useState(false);
+
   // Render budget for the current feed. Reset whenever the tab or any
   // chip filter changes so a freshly-selected scope always starts at
   // page 1 rather than carrying the previous tab's expanded budget.
@@ -217,7 +225,7 @@ export default function DiscoverScreen(): React.JSX.Element {
 
   React.useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [tab, selectedGroupId, selectedRegionVenueId]);
+  }, [tab, selectedGroupId, selectedRegionVenueId, kindFilter]);
 
   // Clear the venue sub-filter whenever the user changes the region
   // selection above it; otherwise a stale venue id could leave the
@@ -313,6 +321,21 @@ export default function DiscoverScreen(): React.JSX.Element {
 
   const searchAction = (
     <View style={styles.actions}>
+      <Pressable
+        onPress={() => setKindMenuOpen(true)}
+        hitSlop={12}
+        accessibilityRole="button"
+        accessibilityLabel="Filter by kind"
+        accessibilityState={{ expanded: kindMenuOpen }}
+        testID="discover-filter-button"
+      >
+        <Filter
+          size={20}
+          color={kindFilter === 'all' ? colors.ink : colors.accent}
+          strokeWidth={2}
+          fill={kindFilter === 'all' ? 'transparent' : colors.accent}
+        />
+      </Pressable>
       <Pressable
         onPress={() => router.push('/search')}
         hitSlop={12}
@@ -458,6 +481,9 @@ export default function DiscoverScreen(): React.JSX.Element {
         (item) => item.venue.id === selectedRegionVenueId,
       );
     }
+    if (kindFilter !== 'all') {
+      result = result.filter((item) => item.kind === kindFilter);
+    }
     return result;
   }, [
     items,
@@ -465,6 +491,7 @@ export default function DiscoverScreen(): React.JSX.Element {
     selectedRegionVenueId,
     tab,
     followedArtistIdSet,
+    kindFilter,
   ]);
 
   // Does the user follow anything on this tab yet? Seeds the decision to
@@ -814,6 +841,12 @@ export default function DiscoverScreen(): React.JSX.Element {
         )}
       </ScrollView>
     </ScreenWrapper>
+    <KindFilterMenu
+      open={kindMenuOpen}
+      value={kindFilter}
+      onSelect={setKindFilter}
+      onClose={() => setKindMenuOpen(false)}
+    />
     <AddToDiscoverSheet
       tab={addSheetTab ?? tab}
       open={addSheetTab !== null}
@@ -1132,7 +1165,7 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
   const venueLabel = [item.venue.name, item.venue.city].filter(Boolean).join(' · ');
   const support =
     item.support && item.support.length > 0
-      ? `${item.kind === 'sports' && item.support.length === 1 ? 'vs' : '+'} ${item.support.join(', ')}`
+      ? `+ ${item.support.join(', ')}`
       : null;
   // Theatre productions use the productionName as the title and don't
   // carry a meaningful headlinerPerformerId for navigation — match the

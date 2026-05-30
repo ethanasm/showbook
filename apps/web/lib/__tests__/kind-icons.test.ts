@@ -24,19 +24,17 @@ test("KIND_LABELS: every ShowKind has a non-empty label", () => {
   }
 });
 
-test("KIND_LABELS includes sports", () => {
-  assert.equal(KIND_LABELS.sports, "Sports");
-});
-
-test("DISCOVER_KIND_ICONS extends KIND_ICONS with sports", () => {
+test("DISCOVER_KIND_ICONS extends KIND_ICONS with film + unknown", () => {
   for (const k of SHOW_KINDS) {
     assert.equal(DISCOVER_KIND_ICONS[k], KIND_ICONS[k]);
   }
-  assert.ok(
-    typeof DISCOVER_KIND_ICONS.sports === "function" ||
-      typeof DISCOVER_KIND_ICONS.sports === "object",
-    "DISCOVER_KIND_ICONS missing sports icon",
-  );
+  for (const k of ["film", "unknown"] as const) {
+    assert.ok(
+      typeof DISCOVER_KIND_ICONS[k] === "function" ||
+        typeof DISCOVER_KIND_ICONS[k] === "object",
+      `DISCOVER_KIND_ICONS missing ${k} icon`,
+    );
+  }
 });
 
 test("KIND_LABELS: capitalized canonical form (matches packages/shared)", () => {

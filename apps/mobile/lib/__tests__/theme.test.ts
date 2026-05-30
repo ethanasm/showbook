@@ -38,10 +38,6 @@ describe('dark mode kind colors', () => {
   it('festival dark = #2A9D8F', () => {
     assert.equal(getKindColor('festival', 'dark'), '#2A9D8F');
   });
-
-  it('sports dark = #E8772E', () => {
-    assert.equal(getKindColor('sports', 'dark'), '#E8772E');
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -64,10 +60,6 @@ describe('light mode kind colors', () => {
   it('festival light = #238577', () => {
     assert.equal(getKindColor('festival', 'light'), '#238577');
   });
-
-  it('sports light = #D06A28', () => {
-    assert.equal(getKindColor('sports', 'light'), '#D06A28');
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -75,7 +67,7 @@ describe('light mode kind colors', () => {
 // ---------------------------------------------------------------------------
 
 describe('getKindColor mode switching', () => {
-  const kinds = ['concert', 'theatre', 'comedy', 'festival', 'sports'] as const;
+  const kinds = ['concert', 'theatre', 'comedy', 'festival'] as const;
 
   for (const kind of kinds) {
     it(`${kind}: dark ≠ light, both valid hex`, () => {

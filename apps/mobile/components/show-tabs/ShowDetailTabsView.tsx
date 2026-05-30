@@ -108,7 +108,7 @@ interface PerformerSetlist {
 }
 export interface ShowDetail {
   id: string;
-  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports' | 'film' | 'unknown';
+  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'film' | 'unknown';
   state: 'past' | 'ticketed' | 'watching';
   date: string | null;
   endDate: string | null;

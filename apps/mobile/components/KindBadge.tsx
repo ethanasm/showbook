@@ -6,7 +6,6 @@
  *   theatre  🎭 → Drama  (Drama exists in lucide-react-native; Theater is the US spelling variant)
  *   comedy   😂 → Smile
  *   festival ⛺ → Tent
- *   sports   ⚽ → Trophy (closest semantic match; soccer-ball glyph unavailable in lucide)
  *
  * Alpha bg: the design source uses `color + '22'` (hex literal 0x22 = 34/255 ≈ 13% opacity).
  * The design comment says "+22%" but the literal hex is 0x22, so we follow the literal.
@@ -14,7 +13,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Music, Drama, Smile, Tent, Trophy, Film, HelpCircle } from 'lucide-react-native';
+import { Music, Drama, Smile, Tent, Film, HelpCircle } from 'lucide-react-native';
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import type { Kind } from '@/lib/theme';
@@ -36,7 +35,6 @@ const KIND_LABEL: Record<Kind, string> = {
   theatre: 'THEATRE',
   comedy: 'COMEDY',
   festival: 'FESTIVAL',
-  sports: 'SPORTS',
   film: 'FILM',
   unknown: 'UNKNOWN',
 };
@@ -47,12 +45,13 @@ type LucideIconComponent = React.ComponentType<{
   strokeWidth?: number;
 }>;
 
-const KIND_ICON: Record<Kind, LucideIconComponent> = {
+// Exported so the Discover kind-filter dropdown can reuse the same
+// {kind → lucide icon} mapping instead of duplicating it.
+export const KIND_ICON: Record<Kind, LucideIconComponent> = {
   concert: Music,
   theatre: Drama,
   comedy: Smile,
   festival: Tent,
-  sports: Trophy,
   film: Film,
   unknown: HelpCircle,
 };

@@ -120,7 +120,7 @@ function toShowCardShow(row: ShowsListItem, token: string | null): ShowCardShow 
       : (headlinerSp?.performer.imageUrl ?? firstSp?.performer.imageUrl ?? null));
   const avatarHeaders = coverSource?.headers;
 
-  // Non-watchable kinds (sports / film / unknown) shouldn't reach the
+  // Non-watchable kinds (film / unknown) shouldn't reach the
   // user's saved shows in normal flow — the discover.watch guard rejects
   // them — but if legacy data exists, fall back to 'concert' visually.
   const kind: Kind = isNonWatchableKind(row.kind) ? 'concert' : (row.kind as Kind);

@@ -26,7 +26,7 @@ const RESULT_LIMIT = 8;
 export type GlobalShowResult = {
   id: string;
   date: string | null;
-  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports' | 'film' | 'unknown';
+  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'film' | 'unknown';
   state: 'past' | 'ticketed' | 'watching';
   title: string;
   venueName: string;
@@ -59,7 +59,7 @@ export type GlobalSearchResults = {
  * flow with the headliner / lineup / venue / date pre-filled.
  *
  * `kind` is narrowed to the four watchable kinds: Ticketmaster events
- * that infer to `sports` / `film` / `unknown` are filtered out so the
+ * that infer to `film` / `unknown` are filtered out so the
  * section only surfaces things the user can actually log — the same
  * watchability rule the Discover feed applies.
  */
@@ -81,7 +81,7 @@ export type FutureShowResult = {
 /**
  * Map a Ticketmaster event to a `FutureShowResult`, or `null` when it
  * should be dropped — either it inferred to a non-watchable kind
- * (sports/film/unknown) or it has no venue name (the Discover
+ * (film/unknown) or it has no venue name (the Discover
  * normalizer refuses those too).
  */
 function mapTmEventToFutureShow(event: TMEvent): FutureShowResult | null {
@@ -291,7 +291,7 @@ export const searchRouter = router({
    * Future-shows search — Ticketmaster events starting from now,
    * surfaced as a separate section in global search. Results are
    * filtered with the same watchability rule as Discover (no
-   * sports / film / unknown), so every row deep-links cleanly into
+   * film / unknown), so every row deep-links cleanly into
    * the Add flow.
    *
    * Best-effort: a Ticketmaster outage (or a missing API key) yields

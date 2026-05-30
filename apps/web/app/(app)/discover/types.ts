@@ -9,7 +9,7 @@
 import type { SortConfig as SortConfigBase } from "@/components/SortHeader";
 import type { ShowKind } from "@/components/design-system";
 
-export type DiscoverKind = ShowKind | "sports" | "film" | "unknown";
+export type DiscoverKind = ShowKind | "film" | "unknown";
 
 export type DiscoverSortField =
   | "showDate"
@@ -77,9 +77,8 @@ export const DISCOVER_KIND_ORDER: Record<DiscoverKind, number> = {
   theatre: 1,
   comedy: 2,
   festival: 3,
-  sports: 4,
-  film: 5,
-  unknown: 6,
+  film: 4,
+  unknown: 5,
 };
 
 const ON_SALE_STATUS_ORDER: Record<Announcement["onSaleStatus"], number> = {

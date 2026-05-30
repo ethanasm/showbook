@@ -78,7 +78,6 @@ describe('isConversationKind', () => {
       null,
       undefined,
       '',
-      'sports',
       'film',
       'unknown',
       42,
