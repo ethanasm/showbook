@@ -532,19 +532,37 @@ export default function DiscoverScreen(): React.JSX.Element {
     try {
       if (target === 'venues') {
         const key = ['mobile', 'venues', 'followed'];
+        const feedKey = ['mobile', 'discover', 'followedFeed'];
         await runOptimisticMutation({
           mutation: 'venues.unfollow',
           input: { venueId: id },
           outbox: getCacheOutbox(),
           call: (input) => utils.client.venues.unfollow.mutate(input),
           optimistic: {
-            snapshot: () => queryClient.getQueryData<{ id: string }[]>(key),
+            // Snapshot + prune the feed alongside the followed list: the
+            // chip rail re-seeds groups from the cached feed items, so
+            // dropping the follow row alone leaves the chip (and its rows)
+            // lingering until the background refetch. Each announcement
+            // belongs to exactly one venue, so pruning by venue id is
+            // unambiguous — the chip and its rows vanish on confirm.
+            snapshot: () => ({
+              list: queryClient.getQueryData<{ id: string }[]>(key),
+              feed: queryClient.getQueryData<FollowedFeed>(feedKey),
+            }),
             apply: () => {
               queryClient.setQueryData<{ id: string }[]>(key, (prev) =>
                 (prev ?? []).filter((v) => v.id !== id),
               );
+              queryClient.setQueryData<FollowedFeed>(feedKey, (prev) =>
+                prev
+                  ? { ...prev, items: prev.items.filter((it) => it.venue.id !== id) }
+                  : prev,
+              );
             },
-            rollback: (snap) => queryClient.setQueryData(key, snap),
+            rollback: (snap) => {
+              queryClient.setQueryData(key, snap.list);
+              queryClient.setQueryData(feedKey, snap.feed);
+            },
           },
           reconcile: () => {
             invalidateDiscoverFeeds(queryClient);
@@ -559,6 +577,13 @@ export default function DiscoverScreen(): React.JSX.Element {
           outbox: getCacheOutbox(),
           call: (input) => utils.client.performers.unfollow.mutate(input),
           optimistic: {
+            // Feed left untouched on purpose: the artist chip already
+            // vanishes immediately (the rail filters artist chips through
+            // the followed-set we prune here), and an announcement can
+            // still belong to the followed-artists feed via a headliner
+            // you follow when only a support act was unfollowed — pruning
+            // by performer id would wrongly drop those. The refetch in
+            // reconcile clears any genuinely orphaned rows.
             snapshot: () => queryClient.getQueryData<{ id: string }[]>(key),
             apply: () => {
               queryClient.setQueryData<{ id: string }[]>(key, (prev) =>
@@ -574,13 +599,21 @@ export default function DiscoverScreen(): React.JSX.Element {
         });
       } else {
         const key = ['mobile', 'preferences', 'get'];
+        const feedKey = ['mobile', 'discover', 'nearbyFeed'];
         await runOptimisticMutation({
           mutation: 'preferences.removeRegion',
           input: { regionId: id },
           outbox: getCacheOutbox(),
           call: (input) => utils.client.preferences.removeRegion.mutate(input),
           optimistic: {
-            snapshot: () => queryClient.getQueryData<PreferencesPayload>(key),
+            // As with venues: prune the nearby feed too so the region
+            // chip and its grouped rows clear on confirm rather than
+            // lingering until the refetch. Each nearby announcement
+            // carries a single owning regionId, so the prune is exact.
+            snapshot: () => ({
+              prefs: queryClient.getQueryData<PreferencesPayload>(key),
+              feed: queryClient.getQueryData<NearbyFeed>(feedKey),
+            }),
             apply: () => {
               queryClient.setQueryData<PreferencesPayload>(key, (prev) =>
                 prev
@@ -590,8 +623,16 @@ export default function DiscoverScreen(): React.JSX.Element {
                     }
                   : prev,
               );
+              queryClient.setQueryData<NearbyFeed>(feedKey, (prev) =>
+                prev
+                  ? { ...prev, items: prev.items.filter((it) => it.regionId !== id) }
+                  : prev,
+              );
             },
-            rollback: (snap) => queryClient.setQueryData(key, snap),
+            rollback: (snap) => {
+              queryClient.setQueryData(key, snap.prefs);
+              queryClient.setQueryData(feedKey, snap.feed);
+            },
           },
           reconcile: () => invalidateDiscoverFeeds(queryClient),
         });
