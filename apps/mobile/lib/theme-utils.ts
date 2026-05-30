@@ -11,9 +11,19 @@ export type ThemeMode = 'light' | 'dark';
 /**
  * Resolve the kind color for a given display mode.
  * Pure function — safe to import in unit tests.
+ *
+ * Falls back to the `unknown` swatch for any kind not in KIND_COLORS.
+ * The discoverable map feed plumbs `kind` straight from the DB enum, so a
+ * value the current bundle doesn't know about (e.g. a legacy `sports` row
+ * that predates the kind's removal, or a future kind shipped server-first)
+ * must degrade to a neutral pin instead of throwing — an unguarded
+ * `KIND_COLORS[kind][mode]` would otherwise crash the Map tab when the
+ * Discoverable layer renders such a row. Mirrors the web map's
+ * `KIND_COLORS_HEX[kind] ?? fallback` guard.
  */
-export function getKindColor(kind: Kind, mode: ThemeMode): string {
-  return KIND_COLORS[kind][mode];
+export function getKindColor(kind: Kind | string, mode: ThemeMode): string {
+  const swatch = KIND_COLORS[kind as Kind] ?? KIND_COLORS.unknown;
+  return swatch[mode];
 }
 
 /** Design token color values — exported for test assertions */

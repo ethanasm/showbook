@@ -81,6 +81,32 @@ describe('getKindColor mode switching', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 3b. Unknown / unmapped kinds fall back instead of throwing
+// ---------------------------------------------------------------------------
+
+describe('getKindColor fallback for unmapped kinds', () => {
+  // The Discoverable map feed plumbs `kind` straight from the DB enum, so a
+  // value this bundle doesn't know about (a legacy `sports` row, a future
+  // server-first kind) must degrade to the neutral `unknown` swatch rather
+  // than throw — otherwise the Map tab hard-crashes when that row renders.
+  for (const kind of ['sports', 'opera', '', 'totally-unknown']) {
+    it(`"${kind}" falls back to the unknown swatch (dark)`, () => {
+      assert.equal(getKindColor(kind, 'dark'), getKindColor('unknown', 'dark'));
+    });
+    it(`"${kind}" falls back to the unknown swatch (light)`, () => {
+      assert.equal(
+        getKindColor(kind, 'light'),
+        getKindColor('unknown', 'light'),
+      );
+    });
+  }
+
+  it('does not throw on an unmapped kind', () => {
+    assert.doesNotThrow(() => getKindColor('sports', 'dark'));
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 4. Color token spot-checks — bg and accent per spec
 // ---------------------------------------------------------------------------
 
