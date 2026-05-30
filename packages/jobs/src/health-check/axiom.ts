@@ -4,7 +4,7 @@ const log = child({ component: 'health-check.axiom' });
 
 const APL_ENDPOINT = 'https://api.axiom.co/v1/datasets/_apl?format=tabular';
 const DEFAULT_ORG = 'showbook-egap';
-const DEFAULT_DATASET = 'showbook-prod-v2';
+const DEFAULT_DATASET = 'prod-server';
 const REQUEST_TIMEOUT_MS = 15_000;
 
 /**
@@ -12,8 +12,8 @@ const REQUEST_TIMEOUT_MS = 15_000;
  * this in the APL `[...]` source selector (the dataset is part of the
  * query text, not a request parameter), so this is the single source of
  * truth for "which dataset do we read". Override with `AXIOM_QUERY_DATASET`
- * — that's how the prod cutover from `showbook-prod` to `showbook-prod-v2`
- * is pointed without a code change. See
+ * — that's how the prod cutover to the `prod-server` dataset is pointed
+ * without a code change. See
  * `docs/specs/operations/axiom-dataset-cutover.md`.
  */
 export function axiomDataset(): string {
@@ -25,7 +25,7 @@ export interface AxiomQueryConfig {
   token?: string;
   /** Defaults to `AXIOM_ORG_ID` env or `showbook-egap`. */
   orgId?: string;
-  /** Defaults to `AXIOM_QUERY_DATASET` env or `showbook-prod-v2`. */
+  /** Defaults to `AXIOM_QUERY_DATASET` env or `prod-server`. */
   dataset?: string;
 }
 

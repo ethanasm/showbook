@@ -72,7 +72,7 @@ describe('queryAxiom', () => {
     });
 
     const result = await queryAxiom<FakeRow>(
-      '["showbook-prod-v2"] | where event in ("job.failed","tm.request.failed") | summarize cnt = count() by event',
+      '["prod-server"] | where event in ("job.failed","tm.request.failed") | summarize cnt = count() by event',
     );
 
     assert.equal(result.ok, true);

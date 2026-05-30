@@ -6,7 +6,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { logger, child, getLogger, flushLogger, serializeErr } from '../logger';
+import { logger, child, getLogger, flushLogger, serializeErr, _testing } from '../logger';
 
 describe('logger', () => {
   it('getLogger returns a singleton', () => {
@@ -154,5 +154,43 @@ describe('serializeErr', () => {
     assert.equal(serialized.randomAttachedField, undefined);
     assert.equal(serialized.anotherJunkField, undefined);
     assert.equal(serialized.message, 'boom');
+  });
+});
+
+// Mobile telemetry is fanned to its own Axiom dataset (AXIOM_MOBILE_DATASET)
+// by matching the bound `component` on serialized lines — keeping the
+// high-cardinality mobile field surface off the server dataset's column
+// budget. See docs/specs/operations/axiom-dataset-cutover.md.
+describe('isMobileRecord', () => {
+  const { isMobileRecord, MOBILE_COMPONENT } = _testing;
+
+  it('matches a real pino line bound with the mobile component', () => {
+    const line = JSON.stringify({
+      level: 50,
+      component: MOBILE_COMPONENT,
+      event: 'mobile.upload.put.failed',
+      msg: 'upload failed',
+    });
+    assert.equal(isMobileRecord(line), true);
+  });
+
+  it('does not match server lines from other components', () => {
+    const line = JSON.stringify({
+      level: 30,
+      component: 'health-check.axiom',
+      event: 'job.complete',
+    });
+    assert.equal(isMobileRecord(line), false);
+  });
+
+  it('does not match a line that merely mentions the component name in a value', () => {
+    // The marker is the bound key/value pair, not a loose substring — a
+    // message that happens to contain the words must not be misrouted.
+    const line = JSON.stringify({
+      level: 30,
+      component: 'api.trpc',
+      msg: 'forwarded to mobile.telemetry sink',
+    });
+    assert.equal(isMobileRecord(line), false);
   });
 });
