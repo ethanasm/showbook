@@ -486,6 +486,40 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # Catch-all failure comment. The Publish step below only fires
+      # when Maestro produced screenshots; failures earlier in the job
+      # (Build, emulator boot, install, Maestro CLI install) would
+      # otherwise leave the PR with no signal beyond a red check.
+      # Post a short comment with the run URL on every failure so
+      # reviewers see the breakage in the PR thread.
+      - name: Post failure comment on PR
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          FAILED_STEP: ${{ steps.maestro.outcome }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          BODY_FILE=$(mktemp)
+          {
+            printf '## Mobile e2e (Android) — failed\n\n'
+            printf '[Workflow run](%s) — see the run log for the failing step.\n\n' "$RUN_URL"
+            printf 'Maestro debug screenshots (if any were captured) are uploaded as the `maestro-debug-%s` artifact.\n' "${{ github.run_id }}"
+          } > "$BODY_FILE"
+          set +e
+          GH_OUTPUT=$(gh pr comment "$PR_NUMBER" --body-file "$BODY_FILE" 2>&1)
+          GH_RC=$?
+          set -uo pipefail
+          echo "::group::gh pr comment result"
+          echo "$GH_OUTPUT"
+          echo "exit code: $GH_RC"
+          echo "::endgroup::"
+          if [ "$GH_RC" -ne 0 ]; then
+            echo "::warning::gh pr comment failed (rc=$GH_RC)"
+          fi
+
       # Push the Maestro debug PNGs to the existing `pr-screenshots`
       # orphan branch under `mobile-e2e/run-<id>/` and post the raw
       # URLs as a PR comment. Repo is public so
