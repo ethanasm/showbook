@@ -368,7 +368,6 @@ function hasFestivalSignal(value: string): boolean {
 // events to fall through to the "concert" default.
 const TM_SEGMENT_ID = {
   music: "KZFzniwnSyZfZ7v7nJ",
-  sports: "KZFzniwnSyZfZ7v7nE",
   artsTheatre: "KZFzniwnSyZfZ7v7na",
   film: "KZFzniwnSyZfZ7v7nn",
   miscellaneous: "KZFzniwnSyZfZ7v7n1",
@@ -386,7 +385,6 @@ export type InferredKind =
   | "theatre"
   | "comedy"
   | "festival"
-  | "sports"
   | "film"
   | "unknown";
 
@@ -434,10 +432,6 @@ export function inferKind(
   const primary =
     classifications.find((c) => c.primary) ?? classifications[0];
   const segmentId = primary?.segment?.id;
-
-  if (segmentId === TM_SEGMENT_ID.sports) {
-    return "sports";
-  }
 
   if (segmentId === TM_SEGMENT_ID.film) {
     return "film";

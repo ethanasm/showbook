@@ -22,7 +22,6 @@ export const kindEnum = pgEnum('kind', [
   'theatre',
   'comedy',
   'festival',
-  'sports',
   'film',
   'unknown',
 ]);

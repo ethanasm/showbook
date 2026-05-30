@@ -3,7 +3,7 @@
  * Ticketmaster-backed "Future shows" section of global search.
  *
  * Ticketmaster is mocked so the test drives the mapping + filtering
- * branches without a network call: non-watchable kinds (sports / film /
+ * branches without a network call: non-watchable kinds (film /
  * unknown) are dropped, venue-less events are dropped, festival titles
  * run through extractFestivalName, and a TM outage degrades to [].
  */
@@ -42,7 +42,6 @@ mock.module('../ticketmaster.js', {
     inferKind: (_classifications: unknown, ctx?: { eventName?: string | null }) => {
       const n = ctx?.eventName ?? '';
       if (/fest/i.test(n)) return 'festival';
-      if (/sports/i.test(n)) return 'sports';
       if (/film/i.test(n)) return 'film';
       if (/mystery/i.test(n)) return 'unknown';
       if (/comedy/i.test(n)) return 'comedy';
@@ -138,9 +137,8 @@ describe('searchRouter.futureShows (unit)', () => {
     assert.equal(result[0]!.title, 'Sunset Fest');
   });
 
-  it('drops sports / film / unknown events (Discover watchability rule)', async () => {
+  it('drops film / unknown events (Discover watchability rule)', async () => {
     mockEvents = [
-      ev({ name: 'Sports Night' }),
       ev({ name: 'Film Premiere' }),
       ev({ name: 'Mystery Thing' }),
       ev({ name: 'Real Concert' }),

@@ -314,7 +314,7 @@ describe('discoverRouter (with mocked db)', () => {
       );
     });
 
-    for (const kind of ['sports', 'film', 'unknown'] as const) {
+    for (const kind of ['film', 'unknown'] as const) {
       it(`rejects ${kind} announcements`, async () => {
         reset({
           selectResults: [

@@ -13,8 +13,9 @@
  * sans on iOS / Android until that polish pass lands.
  *
  * KIND_COLORS is imported from @showbook/shared to avoid duplication.
- * The shared type is `Kind = 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports'`
- * which matches exactly what this module needs.
+ * The shared type is `Kind = 'concert' | 'theatre' | 'comedy' | 'festival'`
+ * (plus the non-watchable `film` / `unknown`) which matches exactly what
+ * this module needs.
  *
  * Pure token utilities (getKindColor, color consts, type ramp) live in
  * ./theme-utils.ts so they can be imported in Node.js unit tests without

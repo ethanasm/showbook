@@ -72,7 +72,9 @@ test('inferKind checks non-primary classifications for festival signals', () => 
   );
 });
 
-test('inferKind preserves existing non-music mappings', () => {
+test('inferKind buckets TM sports-segment events as unknown', () => {
+  // The 'sports' kind was removed; TM's Sports segment now falls through
+  // to the 'unknown' default and is dropped by the ingest normalizer.
   assert.equal(
     inferKind([
       classification({
@@ -80,8 +82,11 @@ test('inferKind preserves existing non-music mappings', () => {
         genre: { id: 'g1', name: 'Basketball' },
       }),
     ]),
-    'sports',
+    'unknown',
   );
+});
+
+test('inferKind preserves existing non-music mappings', () => {
   assert.equal(
     inferKind([
       classification({
