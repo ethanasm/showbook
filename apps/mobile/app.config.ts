@@ -19,40 +19,35 @@ import type { ExpoConfig } from 'expo/config';
 
 const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
 
-// Google OAuth on native uses the *reversed* client ID as a custom URI scheme
-// for the redirect back from Chrome / SFSafariViewController:
-//   "222563763412-noa3...apps.googleusercontent.com"
-//      → scheme "com.googleusercontent.apps.222563763412-noa3..."
-//      → redirect URI "com.googleusercontent.apps.222563763412-noa3...:/oauth2redirect"
-// Android needs an intent-filter on the main activity that claims this scheme,
-// otherwise Chrome can't hand the OAuth callback back to the app and the
-// system falls through to the launcher home screen — which is exactly what
-// happened to Brandon's Play install on 2026-05-29: Google sign-in completed,
-// Chrome tried to redirect, Android had nothing registered to receive it, and
-// the in-app browser session was lost. iOS hits the same wall via
-// CFBundleURLTypes; Expo's `ios.config.googleSignIn.reservedClientId` is the
-// canonical place to register that.
+// Google OAuth on native uses the *application id* (iOS bundle id / Android
+// package) as the redirect URI scheme. expo-auth-session's Google provider
+// calls `makeRedirectUri({ native: `${Application.applicationId}:/oauthredirect` })`
+// internally — see node_modules/expo-auth-session/build/providers/Google.js
+// — so for this app the redirect URI Google sends Chrome back to is
+// `me.ethanasm.showbook:/oauthredirect`.
 //
-// Reading the client IDs from env at config-resolution time keeps the
-// account-specific values out of source and matches how `eas.json`'s build
-// profiles already inject them.
-const GOOGLE_OAUTH_CLIENT_ID_ANDROID =
-  process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID ?? '';
-const GOOGLE_OAUTH_CLIENT_ID_IOS =
-  process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS ?? '';
-
-function toReversedClientIdScheme(clientId: string): string | null {
-  const suffix = '.apps.googleusercontent.com';
-  if (!clientId.endsWith(suffix)) return null;
-  return `com.googleusercontent.apps.${clientId.slice(0, -suffix.length)}`;
-}
-
-const ANDROID_GOOGLE_OAUTH_SCHEME = toReversedClientIdScheme(
-  GOOGLE_OAUTH_CLIENT_ID_ANDROID,
-);
-const IOS_GOOGLE_OAUTH_RESERVED_CLIENT_ID = toReversedClientIdScheme(
-  GOOGLE_OAUTH_CLIENT_ID_IOS,
-);
+// On iOS, Expo's scheme config plugin automatically appends
+// `ios.bundleIdentifier` to CFBundleURLSchemes ("Add the bundle identifier
+// to the list of schemes for easier Google auth", in
+// @expo/config-plugins build/ios/Scheme.js setScheme), so iOS catches the
+// callback without any explicit scheme registration.
+//
+// On Android, the equivalent auto-append does NOT happen — the Android
+// scheme plugin only registers what's in `expo.scheme` / `expo.android.scheme`.
+// So the package name has to go in the scheme list explicitly; otherwise
+// Chrome receives the redirect, finds nothing registered for
+// `me.ethanasm.showbook://`, and falls through to its homepage. That's the
+// symptom Brandon hit on his Play Store install on 2026-05-29 (and again
+// after PR #464): Google sign-in completed, Chrome tried to redirect,
+// Android had nothing registered to receive the callback, and the in-app
+// browser session was lost on google.com.
+//
+// PR #464 registered the *reversed* Google client ID scheme
+// (`com.googleusercontent.apps.<id>`) — that's what the native GIDSignIn /
+// Google Sign-In Android SDKs use, NOT expo-auth-session. The redirect-URI
+// logic in the provider source is unambiguous: it uses `applicationId`, with
+// the reversed-client-id alternative explicitly commented out upstream.
+const ANDROID_PACKAGE = 'me.ethanasm.showbook';
 
 const config: ExpoConfig = {
   name: 'Showbook',
@@ -73,9 +68,7 @@ const config: ExpoConfig = {
   version: '0.1.1',
   orientation: 'portrait',
   icon: './assets/icon.png',
-  scheme: ANDROID_GOOGLE_OAUTH_SCHEME
-    ? ['showbook', ANDROID_GOOGLE_OAUTH_SCHEME]
-    : 'showbook',
+  scheme: ['showbook', ANDROID_PACKAGE],
   userInterfaceStyle: 'automatic',
   // Splash is configured via the `expo-splash-screen` plugin below (the
   // canonical wiring as of SDK 56, which dropped the legacy top-level
@@ -92,13 +85,6 @@ const config: ExpoConfig = {
     config: {
       usesNonExemptEncryption: false,
       ...(GOOGLE_MAPS_API_KEY ? { googleMapsApiKey: GOOGLE_MAPS_API_KEY } : {}),
-      ...(IOS_GOOGLE_OAUTH_RESERVED_CLIENT_ID
-        ? {
-            googleSignIn: {
-              reservedClientId: IOS_GOOGLE_OAUTH_RESERVED_CLIENT_ID,
-            },
-          }
-        : {}),
     },
     // iPhone stays portrait-locked (matches the top-level `orientation`
     // above); iPad gets all four orientations so the M6.C three-pane
@@ -155,7 +141,7 @@ const config: ExpoConfig = {
     },
   },
   android: {
-    package: 'me.ethanasm.showbook',
+    package: ANDROID_PACKAGE,
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#0C0C0C',
