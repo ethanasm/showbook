@@ -18,7 +18,7 @@
  */
 
 import React from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
 import { ChevronRight, MapPin, Music, Ticket } from 'lucide-react-native';
@@ -128,13 +128,15 @@ function PastNightRows({
 
   return (
     <View>
-      <NightRow
-        icon={Ticket}
-        title="Ticket stub"
-        sub="Import from Apple Wallet"
-        onPress={() => setWalletSheetOpen(true)}
-        testID="from-night-ticket-stub"
-      />
+      {Platform.OS === 'ios' ? (
+        <NightRow
+          icon={Ticket}
+          title="Ticket stub"
+          sub="Import from Apple Wallet"
+          onPress={() => setWalletSheetOpen(true)}
+          testID="from-night-ticket-stub"
+        />
+      ) : null}
       {playlistShown ? (
         <NightRow
           icon={existing && existing.spotifyUrl ? SpotifyMark : Music}
@@ -179,15 +181,21 @@ const PRE_STUBS: { icon: React.ComponentType<{ size: number; color: string; stro
 ];
 
 function PreShowRows(): React.JSX.Element {
+  // The ticket-stub stub describes the Apple Wallet share-sheet import,
+  // which only exists on iOS — drop it on Android.
+  const stubs =
+    Platform.OS === 'ios'
+      ? PRE_STUBS
+      : PRE_STUBS.filter((stub) => stub.title !== 'Ticket stub');
   return (
     <View>
-      {PRE_STUBS.map((stub, idx) => (
+      {stubs.map((stub, idx) => (
         <NightRow
           key={stub.title}
           icon={stub.icon}
           title={stub.title}
           sub={stub.sub}
-          isLast={idx === PRE_STUBS.length - 1}
+          isLast={idx === stubs.length - 1}
         />
       ))}
     </View>
