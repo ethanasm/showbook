@@ -4,15 +4,28 @@ const log = child({ component: 'health-check.axiom' });
 
 const APL_ENDPOINT = 'https://api.axiom.co/v1/datasets/_apl?format=tabular';
 const DEFAULT_ORG = 'showbook-egap';
-const DEFAULT_DATASET = 'showbook-prod';
+const DEFAULT_DATASET = 'showbook-prod-v2';
 const REQUEST_TIMEOUT_MS = 15_000;
+
+/**
+ * The Axiom dataset the health-check queries read from. Callers embed
+ * this in the APL `[...]` source selector (the dataset is part of the
+ * query text, not a request parameter), so this is the single source of
+ * truth for "which dataset do we read". Override with `AXIOM_QUERY_DATASET`
+ * — that's how the prod cutover from `showbook-prod` to `showbook-prod-v2`
+ * is pointed without a code change. See
+ * `docs/specs/operations/axiom-dataset-cutover.md`.
+ */
+export function axiomDataset(): string {
+  return process.env.AXIOM_QUERY_DATASET ?? DEFAULT_DATASET;
+}
 
 export interface AxiomQueryConfig {
   /** Defaults to the `AXIOM_QUERY_TOKEN` env var. Read-capable PAT. */
   token?: string;
   /** Defaults to `AXIOM_ORG_ID` env or `showbook-egap`. */
   orgId?: string;
-  /** Defaults to `AXIOM_QUERY_DATASET` env or `showbook-prod`. */
+  /** Defaults to `AXIOM_QUERY_DATASET` env or `showbook-prod-v2`. */
   dataset?: string;
 }
 
@@ -75,7 +88,7 @@ function tabularToRows<TRow extends object>(
 
 /**
  * Run an APL query against Axiom. The APL string is taken as-is; callers
- * are expected to scope to a dataset like `["showbook-prod"]`. When
+ * are expected to scope to a dataset like `[axiomDataset()]`. When
  * `AXIOM_QUERY_TOKEN` is unset (dev, tests) the call is skipped and
  * `rows` is `null` so callers can render "unknown" instead of "ok".
  */
