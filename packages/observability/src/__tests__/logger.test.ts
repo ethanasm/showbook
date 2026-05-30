@@ -184,7 +184,7 @@ describe('isMobileRecord', () => {
   });
 
   it('does not match a line that merely mentions the component name in a value', () => {
-    // The marker is the bound key/value pair, not a loose substring — a
+    // The marker is the top-level `component`, not a loose substring — a
     // message that happens to contain the words must not be misrouted.
     const line = JSON.stringify({
       level: 30,
@@ -192,5 +192,27 @@ describe('isMobileRecord', () => {
       msg: 'forwarded to mobile.telemetry sink',
     });
     assert.equal(isMobileRecord(line), false);
+  });
+
+  it('does not match a server line that embeds a mobile row in its payload', () => {
+    // Regression: the error_volume health check lists its top error events
+    // in `top`, which can include a mobile.telemetry row. The server line's
+    // own component is health-check, so it must stay in the server dataset
+    // — a substring match on the raw line would misroute it to prod-mobile.
+    const line = JSON.stringify({
+      level: 30,
+      component: 'health-check',
+      event: 'health.check.error_volume.ok',
+      top: [
+        { event: 'mobile.trpc.error', component: MOBILE_COMPONENT, cnt: 13 },
+      ],
+    });
+    assert.equal(isMobileRecord(line), false);
+  });
+
+  it('treats a malformed (non-JSON) line as non-mobile', () => {
+    // Shouldn't happen from pino, but if it does we keep the line in the
+    // server dataset rather than dropping it.
+    assert.equal(isMobileRecord('not json {'), false);
   });
 });
