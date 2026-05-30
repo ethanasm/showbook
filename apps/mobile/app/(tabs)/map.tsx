@@ -720,6 +720,7 @@ export default function MapScreen(): React.JSX.Element {
                 numberOfLines={1}
                 style={[
                   styles.filterLabel,
+                  styles.kindLabel,
                   { color: active ? colors.bg : colors.muted },
                 ]}
               >
@@ -1179,8 +1180,14 @@ const styles = StyleSheet.create({
     flex: 1,
     flexShrink: 1,
     justifyContent: 'center',
-    paddingHorizontal: 4,
-    gap: 4,
+    paddingHorizontal: 2,
+    gap: 2,
+  },
+  // Tighter type so the full kind label fits inside the narrow shared-width
+  // chip instead of truncating.
+  kindLabel: {
+    fontSize: 10,
+    letterSpacing: 0,
   },
   filterDot: { width: 5, height: 5, borderRadius: RADII.pill },
   filterLabel: {
