@@ -624,9 +624,9 @@ export default function MapScreen(): React.JSX.Element {
       />
 
       {/* Layer toggle — all / past / upcoming / discoverable. Fixed
-          non-scrolling row (matches the kind strip below): the four chips
-          share the width equally. Counts were dropped to keep the longest
-          label ("DISCOVERABLE") legible at this width. */}
+          non-scrolling row: chips size to their label (so "all" stays
+          compact and "discoverable" gets the room it needs) and can shrink
+          to fit narrow screens rather than scrolling. Counts were dropped. */}
       <View style={styles.modeStrip}>
         {MODE_FILTERS.map(({ m, label }) => {
           const active = m === layer;
@@ -639,7 +639,7 @@ export default function MapScreen(): React.JSX.Element {
               accessibilityLabel={`${label} (${modeCounts[m]})`}
               style={[
                 styles.filterChip,
-                styles.kindChip,
+                styles.modeChip,
                 {
                   borderColor: active ? colors.ink : colors.ruleStrong,
                   backgroundColor: active ? colors.ink : 'transparent',
@@ -649,7 +649,7 @@ export default function MapScreen(): React.JSX.Element {
               <Text
                 numberOfLines={1}
                 adjustsFontSizeToFit
-                minimumFontScale={0.7}
+                minimumFontScale={0.85}
                 style={[
                   styles.filterLabel,
                   { color: active ? colors.bg : colors.muted },
@@ -1101,9 +1101,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 8,
-    gap: 6,
+    gap: 8,
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'center',
+  },
+  // Mode chips size to their label (not equal-width) and may shrink to fit
+  // a narrow screen instead of overflowing the fixed, non-scrolling row.
+  modeChip: {
+    flexShrink: 1,
   },
   filterStrip: {
     paddingHorizontal: 20,
