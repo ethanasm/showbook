@@ -375,8 +375,16 @@ export async function warmCacheForOfflineUse(
     return data;
   });
 
-  // Discover feeds — same limits the screen uses so a cold offline
-  // open reads the exact rows the warm cache already holds.
+  // Discover feeds — a deliberately small snapshot so a cold offline open
+  // (e.g. the daily-digest deep-link into /discover) renders *something*
+  // without bloating warm-up. These write the same query keys the Discover
+  // screen reads, but with far smaller page sizes than the screen's own
+  // fetch (`followedFeed`/`followedArtistsFeed` `limit: 12` vs the screen's
+  // `100`; `nearbyFeed` `perRegionLimit: 8` vs the screen's default `2500`).
+  // The screen treats this as a placeholder and refetches the full set on
+  // mount (`refetchOnMount: 'always'` in `app/(tabs)/discover.tsx`) — so the
+  // user sees the cached rows instantly and the bulk fills in automatically
+  // online, rather than being pinned to "8 venues" until a manual refresh.
   await step('discover.followedFeed', async () => {
     const data = await c.discover.followedFeed.query({ limit: 12 });
     qc.setQueryData(['mobile', 'discover', 'followedFeed'], data);
