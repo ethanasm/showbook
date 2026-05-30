@@ -60,8 +60,8 @@
     "expo-web-browser": "~56.0.5",
     "fflate": "^0.8.3",
     "lucide-react-native": "^1.17.0",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
     "react-native": "0.85.3",
     "react-native-draggable-flatlist": "^4.0.3",
     "react-native-gesture-handler": "~2.31.1",
@@ -86,18 +86,12 @@
     "babel-preset-expo": "~56.0.13",
     "eslint": "^9.39.4",
     "eslint-config-expo": "~56.0.4",
-    "react-test-renderer": "^19.2.6",
+    "react-test-renderer": "19.2.3",
     "tsx": "^4.22.3",
     "typescript": "~6.0.3",
     "yaml": "^2.9.0"
   },
   "expo": {
-    "install": {
-      "exclude": [
-        "react",
-        "react-dom"
-      ]
-    },
     "autolinking": {
       "ios": {
         "exclude": [
