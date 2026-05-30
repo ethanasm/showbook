@@ -515,28 +515,54 @@ export default function DiscoverScreen(): React.JSX.Element {
     setUnfollowChip({ tab, id, name: group?.name ?? '' });
   };
 
-  const handleUnfollowConfirm = async (): Promise<void> => {
-    if (!unfollowChip) return;
-    const { tab: target, id, name } = unfollowChip;
+  // Unfollow / remove a single Discover entity, scoped to the tab it
+  // belongs to. Shared by the long-press confirm sheet and the overflow
+  // picker's trash affordance (which removes directly, no confirm sheet).
+  const performUnfollow = async (
+    target: DiscoverTab,
+    id: string,
+    name: string,
+  ): Promise<void> => {
     // Drop the filter if it pointed at the chip we're removing so the feed
     // doesn't get stuck filtered to a now-gone group.
     setSelectedGroupId((prev) => (prev === id ? null : prev));
+    if (target === 'regions') {
+      setSelectedRegionVenueId(null);
+    }
     try {
       if (target === 'venues') {
         const key = ['mobile', 'venues', 'followed'];
+        const feedKey = ['mobile', 'discover', 'followedFeed'];
         await runOptimisticMutation({
           mutation: 'venues.unfollow',
           input: { venueId: id },
           outbox: getCacheOutbox(),
           call: (input) => utils.client.venues.unfollow.mutate(input),
           optimistic: {
-            snapshot: () => queryClient.getQueryData<{ id: string }[]>(key),
+            // Snapshot + prune the feed alongside the followed list: the
+            // chip rail re-seeds groups from the cached feed items, so
+            // dropping the follow row alone leaves the chip (and its rows)
+            // lingering until the background refetch. Each announcement
+            // belongs to exactly one venue, so pruning by venue id is
+            // unambiguous — the chip and its rows vanish on confirm.
+            snapshot: () => ({
+              list: queryClient.getQueryData<{ id: string }[]>(key),
+              feed: queryClient.getQueryData<FollowedFeed>(feedKey),
+            }),
             apply: () => {
               queryClient.setQueryData<{ id: string }[]>(key, (prev) =>
                 (prev ?? []).filter((v) => v.id !== id),
               );
+              queryClient.setQueryData<FollowedFeed>(feedKey, (prev) =>
+                prev
+                  ? { ...prev, items: prev.items.filter((it) => it.venue.id !== id) }
+                  : prev,
+              );
             },
-            rollback: (snap) => queryClient.setQueryData(key, snap),
+            rollback: (snap) => {
+              queryClient.setQueryData(key, snap.list);
+              queryClient.setQueryData(feedKey, snap.feed);
+            },
           },
           reconcile: () => {
             invalidateDiscoverFeeds(queryClient);
@@ -551,6 +577,13 @@ export default function DiscoverScreen(): React.JSX.Element {
           outbox: getCacheOutbox(),
           call: (input) => utils.client.performers.unfollow.mutate(input),
           optimistic: {
+            // Feed left untouched on purpose: the artist chip already
+            // vanishes immediately (the rail filters artist chips through
+            // the followed-set we prune here), and an announcement can
+            // still belong to the followed-artists feed via a headliner
+            // you follow when only a support act was unfollowed — pruning
+            // by performer id would wrongly drop those. The refetch in
+            // reconcile clears any genuinely orphaned rows.
             snapshot: () => queryClient.getQueryData<{ id: string }[]>(key),
             apply: () => {
               queryClient.setQueryData<{ id: string }[]>(key, (prev) =>
@@ -566,13 +599,21 @@ export default function DiscoverScreen(): React.JSX.Element {
         });
       } else {
         const key = ['mobile', 'preferences', 'get'];
+        const feedKey = ['mobile', 'discover', 'nearbyFeed'];
         await runOptimisticMutation({
           mutation: 'preferences.removeRegion',
           input: { regionId: id },
           outbox: getCacheOutbox(),
           call: (input) => utils.client.preferences.removeRegion.mutate(input),
           optimistic: {
-            snapshot: () => queryClient.getQueryData<PreferencesPayload>(key),
+            // As with venues: prune the nearby feed too so the region
+            // chip and its grouped rows clear on confirm rather than
+            // lingering until the refetch. Each nearby announcement
+            // carries a single owning regionId, so the prune is exact.
+            snapshot: () => ({
+              prefs: queryClient.getQueryData<PreferencesPayload>(key),
+              feed: queryClient.getQueryData<NearbyFeed>(feedKey),
+            }),
             apply: () => {
               queryClient.setQueryData<PreferencesPayload>(key, (prev) =>
                 prev
@@ -582,8 +623,16 @@ export default function DiscoverScreen(): React.JSX.Element {
                     }
                   : prev,
               );
+              queryClient.setQueryData<NearbyFeed>(feedKey, (prev) =>
+                prev
+                  ? { ...prev, items: prev.items.filter((it) => it.regionId !== id) }
+                  : prev,
+              );
             },
-            rollback: (snap) => queryClient.setQueryData(key, snap),
+            rollback: (snap) => {
+              queryClient.setQueryData(key, snap.prefs);
+              queryClient.setQueryData(feedKey, snap.feed);
+            },
           },
           reconcile: () => invalidateDiscoverFeeds(queryClient),
         });
@@ -631,6 +680,10 @@ export default function DiscoverScreen(): React.JSX.Element {
           selected={selectedGroupId}
           onSelect={setSelectedGroupId}
           onLongPress={handleChipLongPress}
+          onRemove={(id) => {
+            const group = groupList.find((g) => g.id === id);
+            void performUnfollow(tab, id, group?.name ?? '');
+          }}
           totalCount={items.length}
           testIdPrefix="discover-group"
           pickerTitle={groupPickerTitle(tab)}
@@ -772,7 +825,9 @@ export default function DiscoverScreen(): React.JSX.Element {
       tab={unfollowChip?.tab ?? tab}
       name={unfollowChip?.name ?? null}
       onConfirm={() => {
-        void handleUnfollowConfirm();
+        if (unfollowChip) {
+          void performUnfollow(unfollowChip.tab, unfollowChip.id, unfollowChip.name);
+        }
       }}
     />
     </>
@@ -1011,7 +1066,13 @@ function SoldOutStripes({
   );
 }
 
-function AnnouncementRow({
+// Memoized: the feed renders up to PAGE_SIZE (50) of these, and the
+// Discover screen re-renders on every ingest-poll tick / watched-set
+// update / refetch `isFetching` toggle. Without memo all 50 rows
+// reconciled on each of those — the bulk of the scroll/tab lag. Props
+// are stable (`item` from the query cache, `onToggleWatch` a stable
+// `useCallback`); only the toggled row's `isWatching` changes.
+const AnnouncementRow = React.memo(function AnnouncementRow({
   item,
   isWatching,
   onToggleWatch,
@@ -1288,7 +1349,7 @@ function AnnouncementRow({
     )}
     </>
   );
-}
+});
 
 const styles = StyleSheet.create({
   actions: {
