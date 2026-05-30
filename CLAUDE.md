@@ -197,10 +197,10 @@ All new code MUST use the shared `@showbook/observability` package — no `conso
 
 **Where logs go (per env):**
 - **dev / local** — stdout only, pretty-printed via `pino-pretty`. `AXIOM_TOKEN` and `AXIOM_DATASET` are intentionally unset in `.env.dev` / `apps/web/.env.local`, so dev runs never ship to Axiom. Tests rely on this — don't set `AXIOM_TOKEN` in CI.
-- **prod** — stdout (JSON via `pino`, captured by Docker) AND shipped to Axiom dataset `showbook-prod` via `@axiomhq/pino`. The `AXIOM_TOKEN` in `.env.prod` is **ingest-only by design** (it's a service token, not a query token), so reading prod logs requires a separate user-scoped token (see "Querying Axiom" below).
+- **prod** — stdout (JSON via `pino`, captured by Docker) AND shipped to Axiom via `@axiomhq/pino`. **Two datasets:** app/server logs go to `prod-server` (`AXIOM_DATASET`); mobile telemetry (the `mobile.*` events relayed through the `telemetry.logEvent` tRPC router, bound with `component: 'mobile.telemetry'`) is fanned to `prod-mobile` (`AXIOM_MOBILE_DATASET`) so its fast-growing field surface keeps its own 257-column budget. The split is in `packages/observability/src/logger.ts` (`isMobileRecord`); if `AXIOM_MOBILE_DATASET` is unset the logger falls back to single-dataset mode and everything goes to `AXIOM_DATASET`. The `AXIOM_TOKEN` in `.env.prod` is **ingest-only by design** (a service token, not a query token) and must have ingest on both datasets; reading prod logs requires a separate user-scoped token (see "Querying Axiom" below). See `docs/specs/operations/axiom-dataset-cutover.md`.
 
 **Querying Axiom from the CLI (read access):**
-The repo-side `AXIOM_TOKEN` cannot read logs. To query, use a Personal Access Token (PAT) you create in the Axiom UI under Settings → Profile → Personal Access Tokens (or an advanced API token with the `Query` capability granted on the `showbook-prod` dataset). PATs and most advanced API tokens require the `X-AXIOM-ORG-ID` header.
+The repo-side `AXIOM_TOKEN` cannot read logs. To query, use a Personal Access Token (PAT) you create in the Axiom UI under Settings → Profile → Personal Access Tokens (or an advanced API token with the `Query` capability granted on the `prod-server` / `prod-mobile` datasets). PATs and most advanced API tokens require the `X-AXIOM-ORG-ID` header.
 
 ```bash
 # Get the org id once: it's the slug shown in Axiom URLs and is also returned
@@ -213,12 +213,12 @@ curl -sS -X POST "https://api.axiom.co/v1/datasets/_apl?format=tabular" \
   -H "Authorization: Bearer $TOKEN" \
   -H "X-AXIOM-ORG-ID: $ORG" \
   -H "Content-Type: application/json" \
-  -d '{"apl":"[\"showbook-prod\"] | where _time > ago(1h) and level in (\"warn\",\"error\") | project _time, level, event, msg | order by _time desc"}'
+  -d '{"apl":"[\"prod-server\"] | where _time > ago(1h) and level in (\"warn\",\"error\") | project _time, level, event, msg | order by _time desc"}'
 ```
 
 The stdout copy in the prod web container (`docker logs showbook-prod-web`) is also a useful fallback when you need recent logs but Axiom retention has rolled them off.
 
-**Axiom column / field cap (257 per dataset).** Each unique top-level or dotted field name across all logged events becomes a column in the Axiom dataset. The `showbook-prod` dataset has a hard cap of **257 columns**; once hit, every new write that introduces an unseen field is rejected with `adding 'X' and N other fields to dataset fields would exceed the column limit of 257` (visible only in stdout / `docker logs showbook-prod-web` — the rejection itself never reaches Axiom). The mobile telemetry `mobile.*` events were the silent casualties of this for ~2 months in 2026-05 because new event-context fields kept getting refused. Two failure modes worth knowing:
+**Axiom column / field cap (257 per dataset).** Each unique top-level or dotted field name across all logged events becomes a column in the Axiom dataset. Every dataset has a hard cap of **257 columns**; once hit, every new write that introduces an unseen field is rejected with `adding 'X' and N other fields to dataset fields would exceed the column limit of 257` (visible only in stdout / `docker logs showbook-prod-web` — the rejection itself never reaches Axiom). The original single `showbook-prod` dataset hit this cap, and the mobile telemetry `mobile.*` events were the silent casualties for ~2 months in 2026-05 because new event-context fields kept getting refused. The fix was to split into `prod-server` + `prod-mobile` (each with its own budget) — see `docs/specs/operations/axiom-dataset-cutover.md`. Two failure modes worth knowing:
 
 - **Error-object enumeration.** Pino's `stdSerializers.err` walks every enumerable property on an `Error` via `for (key in err)`. DOMException-like errors (RN, fetch on Node 22, Web Crypto) carry ~24 inherited constant properties (`ABORT_ERR`, `DATA_CLONE_ERR`, `HIERARCHY_REQUEST_ERR`, …); each became its own column the first time such an error was logged. The custom `serializeErr` in `packages/observability/src/logger.ts` is allowlist-based to prevent this — `ALLOWED_ERROR_FIELDS` is the schema's contract for error logs. Add fields there as new error shapes appear (don't reach for a permissive enumeration shortcut).
 - **Ad-hoc context fields.** A `log.X({ randomNewKey: ... })` callsite permanently widens the schema. Keep the field-name surface stable: reuse existing keys (`event`, `userId`, `jobId`, `assetId`, `key`, `host`, `bytes`, `elapsedMs`, etc.) instead of inventing a new shape per log line.

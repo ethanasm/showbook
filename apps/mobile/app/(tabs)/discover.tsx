@@ -249,10 +249,22 @@ export default function DiscoverScreen(): React.JSX.Element {
   // followedFeed / followedArtistsFeed page at 100, nearbyFeed takes the
   // server default. Mobile previously capped these much tighter (50 / 50 / 25)
   // which made Regions in particular look thin against the web equivalent.
+  //
+  // `refetchOnMount: 'always'` is load-bearing: the offline warm-up
+  // (`lib/cache/warmup.ts`) pre-seeds these exact query keys with a
+  // deliberately tiny snapshot (followedFeed `limit: 12`, nearbyFeed
+  // `perRegionLimit: 8`) so a cold offline open renders something. That
+  // `setQueryData` write is marked fresh, so without forcing a mount
+  // refetch the default 30s `staleTime` would leave the screen pinned to
+  // the warm-up placeholder — "8 venues" until the user pulled to refresh.
+  // Forcing the refetch loads the full `limit: 100` / `perRegionLimit:
+  // 2500` set automatically (the warm-up rows render instantly as a
+  // placeholder while the background fetch runs).
   const followedVenuesQuery = useCachedQuery<FollowedFeed>({
     queryKey: ['mobile', 'discover', 'followedFeed'],
     queryFn: () => utils.client.discover.followedFeed.query({ limit: 100 }),
     enabled: Boolean(token),
+    refetchOnMount: 'always',
     refetchInterval: ingestPolling.intervals.venues,
   });
 
@@ -260,6 +272,7 @@ export default function DiscoverScreen(): React.JSX.Element {
     queryKey: ['mobile', 'discover', 'followedArtistsFeed'],
     queryFn: () => utils.client.discover.followedArtistsFeed.query({ limit: 100 }),
     enabled: Boolean(token),
+    refetchOnMount: 'always',
     refetchInterval: ingestPolling.intervals.artists,
   });
 
@@ -267,6 +280,7 @@ export default function DiscoverScreen(): React.JSX.Element {
     queryKey: ['mobile', 'discover', 'nearbyFeed'],
     queryFn: () => utils.client.discover.nearbyFeed.query({}),
     enabled: Boolean(token),
+    refetchOnMount: 'always',
     refetchInterval: ingestPolling.intervals.nearby,
   });
 
@@ -312,8 +326,16 @@ export default function DiscoverScreen(): React.JSX.Element {
         ? followedArtistsQuery
         : nearbyQuery;
 
+  // True while the active feed is refetching in the background with rows
+  // already on screen — the warm-up-placeholder → full-feed mount refetch,
+  // a pull-to-refresh, or a feed re-fetch the ingest poll triggered. Drives
+  // the inline "updating…" status so the count isn't silently stale while
+  // the full set loads in over the small warm-up snapshot.
+  const isBackgroundRefetching =
+    activeQuery.isFetching && !activeQuery.isLoading;
+
   const refreshControl = useThemedRefreshControl(
-    activeQuery.isFetching && !activeQuery.isLoading,
+    isBackgroundRefetching,
     () => {
       void activeQuery.refetch();
     },
@@ -788,15 +810,24 @@ export default function DiscoverScreen(): React.JSX.Element {
             <View style={styles.summaryRow}>
               <SummaryIcon tab={tab} color={colors.muted} />
               <Text style={[styles.summaryText, { color: colors.muted }]}>
-                {filterCount} upcoming · {ingestPolling.isPolling ? 'discovering more shows…' : 'pull to refresh'}
+                {filterCount} upcoming ·{' '}
+                {ingestPolling.isPolling
+                  ? 'discovering more shows…'
+                  : isBackgroundRefetching
+                    ? 'updating…'
+                    : 'pull to refresh'}
               </Text>
-              {ingestPolling.isPolling && (
+              {(ingestPolling.isPolling || isBackgroundRefetching) && (
                 <ActivityIndicator
                   size="small"
                   color={colors.muted}
                   style={styles.summarySpinner}
                   testID="discover-ingest-spinner"
-                  accessibilityLabel="Discovering more shows"
+                  accessibilityLabel={
+                    ingestPolling.isPolling
+                      ? 'Discovering more shows'
+                      : 'Updating'
+                  }
                 />
               )}
             </View>

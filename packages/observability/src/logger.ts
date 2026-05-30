@@ -1,4 +1,4 @@
-import { PassThrough } from 'node:stream';
+import { PassThrough, Transform } from 'node:stream';
 import pino, { type Level, type Logger, type LoggerOptions, type StreamEntry } from 'pino';
 import buildAxiomTransport from '@axiomhq/pino';
 import pretty from 'pino-pretty';
@@ -123,6 +123,26 @@ const baseOptions: LoggerOptions = {
 // Instead we statically import each sink as a stream factory and wire them
 // into pino.multistream — no workers, no resolution gymnastics.
 
+/**
+ * The `component` bound on the mobile-telemetry child logger (see
+ * `packages/api/src/routers/telemetry.ts`). Every `mobile.*` event carries
+ * this marker, which is how we split mobile telemetry into its own Axiom
+ * dataset — see `isMobileRecord`. Keep in sync with the router.
+ */
+const MOBILE_COMPONENT = 'mobile.telemetry';
+
+/**
+ * Cheap predicate over a serialized pino line: is this a mobile-telemetry
+ * record? pino flattens the child's bound `component` field into every line,
+ * so a substring check is enough — no JSON parse per log line. Used to fan
+ * mobile telemetry to `AXIOM_MOBILE_DATASET` and keep it out of the
+ * server dataset (which has its own column budget — see
+ * docs/specs/operations/axiom-dataset-cutover.md).
+ */
+function isMobileRecord(line: string): boolean {
+  return line.includes(`"component":"${MOBILE_COMPONENT}"`);
+}
+
 function buildStreams(): StreamEntry[] {
   const streams: StreamEntry[] = [];
 
@@ -141,32 +161,68 @@ function buildStreams(): StreamEntry[] {
   return streams;
 }
 
+/**
+ * Build a PassThrough that pino can write to synchronously and, once the
+ * async Axiom transport for `dataset` resolves, forwards only the lines
+ * matching `keep` to it. Lines written before the pipe attaches buffer in
+ * the PassThrough and flush as soon as it's wired — no log lines dropped.
+ * `keep` defaults to forwarding everything (single-dataset mode).
+ */
+function buildAxiomStream(
+  dataset: string,
+  token: string,
+  keep: (line: string) => boolean = () => true,
+): PassThrough {
+  const buffer = new PassThrough();
+
+  void buildAxiomTransport({ dataset, token })
+    .then((axiomStream) => {
+      const filter = new Transform({
+        transform(chunk, _enc, cb) {
+          // pino writes one full JSON line per chunk.
+          if (keep(chunk.toString())) this.push(chunk);
+          cb();
+        },
+      });
+      buffer.pipe(filter).pipe(axiomStream);
+    })
+    .catch((err) => {
+      process.stderr.write(
+        `[observability] Axiom transport init failed (${dataset}): ${(err as Error)?.message ?? err}\n`,
+      );
+    });
+
+  return buffer;
+}
+
 let _logger: Logger | null = null;
 
 function buildLogger(): Logger {
   const streams = buildStreams();
 
-  // Axiom's transport factory is async, but we need the logger synchronously
-  // for module-load-time `child(...)` callers. Insert a PassThrough into the
-  // multistream now and pipe it to the axiom stream once the factory resolves.
-  // Lines written before the pipe is attached buffer in the PassThrough and
-  // flush as soon as it pipes — no log lines are dropped.
-  if (process.env.AXIOM_TOKEN && process.env.AXIOM_DATASET) {
-    const axiomBuffer = new PassThrough();
-    streams.push({ stream: axiomBuffer, level });
+  // Axiom shipping. The mobile app has no direct Axiom path — its telemetry
+  // arrives server-side via the `telemetry.logEvent` tRPC router under the
+  // `mobile.telemetry` component. We ship that to its own dataset
+  // (`AXIOM_MOBILE_DATASET`) so the high-cardinality, fast-growing mobile
+  // field surface doesn't share the server dataset's 257-column budget.
+  // When `AXIOM_MOBILE_DATASET` is unset we fall back to single-dataset
+  // mode: everything (mobile included) goes to `AXIOM_DATASET`.
+  const token = process.env.AXIOM_TOKEN;
+  const serverDataset = process.env.AXIOM_DATASET;
+  const mobileDataset = process.env.AXIOM_MOBILE_DATASET;
 
-    void buildAxiomTransport({
-      dataset: process.env.AXIOM_DATASET,
-      token: process.env.AXIOM_TOKEN,
-    })
-      .then((axiomStream) => {
-        axiomBuffer.pipe(axiomStream);
-      })
-      .catch((err) => {
-        process.stderr.write(
-          `[observability] Axiom transport init failed: ${(err as Error)?.message ?? err}\n`,
-        );
-      });
+  if (token && serverDataset) {
+    const keepServer = mobileDataset
+      ? (line: string) => !isMobileRecord(line)
+      : undefined;
+    streams.push({ stream: buildAxiomStream(serverDataset, token, keepServer), level });
+  }
+
+  if (token && mobileDataset) {
+    streams.push({
+      stream: buildAxiomStream(mobileDataset, token, isMobileRecord),
+      level,
+    });
   }
 
   return pino(baseOptions, pino.multistream(streams));
@@ -196,3 +252,5 @@ export async function flushLogger(): Promise<void> {
     }) ?? resolve();
   });
 }
+
+export const _testing = { isMobileRecord, MOBILE_COMPONENT };

@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { db } from '@showbook/db';
 import { child } from '@showbook/observability';
-import { queryAxiom as defaultQueryAxiom } from './axiom';
+import { queryAxiom as defaultQueryAxiom, axiomDataset } from './axiom';
 
 const log = child({ component: 'health-check.checks' });
 
@@ -35,7 +35,7 @@ interface FailedJobRow {
 export async function checkFailedJobs(
   queryAxiom: QueryAxiomFn = defaultQueryAxiom,
 ): Promise<CheckResult> {
-  const apl = `["showbook-prod"]
+  const apl = `["${axiomDataset()}"]
     | where _time > ago(24h) and event == "job.failed"
     | project _time, job, jobId, msg
     | order by _time desc
@@ -224,7 +224,7 @@ interface ErrorVolumeRow {
 export async function checkErrorVolume(
   queryAxiom: QueryAxiomFn = defaultQueryAxiom,
 ): Promise<CheckResult> {
-  const apl = `["showbook-prod"]
+  const apl = `["${axiomDataset()}"]
     | where _time > ago(24h) and level == "error"
     | summarize cnt = count() by event, component
     | order by cnt desc

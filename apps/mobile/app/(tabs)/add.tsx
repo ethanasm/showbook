@@ -261,7 +261,7 @@ export default function AddChatScreen(): React.JSX.Element {
       />
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
         <ScrollView
@@ -381,7 +381,10 @@ export default function AddChatScreen(): React.JSX.Element {
               (the .pkpass document-type registration in app.config.ts adds
               Showbook to iOS's share sheet for pass files). This door is
               pure discovery/education: tapping it explains the flow rather
-              than launching a picker. */}
+              than launching a picker. iOS-only: Google Wallet on Android
+              doesn't expose pass data to share into apps, so the door is
+              hidden there rather than offering an import that can't run. */}
+          {Platform.OS === 'ios' && (
           <Pressable
             onPress={() => setWalletSheetOpen(true)}
             accessibilityRole="button"
@@ -405,6 +408,7 @@ export default function AddChatScreen(): React.JSX.Element {
             </View>
             <ArrowRight size={16} color={colors.faint} strokeWidth={2} />
           </Pressable>
+          )}
         </ScrollView>
 
         <View
