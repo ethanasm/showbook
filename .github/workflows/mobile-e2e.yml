@@ -300,7 +300,14 @@ jobs:
           cd android
           # --build-cache uses the restored gradle caches; --no-daemon
           # keeps the runner clean between invocations.
+          # Skip the lintVital* tasks: they're Play-Store-distribution
+          # gates that don't affect the APK Maestro installs, and the
+          # lint phase is metaspace-hungry enough to push the WSL
+          # runner past the 2 GiB Gradle heap / 512 MiB metaspace
+          # budget — when it OOMs mid-task the runner reports it as
+          # "The operation was canceled" rather than a Gradle failure.
           ./gradlew :app:assembleRelease \
+            -x lintVitalAnalyzeRelease -x lintVitalRelease \
             --no-daemon --console=plain \
             --build-cache
           APK="app/build/outputs/apk/release/app-release.apk"
