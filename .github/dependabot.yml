@@ -24,13 +24,6 @@ updates:
         patterns:
           - "@aws-sdk/*"
           - "@smithy/*"
-      # react peer-checks an exact version match between react and
-      # react-dom at startup ("Incompatible React versions" otherwise),
-      # so they must bump together in a single PR.
-      react:
-        patterns:
-          - "react"
-          - "react-dom"
       # The Expo SDK is a tightly-coupled package set: every `expo-*` /
       # `@expo/*` runtime package compiles against the `expo-modules-core`
       # major that ships inside the matching `expo` host, and
@@ -95,6 +88,26 @@ updates:
       - dependency-name: "react-native-screens"
       - dependency-name: "react-native-gesture-handler"
       - dependency-name: "react-native-safe-area-context"
+      # react / react-dom / react-test-renderer are version-locked by the
+      # Expo SDK (bundledNativeModules.json pins them — SDK 56 wants exactly
+      # 19.2.3) AND hard-pinned in the root package.json `pnpm.overrides`.
+      # React asserts an EXACT version match between `react` and the renderer
+      # baked into `react-native` ("Incompatible React versions" otherwise),
+      # so they are not free to float independently of `react-native` /
+      # `expo` — a standalone bump lands a react that mismatches the SDK's
+      # bundled `react-native-renderer` and crashes EVERY launch in React's
+      # startup version check (renderWithHooks), before any UI renders. This
+      # is exactly what shipped on 2026-05-29: Dependabot's old `react` group
+      # bumped react/react-dom to 19.2.6 while SDK 56 / RN 0.85.3 ship the
+      # renderer at 19.2.3. They move only via a manual `expo install --fix`
+      # SDK upgrade (see #465). Note these were ALSO formerly listed in a
+      # `react` *group*; grouping kept react+react-dom aligned with each other
+      # but NOT with the SDK, which is the gap that caused the crash. Update
+      # this list (and the root `pnpm.overrides`) if the SDK's pinned react
+      # version changes.
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      - dependency-name: "react-test-renderer"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
