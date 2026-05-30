@@ -515,12 +515,20 @@ export default function DiscoverScreen(): React.JSX.Element {
     setUnfollowChip({ tab, id, name: group?.name ?? '' });
   };
 
-  const handleUnfollowConfirm = async (): Promise<void> => {
-    if (!unfollowChip) return;
-    const { tab: target, id, name } = unfollowChip;
+  // Unfollow / remove a single Discover entity, scoped to the tab it
+  // belongs to. Shared by the long-press confirm sheet and the overflow
+  // picker's trash affordance (which removes directly, no confirm sheet).
+  const performUnfollow = async (
+    target: DiscoverTab,
+    id: string,
+    name: string,
+  ): Promise<void> => {
     // Drop the filter if it pointed at the chip we're removing so the feed
     // doesn't get stuck filtered to a now-gone group.
     setSelectedGroupId((prev) => (prev === id ? null : prev));
+    if (target === 'regions') {
+      setSelectedRegionVenueId(null);
+    }
     try {
       if (target === 'venues') {
         const key = ['mobile', 'venues', 'followed'];
@@ -631,6 +639,10 @@ export default function DiscoverScreen(): React.JSX.Element {
           selected={selectedGroupId}
           onSelect={setSelectedGroupId}
           onLongPress={handleChipLongPress}
+          onRemove={(id) => {
+            const group = groupList.find((g) => g.id === id);
+            void performUnfollow(tab, id, group?.name ?? '');
+          }}
           totalCount={items.length}
           testIdPrefix="discover-group"
           pickerTitle={groupPickerTitle(tab)}
@@ -772,7 +784,9 @@ export default function DiscoverScreen(): React.JSX.Element {
       tab={unfollowChip?.tab ?? tab}
       name={unfollowChip?.name ?? null}
       onConfirm={() => {
-        void handleUnfollowConfirm();
+        if (unfollowChip) {
+          void performUnfollow(unfollowChip.tab, unfollowChip.id, unfollowChip.name);
+        }
       }}
     />
     </>
@@ -1011,7 +1025,13 @@ function SoldOutStripes({
   );
 }
 
-function AnnouncementRow({
+// Memoized: the feed renders up to PAGE_SIZE (50) of these, and the
+// Discover screen re-renders on every ingest-poll tick / watched-set
+// update / refetch `isFetching` toggle. Without memo all 50 rows
+// reconciled on each of those — the bulk of the scroll/tab lag. Props
+// are stable (`item` from the query cache, `onToggleWatch` a stable
+// `useCallback`); only the toggled row's `isWatching` changes.
+const AnnouncementRow = React.memo(function AnnouncementRow({
   item,
   isWatching,
   onToggleWatch,
@@ -1288,7 +1308,7 @@ function AnnouncementRow({
     )}
     </>
   );
-}
+});
 
 const styles = StyleSheet.create({
   actions: {
