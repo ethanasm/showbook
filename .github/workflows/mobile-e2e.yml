@@ -37,48 +37,41 @@ concurrency:
 jobs:
   android-e2e:
     name: Local Android build + Maestro on self-hosted emulator
-    # Gate logic mirrors the previous Maestro Cloud workflow:
-    #   - vars.MOBILE_E2E_ENABLED must be 'true' so the workflow reports
-    #     skipped (not failed) until the prereqs are in place.
-    #   - vars.MOBILE_E2E_API_URL_CONFIGURED must be 'true' to confirm
-    #     the runner has an EXPO_PUBLIC_API_URL secret available; without
-    #     it the APK is built with a missing API base and every tRPC
-    #     fetch fails with "Invalid URL: /api/trpc/...", killing every
-    #     flow that needs to load the Shows list (which is all of them).
-    #     Default unset so the workflow skips cleanly until the secret
-    #     is configured — flip the var to 'true' after adding the secret
-    #     to repo Settings → Secrets and variables → Actions.
-    #     (Tracked in #213 triage comment, 2026-05-17.)
-    #   - PR runs require the `mobile-visual` label so opt-in stays
-    #     explicit; non-PR triggers (push/schedule/dispatch) always run.
+    # PR runs require the `mobile-visual` label so opt-in stays
+    # explicit; non-PR triggers (push/schedule/dispatch) always run.
+    # The dual `vars.MOBILE_E2E_ENABLED` / `MOBILE_E2E_API_URL_CONFIGURED`
+    # gates that used to live here silently swallowed every run
+    # (including labeled-PR runs) when either repo variable wasn't
+    # flipped to 'true' — the symptom was "added the label, workflow
+    # shows up but completes in <1s as skipped, no logs to diagnose".
+    # The secret-presence checks inside the Build step below already
+    # fail loudly with a useful `::error::` message if MAESTRO_E2E_TOKEN
+    # / MAESTRO_E2E_USER_JSON / EXPO_PUBLIC_API_URL aren't configured,
+    # so the secret-gate work the vars were doing is duplicated and
+    # silent. Trust the in-step checks instead.
     #
-    # To enable this workflow:
-    #   1. Add secrets under Settings → Secrets and variables → Actions:
+    # One-time setup the runner still needs (none of which the gate
+    # could have detected anyway):
+    #   1. Secrets under Settings → Secrets and variables → Actions:
     #        - MAESTRO_E2E_TOKEN     (Showbook JWT for the test user)
     #        - MAESTRO_E2E_USER_JSON (JSON-serialized SessionUser)
     #        - EXPO_PUBLIC_API_URL   (full backend URL the APK targets —
-    #          e.g. https://showbook-e2e.your-host.dev). Only set in
-    #          local dev today; until it's in CI the tRPC client builds
-    #          relative URLs and React Native rejects them. See the
-    #          MOBILE_E2E_API_URL_CONFIGURED gate above.
+    #          e.g. https://showbook-e2e.your-host.dev). Without it the
+    #          tRPC client builds relative URLs and React Native rejects
+    #          them with "Invalid URL: /api/trpc/...".
     #      The first two are inlined into the APK at build time via
     #      EXPO_PUBLIC_E2E_TEST_TOKEN / EXPO_PUBLIC_E2E_TEST_USER_JSON,
     #      so `lib/auth.ts` can sign in without any deeplink seeding
     #      step. No EXPO_TOKEN / MAESTRO_CLOUD_API_KEY needed.
-    #   2. Set repo variable `MOBILE_E2E_ENABLED` to `true`.
-    #   3. After adding the EXPO_PUBLIC_API_URL secret in step 1, set
-    #      repo variable `MOBILE_E2E_API_URL_CONFIGURED` to `true`.
-    #   4. Optional: set repo variable `ANDROID_SDK_ROOT` to the install
+    #   2. Optional: set repo variable `ANDROID_SDK_ROOT` to the install
     #      path on the runner; defaults to /opt/android-sdk.
-    #   5. Run scripts/setup-runner.sh on the prod box (already done if
+    #   3. Run scripts/setup-runner.sh on the prod box (already done if
     #      the runner is up), then scripts/setup-runner-android.sh once
     #      to install Android SDK (incl. build-tools + NDK), create the
     #      e2e AVD, and install Maestro.
     if: >-
-      vars.MOBILE_E2E_ENABLED == 'true' &&
-      vars.MOBILE_E2E_API_URL_CONFIGURED == 'true' &&
-      (github.event_name != 'pull_request' ||
-       contains(github.event.pull_request.labels.*.name, 'mobile-visual'))
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'mobile-visual')
     # Self-hosted runner registered by scripts/setup-runner.sh on the
     # prod WSL box (label `showbook-prod`). It needs Android SDK + AVD
     # installed via scripts/setup-runner-android.sh (one-time).
