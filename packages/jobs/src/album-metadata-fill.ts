@@ -15,11 +15,24 @@
  * Schedule: 02:30 ET nightly. Lands before the corpus-fill refresh at
  * 04:45 ET so prediction reads after 04:45 see fresh albums alongside
  * fresh corpus.
+ *
+ * Throughput / pg-boss expiry: the corpus is large (~1.2k performers ×
+ * up to 6 Spotify calls each) and Spotify rate-limits aggressively, so
+ * `spotifyFetch`'s 429 backoff makes a full sweep slow. The job runs
+ * under `LONG_BATCH_CRON` (1800s pg-boss `expireInSeconds`); a sweep
+ * that overruns that budget gets killed mid-flight and lands in pg-boss
+ * `failed` state (which then trips the `pgboss_queue` morning health
+ * check). To stay inside the expiry we cap the loop at a wall-clock
+ * budget (default 25 min, well under 1800s) and stop cleanly with a
+ * partial summary instead of grinding to the kill. Performers are
+ * processed stalest-first (oldest / never-fetched album metadata) so a
+ * budget-truncated run still makes forward progress across the whole
+ * corpus over successive nights rather than re-refreshing the same head.
  */
 
 import './load-env-local';
 
-import { isNotNull } from 'drizzle-orm';
+import { isNotNull, sql } from 'drizzle-orm';
 import { albums, db, performers } from '@showbook/db';
 import {
   getAppAccessToken,
@@ -34,6 +47,28 @@ const log = child({ component: 'jobs.album-metadata-fill' });
 
 const ALBUMS_PER_PERFORMER = 5;
 
+/**
+ * Wall-clock budget for a single run. Kept comfortably under the 1800s
+ * pg-boss `expireInSeconds` for `LONG_BATCH_CRON` so a slow (rate-limited)
+ * sweep returns cleanly with partial progress rather than being killed
+ * and marked `failed`. Operator-tunable via env without a redeploy.
+ */
+const DEFAULT_TIME_BUDGET_MS = 25 * 60 * 1000;
+
+/**
+ * Number of back-to-back 401s (with no intervening success) that we treat
+ * as a run-wide authorization failure once the run has already had at
+ * least one success. Before any success, the very first 401 is already
+ * run-wide (the app token is being rejected outright).
+ */
+const AUTH_ABORT_CONSECUTIVE = 5;
+
+function resolveBudgetMs(): number {
+  const raw = process.env.ALBUM_METADATA_FILL_BUDGET_MS;
+  const parsed = raw ? Number(raw) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_TIME_BUDGET_MS;
+}
+
 export interface AlbumMetadataFillSummary {
   attempted: number;
   performersUpdated: number;
@@ -41,7 +76,23 @@ export interface AlbumMetadataFillSummary {
   failed: number;
 }
 
-export async function runAlbumMetadataFill(): Promise<AlbumMetadataFillSummary> {
+export interface RunAlbumMetadataFillOptions {
+  /** Wall-clock budget in ms. Defaults to env / `DEFAULT_TIME_BUDGET_MS`. */
+  budgetMs?: number;
+  /** Injectable clock for tests. Defaults to `Date.now`. */
+  now?: () => number;
+}
+
+export async function runAlbumMetadataFill(
+  opts: RunAlbumMetadataFillOptions = {},
+): Promise<AlbumMetadataFillSummary> {
+  const budgetMs = opts.budgetMs ?? resolveBudgetMs();
+  const now = opts.now ?? Date.now;
+
+  // Stalest-first: never-fetched performers (NULL max fetched_at) lead,
+  // then those whose album metadata is oldest. A budget-truncated run
+  // therefore spends its budget where coverage is weakest and the corpus
+  // cycles over successive nights instead of re-refreshing the same head.
   const rows = await db
     .select({
       id: performers.id,
@@ -49,12 +100,16 @@ export async function runAlbumMetadataFill(): Promise<AlbumMetadataFillSummary> 
       name: performers.name,
     })
     .from(performers)
-    .where(isNotNull(performers.spotifyArtistId));
+    .where(isNotNull(performers.spotifyArtistId))
+    .orderBy(
+      sql`(select max(${albums.fetchedAt}) from ${albums} where ${albums.performerId} = ${performers.id}) asc nulls first`,
+    );
 
   let attempted = 0;
   let performersUpdated = 0;
   let albumsUpserted = 0;
   let failed = 0;
+  let consecutiveAuthFailures = 0;
 
   // Probe the app-level token once up front so a credentials misconfig
   // surfaces as `token_failed` (and skips the cron) rather than as a
@@ -71,8 +126,31 @@ export async function runAlbumMetadataFill(): Promise<AlbumMetadataFillSummary> 
     return { attempted: 0, performersUpdated: 0, albumsUpserted: 0, failed: 0 };
   }
 
-  for (const performer of rows) {
+  const startedAt = now();
+
+  for (let i = 0; i < rows.length; i += 1) {
+    const performer = rows[i]!;
     if (!performer.spotifyArtistId) continue;
+
+    // Stop before the pg-boss expiry kills us mid-flight. Returning here
+    // lets pg-boss mark the run `complete` with the work done so far; the
+    // remaining stalest performers lead the next run.
+    const elapsedMs = now() - startedAt;
+    if (elapsedMs > budgetMs) {
+      log.warn(
+        {
+          event: 'album_metadata_fill.budget_exhausted',
+          attempted,
+          performersUpdated,
+          albumsUpserted,
+          remaining: rows.length - i,
+          elapsedMs,
+        },
+        'time budget exhausted; stopping run with partial progress',
+      );
+      break;
+    }
+
     attempted += 1;
     try {
       const fetched = await withAppToken((token) =>
@@ -80,6 +158,7 @@ export async function runAlbumMetadataFill(): Promise<AlbumMetadataFillSummary> 
           limit: ALBUMS_PER_PERFORMER,
         }),
       );
+      consecutiveAuthFailures = 0;
       if (fetched.length === 0) continue;
       let perPerformerUpserts = 0;
       for (const album of fetched) {
@@ -130,30 +209,44 @@ export async function runAlbumMetadataFill(): Promise<AlbumMetadataFillSummary> 
     } catch (err) {
       failed += 1;
       const status = err instanceof SpotifyError ? err.status : undefined;
-      // A 401 here means the app-level token was rejected by the catalog
-      // API even after `withAppToken`'s fresh-token retry. That's a
-      // run-wide authorization failure (revoked/restricted credentials),
-      // not a per-performer problem — every remaining performer would
-      // 401 identically. Abort the loop and log once rather than
-      // emitting one error per performer: the May 2026 incident logged
-      // 1145 `performer_failed` errors in a single run, tripping the
-      // error_volume health check and grinding the job past its 30-min
-      // pg-boss expiry into a `failed` state (which then tripped the
-      // pgboss_queue check too). Returning cleanly lets pg-boss mark the
-      // run complete; the single error keeps the credential problem
-      // visible without burying genuine per-performer failures.
+
+      // A 401 from the catalog API after `withAppToken`'s fresh-token
+      // retry can mean one of two things:
+      //  (a) run-wide authorization failure — revoked/restricted
+      //      credentials. Every remaining performer would 401 identically,
+      //      so we abort and log once rather than emitting one error per
+      //      performer (the May 2026 incident logged 1145 `performer_failed`
+      //      errors in a single run, tripping error_volume and grinding the
+      //      job past its 30-min pg-boss expiry into a `failed` state).
+      //  (b) a transient 401 under heavy rate-limiting, after the run has
+      //      already succeeded for other performers. Nuking an otherwise
+      //      healthy sweep on a single flaky 401 needlessly defers ~1k
+      //      performers to the next night.
+      // We distinguish them: a 401 is run-wide when nothing has succeeded
+      // yet this run, or when several land back-to-back. Otherwise it's a
+      // per-performer miss and we keep going.
       if (status === 401) {
-        log.error(
-          {
-            event: 'album_metadata_fill.auth_rejected',
-            err,
-            attempted,
-            failed,
-          },
-          'app-level token rejected by Spotify catalog API (401); aborting run',
-        );
-        break;
+        consecutiveAuthFailures += 1;
+        const runWide =
+          performersUpdated === 0 ||
+          consecutiveAuthFailures >= AUTH_ABORT_CONSECUTIVE;
+        if (runWide) {
+          log.error(
+            {
+              event: 'album_metadata_fill.auth_rejected',
+              err,
+              attempted,
+              failed,
+              consecutiveAuthFailures,
+            },
+            'app-level token rejected by Spotify catalog API (401); aborting run',
+          );
+          break;
+        }
+      } else {
+        consecutiveAuthFailures = 0;
       }
+
       log.error(
         {
           event: 'album_metadata_fill.performer_failed',
