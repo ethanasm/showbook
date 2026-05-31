@@ -7,8 +7,10 @@
  * every visit at that venue.
  *
  * Data source: trpc.shows.listForMap (already returns the headliner name
- * and venue lat/lng). We do NOT call a region-scoped procedure — the
- * "Refresh map" affordance is a pan-detection re-cluster only.
+ * and venue lat/lng). We do NOT call a region-scoped procedure — clusters
+ * re-evaluate client-side as the user pans/zooms. The map refetches
+ * whenever the tab regains focus, so adding or removing a show (logbook or
+ * discovery) on another screen is reflected automatically on return.
  *
  * Clustering is hand-rolled grid bucketing — no external cluster lib.
  * Cell size scales with the visible longitude delta so clusters break
@@ -26,8 +28,8 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { MapPin, RefreshCw, X } from 'lucide-react-native';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { MapPin, X } from 'lucide-react-native';
 import MapView, {
   Marker,
   PROVIDER_GOOGLE,
@@ -323,16 +325,6 @@ function fitRegion(venues: VenueGroup[]): Region {
   };
 }
 
-/** Crude distance metric in degrees; used to detect "user has panned". */
-function regionDelta(a: Region, b: Region): number {
-  return (
-    Math.abs(a.latitude - b.latitude) +
-    Math.abs(a.longitude - b.longitude) +
-    Math.abs(a.latitudeDelta - b.latitudeDelta) +
-    Math.abs(a.longitudeDelta - b.longitudeDelta)
-  );
-}
-
 function formatDate(date: string | Date | null): string {
   if (!date) return '';
   const d = typeof date === 'string' ? new Date(date) : date;
@@ -409,7 +401,6 @@ export default function MapScreen(): React.JSX.Element {
   const [pendingRefit, setPendingRefit] = React.useState(false);
   const [kindFilter, setKindFilter] = React.useState<'all' | Kind>('all');
   const [region, setRegion] = React.useState<Region>(DEFAULT_REGION);
-  const [loadedRegion, setLoadedRegion] = React.useState<Region>(DEFAULT_REGION);
   const [selectedClusterId, setSelectedClusterId] = React.useState<string | null>(null);
   const [didFitOnce, setDidFitOnce] = React.useState(false);
   const [activeFocusId, setActiveFocusId] = React.useState<string | null>(null);
@@ -519,7 +510,6 @@ export default function MapScreen(): React.JSX.Element {
     if (allVenues.length === 0) return;
     const fit = fitRegion(allVenues);
     setRegion(fit);
-    setLoadedRegion(fit);
     mapRef.current?.animateToRegion(fit, 400);
     setDidFitOnce(true);
   }, [showsQuery.isSuccess, allShows, didFitOnce, focusVenueId]);
@@ -549,7 +539,6 @@ export default function MapScreen(): React.JSX.Element {
       longitudeDelta: 0.05,
     };
     setRegion(next);
-    setLoadedRegion(next);
     mapRef.current?.animateToRegion(next, 400);
     setDidFitOnce(true);
     setSelectedClusterId(`v:${target.venueId}`);
@@ -571,7 +560,6 @@ export default function MapScreen(): React.JSX.Element {
     if (layerVenues.length === 0) return;
     const fit = fitRegion(layerVenues);
     setRegion(fit);
-    setLoadedRegion(fit);
     mapRef.current?.animateToRegion(fit, 400);
     setPendingRefit(false);
   }, [pendingRefit, allShows]);
@@ -604,22 +592,21 @@ export default function MapScreen(): React.JSX.Element {
   );
   const selectedVenue = selectedCluster?.venues[0] ?? null;
 
-  // "Refresh map" appears once the user has panned far enough away from
-  // the last region we acknowledged. Tapping it refetches the user's
-  // shows and commits the current region as the new baseline so the
-  // indicator hides until the next pan. (Server-side bbox filtering
-  // isn't wired — shows.listForMap returns the user's full set and
-  // clusters update live as the camera moves.)
-  const panDelta = regionDelta(region, loadedRegion);
-  const shouldShowSearchArea =
-    didFitOnce &&
-    panDelta >
-      Math.max(loadedRegion.latitudeDelta, loadedRegion.longitudeDelta) * 0.25;
-
-  const onSearchAreaPress = React.useCallback(() => {
-    setLoadedRegion(region);
-    void showsQuery.refetch();
-  }, [region, showsQuery]);
+  // Keep the map fresh without a manual "Refresh map" button: refetch both
+  // feeds whenever the tab regains focus. Adding or removing a show (logbook
+  // or discovery) happens on another screen, so returning to Map picks up
+  // the change automatically. The one-time camera fit is gated by
+  // `didFitOnce`, so a refetch updates the pins in place without re-framing.
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!token) return;
+      void showsQuery.refetch();
+      void mapFeedQuery.refetch();
+      // Intentionally exclude the query objects from deps — refetch on every
+      // focus, not on every query-identity change.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [token]),
+  );
 
   // -- Render -------------------------------------------------------------
 
@@ -636,13 +623,11 @@ export default function MapScreen(): React.JSX.Element {
         large
       />
 
-      {/* Layer toggle — past / upcoming / discoverable */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterScroll}
-        contentContainerStyle={styles.modeStrip}
-      >
+      {/* Layer toggle — all / past / upcoming / discoverable. Fixed
+          non-scrolling row: chips size to their label (so "all" stays
+          compact and "discoverable" gets the room it needs) and can shrink
+          to fit narrow screens rather than scrolling. Counts were dropped. */}
+      <View style={styles.modeStrip}>
         {MODE_FILTERS.map(({ m, label }) => {
           const active = m === layer;
           return (
@@ -654,6 +639,7 @@ export default function MapScreen(): React.JSX.Element {
               accessibilityLabel={`${label} (${modeCounts[m]})`}
               style={[
                 styles.filterChip,
+                styles.modeChip,
                 {
                   borderColor: active ? colors.ink : colors.ruleStrong,
                   backgroundColor: active ? colors.ink : 'transparent',
@@ -661,6 +647,9 @@ export default function MapScreen(): React.JSX.Element {
               ]}
             >
               <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
                 style={[
                   styles.filterLabel,
                   { color: active ? colors.bg : colors.muted },
@@ -668,21 +657,10 @@ export default function MapScreen(): React.JSX.Element {
               >
                 {label}
               </Text>
-              <Text
-                style={[
-                  styles.filterCount,
-                  {
-                    color: active ? colors.bg : colors.muted,
-                    opacity: active ? 0.7 : 1,
-                  },
-                ]}
-              >
-                {modeCounts[m]}
-              </Text>
             </Pressable>
           );
         })}
-      </ScrollView>
+      </View>
 
       {/* Kind filter strip — the five chips share the row width (each
           flexes equally) so they all fit on one line without horizontal
@@ -854,24 +832,6 @@ export default function MapScreen(): React.JSX.Element {
                 );
               })}
             </MapView>
-
-            {shouldShowSearchArea && (
-              <Pressable
-                onPress={onSearchAreaPress}
-                style={[
-                  styles.searchAreaButton,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.ruleStrong,
-                  },
-                ]}
-              >
-                <RefreshCw size={14} color={colors.ink} />
-                <Text style={[styles.searchAreaLabel, { color: colors.ink }]}>
-                  Refresh map
-                </Text>
-              </Pressable>
-            )}
 
             {focusRegions.length > 0 && (
               <View
@@ -1137,14 +1097,18 @@ function Stat({ label, value }: { label: string; value: string }): React.JSX.Ele
 
 const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  filterScroll: { flexGrow: 0 },
   modeStrip: {
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 8,
-    gap: 6,
+    gap: 8,
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  // Mode chips size to their label (not equal-width) and may shrink to fit
+  // a narrow screen instead of overflowing the fixed, non-scrolling row.
+  modeChip: {
+    flexShrink: 1,
   },
   filterStrip: {
     paddingHorizontal: 20,
@@ -1196,29 +1160,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
-  filterCount: {
-    fontFamily: 'Geist Mono 400',
-    fontSize: 10,
-  },
   pinOuter: { alignItems: 'center', justifyContent: 'center' },
   pinInner: { alignItems: 'center', justifyContent: 'center' },
   pinCount: { fontFamily: 'Geist Sans 600' },
-  searchAreaButton: {
-    position: 'absolute',
-    top: 12,
-    alignSelf: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderRadius: RADII.pill,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  searchAreaLabel: {
-    fontFamily: 'Geist Sans 600',
-    fontSize: 12,
-  },
   focusToggle: {
     position: 'absolute',
     bottom: 16,
