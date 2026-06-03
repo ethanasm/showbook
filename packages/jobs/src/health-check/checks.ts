@@ -297,9 +297,23 @@ interface QueueFailureRow {
 
 export async function checkPgBossQueue(): Promise<CheckResult> {
   try {
+    // Failed-job count is bounded to the last 24h. pg-boss v12 keeps
+    // terminally-failed rows in `pgboss.job` for the per-queue retention
+    // (7–14 days) before the maintenance loop deletes them, so an
+    // un-bounded `state = 'failed'` count surfaces failures from nights
+    // *days* ago — long after the underlying bug was fixed — and trips
+    // the morning warning every day until the rows age out. Worse, it
+    // contradicts the `failed_jobs` check (Axiom, 24h window), which goes
+    // green the morning after a fix lands while this check stays yellow.
+    // Bounding on `completed_on` (set when a job enters the terminal
+    // `failed` state; `created_on` is the fallback for the rare row that
+    // failed before `started_on` was stamped) keeps the two checks
+    // consistent: this gauge answers "did a job fail *last night*?", not
+    // "is there any failed row still in the table?". Stuck / active /
+    // retry counts stay un-bounded — those are inherently current state.
     const result = await db.execute(sql`
       select
-        count(*) filter (where state = 'failed') as failed,
+        count(*) filter (where state = 'failed' and coalesce(completed_on, created_on) > now() - interval '24 hours') as failed,
         count(*) filter (where state = 'active' and created_on < now() - interval '2 hours') as active_stuck,
         count(*) filter (where state = 'active') as active_total,
         count(*) filter (where state = 'retry') as retry
@@ -328,7 +342,7 @@ export async function checkPgBossQueue(): Promise<CheckResult> {
       const breakdown = await db.execute(sql`
         select name, count(*)::int as failed
         from pgboss.job
-        where state = 'failed'
+        where state = 'failed' and coalesce(completed_on, created_on) > now() - interval '24 hours'
         group by name
         order by count(*) desc
         limit 5
@@ -353,8 +367,8 @@ export async function checkPgBossQueue(): Promise<CheckResult> {
       };
       const summary =
         stuck > 0
-          ? `${stuck} stuck active · ${failed} failed · top: ${topQueue?.name ?? '(unknown)'} (${topQueue?.failed ?? 0})`
-          : `${failed} failed · top: ${topQueue?.name ?? '(unknown)'} (${topQueue?.failed ?? 0})`;
+          ? `${stuck} stuck active · ${failed} failed (24h) · top: ${topQueue?.name ?? '(unknown)'} (${topQueue?.failed ?? 0})`
+          : `${failed} failed (24h) · top: ${topQueue?.name ?? '(unknown)'} (${topQueue?.failed ?? 0})`;
       return { name: 'pgboss_queue', status, summary, detail };
     }
 
