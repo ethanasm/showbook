@@ -78,15 +78,24 @@ def make_favicon(svg_xml: str) -> None:
 
 
 def make_splash(svg_xml: str) -> None:
-    """iPhone 14 Pro Max splash (1284×2778). Centers the ticket and tucks a
-    wordmark below. resizeMode='cover' in app.config.ts means anything outside
-    the inner viewport gets trimmed on smaller devices, so keep content tight."""
-    W, H = 1284, 2778
-    # Ticket renders ~520px wide centered around 40% down — leaves room for the
-    # wordmark + tagline below without crowding the top notch on cropped devices.
-    ticket_size = 720
+    """Centered brand-mark splash (1080×1180).
+
+    expo-splash-screen (SDK 50+) renders the `image` as a *centered logo* sized
+    by `imageWidth` (see app.config.ts) — NOT a full-bleed background. A
+    full-screen composition with the mark floating in the middle therefore gets
+    scaled down into the centered splash slot and the logo + wordmark come out
+    unreadably small. So the asset is framed *tight*: the ticket, wordmark, and
+    tagline fill the canvas with only a small margin, and `backgroundColor` in
+    app.config.ts paints the rest of the screen the same #0C0C0C — seamless.
+    Keep this composition compact; don't reintroduce large empty margins."""
+    W, H = 1080, 1180
+    # Ticket up top, large. Wordmark + tagline tucked beneath it. Values chosen
+    # so the content block sits roughly centered with a tight, even margin.
+    ticket_size = 660
     ticket_x = (W - ticket_size) // 2
-    ticket_y = int(H * 0.36) - ticket_size // 2
+    ticket_y = 70
+    wordmark_baseline = ticket_y + ticket_size + 235
+    tagline_baseline = wordmark_baseline + 100
     splash_svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}">
   <rect width="{W}" height="{H}" fill="#0C0C0C"/>
   <g transform="translate({ticket_x} {ticket_y})">
@@ -94,12 +103,12 @@ def make_splash(svg_xml: str) -> None:
       {strip_background(svg_xml).split('<svg', 1)[1].split('>', 1)[1].rsplit('</svg>', 1)[0]}
     </svg>
   </g>
-  <text x="{W // 2}" y="{int(H * 0.55)}" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif"
-        font-weight="600" font-size="96" fill="#EDEDED" text-anchor="middle"
-        letter-spacing="-2">showbook</text>
-  <text x="{W // 2}" y="{int(H * 0.58)}" font-family="DejaVu Sans Mono, Liberation Mono, monospace"
-        font-weight="500" font-size="28" fill="#7A7A7A" text-anchor="middle"
-        letter-spacing="6">YOUR SHOWS, IN ORDER</text>
+  <text x="{W // 2}" y="{wordmark_baseline}" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif"
+        font-weight="700" font-size="184" fill="#EDEDED" text-anchor="middle"
+        letter-spacing="-5">showbook</text>
+  <text x="{W // 2}" y="{tagline_baseline}" font-family="DejaVu Sans Mono, Liberation Mono, monospace"
+        font-weight="500" font-size="42" fill="#7A7A7A" text-anchor="middle"
+        letter-spacing="9">YOUR SHOWS, IN ORDER</text>
 </svg>"""
     out = MOBILE_ASSETS / "splash.png"
     out.write_bytes(render_png(splash_svg, W, H))
