@@ -2,6 +2,11 @@ import { sql } from 'drizzle-orm';
 import { db } from '@showbook/db';
 import { child } from '@showbook/observability';
 import { queryAxiom as defaultQueryAxiom, axiomDataset } from './axiom';
+import {
+  fetchCiHealth as defaultFetchCiHealth,
+  type FetchCiHealthFn,
+  type CiWorkflowRun,
+} from './github';
 
 const log = child({ component: 'health-check.checks' });
 
@@ -513,6 +518,76 @@ export async function checkExternalApis(
         : `${failed.length}/${entries.length} external APIs failing: ${failed.join(', ')}`,
     detail: { perApi },
   };
+}
+
+// ── CI health check (GitHub Actions) ───────────────────────────────────
+
+/** Conclusions that mean a run is genuinely broken (vs. cancelled/skipped). */
+const CI_FAIL_CONCLUSIONS = new Set(['failure', 'timed_out', 'startup_failure']);
+/** Conclusions that warrant a heads-up but aren't a hard failure. */
+const CI_WARN_CONCLUSIONS = new Set(['cancelled', 'action_required', 'stale']);
+
+function classifyRun(run: CiWorkflowRun): 'fail' | 'warn' | 'ok' {
+  // Still running / queued — not a failure, just unsettled.
+  if (run.status !== 'completed' || run.conclusion === null) return 'ok';
+  if (CI_FAIL_CONCLUSIONS.has(run.conclusion)) return 'fail';
+  if (CI_WARN_CONCLUSIONS.has(run.conclusion)) return 'warn';
+  return 'ok';
+}
+
+/**
+ * Latest GitHub Actions run per workflow on the trunk branch, with each
+ * run's per-job breakdown surfaced in `detail.ci` for the email's CI
+ * section. Mirrors the Axiom-skip semantics: no token → `unknown` so the
+ * operator can tell "CI is green" apart from "we couldn't ask GitHub".
+ */
+export async function checkCiHealth(
+  fetchCi: FetchCiHealthFn = defaultFetchCiHealth,
+): Promise<CheckResult> {
+  const res = await fetchCi();
+
+  if (res.skipped) {
+    return {
+      name: 'ci_health',
+      status: 'unknown',
+      summary: 'GitHub token unset — skipped',
+    };
+  }
+  if (!res.ok || !res.data) {
+    return {
+      name: 'ci_health',
+      status: 'warn',
+      summary: `GitHub API query failed: ${res.error ?? 'unknown error'}`,
+    };
+  }
+
+  const { runs, branch } = res.data;
+  if (runs.length === 0) {
+    return {
+      name: 'ci_health',
+      status: 'warn',
+      summary: `No CI runs found on ${branch}`,
+      detail: { ci: res.data },
+    };
+  }
+
+  const failing = runs.filter((r) => classifyRun(r) === 'fail');
+  const warning = runs.filter((r) => classifyRun(r) === 'warn');
+
+  const status: CheckStatus =
+    failing.length > 0 ? 'fail' : warning.length > 0 ? 'warn' : 'ok';
+  const summary =
+    failing.length > 0
+      ? `${failing.length}/${runs.length} CI workflow${failing.length === 1 ? '' : 's'} failing on ${branch}: ${failing
+          .map((r) => r.workflowName)
+          .join(', ')}`
+      : warning.length > 0
+        ? `${warning.length}/${runs.length} CI workflow${warning.length === 1 ? '' : 's'} need attention on ${branch}: ${warning
+            .map((r) => r.workflowName)
+            .join(', ')}`
+        : `All ${runs.length} CI workflow${runs.length === 1 ? '' : 's'} green on ${branch}`;
+
+  return { name: 'ci_health', status, summary, detail: { ci: res.data } };
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────

@@ -203,6 +203,52 @@ const styles = {
       marginRight: '8px',
       verticalAlign: '2px',
     }) as React.CSSProperties,
+  ciRunWrap: {
+    margin: '0 0 18px',
+    paddingBottom: '14px',
+    borderBottom: `1px solid ${C.rule}`,
+  },
+  ciRunHead: {
+    fontSize: '15px',
+    fontWeight: 600,
+    color: C.ink,
+    letterSpacing: '-0.005em',
+    lineHeight: '20px',
+    margin: 0,
+  },
+  ciRunMeta: {
+    fontSize: '12px',
+    color: C.faint,
+    lineHeight: '16px',
+    margin: '4px 0 0',
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+    wordBreak: 'break-word' as const,
+  },
+  ciJobRow: {
+    fontSize: '13px',
+    color: C.muted,
+    lineHeight: '18px',
+    margin: '8px 0 0',
+    paddingLeft: '4px',
+  },
+  ciLink: {
+    color: C.muted,
+    textDecoration: 'underline',
+  },
+  jobBadge: (status: HealthCheckStatus) =>
+    ({
+      display: 'inline-block',
+      padding: '1px 6px',
+      fontSize: '9px',
+      fontWeight: 700,
+      letterSpacing: '0.06em',
+      textTransform: 'uppercase' as const,
+      color: status === 'warn' ? C.accentText : C.ink,
+      backgroundColor: STATUS_COLORS[status],
+      borderRadius: '999px',
+      marginRight: '8px',
+      verticalAlign: '1px',
+    }) as React.CSSProperties,
   footer: {
     padding: '20px 32px 28px',
     borderTop: `1px solid ${C.rule}`,
@@ -250,6 +296,162 @@ function summarizeDetail(detail: Record<string, unknown> | undefined): string | 
   }
 }
 
+// ── CI health (GitHub Actions) rendering ───────────────────────────────
+// The `ci_health` check ships a structured per-workflow / per-job payload
+// in `detail.ci` (see packages/jobs/src/health-check/github.ts). The
+// generic CheckRow truncates detail to 240 chars, which is useless for a
+// nested job list — so we pull this check out and render it as its own
+// section. These render types are a defensive local copy of the producer
+// shape; `extractCiData` validates so a malformed payload can never throw
+// inside the email.
+
+interface CiJobView {
+  name: string;
+  status: string;
+  conclusion: string | null;
+  url: string | null;
+}
+
+interface CiRunView {
+  workflowName: string;
+  runNumber: number | null;
+  status: string;
+  conclusion: string | null;
+  branch: string | null;
+  commitSha: string | null;
+  title: string | null;
+  url: string | null;
+  jobs: CiJobView[];
+}
+
+interface CiView {
+  repo: string;
+  branch: string;
+  runs: CiRunView[];
+}
+
+function asString(v: unknown): string | null {
+  return typeof v === 'string' && v.length > 0 ? v : null;
+}
+
+function extractCiData(detail: Record<string, unknown> | undefined): CiView | null {
+  const ci = detail?.ci;
+  if (!ci || typeof ci !== 'object') return null;
+  const obj = ci as Record<string, unknown>;
+  if (!Array.isArray(obj.runs)) return null;
+  const runs: CiRunView[] = obj.runs.map((r) => {
+    const run = (r ?? {}) as Record<string, unknown>;
+    const jobsRaw = Array.isArray(run.jobs) ? run.jobs : [];
+    return {
+      workflowName: asString(run.workflowName) ?? '(unnamed workflow)',
+      runNumber: typeof run.runNumber === 'number' ? run.runNumber : null,
+      status: asString(run.status) ?? 'unknown',
+      conclusion: asString(run.conclusion),
+      branch: asString(run.branch),
+      commitSha: asString(run.commitSha),
+      title: asString(run.title),
+      url: asString(run.url),
+      jobs: jobsRaw.map((j) => {
+        const job = (j ?? {}) as Record<string, unknown>;
+        return {
+          name: asString(job.name) ?? '(unnamed)',
+          status: asString(job.status) ?? 'unknown',
+          conclusion: asString(job.conclusion),
+          url: asString(job.url),
+        };
+      }),
+    };
+  });
+  return {
+    repo: asString(obj.repo) ?? '',
+    branch: asString(obj.branch) ?? '',
+    runs,
+  };
+}
+
+/** Map a GitHub Actions status/conclusion to a badge colour + label. */
+function ciBadge(status: string, conclusion: string | null): {
+  badge: HealthCheckStatus;
+  label: string;
+} {
+  if (status !== 'completed' || conclusion === null) {
+    return { badge: 'unknown', label: status.replace(/_/g, ' ') };
+  }
+  if (['failure', 'timed_out', 'startup_failure'].includes(conclusion)) {
+    return { badge: 'fail', label: conclusion.replace(/_/g, ' ') };
+  }
+  if (['cancelled', 'action_required', 'stale'].includes(conclusion)) {
+    return { badge: 'warn', label: conclusion.replace(/_/g, ' ') };
+  }
+  if (conclusion === 'success') return { badge: 'ok', label: 'success' };
+  // skipped / neutral / anything else — informational, not a failure.
+  return { badge: 'unknown', label: conclusion.replace(/_/g, ' ') };
+}
+
+function CiRun({ run }: { run: CiRunView }) {
+  const { badge, label } = ciBadge(run.status, run.conclusion);
+  const metaBits = [
+    run.runNumber != null ? `#${run.runNumber}` : null,
+    run.branch,
+    run.commitSha,
+    run.title,
+  ].filter((b): b is string => Boolean(b));
+  return (
+    <Section style={styles.ciRunWrap}>
+      <Text style={styles.ciRunHead}>
+        <span style={styles.badge(badge)}>{label}</span>
+        {run.url ? (
+          <Link href={run.url} style={styles.ciLink}>
+            {run.workflowName}
+          </Link>
+        ) : (
+          run.workflowName
+        )}
+      </Text>
+      {metaBits.length > 0 ? (
+        <Text style={styles.ciRunMeta}>{metaBits.join(' · ')}</Text>
+      ) : null}
+      {run.jobs.map((job, i) => {
+        const jb = ciBadge(job.status, job.conclusion);
+        return (
+          <Text key={`${run.workflowName}-job-${i}`} style={styles.ciJobRow}>
+            <span style={styles.jobBadge(jb.badge)}>{jb.label}</span>
+            {job.url ? (
+              <Link href={job.url} style={styles.ciLink}>
+                {job.name}
+              </Link>
+            ) : (
+              job.name
+            )}
+          </Text>
+        );
+      })}
+    </Section>
+  );
+}
+
+function CiSection({ row }: { row: HealthCheckSummaryRow }) {
+  const ci = extractCiData(row.detail);
+  return (
+    <>
+      <Hr style={styles.sectionDivider} />
+      <Section style={styles.section}>
+        <Text style={styles.sectionTitle}>
+          CI Health
+          {ci?.branch ? ` · ${ci.branch}` : ''}
+        </Text>
+        <Text style={styles.rowMeta}>
+          <span style={styles.badge(row.status)}>{STATUS_LABEL[row.status]}</span>
+          {row.summary}
+        </Text>
+        {ci && ci.runs.length > 0
+          ? ci.runs.map((run) => <CiRun key={run.workflowName} run={run} />)
+          : null}
+      </Section>
+    </>
+  );
+}
+
 function CheckRow({ row }: { row: HealthCheckSummaryRow }) {
   const detail = summarizeDetail(row.detail);
   return (
@@ -271,16 +473,29 @@ export function HealthSummary({
   appUrl,
   preamble,
 }: HealthSummaryProps) {
-  const failing = checks.filter((c) => c.status === 'fail');
-  const warning = checks.filter((c) => c.status === 'warn');
-  const unknown = checks.filter((c) => c.status === 'unknown');
-  const passing = checks.filter((c) => c.status === 'ok');
+  // CI health renders as its own section with a per-job breakdown, so
+  // pull it out of the generic status buckets (it carries a large nested
+  // detail payload the compact CheckRow can't show). It still counts
+  // toward the hero's overall severity via `checks`.
+  const ciCheck = checks.find((c) => c.name === 'ci_health');
+  const generic = checks.filter((c) => c.name !== 'ci_health');
+  const failing = generic.filter((c) => c.status === 'fail');
+  const warning = generic.filter((c) => c.status === 'warn');
+  const unknown = generic.filter((c) => c.status === 'unknown');
+  const passing = generic.filter((c) => c.status === 'ok');
+
+  // Hero counts span every check (CI included) so the headline matches the
+  // rolled-up `status`, even when CI is the only thing failing.
+  const allFailing = checks.filter((c) => c.status === 'fail').length;
+  const allWarning = checks.filter((c) => c.status === 'warn').length;
+  const allUnknown = checks.filter((c) => c.status === 'unknown').length;
+  const allPassing = checks.filter((c) => c.status === 'ok').length;
 
   const previewText =
     status === 'fail'
-      ? `${failing.length} failing check${failing.length === 1 ? '' : 's'}`
+      ? `${allFailing} failing check${allFailing === 1 ? '' : 's'}`
       : status === 'warn'
-        ? `${warning.length} warning${warning.length === 1 ? '' : 's'}`
+        ? `${allWarning} warning${allWarning === 1 ? '' : 's'}`
         : status === 'unknown'
           ? 'Health check could not query Axiom'
           : 'All checks passing';
@@ -296,9 +511,9 @@ export function HealthSummary({
 
   const headline =
     status === 'fail'
-      ? `${failing.length} failing · ${warning.length} warning`
+      ? `${allFailing} failing · ${allWarning} warning`
       : status === 'warn'
-        ? `${warning.length} warning${warning.length === 1 ? '' : 's'}`
+        ? `${allWarning} warning${allWarning === 1 ? '' : 's'}`
         : status === 'unknown'
           ? 'Some checks could not be evaluated'
           : 'Everything looks healthy';
@@ -332,13 +547,15 @@ export function HealthSummary({
               ))
             ) : (
               <Text style={styles.greet}>
-                {passing.length}/{checks.length} checks passing
-                {unknown.length > 0
-                  ? ` · ${unknown.length} unknown (Axiom token unset?)`
+                {allPassing}/{checks.length} checks passing
+                {allUnknown > 0
+                  ? ` · ${allUnknown} unknown (Axiom/GitHub token unset?)`
                   : ''}
               </Text>
             )}
           </Section>
+
+          {ciCheck ? <CiSection row={ciCheck} /> : null}
 
           {failing.length > 0 ? (
             <>
