@@ -3,10 +3,11 @@ import type { ExpoConfig } from 'expo/config';
 // Asset files in ./assets are the production brand assets — the gold
 // ticket BrandMark. icon.png is 1024×1024 with the #0C0C0C background
 // baked in; adaptive-icon.png is the same foreground on transparent so
-// Android can composite it over the bg color below; splash.png is
-// 1284×2778 (iPhone 14 Pro Max) and resizeMode 'cover' trims it on
-// smaller devices. The source SVG + render script live under
-// `assets/logo-mocks/` so the masters stay revisable.
+// Android can composite it over the bg color below; splash.png is a
+// 1080×1180 tightly-framed mark rendered as a centered logo (sized via
+// the splash plugin's `imageWidth` below), not a full-bleed background.
+// The source SVG + render script live under `assets/logo-mocks/` so the
+// masters stay revisable.
 //
 // Google Maps API key (used by react-native-maps on the Map tab):
 //   EXPO_PUBLIC_GOOGLE_MAPS_API_KEY  — single key sourced from the user's
@@ -172,21 +173,32 @@ const config: ExpoConfig = {
     [
       'expo-splash-screen',
       {
-        // Light splash (default). When the asset is replaced with real
-        // artwork, the gold-on-black brand mark renders against the
-        // bg color below for the brief moment Expo holds the splash.
+        // splash.png is a *tightly-framed* gold-on-black brand mark (ticket +
+        // "showbook" wordmark + tagline filling the canvas — see
+        // assets/logo-mocks/_build_assets.py make_splash). expo-splash-screen
+        // renders `image` as a centered logo, so it's sized by `imageWidth`
+        // (dp) and centered on `backgroundColor`, NOT scaled to full-bleed.
+        // `resizeMode: 'contain'` keeps the mark intact; `imageWidth: 300`
+        // makes it large and legible (~75% of a phone's width) instead of the
+        // tiny middle-of-screen logo the old full-screen `cover` asset produced.
+        // `enableFullScreenImage_legacy` opts Android out of the Android-12
+        // masked-circle splash icon (which would crop the wordmark) and back
+        // into the full-screen drawable, matching the iOS storyboard.
         image: './assets/splash.png',
+        imageWidth: 300,
         backgroundColor: '#0C0C0C',
-        resizeMode: 'cover',
+        resizeMode: 'contain',
+        enableFullScreenImage_legacy: true,
         // Dark-mode variant. Kicks in when userInterfaceStyle resolves
         // to `dark`. Showbook is dark-everywhere so this differs only
-        // in the explicit `backgroundColor` hint to native splash —
-        // until the real splash-dark.png exists, the file points at
-        // the same placeholder.
+        // in the explicit `backgroundColor` hint to native splash; the
+        // asset is already gold-on-#0C0C0C so it reuses the same file.
         dark: {
           image: './assets/splash.png',
+          imageWidth: 300,
           backgroundColor: '#0C0C0C',
-          resizeMode: 'cover',
+          resizeMode: 'contain',
+          enableFullScreenImage_legacy: true,
         },
       },
     ],
