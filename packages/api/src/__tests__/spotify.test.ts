@@ -5,7 +5,12 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { SpotifyError, getFollowedArtists, searchSpotifyArtist } from '../spotify';
+import {
+  SpotifyError,
+  getArtistAlbums,
+  getFollowedArtists,
+  searchSpotifyArtist,
+} from '../spotify';
 
 let origFetch: typeof globalThis.fetch;
 
@@ -148,6 +153,47 @@ describe('getFollowedArtists', () => {
 
     const result = await getFollowedArtists('t');
     assert.equal(result.length, 1000);
+  });
+});
+
+describe('spotifyFetch 429 handling', () => {
+  it('retries on 429 then succeeds', async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      if (calls < 3) {
+        // Retry-After: 0 keeps the test fast (sleep is Math.min(0,5)*1000).
+        return new Response('rate limited', {
+          status: 429,
+          headers: { 'Retry-After': '0' },
+        });
+      }
+      return jsonResponse({ items: [] });
+    }) as typeof globalThis.fetch;
+
+    const result = await getArtistAlbums('artist-1', 'token');
+    assert.deepEqual(result, []);
+    assert.equal(calls, 3, 'two 429 retries then a success');
+  });
+
+  it('throws SpotifyError(429) after exhausting the retry budget', async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      return new Response('rate limited', {
+        status: 429,
+        headers: { 'Retry-After': '0' },
+      });
+    }) as typeof globalThis.fetch;
+
+    await assert.rejects(getArtistAlbums('artist-1', 'token'), (err: unknown) => {
+      assert.ok(err instanceof SpotifyError);
+      assert.equal((err as SpotifyError).status, 429);
+      return true;
+    });
+    // Initial attempt + 5 bounded retries = 6 fetches; it does not recurse
+    // forever.
+    assert.equal(calls, 6);
   });
 });
 
