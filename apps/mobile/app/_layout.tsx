@@ -66,6 +66,7 @@ import { PendingWritesDrawer } from '../components/PendingWritesDrawer';
 import { PreviewMiniPlayer } from '../components/PreviewMiniPlayer';
 import { PreviewPlayerProvider } from '@/lib/preview-player-provider';
 import { SpotifySdkMount } from '../components/SpotifySdkMount';
+import { BrandSplash } from '../components/BrandSplash';
 import { readAndParsePkpassUri } from '@/lib/wallet/read-pkpass-uri';
 
 // Keep the splash screen up until fonts are ready. Errors here are
@@ -75,22 +76,38 @@ SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 export default function RootLayout(): React.JSX.Element {
   const [fontsLoaded, setFontsLoaded] = React.useState(false);
+  // Minimum on-screen time for the JS BrandSplash so it doesn't flash by on a
+  // warm start where fonts resolve almost instantly.
+  const [minSplashElapsed, setMinSplashElapsed] = React.useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
+    // Dismiss the native splash as soon as JS is mounted and hand off to the
+    // full-screen <BrandSplash/> below. The native splash on Android 12+ can
+    // only render a small circle-masked icon, so we keep it up for the
+    // shortest possible window and let our own splash be the readable logo +
+    // wordmark the user actually sees. Both share the #0C0C0C background, so
+    // the swap is seamless.
+    SplashScreen.hideAsync().catch(() => undefined);
+    const timer = setTimeout(() => {
+      if (!cancelled) setMinSplashElapsed(true);
+    }, 1100);
     loadAppFonts()
       .catch(() => undefined)
       .finally(() => {
         if (cancelled) return;
         setFontsLoaded(true);
-        SplashScreen.hideAsync().catch(() => undefined);
       });
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, []);
 
-  if (!fontsLoaded) return <></>;
+  // Keep the branded splash up until fonts are ready (so the first painted
+  // frame of the real UI isn't a flash of fallback-font text) and the minimum
+  // display time has elapsed.
+  if (!fontsLoaded || !minSplashElapsed) return <BrandSplash />;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
