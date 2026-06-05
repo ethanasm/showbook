@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import {
@@ -29,6 +29,7 @@ import {
 import { MediaSection } from "@/components/media";
 import { ShowTabs } from "./ShowTabs";
 import { OverviewTab, type OverviewLineupEntry } from "./OverviewTab";
+import { DeleteShowConfirmModal } from "./DeleteShowConfirmModal";
 import { SetlistTab, SetlistTabComingSoon, type ActualSong } from "./SetlistTab";
 import {
   FestivalSetlistTab,
@@ -92,6 +93,11 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
   const isPast = show.state === "past";
   const isFestival = show.kind === "festival";
 
+  // Drives the delete-confirmation popup. Replaces the old
+  // `window.confirm()` so the destructive action gets a styled,
+  // dismissable Delete / Cancel prompt.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
   // Predicted-setlist query. Eligibility gate lives server-side; the
   // procedure returns the cold empty state for non-concert/festival
   // shows automatically.
@@ -150,6 +156,11 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
     meta: { successToast: "Show deleted" },
     onSuccess: () => {
       router.push(isPast ? "/logbook" : "/upcoming");
+    },
+    onError: () => {
+      // Keep the user on the page so they can retry; the modal closed
+      // optimistically on confirm, so just drop the in-flight flag.
+      setConfirmingDelete(false);
     },
   });
 
@@ -316,9 +327,14 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
     router.push(`/add?editId=${show.id}`);
   }, [router, show.id]);
   const handleDelete = useCallback(() => {
-    if (!window.confirm("Delete this show? This cannot be undone.")) return;
+    setConfirmingDelete(true);
+  }, []);
+  const handleConfirmDelete = useCallback(() => {
     void deleteShow.mutateAsync({ showId: show.id });
   }, [deleteShow, show.id]);
+  const handleCancelDelete = useCallback(() => {
+    setConfirmingDelete(false);
+  }, []);
   const handleSaveNotes = useCallback(
     async (next: string) => {
       await setNotes.mutateAsync({ showId: show.id, notes: next });
@@ -478,6 +494,14 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
       }}
     >
       <FullTrackDriverMount />
+      {confirmingDelete && (
+        <DeleteShowConfirmModal
+          showName={headlinerName}
+          deleting={deleteShow.isPending}
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+        />
+      )}
       <ShowHeaderStrip
         show={show}
         showPrimingStat={isPast}

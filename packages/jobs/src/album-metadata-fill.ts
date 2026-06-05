@@ -28,6 +28,14 @@
  * processed stalest-first (oldest / never-fetched album metadata) so a
  * budget-truncated run still makes forward progress across the whole
  * corpus over successive nights rather than re-refreshing the same head.
+ *
+ * Rate limiting: `spotifyFetch` bounds its 429 retry/backoff per call
+ * (it no longer recurses forever), so a sustained 429 storm surfaces here
+ * as a thrown `SpotifyError(status=429)`. We stop the run cleanly on the
+ * first such throw — burning the rest of the budget on calls that will
+ * keep getting 429'd just risks overrunning the pg-boss expiry again and
+ * floods `error_volume` with per-performer errors. The stalest-first
+ * ordering means the skipped performers lead the next night's run.
  */
 
 import './load-env-local';
@@ -209,6 +217,28 @@ export async function runAlbumMetadataFill(
     } catch (err) {
       failed += 1;
       const status = err instanceof SpotifyError ? err.status : undefined;
+
+      // A 429 means `spotifyFetch` already exhausted its per-call retry +
+      // backoff budget before throwing, so Spotify is rate-limiting the app
+      // token hard. Stop the run cleanly with partial progress rather than
+      // burning the rest of the budget on calls that will keep getting 429'd
+      // — and rather than logging a per-performer error for each, which would
+      // trip the `error_volume` health check. Performers are processed
+      // stalest-first, so the ones we skip lead the next night's run. This
+      // mirrors the setlist.fm corpus-fill `rate_limited` clean-exit.
+      if (status === 429) {
+        log.warn(
+          {
+            event: 'album_metadata_fill.rate_limited',
+            attempted,
+            performersUpdated,
+            albumsUpserted,
+            failed,
+          },
+          'Spotify rate limit exhausted retries; stopping run with partial progress',
+        );
+        break;
+      }
 
       // A 401 from the catalog API after `withAppToken`'s fresh-token
       // retry can mean one of two things:
