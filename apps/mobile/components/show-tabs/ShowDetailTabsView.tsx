@@ -15,6 +15,7 @@
 
 import React from 'react';
 import {
+  Alert,
   Linking,
   Pressable,
   RefreshControl,
@@ -350,6 +351,26 @@ export function ShowDetailTabsView({
       router.replace('/(tabs)/shows');
     },
   });
+  // Delete is irreversible, so the Overview "Delete" pill confirms via
+  // Alert.alert before firing — mirroring ShowActionSheet.askDelete (and
+  // the web DeleteShowConfirmModal) so both delete entry points on the
+  // detail screen get a Cancel / Delete prompt.
+  const confirmDelete = React.useCallback(() => {
+    Alert.alert(
+      'Delete this show?',
+      'This removes the show, its setlists, and any tagged media. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void deleteShow.mutateAsync({ showId: show.id });
+          },
+        },
+      ],
+    );
+  }, [deleteShow, show.id]);
 
   // ──────────────────────────── Panels ────────────────────────────
   const overviewCells = React.useMemo(() => {
@@ -467,9 +488,7 @@ export function ShowDetailTabsView({
           label: 'Delete',
           danger: true,
           testID: 'action-delete-show',
-          onPress: () => {
-            void deleteShow.mutateAsync({ showId: show.id });
-          },
+          onPress: confirmDelete,
         },
       ]}
       isPast={isPast}
