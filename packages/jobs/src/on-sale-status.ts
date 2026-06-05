@@ -1,6 +1,11 @@
 import type { TMEvent } from '@showbook/api';
 
-export type OnSaleStatus = 'announced' | 'presale' | 'on_sale' | 'sold_out';
+export type OnSaleStatus =
+  | 'announced'
+  | 'presale'
+  | 'on_sale'
+  | 'sold_out'
+  | 'cancelled';
 
 // TM Discovery API uses American spelling 'canceled'; accept both defensively.
 function isCanceled(event: TMEvent): boolean {
@@ -30,7 +35,10 @@ function isCurrentlyInPresale(event: TMEvent, now: Date): boolean {
 }
 
 export function determineOnSaleStatus(event: TMEvent): OnSaleStatus {
-  if (isCanceled(event)) return 'sold_out';
+  // A cancelled event is a distinct outcome from "sold out" — the show
+  // isn't happening at all. TM surfaces this as dates.status.code
+  // ='canceled' (and we accept the British spelling defensively).
+  if (isCanceled(event)) return 'cancelled';
 
   const now = new Date();
   const publicSale = event.sales?.public;

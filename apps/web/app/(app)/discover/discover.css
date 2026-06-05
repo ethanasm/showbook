@@ -670,32 +670,45 @@ a.discover-row__headliner-link:hover {
   border: 1px solid var(--rule-strong);
 }
 
-/* Sold-out rows get tasteful diagonal stripes layered behind the cells so
-   they're recognisable at a glance without obscuring the text. The stripe
-   colour leans on `--rule` so it adapts to both light and dark themes. */
-.discover-row.discover-row--sold-out {
+/* Cancelled is a distinct outcome from sold out — the show isn't happening
+   at all. Give it a red-tinted badge so it reads as "called off" rather than
+   "no tickets left". The colour matches the form-error red used elsewhere. */
+.discover-row__status-badge--cancelled {
+  color: #e63946;
+  background: transparent;
+  border: 1px solid #e63946;
+}
+
+/* Sold-out and cancelled rows get diagonal stripes layered behind the cells
+   so they're recognisable at a glance without obscuring the text. Wider, 2px
+   stripes (`--rule-strong`) make the struck-through treatment more pronounced
+   than the original hairline; the colour adapts to both light and dark themes. */
+.discover-row.discover-row--sold-out,
+.discover-row.discover-row--cancelled {
   background-image: repeating-linear-gradient(
     -45deg,
     transparent 0,
-    transparent 8px,
-    var(--rule) 8px,
-    var(--rule) 9px
+    transparent 5px,
+    var(--rule-strong) 5px,
+    var(--rule-strong) 7px
   );
 }
 
-.discover-row.discover-row--sold-out:hover {
+.discover-row.discover-row--sold-out:hover,
+.discover-row.discover-row--cancelled:hover {
   background-image: repeating-linear-gradient(
     -45deg,
     transparent 0,
-    transparent 8px,
-    var(--rule) 8px,
-    var(--rule) 9px
+    transparent 5px,
+    var(--rule-strong) 5px,
+    var(--rule-strong) 7px
   );
   background-color: rgba(245, 245, 243, 0.04);
 }
 
-/* Watched + sold-out: keep the accent tint, layer stripes on top. */
-.discover-row.discover-row--sold-out.discover-row--watched {
+/* Watched + sold-out/cancelled: keep the accent tint, layer stripes on top. */
+.discover-row.discover-row--sold-out.discover-row--watched,
+.discover-row.discover-row--cancelled.discover-row--watched {
   background-color: var(--accent-faded);
 }
 

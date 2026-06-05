@@ -33,7 +33,7 @@ export interface NormalizedEvent {
   /** Resolved performer ids for support acts, parallel to `support`. */
   supportPerformerIds: string[] | null;
   onSaleDate: Date | null;
-  onSaleStatus: 'announced' | 'presale' | 'on_sale' | 'sold_out';
+  onSaleStatus: 'announced' | 'presale' | 'on_sale' | 'sold_out' | 'cancelled';
   source: 'ticketmaster' | 'manual' | 'scraped';
   ticketUrl: string | null;
 }
@@ -61,7 +61,7 @@ export interface EventRun {
   supportPerformerIds: string[] | null;
   /** Earliest on-sale date across the run (most relevant for "tickets coming"). */
   onSaleDate: Date | null;
-  onSaleStatus: 'announced' | 'presale' | 'on_sale' | 'sold_out';
+  onSaleStatus: 'announced' | 'presale' | 'on_sale' | 'sold_out' | 'cancelled';
   source: 'ticketmaster' | 'manual' | 'scraped';
   ticketUrl: string | null;
 }
@@ -182,6 +182,7 @@ const STATUS_RANK: Record<NormalizedEvent['onSaleStatus'], number> = {
   presale: 1,
   sold_out: 2,
   announced: 3,
+  cancelled: 4,
 };
 
 function mergeCluster(cluster: NormalizedEvent[]): NormalizedEvent {
@@ -273,7 +274,9 @@ function makeRun(cluster: NormalizedEvent[]): EventRun {
           ? 'presale'
           : statuses.size === 1 && statuses.has('sold_out')
             ? 'sold_out'
-            : 'announced';
+            : statuses.size === 1 && statuses.has('cancelled')
+              ? 'cancelled'
+              : 'announced';
 
   // For festivals, the support list is the union of every day's lineup —
   // otherwise picking a single representative event would throw away two

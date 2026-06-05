@@ -65,8 +65,10 @@ type ShowData = {
 
 const ON_SALE_STATUS_LABELS: Record<string, string> = {
   announced: "announced",
+  presale: "presale",
   on_sale: "on sale",
   sold_out: "sold out",
+  cancelled: "cancelled",
 };
 
 
