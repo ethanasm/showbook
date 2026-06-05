@@ -257,6 +257,33 @@ describe('runAlbumMetadataFill', () => {
     assert.equal(countEvent('album_metadata_fill.performer_failed'), 4);
   });
 
+  it('stops cleanly on a 429 (rate limit) with partial progress', async () => {
+    // p1 succeeds, then Spotify rate-limits (spotifyFetch already exhausted
+    // its retry budget and threw a 429). The run stops cleanly rather than
+    // logging one performer_failed error per remaining performer (which
+    // would trip error_volume) or grinding toward the pg-boss expiry.
+    SCRIPT.performers = [
+      { id: 'p1', spotifyArtistId: 'a1', name: 'One' },
+      { id: 'p2', spotifyArtistId: 'a2', name: 'Two' },
+      { id: 'p3', spotifyArtistId: 'a3', name: 'Three' },
+    ];
+    SCRIPT.albumsByArtist.set('a1', [
+      { id: 'al1', name: 'A1', releaseDate: '2026-01-01', albumType: 'album' },
+    ]);
+    SCRIPT.tracksByAlbum.set('al1', ['t1']);
+    SCRIPT.errorByArtist.set('a2', new FakeSpotifyError('rate limit', 429));
+
+    const res = await mod.runAlbumMetadataFill();
+
+    // Bailed at p2 rather than attempting p3.
+    assert.equal(res.attempted, 2);
+    assert.equal(res.failed, 1);
+    assert.equal(res.performersUpdated, 1);
+    assert.equal(countEvent('album_metadata_fill.rate_limited'), 1);
+    assert.equal(countEvent('album_metadata_fill.performer_failed'), 0);
+    assert.equal(countEvent('album_metadata_fill.auth_rejected'), 0);
+  });
+
   it('stops cleanly when the wall-clock budget is exhausted', async () => {
     SCRIPT.performers = [
       { id: 'p1', spotifyArtistId: 'a1', name: 'One' },

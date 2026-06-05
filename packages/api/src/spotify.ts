@@ -82,9 +82,24 @@ function pickImage(images: SpotifyArtistRaw['images']): string | null {
   return sorted[0]?.url ?? null;
 }
 
+/**
+ * Maximum 429 retries for a single `spotifyFetch` call. With the per-retry
+ * sleep capped at 5s, this bounds a single call to ~25s of backoff before it
+ * throws a `SpotifyError(status=429)` instead of recursing forever. The cap
+ * matters for the batch crons (album-metadata-fill in particular): an
+ * unbounded recursion let a single performer iteration run arbitrarily long
+ * under a sustained 429 storm, blowing past the job's 1800s pg-boss
+ * `expireInSeconds` mid-iteration — the job's between-performer wall-clock
+ * budget can't catch that — so the run was killed into pg-boss `failed`
+ * state and tripped the `pgboss_queue` morning health check. Callers already
+ * handle `SpotifyError`, so a bounded throw degrades gracefully.
+ */
+const MAX_429_RETRIES = 5;
+
 async function spotifyFetch(
   url: string,
   accessToken: string,
+  attempt = 0,
 ): Promise<Response> {
   const startedAt = Date.now();
   const response = await fetch(url, {
@@ -93,15 +108,25 @@ async function spotifyFetch(
   });
   const durationMs = Date.now() - startedAt;
   if (response.status === 429) {
+    if (attempt >= MAX_429_RETRIES) {
+      log.warn(
+        { event: 'spotify.request.rate_limited_exhausted', attempt, durationMs },
+        'Spotify 429 retry budget exhausted',
+      );
+      throw new SpotifyError(
+        `Spotify rate limit: ${MAX_429_RETRIES} retries exhausted`,
+        429,
+      );
+    }
     const retryAfter = Number(response.headers.get('Retry-After') ?? '2');
     log.warn(
-      { event: 'spotify.request.rate_limited', retryAfter, durationMs },
+      { event: 'spotify.request.rate_limited', retryAfter, attempt, durationMs },
       'Spotify 429, retrying',
     );
     await new Promise((resolve) =>
       setTimeout(resolve, Math.min(retryAfter, 5) * 1000),
     );
-    return spotifyFetch(url, accessToken);
+    return spotifyFetch(url, accessToken, attempt + 1);
   }
   if (!response.ok) {
     log.warn(
