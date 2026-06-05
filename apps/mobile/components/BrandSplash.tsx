@@ -1,62 +1,36 @@
 /**
  * BrandSplash — the in-app launch splash.
  *
- * The native splash (expo-splash-screen, configured in app.config.ts) can
- * only do so much: on Android 12+ the system splash is a small, circle-masked
- * centered icon — a wide "showbook" wordmark can't render there at a readable
- * size no matter how the asset is framed. So we keep the native splash on
- * screen for the shortest possible window (just until JS mounts) and hand off
- * to this full-screen React splash, which we fully control and which renders a
- * large, legible logo + wordmark + tagline on both platforms.
+ * On cold launch iOS/Android paint a *native* splash first (the storyboard /
+ * drawable generated from the `expo-splash-screen` config in app.config.ts),
+ * then hand off to JS once React Native has initialised. To make that handoff
+ * seamless — no size "pop", no flash — this renders the **same `splash.png`
+ * asset** with the **same fit** (`contain` on the #0C0C0C background) that the
+ * native splash uses. The two are then pixel-identical, so the transition from
+ * the native splash to this one is invisible; the root layout simply holds this
+ * until fonts are ready (see app/_layout.tsx).
  *
- * Colors are hard-coded to the dark brand palette (DARK_COLORS) rather than
- * pulled from the theme so this can render *outside* ThemeProvider, before the
- * provider tree (and custom fonts) are ready. The mark is drawn inline with
- * react-native-svg using the same ticket path as `BrandMark`, sized large.
- * Text uses the system bold sans so it looks right even before Geist loads.
+ * Using the bundled asset (not a redrawn SVG) is deliberate: it guarantees the
+ * JS splash matches whatever the native splash shows, and the background color
+ * matches too, so even the frame before the image decodes is the right color.
  */
 
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import Svg, { G, Path, Text as SvgText } from 'react-native-svg';
+import { View, Image, StyleSheet } from 'react-native';
 
 const BG = '#0C0C0C';
-const ACCENT = '#FFD166';
-const INK = '#F5F5F3';
-const MUTED = 'rgba(245,245,243,0.55)';
-const S_INK = '#0B0B0A';
 
-const TICKET_PATH =
-  'M 14.5 18 H 49.5 A 3.5 3.5 0 0 1 53 21.5 V 30 A 3.75 3.75 0 0 0 49.25 33.75 A 3.75 3.75 0 0 0 53 37.5 V 42.5 A 3.5 3.5 0 0 1 49.5 46 H 14.5 A 3.5 3.5 0 0 1 11 42.5 V 37.5 A 3.75 3.75 0 0 0 14.75 33.75 A 3.75 3.75 0 0 0 11 30 V 21.5 A 3.5 3.5 0 0 1 14.5 18 Z';
-
-export interface BrandSplashProps {
-  /** Mark size in px. Default 132 — large enough to read the punch-through S. */
-  markSize?: number;
-}
-
-export function BrandSplash({ markSize = 132 }: BrandSplashProps): React.JSX.Element {
+export function BrandSplash(): React.JSX.Element {
   return (
     <View style={styles.root}>
-      <View style={styles.center}>
-        <Svg width={markSize} height={markSize} viewBox="0 0 64 64" accessibilityLabel="Showbook">
-          <G originX={32} originY={32} rotation={-6}>
-            <Path fill={ACCENT} fillRule="evenodd" d={TICKET_PATH} />
-            <SvgText
-              x={32}
-              y={41.5}
-              fontSize={26}
-              fontWeight="900"
-              fill={S_INK}
-              textAnchor="middle"
-              fontFamily="System"
-            >
-              S
-            </SvgText>
-          </G>
-        </Svg>
-        <Text style={styles.wordmark}>showbook</Text>
-        <Text style={styles.tagline}>YOUR SHOWS, IN ORDER</Text>
-      </View>
+      <Image
+        // Same asset the native splash is generated from — keeps the
+        // native→JS handoff seamless.
+        source={require('../assets/splash.png')}
+        resizeMode="contain"
+        style={styles.image}
+        accessibilityLabel="Showbook"
+      />
     </View>
   );
 }
@@ -72,22 +46,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  center: {
-    alignItems: 'center',
-    gap: 20,
-  },
-  wordmark: {
-    color: INK,
-    fontSize: 46,
-    fontWeight: '800',
-    letterSpacing: -1,
-    marginTop: 4,
-  },
-  tagline: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '500',
-    letterSpacing: 3.5,
+  image: {
+    width: '100%',
+    height: '100%',
   },
 });
 
