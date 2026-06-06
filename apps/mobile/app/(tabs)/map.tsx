@@ -1220,11 +1220,16 @@ const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   modeStrip: {
     paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 8,
+    // No top padding: the large TopBar already supplies the header gap, so
+    // the lone (post-kind-strip-removal) filter row sits tight under it
+    // instead of floating in blank space. Centred so the four chips read as
+    // a balanced group rather than left-anchored.
+    paddingTop: 0,
+    paddingBottom: 10,
     gap: 8,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   // Mode chips size to their label (not equal-width) and may shrink to fit
   // a narrow screen instead of overflowing the fixed, non-scrolling row.

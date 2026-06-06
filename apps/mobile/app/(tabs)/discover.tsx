@@ -741,6 +741,7 @@ export default function DiscoverScreen(): React.JSX.Element {
           }}
           totalCount={items.length}
           hideCounts
+          hideInlineSublabel
           testIdPrefix="discover-group"
           pickerTitle={groupPickerTitle(tab)}
           leadingAction={{
