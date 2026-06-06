@@ -205,6 +205,49 @@ function trpcKey(path: readonly string[], input: unknown): QueryKey {
 }
 
 // ---------------------------------------------------------------------------
+// Discover-feed seed guard
+// ---------------------------------------------------------------------------
+//
+// The Discover screen and this warm-up both write the same three feed cache
+// keys, but at different page sizes: the screen fetches the FULL set
+// (`limit: 100` / default `perRegionLimit`) on focus, while warm-up fetches a
+// deliberately tiny snapshot (`limit: 12` / `perRegionLimit: 8`) so a cold
+// offline open renders *something* without bloating the persisted cache.
+//
+// Writing the snapshot unconditionally *raced* the screen's own fetch: when
+// warm-up's request resolved AFTER the screen's full refetch (warm-up reaches
+// the nearbyFeed step only after ~10 serial phase-1 calls, so this was the
+// common case on a quick tab tap), the small snapshot clobbered the full feed
+// back to "1 upcoming" — and nothing re-triggered a fetch, so the user was
+// stuck until a manual pull-to-refresh. That's the regression #496's
+// `refetchOnMount: 'always'` couldn't fix, because the clobber happens after
+// the mount refetch already won.
+//
+// The guard: seed only when the snapshot wouldn't SHRINK what's already
+// cached. A first seed (empty cache) and a legitimate refresh (snapshot
+// equal-or-larger) both write; a smaller snapshot landing on top of the
+// screen's full feed is dropped. Warm-up keeps its offline-seeding job
+// without ever downgrading the live screen.
+
+function feedItemCount(value: unknown): number {
+  if (value && typeof value === 'object' && 'items' in value) {
+    const items = (value as { items?: unknown }).items;
+    return Array.isArray(items) ? items.length : 0;
+  }
+  return 0;
+}
+
+function seedDiscoverFeed(
+  qc: QueryClient,
+  key: QueryKey,
+  data: unknown,
+): void {
+  if (feedItemCount(data) >= feedItemCount(qc.getQueryData(key))) {
+    qc.setQueryData(key, data);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Concurrency helper
 // ---------------------------------------------------------------------------
 
@@ -382,24 +425,26 @@ export async function warmCacheForOfflineUse(
   // fetch (`followedFeed`/`followedArtistsFeed` `limit: 12` vs the screen's
   // `100`; `nearbyFeed` `perRegionLimit: 8` vs the screen's default `2500`).
   // The screen treats this as a placeholder and refetches the full set on
-  // mount (`refetchOnMount: 'always'` in `app/(tabs)/discover.tsx`) — so the
-  // user sees the cached rows instantly and the bulk fills in automatically
-  // online, rather than being pinned to "8 venues" until a manual refresh.
+  // focus — so the user sees the cached rows instantly and the bulk fills in
+  // automatically online, rather than being pinned to "8 venues" until a
+  // manual refresh. `seedDiscoverFeed` keeps this snapshot from clobbering
+  // the screen's full feed when warm-up's request loses the race and resolves
+  // after it (see the guard's docblock above).
   await step('discover.followedFeed', async () => {
     const data = await c.discover.followedFeed.query({ limit: 12 });
-    qc.setQueryData(['mobile', 'discover', 'followedFeed'], data);
+    seedDiscoverFeed(qc, ['mobile', 'discover', 'followedFeed'], data);
     return data;
   });
 
   await step('discover.followedArtistsFeed', async () => {
     const data = await c.discover.followedArtistsFeed.query({ limit: 12 });
-    qc.setQueryData(['mobile', 'discover', 'followedArtistsFeed'], data);
+    seedDiscoverFeed(qc, ['mobile', 'discover', 'followedArtistsFeed'], data);
     return data;
   });
 
   await step('discover.nearbyFeed', async () => {
     const data = await c.discover.nearbyFeed.query({ perRegionLimit: 8 });
-    qc.setQueryData(['mobile', 'discover', 'nearbyFeed'], data);
+    seedDiscoverFeed(qc, ['mobile', 'discover', 'nearbyFeed'], data);
     return data;
   });
 
