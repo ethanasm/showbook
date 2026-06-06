@@ -1,36 +1,5 @@
-import { isDatePast } from "@showbook/shared";
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-/**
- * True when a chat-parsed date hint is a usable calendar date that is
- * today or later. Ticketmaster's Discovery API only exposes upcoming
- * events, so a past — or absent / malformed — date means the chat flow
- * skips the "did you mean one of these?" lookup entirely.
- */
-export function isUpcomingDateHint(
-  dateHint: string | null | undefined,
-): dateHint is string {
-  if (!dateHint || !ISO_DATE.test(dateHint)) return false;
-  return !isDatePast(dateHint);
-}
-
-/**
- * A ±3-day ISO datetime window around the parsed date, passed to the
- * Ticketmaster event search as start/end bounds. The slop absorbs
- * timezone edges and small date-parsing misses so the event the user
- * described still surfaces among the matches.
- */
-export function tmDateWindow(dateHint: string): {
-  startDate: string;
-  endDate: string;
-} {
-  const [y, m, d] = dateHint.split("-").map(Number);
-  const base = Date.UTC(y!, m! - 1, d!);
-  const DAY = 86_400_000;
-  const iso = (ms: number) => `${new Date(ms).toISOString().split(".")[0]}Z`;
-  return {
-    startDate: iso(base - 3 * DAY),
-    endDate: iso(base + 4 * DAY - 1000),
-  };
-}
+// The chat-add "did you mean one of these?" date gate + Ticketmaster
+// search window now live in `@showbook/shared` so the mobile chat-add
+// flow can share the exact same logic. Re-exported here to keep the
+// existing web import path (and its unit test) stable.
+export { isUpcomingDateHint, tmDateWindow } from '@showbook/shared';
