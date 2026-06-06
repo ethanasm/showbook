@@ -76,6 +76,7 @@ export function FilterChipsRow({
   leadingAction,
   pickerTitle = 'All filters',
   hideCounts = false,
+  hideInlineSublabel = false,
 }: {
   groups: FilterGroup[];
   selected: string | null;
@@ -111,6 +112,11 @@ export function FilterChipsRow({
    *  for ordering and the fit calculation — only its rendering is
    *  dropped. */
   hideCounts?: boolean;
+  /** Suppress the `· sublabel` on the *visible* inline chips (and the
+   *  measuring pass) while keeping it in the overflow picker sheet. Used
+   *  by Discover so the venue chips read as bare venue names on the rail
+   *  but still disambiguate by city in the "All filters" sheet. */
+  hideInlineSublabel?: boolean;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -201,6 +207,7 @@ export function FilterChipsRow({
         totalCount={totalCount ?? 0}
         captureWidth={captureWidth}
         hideCounts={hideCounts}
+        hideInlineSublabel={hideInlineSublabel}
       />
 
       {/* Visible single line. */}
@@ -252,6 +259,7 @@ export function FilterChipsRow({
             onLongPress={onLongPress ? () => onLongPress(g.id) : undefined}
             colors={colors}
             hideCounts={hideCounts}
+            hideInlineSublabel={hideInlineSublabel}
             testID={testIdPrefix ? `${testIdPrefix}-${g.id}` : undefined}
           />
         ))}
@@ -401,6 +409,7 @@ const MeasurePass = React.memo(function MeasurePass({
   totalCount,
   captureWidth,
   hideCounts,
+  hideInlineSublabel,
 }: {
   groups: FilterGroup[];
   colors: ColorTokens;
@@ -410,6 +419,7 @@ const MeasurePass = React.memo(function MeasurePass({
   totalCount: number;
   captureWidth: (key: string, w: number) => void;
   hideCounts: boolean;
+  hideInlineSublabel: boolean;
 }): React.JSX.Element {
   return (
     <View
@@ -445,6 +455,7 @@ const MeasurePass = React.memo(function MeasurePass({
             active={false}
             colors={colors}
             hideCounts={hideCounts}
+            hideInlineSublabel={hideInlineSublabel}
           />
         </MeasuredChip>
       ))}
@@ -483,6 +494,7 @@ function Chip({
   onLongPress,
   colors,
   hideCounts = false,
+  hideInlineSublabel = false,
   testID,
 }: {
   label: string;
@@ -494,6 +506,7 @@ function Chip({
   onLongPress?: () => void;
   colors: ColorTokens;
   hideCounts?: boolean;
+  hideInlineSublabel?: boolean;
   testID?: string;
 }): React.JSX.Element {
   return (
@@ -522,6 +535,7 @@ function Chip({
         active={active}
         colors={colors}
         hideCounts={hideCounts}
+        hideInlineSublabel={hideInlineSublabel}
       />
     </Pressable>
   );
@@ -537,6 +551,7 @@ function ChipBody({
   active,
   colors,
   hideCounts = false,
+  hideInlineSublabel = false,
 }: {
   label: string;
   sublabel?: string;
@@ -545,9 +560,11 @@ function ChipBody({
   active: boolean;
   colors: ColorTokens;
   hideCounts?: boolean;
+  hideInlineSublabel?: boolean;
 }): React.JSX.Element {
   const renderedBadge =
     hideCounts ? '' : badgeText !== undefined ? badgeText : String(count);
+  const showSublabel = Boolean(sublabel) && !hideInlineSublabel;
   return (
     <>
       <Text
@@ -561,7 +578,7 @@ function ChipBody({
         ]}
       >
         {label}
-        {sublabel ? (
+        {showSublabel ? (
           <Text
             style={[
               styles.chipSublabel,
