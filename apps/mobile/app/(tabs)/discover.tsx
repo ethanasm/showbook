@@ -43,7 +43,7 @@ import {
   type LayoutChangeEvent,
 } from 'react-native';
 import Svg, { Line } from 'react-native-svg';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import {
   Calendar,
   ChevronRight,
@@ -327,8 +327,29 @@ export default function DiscoverScreen(): React.JSX.Element {
         ? followedArtistsQuery
         : nearbyQuery;
 
+  // Auto-refresh on focus. Tab screens mount once and stay mounted, so
+  // `refetchOnMount: 'always'` only fires on the very first visit — and even
+  // that first fetch raced the offline warm-up, which could clobber the full
+  // feed back down to its tiny snapshot (now blocked by `seedDiscoverFeed` in
+  // warmup.ts). Refetching the active feed every time the tab regains focus
+  // guarantees the full set loads in over the warm-up placeholder without a
+  // manual pull-to-refresh — the behaviour the user expects and the same
+  // pattern the Map tab uses. A "latest ref" (updated in a commit effect, not
+  // during render) keeps the focus callback stable on `[token]` so it fires
+  // on focus / sign-in rather than on every query-identity change.
+  const activeQueryRef = React.useRef(activeQuery);
+  React.useEffect(() => {
+    activeQueryRef.current = activeQuery;
+  });
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!token) return;
+      void activeQueryRef.current.refetch();
+    }, [token]),
+  );
+
   // True while the active feed is refetching in the background with rows
-  // already on screen — the warm-up-placeholder → full-feed mount refetch,
+  // already on screen — the warm-up-placeholder → full-feed focus refetch,
   // a pull-to-refresh, or a feed re-fetch the ingest poll triggered. Drives
   // the inline "updating…" status so the count isn't silently stale while
   // the full set loads in over the small warm-up snapshot.
