@@ -4,7 +4,8 @@ import { useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Music } from "lucide-react";
+import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import { FollowButton } from "@/components/FollowButton";
 import { useSpotifyConnection } from "@/components/spotify/useSpotifyConnection";
 import { useIsMobile } from "@/lib/useIsMobile";
@@ -21,7 +22,11 @@ import {
 import { EditableName } from "@/components/EditableName";
 import { MediaSection } from "@/components/media";
 import { SpotifyMark } from "@/components/BrandIcons";
-import { formatDateMedium as formatDateLong, formatDateParts } from "@showbook/shared";
+import {
+  formatDateMedium as formatDateLong,
+  formatDateParts,
+  formatOnSaleDate,
+} from "@showbook/shared";
 import {
   getHeadliner,
   getHeadlinerId,
@@ -91,6 +96,14 @@ function formatShowDateParts(show: ShowData): {
   };
 }
 
+const ON_SALE_STATUS_LABELS: Record<string, string> = {
+  announced: "announced",
+  presale: "presale",
+  on_sale: "on sale",
+  sold_out: "sold out",
+  cancelled: "cancelled",
+};
+
 function gradientLastWord(name: string) {
   const words = name.trim().split(/\s+/);
   if (words.length <= 1) return <span className="gradient-emphasis">{name}</span>;
@@ -118,6 +131,11 @@ export default function ArtistDetailPage() {
 
   const userShowsQuery = trpc.performers.userShows.useQuery(
     { performerId },
+    { enabled: Boolean(performerId) },
+  );
+
+  const upcomingQuery = trpc.performers.upcomingAnnouncements.useQuery(
+    { performerId, limit: 100 },
     { enabled: Boolean(performerId) },
   );
 
@@ -184,6 +202,7 @@ export default function ArtistDetailPage() {
     () => (userShowsQuery.data ?? []) as ShowData[],
     [userShowsQuery.data],
   );
+  const upcoming = upcomingQuery.data ?? [];
 
   const stats = useMemo(() => {
     const sorted = [...userShows]
@@ -343,8 +362,11 @@ export default function ArtistDetailPage() {
           background: "var(--surface)",
           borderBottom: "1px solid var(--rule)",
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
+          gridTemplateColumns: isMobile
+            ? "repeat(2, 1fr)"
+            : "repeat(4, 1fr)",
           columnGap: isMobile ? 12 : 28,
+          rowGap: isMobile ? 12 : 0,
         }}
       >
         <Stat label="Your shows" value={String(performer.showCount)} />
@@ -355,6 +377,18 @@ export default function ArtistDetailPage() {
         <Stat
           label="Last seen"
           value={stats.last ? formatDateLong(stats.last) : "—"}
+        />
+        <Stat
+          label="Upcoming"
+          value={
+            <span
+              style={{
+                color: upcoming.length > 0 ? "var(--accent)" : "var(--ink)",
+              }}
+            >
+              {upcoming.length}
+            </span>
+          }
         />
       </div>
 
@@ -371,6 +405,12 @@ export default function ArtistDetailPage() {
           gap: 36,
         }}
       >
+        <UpcomingShows
+          upcoming={upcoming}
+          isLoading={upcomingQuery.isLoading}
+          isMobile={isMobile}
+        />
+
         <MediaSection scope="performer" performerId={performer.id} />
 
         {(songsQuery.data?.length ?? 0) > 0 && (
@@ -538,6 +578,280 @@ export default function ArtistDetailPage() {
     </div>
       )}
     </QueryBoundary>
+  );
+}
+
+type UpcomingRow = {
+  id: string;
+  ephemeral: boolean;
+  kind: string;
+  headliner: string;
+  headlinerPerformerId: string | null;
+  support: string[] | null;
+  productionName: string | null;
+  showDate: string;
+  onSaleStatus: string;
+  onSaleDate: Date | string | null;
+  ticketUrl: string | null;
+  venue: {
+    id: string | null;
+    name: string;
+    city: string | null;
+    stateRegion: string | null;
+  };
+};
+
+function UpcomingShows({
+  upcoming,
+  isLoading,
+  isMobile,
+}: {
+  upcoming: UpcomingRow[];
+  isLoading: boolean;
+  isMobile: boolean;
+}) {
+  const gridColumns = isMobile
+    ? "58px minmax(0, 1fr) 84px"
+    : "100px 104px 1.3fr 1fr 104px 104px";
+  return (
+    <section data-testid="artist-upcoming-section">
+      <SectionHeader
+        label={`Upcoming · ${upcoming.length}`}
+        note={upcoming.length > 0 ? "ascending · soonest first" : undefined}
+      />
+      {isLoading ? (
+        <CardMessage>Loading upcoming shows…</CardMessage>
+      ) : upcoming.length === 0 ? (
+        <CardMessage>
+          No upcoming shows on sale. New dates for this artist will appear
+          here as they&apos;re announced.
+        </CardMessage>
+      ) : (
+        <div style={{ background: "var(--surface)" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: gridColumns,
+              columnGap: 16,
+              padding: "10px 16px",
+              borderBottom: "1px solid var(--rule)",
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 9.5,
+              color: "var(--faint)",
+              letterSpacing: ".12em",
+              textTransform: "uppercase",
+            }}
+          >
+            <div>Date</div>
+            {!isMobile && <div>Kind</div>}
+            <div>Headliner</div>
+            <div>Venue</div>
+            {!isMobile && <div>On sale</div>}
+            <div>Status</div>
+          </div>
+          {upcoming.map((a) => {
+            const date = formatDateParts(a.showDate);
+            const KindIcon = KIND_ICONS[a.kind as ShowKind] ?? Music;
+            const isOnSale = a.onSaleStatus === "on_sale";
+            return (
+              <div
+                key={a.id}
+                data-testid="artist-upcoming-row"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: gridColumns,
+                  columnGap: 16,
+                  padding: "12px 16px",
+                  borderBottom: "1px solid var(--rule)",
+                  alignItems: "center",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: 12,
+                      color: "var(--ink)",
+                      letterSpacing: ".02em",
+                      fontFeatureSettings: '"tnum"',
+                    }}
+                  >
+                    {date.month} {date.day}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: 10,
+                      color: "var(--muted)",
+                      marginTop: 2,
+                      textTransform: "lowercase",
+                    }}
+                  >
+                    {date.year} &middot; {date.dow}
+                  </div>
+                </div>
+                {!isMobile && (
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: 10.5,
+                      color: `var(--kind-${a.kind})`,
+                      letterSpacing: ".06em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    <KindIcon size={12} />
+                    {KIND_LABELS[a.kind as ShowKind] ?? a.kind}
+                  </div>
+                )}
+                <div style={{ minWidth: 0 }}>
+                  {a.headlinerPerformerId ? (
+                    <Link
+                      href={`/artists/${a.headlinerPerformerId}`}
+                      style={{
+                        fontFamily: "var(--font-geist-sans), sans-serif",
+                        fontSize: 14,
+                        fontWeight: 500,
+                        color: "var(--ink)",
+                        letterSpacing: -0.2,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        textDecoration: "none",
+                        display: "block",
+                      }}
+                    >
+                      {a.headliner}
+                    </Link>
+                  ) : (
+                    <div
+                      style={{
+                        fontFamily: "var(--font-geist-sans), sans-serif",
+                        fontSize: 14,
+                        fontWeight: 500,
+                        color: "var(--ink)",
+                        letterSpacing: -0.2,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {a.headliner}
+                    </div>
+                  )}
+                  {a.support && a.support.length > 0 && (
+                    <div
+                      style={{
+                        fontFamily: "var(--font-geist-mono), monospace",
+                        fontSize: 10.5,
+                        color: "var(--muted)",
+                        marginTop: 2,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      + {a.support.join(", ")}
+                    </div>
+                  )}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <VenueCell venue={a.venue} />
+                  {isMobile && (
+                    <div
+                      style={{
+                        fontFamily: "var(--font-geist-mono), monospace",
+                        fontSize: 10,
+                        color: "var(--faint)",
+                        marginTop: 2,
+                      }}
+                    >
+                      {ON_SALE_STATUS_LABELS[a.onSaleStatus] ?? a.onSaleStatus}
+                    </div>
+                  )}
+                </div>
+                {!isMobile && (
+                  <div
+                    style={{
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      fontSize: 11,
+                      color: isOnSale ? "var(--accent)" : "var(--muted)",
+                      fontWeight: isOnSale ? 500 : 400,
+                    }}
+                  >
+                    {formatOnSaleDate(a.onSaleDate)}
+                  </div>
+                )}
+                {!isMobile && (
+                  <div>
+                    <span
+                      style={{
+                        fontFamily: "var(--font-geist-mono), monospace",
+                        fontSize: 10,
+                        color: "var(--ink)",
+                        letterSpacing: ".06em",
+                        textTransform: "uppercase",
+                        padding: "3px 8px",
+                        border: `1px solid var(--kind-${a.kind})`,
+                      }}
+                    >
+                      {ON_SALE_STATUS_LABELS[a.onSaleStatus] ?? a.onSaleStatus}
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function VenueCell({
+  venue,
+}: {
+  venue: UpcomingRow["venue"];
+}) {
+  const location = [venue.city, venue.stateRegion].filter(Boolean).join(", ");
+  const nameStyle: React.CSSProperties = {
+    fontFamily: "var(--font-geist-sans), sans-serif",
+    fontSize: 13,
+    color: "var(--ink)",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    textDecoration: "none",
+    display: "block",
+  };
+  return (
+    <>
+      {venue.id ? (
+        <Link href={`/venues/${venue.id}`} style={nameStyle}>
+          {venue.name}
+        </Link>
+      ) : (
+        <div style={nameStyle}>{venue.name}</div>
+      )}
+      {location && (
+        <div
+          style={{
+            fontFamily: "var(--font-geist-mono), monospace",
+            fontSize: 10.5,
+            color: "var(--muted)",
+            marginTop: 2,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {location}
+        </div>
+      )}
+    </>
   );
 }
 
