@@ -33,10 +33,21 @@ export {
   pickPrimaryEventUrl,
   normalizeFestivalText,
   extractFestivalName,
+  determineOnSaleStatus,
+  parseOnSaleDate,
+  type OnSaleStatus,
   type TMEvent,
   type TMVenue,
   type TMAttraction,
 } from './ticketmaster';
+export {
+  normalizeLiveAttractionEvents,
+  shapeStoredUpcoming,
+  dedupeUpcomingAgainstUserShows,
+  type PerformerUpcomingRow,
+  type StoredAnnouncementForShaping,
+  type VenueForShaping,
+} from './performer-upcoming';
 export { matchOrCreateVenue, isUniqueViolation } from './venue-matcher';
 export { geocodeVenue } from './geocode';
 export type { GeocodeResult } from './geocode';

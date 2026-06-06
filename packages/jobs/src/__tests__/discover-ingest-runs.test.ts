@@ -104,6 +104,10 @@ mock.module('@showbook/api', {
     inferKind: () => 'theatre',
     selectBestImage: () => null,
     extractMusicbrainzId: () => null,
+    // on-sale-status helpers now live in @showbook/api (re-exported by
+    // ../on-sale-status); stub to the values these sales-less events imply.
+    determineOnSaleStatus: () => 'on_sale',
+    parseOnSaleDate: () => null,
     isPrimaryEventUrl: () => true,
     matchOrCreateVenue: async () => ({
       venue: { id: 'v1', name: 'Richard Rodgers', city: 'NYC' },

@@ -22,6 +22,7 @@ export {
   isVenuePlaceholder,
 } from './format';
 export { buildIcs, defaultShowTime, slugifyForFilename, type IcsEvent } from './ical';
+export { isUpcomingDateHint, tmDateWindow } from './chat-tm-match';
 export {
   normalizeShowName,
   showMatchesAnnouncement,
