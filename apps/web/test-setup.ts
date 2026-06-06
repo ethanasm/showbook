@@ -1,5 +1,11 @@
 // Browser globals for node:test under jsdom.
 // Loaded via `node --import tsx --import ./test-setup.ts --test ...`.
+
+// Keep the fire-and-forget Wikidata enrichment hook in
+// matchOrCreatePerformer offline during tests (it has no API key to gate
+// on, unlike Spotify). Prod/dev leave this unset.
+process.env.WIKIDATA_ENRICHMENT_DISABLED ??= '1';
+
 import 'global-jsdom/register';
 import { Module } from 'node:module';
 

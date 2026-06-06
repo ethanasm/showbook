@@ -44,6 +44,7 @@ import {
   IdCard,
   Hash,
   Music,
+  Drama,
   ChevronRight,
 } from 'lucide-react-native';
 
@@ -114,6 +115,8 @@ export function AdminSection(): React.JSX.Element | null {
     trpc.admin.enqueueBackfillPerformerTicketmasterIds.useMutation();
   const performerSpotify =
     trpc.admin.enqueueBackfillPerformerSpotifyIds.useMutation();
+  const performerWikidata =
+    trpc.admin.enqueueBackfillPerformerWikidataIds.useMutation();
   const showTicketUrls =
     trpc.admin.enqueueBackfillShowTicketUrls.useMutation();
 
@@ -248,6 +251,20 @@ export function AdminSection(): React.JSX.Element | null {
       pending: performerSpotify.isPending,
       run: async () => {
         const r = await performerSpotify.mutateAsync();
+        return formatJobEnqueued(r.jobId);
+      },
+    },
+    {
+      id: 'performer-wikidata',
+      title: 'Backfill performer Wikidata IDs',
+      blurb: 'Resolve Wikidata IDs + headshots for theatre cast',
+      description:
+        'Enqueues the backfill-performer-wikidata-ids job, which resolves a Wikidata QID (plus a headshot and MusicBrainz id when present) for every theatre cast / non-Ticketmaster performer that is missing one. Never overwrites existing values. Also runs daily at 07:15 ET.',
+      confirmLabel: 'Enqueue backfill',
+      icon: Drama,
+      pending: performerWikidata.isPending,
+      run: async () => {
+        const r = await performerWikidata.mutateAsync();
         return formatJobEnqueued(r.jobId);
       },
     },

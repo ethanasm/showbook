@@ -6,6 +6,7 @@ import {
   getAttraction,
   searchAttractions,
   selectBestImage,
+  resolveWikidataEntity,
 } from '@showbook/api';
 import { fetchUpstream, isProxyableUrl } from '@/lib/image-proxy';
 import { decodeMobileToken } from '@/lib/mobile-token';
@@ -108,6 +109,7 @@ export async function GET(
       name: performers.name,
       imageUrl: performers.imageUrl,
       ticketmasterAttractionId: performers.ticketmasterAttractionId,
+      wikidataQid: performers.wikidataQid,
     })
     .from(performers)
     .where(eq(performers.id, performerId))
@@ -126,7 +128,25 @@ export async function GET(
 
   // Lazy resolve when nothing is stored. Self-heals performers created via
   // Gmail / manual add / setlist.fm imports that didn't carry a TM image,
-  // without waiting for the daily backfill cron.
+  // without waiting for the daily backfill cron. Theatre cast carry a
+  // Wikidata QID but no TM id, so try Wikidata's P18 headshot first for
+  // those; everyone else falls through to the TM lookup.
+  if (!imageUrl && performer.wikidataQid) {
+    try {
+      const { imageUrl: wdImage } = await resolveWikidataEntity(
+        performer.wikidataQid,
+      );
+      if (wdImage) {
+        imageUrl = wdImage;
+        isFresh = true;
+      }
+    } catch (err) {
+      log.warn(
+        { err, event: 'performer.photo.lazy_resolve_failed', performerId, source: 'wikidata' },
+        'Lazy Wikidata performer image resolve failed',
+      );
+    }
+  }
   if (!imageUrl) {
     try {
       const resolved = await lookupTmImage(

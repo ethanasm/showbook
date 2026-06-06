@@ -20,6 +20,7 @@ import {
   enqueueBackfillPerformerMbids,
   enqueueBackfillPerformerTicketmasterIds,
   enqueueBackfillPerformerSpotifyIds,
+  enqueueBackfillPerformerWikidataIds,
   enqueueBackfillShowTicketUrls,
 } from '../job-queue';
 import { child } from '@showbook/observability';
@@ -431,6 +432,28 @@ export const adminRouter = router({
           jobId,
         },
         'Admin enqueued backfill-performer-spotify-ids job',
+      );
+      return { jobId };
+    },
+  ),
+
+  /**
+   * Enqueue the `backfill/performer-wikidata-ids` cron on demand. Resolves
+   * a Wikidata QID (+ headshot + MBID when present) for every theatre cast
+   * / non-TM performer without one. Already runs daily at 07:15 ET. Use
+   * this after adding theatre shows to catch up the cast backlog.
+   */
+  enqueueBackfillPerformerWikidataIds: adminProcedure.mutation(
+    async ({ ctx }) => {
+      const userId = ctx.session.user.id;
+      const jobId = await enqueueBackfillPerformerWikidataIds();
+      log.info(
+        {
+          event: 'admin.backfill_performer_wikidata_qids.enqueue',
+          userId,
+          jobId,
+        },
+        'Admin enqueued backfill-performer-wikidata-ids job',
       );
       return { jobId };
     },
