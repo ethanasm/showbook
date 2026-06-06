@@ -1,18 +1,38 @@
 import { z } from 'zod';
-import { eq, and, or, ne, sql, desc, count, max, min, inArray } from 'drizzle-orm';
+import { eq, and, or, ne, sql, asc, gte, desc, count, max, min, inArray, arrayOverlaps } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
-import { performers, userPerformerFollows, shows, showPerformers, announcements, venues, userVenueFollows, userRegions } from '@showbook/db';
+import { performers, userPerformerFollows, shows, showPerformers, showAnnouncementLinks, announcements, venues, userVenueFollows, userRegions } from '@showbook/db';
 import { enqueueIngestPerformer } from '../job-queue';
 import { computePerformerAnnouncementsToDelete } from './preferences';
-import { searchAttractions, selectBestImage, extractMusicbrainzId } from '../ticketmaster';
+import { searchAttractions, searchEvents, selectBestImage, extractMusicbrainzId, type TMEvent } from '../ticketmaster';
 import { searchWikidataPeople } from '../wikidata';
+import {
+  normalizeLiveAttractionEvents,
+  shapeStoredUpcoming,
+  dedupeUpcomingAgainstUserShows,
+} from '../performer-upcoming';
 import { matchOrCreatePerformer } from '../performer-matcher';
 import { enforceRateLimit } from '../rate-limit';
 import { assertUnderFollowCap } from '../follow-caps';
 import { child } from '@showbook/observability';
 
 const log = child({ component: 'api.performers' });
+
+/**
+ * Upper bound on stored future announcements scanned for the upcoming rail.
+ * The dedup against the user's own shows runs in memory, so this bounds the
+ * cost for a pathologically prolific artist. Mirrors the venue router's cap.
+ */
+const UPCOMING_SCAN_CAP = 200;
+
+/** How far ahead the live TM lookup reaches when there's no stored data. */
+const UPCOMING_HORIZON_MONTHS = 12;
+
+// TM's Discovery API rejects datetimes carrying milliseconds; strip them.
+function tmISO(date: Date): string {
+  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
 
 export const performersRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -416,6 +436,150 @@ export const performersRouter = router({
           },
         },
       });
+    }),
+
+  /**
+   * Upcoming shows for an artist, mirroring `venues.upcomingAnnouncements`.
+   *
+   * Sourcing (per the parity requirement):
+   *   - If we already hold stored discover data for this performer — because
+   *     they're followed, play a followed venue, or fall inside an active
+   *     region — return those `announcements` rows. They carry real ids so
+   *     the client can watch / mark-ticketed them.
+   *   - Otherwise, fetch the artist's upcoming events from Ticketmaster at
+   *     read time and return them WITHOUT persisting (flagged `ephemeral`).
+   *     The section then renders "as if followed" for any artist.
+   *
+   * Both paths drop announcements that map to a show the user already owns.
+   */
+  upcomingAnnouncements: protectedProcedure
+    .input(
+      z.object({
+        performerId: z.string().uuid(),
+        limit: z.number().int().min(1).max(100).optional().default(50),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const today = new Date().toISOString().slice(0, 10);
+
+      const [performer] = await ctx.db
+        .select({
+          id: performers.id,
+          name: performers.name,
+          ticketmasterAttractionId: performers.ticketmasterAttractionId,
+        })
+        .from(performers)
+        .where(eq(performers.id, input.performerId))
+        .limit(1);
+
+      if (!performer) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Performer not found' });
+      }
+
+      // User's shows featuring this performer + the announcements they've
+      // already linked — the two dedup signals shared by both source paths.
+      const userShowRows = await ctx.db
+        .select({
+          date: shows.date,
+          endDate: shows.endDate,
+          productionName: shows.productionName,
+        })
+        .from(shows)
+        .innerJoin(showPerformers, eq(showPerformers.showId, shows.id))
+        .where(
+          and(
+            eq(shows.userId, userId),
+            eq(showPerformers.performerId, input.performerId),
+          ),
+        );
+      const userShowsForDedup = userShowRows.map((s) => ({
+        ...s,
+        headlinerName: performer.name,
+      }));
+
+      const linkedRows = await ctx.db
+        .select({ announcementId: showAnnouncementLinks.announcementId })
+        .from(showAnnouncementLinks)
+        .innerJoin(shows, eq(shows.id, showAnnouncementLinks.showId))
+        .where(eq(shows.userId, userId));
+      const linkedSet = new Set(linkedRows.map((r) => r.announcementId));
+
+      // Stored discover data: this performer headlining OR supporting, future.
+      const storedRows = await ctx.db
+        .select({ announcement: announcements, venue: venues })
+        .from(announcements)
+        .innerJoin(venues, eq(announcements.venueId, venues.id))
+        .where(
+          and(
+            or(
+              eq(announcements.headlinerPerformerId, input.performerId),
+              arrayOverlaps(announcements.supportPerformerIds, [
+                input.performerId,
+              ]),
+            ),
+            gte(announcements.showDate, today),
+          ),
+        )
+        .orderBy(asc(announcements.showDate), asc(announcements.id))
+        .limit(UPCOMING_SCAN_CAP);
+
+      if (storedRows.length > 0) {
+        const shaped = storedRows.map((r) =>
+          shapeStoredUpcoming(r.announcement, r.venue),
+        );
+        const deduped = dedupeUpcomingAgainstUserShows(
+          shaped,
+          userShowsForDedup,
+          linkedSet,
+        );
+        return deduped.slice(0, input.limit);
+      }
+
+      // No stored data — fall back to a live, un-persisted TM lookup so the
+      // rail still populates for artists the user hasn't followed.
+      if (!performer.ticketmasterAttractionId) return [];
+
+      enforceRateLimit(`performers.upcomingExternal:${userId}`, {
+        max: 30,
+        windowMs: 60_000,
+      });
+
+      const horizon = new Date();
+      horizon.setMonth(horizon.getMonth() + UPCOMING_HORIZON_MONTHS);
+
+      let events: TMEvent[] = [];
+      try {
+        const res = await searchEvents({
+          attractionId: performer.ticketmasterAttractionId,
+          startDateTime: tmISO(new Date()),
+          endDateTime: tmISO(horizon),
+          size: 100,
+        });
+        events = res.events;
+      } catch (err) {
+        log.error(
+          {
+            err,
+            event: 'performers.upcoming_external.failed',
+            performerId: input.performerId,
+          },
+          'Live TM upcoming lookup failed',
+        );
+        return [];
+      }
+
+      const liveRows = normalizeLiveAttractionEvents(events, {
+        performerId: performer.id,
+        tmAttractionId: performer.ticketmasterAttractionId,
+        today,
+      });
+      const deduped = dedupeUpcomingAgainstUserShows(
+        liveRows,
+        userShowsForDedup,
+        linkedSet,
+      );
+      return deduped.slice(0, input.limit);
     }),
 
   rename: protectedProcedure

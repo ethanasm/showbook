@@ -171,6 +171,12 @@ mock.module('@showbook/api', {
     selectBestImage: () => null,
     extractMusicbrainzId: () => null,
     extractFestivalName: (name: string) => name,
+    // on-sale-status helpers now live in @showbook/api (re-exported by
+    // ../on-sale-status). These tests' events always carry status 'onsale'
+    // with no sales window, so the real fns would return on_sale / null —
+    // stub them to match without depending on the unmocked module.
+    determineOnSaleStatus: () => 'on_sale',
+    parseOnSaleDate: () => null,
     // Tests use minimal `https://tm/event` URLs that don't match the
     // real slug-format regex; treat them all as primary so the pipeline
     // assertions remain about event counts, not URL shape.
