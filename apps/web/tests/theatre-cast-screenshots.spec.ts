@@ -144,3 +144,31 @@ test('theatre cast typeahead + populated cast section', async ({ page }) => {
     ),
   });
 });
+
+test('built-in integrations section on preferences', async ({ page }) => {
+  test.setTimeout(120_000);
+  await loginAndSeedAsWorker(page);
+  await page.goto('/preferences');
+  await page.addStyleTag({ content: HIDE_DEV_INDICATOR });
+
+  const heading = page.getByText('Built-in integrations', { exact: true });
+  await expect(heading).toBeVisible({ timeout: 15_000 });
+  await heading.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+
+  const box = await heading.boundingBox();
+  if (box) {
+    await page.screenshot({
+      path: path.join(
+        __dirname,
+        '../test-results/screenshots/builtin-integrations.png',
+      ),
+      clip: {
+        x: Math.max(0, box.x - 16),
+        y: box.y - 12,
+        width: Math.min(760, page.viewportSize()!.width - box.x + 16),
+        height: 360,
+      },
+    });
+  }
+});
