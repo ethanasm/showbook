@@ -1,7 +1,8 @@
 /**
  * KindFilterMenu — a lightweight, header-anchored dropdown for picking a
- * single show kind to filter the Discover feed by. Opened by the filter
- * button next to the search button.
+ * single show kind to filter a screen by. Opened by the filter button in
+ * the screen header (next to search / the Me action). Shared across the
+ * Discover, Home, Shows, and Map tabs via `KindFilterControl`.
  *
  * There's no floating-popover primitive in the app (only the full-screen
  * `Sheet`), so this rolls a minimal anchored menu: a transparent Modal with
@@ -10,7 +11,12 @@
  * FilterChipsRow (check on the active row, kind-coloured lucide icon).
  *
  * Options are "All" + the four watchable kinds. "All" clears the filter and
- * shows everything the feed surfaces (including any film/unknown items).
+ * shows everything the screen surfaces (including any film/unknown items).
+ *
+ * `testIDPrefix` namespaces the menu / option / backdrop testIDs per host
+ * screen (defaults to `discover` so the original Discover testIDs are
+ * preserved); `topOffset` tunes where the card anchors below the header
+ * (the large `TopBar` screens use the default 56; `HomeHeader` is shorter).
  */
 
 import React from 'react';
@@ -31,11 +37,33 @@ const OPTIONS: readonly { value: KindFilterValue; label: string }[] = [
   { value: 'festival', label: 'Festival' },
 ];
 
+/**
+ * Lowercase singular noun for a filtered kind, used in empty-state copy
+ * (e.g. "No upcoming comedy shows"). Kept here so every host screen
+ * phrases the filtered-empty message the same way.
+ */
+const KIND_NOUNS: Record<Kind, string> = {
+  concert: 'concert',
+  theatre: 'theatre',
+  comedy: 'comedy',
+  festival: 'festival',
+  film: 'film',
+  unknown: 'unknown',
+};
+
+export function kindFilterNoun(kind: Kind): string {
+  return KIND_NOUNS[kind];
+}
+
 interface KindFilterMenuProps {
   open: boolean;
   value: KindFilterValue;
   onSelect: (value: KindFilterValue) => void;
   onClose: () => void;
+  /** Namespaces the menu / option / backdrop testIDs. Default `discover`. */
+  testIDPrefix?: string;
+  /** Vertical anchor below the safe-area top. Default 56 (large TopBar). */
+  topOffset?: number;
 }
 
 export function KindFilterMenu({
@@ -43,6 +71,8 @@ export function KindFilterMenu({
   value,
   onSelect,
   onClose,
+  testIDPrefix = 'discover',
+  topOffset = 56,
 }: KindFilterMenuProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -61,7 +91,7 @@ export function KindFilterMenu({
         onPress={onClose}
         accessibilityRole="button"
         accessibilityLabel="Close kind filter"
-        testID="discover-kind-menu-backdrop"
+        testID={`${testIDPrefix}-kind-menu-backdrop`}
       >
         {/* Stop propagation so taps inside the card don't close the menu. */}
         <Pressable
@@ -69,12 +99,12 @@ export function KindFilterMenu({
           style={[
             styles.card,
             {
-              top: insets.top + 56,
+              top: insets.top + topOffset,
               backgroundColor: colors.surfaceRaised,
               borderColor: colors.ruleStrong,
             },
           ]}
-          testID="discover-kind-menu"
+          testID={`${testIDPrefix}-kind-menu`}
         >
           {OPTIONS.map(({ value: v, label }) => {
             const active = v === value;
@@ -89,7 +119,7 @@ export function KindFilterMenu({
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
                 accessibilityLabel={label}
-                testID={`discover-kind-option-${v}`}
+                testID={`${testIDPrefix}-kind-option-${v}`}
                 style={({ pressed }) => [
                   styles.row,
                   {
