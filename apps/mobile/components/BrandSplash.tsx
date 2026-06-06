@@ -5,10 +5,11 @@
  * drawable generated from the `expo-splash-screen` config in app.config.ts),
  * then hand off to JS once React Native has initialised. To make that handoff
  * seamless — no size "pop", no flash — this renders the **same `splash.png`
- * asset** with the **same fit** (`contain` on the #0C0C0C background) that the
- * native splash uses. The two are then pixel-identical, so the transition from
- * the native splash to this one is invisible; the root layout simply holds this
- * until fonts are ready (see app/_layout.tsx).
+ * asset** at the **same centered size** (`imageWidth` in app.config.ts) on the
+ * same #0C0C0C background that the native splash uses. The two are then
+ * visually identical, so the transition from the native splash to this one is
+ * invisible; the root layout simply holds this until fonts are ready (see
+ * app/_layout.tsx).
  *
  * Using the bundled asset (not a redrawn SVG) is deliberate: it guarantees the
  * JS splash matches whatever the native splash shows, and the background color
@@ -20,12 +21,19 @@ import { View, Image, StyleSheet } from 'react-native';
 
 const BG = '#0C0C0C';
 
+// Match the native splash's `imageWidth` (app.config.ts) so the native→JS
+// handoff is seamless: same asset, same centered size, same background.
+// expo-splash-screen lays the native image into an `imageWidth × imageWidth`
+// square box with aspect-fit, so we mirror a square box here — `contain` then
+// fits the 1080×1180 asset inside it identically to the storyboard.
+const LOGO_BOX = 200;
+
 export function BrandSplash(): React.JSX.Element {
   return (
     <View style={styles.root}>
       <Image
-        // Same asset the native splash is generated from — keeps the
-        // native→JS handoff seamless.
+        // Same asset the native splash is generated from, rendered at the same
+        // centered size — keeps the native→JS handoff seamless.
         source={require('../assets/splash.png')}
         resizeMode="contain"
         style={styles.image}
@@ -47,8 +55,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   image: {
-    width: '100%',
-    height: '100%',
+    width: LOGO_BOX,
+    height: LOGO_BOX,
   },
 });
 

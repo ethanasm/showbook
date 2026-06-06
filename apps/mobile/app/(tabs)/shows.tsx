@@ -33,6 +33,8 @@ import { RADII } from '@/lib/theme-utils';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
+import { KindFilterControl } from '../../components/KindFilterControl';
+import { kindFilterNoun, type KindFilterValue } from '../../components/KindFilterMenu';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { FilterChipsRow, type FilterGroup } from '../../components/FilterChipsRow';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
@@ -235,6 +237,9 @@ export default function ShowsScreen(): React.JSX.Element {
     state: ShowState;
   } | null>(null);
   const [markTicketedForId, setMarkTicketedForId] = React.useState<string | null>(null);
+  // Header kind filter, applied on top of the Upcoming/Past bucket. Feeds
+  // every mode (timeline / calendar / stats) since they all derive from `rows`.
+  const [kindFilter, setKindFilter] = React.useState<KindFilterValue>('all');
 
   const showsQuery = useCachedQuery<ShowsListItem[]>({
     queryKey: ['mobile', 'shows.list'],
@@ -272,12 +277,20 @@ export default function ShowsScreen(): React.JSX.Element {
   // Apply the Upcoming/Past state filter. Stats only makes sense for
   // Past; if the user lands on Upcoming with stats selected, force back
   // to timeline.
-  const rows: ShowRow[] = React.useMemo(() => {
+  const bucketRows: ShowRow[] = React.useMemo(() => {
     if (stateBucket === 'upcoming') {
       return allRows.filter((r) => r.state === 'watching' || r.state === 'ticketed');
     }
     return allRows.filter((r) => r.state === 'past');
   }, [allRows, stateBucket]);
+
+  // Layer the header kind filter on top of the bucket. `bucketRows` (kind
+  // unfiltered) is kept so the empty state can tell "no shows in this
+  // bucket at all" apart from "no shows of this kind".
+  const rows: ShowRow[] = React.useMemo(() => {
+    if (kindFilter === 'all') return bucketRows;
+    return bucketRows.filter((r) => r.kind === kindFilter);
+  }, [bucketRows, kindFilter]);
 
   React.useEffect(() => {
     if (stateBucket === 'upcoming' && mode === 'stats') {
@@ -312,7 +325,21 @@ export default function ShowsScreen(): React.JSX.Element {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
-      <TopBar title="Shows" eyebrow={eyebrow} rightAction={<MeTopBarAction />} large />
+      <TopBar
+        title="Shows"
+        eyebrow={eyebrow}
+        rightAction={
+          <View style={styles.headerActions}>
+            <KindFilterControl
+              value={kindFilter}
+              onChange={setKindFilter}
+              testIDPrefix="shows"
+            />
+            <MeTopBarAction />
+          </View>
+        }
+        large
+      />
 
       <View style={{ paddingHorizontal: 20, paddingBottom: 12 }}>
         <SegmentedControl<'upcoming' | 'past'>
@@ -354,6 +381,26 @@ export default function ShowsScreen(): React.JSX.Element {
             title="Couldn't load shows"
             subtitle={showsQuery.error.message}
             cta={{ label: 'Try again', onPress: () => void showsQuery.refetch() }}
+          />
+        </ScrollView>
+      ) : rows.length === 0 && kindFilter !== 'all' ? (
+        // A kind filter is active and nothing in this bucket matches it —
+        // surface a kind-specific empty state with a one-tap clear rather
+        // than the onboarding hero (which would wrongly imply an empty log).
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+          refreshControl={refreshControl}
+        >
+          <EmptyState
+            title={`No ${kindFilterNoun(kindFilter as Kind)} shows ${
+              stateBucket === 'upcoming' ? 'coming up' : 'logged'
+            }`}
+            subtitle={
+              bucketRows.length > 0
+                ? 'Try a different kind, or clear the filter to see everything.'
+                : undefined
+            }
+            cta={{ label: 'Clear filter', onPress: () => setKindFilter('all') }}
           />
         </ScrollView>
       ) : rows.length === 0 ? (
@@ -1141,6 +1188,11 @@ function StatTile({ value, label }: { value: string; label: string }): React.JSX
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
   sectionHeader: {
     paddingHorizontal: 20,
     paddingVertical: 10,

@@ -47,7 +47,6 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import {
   Calendar,
   ChevronRight,
-  Filter,
   MapPin,
   Search,
   Users,
@@ -84,7 +83,8 @@ import {
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
 import { PickPerformanceDateSheet } from '../../components/PickPerformanceDateSheet';
-import { KindFilterMenu, type KindFilterValue } from '../../components/KindFilterMenu';
+import { KindFilterControl } from '../../components/KindFilterControl';
+import { type KindFilterValue } from '../../components/KindFilterMenu';
 
 type UtilsClient = ReturnType<typeof trpc.useUtils>['client'];
 type FollowedFeed = RouterOutput<UtilsClient['discover']['followedFeed']['query']>;
@@ -211,7 +211,6 @@ export default function DiscoverScreen(): React.JSX.Element {
   // watchable kinds narrow the list. Driven by the dropdown opened from the
   // filter button next to search.
   const [kindFilter, setKindFilter] = React.useState<KindFilterValue>('all');
-  const [kindMenuOpen, setKindMenuOpen] = React.useState(false);
 
   // Render budget for the current feed. Reset whenever the tab or any
   // chip filter changes so a freshly-selected scope always starts at
@@ -365,21 +364,11 @@ export default function DiscoverScreen(): React.JSX.Element {
 
   const searchAction = (
     <View style={styles.actions}>
-      <Pressable
-        onPress={() => setKindMenuOpen(true)}
-        hitSlop={12}
-        accessibilityRole="button"
-        accessibilityLabel="Filter by kind"
-        accessibilityState={{ expanded: kindMenuOpen }}
-        testID="discover-filter-button"
-      >
-        <Filter
-          size={20}
-          color={kindFilter === 'all' ? colors.ink : colors.accent}
-          strokeWidth={2}
-          fill={kindFilter === 'all' ? 'transparent' : colors.accent}
-        />
-      </Pressable>
+      <KindFilterControl
+        value={kindFilter}
+        onChange={setKindFilter}
+        testIDPrefix="discover"
+      />
       <Pressable
         onPress={() => router.push('/search')}
         hitSlop={12}
@@ -430,7 +419,6 @@ export default function DiscoverScreen(): React.JSX.Element {
         seen.set(r.id, {
           id: r.id,
           name: r.cityName,
-          sublabel: `${r.radiusMiles}mi`,
           count: 0,
         });
       }
@@ -447,11 +435,7 @@ export default function DiscoverScreen(): React.JSX.Element {
                 ? (item as NearbyAnnouncementItem).regionCityName ?? 'Region'
                 : item.venue.name;
           const fallbackSub =
-            tab === 'venues'
-              ? item.venue.city
-              : tab === 'regions'
-                ? `${(item as NearbyAnnouncementItem).regionRadiusMiles ?? '?'}mi`
-                : undefined;
+            tab === 'venues' ? item.venue.city : undefined;
           seen.set(key, {
             id: key,
             name: fallbackName,
@@ -756,6 +740,7 @@ export default function DiscoverScreen(): React.JSX.Element {
             void performUnfollow(tab, id, group?.name ?? '');
           }}
           totalCount={items.length}
+          hideCounts
           testIdPrefix="discover-group"
           pickerTitle={groupPickerTitle(tab)}
           leadingAction={{
@@ -785,6 +770,7 @@ export default function DiscoverScreen(): React.JSX.Element {
             totalCount={regionVenueList.reduce((n, g) => n + g.count, 0)}
             allLabel="All venues"
             variant="sub"
+            hideCounts
             testIdPrefix="discover-venue-chip"
           />
         )}
@@ -894,12 +880,6 @@ export default function DiscoverScreen(): React.JSX.Element {
         )}
       </ScrollView>
     </ScreenWrapper>
-    <KindFilterMenu
-      open={kindMenuOpen}
-      value={kindFilter}
-      onSelect={setKindFilter}
-      onClose={() => setKindMenuOpen(false)}
-    />
     <AddToDiscoverSheet
       tab={addSheetTab ?? tab}
       open={addSheetTab !== null}

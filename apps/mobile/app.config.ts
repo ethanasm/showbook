@@ -176,29 +176,24 @@ const config: ExpoConfig = {
         // splash.png is a *tightly-framed* gold-on-black brand mark (ticket +
         // "showbook" wordmark + tagline filling the canvas — see
         // assets/logo-mocks/_build_assets.py make_splash). expo-splash-screen
-        // renders `image` as a centered logo, so it's sized by `imageWidth`
-        // (dp) and centered on `backgroundColor`, NOT scaled to full-bleed.
-        // `resizeMode: 'contain'` keeps the mark intact; `imageWidth: 300`
-        // makes it large and legible (~75% of a phone's width) instead of the
-        // tiny middle-of-screen logo the old full-screen `cover` asset produced.
-        // `enableFullScreenImage_legacy` opts Android out of the Android-12
-        // masked-circle splash icon (which would crop the wordmark) and back
-        // into the full-screen drawable, matching the iOS storyboard.
+        // renders `image` as a centered logo sized by `imageWidth` (dp) and
+        // centered on `backgroundColor` — NOT full-bleed. `imageWidth: 200`
+        // keeps the mark a moderate, centered size (~half a phone's width);
+        // do NOT add `enableFullScreenImage_legacy` — it forces iOS into
+        // full-screen aspect-fit, which blows the logo up to the full width.
         image: './assets/splash.png',
-        imageWidth: 300,
+        imageWidth: 200,
         backgroundColor: '#0C0C0C',
         resizeMode: 'contain',
-        enableFullScreenImage_legacy: true,
         // Dark-mode variant. Kicks in when userInterfaceStyle resolves
         // to `dark`. Showbook is dark-everywhere so this differs only
         // in the explicit `backgroundColor` hint to native splash; the
         // asset is already gold-on-#0C0C0C so it reuses the same file.
         dark: {
           image: './assets/splash.png',
-          imageWidth: 300,
+          imageWidth: 200,
           backgroundColor: '#0C0C0C',
           resizeMode: 'contain',
-          enableFullScreenImage_legacy: true,
         },
       },
     ],
