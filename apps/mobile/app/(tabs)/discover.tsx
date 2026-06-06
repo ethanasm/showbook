@@ -143,6 +143,7 @@ const ON_SALE_LABEL: Record<AnnouncementItem['onSaleStatus'], string> = {
   presale: 'Presale',
   on_sale: 'On sale',
   sold_out: 'Sold out',
+  cancelled: 'Cancelled',
 };
 
 /**
@@ -1087,10 +1088,14 @@ function addChipAccessibilityLabel(tab: DiscoverTab): string {
 
 /**
  * Renders -45° diagonal stripes scaled to the parent card's measured
- * dimensions. Used as a background layer on sold-out announcements so the
- * row is recognisably struck through without obscuring the text. The
- * comment in this file's header (iOS #263) explains why SVG Pattern/Mask
- * is off the table — we draw explicit <Line> elements instead.
+ * dimensions. Used as a background layer on sold-out and cancelled
+ * announcements so the row is recognisably struck through without obscuring
+ * the text. The comment in this file's header (iOS #263) explains why SVG
+ * Pattern/Mask is off the table — we draw explicit <Line> elements instead.
+ *
+ * The stripes are deliberately pronounced: tighter spacing, thicker strokes
+ * and higher opacity than a hairline so the struck-through treatment reads at
+ * a glance.
  */
 function SoldOutStripes({
   color,
@@ -1102,7 +1107,7 @@ function SoldOutStripes({
   height: number;
 }): React.JSX.Element | null {
   if (width <= 0 || height <= 0) return null;
-  const spacing = 9;
+  const spacing = 6;
   const lines: React.ReactElement[] = [];
   for (let x = -height; x < width; x += spacing) {
     lines.push(
@@ -1113,8 +1118,8 @@ function SoldOutStripes({
         x2={x + height}
         y2={height}
         stroke={color}
-        strokeWidth={1}
-        opacity={0.5}
+        strokeWidth={1.5}
+        opacity={0.7}
       />,
     );
   }
@@ -1155,6 +1160,9 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
   const onSaleLabel = ON_SALE_LABEL[item.onSaleStatus];
   const ticketUrl = item.ticketUrl;
   const isSoldOut = item.onSaleStatus === 'sold_out';
+  const isCancelled = item.onSaleStatus === 'cancelled';
+  // Both sold-out and cancelled rows get the struck-through stripe treatment.
+  const isStruck = isSoldOut || isCancelled;
   const runMode = isRun(item);
   const runEndLabel =
     runMode && item.runEndDate ? formatRunEnd(item.runEndDate) : null;
@@ -1217,20 +1225,20 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
     <>
     <Pressable
       onPress={onPress}
-      onLayout={isSoldOut ? onCardLayout : undefined}
+      onLayout={isStruck ? onCardLayout : undefined}
       accessibilityRole="button"
       accessibilityLabel={`${title} — open actions`}
       testID={`discover-row-${item.id}`}
       style={({ pressed }) => [
         styles.card,
         { backgroundColor: colors.surface },
-        isSoldOut && styles.cardSoldOut,
+        isStruck && styles.cardSoldOut,
         pressed && { opacity: 0.9 },
       ]}
     >
-      {isSoldOut && (
+      {isStruck && (
         <SoldOutStripes
-          color={colors.rule}
+          color={isCancelled ? colors.danger : colors.ruleStrong}
           width={cardSize.w}
           height={cardSize.h}
         />
@@ -1281,9 +1289,20 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
         <View style={styles.badgeRow}>
           <KindBadge kind={item.kind as Kind} size="sm" />
           <View
-            style={[styles.statusBadge, { backgroundColor: accent + '22' }]}
+            style={[
+              styles.statusBadge,
+              {
+                backgroundColor:
+                  (isCancelled ? colors.danger : accent) + '22',
+              },
+            ]}
           >
-            <Text style={[styles.statusLabel, { color: accent }]}>
+            <Text
+              style={[
+                styles.statusLabel,
+                { color: isCancelled ? colors.danger : accent },
+              ]}
+            >
               {onSaleLabel}
             </Text>
           </View>
