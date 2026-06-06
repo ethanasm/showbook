@@ -39,6 +39,8 @@ import MapView, {
 import type { Kind } from '@showbook/shared';
 import { TopBar } from '../../components/TopBar';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
+import { KindFilterControl } from '../../components/KindFilterControl';
+import { type KindFilterValue } from '../../components/KindFilterMenu';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { Sheet } from '../../components/Sheet';
@@ -128,14 +130,6 @@ const MAX_VISIBLE_MARKERS = 60;
 // shows the continental US end-to-end.
 const MAX_REGION_LAT_DELTA = 60;
 const MAX_REGION_LNG_DELTA = 120;
-
-const KIND_FILTERS: readonly { k: 'all' | Kind; label: string }[] = [
-  { k: 'all', label: 'all' },
-  { k: 'concert', label: 'concert' },
-  { k: 'theatre', label: 'theatre' },
-  { k: 'comedy', label: 'comedy' },
-  { k: 'festival', label: 'festival' },
-];
 
 // Which layer of shows the map plots. `all` / `past` / `upcoming` split the
 // user's own logbook by show state (`all` is the whole logbook); `discoverable`
@@ -399,7 +393,7 @@ export default function MapScreen(): React.JSX.Element {
 
   const [layer, setLayer] = React.useState<MapMode>('past');
   const [pendingRefit, setPendingRefit] = React.useState(false);
-  const [kindFilter, setKindFilter] = React.useState<'all' | Kind>('all');
+  const [kindFilter, setKindFilter] = React.useState<KindFilterValue>('all');
   const [region, setRegion] = React.useState<Region>(DEFAULT_REGION);
   const [selectedClusterId, setSelectedClusterId] = React.useState<string | null>(null);
   const [didFitOnce, setDidFitOnce] = React.useState(false);
@@ -470,12 +464,6 @@ export default function MapScreen(): React.JSX.Element {
       discoverable: discoverableShows.length,
     };
   }, [loggedShows, discoverableShows]);
-
-  const kindCounts = React.useMemo<Record<string, number>>(() => {
-    const counts: Record<string, number> = { all: allShows.length };
-    for (const s of allShows) counts[s.kind] = (counts[s.kind] ?? 0) + 1;
-    return counts;
-  }, [allShows]);
 
   const filteredShows = React.useMemo(
     () =>
@@ -619,7 +607,12 @@ export default function MapScreen(): React.JSX.Element {
       <TopBar
         title="Map"
         eyebrow={`${venues.length} ${venues.length === 1 ? 'VENUE' : 'VENUES'}`}
-        rightAction={<MeTopBarAction />}
+        rightAction={
+          <View style={styles.headerActions}>
+            <KindFilterControl value={kindFilter} onChange={setKindFilter} testIDPrefix="map" />
+            <MeTopBarAction />
+          </View>
+        }
         large
       />
 
@@ -662,54 +655,9 @@ export default function MapScreen(): React.JSX.Element {
         })}
       </View>
 
-      {/* Kind filter strip — the five chips share the row width (each
-          flexes equally) so they all fit on one line without horizontal
-          scrolling. The per-kind count is dropped here to keep the labels
-          legible at this width; the mode strip above carries the totals. */}
-      <View style={[styles.kindStrip, { borderBottomColor: colors.rule }]}>
-        {KIND_FILTERS.map(({ k, label }) => {
-          const active = k === kindFilter;
-          const count = kindCounts[k] ?? 0;
-          return (
-            <Pressable
-              key={k}
-              onPress={() => setKindFilter(k)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={`${label} (${count})`}
-              style={[
-                styles.filterChip,
-                styles.kindChip,
-                {
-                  borderColor: active ? colors.ink : colors.ruleStrong,
-                  backgroundColor: active ? colors.ink : 'transparent',
-                },
-              ]}
-            >
-              {k !== 'all' && (
-                <View
-                  style={[
-                    styles.filterDot,
-                    { backgroundColor: tokens.kindColor(k) },
-                  ]}
-                />
-              )}
-              <Text
-                numberOfLines={1}
-                style={[
-                  styles.filterLabel,
-                  styles.kindLabel,
-                  { color: active ? colors.bg : colors.muted },
-                ]}
-              >
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Map area */}
+      {/* Map area — the kind filter that used to live in a pill strip here
+          now lives in the header filter button, giving the map the full
+          height between the mode strip and the tab bar. */}
       <View style={{ flex: 1, backgroundColor: colors.surfaceRaised }}>
         {isLoading ? (
           <View style={styles.centered}>
@@ -1118,16 +1066,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
   },
-  // Non-scrolling variant of the strip: a single flex row whose chips
-  // divide the available width so all of them fit without scrolling.
-  kindStrip: {
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    gap: 6,
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    borderBottomWidth: 1,
-  },
   filterChip: {
     paddingVertical: 6,
     paddingHorizontal: 11,
@@ -1138,22 +1076,11 @@ const styles = StyleSheet.create({
     gap: 5,
     flexShrink: 0,
   },
-  // Kind chips share the row equally and shrink to fit (overrides the
-  // fixed-width / flexShrink:0 behaviour of the scrolling mode chips).
-  kindChip: {
-    flex: 1,
-    flexShrink: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-    gap: 2,
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
   },
-  // Tighter type so the full kind label fits inside the narrow shared-width
-  // chip instead of truncating.
-  kindLabel: {
-    fontSize: 10,
-    letterSpacing: 0,
-  },
-  filterDot: { width: 5, height: 5, borderRadius: RADII.pill },
   filterLabel: {
     fontFamily: 'Geist Sans 500',
     fontSize: 11,
