@@ -354,7 +354,8 @@ export async function GET(request: Request) {
         { venueId: msgId, kind: 'concert', headliner: 'Bon Iver', support: ['Big Thief'], showDate: '2026-08-15', runStartDate: '2026-08-15', runEndDate: '2026-08-15', performanceDates: ['2026-08-15'], onSaleStatus: 'on_sale', source: 'ticketmaster' },
         { venueId: msgId, kind: 'comedy', headliner: 'Trevor Noah', showDate: '2026-09-01', runStartDate: '2026-09-01', runEndDate: '2026-09-01', performanceDates: ['2026-09-01'], onSaleStatus: 'announced', source: 'ticketmaster' },
         { venueId: bsId, kind: 'concert', headliner: 'Alvvays', support: ['Men I Trust'], showDate: '2026-07-22', runStartDate: '2026-07-22', runEndDate: '2026-07-22', performanceDates: ['2026-07-22'], onSaleStatus: 'on_sale', source: 'ticketmaster' },
-        { venueId: btId, kind: 'concert', headliner: 'Fleet Foxes', showDate: '2026-08-30', runStartDate: '2026-08-30', runEndDate: '2026-08-30', performanceDates: ['2026-08-30'], onSaleStatus: 'sold_out', source: 'ticketmaster' },
+        { venueId: msgId, kind: 'concert', headliner: 'Fleet Foxes', showDate: '2026-08-30', runStartDate: '2026-08-30', runEndDate: '2026-08-30', performanceDates: ['2026-08-30'], onSaleStatus: 'sold_out', source: 'ticketmaster' },
+        { venueId: msgId, kind: 'concert', headliner: 'Meghan Trainor', support: ['Icona Pop'], showDate: '2026-08-08', runStartDate: '2026-08-08', runEndDate: '2026-08-08', performanceDates: ['2026-08-08'], onSaleStatus: 'cancelled', source: 'ticketmaster' },
         { venueId: btId, kind: 'concert', headliner: 'Big Thief', support: ['Adrianne Lenker'], showDate: '2026-10-18', runStartDate: '2026-10-18', runEndDate: '2026-10-18', performanceDates: ['2026-10-18'], onSaleStatus: 'announced', source: 'ticketmaster' },
         // Multi-night theatre run — exercises the run-card UI path
         {
@@ -388,7 +389,7 @@ export async function GET(request: Request) {
         venues: venueMap.size,
         performers: performerMap.size,
         shows: showCount,
-        announcements: isWorkerSeed ? 0 : 6,
+        announcements: isWorkerSeed ? 0 : 7,
         regions: 2,
         followedVenues: followVenues.length,
       },

@@ -263,7 +263,7 @@ An upcoming event surfaced in the Discover feed. These are **global** — one ro
 | `support` | string[] | yes | source (TM) | Often empty at announcement time |
 | `show_date` | date | no | source | |
 | `on_sale_date` | datetime | yes | source (TM) | Displayed statically. Not polled |
-| `on_sale_status` | enum | no | source (TM) at ingestion | `announced` · `on_sale` · `sold_out` |
+| `on_sale_status` | enum | no | source (TM) at ingestion | `announced` · `presale` · `on_sale` · `sold_out` · `cancelled` |
 | `source` | enum | no | system | `ticketmaster` · `manual` |
 | `source_event_id` | string | yes | source | TM event ID. Primary dedup key |
 | `discovered_at` | timestamp | no | system | When our ingestion first saw it |

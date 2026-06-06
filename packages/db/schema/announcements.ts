@@ -18,6 +18,7 @@ export const onSaleStatusEnum = pgEnum('on_sale_status', [
   'presale',
   'on_sale',
   'sold_out',
+  'cancelled',
 ]);
 
 export const announcementSourceEnum = pgEnum('announcement_source', [
