@@ -419,7 +419,6 @@ export default function DiscoverScreen(): React.JSX.Element {
         seen.set(r.id, {
           id: r.id,
           name: r.cityName,
-          sublabel: `${r.radiusMiles}mi`,
           count: 0,
         });
       }
@@ -436,11 +435,7 @@ export default function DiscoverScreen(): React.JSX.Element {
                 ? (item as NearbyAnnouncementItem).regionCityName ?? 'Region'
                 : item.venue.name;
           const fallbackSub =
-            tab === 'venues'
-              ? item.venue.city
-              : tab === 'regions'
-                ? `${(item as NearbyAnnouncementItem).regionRadiusMiles ?? '?'}mi`
-                : undefined;
+            tab === 'venues' ? item.venue.city : undefined;
           seen.set(key, {
             id: key,
             name: fallbackName,
@@ -745,6 +740,7 @@ export default function DiscoverScreen(): React.JSX.Element {
             void performUnfollow(tab, id, group?.name ?? '');
           }}
           totalCount={items.length}
+          hideCounts
           testIdPrefix="discover-group"
           pickerTitle={groupPickerTitle(tab)}
           leadingAction={{
@@ -774,6 +770,7 @@ export default function DiscoverScreen(): React.JSX.Element {
             totalCount={regionVenueList.reduce((n, g) => n + g.count, 0)}
             allLabel="All venues"
             variant="sub"
+            hideCounts
             testIdPrefix="discover-venue-chip"
           />
         )}
