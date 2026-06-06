@@ -53,6 +53,12 @@ import {
   isConversationKind,
   type SessionRecentShow,
 } from '@/lib/conversationMemory';
+import {
+  isUpcomingDateHint,
+  tmDateWindow,
+  tmResultToFormParams,
+  type TmChatMatch,
+} from '@/lib/chat-tm-match';
 
 const SUGGESTIONS = [
   'Phoebe Bridgers at the Greek 8/15 GA',
@@ -77,6 +83,24 @@ export default function AddChatScreen(): React.JSX.Element {
   const [walletSheetOpen, setWalletSheetOpen] = React.useState(false);
   const [festivalSheetOpen, setFestivalSheetOpen] = React.useState(false);
   const parse = trpc.enrichment.parseChat.useMutation();
+
+  // ---------------------------------------------------------------------------
+  // Ticketmaster "did you mean one of these?" picker
+  // ---------------------------------------------------------------------------
+  // For shows the user is *going* to see, after the parse we search
+  // Ticketmaster for matching upcoming events and offer a picker that
+  // prefills the form with the venue / date / lineup. Past shows skip
+  // this entirely — Ticketmaster's catalogue only exposes upcoming
+  // events (`isUpcomingDateHint`). `pendingForm` holds the params we'd
+  // route with if the user picks "None of these", so the manual path
+  // still carries everything the LLM parsed.
+  const [tmMatches, setTmMatches] = React.useState<TmChatMatch[] | null>(null);
+  const [tmSearching, setTmSearching] = React.useState(false);
+  const [pendingForm, setPendingForm] = React.useState<{
+    baseParams: Record<string, string>;
+    seatHint: string;
+    freeText: string;
+  } | null>(null);
 
   // ---------------------------------------------------------------------------
   // Conversation memory
@@ -172,13 +196,47 @@ export default function AddChatScreen(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.savedShowId]);
 
+  const routeToForm = React.useCallback(
+    (params: Record<string, string>) => {
+      router.push({ pathname: '/add/form', params });
+    },
+    [router],
+  );
+
+  // Picked a Ticketmaster match — drop into the form prefilled with the
+  // event's venue / date / lineup, carrying over the seat the user
+  // mentioned and the original free text.
+  const handleSelectMatch = React.useCallback(
+    (match: TmChatMatch) => {
+      const seatHint = pendingForm?.seatHint ?? '';
+      const freeText = pendingForm?.freeText ?? '';
+      setTmMatches(null);
+      setPendingForm(null);
+      setText('');
+      routeToForm({ ...tmResultToFormParams(match), seatHint, freeText });
+    },
+    [pendingForm, routeToForm],
+  );
+
+  // "None of these" — fall back to the plain parsed details, exactly as
+  // the chat flow behaved before the Ticketmaster picker existed.
+  const handleRejectMatches = React.useCallback(() => {
+    const baseParams = pendingForm?.baseParams;
+    setTmMatches(null);
+    setPendingForm(null);
+    setText('');
+    if (baseParams) routeToForm(baseParams);
+  }, [pendingForm, routeToForm]);
+
   const submit = React.useCallback(
     async (raw: string) => {
       const trimmed = raw.trim();
       if (trimmed.length === 0) return;
-      // Sending a new message clears the previous confirmation card —
-      // the user is moving on, so the recap shouldn't hang around.
+      // Sending a new message clears the previous confirmation card and
+      // any stale Ticketmaster picker — the user is moving on.
       setConfirmation(null);
+      setTmMatches(null);
+      setPendingForm(null);
       try {
         const parsed = await parse.mutateAsync({
           freeText: trimmed,
@@ -209,17 +267,50 @@ export default function AddChatScreen(): React.JSX.Element {
             }),
           );
         }
-        router.push({
-          pathname: '/add/form',
-          params: {
-            headliner: parsed.headliner ?? '',
-            venueHint: parsed.venue_hint ?? '',
-            dateHint: parsed.date_hint ?? '',
-            seatHint: parsed.seat_hint ?? '',
-            kindHint: parsed.kind_hint ?? '',
-            freeText: trimmed,
-          },
-        });
+
+        // Params we'd route with absent a Ticketmaster match — the
+        // chat flow's original behavior, reused for past shows and the
+        // picker's "None of these" fallback.
+        const baseParams: Record<string, string> = {
+          headliner: parsed.headliner ?? '',
+          venueHint: parsed.venue_hint ?? '',
+          dateHint: parsed.date_hint ?? '',
+          seatHint: parsed.seat_hint ?? '',
+          kindHint: parsed.kind_hint ?? '',
+          freeText: trimmed,
+        };
+
+        // Only upcoming shows live in Ticketmaster's catalogue — gate
+        // the lookup on a parsed headliner + a today-or-later date so
+        // past shows go straight to the form.
+        if (parsedHeadliner && isUpcomingDateHint(parsed.date_hint)) {
+          setTmSearching(true);
+          try {
+            const { startDate, endDate } = tmDateWindow(parsed.date_hint);
+            const matches = (await utils.client.enrichment.searchTM.query({
+              headliner: parsedHeadliner,
+              startDate,
+              endDate,
+            })) as TmChatMatch[];
+            if (matches.length > 0) {
+              setPendingForm({
+                baseParams,
+                seatHint: parsed.seat_hint ?? '',
+                freeText: trimmed,
+              });
+              setTmMatches(matches);
+              setText('');
+              return; // wait for the user to pick a match or dismiss
+            }
+          } catch {
+            // TM lookup is best-effort — fall through to the plain form.
+          } finally {
+            setTmSearching(false);
+          }
+        }
+
+        setText('');
+        routeToForm(baseParams);
       } catch (err) {
         // toUserMessage swallows internal blobs (Zod / SQL / Groq schema
         // failures) and falls back to a clean message so the toast can't
@@ -239,7 +330,7 @@ export default function AddChatScreen(): React.JSX.Element {
         });
       }
     },
-    [parse, router, showToast],
+    [parse, router, routeToForm, utils, showToast],
   );
 
   return (
@@ -332,6 +423,75 @@ export default function AddChatScreen(): React.JSX.Element {
             </View>
           )}
 
+          {tmSearching ? (
+            <View style={styles.tmSearching}>
+              <ActivityIndicator size="small" color={colors.accent} />
+              <Text style={[styles.tmSearchingText, { color: colors.muted }]}>
+                Checking Ticketmaster…
+              </Text>
+            </View>
+          ) : null}
+
+          {tmMatches && tmMatches.length > 0 ? (
+            <View style={styles.tmSection}>
+              <Text style={[styles.tmHeading, { color: colors.muted }]}>
+                Found these on Ticketmaster — pick one to prefill the form, or
+                enter it yourself.
+              </Text>
+              {tmMatches.map((m) => (
+                <Pressable
+                  key={m.tmEventId}
+                  onPress={() => handleSelectMatch(m)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Use ${m.name} from Ticketmaster`}
+                  testID="chat-tm-match"
+                  style={({ pressed }) => [
+                    styles.posterDoor,
+                    {
+                      borderColor: colors.rule,
+                      backgroundColor: colors.surface,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[styles.posterIcon, { backgroundColor: colors.surfaceRaised }]}
+                  >
+                    <Ticket size={18} color={colors.accent} strokeWidth={1.8} />
+                  </View>
+                  <View style={styles.posterBody}>
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.posterTitle, { color: colors.ink }]}
+                    >
+                      {m.name}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.posterSub, { color: colors.muted }]}
+                    >
+                      {[m.venueName, m.venueCity, m.date].filter(Boolean).join(' · ')}
+                    </Text>
+                  </View>
+                  <ChevronRight size={16} color={colors.faint} strokeWidth={2} />
+                </Pressable>
+              ))}
+              <Pressable
+                onPress={handleRejectMatches}
+                accessibilityRole="button"
+                accessibilityLabel="None of these — enter the show manually"
+                testID="chat-tm-reject"
+                style={({ pressed }) => [styles.tmReject, pressed && { opacity: 0.7 }]}
+              >
+                <Text style={[styles.tmRejectText, { color: colors.accent }]}>
+                  None of these — enter manually
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {!tmMatches && (
+            <>
           <View style={styles.suggestions}>
             {SUGGESTIONS.map((s) => (
               <Pressable
@@ -409,6 +569,8 @@ export default function AddChatScreen(): React.JSX.Element {
             <ArrowRight size={16} color={colors.faint} strokeWidth={2} />
           </Pressable>
           )}
+            </>
+          )}
         </ScrollView>
 
         <View
@@ -428,11 +590,11 @@ export default function AddChatScreen(): React.JSX.Element {
             placeholderTextColor={colors.faint}
             multiline
             style={[styles.composerInput, { color: colors.ink }]}
-            editable={!parse.isPending}
+            editable={!parse.isPending && !tmSearching}
           />
           <Pressable
             onPress={() => void submit(text)}
-            disabled={parse.isPending || text.trim().length === 0}
+            disabled={parse.isPending || tmSearching || text.trim().length === 0}
             accessibilityRole="button"
             accessibilityLabel="Send"
             style={({ pressed }) => [
@@ -443,7 +605,7 @@ export default function AddChatScreen(): React.JSX.Element {
               },
             ]}
           >
-            {parse.isPending ? (
+            {parse.isPending || tmSearching ? (
               <ActivityIndicator size="small" color={colors.accentText} />
             ) : (
               <ArrowRight size={18} color={colors.accentText} strokeWidth={2.4} />
@@ -487,6 +649,31 @@ const styles = StyleSheet.create({
   },
   suggestions: {
     gap: 8,
+  },
+  tmSearching: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tmSearchingText: {
+    fontFamily: 'Geist Sans',
+    fontSize: 13,
+  },
+  tmSection: {
+    gap: 8,
+  },
+  tmHeading: {
+    fontFamily: 'Geist Sans',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  tmReject: {
+    paddingVertical: 8,
+    alignSelf: 'flex-start',
+  },
+  tmRejectText: {
+    fontFamily: 'Geist Sans 600',
+    fontSize: 13,
   },
   suggestion: {
     borderWidth: StyleSheet.hairlineWidth,
