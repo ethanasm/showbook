@@ -20,12 +20,19 @@ import { View, Image, StyleSheet } from 'react-native';
 
 const BG = '#0C0C0C';
 
+// Match the native splash's `imageWidth` (app.config.ts) so the native→JS
+// handoff is seamless: same asset, same centered size, same background.
+// expo-splash-screen lays the native image into an `imageWidth × imageWidth`
+// square box with aspect-fit, so we mirror a square box here — `contain` then
+// fits the 1080×1180 asset inside it identically to the storyboard.
+const LOGO_BOX = 200;
+
 export function BrandSplash(): React.JSX.Element {
   return (
     <View style={styles.root}>
       <Image
-        // Same asset the native splash is generated from — keeps the
-        // native→JS handoff seamless.
+        // Same asset the native splash is generated from, rendered at the same
+        // centered width — keeps the native→JS handoff seamless.
         source={require('../assets/splash.png')}
         resizeMode="contain"
         style={styles.image}
@@ -47,8 +54,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   image: {
-    width: '100%',
-    height: '100%',
+    width: LOGO_BOX,
+    height: LOGO_BOX,
   },
 });
 
