@@ -81,6 +81,28 @@ describe('image-proxy: allowlists', () => {
     assert.ok(ALLOWED_PROXY_HOSTS.has('mosaic.scdn.co'));
   });
 
+  it('ALLOWED_PROXY_HOSTS contains Wikimedia Commons (theatre cast headshots)', () => {
+    // Wikidata-resolved cast photos persist as
+    // commons.wikimedia.org/wiki/Special:FilePath/... URLs.
+    assert.ok(ALLOWED_PROXY_HOSTS.has('commons.wikimedia.org'));
+  });
+
+  it('ALLOWED_REDIRECT_HOSTS contains upload.wikimedia.org (Commons CDN hop)', () => {
+    // Special:FilePath 302-redirects to the upload.wikimedia.org CDN.
+    assert.ok(ALLOWED_REDIRECT_HOSTS.has('upload.wikimedia.org'));
+  });
+
+  it('isProxyableUrl accepts a Commons Special:FilePath URL and rejects other wikimedia hosts', () => {
+    assert.equal(
+      isProxyableUrl(
+        'https://commons.wikimedia.org/wiki/Special:FilePath/Cole.png?width=600',
+      ),
+      true,
+    );
+    // upload.wikimedia.org is only a redirect target, not an initial host.
+    assert.equal(isProxyableUrl('https://upload.wikimedia.org/x.png'), false);
+  });
+
   it('ALLOWED_REDIRECT_HOSTS contains the Google Places photo CDN hosts', () => {
     for (const host of [
       'lh3.googleusercontent.com',

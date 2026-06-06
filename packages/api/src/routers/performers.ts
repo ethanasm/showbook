@@ -6,6 +6,7 @@ import { performers, userPerformerFollows, shows, showPerformers, showAnnounceme
 import { enqueueIngestPerformer } from '../job-queue';
 import { computePerformerAnnouncementsToDelete } from './preferences';
 import { searchAttractions, searchEvents, selectBestImage, extractMusicbrainzId, type TMEvent } from '../ticketmaster';
+import { searchWikidataPeople } from '../wikidata';
 import {
   normalizeLiveAttractionEvents,
   shapeStoredUpcoming,
@@ -141,25 +142,58 @@ export const performersRouter = router({
     }),
 
   /**
-   * Search Ticketmaster for attractions (artists/performers/productions) not
-   * yet in our local DB, so users can follow artists they haven't seen
-   * before. Returns lightweight cards; followAttraction below does the
-   * actual match-or-create + follow.
+   * Search for external performers not yet in our local DB so users can add
+   * them to a show / follow them. Returns lightweight cards; followAttraction
+   * below does the actual match-or-create + follow.
+   *
+   * Source depends on `kind`: theatre cast mostly have no Ticketmaster page,
+   * so for `kind === 'theatre'` we query Wikidata people (QID + headshot +
+   * disambiguating description, plus a MusicBrainz id when the actor is also
+   * a recording artist). Every other kind keeps the Ticketmaster attraction
+   * search unchanged. The output shape is unified — `tmAttractionId`,
+   * `wikidataQid`, and `subtitle` are all optional — so both the web and
+   * mobile lineup typeaheads consume one result type.
    */
   searchExternal: protectedProcedure
-    .input(z.object({ query: z.string().min(1).max(200) }))
+    .input(
+      z.object({
+        query: z.string().min(1).max(200),
+        kind: z.string().optional(),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       enforceRateLimit(`performers.searchExternal:${ctx.session.user.id}`, {
         max: 30,
         windowMs: 60_000,
       });
+      if (input.kind === 'theatre') {
+        try {
+          const people = await searchWikidataPeople(input.query);
+          return people.map((p) => ({
+            tmAttractionId: null as string | null,
+            wikidataQid: p.wikidataQid,
+            name: p.name,
+            imageUrl: p.imageUrl,
+            musicbrainzId: p.musicbrainzId,
+            subtitle: p.description,
+          }));
+        } catch (err) {
+          log.error(
+            { err, event: 'performers.search_external.failed', query: input.query, source: 'wikidata' },
+            'searchExternal (wikidata) failed',
+          );
+          return [];
+        }
+      }
       try {
         const attractions = await searchAttractions(input.query);
         return attractions.slice(0, 10).map((a) => ({
-          tmAttractionId: a.id,
+          tmAttractionId: a.id as string | null,
+          wikidataQid: null as string | null,
           name: a.name,
           imageUrl: selectBestImage(a.images),
           musicbrainzId: extractMusicbrainzId(a) ?? null,
+          subtitle: null as string | null,
         }));
       } catch (err) {
         log.error({ err, event: 'performers.search_external.failed', query: input.query }, 'searchExternal failed');

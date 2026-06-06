@@ -45,6 +45,16 @@ export const performers = pgTable(
     // signal and to render the "Open in Spotify" button on the artist
     // detail page.
     spotifyArtistId: text('spotify_artist_id'),
+    // Theatre cast — Wikidata QID (e.g. "Q40281836"). Populated at create
+    // time by the fire-and-forget `resolvePerformerWikidataId` hook in
+    // `matchOrCreatePerformer` for cast members entered via the theatre
+    // typeahead / playbill extraction (who have no Ticketmaster page), and
+    // by the `backfill-performer-wikidata-ids` cron / admin button as the
+    // catch-up safety net. Wikidata is the enrichment source for theatre
+    // people: it provides the headshot (P18, stored to `image_url`) and,
+    // when present, the MusicBrainz id (P434, stored to `musicbrainz_id`)
+    // which unifies stage-and-screen performers with their concert rows.
+    wikidataQid: text('wikidata_qid'),
     // Phase 11 (§15l) — dedup for the setlist-tour-watch cron. Updated
     // each time the every-3h job enqueues a corpus refresh for this
     // performer; 21h window prevents same-day repeats and respects the
@@ -68,6 +78,9 @@ export const performers = pgTable(
     uniqueIndex('performers_spotify_artist_uniq')
       .on(table.spotifyArtistId)
       .where(sql`${table.spotifyArtistId} IS NOT NULL`),
+    uniqueIndex('performers_wikidata_uniq')
+      .on(table.wikidataQid)
+      .where(sql`${table.wikidataQid} IS NOT NULL`),
     index('performers_name_idx').on(table.name),
   ]
 );

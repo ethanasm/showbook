@@ -120,6 +120,10 @@ const performerInputSchema = z.object({
   sortOrder: z.number().int(),
   tmAttractionId: z.string().optional(),
   musicbrainzId: z.string().optional(),
+  // Theatre cast picked from the Wikidata-backed typeahead carry a QID
+  // (e.g. "Q40281836"); matchOrCreatePerformer dedupes on it and the
+  // imageUrl here is a Wikimedia Commons headshot.
+  wikidataQid: z.string().optional(),
   imageUrl: z.string().url().optional(),
   setlist: performerSetlistSchema.optional(),
 });
@@ -128,6 +132,7 @@ const headlinerInputSchema = z.object({
   name: z.string().min(1),
   tmAttractionId: z.string().optional(),
   musicbrainzId: z.string().optional(),
+  wikidataQid: z.string().optional(),
   imageUrl: z.string().url().optional(),
   setlist: performerSetlistSchema.optional(),
 });
@@ -543,6 +548,7 @@ export const showsRouter = router({
           name: input.headliner.name,
           tmAttractionId: input.headliner.tmAttractionId,
           musicbrainzId: input.headliner.musicbrainzId,
+          wikidataQid: input.headliner.wikidataQid,
           imageUrl: input.headliner.imageUrl,
         });
         headlinerId = headlinerResult.performer.id;
@@ -559,6 +565,7 @@ export const showsRouter = router({
             name: p.name,
             tmAttractionId: p.tmAttractionId,
             musicbrainzId: p.musicbrainzId,
+            wikidataQid: p.wikidataQid,
             imageUrl: p.imageUrl,
           });
           resolvedPerformers.push({ id: result.performer.id, input: p });
@@ -1030,6 +1037,7 @@ export const showsRouter = router({
           name: input.headliner.name,
           tmAttractionId: input.headliner.tmAttractionId,
           musicbrainzId: input.headliner.musicbrainzId,
+          wikidataQid: input.headliner.wikidataQid,
           imageUrl: input.headliner.imageUrl,
         });
         resolvedHeadlinerId = headlinerResult.performer.id;
@@ -1049,6 +1057,7 @@ export const showsRouter = router({
             name: p.name,
             tmAttractionId: p.tmAttractionId,
             musicbrainzId: p.musicbrainzId,
+            wikidataQid: p.wikidataQid,
             imageUrl: p.imageUrl,
           });
           resolvedSupport.push({ id: result.performer.id, input: p });
@@ -1162,6 +1171,7 @@ export const showsRouter = router({
         characterName: z.string().optional(),
         tmAttractionId: z.string().optional(),
         musicbrainzId: z.string().optional(),
+        wikidataQid: z.string().optional(),
         imageUrl: z.string().optional(),
       }),
     )
@@ -1181,6 +1191,7 @@ export const showsRouter = router({
         name: input.name,
         tmAttractionId: input.tmAttractionId,
         musicbrainzId: input.musicbrainzId,
+        wikidataQid: input.wikidataQid,
         imageUrl: input.imageUrl,
       });
 

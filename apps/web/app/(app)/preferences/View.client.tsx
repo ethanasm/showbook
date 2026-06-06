@@ -23,9 +23,14 @@ import {
 
 // ── Data Source Row ────────────────────────────────────────
 
+// Built-in integrations: enrichment data sources Showbook talks to through
+// shared, app-wide keys (or no key, for Wikidata / setlist.fm). They aren't
+// tied to your account and need no sign-in — every account uses the same ones.
 const DATA_SOURCES = [
   { name: "setlist.fm", desc: "Setlists, tour info, song data", connected: true },
   { name: "Ticketmaster", desc: "Venue, date, seat, pricing", connected: true },
+  { name: "Google Places", desc: "City & venue search, map photos", connected: true },
+  { name: "Wikidata", desc: "Theatre cast IDs, photos & links", connected: true },
   { name: "Playbill", desc: "Theatre cast on the night", connected: true },
 ] as const;
 
@@ -643,8 +648,11 @@ export default function PreferencesView() {
             />
           )}
 
-          {/* ── Data Sources ─────────────────────────── */}
-          <SectionHead label="Data sources" sub="auto-enrichment for show details" />
+          {/* ── Built-in integrations ─────────────────── */}
+          <SectionHead
+            label="Built-in integrations"
+            sub="shared, app-wide data sources — not tied to your account"
+          />
           <div style={styles.card}>
             {DATA_SOURCES.map((source, i) => (
               <SettingRow

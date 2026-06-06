@@ -91,8 +91,10 @@ export function LineupEditor({
     { query: debouncedQuery },
     { enabled: debouncedQuery.trim().length > 0, staleTime: 60_000 },
   );
+  // For theatre the kind routes searchExternal to Wikidata (cast members
+  // have no Ticketmaster page); every other kind keeps the TM search.
   const externalSearchQuery = trpc.performers.searchExternal.useQuery(
-    { query: debouncedQuery },
+    { query: debouncedQuery, kind },
     { enabled: debouncedQuery.trim().length > 0, staleTime: 60_000 },
   );
 
@@ -117,16 +119,19 @@ export function LineupEditor({
       });
     }
     for (const ext of externalSearchQuery.data ?? []) {
-      const key = dedupKey(ext.name, ext.tmAttractionId);
+      const extId = ext.wikidataQid ?? ext.tmAttractionId;
+      const key = dedupKey(ext.name, extId);
       if (seen.has(key)) continue;
       seen.add(key);
       out.push({
-        key: `tm:${ext.tmAttractionId}`,
+        key: ext.wikidataQid ? `wd:${ext.wikidataQid}` : `tm:${ext.tmAttractionId}`,
         name: ext.name,
         imageUrl: ext.imageUrl ?? null,
         tmAttractionId: ext.tmAttractionId,
+        wikidataQid: ext.wikidataQid ?? null,
         musicbrainzId: ext.musicbrainzId,
-        source: 'Ticketmaster',
+        subtitle: ext.subtitle ?? null,
+        source: ext.wikidataQid ? 'Wikidata' : 'Ticketmaster',
       });
     }
     return out.slice(0, 8);
@@ -170,6 +175,7 @@ export function LineupEditor({
       updateRow(rowId, {
         name: artist.name,
         tmAttractionId: artist.tmAttractionId ?? undefined,
+        wikidataQid: artist.wikidataQid ?? undefined,
         musicbrainzId: artist.musicbrainzId ?? undefined,
         imageUrl: artist.imageUrl ?? undefined,
       });
@@ -268,6 +274,7 @@ export function LineupEditor({
                       // editing a manual name disowns any previously
                       // matched IDs — they don't apply to a new string
                       tmAttractionId: undefined,
+                      wikidataQid: undefined,
                       musicbrainzId: undefined,
                       imageUrl: undefined,
                     });
