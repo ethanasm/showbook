@@ -24,10 +24,17 @@
 // lands here as a raw URL. Adding a host here without a security
 // review re-opens the SSRF vector previously closed by tightening the
 // input schemas and the proxy fetches.
+//   - Wikimedia Commons (`commons.wikimedia.org`) — written to
+//     performers.imageUrl for theatre cast resolved via Wikidata (P18).
+//     The Special:FilePath URL 302-redirects to the upload.wikimedia.org
+//     CDN, which the one-hop redirect handler below follows. Both hosts
+//     serve only static, publicly-cacheable image bytes — no internal
+//     network reachability — so this does not widen the SSRF surface.
 export const ALLOWED_PROXY_HOSTS: ReadonlySet<string> = new Set([
   's1.ticketm.net',
   'i.scdn.co',
   'mosaic.scdn.co',
+  'commons.wikimedia.org',
 ]);
 
 // Redirect-target allowlist for the one hop `fetchUpstream` will follow.
@@ -49,6 +56,9 @@ export const ALLOWED_REDIRECT_HOSTS: ReadonlySet<string> = new Set([
   // a legitimate artist photo.
   'i.scdn.co',
   'mosaic.scdn.co',
+  // Wikimedia Commons Special:FilePath URLs 302 to this CDN; following the
+  // one hop is how we serve Wikidata-sourced cast headshots.
+  'upload.wikimedia.org',
 ]);
 
 // Allowlist of content-types we'll proxy back to the client. SVG is

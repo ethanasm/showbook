@@ -122,6 +122,27 @@ describe('matchOrCreatePerformer (mocked db)', () => {
     assert.equal(result.performer.ticketmasterAttractionId, 'tm-2');
   });
 
+  it('returns existing on Wikidata QID match (theatre cast dedupe)', async () => {
+    const existing = {
+      id: 'p-wd',
+      name: 'Cole Escola',
+      ticketmasterAttractionId: null,
+      musicbrainzId: null,
+      wikidataQid: 'Q40281836',
+      imageUrl: null,
+    };
+    reset({
+      // No TM id provided → TM branch skips; Wikidata branch hits.
+      selectResults: [[existing]],
+    });
+    const result = await mod.matchOrCreatePerformer({
+      name: 'Cole Escola',
+      wikidataQid: 'Q40281836',
+    });
+    assert.equal(result.created, false);
+    assert.equal(result.performer.id, 'p-wd');
+  });
+
   it('returns existing on case-insensitive name match', async () => {
     const existing = {
       id: 'p3',

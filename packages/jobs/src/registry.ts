@@ -13,6 +13,7 @@ import { runBackfillPerformerImages } from './backfill-performer-images';
 import { runBackfillPerformerMbids } from './backfill-performer-mbids';
 import { runBackfillPerformerTicketmasterIds } from './backfill-performer-ticketmaster-ids';
 import { runBackfillPerformerSpotifyIds } from './backfill-performer-spotify-ids';
+import { runBackfillPerformerWikidataIds } from './backfill-performer-wikidata-ids';
 import { runBackfillVenuePhotos } from './backfill-venue-photos';
 import { runBackfillShowCoverImages } from './backfill-show-cover-images';
 import { runBackfillShowTicketUrls } from './backfill-show-ticket-urls';
@@ -51,6 +52,7 @@ export const JOBS = {
   BACKFILL_PERFORMER_MBIDS: 'backfill/performer-mbids',
   BACKFILL_PERFORMER_TICKETMASTER_IDS: 'backfill/performer-ticketmaster-ids',
   BACKFILL_PERFORMER_SPOTIFY_IDS: 'backfill/performer-spotify-ids',
+  BACKFILL_PERFORMER_WIKIDATA_IDS: 'backfill/performer-wikidata-ids',
   BACKFILL_VENUE_PHOTOS: 'backfill/venue-photos',
   BACKFILL_SHOW_COVER_IMAGES: 'backfill/show-cover-images',
   BACKFILL_SHOW_TICKET_URLS: 'backfill/show-ticket-urls',
@@ -535,6 +537,27 @@ const JOBS_TABLE: JobEntry[] = [
       summary: (r) => ({
         event: 'backfill.performer_spotify_ids.summary',
         msg: 'Performer Spotify ID backfill complete',
+        total: r.total,
+        updated: r.updated,
+        missing: r.missing,
+        skipped: r.skipped,
+        failed: r.failed,
+      }),
+    }),
+  },
+  // Wikidata QID backfill for theatre cast / non-TM performers. Catch-up
+  // for the inline `resolvePerformerWikidataId` hook. Scheduled at 07:15 ET
+  // — just after the morning health check (07:00) and before the digest.
+  {
+    name: JOBS.BACKFILL_PERFORMER_WIKIDATA_IDS,
+    queueOptions: LONG_BATCH_CRON,
+    schedule: '15 7 * * *',
+    handler: defineJobHandler({
+      name: JOBS.BACKFILL_PERFORMER_WIKIDATA_IDS,
+      run: () => runBackfillPerformerWikidataIds(),
+      summary: (r) => ({
+        event: 'backfill.performer_wikidata_qids.summary',
+        msg: 'Performer Wikidata QID backfill complete',
         total: r.total,
         updated: r.updated,
         missing: r.missing,
