@@ -85,6 +85,13 @@ export interface ShowFormFieldsProps {
    * the picker can navigate from the right route context.
    */
   onExtractLineup?: () => void;
+  /**
+   * Theatre-only entry into the playbill cast OCR sheet. When provided
+   * and kind is "theatre" the form renders an "Extract cast from
+   * playbill" pill above the lineup editor (the mobile twin of the web
+   * Add flow's playbill upload). The parent screen owns the sheet.
+   */
+  onExtractCast?: () => void;
 }
 
 export function ShowFormFields({
@@ -97,11 +104,13 @@ export function ShowFormFields({
   errors,
   clearError,
   onExtractLineup,
+  onExtractCast,
 }: ShowFormFieldsProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
 
   const isFestival = values.kind === 'festival';
+  const isTheatre = values.kind === 'theatre';
 
   return (
     <View style={styles.wrap}>
@@ -240,6 +249,24 @@ export function ShowFormFields({
           <ImageIcon size={14} color={colors.accentText} strokeWidth={2} />
           <Text style={[styles.extractBtnLabel, { color: colors.accentText }]}>
             Extract lineup from poster
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {isTheatre && onExtractCast ? (
+        <Pressable
+          onPress={onExtractCast}
+          accessibilityRole="button"
+          accessibilityLabel="Extract cast from playbill"
+          testID="extract-cast-from-playbill"
+          style={({ pressed }) => [
+            styles.extractBtn,
+            { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
+          ]}
+        >
+          <ImageIcon size={14} color={colors.accentText} strokeWidth={2} />
+          <Text style={[styles.extractBtnLabel, { color: colors.accentText }]}>
+            Extract cast from playbill
           </Text>
         </Pressable>
       ) : null}

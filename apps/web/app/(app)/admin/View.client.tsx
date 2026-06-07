@@ -67,6 +67,8 @@ export default function AdminView() {
     trpc.admin.enqueueBackfillPerformerTicketmasterIds.useMutation();
   const performerSpotifyMutation =
     trpc.admin.enqueueBackfillPerformerSpotifyIds.useMutation();
+  const performerWikidataMutation =
+    trpc.admin.enqueueBackfillPerformerWikidataIds.useMutation();
   const showTicketUrlsMutation =
     trpc.admin.enqueueBackfillShowTicketUrls.useMutation();
 
@@ -107,6 +109,11 @@ export default function AdminView() {
   const performerSpotifyResult = performerSpotifyMutation.data
     ? performerSpotifyMutation.data.jobId
       ? `Enqueued job ${performerSpotifyMutation.data.jobId}`
+      : 'Enqueue returned no job id (likely a duplicate already queued)'
+    : null;
+  const performerWikidataResult = performerWikidataMutation.data
+    ? performerWikidataMutation.data.jobId
+      ? `Enqueued job ${performerWikidataMutation.data.jobId}`
       : 'Enqueue returned no job id (likely a duplicate already queued)'
     : null;
   const showTicketUrlsResult = showTicketUrlsMutation.data
@@ -230,6 +237,17 @@ export default function AdminView() {
               errorMessage={performerSpotifyMutation.error?.message ?? null}
               resultLine={performerSpotifyResult}
               onRun={() => performerSpotifyMutation.mutate()}
+            />
+
+            <BackfillCard
+              title="Backfill performer Wikidata IDs"
+              description="Enqueue the backfill-performer-wikidata-ids job. Resolves a Wikidata QID (plus a headshot and MusicBrainz id when present) for every theatre cast / non-Ticketmaster performer without one — never overwrites an existing value. Already runs daily at 07:15 ET; use this after adding theatre shows to catch up the cast backlog. Results land in Axiom (event backfill.performer_wikidata_qids.summary)."
+              buttonLabel="Enqueue Wikidata-id backfill"
+              confirmText="Enqueue the performer-Wikidata-id backfill? It calls Wikidata search once per non-TM performer with no QID."
+              isPending={performerWikidataMutation.isPending}
+              errorMessage={performerWikidataMutation.error?.message ?? null}
+              resultLine={performerWikidataResult}
+              onRun={() => performerWikidataMutation.mutate()}
             />
           </div>
 

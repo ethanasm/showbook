@@ -31,6 +31,8 @@ export interface PerformerRow {
   /** Festival tier toggle. Defaults to 'support' for new rows. Ignored for non-festival kinds. */
   tier?: 'headliner' | 'support';
   tmAttractionId?: string;
+  /** Wikidata QID for theatre cast (no Ticketmaster page). */
+  wikidataQid?: string;
   musicbrainzId?: string;
   imageUrl?: string;
 }
@@ -78,6 +80,7 @@ export interface SerializedShowVenue {
 export interface SerializedShowHeadliner {
   name: string;
   tmAttractionId?: string;
+  wikidataQid?: string;
   musicbrainzId?: string;
   imageUrl?: string;
 }
@@ -88,6 +91,7 @@ export interface SerializedShowPerformer {
   characterName?: string;
   sortOrder: number;
   tmAttractionId?: string;
+  wikidataQid?: string;
   musicbrainzId?: string;
   imageUrl?: string;
 }
@@ -111,12 +115,15 @@ export interface SerializedShowInput {
   performers?: SerializedShowPerformer[];
 }
 
-const PERFORMER_ENRICHMENT_KEYS = ['tmAttractionId', 'musicbrainzId', 'imageUrl'] as const;
+const PERFORMER_ENRICHMENT_KEYS = ['tmAttractionId', 'wikidataQid', 'musicbrainzId', 'imageUrl'] as const;
 
-function pickEnrichment(
-  row: Pick<PerformerRow, 'tmAttractionId' | 'musicbrainzId' | 'imageUrl'>,
-): Partial<Pick<PerformerRow, 'tmAttractionId' | 'musicbrainzId' | 'imageUrl'>> {
-  const out: Partial<Pick<PerformerRow, 'tmAttractionId' | 'musicbrainzId' | 'imageUrl'>> = {};
+type PerformerEnrichment = Pick<
+  PerformerRow,
+  'tmAttractionId' | 'wikidataQid' | 'musicbrainzId' | 'imageUrl'
+>;
+
+function pickEnrichment(row: PerformerEnrichment): Partial<PerformerEnrichment> {
+  const out: Partial<PerformerEnrichment> = {};
   for (const key of PERFORMER_ENRICHMENT_KEYS) {
     const v = row[key];
     if (typeof v === 'string' && v.length > 0) out[key] = v;
@@ -127,7 +134,7 @@ function pickEnrichment(
 function findHeadlinerEnrichment(
   performers: readonly PerformerRow[],
   headlinerName: string,
-): Pick<PerformerRow, 'tmAttractionId' | 'musicbrainzId' | 'imageUrl'> {
+): PerformerEnrichment {
   // Concert/comedy don't show a tier toggle, so a typeahead-picked
   // headliner has no in-form lineup row to inherit IDs from. Concerts
   // currently fall through to free-text {name} only — that's fine; the
@@ -273,6 +280,7 @@ export interface ShowDetailPerformer {
   performer: {
     name: string;
     ticketmasterAttractionId?: string | null;
+    wikidataQid?: string | null;
     musicbrainzId?: string | null;
     imageUrl?: string | null;
   };
@@ -340,6 +348,7 @@ export function buildShowFormFromDetail(
     characterName: p.characterName ?? undefined,
     tier: p.role === 'headliner' ? 'headliner' : 'support',
     tmAttractionId: p.performer.ticketmasterAttractionId ?? undefined,
+    wikidataQid: p.performer.wikidataQid ?? undefined,
     musicbrainzId: p.performer.musicbrainzId ?? undefined,
     imageUrl: p.performer.imageUrl ?? undefined,
   }));

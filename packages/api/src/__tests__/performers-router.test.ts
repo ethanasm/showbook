@@ -136,6 +136,44 @@ describe('performersRouter (unit)', () => {
         globalThis.fetch = origFetch;
       }
     });
+
+    it('routes kind=theatre to Wikidata and returns QID + subtitle, tmAttractionId null', async () => {
+      const origFetch = globalThis.fetch;
+      const json = (body: unknown) =>
+        ({ ok: true, status: 200, json: async () => body }) as unknown as Response;
+      globalThis.fetch = (async (input: string | URL) => {
+        const url = String(input);
+        if (url.includes('wbsearchentities')) {
+          return json({
+            search: [{ id: 'Q40281836', label: 'Cole Escola', description: 'American actor' }],
+          });
+        }
+        return json({
+          entities: {
+            Q40281836: {
+              claims: {
+                P31: [{ mainsnak: { datavalue: { value: { id: 'Q5' } } } }],
+                P18: [{ mainsnak: { datavalue: { value: 'Cole.png' } } }],
+              },
+            },
+          },
+        });
+      }) as typeof globalThis.fetch;
+      try {
+        const db = makeFakeDb();
+        const result = await caller(db).searchExternal({
+          query: 'Cole Escola',
+          kind: 'theatre',
+        });
+        assert.equal(result.length, 1);
+        assert.equal(result[0].wikidataQid, 'Q40281836');
+        assert.equal(result[0].tmAttractionId, null);
+        assert.equal(result[0].subtitle, 'American actor');
+        assert.match(result[0].imageUrl ?? '', /commons\.wikimedia\.org/);
+      } finally {
+        globalThis.fetch = origFetch;
+      }
+    });
   });
 
   describe('list', () => {
