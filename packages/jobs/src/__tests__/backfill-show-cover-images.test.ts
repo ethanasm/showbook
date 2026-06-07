@@ -8,6 +8,7 @@ interface Script {
   selectBestImageReturns: Array<string | null>;
   updates: Array<{ id: string; coverImageUrl: string }>;
   executeCount: number;
+  executeQueries: unknown[];
 }
 
 const SCRIPT: Script = {
@@ -17,6 +18,7 @@ const SCRIPT: Script = {
   selectBestImageReturns: [],
   updates: [],
   executeCount: 0,
+  executeQueries: [],
 };
 
 function reset(opts: Partial<Script> = {}) {
@@ -26,6 +28,35 @@ function reset(opts: Partial<Script> = {}) {
   SCRIPT.selectBestImageReturns = opts.selectBestImageReturns ?? [];
   SCRIPT.updates = [];
   SCRIPT.executeCount = 0;
+  SCRIPT.executeQueries = [];
+}
+
+// Walk a drizzle `sql` object's queryChunks tree and collect every bound
+// value (the non-StringChunk leaves). Mirrors the helper in
+// health-check-checks.test.ts — lets us assert the sibling-propagation
+// UPDATE binds each production name as its own scalar param rather than a
+// single JS-array param (the prod regression on 2026-06-06: a raw
+// `= any(${jsArray})` reached postgres as a stringified array and threw
+// "malformed array literal").
+function collectBoundValues(chunks: unknown[]): unknown[] {
+  const out: unknown[] = [];
+  for (const c of chunks) {
+    if (c && typeof c === 'object') {
+      if ('queryChunks' in c) {
+        const nested = (c as { queryChunks: unknown }).queryChunks;
+        if (Array.isArray(nested)) out.push(...collectBoundValues(nested));
+        continue;
+      }
+      if ('value' in c && Array.isArray((c as { value: unknown }).value)) {
+        // StringChunk: `value` is the literal SQL fragment(s) — skip.
+        continue;
+      }
+      if ('value' in c) out.push((c as { value: unknown }).value);
+      continue;
+    }
+    out.push(c);
+  }
+  return out;
 }
 
 // Minimal drizzle-like fake. The job uses a single chained select(), and
@@ -56,8 +87,9 @@ const fakeDb = {
       },
     }),
   }),
-  execute: async () => {
+  execute: async (query: unknown) => {
     SCRIPT.executeCount += 1;
+    SCRIPT.executeQueries.push(query);
     return undefined;
   },
 };
@@ -274,5 +306,52 @@ describe('runBackfillShowCoverImages', () => {
     assert.equal(SCRIPT.updates.length, 2);
     assert.equal(SCRIPT.updates[0].coverImageUrl, 'https://tm/wicked.jpg');
     assert.equal(SCRIPT.updates[1].coverImageUrl, 'https://tm/wicked.jpg');
+  });
+
+  it('binds the sibling-propagation names as scalar params, not a JS array', async () => {
+    // Regression for the 2026-06-06 prod failure: a single found cover made
+    // `filledNames` a one-element array, and the old `= any(${filledNames})`
+    // reached postgres as a stringified array literal ("malformed array
+    // literal: \"death of a salesman\"", SQLSTATE 22P02), failing the whole
+    // pg-boss job. The fix builds an explicit `ARRAY[$1, $2, …]` so each name
+    // binds as its own text param.
+    reset({
+      candidates: [
+        {
+          id: 'show-salesman',
+          productionName: 'Death of a Salesman',
+          date: null,
+          endDate: null,
+          tmVenueId: null,
+        },
+      ],
+      searchAttractionsResults: [
+        [{ name: 'Death of a Salesman', images: [{ url: 'https://tm/dos.jpg' }] }],
+      ],
+      selectBestImageReturns: ['https://tm/dos.jpg'],
+    });
+    const result = await mod.runBackfillShowCoverImages();
+    assert.equal(result.updated, 1);
+    // The propagation UPDATE must have run (filledNames non-empty).
+    assert.equal(SCRIPT.executeCount, 1);
+    const query = SCRIPT.executeQueries[0] as { queryChunks?: unknown[] };
+    assert.ok(
+      Array.isArray(query.queryChunks),
+      'execute should receive a drizzle sql object',
+    );
+    const bound = collectBoundValues(query.queryChunks);
+    // No bound value may itself be an array — that's the broken
+    // `any(${jsArray})` shape that postgres rejects.
+    const arrayParams = bound.filter((v) => Array.isArray(v));
+    assert.equal(
+      arrayParams.length,
+      0,
+      `no bind param should be a JS array, got ${JSON.stringify(arrayParams)}`,
+    );
+    // The production name must be bound as an individual scalar param.
+    assert.ok(
+      bound.includes('death of a salesman'),
+      'expected the lowercased production name as a scalar bind param',
+    );
   });
 });
