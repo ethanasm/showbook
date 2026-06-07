@@ -50,6 +50,8 @@ import {
   CloudUpload,
   Music,
   RefreshCw,
+  Building2,
+  MicVocal,
   Library,
 } from 'lucide-react-native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -249,6 +251,55 @@ export default function MeScreen(): React.JSX.Element {
               onPress={() => router.push(`/integrations/${row.id}`)}
             />
           ))}
+        </View>
+
+        {/* LIBRARY — venues + artists collections. Mobile has no top-level
+            Venues / Artists tabs (web does), so these rows are the entry
+            point into the full `/venues` and `/artists` list screens. */}
+        <Text style={[styles.sectionLabel, { color: colors.muted }]}>LIBRARY</Text>
+        <View
+          style={[
+            styles.card,
+            styles.cardNoPad,
+            { backgroundColor: colors.surface, borderColor: colors.rule },
+          ]}
+        >
+          <Pressable
+            onPress={() => router.push('/venues')}
+            accessibilityRole="button"
+            accessibilityLabel="View all venues"
+            testID="me-venues-row"
+            style={({ pressed }) => [
+              styles.row,
+              { borderBottomColor: colors.rule, borderBottomWidth: StyleSheet.hairlineWidth },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Building2 size={18} color={colors.muted} strokeWidth={2} />
+            <View style={styles.rowText}>
+              <Text style={[styles.rowLabel, { color: colors.ink }]}>Venues</Text>
+              <Text style={[styles.rowSub, { color: colors.muted }]} numberOfLines={1}>
+                Every stage you have logged or followed
+              </Text>
+            </View>
+            <ChevronRight size={16} color={colors.faint} strokeWidth={2} />
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/artists')}
+            accessibilityRole="button"
+            accessibilityLabel="View all artists"
+            testID="me-artists-row"
+            style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+          >
+            <MicVocal size={18} color={colors.muted} strokeWidth={2} />
+            <View style={styles.rowText}>
+              <Text style={[styles.rowLabel, { color: colors.ink }]}>Artists</Text>
+              <Text style={[styles.rowSub, { color: colors.muted }]} numberOfLines={1}>
+                Your full lineup of performers
+              </Text>
+            </View>
+            <ChevronRight size={16} color={colors.faint} strokeWidth={2} />
+          </Pressable>
         </View>
 
         {/* REGION */}
