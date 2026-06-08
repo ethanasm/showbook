@@ -4,8 +4,9 @@ import type { ExpoConfig } from 'expo/config';
 // ticket BrandMark. icon.png is 1024×1024 with the #0C0C0C background
 // baked in; adaptive-icon.png is the same foreground on transparent so
 // Android can composite it over the bg color below; splash.png is a
-// 1080×1180 tightly-framed mark rendered as a centered logo (sized via
-// the splash plugin's `imageWidth` below), not a full-bleed background.
+// 1080×1180 tightly-framed mark rendered as a centered logo by the JS
+// <BrandSplash/> (components/BrandSplash.tsx) — the native splash itself
+// is image-less black (see the expo-splash-screen plugin below for why).
 // The source SVG + render script live under `assets/logo-mocks/` so the
 // masters stay revisable.
 //
@@ -173,32 +174,22 @@ const config: ExpoConfig = {
     [
       'expo-splash-screen',
       {
-        // splash.png is a *tightly-framed* gold-on-black brand mark (ticket +
-        // "showbook" wordmark + tagline filling the canvas — see
-        // assets/logo-mocks/_build_assets.py make_splash). expo-splash-screen
-        // renders `image` as a centered logo, so it's sized by `imageWidth`
-        // (dp) and centered on `backgroundColor`, NOT scaled to full-bleed.
-        // `resizeMode: 'contain'` keeps the mark intact; `imageWidth: 300`
-        // makes it large and legible (~75% of a phone's width) instead of the
-        // tiny middle-of-screen logo the old full-screen `cover` asset produced.
-        // `enableFullScreenImage_legacy` opts Android out of the Android-12
-        // masked-circle splash icon (which would crop the wordmark) and back
-        // into the full-screen drawable, matching the iOS storyboard.
-        image: './assets/splash.png',
-        imageWidth: 300,
+        // Deliberately image-LESS: the native splash is a plain #0C0C0C
+        // screen with NO logo. iOS/Android paint this OS-level launch
+        // screen before any JS runs, and a logo here rendered noticeably
+        // smaller than the JS <BrandSplash/> that follows — producing a
+        // jarring "tiny icon → normal icon" pop on cold launch. By keeping
+        // the native splash blank-black, the first thing the user actually
+        // sees is the correctly-sized <BrandSplash/> (app/_layout.tsx,
+        // same #0C0C0C background, so the swap is seamless) rather than a
+        // mismatched small mark. The brand mark / wordmark / tagline lives
+        // entirely in <BrandSplash/> now.
         backgroundColor: '#0C0C0C',
-        resizeMode: 'contain',
-        enableFullScreenImage_legacy: true,
-        // Dark-mode variant. Kicks in when userInterfaceStyle resolves
-        // to `dark`. Showbook is dark-everywhere so this differs only
-        // in the explicit `backgroundColor` hint to native splash; the
-        // asset is already gold-on-#0C0C0C so it reuses the same file.
+        // Dark-mode variant. Showbook is dark-everywhere, so this only
+        // pins the same black background when userInterfaceStyle resolves
+        // to `dark`.
         dark: {
-          image: './assets/splash.png',
-          imageWidth: 300,
           backgroundColor: '#0C0C0C',
-          resizeMode: 'contain',
-          enableFullScreenImage_legacy: true,
         },
       },
     ],

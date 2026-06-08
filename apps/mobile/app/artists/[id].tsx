@@ -26,13 +26,20 @@ import {
 import * as WebBrowser from 'expo-web-browser';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Link } from 'expo-router';
-import { ChevronLeft, AlertCircle, Image as ImageIcon, Music } from 'lucide-react-native';
+import { ChevronLeft, AlertCircle, Image as ImageIcon, Music, Calendar } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { EmptyState } from '../../components/EmptyState';
 import { Eyebrow, GradientEmphasis, RemoteImage } from '../../components/design-system';
 import { QueryBoundary } from '../../components/QueryBoundary';
+import { KindBadge } from '../../components/KindBadge';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
-import { SetlistfmMark, SpotifyMark } from '../../components/BrandIcons';
+import { SetlistfmMark, SpotifyMark, TicketmasterMark } from '../../components/BrandIcons';
+import { UpcomingAnnouncementActionSheet } from '../../components/UpcomingAnnouncementActionSheet';
+import {
+  WATCHED_IDS_CACHE_KEY,
+  useToggleWatch,
+  type WatchToggle,
+} from '@/lib/discover-watch';
 import { buildSetlistfmOpenPlan } from '@/lib/setlistfm-deep-link';
 import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
@@ -57,9 +64,24 @@ type UtilsClient = ReturnType<typeof trpc.useUtils>['client'];
 type PerformerDetail = RouterOutput<UtilsClient['performers']['detail']['query']>;
 type UserShow = RouterOutput<UtilsClient['performers']['userShows']['query']>[number];
 type TaggedMedia = RouterOutput<UtilsClient['media']['listForPerformer']['query']>[number];
+type UpcomingAnnouncement = RouterOutput<
+  UtilsClient['performers']['upcomingAnnouncements']['query']
+>[number];
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const DOWS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+function parseDate(iso: string): { month: string; day: string; dow: string } {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return { month: '—', day: '—', dow: '—' };
+  const monthIdx = Number(m[2]) - 1;
+  const dt = new Date(Number(m[1]), monthIdx, Number(m[3]));
+  return {
+    month: MONTHS[monthIdx] ?? '—',
+    day: String(Number(m[3])),
+    dow: DOWS[dt.getDay()] ?? '—',
+  };
+}
 
 function toShowCard(s: UserShow): ShowCardShow {
   let month = '—';
@@ -131,6 +153,13 @@ export default function ArtistDetailScreen(): React.JSX.Element {
     enabled: Boolean(token) && performerId.length > 0,
   });
 
+  const upcomingQuery = useCachedQuery<UpcomingAnnouncement[]>({
+    queryKey: ['mobile', 'artist', performerId, 'upcoming'],
+    queryFn: () =>
+      utils.client.performers.upcomingAnnouncements.query({ performerId, limit: 25 }),
+    enabled: Boolean(token) && performerId.length > 0,
+  });
+
   const showsQuery = useCachedQuery<UserShow[]>({
     queryKey: ['mobile', 'artist', performerId, 'shows'],
     queryFn: () => utils.client.performers.userShows.query({ performerId }),
@@ -141,6 +170,31 @@ export default function ArtistDetailScreen(): React.JSX.Element {
     queryKey: ['mobile', 'artist', performerId, 'media'],
     queryFn: () => utils.client.media.listForPerformer.query({ performerId }),
     enabled: Boolean(token) && performerId.length > 0,
+  });
+
+  // Prime the shared watched-id cache so the Discover screen doesn't pay the
+  // round-trip on first paint (mirrors the venue detail screen). The upcoming
+  // list itself is server-deduped against the user's shows, so we don't read
+  // this set to filter rows here.
+  useCachedQuery<readonly string[]>({
+    queryKey: [...WATCHED_IDS_CACHE_KEY],
+    queryFn: () => utils.client.discover.watchedAnnouncementIds.query(),
+    enabled: Boolean(token),
+  });
+
+  const queryClient = useQueryClient();
+  const onToggleWatch = useToggleWatch({
+    onReconcile: () => {
+      void utils.performers.detail.invalidate({ performerId });
+      void utils.performers.userShows.invalidate({ performerId });
+      void utils.performers.upcomingAnnouncements.invalidate({ performerId });
+      void queryClient.invalidateQueries({
+        queryKey: ['mobile', 'artist', performerId, 'upcoming'],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['mobile', 'artist', performerId, 'shows'],
+      });
+    },
   });
 
   const back = (
@@ -156,12 +210,22 @@ export default function ArtistDetailScreen(): React.JSX.Element {
 
   const performer = detailQuery.data;
   const shows = showsQuery.data ?? [];
+  const upcoming = upcomingQuery.data ?? [];
   const refreshControl = useThemedRefreshControl(
-    (detailQuery.isFetching || showsQuery.isFetching || mediaQuery.isFetching) &&
-      !(detailQuery.isLoading && showsQuery.isLoading && mediaQuery.isLoading),
+    (detailQuery.isFetching ||
+      upcomingQuery.isFetching ||
+      showsQuery.isFetching ||
+      mediaQuery.isFetching) &&
+      !(
+        detailQuery.isLoading &&
+        upcomingQuery.isLoading &&
+        showsQuery.isLoading &&
+        mediaQuery.isLoading
+      ),
     () => {
       void Promise.all([
         detailQuery.refetch(),
+        upcomingQuery.refetch(),
         showsQuery.refetch(),
         mediaQuery.refetch(),
       ]);
@@ -203,6 +267,11 @@ export default function ArtistDetailScreen(): React.JSX.Element {
             refreshControl={refreshControl}
           >
             <Hero performer={performer} performerId={performerId} />
+            <Upcoming
+              items={upcoming}
+              loading={upcomingQuery.isLoading}
+              onToggleWatch={onToggleWatch}
+            />
             <YourShows shows={shows} loading={showsQuery.isLoading} />
             <TaggedPhotos
               items={mediaQuery.data ?? []}
@@ -502,6 +571,159 @@ function FollowArtistButton({
   );
 }
 
+function Upcoming({
+  items,
+  loading,
+  onToggleWatch,
+}: {
+  items: UpcomingAnnouncement[];
+  loading: boolean;
+  onToggleWatch: WatchToggle;
+}): React.JSX.Element {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+  const router = useRouter();
+  const [sheetItem, setSheetItem] = React.useState<UpcomingAnnouncement | null>(
+    null,
+  );
+  const closeSheet = React.useCallback(() => setSheetItem(null), []);
+  return (
+    <Section title="Upcoming" icon={<Calendar size={13} color={colors.ink} strokeWidth={2} />}>
+      {loading && items.length === 0 ? (
+        <View style={[styles.stubCard, { backgroundColor: colors.surface, borderColor: colors.rule }]}>
+          <ActivityIndicator color={colors.muted} />
+        </View>
+      ) : items.length === 0 ? (
+        <View style={[styles.stubCard, { backgroundColor: colors.surface, borderColor: colors.rule }]}>
+          <EmptyState
+            icon={<Calendar size={32} color={colors.faint} strokeWidth={1.5} />}
+            title="No upcoming shows"
+            subtitle="New dates for this artist will appear here as they're announced."
+          />
+        </View>
+      ) : (
+        <View style={styles.upcomingList}>
+          {items.map((a) => (
+            <UpcomingRow key={a.id} item={a} onOpenSheet={() => setSheetItem(a)} />
+          ))}
+        </View>
+      )}
+      <UpcomingAnnouncementActionSheet
+        open={sheetItem !== null}
+        onClose={closeSheet}
+        // Watch needs a persisted announcement; live (ephemeral) rows have no
+        // row to link a show to, so only stored, watchable kinds can be saved.
+        canWatch={
+          sheetItem ? !sheetItem.ephemeral && !isNonWatchableKind(sheetItem.kind) : false
+        }
+        isWatching={false}
+        ticketUrl={sheetItem?.ticketUrl ?? null}
+        onToggleWatch={() => {
+          if (!sheetItem) return;
+          void onToggleWatch(sheetItem.id, false);
+        }}
+        onMarkTicketed={() => {
+          if (!sheetItem) return;
+          router.push({
+            pathname: '/add/form',
+            params: {
+              kindHint: sheetItem.kind,
+              headliner: sheetItem.productionName ?? sheetItem.headliner,
+              venueHint: sheetItem.venue.name,
+              dateHint: sheetItem.showDate,
+            },
+          });
+        }}
+      />
+    </Section>
+  );
+}
+
+function UpcomingRow({
+  item,
+  onOpenSheet,
+}: {
+  item: UpcomingAnnouncement;
+  onOpenSheet: () => void;
+}): React.JSX.Element {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+  const { showToast } = useFeedback();
+  const { month, day, dow } = parseDate(item.showDate);
+  const accent = tokens.kindColor(item.kind);
+  const title = item.productionName ?? item.headliner;
+  const location = [item.venue.name, item.venue.city]
+    .filter((p): p is string => Boolean(p))
+    .join(' · ');
+  const ticketUrl = item.ticketUrl;
+
+  return (
+    <Pressable
+      onPress={() => {
+        void hapticSelection();
+        onOpenSheet();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`${title} — open actions`}
+      testID={`artist-upcoming-row-${item.id}`}
+      style={({ pressed }) => [
+        styles.upcomingRow,
+        { backgroundColor: colors.surface, borderLeftColor: accent },
+        pressed && { opacity: 0.85 },
+      ]}
+    >
+      <View style={styles.upcomingDate}>
+        <Text style={[styles.upcomingMonth, { color: colors.muted }]}>{month}</Text>
+        <Text style={[styles.upcomingDay, { color: colors.ink }]}>{day}</Text>
+        <Text style={[styles.upcomingDow, { color: colors.faint }]}>{dow}</Text>
+      </View>
+      <View style={styles.upcomingContent}>
+        <View style={styles.upcomingBadgeRow}>
+          <KindBadge kind={item.kind} size="sm" />
+        </View>
+        <Text
+          style={[styles.upcomingTitle, { color: colors.ink }]}
+          numberOfLines={2}
+          ellipsizeMode="tail"
+        >
+          {title}
+        </Text>
+        {location ? (
+          <Text
+            style={[styles.upcomingVenue, { color: colors.muted }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {location}
+          </Text>
+        ) : null}
+      </View>
+      {ticketUrl ? (
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation();
+            void hapticSelection();
+            Linking.openURL(ticketUrl).catch(() => {
+              showToast({ kind: 'error', text: "Couldn't open Ticketmaster." });
+            });
+          }}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Open tickets on Ticketmaster"
+          testID={`artist-upcoming-tix-${item.id}`}
+          style={({ pressed }) => [
+            styles.upcomingTixPill,
+            { borderColor: colors.ruleStrong, backgroundColor: colors.surface },
+            pressed && { opacity: 0.6 },
+          ]}
+        >
+          <TicketmasterMark size={14} />
+        </Pressable>
+      ) : null}
+    </Pressable>
+  );
+}
+
 function YourShows({
   shows,
   loading,
@@ -711,6 +933,68 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 11 * 0.08,
     textTransform: 'uppercase',
+  },
+  upcomingList: {
+    gap: 8,
+  },
+  upcomingRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    paddingVertical: 12,
+    paddingRight: 12,
+    borderRadius: RADII.lg,
+    borderLeftWidth: 3,
+    gap: 12,
+  },
+  upcomingDate: {
+    minWidth: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 12,
+  },
+  upcomingMonth: {
+    fontFamily: 'Geist Sans 600',
+    fontSize: 10.5,
+    letterSpacing: 1.05,
+    textTransform: 'uppercase',
+  },
+  upcomingDay: {
+    fontFamily: 'Geist Sans 700',
+    fontSize: 22,
+    lineHeight: 26,
+  },
+  upcomingDow: {
+    fontFamily: 'Geist Sans 400',
+    fontSize: 10,
+    textTransform: 'uppercase',
+  },
+  upcomingContent: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+    gap: 4,
+  },
+  upcomingBadgeRow: {
+    flexDirection: 'row',
+  },
+  upcomingTitle: {
+    fontFamily: 'Geist Sans 600',
+    fontSize: 15,
+    lineHeight: 19,
+  },
+  upcomingVenue: {
+    fontFamily: 'Geist Sans 400',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  upcomingTixPill: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 3,
+    paddingHorizontal: 5,
+    borderRadius: RADII.pill,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   showsList: {
     gap: 8,

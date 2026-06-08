@@ -137,8 +137,11 @@ export function useAddShowForm() {
     { query: debouncedQuery },
     { enabled: debouncedQuery.length >= 2 && kind === "festival" },
   );
+  // The lineup add input. For theatre the kind routes searchExternal to
+  // Wikidata (cast members have no Ticketmaster page); every other kind
+  // keeps the TM attraction search.
   const performerArtistSearch = trpc.performers.searchExternal.useQuery(
-    { query: debouncedPerformerQuery },
+    { query: debouncedPerformerQuery, kind: kind ?? undefined },
     { enabled: debouncedPerformerQuery.length >= 2 },
   );
 
@@ -828,14 +831,23 @@ export function useAddShowForm() {
   }, [performerSearchInput]);
 
   const handleSelectArtistAsPerformer = useCallback(
-    (artist: { tmAttractionId: string; name: string; imageUrl: string | null; musicbrainzId: string | null }) => {
+    (artist: {
+      tmAttractionId?: string | null;
+      wikidataQid?: string | null;
+      name: string;
+      imageUrl: string | null;
+      musicbrainzId: string | null;
+    }) => {
       setPerformers((prev) => [
         ...prev,
         {
           name: artist.name,
-          role: "support",
+          // Theatre lineups are cast (each with a character name); every
+          // other kind adds support acts.
+          role: kind === "theatre" ? "cast" : "support",
           sortOrder: prev.length + 1,
-          tmAttractionId: artist.tmAttractionId,
+          tmAttractionId: artist.tmAttractionId ?? undefined,
+          wikidataQid: artist.wikidataQid ?? undefined,
           musicbrainzId: artist.musicbrainzId ?? undefined,
           imageUrl: artist.imageUrl ?? undefined,
         },
@@ -843,15 +855,15 @@ export function useAddShowForm() {
       setPerformerSearchInput("");
       setDebouncedPerformerQuery("");
     },
-    [],
+    [kind],
   );
 
   const handleSelectArtistAsHeadliner = useCallback(
-    (artist: { tmAttractionId: string; name: string; imageUrl: string | null; musicbrainzId: string | null }) => {
+    (artist: { tmAttractionId?: string | null; name: string; imageUrl: string | null; musicbrainzId: string | null }) => {
       setHeadlinerName(artist.name);
       setHeadliner({
         name: artist.name,
-        tmAttractionId: artist.tmAttractionId,
+        tmAttractionId: artist.tmAttractionId ?? undefined,
         musicbrainzId: artist.musicbrainzId ?? undefined,
         imageUrl: artist.imageUrl ?? undefined,
       });
@@ -875,6 +887,18 @@ export function useAddShowForm() {
       ),
     );
   }, []);
+
+  // Theatre cast — the character each actor played (e.g. "Elphaba").
+  const handleUpdatePerformerCharacterName = useCallback(
+    (index: number, value: string) => {
+      setPerformers((prev) =>
+        prev.map((p, i) =>
+          i === index ? { ...p, characterName: value } : p,
+        ),
+      );
+    },
+    [],
+  );
 
   // Drops the headliner-search dropdown without changing what's in the
   // input. Used by the "Use <typed name>" manual-entry button and after
@@ -1028,6 +1052,7 @@ export function useAddShowForm() {
     handleSelectArtistAsHeadliner,
     handleRemovePerformer,
     handleTogglePerformerRole,
+    handleUpdatePerformerCharacterName,
     clearHeadlinerSearch,
     useManualHeadliner,
   };

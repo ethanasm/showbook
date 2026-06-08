@@ -43,11 +43,10 @@ import {
   type LayoutChangeEvent,
 } from 'react-native';
 import Svg, { Line } from 'react-native-svg';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import {
   Calendar,
   ChevronRight,
-  Filter,
   MapPin,
   Search,
   Users,
@@ -84,7 +83,8 @@ import {
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
 import { PickPerformanceDateSheet } from '../../components/PickPerformanceDateSheet';
-import { KindFilterMenu, type KindFilterValue } from '../../components/KindFilterMenu';
+import { KindFilterControl } from '../../components/KindFilterControl';
+import { type KindFilterValue } from '../../components/KindFilterMenu';
 
 type UtilsClient = ReturnType<typeof trpc.useUtils>['client'];
 type FollowedFeed = RouterOutput<UtilsClient['discover']['followedFeed']['query']>;
@@ -143,6 +143,7 @@ const ON_SALE_LABEL: Record<AnnouncementItem['onSaleStatus'], string> = {
   presale: 'Presale',
   on_sale: 'On sale',
   sold_out: 'Sold out',
+  cancelled: 'Cancelled',
 };
 
 /**
@@ -210,7 +211,6 @@ export default function DiscoverScreen(): React.JSX.Element {
   // watchable kinds narrow the list. Driven by the dropdown opened from the
   // filter button next to search.
   const [kindFilter, setKindFilter] = React.useState<KindFilterValue>('all');
-  const [kindMenuOpen, setKindMenuOpen] = React.useState(false);
 
   // Render budget for the current feed. Reset whenever the tab or any
   // chip filter changes so a freshly-selected scope always starts at
@@ -326,8 +326,29 @@ export default function DiscoverScreen(): React.JSX.Element {
         ? followedArtistsQuery
         : nearbyQuery;
 
+  // Auto-refresh on focus. Tab screens mount once and stay mounted, so
+  // `refetchOnMount: 'always'` only fires on the very first visit — and even
+  // that first fetch raced the offline warm-up, which could clobber the full
+  // feed back down to its tiny snapshot (now blocked by `seedDiscoverFeed` in
+  // warmup.ts). Refetching the active feed every time the tab regains focus
+  // guarantees the full set loads in over the warm-up placeholder without a
+  // manual pull-to-refresh — the behaviour the user expects and the same
+  // pattern the Map tab uses. A "latest ref" (updated in a commit effect, not
+  // during render) keeps the focus callback stable on `[token]` so it fires
+  // on focus / sign-in rather than on every query-identity change.
+  const activeQueryRef = React.useRef(activeQuery);
+  React.useEffect(() => {
+    activeQueryRef.current = activeQuery;
+  });
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!token) return;
+      void activeQueryRef.current.refetch();
+    }, [token]),
+  );
+
   // True while the active feed is refetching in the background with rows
-  // already on screen — the warm-up-placeholder → full-feed mount refetch,
+  // already on screen — the warm-up-placeholder → full-feed focus refetch,
   // a pull-to-refresh, or a feed re-fetch the ingest poll triggered. Drives
   // the inline "updating…" status so the count isn't silently stale while
   // the full set loads in over the small warm-up snapshot.
@@ -343,21 +364,11 @@ export default function DiscoverScreen(): React.JSX.Element {
 
   const searchAction = (
     <View style={styles.actions}>
-      <Pressable
-        onPress={() => setKindMenuOpen(true)}
-        hitSlop={12}
-        accessibilityRole="button"
-        accessibilityLabel="Filter by kind"
-        accessibilityState={{ expanded: kindMenuOpen }}
-        testID="discover-filter-button"
-      >
-        <Filter
-          size={20}
-          color={kindFilter === 'all' ? colors.ink : colors.accent}
-          strokeWidth={2}
-          fill={kindFilter === 'all' ? 'transparent' : colors.accent}
-        />
-      </Pressable>
+      <KindFilterControl
+        value={kindFilter}
+        onChange={setKindFilter}
+        testIDPrefix="discover"
+      />
       <Pressable
         onPress={() => router.push('/search')}
         hitSlop={12}
@@ -408,7 +419,6 @@ export default function DiscoverScreen(): React.JSX.Element {
         seen.set(r.id, {
           id: r.id,
           name: r.cityName,
-          sublabel: `${r.radiusMiles}mi`,
           count: 0,
         });
       }
@@ -425,11 +435,7 @@ export default function DiscoverScreen(): React.JSX.Element {
                 ? (item as NearbyAnnouncementItem).regionCityName ?? 'Region'
                 : item.venue.name;
           const fallbackSub =
-            tab === 'venues'
-              ? item.venue.city
-              : tab === 'regions'
-                ? `${(item as NearbyAnnouncementItem).regionRadiusMiles ?? '?'}mi`
-                : undefined;
+            tab === 'venues' ? item.venue.city : undefined;
           seen.set(key, {
             id: key,
             name: fallbackName,
@@ -745,6 +751,8 @@ export default function DiscoverScreen(): React.JSX.Element {
             void performUnfollow(tab, id, group?.name ?? '');
           }}
           totalCount={items.length}
+          hideCounts
+          hideInlineSublabel
           testIdPrefix="discover-group"
           pickerTitle={groupPickerTitle(tab)}
           leadingAction={{
@@ -774,6 +782,7 @@ export default function DiscoverScreen(): React.JSX.Element {
             totalCount={regionVenueList.reduce((n, g) => n + g.count, 0)}
             allLabel="All venues"
             variant="sub"
+            hideCounts
             testIdPrefix="discover-venue-chip"
           />
         )}
@@ -883,12 +892,6 @@ export default function DiscoverScreen(): React.JSX.Element {
         )}
       </ScrollView>
     </ScreenWrapper>
-    <KindFilterMenu
-      open={kindMenuOpen}
-      value={kindFilter}
-      onSelect={setKindFilter}
-      onClose={() => setKindMenuOpen(false)}
-    />
     <AddToDiscoverSheet
       tab={addSheetTab ?? tab}
       open={addSheetTab !== null}
@@ -1098,10 +1101,14 @@ function addChipAccessibilityLabel(tab: DiscoverTab): string {
 
 /**
  * Renders -45° diagonal stripes scaled to the parent card's measured
- * dimensions. Used as a background layer on sold-out announcements so the
- * row is recognisably struck through without obscuring the text. The
- * comment in this file's header (iOS #263) explains why SVG Pattern/Mask
- * is off the table — we draw explicit <Line> elements instead.
+ * dimensions. Used as a background layer on sold-out and cancelled
+ * announcements so the row is recognisably struck through without obscuring
+ * the text. The comment in this file's header (iOS #263) explains why SVG
+ * Pattern/Mask is off the table — we draw explicit <Line> elements instead.
+ *
+ * The stripes are deliberately pronounced: tighter spacing, thicker strokes
+ * and higher opacity than a hairline so the struck-through treatment reads at
+ * a glance.
  */
 function SoldOutStripes({
   color,
@@ -1113,7 +1120,7 @@ function SoldOutStripes({
   height: number;
 }): React.JSX.Element | null {
   if (width <= 0 || height <= 0) return null;
-  const spacing = 9;
+  const spacing = 6;
   const lines: React.ReactElement[] = [];
   for (let x = -height; x < width; x += spacing) {
     lines.push(
@@ -1124,8 +1131,8 @@ function SoldOutStripes({
         x2={x + height}
         y2={height}
         stroke={color}
-        strokeWidth={1}
-        opacity={0.5}
+        strokeWidth={1.5}
+        opacity={0.7}
       />,
     );
   }
@@ -1166,6 +1173,9 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
   const onSaleLabel = ON_SALE_LABEL[item.onSaleStatus];
   const ticketUrl = item.ticketUrl;
   const isSoldOut = item.onSaleStatus === 'sold_out';
+  const isCancelled = item.onSaleStatus === 'cancelled';
+  // Both sold-out and cancelled rows get the struck-through stripe treatment.
+  const isStruck = isSoldOut || isCancelled;
   const runMode = isRun(item);
   const runEndLabel =
     runMode && item.runEndDate ? formatRunEnd(item.runEndDate) : null;
@@ -1228,20 +1238,20 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
     <>
     <Pressable
       onPress={onPress}
-      onLayout={isSoldOut ? onCardLayout : undefined}
+      onLayout={isStruck ? onCardLayout : undefined}
       accessibilityRole="button"
       accessibilityLabel={`${title} — open actions`}
       testID={`discover-row-${item.id}`}
       style={({ pressed }) => [
         styles.card,
         { backgroundColor: colors.surface },
-        isSoldOut && styles.cardSoldOut,
+        isStruck && styles.cardSoldOut,
         pressed && { opacity: 0.9 },
       ]}
     >
-      {isSoldOut && (
+      {isStruck && (
         <SoldOutStripes
-          color={colors.rule}
+          color={isCancelled ? colors.danger : colors.ruleStrong}
           width={cardSize.w}
           height={cardSize.h}
         />
@@ -1292,9 +1302,20 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
         <View style={styles.badgeRow}>
           <KindBadge kind={item.kind as Kind} size="sm" />
           <View
-            style={[styles.statusBadge, { backgroundColor: accent + '22' }]}
+            style={[
+              styles.statusBadge,
+              {
+                backgroundColor:
+                  (isCancelled ? colors.danger : accent) + '22',
+              },
+            ]}
           >
-            <Text style={[styles.statusLabel, { color: accent }]}>
+            <Text
+              style={[
+                styles.statusLabel,
+                { color: isCancelled ? colors.danger : accent },
+              ]}
+            >
               {onSaleLabel}
             </Text>
           </View>

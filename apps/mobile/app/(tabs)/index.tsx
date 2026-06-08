@@ -34,6 +34,8 @@ import { Link, useRouter } from 'expo-router';
 import { Calendar, ChevronRight } from 'lucide-react-native';
 import { HomeHeader } from '../../components/HomeHeader';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
+import { KindFilterControl } from '../../components/KindFilterControl';
+import { kindFilterNoun, type KindFilterValue } from '../../components/KindFilterMenu';
 import { EmptyState } from '../../components/EmptyState';
 import { GetStartedHub } from '../../components/GetStartedHub';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
@@ -221,6 +223,9 @@ export default function HomeScreen(): React.JSX.Element {
     state: ShowState;
   } | null>(null);
   const [markTicketedForId, setMarkTicketedForId] = React.useState<string | null>(null);
+  // Header kind filter — `all` is the signature hero + sections layout; a
+  // specific kind narrows every section to that kind (see `sections`).
+  const [kindFilter, setKindFilter] = React.useState<KindFilterValue>('all');
 
   const showsQuery = useCachedQuery<ShowsListItem[]>({
     queryKey: ['mobile', 'home', 'shows.list'],
@@ -238,28 +243,43 @@ export default function HomeScreen(): React.JSX.Element {
   const sections = React.useMemo(() => {
     const rows = showsQuery.data ?? [];
     const today = todayIso();
+    const isFiltered = kindFilter !== 'all';
+    // Scope every section to the active kind. `total` stays on the full
+    // set so the onboarding hub only shows for a genuinely empty logbook,
+    // not for "no comedy shows".
+    const scoped = isFiltered
+      ? rows.filter((r) => r.kind === kindFilter)
+      : rows;
 
-    const nowPlaying = rows.find(
+    const nowPlaying = scoped.find(
       (r) => r.state === 'ticketed' && r.date === today,
     );
 
-    const upcomingAll = rows
+    const upcomingAll = scoped
       .filter(
         (r) =>
           (r.state === 'ticketed' || r.state === 'watching') &&
           r.date !== null &&
-          r.date > today &&
-          r.id !== nowPlaying?.id,
+          // Filtered view has no hero, so today's ticketed show belongs in
+          // the upcoming list; the default view promotes it to the hero
+          // instead and keeps the list strictly future-dated.
+          (isFiltered ? r.date >= today : r.date > today) &&
+          (isFiltered || r.id !== nowPlaying?.id),
       )
       .sort((a, b) => (a.date! < b.date! ? -1 : 1));
 
     // The hero promotes the first ticketed show on deck (or today's, if
     // there is one) into a full-bleed treatment. Everything else in the
-    // upcoming bucket renders as rows beneath it.
-    const hero = nowPlaying ?? upcomingAll[0] ?? null;
-    const upcomingRest = hero === nowPlaying ? upcomingAll.slice(0, 3) : upcomingAll.slice(1, 4);
+    // upcoming bucket renders as rows beneath it. A kind filter drops the
+    // hero entirely and renders a flat list of up to four upcoming shows.
+    const hero = isFiltered ? null : (nowPlaying ?? upcomingAll[0] ?? null);
+    const upcoming = isFiltered
+      ? upcomingAll.slice(0, 4)
+      : hero === nowPlaying
+        ? upcomingAll.slice(0, 3)
+        : upcomingAll.slice(1, 4);
 
-    const recent = rows
+    const recent = scoped
       .filter((r) => r.state === 'past' && r.date !== null)
       .sort((a, b) => (a.date! < b.date! ? 1 : -1))
       .slice(0, 3);
@@ -267,7 +287,7 @@ export default function HomeScreen(): React.JSX.Element {
     // Dated watching shows already render in Upcoming alongside ticketed
     // entries, so the wishlist section is reserved for TBD-date entries
     // (the "I want to go but haven't picked a date" bucket).
-    const wishlist = rows
+    const wishlist = scoped
       .filter((r) => r.state === 'watching' && r.date === null)
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
       .slice(0, 3);
@@ -275,12 +295,13 @@ export default function HomeScreen(): React.JSX.Element {
     return {
       hero,
       heroIsToday: hero != null && hero === nowPlaying,
-      upcoming: upcomingRest,
+      upcoming,
       recent,
       wishlist,
       total: rows.length,
+      isFiltered,
     };
-  }, [showsQuery.data]);
+  }, [showsQuery.data, kindFilter]);
 
   const headerCounts = React.useMemo(() => {
     const rows = showsQuery.data ?? [];
@@ -295,7 +316,17 @@ export default function HomeScreen(): React.JSX.Element {
       <HomeHeader
         upcomingCount={headerCounts.upcoming}
         thisYearCount={headerCounts.thisYear}
-        rightAction={<MeTopBarAction />}
+        rightAction={
+          <View style={styles.headerActions}>
+            <KindFilterControl
+              value={kindFilter}
+              onChange={setKindFilter}
+              testIDPrefix="home"
+              topOffset={50}
+            />
+            <MeTopBarAction />
+          </View>
+        }
       />
 
       <ScrollView
@@ -356,48 +387,98 @@ export default function HomeScreen(): React.JSX.Element {
               </Section>
             ) : null}
 
-            {sections.upcoming.length > 0 ? (
-              <Section
-                title="Upcoming"
-                href={{ pathname: '/(tabs)/shows', params: { bucket: 'upcoming' } }}
-                hrefA11yLabel="See all upcoming shows"
-              >
-                {sections.upcoming.map((s) => (
-                  <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
-                ))}
-              </Section>
-            ) : null}
+            {/* Filtered view: always render Upcoming + Recently attended so
+                the user sees a per-section "no shows for this kind" message
+                rather than a silently missing section. */}
+            {sections.isFiltered ? (
+              <>
+                <Section
+                  title="Upcoming"
+                  paddingTop={4}
+                  href={{ pathname: '/(tabs)/shows', params: { bucket: 'upcoming' } }}
+                  hrefA11yLabel="See all upcoming shows"
+                >
+                  {sections.upcoming.length > 0 ? (
+                    sections.upcoming.map((s) => (
+                      <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
+                    ))
+                  ) : (
+                    <KindSectionEmpty
+                      text={`No upcoming ${kindFilterNoun(kindFilter as Kind)} shows.`}
+                    />
+                  )}
+                </Section>
 
-            {sections.recent.length > 0 ? (
-              <Section
-                title="Recently attended"
-                href={{ pathname: '/(tabs)/shows', params: { bucket: 'past' } }}
-                hrefA11yLabel="See all past shows"
-              >
-                {sections.recent.map((s) => (
-                  <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
-                ))}
-              </Section>
-            ) : null}
+                <Section
+                  title="Recently attended"
+                  href={{ pathname: '/(tabs)/shows', params: { bucket: 'past' } }}
+                  hrefA11yLabel="See all past shows"
+                >
+                  {sections.recent.length > 0 ? (
+                    sections.recent.map((s) => (
+                      <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
+                    ))
+                  ) : (
+                    <KindSectionEmpty
+                      text={`No ${kindFilterNoun(kindFilter as Kind)} shows attended yet.`}
+                    />
+                  )}
+                </Section>
 
-            {sections.wishlist.length > 0 ? (
-              <Section title="Wishlist">
-                {sections.wishlist.map((s) => (
-                  <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
-                ))}
-              </Section>
-            ) : null}
+                {sections.wishlist.length > 0 ? (
+                  <Section title="Wishlist">
+                    {sections.wishlist.map((s) => (
+                      <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
+                    ))}
+                  </Section>
+                ) : null}
+              </>
+            ) : (
+              <>
+                {sections.upcoming.length > 0 ? (
+                  <Section
+                    title="Upcoming"
+                    href={{ pathname: '/(tabs)/shows', params: { bucket: 'upcoming' } }}
+                    hrefA11yLabel="See all upcoming shows"
+                  >
+                    {sections.upcoming.map((s) => (
+                      <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
+                    ))}
+                  </Section>
+                ) : null}
 
-            {sections.upcoming.length === 0 &&
-            sections.recent.length === 0 &&
-            sections.wishlist.length === 0 &&
-            !sections.hero ? (
-              <EmptyState
-                icon={<Calendar size={40} color={colors.faint} strokeWidth={1.5} />}
-                title="Nothing on deck"
-                subtitle="Add a ticket or wishlist a show to see it here."
-              />
-            ) : null}
+                {sections.recent.length > 0 ? (
+                  <Section
+                    title="Recently attended"
+                    href={{ pathname: '/(tabs)/shows', params: { bucket: 'past' } }}
+                    hrefA11yLabel="See all past shows"
+                  >
+                    {sections.recent.map((s) => (
+                      <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
+                    ))}
+                  </Section>
+                ) : null}
+
+                {sections.wishlist.length > 0 ? (
+                  <Section title="Wishlist">
+                    {sections.wishlist.map((s) => (
+                      <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
+                    ))}
+                  </Section>
+                ) : null}
+
+                {sections.upcoming.length === 0 &&
+                sections.recent.length === 0 &&
+                sections.wishlist.length === 0 &&
+                !sections.hero ? (
+                  <EmptyState
+                    icon={<Calendar size={40} color={colors.faint} strokeWidth={1.5} />}
+                    title="Nothing on deck"
+                    subtitle="Add a ticket or wishlist a show to see it here."
+                  />
+                ) : null}
+              </>
+            )}
           </>
         )}
       </ScrollView>
@@ -469,6 +550,21 @@ function Section({
   );
 }
 
+/**
+ * In-section placeholder shown when a kind filter is active but the section
+ * has no shows of that kind. Sits inside the section's list padding so it
+ * reads as "this section, filtered, is empty" rather than a full-screen
+ * empty state.
+ */
+function KindSectionEmpty({ text }: { text: string }): React.JSX.Element {
+  const { tokens } = useTheme();
+  return (
+    <Text style={[styles.kindSectionEmpty, { color: tokens.colors.faint }]}>
+      {text}
+    </Text>
+  );
+}
+
 function ShowCardLink({
   show,
   onLongPress,
@@ -529,5 +625,17 @@ const styles = StyleSheet.create({
   },
   heroWrap: {
     paddingHorizontal: 16,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  kindSectionEmpty: {
+    fontFamily: 'Geist Sans 400',
+    fontSize: 13,
+    lineHeight: 19,
+    paddingHorizontal: 4,
+    paddingVertical: 6,
   },
 });

@@ -259,6 +259,62 @@ test('getPlaceDetails: handles fully empty body', async () => {
   });
 });
 
+// ── fetchWithRetry (transient network errors) ──────────────────────────
+
+function transientError(code: string): Error {
+  // Shape undici uses: `TypeError: fetch failed` with `err.cause.code`.
+  const err = new TypeError('fetch failed');
+  (err as { cause?: unknown }).cause = { code };
+  return err;
+}
+
+test('getPlaceDetails: retries on a transient ECONNRESET then succeeds', async () => {
+  let calls = 0;
+  stubFetch(async () => {
+    calls++;
+    if (calls < 3) throw transientError('ECONNRESET');
+    return jsonResponse({ displayName: { text: 'Recovered Venue' } });
+  });
+  const result = await getPlaceDetails('place-flaky');
+  assert.equal(calls, 3);
+  assert.equal(result?.name, 'Recovered Venue');
+});
+
+test('getPlaceDetails: propagates a transient error that survives every attempt', async () => {
+  let calls = 0;
+  stubFetch(async () => {
+    calls++;
+    throw transientError('ECONNRESET');
+  });
+  await assert.rejects(getPlaceDetails('place-down'), /fetch failed/);
+  assert.equal(calls, 3); // exhausted all attempts
+});
+
+test('getPlaceDetails: does not retry a non-transient error', async () => {
+  let calls = 0;
+  stubFetch(async () => {
+    calls++;
+    throw new Error('boom'); // not a recognised transport failure
+  });
+  await assert.rejects(getPlaceDetails('place-x'), /boom/);
+  assert.equal(calls, 1); // thrown on the first attempt, no retry
+});
+
+test('autocomplete: retries on a transient socket error then succeeds', async () => {
+  let calls = 0;
+  stubFetch(async () => {
+    calls++;
+    if (calls < 2) throw transientError('UND_ERR_SOCKET');
+    return jsonResponse({
+      suggestions: [{ placePrediction: { placeId: 'p1', text: { text: 'Venue One' } } }],
+    });
+  });
+  const result = await autocomplete('venue');
+  assert.equal(calls, 2);
+  assert.equal(result.length, 1);
+  assert.equal(result[0]?.placeId, 'p1');
+});
+
 // ── getPlacePhotoMediaUrl ───────────────────────────────────────────────
 
 test('getPlacePhotoMediaUrl: returns null when API key is missing', () => {

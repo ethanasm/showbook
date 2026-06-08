@@ -69,7 +69,10 @@ nodeArgs.push(...files);
 const child = spawn(process.execPath, nodeArgs, {
   cwd: REPO_ROOT,
   stdio: 'inherit',
-  env: process.env,
+  // Keep the fire-and-forget Wikidata enrichment hook in
+  // matchOrCreatePerformer offline during integration tests (no API key
+  // to gate on, unlike Spotify). Prod/dev leave it unset.
+  env: { WIKIDATA_ENRICHMENT_DISABLED: '1', ...process.env },
 });
 
 const killTimer = setTimeout(() => {

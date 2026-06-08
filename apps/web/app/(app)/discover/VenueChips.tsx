@@ -41,6 +41,7 @@ export function VenueChips({
   totalCount,
   allLabel = "All",
   pickerTitle = "All filters",
+  hideCounts = false,
 }: {
   venues: ChipOption[];
   selected: string | null;
@@ -48,6 +49,11 @@ export function VenueChips({
   totalCount: number;
   allLabel?: string;
   pickerTitle?: string;
+  /** Suppress the numeric count / badge on every chip (and in the
+   *  overflow picker). Mirrors the mobile `FilterChipsRow` prop so the
+   *  Discover rail stays short and more followed-entity chips fit on one
+   *  line. The `count` is still used for ordering and the fit math. */
+  hideCounts?: boolean;
 }) {
   // Pin the active selection to the front so it stays inline (and so a
   // pick from the dropdown surfaces without a horizontal hunt).
@@ -142,7 +148,7 @@ export function VenueChips({
         {label}
         {sub ? <span className="discover-chip__sub"> · {sub}</span> : null}
       </span>
-      {badge.length > 0 ? (
+      {!hideCounts && badge.length > 0 ? (
         <span className="discover-chip__count">{badge}</span>
       ) : null}
     </>
@@ -221,7 +227,9 @@ export function VenueChips({
               {selected === null ? <Check size={15} strokeWidth={2.5} /> : null}
             </span>
             <span className="discover-chips__menu-label">{allLabel}</span>
-            <span className="discover-chips__menu-count">{totalCount}</span>
+            {hideCounts ? null : (
+              <span className="discover-chips__menu-count">{totalCount}</span>
+            )}
           </button>
           {venues.map((v) => (
             <button
@@ -244,9 +252,11 @@ export function VenueChips({
                   <span className="discover-chip__sub"> · {v.sublabel}</span>
                 ) : null}
               </span>
-              <span className="discover-chips__menu-count">
-                {v.badgeText ?? v.count}
-              </span>
+              {hideCounts ? null : (
+                <span className="discover-chips__menu-count">
+                  {v.badgeText ?? v.count}
+                </span>
+              )}
             </button>
           ))}
         </div>

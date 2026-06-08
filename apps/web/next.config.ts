@@ -82,6 +82,11 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "mosaic.scdn.co" },
       // Apple Music artwork.
       { protocol: "https", hostname: "**.mzstatic.com" },
+      // Wikimedia Commons headshots for theatre cast (Wikidata P18). The
+      // Special:FilePath URL on commons.wikimedia.org redirects to the
+      // upload.wikimedia.org CDN.
+      { protocol: "https", hostname: "commons.wikimedia.org" },
+      { protocol: "https", hostname: "upload.wikimedia.org" },
     ],
   },
   transpilePackages: [

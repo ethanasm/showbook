@@ -35,7 +35,7 @@ export type Announcement = {
   runEndDate: string | null;
   performanceDates: string[] | null;
   onSaleDate: string | null;
-  onSaleStatus: "announced" | "presale" | "on_sale" | "sold_out";
+  onSaleStatus: "announced" | "presale" | "on_sale" | "sold_out" | "cancelled";
   source: string;
   ticketUrl: string | null;
   venue: {
@@ -70,6 +70,7 @@ export const ON_SALE_STATUS_LABELS: Record<string, string> = {
   presale: "presale",
   on_sale: "on sale",
   sold_out: "sold out",
+  cancelled: "cancelled",
 };
 
 export const DISCOVER_KIND_ORDER: Record<DiscoverKind, number> = {
@@ -86,6 +87,7 @@ const ON_SALE_STATUS_ORDER: Record<Announcement["onSaleStatus"], number> = {
   presale: 1,
   on_sale: 2,
   sold_out: 3,
+  cancelled: 4,
 };
 
 export const DISCOVER_DEFAULT_SORT: DiscoverSortConfig = {

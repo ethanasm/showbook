@@ -75,6 +75,8 @@ export function FilterChipsRow({
   testIdPrefix,
   leadingAction,
   pickerTitle = 'All filters',
+  hideCounts = false,
+  hideInlineSublabel = false,
 }: {
   groups: FilterGroup[];
   selected: string | null;
@@ -104,6 +106,17 @@ export function FilterChipsRow({
   leadingAction?: FilterChipsLeadingAction;
   /** Heading shown above the overflow dropdown picker. */
   pickerTitle?: string;
+  /** Suppress the numeric count / badge on every chip (and in the
+   *  overflow picker). Used by Discover to keep the rail short so more
+   *  followed-entity chips fit on one line. The `count` is still used
+   *  for ordering and the fit calculation — only its rendering is
+   *  dropped. */
+  hideCounts?: boolean;
+  /** Suppress the `· sublabel` on the *visible* inline chips (and the
+   *  measuring pass) while keeping it in the overflow picker sheet. Used
+   *  by Discover so the venue chips read as bare venue names on the rail
+   *  but still disambiguate by city in the "All filters" sheet. */
+  hideInlineSublabel?: boolean;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -193,6 +206,8 @@ export function FilterChipsRow({
         allLabel={allLabel}
         totalCount={totalCount ?? 0}
         captureWidth={captureWidth}
+        hideCounts={hideCounts}
+        hideInlineSublabel={hideInlineSublabel}
       />
 
       {/* Visible single line. */}
@@ -225,6 +240,7 @@ export function FilterChipsRow({
             active={selected === null}
             onPress={() => onSelect(null)}
             colors={colors}
+            hideCounts={hideCounts}
             testID={testIdPrefix ? `${testIdPrefix}-all` : undefined}
           />
         ) : null}
@@ -242,6 +258,8 @@ export function FilterChipsRow({
             }
             onLongPress={onLongPress ? () => onLongPress(g.id) : undefined}
             colors={colors}
+            hideCounts={hideCounts}
+            hideInlineSublabel={hideInlineSublabel}
             testID={testIdPrefix ? `${testIdPrefix}-${g.id}` : undefined}
           />
         ))}
@@ -284,6 +302,7 @@ export function FilterChipsRow({
                 active={selected === null}
                 onPress={() => handlePick(null)}
                 colors={colors}
+                hideCounts={hideCounts}
                 testID={testIdPrefix ? `${testIdPrefix}-sheet-all` : undefined}
               />
             ) : null}
@@ -298,6 +317,7 @@ export function FilterChipsRow({
                 onPress={() => handlePick(g.id)}
                 onRemove={onRemove ? () => requestRemove(g.id) : undefined}
                 colors={colors}
+                hideCounts={hideCounts}
                 testID={
                   testIdPrefix ? `${testIdPrefix}-sheet-${g.id}` : undefined
                 }
@@ -388,6 +408,8 @@ const MeasurePass = React.memo(function MeasurePass({
   allLabel,
   totalCount,
   captureWidth,
+  hideCounts,
+  hideInlineSublabel,
 }: {
   groups: FilterGroup[];
   colors: ColorTokens;
@@ -396,6 +418,8 @@ const MeasurePass = React.memo(function MeasurePass({
   allLabel: string;
   totalCount: number;
   captureWidth: (key: string, w: number) => void;
+  hideCounts: boolean;
+  hideInlineSublabel: boolean;
 }): React.JSX.Element {
   return (
     <View
@@ -417,6 +441,7 @@ const MeasurePass = React.memo(function MeasurePass({
             count={totalCount}
             active={false}
             colors={colors}
+            hideCounts={hideCounts}
           />
         </MeasuredChip>
       ) : null}
@@ -429,6 +454,8 @@ const MeasurePass = React.memo(function MeasurePass({
             badgeText={g.badgeText}
             active={false}
             colors={colors}
+            hideCounts={hideCounts}
+            hideInlineSublabel={hideInlineSublabel}
           />
         </MeasuredChip>
       ))}
@@ -466,6 +493,8 @@ function Chip({
   onPress,
   onLongPress,
   colors,
+  hideCounts = false,
+  hideInlineSublabel = false,
   testID,
 }: {
   label: string;
@@ -476,6 +505,8 @@ function Chip({
   onPress: () => void;
   onLongPress?: () => void;
   colors: ColorTokens;
+  hideCounts?: boolean;
+  hideInlineSublabel?: boolean;
   testID?: string;
 }): React.JSX.Element {
   return (
@@ -503,6 +534,8 @@ function Chip({
         badgeText={badgeText}
         active={active}
         colors={colors}
+        hideCounts={hideCounts}
+        hideInlineSublabel={hideInlineSublabel}
       />
     </Pressable>
   );
@@ -517,6 +550,8 @@ function ChipBody({
   badgeText,
   active,
   colors,
+  hideCounts = false,
+  hideInlineSublabel = false,
 }: {
   label: string;
   sublabel?: string;
@@ -524,8 +559,12 @@ function ChipBody({
   badgeText?: string;
   active: boolean;
   colors: ColorTokens;
+  hideCounts?: boolean;
+  hideInlineSublabel?: boolean;
 }): React.JSX.Element {
-  const renderedBadge = badgeText !== undefined ? badgeText : String(count);
+  const renderedBadge =
+    hideCounts ? '' : badgeText !== undefined ? badgeText : String(count);
+  const showSublabel = Boolean(sublabel) && !hideInlineSublabel;
   return (
     <>
       <Text
@@ -539,7 +578,7 @@ function ChipBody({
         ]}
       >
         {label}
-        {sublabel ? (
+        {showSublabel ? (
           <Text
             style={[
               styles.chipSublabel,
@@ -607,6 +646,7 @@ function PickerRow({
   onPress,
   onRemove,
   colors,
+  hideCounts = false,
   testID,
 }: {
   label: string;
@@ -617,10 +657,16 @@ function PickerRow({
   onPress: () => void;
   onRemove?: () => void;
   colors: ColorTokens;
+  hideCounts?: boolean;
   testID?: string;
 }): React.JSX.Element {
-  const renderedBadge =
-    badgeText !== undefined ? badgeText : count !== undefined ? String(count) : '';
+  const renderedBadge = hideCounts
+    ? ''
+    : badgeText !== undefined
+      ? badgeText
+      : count !== undefined
+        ? String(count)
+        : '';
   return (
     <Pressable
       accessibilityRole="button"

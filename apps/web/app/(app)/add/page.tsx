@@ -80,6 +80,7 @@ export default function AddPage() {
     handleSelectArtistAsHeadliner,
     handleRemovePerformer,
     handleTogglePerformerRole,
+    handleUpdatePerformerCharacterName,
     clearHeadlinerSearch,
     useManualHeadliner,
   } = form;
@@ -582,7 +583,7 @@ export default function AddPage() {
                   )}
                   {festivalHeadlinerSearch.data && festivalHeadlinerSearch.data.length > 0 && festivalHeadlinerSearch.data.map((artist) => (
                     <button
-                      key={artist.tmAttractionId}
+                      key={artist.tmAttractionId ?? artist.name}
                       type="button"
                       onClick={() => handleSelectArtistAsHeadliner(artist)}
                       style={{
@@ -680,6 +681,27 @@ export default function AddPage() {
                 <div style={{ fontFamily: sans, fontSize: 14, fontWeight: p.role === "headliner" ? 600 : 500, color: "var(--ink)", letterSpacing: -0.15 }}>
                   {p.name}
                 </div>
+                {p.role === "cast" && (
+                  <input
+                    type="text"
+                    placeholder="character / role (optional)"
+                    value={p.characterName ?? ""}
+                    onChange={(e) => handleUpdatePerformerCharacterName(i, e.target.value)}
+                    style={{
+                      marginTop: 4,
+                      background: "transparent",
+                      border: "none",
+                      borderBottom: `1px solid var(--rule)`,
+                      outline: "none",
+                      fontFamily: sans,
+                      fontSize: 12.5,
+                      color: "var(--muted)",
+                      letterSpacing: -0.1,
+                      width: "100%",
+                      padding: "1px 0",
+                    }}
+                  />
+                )}
               </div>
               {p.role === "cast" ? (
                 <div style={{ fontFamily: mono, fontSize: 10.5, color: "var(--muted)", letterSpacing: ".06em", textTransform: "uppercase" }}>
@@ -708,13 +730,13 @@ export default function AddPage() {
               <div style={{
                 fontFamily: mono,
                 fontSize: 10,
-                color: p.tmAttractionId ? "var(--kind-festival)" : "var(--faint)",
+                color: p.tmAttractionId || p.wikidataQid ? "var(--kind-festival)" : "var(--faint)",
                 letterSpacing: ".04em",
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 4,
               }}>
-                {p.tmAttractionId ? "✓ matched" : "no match"}
+                {p.tmAttractionId || p.wikidataQid ? "✓ matched" : "no match"}
               </div>
               <button
                 type="button"
@@ -747,7 +769,7 @@ export default function AddPage() {
             <span style={{ color: "var(--muted)", fontSize: 14 }}>+</span>
             <input
               type="text"
-              placeholder="search artists..."
+              placeholder={kind === "theatre" ? "search cast..." : "search artists..."}
               value={performerSearchInput}
               onChange={(e) => handlePerformerSearchInput(e.target.value)}
               onKeyDown={(e) => {
@@ -818,7 +840,7 @@ export default function AddPage() {
               )}
               {performerArtistSearch.data && performerArtistSearch.data.length > 0 && performerArtistSearch.data.map((artist) => (
                 <button
-                  key={artist.tmAttractionId}
+                  key={artist.wikidataQid ?? artist.tmAttractionId ?? artist.name}
                   type="button"
                   onClick={() => handleSelectArtistAsPerformer(artist)}
                   style={{
@@ -838,8 +860,17 @@ export default function AddPage() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={artist.imageUrl} alt="" style={{ width: 24, height: 24, objectFit: "cover", borderRadius: 2 }} />
                   )}
-                  <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>
-                    {artist.name}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>
+                      {artist.name}
+                    </div>
+                    {/* Wikidata disambiguation, e.g. "American actor" — lets
+                        the user pick the right same-named person. */}
+                    {"subtitle" in artist && artist.subtitle && (
+                      <div style={{ fontFamily: mono, fontSize: 10, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {artist.subtitle}
+                      </div>
+                    )}
                   </div>
                 </button>
               ))}
