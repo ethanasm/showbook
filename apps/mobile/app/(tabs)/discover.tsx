@@ -683,7 +683,18 @@ export default function DiscoverScreen(): React.JSX.Element {
               queryClient.setQueryData(feedKey, snap.feed);
             },
           },
-          reconcile: () => invalidateDiscoverFeeds(queryClient),
+          reconcile: () => {
+            invalidateDiscoverFeeds(queryClient);
+            // The Discover readers above live under `['mobile', …]` keys,
+            // but the region cap in `AddToDiscoverSheet` (and the regions
+            // editor) reads the tRPC-native `preferences.get` query — which
+            // `invalidateDiscoverFeeds` never touches. Without this the add
+            // sheet keeps the pre-delete count and shows "at limit" until a
+            // force-quit clears the in-memory cache. Mirrors the native
+            // `utils.venues.list` / `utils.performers.list` invalidation the
+            // venues / artists branches above already do.
+            void utils.preferences.get.invalidate();
+          },
         });
       }
       showToast({
