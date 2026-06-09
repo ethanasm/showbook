@@ -17,6 +17,7 @@ import {
   checkDataFreshness,
   checkStalledScrapes,
   checkExternalApis,
+  checkCiHealth,
   type CheckResult,
   type CheckStatus,
   type ExternalPingFns,
@@ -208,6 +209,7 @@ export async function runHealthCheck(
     checkMissedSchedules(now),
     checkErrorVolume(),
     checkExternalApis(pings),
+    checkCiHealth(),
   ]);
 
   for (const c of checks) logCheckOutcome(c);
