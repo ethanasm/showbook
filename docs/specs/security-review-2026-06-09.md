@@ -26,15 +26,18 @@ several candidate findings were dropped after verification (see "Verified safe
   enforced in prod. The high findings are gaps in that baseline, not a weak
   foundation.
 
+All seven were **fixed in the same PR** that introduced this report — the
+status column reflects the fix shipped, not the as-found state.
+
 | ID | Severity | Area | Status |
 |----|----------|------|--------|
-| H1 | HIGH | tRPC IDOR — venue scrape config (`venues.saveScrapeConfig` / `scrapeStatus`) | Open |
-| H2 | HIGH | Unauthenticated `telemetry.logEvent` — log forgery + Axiom field-cap exhaustion | Open |
-| M1 | MEDIUM | `eventbrite/callback` does not validate granted OAuth scopes | Open |
-| M2 | MEDIUM | `test/login` falls back to an empty JWT secret (`?? ''`) | Open (test-route, guarded) |
-| L1 | LOW | Partial Gmail access token (head+tail) written to logs | Open |
-| L2 | LOW | `admin/sql` permits recursive CTEs within the statement timeout | Accepted (defense-in-depth) |
-| L3 | LOW | `telemetry.logEvent` / `crash-report` unauthenticated + no rate limit | Accepted (single-tenant) |
+| H1 | HIGH | tRPC IDOR — venue scrape config (`venues.saveScrapeConfig` / `scrapeStatus`) | Fixed — follow/ownership gate (`assertVenueAccess`) |
+| H2 | HIGH | Unauthenticated `telemetry.logEvent` — log forgery + Axiom field-cap exhaustion | Fixed — context-key allowlist, server-set `event`/`userId`, per-IP rate limit |
+| M1 | MEDIUM | `eventbrite/callback` does not validate the token response | Fixed — reject non-string/empty `access_token` |
+| M2 | MEDIUM | `test/login` falls back to an empty JWT secret (`?? ''`) | Fixed — fail closed (500) when no secret |
+| L1 | LOW | Partial Gmail access token (head+tail) written to logs | Fixed — log token length only |
+| L2 | LOW | `admin/sql` permits recursive CTEs within the statement timeout | Fixed — reject `WITH RECURSIVE`, timeout 5s→3s |
+| L3 | LOW | `telemetry.logEvent` / `crash-report` unauthenticated + no rate limit | Fixed — per-IP rate limits on both |
 
 ---
 
@@ -250,12 +253,25 @@ source, recorded so the next pass doesn't re-litigate them:
 
 ---
 
-## Recommended order of work
+## Fixes shipped in this PR
 
-1. **H1** — add the follows/ownership gate to `venues.saveScrapeConfig`,
-   its delete branch, and `scrapeStatus` (mirror `venues.rename`).
-2. **H2** — stop spreading caller context at top level in `telemetry.logEvent`;
-   nest + stringify (or allowlist + cap keys); set `event`/`userId` after the
-   spread.
-3. **M2** — fail closed on a missing JWT secret in `test/login`.
-4. **M1 / L1** — validate Eventbrite scopes; drop token head/tail from logs.
+1. **H1** — `venues.saveScrapeConfig` (both branches) and `scrapeStatus` now
+   call a shared `assertVenueAccess` (follow OR show at the venue), mirroring
+   `venues.rename`. The web venue-detail page only renders
+   `ScrapeConfigSection` for users who pass that gate.
+2. **H2** — `telemetry.logEvent` now drops context keys outside a curated
+   allowlist (bounding the Axiom field surface), sets `event`/`userId` *after*
+   the context spread so they can't be forged, and applies a per-IP rate
+   limit (client IP threaded through the tRPC context).
+3. **M1** — `eventbrite/callback` validates the token response and refuses to
+   reflect a missing/empty `access_token` as a credential.
+4. **M2** — `test/login` returns 500 instead of signing with an empty secret.
+5. **L1** — the Gmail callback logs only the access token's length.
+6. **L2** — the admin SQL validator rejects `WITH RECURSIVE`; statement
+   timeout tightened 5s → 3s.
+7. **L3** — per-IP rate limits added to `telemetry.logEvent` and the
+   `mobile/crash-report` route.
+
+Tests: new unit coverage for the telemetry allowlist / forgery / drop paths
+and the recursive-CTE rejection; venue unit + integration tests updated for
+the new authorization gate (FORBIDDEN cases added).

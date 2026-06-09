@@ -35,6 +35,18 @@ describe('validateAdminQuery', () => {
     assert.equal(r.ok, true);
   });
 
+  it('rejects recursive CTEs (unbounded compute)', () => {
+    const r = validateAdminQuery(
+      'WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM c WHERE n < 1000000) SELECT * FROM c',
+    );
+    assert.equal(r.ok, false);
+  });
+
+  it('rejects recursive CTEs regardless of casing/whitespace', () => {
+    const r = validateAdminQuery('with   recursive c AS (SELECT 1) SELECT * FROM c');
+    assert.equal(r.ok, false);
+  });
+
   it('accepts SHOW', () => {
     const r = validateAdminQuery('SHOW server_version');
     assert.equal(r.ok, true);

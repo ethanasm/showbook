@@ -99,6 +99,42 @@ async function getDedupedUpcomingAnnouncements(
   });
 }
 
+/**
+ * Authorize a caller against shared venue state (rename, scrape config):
+ * the user must either follow the venue OR have a show at it. Mirrors the
+ * inline check in `rename` so the scrape-config read/write paths can't be
+ * driven against arbitrary venues by venueId alone. Throws FORBIDDEN.
+ */
+async function assertVenueAccess(
+  db: Database,
+  userId: string,
+  venueId: string,
+): Promise<void> {
+  const [follow] = await db
+    .select({ venueId: userVenueFollows.venueId })
+    .from(userVenueFollows)
+    .where(
+      and(
+        eq(userVenueFollows.userId, userId),
+        eq(userVenueFollows.venueId, venueId),
+      ),
+    )
+    .limit(1);
+  if (follow) return;
+
+  const [show] = await db
+    .select({ id: shows.id })
+    .from(shows)
+    .where(and(eq(shows.userId, userId), eq(shows.venueId, venueId)))
+    .limit(1);
+  if (show) return;
+
+  throw new TRPCError({
+    code: 'FORBIDDEN',
+    message: 'Not authorized for this venue',
+  });
+}
+
 export const venuesRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
@@ -430,6 +466,7 @@ export const venuesRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await assertVenueAccess(ctx.db, ctx.session.user.id, input.venueId);
       if (input.config === null) {
         await ctx.db
           .update(venues)
@@ -457,6 +494,7 @@ export const venuesRouter = router({
   scrapeStatus: protectedProcedure
     .input(z.object({ venueId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
+      await assertVenueAccess(ctx.db, ctx.session.user.id, input.venueId);
       const [venue] = await ctx.db
         .select({ scrapeConfig: venues.scrapeConfig })
         .from(venues)

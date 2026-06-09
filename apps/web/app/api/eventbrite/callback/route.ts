@@ -100,8 +100,40 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const tokens = (await tokenRes.json()) as { access_token: string };
-  const accessToken = escapeForScript(tokens.access_token);
+  // Eventbrite tokens are account-scoped — the token response carries no
+  // granular `scope` to validate — so the meaningful check is that we
+  // actually got a usable access token back. A 200 with a malformed/empty
+  // body (or an error envelope) must not be reflected to the client as if it
+  // were a credential.
+  let tokens: unknown;
+  try {
+    tokens = await tokenRes.json();
+  } catch {
+    tokens = null;
+  }
+  const accessTokenRaw =
+    tokens && typeof tokens === 'object'
+      ? (tokens as { access_token?: unknown }).access_token
+      : undefined;
+  if (typeof accessTokenRaw !== 'string' || accessTokenRaw.length === 0) {
+    logger.warn(
+      { event: 'eventbrite.callback.no_access_token', userId: session.user.id },
+      'Eventbrite token exchange returned no access token',
+    );
+    return clearStateCookie(
+      new NextResponse(
+        `<html><body><p>Authentication failed.</p><script>
+        if (window.opener) {
+          window.opener.postMessage({type:"eventbrite-auth-error"}, window.location.origin);
+          setTimeout(function() { window.close(); }, 500);
+        }
+      </script></body></html>`,
+        { headers: { 'Content-Type': 'text/html' } },
+      ),
+      isSecure,
+    );
+  }
+  const accessToken = escapeForScript(accessTokenRaw);
 
   return clearStateCookie(
     new NextResponse(
