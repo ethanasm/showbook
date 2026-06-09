@@ -1,4 +1,4 @@
-# Axiom: bound the schema with a `fields` map field (`prod-v2`)
+# Axiom: bound the schema with a `fields` map field (`showbook-prod`)
 
 ## Why
 
@@ -28,9 +28,10 @@ field named `fields`**. The schema then becomes structurally bounded forever
 call-site changes**, and stdout / `docker logs` stay flat (the reshape runs
 on the Axiom stream only).
 
-This also lets us **merge back to a single dataset** (`prod-v2`): the original
-reason for the server/mobile split (mobile's unbounded field growth) is gone
-once every non-core key folds into the map.
+This also lets us **merge back to a single dataset** and reclaim the canonical
+`showbook-prod` name (recreated fresh — the original capped one is long past
+its 30-day retention): the reason for the server/mobile split (mobile's
+unbounded field growth) is gone once every non-core key folds into the map.
 
 ### Code
 
@@ -65,7 +66,7 @@ new — its context keys fold into `fields`, and it never logs `Error` objects.
 ### Read side
 
 `packages/jobs/src/health-check/axiom.ts` `axiomDataset()` now resolves
-`AXIOM_QUERY_DATASET ?? AXIOM_DATASET ?? 'prod-v2'`, so the dataset name is
+`AXIOM_QUERY_DATASET ?? AXIOM_DATASET ?? 'showbook-prod'`, so the dataset name is
 set once via `AXIOM_DATASET`; `AXIOM_QUERY_DATASET` remains an optional
 override for reading a different dataset.
 
@@ -75,7 +76,7 @@ Fields in the map are addressed with map syntax:
 `['fields']['spotifyTrackId']` or `fields.venueId`, e.g.
 
 ```
-['prod-v2']
+['showbook-prod']
 | where event == "venue.follow"
 | extend vid = ['fields']['venueId']
 | project _time, event, userId, vid
@@ -95,13 +96,22 @@ ingest-only `AXIOM_TOKEN` cannot create datasets or map fields.
 even one event lands first, `fields` becomes an ordinary nested column (its
 sub-keys count against the cap) and the design silently fails.
 
-1. **Create the dataset** `prod-v2` (Axiom UI → Settings → Datasets → New
-   dataset, or `POST /v1/datasets` with a management-capable token +
-   `X-AXIOM-ORG-ID: showbook-egap`).
+0. **If a `showbook-prod` dataset already exists, delete it first.** The name
+   was used by the original capped dataset (pre-2026-05 split). Its data is
+   long past the 30-day retention, but the dataset *object* may still exist
+   with the old flat schema — and you can't designate a map field on a dataset
+   that already has `fields`-shaped columns. Confirm it's the stale one (empty
+   / no recent `_time`), then delete it in the Axiom UI (Settings → Datasets →
+   showbook-prod → Delete) or `DELETE /v1/datasets/showbook-prod`. If no
+   `showbook-prod` exists, skip this step.
+
+1. **Create the dataset** `showbook-prod` fresh (Axiom UI → Settings →
+   Datasets → New dataset, or `POST /v1/datasets` with a management-capable
+   token + `X-AXIOM-ORG-ID: showbook-egap`).
 
 2. **Designate the `fields` map field — before any ingest:**
    ```bash
-   curl -sS -X POST "https://api.axiom.co/v2/datasets/prod-v2/mapfields" \
+   curl -sS -X POST "https://api.axiom.co/v2/datasets/showbook-prod/mapfields" \
      -H "Authorization: Bearer $ADMIN_OR_PAT_TOKEN" \
      -H "X-AXIOM-ORG-ID: showbook-egap" \
      -H "Content-Type: application/json" \
@@ -110,26 +120,26 @@ sub-keys count against the cap) and the design silently fails.
    (`$ADMIN_OR_PAT_TOKEN` = a PAT or advanced token with dataset-management
    capability. The ingest-only `AXIOM_TOKEN` will be rejected.)
 
-3. **Grant the ingest `AXIOM_TOKEN` ingest on `prod-v2`** (silent-failure
+3. **Grant the ingest `AXIOM_TOKEN` ingest on `showbook-prod`** (silent-failure
    trap: an uncovered dataset drops events with no error in Axiom — only in
    `docker logs`).
 
 4. **Set env and restart prod.** In `.env.prod`:
    ```
-   AXIOM_DATASET=prod-v2
+   AXIOM_DATASET=showbook-prod
    ```
    Remove `AXIOM_MOBILE_DATASET` (no longer read). `AXIOM_QUERY_DATASET` can
    also be removed — it now defaults to `AXIOM_DATASET`. These live **only in
    `.env.prod`** (dev never ships to Axiom; CI doesn't ship logs). Then
    `pnpm prod:up` to reload and confirm the values inside the container.
 
-5. **Repoint the read side.** Health-check cron default is now `prod-v2`
+5. **Repoint the read side.** Health-check cron default is now `showbook-prod`
    (`axiomDataset()`), so no action unless overriding. Repoint any Axiom
    monitors / alerts / dashboards / saved queries from `["prod-server"]` /
-   `["prod-mobile"]` to `["prod-v2"]`, and rewrite projections of any
+   `["prod-mobile"]` to `["showbook-prod"]`, and rewrite projections of any
    now-folded field to `['fields']['x']`.
 
-6. **Verify.** Query `['prod-v2']`: confirm core fields are real columns, an
+6. **Verify.** Query `['showbook-prod']`: confirm core fields are real columns, an
    ad-hoc context key shows under `fields` (`['fields']['<key>']` resolves),
    and both server logs and `component == "mobile.telemetry"` rows land in
    the one dataset. A `getschema` should show ~40 columns that does **not**

@@ -73,7 +73,7 @@ describe('queryAxiom', () => {
     });
 
     const result = await queryAxiom<FakeRow>(
-      '["prod-v2"] | where event in ("job.failed","tm.request.failed") | summarize cnt = count() by event',
+      '["showbook-prod"] | where event in ("job.failed","tm.request.failed") | summarize cnt = count() by event',
     );
 
     assert.equal(result.ok, true);
@@ -146,17 +146,17 @@ describe('queryAxiom', () => {
 });
 
 describe('axiomDataset', () => {
-  it('defaults to prod-v2 when no env override is set', () => {
-    assert.equal(axiomDataset(), 'prod-v2');
+  it('defaults to showbook-prod when no env override is set', () => {
+    assert.equal(axiomDataset(), 'showbook-prod');
   });
 
   it('falls back to AXIOM_DATASET so the name is set in one place', () => {
-    process.env.AXIOM_DATASET = 'prod-v2';
-    assert.equal(axiomDataset(), 'prod-v2');
+    process.env.AXIOM_DATASET = 'showbook-prod';
+    assert.equal(axiomDataset(), 'showbook-prod');
   });
 
   it('prefers AXIOM_QUERY_DATASET as an explicit read override', () => {
-    process.env.AXIOM_DATASET = 'prod-v2';
+    process.env.AXIOM_DATASET = 'showbook-prod';
     process.env.AXIOM_QUERY_DATASET = 'some-other-dataset';
     assert.equal(axiomDataset(), 'some-other-dataset');
   });

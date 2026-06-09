@@ -4,7 +4,7 @@ const log = child({ component: 'health-check.axiom' });
 
 const APL_ENDPOINT = 'https://api.axiom.co/v1/datasets/_apl?format=tabular';
 const DEFAULT_ORG = 'showbook-egap';
-const DEFAULT_DATASET = 'prod-v2';
+const DEFAULT_DATASET = 'showbook-prod';
 const REQUEST_TIMEOUT_MS = 15_000;
 
 /**
@@ -27,7 +27,7 @@ export interface AxiomQueryConfig {
   token?: string;
   /** Defaults to `AXIOM_ORG_ID` env or `showbook-egap`. */
   orgId?: string;
-  /** Defaults to `AXIOM_QUERY_DATASET` env, then `AXIOM_DATASET`, then `prod-v2`. */
+  /** Defaults to `AXIOM_QUERY_DATASET` env, then `AXIOM_DATASET`, then `showbook-prod`. */
   dataset?: string;
 }
 

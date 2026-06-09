@@ -3,7 +3,8 @@
 > **Superseded (2026-06).** The `prod-server` / `prod-mobile` split
 > described here only *doubled* the per-dataset column budget; `prod-server`
 > hit the cap again in June 2026. It has been replaced by a single dataset
-> (`prod-v2`) whose schema is bounded by a `fields` **map field** — see
+> (the canonical `showbook-prod` name, recreated fresh) whose schema is bounded
+> by a `fields` **map field** — see
 > [`axiom-map-fields.md`](./axiom-map-fields.md). This document is kept as the
 > historical record of the May-2026 split and the dead-column cleanup that
 > still applies.
