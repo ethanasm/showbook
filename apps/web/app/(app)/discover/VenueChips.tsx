@@ -49,10 +49,11 @@ export function VenueChips({
   totalCount: number;
   allLabel?: string;
   pickerTitle?: string;
-  /** Suppress the numeric count / badge on every chip (and in the
-   *  overflow picker). Mirrors the mobile `FilterChipsRow` prop so the
-   *  Discover rail stays short and more followed-entity chips fit on one
-   *  line. The `count` is still used for ordering and the fit math. */
+  /** Suppress the numeric count / badge on the *inline* chips. Mirrors
+   *  the mobile `FilterChipsRow` prop so the Discover rail stays short
+   *  and more followed-entity chips fit on one line. The `count` is
+   *  still used for ordering and the fit math, and the overflow picker
+   *  menu always shows it so the per-group metadata stays one tap away. */
   hideCounts?: boolean;
 }) {
   // Pin the active selection to the front so it stays inline (and so a
@@ -227,9 +228,7 @@ export function VenueChips({
               {selected === null ? <Check size={15} strokeWidth={2.5} /> : null}
             </span>
             <span className="discover-chips__menu-label">{allLabel}</span>
-            {hideCounts ? null : (
-              <span className="discover-chips__menu-count">{totalCount}</span>
-            )}
+            <span className="discover-chips__menu-count">{totalCount}</span>
           </button>
           {venues.map((v) => (
             <button
@@ -252,11 +251,9 @@ export function VenueChips({
                   <span className="discover-chip__sub"> · {v.sublabel}</span>
                 ) : null}
               </span>
-              {hideCounts ? null : (
-                <span className="discover-chips__menu-count">
-                  {v.badgeText ?? v.count}
-                </span>
-              )}
+              <span className="discover-chips__menu-count">
+                {v.badgeText ?? v.count}
+              </span>
             </button>
           ))}
         </div>
