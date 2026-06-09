@@ -40,6 +40,11 @@ export interface OverviewAction {
 export interface OverviewTabProps {
   cells: OverviewStatCell[];
   lineup: OverviewLineupEntry[];
+  /**
+   * Header for the performers section. Theatre shows label it "Cast";
+   * everything else uses the default "Lineup".
+   */
+  lineupLabel?: string;
   actions: OverviewAction[];
   musicLayerSlot?: React.ReactNode;
   isPast: boolean;
@@ -49,6 +54,7 @@ export interface OverviewTabProps {
 export function OverviewTab({
   cells,
   lineup,
+  lineupLabel = 'Lineup',
   actions,
   musicLayerSlot,
   isPast,
@@ -120,7 +126,7 @@ export function OverviewTab({
         </SectionFrame>
       ) : null}
 
-      <SectionFrame title="Lineup" count={lineup.length}>
+      <SectionFrame title={lineupLabel} count={lineup.length}>
         <View style={styles.lineupCol}>
           {lineup.map((entry) => (
             <Pressable

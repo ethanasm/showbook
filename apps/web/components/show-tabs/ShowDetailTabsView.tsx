@@ -431,6 +431,7 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
       state={show.state}
       cells={cells}
       lineup={lineupEntries}
+      lineupLabel={show.kind === "theatre" ? "Cast" : "Lineup"}
       onMarkAttended={
         show.state === "ticketed" ? handleMarkAttended : undefined
       }
