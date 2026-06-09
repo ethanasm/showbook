@@ -161,6 +161,16 @@ export async function runBackfillShowCoverImages(): Promise<BackfillShowCoverIma
       .filter(([, url]) => url !== null)
       .map(([name]) => name);
     if (filledNames.length > 0) {
+      // Drizzle's `sql` template expands a JS array as a parenthesised tuple
+      // (`($1, $2, …)`): postgres reads a single-element one as a bare scalar
+      // (`any(($1))` → "malformed array literal") and a multi-element one as a
+      // record (`text = record`). Build an ARRAY[…] expression explicitly so
+      // each name binds as its own text param. Mirrors the missed-schedules
+      // check in health-check/checks.ts.
+      const filledNamesSql = sql`ARRAY[${sql.join(
+        filledNames.map((n) => sql`${n}`),
+        sql`, `,
+      )}]`;
       await db.execute(sql`
         update shows s
         set cover_image_url = src.cover_image_url
@@ -171,7 +181,7 @@ export async function runBackfillShowCoverImages(): Promise<BackfillShowCoverIma
           from shows
           where cover_image_url is not null
             and production_name is not null
-            and lower(production_name) = any(${filledNames})
+            and lower(production_name) = any(${filledNamesSql})
           order by lower(production_name), updated_at desc nulls last
         ) src
         where s.cover_image_url is null

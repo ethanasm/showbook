@@ -72,7 +72,14 @@ export function AddToDiscoverSheet({
           call: (i) => utils.client.preferences.addRegion.mutate(i),
           // Discover reads under `['mobile', …]` keys — fan out so the new
           // region chip appears and its scoped ingest poll arms immediately.
-          reconcile: () => invalidateDiscoverFeeds(queryClient),
+          // Also invalidate the tRPC-native `preferences.get` query: it backs
+          // this sheet's own `regionsAtCap` and the regions editor's cap, and
+          // is outside the mobile-key fan-out, so without this the count stays
+          // stale by one after an add.
+          reconcile: () => {
+            invalidateDiscoverFeeds(queryClient);
+            void utils.preferences.get.invalidate();
+          },
         });
         showToast({ kind: 'success', text: `Added ${input.cityName}` });
         onClose();

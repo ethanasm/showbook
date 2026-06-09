@@ -5,11 +5,13 @@
  * drawable generated from the `expo-splash-screen` config in app.config.ts),
  * then hand off to JS once React Native has initialised. To make that handoff
  * seamless — no size "pop", no flash — this renders the **same `splash.png`
- * asset** at the **same centered size** (`imageWidth` in app.config.ts) on the
- * same #0C0C0C background that the native splash uses. The two are then
- * visually identical, so the transition from the native splash to this one is
- * invisible; the root layout simply holds this until fonts are ready (see
- * app/_layout.tsx).
+ * asset** at the **same centered size** as the native splash, on the same
+ * #0C0C0C background. expo-splash-screen lays the native image into an
+ * `imageWidth × imageWidth` aspect-fit box, centered; this mirrors that with a
+ * `SPLASH_IMAGE_WIDTH × SPLASH_IMAGE_WIDTH` `contain` box reading the SAME
+ * shared constant (see lib/splash.ts), so the two are pixel-identical and the
+ * native→JS transition is invisible. The root layout holds this until fonts
+ * are ready (see app/_layout.tsx).
  *
  * Using the bundled asset (not a redrawn SVG) is deliberate: it guarantees the
  * JS splash matches whatever the native splash shows, and the background color
