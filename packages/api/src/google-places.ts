@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { child } from '@showbook/observability';
+import { isTransientFetchError, transientErrorCode } from './transient-fetch';
 
 const log = child({ component: 'api.google-places' });
 
@@ -11,32 +12,6 @@ function getApiKey() {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// Low-level socket errors undici surfaces as `err.cause.code` on a
-// `TypeError: fetch failed`. These are connection-level blips (Google
-// resets a small fraction of keep-alive sockets mid-read), not API errors —
-// the response never arrives, so a retry on a fresh connection clears them.
-const TRANSIENT_CAUSE_CODES = new Set([
-  'ECONNRESET',
-  'ETIMEDOUT',
-  'ECONNREFUSED',
-  'EAI_AGAIN',
-  'EPIPE',
-  'ENOTFOUND',
-  'UND_ERR_SOCKET',
-]);
-
-function isTransientFetchError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
-  // AbortSignal.timeout(...) fires a TimeoutError; a manual abort an AbortError.
-  if (err.name === 'TimeoutError' || err.name === 'AbortError') return true;
-  const code = (err as { cause?: { code?: unknown } }).cause?.code;
-  if (typeof code === 'string' && TRANSIENT_CAUSE_CODES.has(code)) return true;
-  // `TypeError: fetch failed` with no decodable cause is still a transport
-  // failure (DNS / TLS / reset) rather than anything we can fix by not
-  // retrying — treat it as transient.
-  return err instanceof TypeError && err.message === 'fetch failed';
 }
 
 // Retry transient network failures a couple of times with short backoff.
@@ -58,11 +33,8 @@ async function fetchWithRetry(
     } catch (err) {
       lastErr = err;
       if (attempt >= attempts || !isTransientFetchError(err)) throw err;
-      const code =
-        (err as { cause?: { code?: string } }).cause?.code ??
-        (err instanceof Error ? err.name : 'unknown');
       log.warn(
-        { event: 'places.request.retry', call, code },
+        { event: 'places.request.retry', call, code: transientErrorCode(err) },
         'Transient Google Places network error; retrying',
       );
       await sleep(attempt * 300);

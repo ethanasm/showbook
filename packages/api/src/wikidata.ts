@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { child } from '@showbook/observability';
+import { isTransientFetchError, transientErrorCode } from './transient-fetch';
 
 const log = child({ component: 'api.wikidata' });
 
@@ -20,29 +21,6 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Mirrors the transient-network handling in google-places.ts: undici
-// surfaces socket resets as `err.cause.code` on a `TypeError: fetch
-// failed`; those are connection blips, not API errors, so a retry on a
-// fresh connection clears them. HTTP error *responses* don't throw and
-// are handled by each caller's `res.ok` check.
-const TRANSIENT_CAUSE_CODES = new Set([
-  'ECONNRESET',
-  'ETIMEDOUT',
-  'ECONNREFUSED',
-  'EAI_AGAIN',
-  'EPIPE',
-  'ENOTFOUND',
-  'UND_ERR_SOCKET',
-]);
-
-function isTransientFetchError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
-  if (err.name === 'TimeoutError' || err.name === 'AbortError') return true;
-  const code = (err as { cause?: { code?: unknown } }).cause?.code;
-  if (typeof code === 'string' && TRANSIENT_CAUSE_CODES.has(code)) return true;
-  return err instanceof TypeError && err.message === 'fetch failed';
-}
-
 async function fetchWithRetry(
   url: string,
   call: string,
@@ -58,11 +36,8 @@ async function fetchWithRetry(
     } catch (err) {
       lastErr = err;
       if (attempt >= attempts || !isTransientFetchError(err)) throw err;
-      const code =
-        (err as { cause?: { code?: string } }).cause?.code ??
-        (err instanceof Error ? err.name : 'unknown');
       log.warn(
-        { event: 'wikidata.request.retry', call, code },
+        { event: 'wikidata.request.retry', call, code: transientErrorCode(err) },
         'Transient Wikidata network error; retrying',
       );
       await sleep(attempt * 300);
