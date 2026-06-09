@@ -19,6 +19,7 @@ import {
   generateDigestPreamble,
   predictedSetlistCached,
   signUnsubscribeToken,
+  loadVenueNameOverrides,
 } from '@showbook/api';
 import { child } from '@showbook/observability';
 import {
@@ -444,6 +445,7 @@ export async function runDailyDigest(
       const todayRows = await db
         .select({
           id: shows.id,
+          venueId: shows.venueId,
           venueName: venues.name,
           seat: shows.seat,
         })
@@ -459,6 +461,14 @@ export async function runDailyDigest(
 
       const todayHeadliners = await getHeadlinersForShows(
         todayRows.map((r) => r.id),
+      );
+
+      // Per-user venue-name overrides so the digest shows the user's
+      // alias rather than the canonical name.
+      const todayVenueOverrides = await loadVenueNameOverrides(
+        db,
+        user.userId,
+        todayRows.map((r) => r.venueId),
       );
 
       // Phase 11 §15o — prefetch the predicted setlist for each
@@ -481,7 +491,7 @@ export async function runDailyDigest(
           : null;
         return {
           headliner: todayHeadliners.get(row.id) ?? 'Unknown Artist',
-          venueName: row.venueName,
+          venueName: todayVenueOverrides.get(row.venueId) ?? row.venueName,
           seat: row.seat,
           predictedSetlistTile: tile,
         };
@@ -492,6 +502,7 @@ export async function runDailyDigest(
         .select({
           id: shows.id,
           date: shows.date,
+          venueId: shows.venueId,
           venueName: venues.name,
         })
         .from(shows)
@@ -512,6 +523,11 @@ export async function runDailyDigest(
       const upcomingHeadliners = await getHeadlinersForShows(
         upcomingFiltered.map((r) => r.id),
       );
+      const upcomingVenueOverrides = await loadVenueNameOverrides(
+        db,
+        user.userId,
+        upcomingFiltered.map((r) => r.venueId),
+      );
       const upcomingShows = upcomingFiltered.map((row) => {
         const showDate = new Date(row.date! + 'T00:00:00');
         const daysUntil = Math.round(
@@ -520,7 +536,7 @@ export async function runDailyDigest(
         );
         return {
           headliner: upcomingHeadliners.get(row.id) ?? 'Unknown Artist',
-          venueName: row.venueName,
+          venueName: upcomingVenueOverrides.get(row.venueId) ?? row.venueName,
           dateLabel: formatDate(row.date!),
           daysUntil,
         };
@@ -559,9 +575,24 @@ export async function runDailyDigest(
         performerRows.map((r) => r.performerId),
       );
 
-      const newSinceCutoff = allRecentAnnouncements.filter(
+      const newSinceCutoffRaw = allRecentAnnouncements.filter(
         (a) => a.discoveredAt !== null && a.discoveredAt >= cutoff,
       );
+      // `allRecentAnnouncements` is shared across all users, so resolve the
+      // per-user venue-name overrides into a fresh array here — never mutate
+      // the shared rows.
+      const announcementVenueOverrides = await loadVenueNameOverrides(
+        db,
+        user.userId,
+        newSinceCutoffRaw.map((a) => a.venueId),
+      );
+      const newSinceCutoff =
+        announcementVenueOverrides.size === 0
+          ? newSinceCutoffRaw
+          : newSinceCutoffRaw.map((a) => {
+              const custom = announcementVenueOverrides.get(a.venueId);
+              return custom ? { ...a, venueName: custom } : a;
+            });
 
       const filterCounts: BucketCounts = {
         droppedArtistMatches: 0,

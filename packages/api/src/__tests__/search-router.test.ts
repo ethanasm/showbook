@@ -73,6 +73,7 @@ describe('searchRouter.global (unit)', () => {
     const baseDb = makeFakeDb({
       selectResults: [
         [{ id: 's1', date: '2024-05-01' }], // matchingShowIdsRows
+        [], // showVenueOverrides (per-user aliases)
         [], // performerRows
         [], // userVenueIdsRows
         [], // followedVenueIdsRows
@@ -112,6 +113,7 @@ describe('searchRouter.global (unit)', () => {
     const baseDb = makeFakeDb({
       selectResults: [
         [{ id: 's1', date: '2024-05-01' }],
+        [], // showVenueOverrides
         [],
         [],
         [],
@@ -158,6 +160,7 @@ describe('searchRouter.global (unit)', () => {
           { id: 's-dated', date: '2024-05-01' },
           { id: 's-dateless', date: null },
         ],
+        [], // showVenueOverrides
         [],
         [],
         [],

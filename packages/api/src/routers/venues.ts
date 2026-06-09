@@ -5,6 +5,7 @@ import { router, protectedProcedure } from '../trpc';
 import {
   venues,
   userVenueFollows,
+  userVenueNames,
   userPerformerFollows,
   userRegions,
   announcements,
@@ -24,6 +25,7 @@ import { venueScrapeRuns } from '@showbook/db';
 import { computeVenueUnfollowAnnouncementsToDelete } from './preferences';
 import { enforceRateLimit } from '../rate-limit';
 import { assertUnderFollowCap } from '../follow-caps';
+import { loadVenueNameOverrides } from '../venue-names';
 import { child } from '@showbook/observability';
 
 const log = child({ component: 'api.venues' });
@@ -164,7 +166,17 @@ export const venuesRouter = router({
       .where(eq(userVenueFollows.userId, userId));
     const followedSet = new Set(followed.map((f) => f.venueId));
 
-    return rows.map((r) => ({ ...r, isFollowed: followedSet.has(r.id) }));
+    const overrides = await loadVenueNameOverrides(
+      ctx.db,
+      userId,
+      rows.map((r) => r.id),
+    );
+
+    return rows.map((r) => ({
+      ...r,
+      name: overrides.get(r.id) ?? r.name,
+      isFollowed: followedSet.has(r.id),
+    }));
   }),
 
   /**
@@ -183,15 +195,26 @@ export const venuesRouter = router({
   search: protectedProcedure
     .input(z.object({ query: z.string().min(1).max(200) }))
     .query(async ({ ctx, input }) => {
-      enforceRateLimit(`venues.search:${ctx.session.user.id}`, {
+      const userId = ctx.session.user.id;
+      enforceRateLimit(`venues.search:${userId}`, {
         max: 60,
         windowMs: 60_000,
       });
-      return ctx.db
+      const rows = await ctx.db
         .select()
         .from(venues)
         .where(sql`${venues.name} ILIKE ${'%' + input.query + '%'}`)
         .limit(20);
+      // Match is against the canonical name only; we still surface the
+      // user's alias as the displayed `name` so results read consistently
+      // with the rest of the app. (A venue matched on its canonical name
+      // can therefore show the user's custom name in the result.)
+      const overrides = await loadVenueNameOverrides(
+        ctx.db,
+        userId,
+        rows.map((r) => r.id),
+      );
+      return rows.map((r) => ({ ...r, name: overrides.get(r.id) ?? r.name }));
     }),
 
   follow: protectedProcedure
@@ -248,41 +271,67 @@ export const venuesRouter = router({
       return { success: true };
     }),
 
+  /**
+   * Set a per-user name override for a venue. This is a personal alias —
+   * only the editing user sees it; the shared `venues.name` is untouched.
+   * Upserts into `user_venue_names`. Returns a `{ id, name, customName }`
+   * patch so optimistic caches that write `{ ...prev, name }` keep working.
+   */
   rename: protectedProcedure
     .input(z.object({ venueId: z.string().uuid(), name: z.string().min(1).max(300) }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+      await assertVenueAccess(ctx.db, userId, input.venueId);
 
-      // Authorize: user must follow this venue OR have a show at it.
-      const [follow] = await ctx.db
-        .select({ venueId: userVenueFollows.venueId })
-        .from(userVenueFollows)
+      const trimmed = input.name.trim();
+      const [row] = await ctx.db
+        .insert(userVenueNames)
+        .values({ userId, venueId: input.venueId, customName: trimmed })
+        .onConflictDoUpdate({
+          target: [userVenueNames.userId, userVenueNames.venueId],
+          set: { customName: trimmed, updatedAt: new Date() },
+        })
+        .returning();
+      log.info(
+        { event: 'venue.rename', userId, venueId: input.venueId },
+        'Venue alias set',
+      );
+      return { id: input.venueId, name: row.customName, customName: row.customName };
+    }),
+
+  /**
+   * Clear a per-user venue-name override, falling back to the canonical
+   * `venues.name`. Returns the canonical name so the client can repaint
+   * immediately.
+   */
+  resetName: protectedProcedure
+    .input(z.object({ venueId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      await assertVenueAccess(ctx.db, userId, input.venueId);
+
+      await ctx.db
+        .delete(userVenueNames)
         .where(
           and(
-            eq(userVenueFollows.userId, userId),
-            eq(userVenueFollows.venueId, input.venueId),
+            eq(userVenueNames.userId, userId),
+            eq(userVenueNames.venueId, input.venueId),
           ),
-        )
-        .limit(1);
+        );
 
-      if (!follow) {
-        const [show] = await ctx.db
-          .select({ id: shows.id })
-          .from(shows)
-          .where(and(eq(shows.userId, userId), eq(shows.venueId, input.venueId)))
-          .limit(1);
-        if (!show) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Not authorized to rename this venue' });
-        }
-      }
-
-      const [updated] = await ctx.db
-        .update(venues)
-        .set({ name: input.name.trim() })
+      const [venue] = await ctx.db
+        .select({ name: venues.name })
+        .from(venues)
         .where(eq(venues.id, input.venueId))
-        .returning();
-      if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Venue not found' });
-      return updated;
+        .limit(1);
+      if (!venue) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Venue not found' });
+      }
+      log.info(
+        { event: 'venue.rename.reset', userId, venueId: input.venueId },
+        'Venue alias cleared',
+      );
+      return { id: input.venueId, name: venue.name, customName: null };
     }),
 
   unfollow: protectedProcedure
@@ -389,7 +438,13 @@ export const venuesRouter = router({
       with: { venue: true },
     });
 
-    return follows.map((f) => f.venue);
+    const venueRows = follows.map((f) => f.venue);
+    const overrides = await loadVenueNameOverrides(
+      ctx.db,
+      userId,
+      venueRows.map((v) => v.id),
+    );
+    return venueRows.map((v) => ({ ...v, name: overrides.get(v.id) ?? v.name }));
   }),
 
   detail: protectedProcedure
@@ -433,8 +488,16 @@ export const venuesRouter = router({
         today,
       );
 
+      const overrides = await loadVenueNameOverrides(ctx.db, userId, [venue.id]);
+      const customName = overrides.get(venue.id) ?? null;
+
       return {
         ...venue,
+        // `name` is the resolved name the UI renders; `canonicalName` is the
+        // shared baseline so the UI can offer "reset to original".
+        name: customName ?? venue.name,
+        canonicalName: venue.name,
+        hasCustomName: customName !== null,
         isFollowed: Boolean(followRow),
         userShowCount,
         upcomingCount: dedupedUpcoming.length,

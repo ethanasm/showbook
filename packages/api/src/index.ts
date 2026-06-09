@@ -49,6 +49,11 @@ export {
   type VenueForShaping,
 } from './performer-upcoming';
 export { matchOrCreateVenue, isUniqueViolation } from './venue-matcher';
+export {
+  loadVenueNameOverrides,
+  applyVenueNameOverrides,
+  applyNestedVenueNameOverrides,
+} from './venue-names';
 export { geocodeVenue } from './geocode';
 export type { GeocodeResult } from './geocode';
 export { matchOrCreatePerformer } from './performer-matcher';

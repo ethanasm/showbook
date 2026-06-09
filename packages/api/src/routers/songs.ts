@@ -27,6 +27,7 @@ import {
   venues,
 } from '@showbook/db';
 import { protectedProcedure, router } from '../trpc';
+import { loadVenueNameOverrides } from '../venue-names';
 
 const songsListInput = z
   .object({
@@ -228,6 +229,7 @@ export const songsRouter = router({
           songIndex: setlistSongAppearances.songIndex,
           isEncore: setlistSongAppearances.isEncore,
           role: setlistSongAppearances.role,
+          venueId: venues.id,
           venueName: venues.name,
           venueCity: venues.city,
         })
@@ -241,6 +243,17 @@ export const songsRouter = router({
           ),
         )
         .orderBy(asc(setlistSongAppearances.performanceDate));
+
+      // Apply per-user venue-name overrides so the timeline + first/last
+      // cards show the user's alias rather than the canonical name.
+      const venueNameOverrides = await loadVenueNameOverrides(
+        ctx.db,
+        userId,
+        timeline.map((r) => r.venueId),
+      );
+      for (const r of timeline) {
+        r.venueName = venueNameOverrides.get(r.venueId) ?? r.venueName;
+      }
 
       // Rarity: corpus hits in the last 12 months, divided by the
       // performer's total corpus setlists in the same window. Both
