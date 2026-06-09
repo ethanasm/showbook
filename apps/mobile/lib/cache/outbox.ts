@@ -24,6 +24,7 @@ export type PendingMutation =
   | 'shows.updateState'
   | 'shows.setSetlist'
   | 'shows.setNotes'
+  | 'shows.setTicketStatus'
   | 'venues.follow'
   | 'venues.unfollow'
   | 'venues.rename'

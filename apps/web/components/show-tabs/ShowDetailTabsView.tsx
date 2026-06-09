@@ -27,6 +27,7 @@ import {
   countFestivalActualSongs,
 } from "@/lib/show-accessors";
 import { MediaSection } from "@/components/media";
+import { TicketStatusBadge } from "@/components/design-system";
 import { ShowTabs } from "./ShowTabs";
 import { OverviewTab, type OverviewLineupEntry } from "./OverviewTab";
 import { DeleteShowConfirmModal } from "./DeleteShowConfirmModal";
@@ -52,6 +53,7 @@ interface ShowDetailTabsViewProps {
     id: string;
     kind: "concert" | "theatre" | "comedy" | "festival" | "film" | "unknown";
     state: "past" | "ticketed" | "watching";
+    ticketStatus?: "sold_out" | "cancelled" | null;
     date: string | null;
     endDate: string | null;
     seat: string | null;
@@ -148,6 +150,11 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
     },
   });
   const updateState = trpc.shows.updateState.useMutation({
+    onSuccess: () => {
+      utils.shows.detail.invalidate({ showId: show.id });
+    },
+  });
+  const setTicketStatus = trpc.shows.setTicketStatus.useMutation({
     onSuccess: () => {
       utils.shows.detail.invalidate({ showId: show.id });
     },
@@ -341,6 +348,15 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
     },
     [show.id, setNotes],
   );
+  const handleToggleTicketStatus = useCallback(
+    (status: "sold_out" | "cancelled") => {
+      // Toggle: clicking the active status clears it, otherwise set it
+      // (which also replaces the other status since it's one column).
+      const next = show.ticketStatus === status ? null : status;
+      void setTicketStatus.mutateAsync({ showId: show.id, status: next });
+    },
+    [show.id, show.ticketStatus, setTicketStatus],
+  );
 
   const mediaLineup = lineupEntries.map((entry) => ({
     id: entry.performerId,
@@ -438,6 +454,8 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
       onEdit={handleEdit}
       onAddToCalendarHref={`/api/shows/${show.id}/ical`}
       onDelete={handleDelete}
+      ticketStatus={show.ticketStatus ?? null}
+      onToggleTicketStatus={handleToggleTicketStatus}
       musicLayerPlaceholder={musicLayerPlaceholder}
     />
   );
@@ -684,6 +702,17 @@ function ShowHeaderStrip({
             </span>
           )}
         </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            gap: 8,
+            flexWrap: "wrap",
+          }}
+        >
+        {show.ticketStatus ? (
+          <TicketStatusBadge status={show.ticketStatus} />
+        ) : null}
         {isPast ? (
           <span
             style={{
@@ -731,6 +760,7 @@ function ShowHeaderStrip({
             watching
           </span>
         )}
+        </div>
       </div>
       {showPrimingStat && <PrimingStat showId={show.id} />}
     </header>
