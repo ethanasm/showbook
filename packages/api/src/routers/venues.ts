@@ -31,41 +31,6 @@ import { child } from '@showbook/observability';
 const log = child({ component: 'api.venues' });
 
 /**
- * Authorize a per-user venue-name edit: the user must follow the venue OR
- * have a show there. Shared by `rename` and `resetName` so the two never
- * drift on who's allowed to alias a venue.
- */
-async function assertVenueStanding(
-  db: Database,
-  userId: string,
-  venueId: string,
-): Promise<void> {
-  const [follow] = await db
-    .select({ venueId: userVenueFollows.venueId })
-    .from(userVenueFollows)
-    .where(
-      and(
-        eq(userVenueFollows.userId, userId),
-        eq(userVenueFollows.venueId, venueId),
-      ),
-    )
-    .limit(1);
-  if (follow) return;
-
-  const [show] = await db
-    .select({ id: shows.id })
-    .from(shows)
-    .where(and(eq(shows.userId, userId), eq(shows.venueId, venueId)))
-    .limit(1);
-  if (!show) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'Not authorized to rename this venue',
-    });
-  }
-}
-
-/**
  * Upper bound on how many future announcements we scan when deduping
  * against the user's logged shows at a venue. The dedup is in-memory
  * (joining + fuzzy-matching headliner / production names against the user's
@@ -316,7 +281,7 @@ export const venuesRouter = router({
     .input(z.object({ venueId: z.string().uuid(), name: z.string().min(1).max(300) }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      await assertVenueStanding(ctx.db, userId, input.venueId);
+      await assertVenueAccess(ctx.db, userId, input.venueId);
 
       const trimmed = input.name.trim();
       const [row] = await ctx.db
@@ -343,7 +308,7 @@ export const venuesRouter = router({
     .input(z.object({ venueId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      await assertVenueStanding(ctx.db, userId, input.venueId);
+      await assertVenueAccess(ctx.db, userId, input.venueId);
 
       await ctx.db
         .delete(userVenueNames)
