@@ -41,6 +41,7 @@ export const MUTATION_LABEL: Record<PendingMutation, string> = {
   'shows.updateState': 'Change show state',
   'shows.setSetlist': 'Update setlist',
   'shows.setNotes': 'Update notes',
+  'shows.setTicketStatus': 'Update ticket status',
   'venues.follow': 'Follow venue',
   'venues.unfollow': 'Unfollow venue',
   'venues.rename': 'Rename venue',

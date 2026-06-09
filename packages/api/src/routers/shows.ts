@@ -920,6 +920,29 @@ export const showsRouter = router({
       return updated;
     }),
 
+  // Per-user manual ticket-status override (sold out / cancelled). Pass
+  // `null` to clear it. Orthogonal to `state`, so it's allowed regardless of
+  // whether the show is watching/ticketed/past. See ticketStatusEnum.
+  setTicketStatus: protectedProcedure
+    .input(
+      z.object({
+        showId: z.string().uuid(),
+        status: z.enum(['sold_out', 'cancelled']).nullable(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const [updated] = await ctx.db
+        .update(shows)
+        .set({ ticketStatus: input.status, updatedAt: new Date() })
+        .where(and(eq(shows.id, input.showId), eq(shows.userId, userId)))
+        .returning({ id: shows.id, ticketStatus: shows.ticketStatus });
+      if (!updated) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+      }
+      return updated;
+    }),
+
   updateState: protectedProcedure
     .input(
       z.object({
