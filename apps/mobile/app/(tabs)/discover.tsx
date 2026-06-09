@@ -419,6 +419,10 @@ export default function DiscoverScreen(): React.JSX.Element {
         seen.set(r.id, {
           id: r.id,
           name: r.cityName,
+          // Radius is suppressed on the inline pills (hideInlineSublabel)
+          // but kept here so the overflow "All regions" sheet still shows
+          // each region's search radius.
+          sublabel: `${r.radiusMiles}mi`,
           count: 0,
         });
       }
@@ -435,7 +439,11 @@ export default function DiscoverScreen(): React.JSX.Element {
                 ? (item as NearbyAnnouncementItem).regionCityName ?? 'Region'
                 : item.venue.name;
           const fallbackSub =
-            tab === 'venues' ? item.venue.city : undefined;
+            tab === 'venues'
+              ? item.venue.city
+              : tab === 'regions'
+                ? `${(item as NearbyAnnouncementItem).regionRadiusMiles ?? '?'}mi`
+                : undefined;
           seen.set(key, {
             id: key,
             name: fallbackName,
