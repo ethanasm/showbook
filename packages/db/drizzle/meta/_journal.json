@@ -414,6 +414,13 @@
       "when": 1795968720000,
       "tag": "0058_performer_wikidata_qid",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1795968780000,
+      "tag": "0059_user_venue_names",
+      "breakpoints": true
     }
   ]
 }

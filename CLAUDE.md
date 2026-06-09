@@ -238,6 +238,7 @@ The stdout copy in the prod web container (`docker logs showbook-prod-web`) is a
 - `venue.photo.{updated,missing,failed,done,fatal}` — `backfill-venue-photos` job.
 - `venue.photo.proxy.{upstream_error,host_not_allowed,redirect_not_allowed}` — `/api/venue-photo/[venueId]` SSRF-guard and upstream-failure boundaries. `upstream_error` fires on a non-2xx / wrong-content-type final response; `host_not_allowed` fires when a persisted absolute `photoUrl` falls outside `ALLOWED_PROXY_HOSTS`; `redirect_not_allowed` fires when an upstream 3xx points to a host outside `ALLOWED_REDIRECT_HOSTS` (added 2026-05-17 alongside the one-hop redirect follow that restored Google-Places-backed venue photos broken by `redirect: 'manual'` in #192).
 - `venue.follow`, `venue.follow.place_backfill_failed` — `venues.follow` lazy backfill.
+- `venue.rename`, `venue.rename.reset` — per-user venue-name alias set / cleared via `venues.rename` / `venues.resetName` (writes `user_venue_names`, not the shared `venues.name`). `admin.venue.rename` is the operator-only global canonical rename (`admin.renameVenue`).
 - `discover.ingest.{performer,venue,region,targeted,*}.complete` — pg-boss discover-ingest jobs.
 - `shows.nightly.summary`, `setlist.retry.summary` — nightly transition + setlist-retry jobs.
 - `shows.create.{tm_enrichment_failed,venue_place_backfill_failed,mbid_resolve_failed}` — `shows.create` non-blocking enrichments. `mbid_resolve_failed` fires when the inline setlist.fm MBID lookup for a future concert errors; the nightly backfill at 04:30 ET catches the gap.

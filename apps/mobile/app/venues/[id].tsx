@@ -318,8 +318,12 @@ function Hero({
 
   // Mirror the web app's rename gate (`packages/api/src/routers/venues.ts`):
   // only show the rename affordance when the user already has standing at
-  // the venue — server still enforces this on submit.
-  const canRename = venue.isFollowed || venue.userShowCount > 0;
+  // the venue — server still enforces this on submit. Admins can always open
+  // the sheet to edit the canonical name.
+  const amIAdmin =
+    trpc.admin.amIAdmin.useQuery(undefined, { staleTime: 5 * 60_000 }).data
+      ?.isAdmin ?? false;
+  const canRename = venue.isFollowed || venue.userShowCount > 0 || amIAdmin;
   const [renameOpen, setRenameOpen] = React.useState(false);
   const openRename = React.useCallback(() => {
     if (!canRename) return;
@@ -390,6 +394,8 @@ function Hero({
           onClose={() => setRenameOpen(false)}
           venueId={venueId}
           currentName={venue.name}
+          canonicalName={venue.canonicalName}
+          isAdmin={amIAdmin}
         />
       ) : null}
     </View>

@@ -109,7 +109,7 @@ describe('showsRouter (unit)', () => {
           venue: { id: 'v1', name: 'V', city: 'NYC', stateRegion: 'NY', latitude: null, longitude: null, photoUrl: null },
         },
       ];
-      const db = makeFakeDb({ selectResults: [shows] });
+      const db = makeFakeDb({ selectResults: [shows, []] });
       const result = await caller(db).listForMap();
       assert.equal(result.length, 1);
       assert.equal(result[0]!.headlinerName, 'Hamilton');
@@ -138,7 +138,7 @@ describe('showsRouter (unit)', () => {
         // another headliner sortOrder=1 — tier 1
         { showId: 'show-1', performerId: 'h1', name: 'Co', imageUrl: null, role: 'headliner', sortOrder: 1 },
       ];
-      const db = makeFakeDb({ selectResults: [shows, performerRows] });
+      const db = makeFakeDb({ selectResults: [shows, performerRows, []] });
       const result = await caller(db).listForMap();
       assert.equal(result[0]!.headlinerName, 'Main');
       assert.equal(result[0]!.headlinerId, 'h0');
@@ -162,7 +162,7 @@ describe('showsRouter (unit)', () => {
       const performerRows = [
         { showId: 'show-1', performerId: 's2', name: 'Only', imageUrl: null, role: 'support', sortOrder: 5 },
       ];
-      const db = makeFakeDb({ selectResults: [shows, performerRows] });
+      const db = makeFakeDb({ selectResults: [shows, performerRows, []] });
       const result = await caller(db).listForMap();
       assert.equal(result[0]!.headlinerName, 'Only');
     });
@@ -519,7 +519,7 @@ describe('showsRouter (unit)', () => {
           venue: { id: 'v', name: 'V', city: 'SF', stateRegion: 'CA', latitude: null, longitude: null, photoUrl: null },
         },
       ];
-      const db = makeFakeDb({ selectResults: [shows] });
+      const db = makeFakeDb({ selectResults: [shows, []] });
       const result = await caller(db).listForMap();
       assert.equal(result[0]!.headlinerName, 'Outside Lands');
     });
@@ -538,7 +538,7 @@ describe('showsRouter (unit)', () => {
           venue: { id: 'v', name: 'V', city: 'C', stateRegion: 'NY', latitude: null, longitude: null, photoUrl: null },
         },
       ];
-      const db = makeFakeDb({ selectResults: [shows, []] });
+      const db = makeFakeDb({ selectResults: [shows, [], []] });
       const result = await caller(db).listForMap();
       assert.equal(result[0]!.headlinerName, null);
       assert.equal(result[0]!.headlinerId, null);

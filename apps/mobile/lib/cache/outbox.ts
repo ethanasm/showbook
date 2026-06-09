@@ -27,6 +27,7 @@ export type PendingMutation =
   | 'venues.follow'
   | 'venues.unfollow'
   | 'venues.rename'
+  | 'venues.resetName'
   | 'performers.follow'
   | 'performers.unfollow'
   | 'preferences.update'

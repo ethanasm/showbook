@@ -55,6 +55,40 @@ export const adminRouter = router({
   }),
 
   /**
+   * Rename a venue's CANONICAL name globally — the shared `venues.name` that
+   * every user sees as the baseline. This is the operator escape hatch for
+   * fixing a genuine typo in the canonical record; the per-user
+   * `venues.rename` alias (in `user_venue_names`) is unaffected and still
+   * overrides this for users who set one.
+   */
+  renameVenue: adminProcedure
+    .input(
+      z.object({
+        venueId: z.string().uuid(),
+        name: z.string().min(1).max(300),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [updated] = await ctx.db
+        .update(venues)
+        .set({ name: input.name.trim() })
+        .where(eq(venues.id, input.venueId))
+        .returning();
+      if (!updated) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Venue not found' });
+      }
+      log.info(
+        {
+          event: 'admin.venue.rename',
+          userId: ctx.session.user.id,
+          venueId: input.venueId,
+        },
+        'Canonical venue name updated by admin',
+      );
+      return { id: updated.id, name: updated.name };
+    }),
+
+  /**
    * Fill in missing latitude/longitude/stateRegion/country for every venue
    * with a known city. Calls Google geocoding per row.
    */

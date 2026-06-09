@@ -158,6 +158,22 @@ export default function VenueDetailPage() {
     },
   });
 
+  const resetNameMutation = trpc.venues.resetName.useMutation({
+    onSuccess: () => {
+      utils.venues.detail.invalidate();
+    },
+  });
+
+  const amIAdmin = trpc.admin.amIAdmin.useQuery().data?.isAdmin ?? false;
+  const adminRenameMutation = trpc.admin.renameVenue.useMutation({
+    meta: { successToast: "Canonical name updated" },
+    onSuccess: () => {
+      utils.venues.detail.invalidate();
+      utils.venues.followed.invalidate();
+      utils.venues.list.invalidate();
+    },
+  });
+
   const invalidateSidebarCounts = useInvalidateSidebarCounts();
 
   const updateState = trpc.shows.updateState.useMutation({
@@ -332,6 +348,37 @@ export default function VenueDetailPage() {
               >
                 {locationLine}
               </div>
+            )}
+            {venue.hasCustomName && (
+              <button
+                type="button"
+                onClick={() => resetNameMutation.mutate({ venueId: venue.id })}
+                disabled={resetNameMutation.isPending}
+                style={{
+                  marginTop: 6,
+                  padding: 0,
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontSize: 11.5,
+                  color: "var(--muted)",
+                  letterSpacing: ".02em",
+                  textAlign: "left",
+                }}
+                title={`Reset to “${venue.canonicalName}”`}
+              >
+                Renamed by you · reset to original
+              </button>
+            )}
+            {amIAdmin && (
+              <AdminCanonicalName
+                canonicalName={venue.canonicalName}
+                onSave={(name) =>
+                  adminRenameMutation.mutate({ venueId: venue.id, name })
+                }
+                pending={adminRenameMutation.isPending}
+              />
             )}
           </div>
         </div>
@@ -775,6 +822,84 @@ function CardMessage({ children }: { children: React.ReactNode }) {
     >
       {children}
     </div>
+  );
+}
+
+
+// ── Admin: edit the canonical (shared) venue name ─────────────────────────
+function AdminCanonicalName({
+  canonicalName,
+  onSave,
+  pending,
+}: {
+  canonicalName: string;
+  onSave: (name: string) => void;
+  pending: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(canonicalName);
+
+  const sharedStyle: React.CSSProperties = {
+    fontFamily: "var(--font-geist-mono), monospace",
+    fontSize: 11.5,
+    color: "var(--muted)",
+    letterSpacing: ".02em",
+  };
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const trimmed = draft.trim();
+          setEditing(false);
+          if (trimmed && trimmed !== canonicalName) onSave(trimmed);
+          else setDraft(canonicalName);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          if (e.key === "Escape") {
+            setDraft(canonicalName);
+            setEditing(false);
+          }
+        }}
+        style={{
+          ...sharedStyle,
+          marginTop: 6,
+          width: "100%",
+          background: "transparent",
+          border: "none",
+          borderBottom: "1px solid var(--accent)",
+          outline: "none",
+          padding: 0,
+        }}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setDraft(canonicalName);
+        setEditing(true);
+      }}
+      disabled={pending}
+      style={{
+        ...sharedStyle,
+        marginTop: 6,
+        padding: 0,
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        textAlign: "left",
+      }}
+      title="Edit the canonical name everyone sees"
+    >
+      admin · canonical “{canonicalName}” · edit for everyone
+    </button>
   );
 }
 

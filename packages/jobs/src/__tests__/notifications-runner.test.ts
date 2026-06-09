@@ -106,6 +106,9 @@ mock.module('@showbook/api', {
     // Deterministic HMAC-shaped token for assertions; the real
     // signer is unit-tested in `packages/api/src/__tests__/unsubscribe-token.test.ts`.
     signUnsubscribeToken: (userId: string) => `${userId}.test-hmac`,
+    // No per-user venue aliases in these fixtures — the override resolver
+    // is unit-tested directly in `packages/api/src/__tests__/venue-names.test.ts`.
+    loadVenueNameOverrides: async () => new Map(),
   },
 });
 

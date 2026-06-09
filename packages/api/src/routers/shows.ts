@@ -19,6 +19,7 @@ import {
   resolveListForMapHeadliners,
   showsWithRelationsShape,
 } from '../queries/show-queries';
+import { applyNestedVenueNameOverrides } from '../venue-names';
 import { matchOrCreateVenue, type VenueInput } from '../venue-matcher';
 import { matchOrCreatePerformer } from '../performer-matcher';
 import {
@@ -278,11 +279,12 @@ export const showsRouter = router({
         );
       }
 
-      return ctx.db.query.shows.findMany({
+      const rows = await ctx.db.query.shows.findMany({
         where: and(...conditions),
         orderBy: [desc(shows.date)],
         with: showsWithRelationsShape,
       });
+      return applyNestedVenueNameOverrides(ctx.db, userId, rows, (s) => s.venue);
     }),
 
   /**
@@ -409,7 +411,14 @@ export const showsRouter = router({
       }
     }
 
-    return rows.map(({ productionName: _pn, ...show }) => ({
+    const resolvedRows = await applyNestedVenueNameOverrides(
+      ctx.db,
+      userId,
+      rows,
+      (r) => r.venue,
+    );
+
+    return resolvedRows.map(({ productionName: _pn, ...show }) => ({
       ...show,
       headlinerName: headlinerName.get(show.id) ?? null,
       headlinerId: headlinerId.get(show.id) ?? null,
@@ -488,7 +497,13 @@ export const showsRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
       }
 
-      return show;
+      const [resolved] = await applyNestedVenueNameOverrides(
+        ctx.db,
+        userId,
+        [show],
+        (s) => s.venue,
+      );
+      return resolved;
     }),
 
   create: protectedProcedure
@@ -874,10 +889,18 @@ export const showsRouter = router({
       }
 
       // Return the full show with relations
-      return ctx.db.query.shows.findFirst({
+      const reloaded = await ctx.db.query.shows.findFirst({
         where: eq(shows.id, show.id),
         with: showsWithRelationsShape,
       });
+      if (!reloaded) return reloaded;
+      const [resolved] = await applyNestedVenueNameOverrides(
+        ctx.db,
+        userId,
+        [reloaded],
+        (s) => s.venue,
+      );
+      return resolved;
     }),
 
   setNotes: protectedProcedure
@@ -1150,10 +1173,18 @@ export const showsRouter = router({
       // appearances for this showId before re-inserting.
       await reindexShowAfterWrite(input.showId);
 
-      return ctx.db.query.shows.findFirst({
+      const reloaded = await ctx.db.query.shows.findFirst({
         where: eq(shows.id, input.showId),
         with: showsWithRelationsShape,
       });
+      if (!reloaded) return reloaded;
+      const [resolved] = await applyNestedVenueNameOverrides(
+        ctx.db,
+        userId,
+        [reloaded],
+        (s) => s.venue,
+      );
+      return resolved;
     }),
 
   /**

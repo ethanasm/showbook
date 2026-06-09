@@ -30,6 +30,12 @@ export interface RenameVenueSheetProps {
   onClose: () => void;
   venueId: string;
   currentName: string;
+  /** The shared, canonical venue name. When it differs from `currentName`
+   *  the user has a personal alias and we surface a "reset to original". */
+  canonicalName?: string;
+  /** When true, also offer an admin-only "rename for everyone" action that
+   *  edits the shared canonical name (`admin.renameVenue`). */
+  isAdmin?: boolean;
 }
 
 const MAX_LEN = 300;
@@ -39,6 +45,8 @@ export function RenameVenueSheet({
   onClose,
   venueId,
   currentName,
+  canonicalName,
+  isAdmin = false,
 }: RenameVenueSheetProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -58,17 +66,77 @@ export function RenameVenueSheet({
 
   const trimmed = draft.trim();
   const canSubmit = trimmed.length > 0 && trimmed !== currentName && !submitting;
+  // A personal alias exists when the displayed name differs from the
+  // canonical one — only then is "reset to original" meaningful.
+  const hasCustomName =
+    canonicalName != null && canonicalName !== currentName;
+
+  type DetailCache = { name?: string } | undefined;
+  type FollowedCache = { id: string; name?: string }[] | undefined;
+  type ListCache = { id: string; name?: string }[] | undefined;
+  const detailKey = ['mobile', 'venue', venueId, 'detail'];
+  const followedKey = ['mobile', 'venues', 'followed'];
+  const listKey = ['mobile', 'venues', 'list'];
+
+  // Capture the three name-bearing cache slots so the runner can roll back.
+  const snapshotNameCaches = () => ({
+    detail: queryClient.getQueryData<DetailCache>(detailKey),
+    followed: queryClient.getQueryData<FollowedCache>(followedKey),
+    list: queryClient.getQueryData<ListCache>(listKey),
+  });
+
+  const rollbackNameCaches = (snap: ReturnType<typeof snapshotNameCaches>) => {
+    queryClient.setQueryData(detailKey, snap.detail);
+    queryClient.setQueryData(followedKey, snap.followed);
+    queryClient.setQueryData(listKey, snap.list);
+  };
+
+  // Optimistically write `name` into every cache slot that holds it.
+  const writeNameToCaches = (name: string) => {
+    queryClient.setQueryData<DetailCache>(detailKey, (prev) =>
+      prev ? { ...prev, name } : prev,
+    );
+    queryClient.setQueryData<FollowedCache>(followedKey, (prev) =>
+      prev?.map((v) => (v.id === venueId ? { ...v, name } : v)),
+    );
+    queryClient.setQueryData<ListCache>(listKey, (prev) =>
+      prev?.map((v) => (v.id === venueId ? { ...v, name } : v)),
+    );
+  };
+
+  const reconcileVenueCaches = () => {
+    void utils.venues.detail.invalidate({ venueId });
+    void utils.venues.followed.invalidate();
+    void utils.venues.list.invalidate();
+  };
+
+  // Admin-only: edit the shared canonical name. Not routed through the
+  // offline outbox — admin actions are online-only, matching AdminSection.
+  const adminRename = trpc.admin.renameVenue.useMutation({
+    onSuccess: () => {
+      reconcileVenueCaches();
+    },
+  });
+
+  const submitAdminRename = async (): Promise<void> => {
+    if (trimmed.length === 0 || submitting) return;
+    setSubmitting(true);
+    try {
+      await adminRename.mutateAsync({ venueId, name: trimmed });
+      showToast({ kind: 'success', text: 'Canonical name updated' });
+      onClose();
+    } catch (err) {
+      showToast({
+        kind: 'error',
+        text: toUserMessage(err, 'Could not update canonical name'),
+      });
+      setSubmitting(false);
+    }
+  };
 
   const submit = async (): Promise<void> => {
     if (!canSubmit) return;
     setSubmitting(true);
-
-    type DetailCache = { name?: string } | undefined;
-    type FollowedCache = { id: string; name?: string }[] | undefined;
-    type ListCache = { id: string; name?: string }[] | undefined;
-    const detailKey = ['mobile', 'venue', venueId, 'detail'];
-    const followedKey = ['mobile', 'venues', 'followed'];
-    const listKey = ['mobile', 'venues', 'list'];
 
     try {
       await runOptimisticMutation({
@@ -77,33 +145,11 @@ export function RenameVenueSheet({
         outbox: getCacheOutbox(),
         call: (input) => utils.client.venues.rename.mutate(input),
         optimistic: {
-          snapshot: () => ({
-            detail: queryClient.getQueryData<DetailCache>(detailKey),
-            followed: queryClient.getQueryData<FollowedCache>(followedKey),
-            list: queryClient.getQueryData<ListCache>(listKey),
-          }),
-          apply: () => {
-            queryClient.setQueryData<DetailCache>(detailKey, (prev) =>
-              prev ? { ...prev, name: trimmed } : prev,
-            );
-            queryClient.setQueryData<FollowedCache>(followedKey, (prev) =>
-              prev?.map((v) => (v.id === venueId ? { ...v, name: trimmed } : v)),
-            );
-            queryClient.setQueryData<ListCache>(listKey, (prev) =>
-              prev?.map((v) => (v.id === venueId ? { ...v, name: trimmed } : v)),
-            );
-          },
-          rollback: (snap) => {
-            queryClient.setQueryData(detailKey, snap.detail);
-            queryClient.setQueryData(followedKey, snap.followed);
-            queryClient.setQueryData(listKey, snap.list);
-          },
+          snapshot: snapshotNameCaches,
+          apply: () => writeNameToCaches(trimmed),
+          rollback: rollbackNameCaches,
         },
-        reconcile: () => {
-          void utils.venues.detail.invalidate({ venueId });
-          void utils.venues.followed.invalidate();
-          void utils.venues.list.invalidate();
-        },
+        reconcile: reconcileVenueCaches,
       });
       showToast({ kind: 'success', text: 'Venue renamed' });
       onClose();
@@ -116,12 +162,40 @@ export function RenameVenueSheet({
     }
   };
 
+  const resetName = async (): Promise<void> => {
+    if (canonicalName == null || submitting) return;
+    setSubmitting(true);
+
+    try {
+      await runOptimisticMutation({
+        mutation: 'venues.resetName',
+        input: { venueId },
+        outbox: getCacheOutbox(),
+        call: (input) => utils.client.venues.resetName.mutate(input),
+        optimistic: {
+          snapshot: snapshotNameCaches,
+          apply: () => writeNameToCaches(canonicalName),
+          rollback: rollbackNameCaches,
+        },
+        reconcile: reconcileVenueCaches,
+      });
+      showToast({ kind: 'success', text: 'Reset to original name' });
+      onClose();
+    } catch (err) {
+      showToast({
+        kind: 'error',
+        text: toUserMessage(err, 'Could not reset venue name'),
+      });
+      setSubmitting(false);
+    }
+  };
+
   return (
     <Sheet open={open} onClose={onClose} snapPoints={['42%']}>
       <View style={styles.body}>
         <Text style={[styles.title, { color: colors.ink }]}>Rename venue</Text>
         <Text style={[styles.hint, { color: colors.muted }]}>
-          Renames the venue for everyone who tracks it.
+          Only you will see this name.
         </Text>
 
         <View style={styles.field}>
@@ -179,6 +253,45 @@ export function RenameVenueSheet({
             </Text>
           </Pressable>
         </View>
+
+        {hasCustomName && (
+          <Pressable
+            onPress={() => void resetName()}
+            disabled={submitting}
+            accessibilityRole="button"
+            accessibilityLabel="Reset to original venue name"
+            testID="rename-venue-reset"
+            style={({ pressed }) => [
+              styles.resetBtn,
+              { opacity: submitting ? 0.5 : pressed ? 0.7 : 1 },
+            ]}
+          >
+            <Text style={[styles.resetLabel, { color: colors.muted }]}>
+              Reset to original ({canonicalName})
+            </Text>
+          </Pressable>
+        )}
+
+        {isAdmin && (
+          <Pressable
+            onPress={() => void submitAdminRename()}
+            disabled={trimmed.length === 0 || submitting}
+            accessibilityRole="button"
+            accessibilityLabel="Rename for everyone (admin)"
+            testID="rename-venue-admin"
+            style={({ pressed }) => [
+              styles.resetBtn,
+              {
+                opacity:
+                  trimmed.length === 0 || submitting ? 0.5 : pressed ? 0.7 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.resetLabel, { color: colors.faint }]}>
+              Admin · rename for everyone
+            </Text>
+          </Pressable>
+        )}
       </View>
     </Sheet>
   );
@@ -241,5 +354,15 @@ const styles = StyleSheet.create({
   confirmLabel: {
     fontFamily: 'Geist Sans 600',
     fontSize: 13,
+  },
+  resetBtn: {
+    alignSelf: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  resetLabel: {
+    fontFamily: 'Geist Mono',
+    fontSize: 11.5,
+    letterSpacing: 0.2,
   },
 });

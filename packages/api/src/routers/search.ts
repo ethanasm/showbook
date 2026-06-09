@@ -11,6 +11,7 @@ import {
   userVenueFollows,
 } from '@showbook/db';
 import { enforceRateLimit } from '../rate-limit';
+import { loadVenueNameOverrides } from '../venue-names';
 import {
   searchEvents,
   inferKind,
@@ -155,6 +156,14 @@ export const searchRouter = router({
               },
             });
 
+      // Resolve per-user venue-name overrides for the matched shows so the
+      // displayed `venueName` reflects the user's alias, not the canonical.
+      const showVenueOverrides = await loadVenueNameOverrides(
+        ctx.db,
+        userId,
+        showRows.map((s) => s.venue.id),
+      );
+
       const showResults: GlobalShowResult[] = showRows
         .sort((a, b) => {
           // Dateless rows (state='watching' with no committed performance
@@ -180,7 +189,7 @@ export const searchRouter = router({
             kind: s.kind,
             state: s.state,
             title,
-            venueName: s.venue.name,
+            venueName: showVenueOverrides.get(s.venue.id) ?? s.venue.name,
             venueCity: s.venue.city ?? null,
           };
         });
@@ -263,10 +272,18 @@ export const searchRouter = router({
             counts.map((c) => [c.venueId, Number(c.showCount)]),
           );
 
+          // Match is on the canonical name/city (above); display the user's
+          // alias when they have one.
+          const venueNameOverrides = await loadVenueNameOverrides(
+            ctx.db,
+            userId,
+            matchedIds,
+          );
+
           venueRows = matchedVenues
             .map((v) => ({
               id: v.id,
-              name: v.name,
+              name: venueNameOverrides.get(v.id) ?? v.name,
               city: v.city ?? null,
               showCount: countById.get(v.id) ?? 0,
             }))

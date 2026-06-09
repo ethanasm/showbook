@@ -4,6 +4,7 @@ export * from './performers';
 export * from './shows';
 export * from './announcements';
 export * from './follows';
+export * from './user-venue-names';
 export * from './regions';
 export * from './enrichment';
 export * from './preferences';

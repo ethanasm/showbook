@@ -54,6 +54,7 @@ describe('venuesRouter (unit)', () => {
           upcomingRows, // scanned upcoming announcements
           [], // showAnnouncementLinks for this user+venue
           [], // user's shows at this venue (for fuzzy dedup)
+          [], // loadVenueNameOverrides → no per-user alias
         ],
       });
       const result = await caller(db).detail({ venueId: VENUE_ID });
@@ -61,6 +62,33 @@ describe('venuesRouter (unit)', () => {
       assert.equal(result.isFollowed, true);
       assert.equal(result.userShowCount, 4);
       assert.equal(result.upcomingCount, 3);
+      assert.equal(result.name, 'Test Venue');
+      assert.equal(result.canonicalName, 'Test Venue');
+      assert.equal(result.hasCustomName, false);
+    });
+
+    it('returns the per-user alias as name with canonicalName preserved', async () => {
+      const venue = {
+        id: VENUE_ID,
+        name: 'Test Venue',
+        city: 'NYC',
+        country: 'US',
+        latitude: null,
+        longitude: null,
+      };
+      const db = makeFakeDb({
+        selectResults: [
+          [venue],
+          [{ venueId: VENUE_ID }], // follows
+          [{ count: 0 }], // user show count
+          [], // upcoming scan → empty, dedup skips link/user-show selects
+          [{ venueId: VENUE_ID, customName: 'My Spot' }], // override exists
+        ],
+      });
+      const result = await caller(db).detail({ venueId: VENUE_ID });
+      assert.equal(result.name, 'My Spot');
+      assert.equal(result.canonicalName, 'Test Venue');
+      assert.equal(result.hasCustomName, true);
     });
 
     it('drops upcoming announcements that fuzzy-match a logged show', async () => {
@@ -99,6 +127,7 @@ describe('venuesRouter (unit)', () => {
               headlinerName: null,
             },
           ],
+          [], // loadVenueNameOverrides → no alias
         ],
       });
       const result = await caller(db).detail({ venueId: VENUE_ID });
@@ -116,26 +145,63 @@ describe('venuesRouter (unit)', () => {
       );
     });
 
-    it('trims whitespace and returns the updated row', async () => {
-      const updated = { id: VENUE_ID, name: 'Trimmed Hall' };
+    it('trims whitespace and upserts a per-user alias', async () => {
       const db = makeFakeDb({
         selectResults: [[{ venueId: VENUE_ID }]], // follow exists
-        updateResults: [[updated]],
+        insertResults: [[{ customName: 'Trimmed Hall' }]], // upsert returning
       });
       const result = await caller(db).rename({
         venueId: VENUE_ID,
         name: '   Trimmed Hall   ',
       });
       assert.equal(result.name, 'Trimmed Hall');
+      assert.equal(result.customName, 'Trimmed Hall');
     });
 
-    it('throws NOT_FOUND when update returns nothing', async () => {
+    it('authorizes via a show when there is no follow', async () => {
       const db = makeFakeDb({
-        selectResults: [[{ venueId: VENUE_ID }]],
-        updateResults: [[]],
+        selectResults: [
+          [], // no follow
+          [{ id: 'show-1' }], // has a show at the venue
+        ],
+        insertResults: [[{ customName: 'Via Show' }]],
+      });
+      const result = await caller(db).rename({ venueId: VENUE_ID, name: 'Via Show' });
+      assert.equal(result.name, 'Via Show');
+    });
+  });
+
+  describe('resetName', () => {
+    it('throws FORBIDDEN when caller has no follow and no show', async () => {
+      const db = makeFakeDb({ selectResults: [[], []] });
+      await assert.rejects(
+        () => caller(db).resetName({ venueId: VENUE_ID }),
+        (err: unknown) =>
+          err instanceof TRPCError && err.code === 'FORBIDDEN',
+      );
+    });
+
+    it('deletes the override and returns the canonical name', async () => {
+      const db = makeFakeDb({
+        selectResults: [
+          [{ venueId: VENUE_ID }], // follow exists
+          [{ name: 'Canonical Hall' }], // canonical name lookup
+        ],
+      });
+      const result = await caller(db).resetName({ venueId: VENUE_ID });
+      assert.equal(result.name, 'Canonical Hall');
+      assert.equal(result.customName, null);
+    });
+
+    it('throws NOT_FOUND when the venue is gone', async () => {
+      const db = makeFakeDb({
+        selectResults: [
+          [{ venueId: VENUE_ID }], // follow exists
+          [], // canonical lookup empty
+        ],
       });
       await assert.rejects(
-        () => caller(db).rename({ venueId: VENUE_ID, name: 'x' }),
+        () => caller(db).resetName({ venueId: VENUE_ID }),
         (err: unknown) =>
           err instanceof TRPCError && err.code === 'NOT_FOUND',
       );
@@ -156,12 +222,27 @@ describe('venuesRouter (unit)', () => {
         { id: 'other', name: 'Other', city: 'LA', stateRegion: 'CA', country: 'US', googlePlaceId: null, photoUrl: null, ticketmasterVenueId: null, pastShowsCount: 0, futureShowsCount: 1 },
       ];
       const db = makeFakeDb({
-        selectResults: [rows, [{ venueId: VENUE_ID }]],
+        selectResults: [rows, [{ venueId: VENUE_ID }], []],
       });
       const result = await caller(db).list();
       assert.equal(result.length, 2);
       assert.equal(result.find((r) => r.id === VENUE_ID)!.isFollowed, true);
       assert.equal(result.find((r) => r.id === 'other')!.isFollowed, false);
+    });
+
+    it('applies the per-user alias over the canonical name', async () => {
+      const rows = [
+        { id: VENUE_ID, name: 'Canonical', city: 'NYC', stateRegion: 'NY', country: 'US', googlePlaceId: null, photoUrl: null, ticketmasterVenueId: null, pastShowsCount: 1, futureShowsCount: 0 },
+      ];
+      const db = makeFakeDb({
+        selectResults: [
+          rows,
+          [], // no follows
+          [{ venueId: VENUE_ID, customName: 'My Alias' }], // override
+        ],
+      });
+      const result = await caller(db).list();
+      assert.equal(result[0]!.name, 'My Alias');
     });
   });
 
@@ -182,10 +263,21 @@ describe('venuesRouter (unit)', () => {
   describe('search', () => {
     it('runs an ilike query when query is provided', async () => {
       const db = makeFakeDb({
-        selectResults: [[{ id: VENUE_ID, name: 'matched' }]],
+        selectResults: [[{ id: VENUE_ID, name: 'matched' }], []],
       });
       const result = await caller(db).search({ query: 'matched' });
       assert.equal(result.length, 1);
+    });
+
+    it('surfaces the per-user alias on a canonical-name match', async () => {
+      const db = makeFakeDb({
+        selectResults: [
+          [{ id: VENUE_ID, name: 'Canonical' }],
+          [{ venueId: VENUE_ID, customName: 'Alias' }],
+        ],
+      });
+      const result = await caller(db).search({ query: 'Canonical' });
+      assert.equal(result[0]!.name, 'Alias');
     });
   });
 
@@ -341,7 +433,7 @@ describe('venuesRouter (unit)', () => {
 
   describe('followed', () => {
     it('returns the bare venue rows the user follows', async () => {
-      const db = makeFakeDb();
+      const db = makeFakeDb({ selectResults: [[]] }); // loadVenueNameOverrides → none
       (db as unknown as {
         query: { userVenueFollows: { findMany: () => Promise<unknown[]> } };
       }).query = {
@@ -351,6 +443,7 @@ describe('venuesRouter (unit)', () => {
       };
       const result = await caller(db).followed();
       assert.equal(result.length, 1);
+      assert.equal(result[0]!.name, 'V');
     });
   });
 

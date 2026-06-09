@@ -5,6 +5,7 @@ import { performers } from './performers';
 import { shows, showPerformers } from './shows';
 import { announcements, showAnnouncementLinks } from './announcements';
 import { userVenueFollows, userPerformerFollows } from './follows';
+import { userVenueNames } from './user-venue-names';
 import { userRegions } from './regions';
 import { enrichmentQueue } from './enrichment';
 import { userPreferences } from './preferences';
@@ -145,6 +146,20 @@ export const userVenueFollowsRelations = relations(
     }),
     venue: one(venues, {
       fields: [userVenueFollows.venueId],
+      references: [venues.id],
+    }),
+  })
+);
+
+export const userVenueNamesRelations = relations(
+  userVenueNames,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [userVenueNames.userId],
+      references: [users.id],
+    }),
+    venue: one(venues, {
+      fields: [userVenueNames.venueId],
       references: [venues.id],
     }),
   })
