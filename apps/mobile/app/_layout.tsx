@@ -221,6 +221,8 @@ function OfflineBridge({ children }: { children: React.ReactNode }): React.JSX.E
           return c.shows.setSetlist.mutate(payload);
         case 'shows.setNotes':
           return c.shows.setNotes.mutate(payload);
+        case 'shows.setTicketStatus':
+          return c.shows.setTicketStatus.mutate(payload);
         case 'venues.follow':
           return swallowAlreadyInState(() => c.venues.follow.mutate(payload));
         case 'venues.unfollow':
