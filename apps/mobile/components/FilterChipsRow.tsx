@@ -106,11 +106,12 @@ export function FilterChipsRow({
   leadingAction?: FilterChipsLeadingAction;
   /** Heading shown above the overflow dropdown picker. */
   pickerTitle?: string;
-  /** Suppress the numeric count / badge on every chip (and in the
-   *  overflow picker). Used by Discover to keep the rail short so more
+  /** Suppress the numeric count / badge on the *inline* chips (and the
+   *  measuring pass). Used by Discover to keep the rail short so more
    *  followed-entity chips fit on one line. The `count` is still used
-   *  for ordering and the fit calculation — only its rendering is
-   *  dropped. */
+   *  for ordering and the fit calculation — only its rendering on the
+   *  rail is dropped. The overflow picker sheet always shows the count,
+   *  so the per-group metadata stays available one tap away. */
   hideCounts?: boolean;
   /** Suppress the `· sublabel` on the *visible* inline chips (and the
    *  measuring pass) while keeping it in the overflow picker sheet. Used
@@ -302,7 +303,6 @@ export function FilterChipsRow({
                 active={selected === null}
                 onPress={() => handlePick(null)}
                 colors={colors}
-                hideCounts={hideCounts}
                 testID={testIdPrefix ? `${testIdPrefix}-sheet-all` : undefined}
               />
             ) : null}
@@ -317,7 +317,6 @@ export function FilterChipsRow({
                 onPress={() => handlePick(g.id)}
                 onRemove={onRemove ? () => requestRemove(g.id) : undefined}
                 colors={colors}
-                hideCounts={hideCounts}
                 testID={
                   testIdPrefix ? `${testIdPrefix}-sheet-${g.id}` : undefined
                 }
@@ -646,7 +645,6 @@ function PickerRow({
   onPress,
   onRemove,
   colors,
-  hideCounts = false,
   testID,
 }: {
   label: string;
@@ -657,12 +655,10 @@ function PickerRow({
   onPress: () => void;
   onRemove?: () => void;
   colors: ColorTokens;
-  hideCounts?: boolean;
   testID?: string;
 }): React.JSX.Element {
-  const renderedBadge = hideCounts
-    ? ''
-    : badgeText !== undefined
+  const renderedBadge =
+    badgeText !== undefined
       ? badgeText
       : count !== undefined
         ? String(count)
