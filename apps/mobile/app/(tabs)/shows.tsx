@@ -28,6 +28,13 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  runOnJS,
+} from 'react-native-reanimated';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { RADII } from '@/lib/theme-utils';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
@@ -771,18 +778,53 @@ function CalendarView({
   const atMin = calendarMode === 'year' ? atMinYear : atMinMonth;
   const atMax = calendarMode === 'year' ? atMaxYear : atMaxMonth;
 
-  const step = (delta: number) => {
-    setSelected(null);
-    if (calendarMode === 'year') {
-      setCursor((c) => {
-        const next = c.year + delta;
-        if (next < bounds.min.year || next > bounds.max.year) return c;
-        return { year: next, month: c.month };
-      });
-    } else {
-      setCursor((c) => stepCursor(c, delta, bounds));
-    }
-  };
+  const step = React.useCallback(
+    (delta: number) => {
+      setSelected(null);
+      if (calendarMode === 'year') {
+        setCursor((c) => {
+          const next = c.year + delta;
+          if (next < bounds.min.year || next > bounds.max.year) return c;
+          return { year: next, month: c.month };
+        });
+      } else {
+        setCursor((c) => stepCursor(c, delta, bounds));
+      }
+    },
+    [calendarMode, bounds],
+  );
+
+  // Horizontal swipe to step between periods (month or year), mirroring the
+  // prev/next arrow buttons. The grid follows the finger with a damped drag
+  // (extra resistance when a swipe would cross a navigation bound) and a swipe
+  // past the threshold commits the step. `activeOffsetX` keeps day-cell taps
+  // working, and `failOffsetY` defers vertical drags to the parent ScrollView.
+  const dragX = useSharedValue(0);
+  const swipeGesture = Gesture.Pan()
+    .activeOffsetX([-20, 20])
+    .failOffsetY([-16, 16])
+    .onUpdate((e) => {
+      'worklet';
+      const blocked =
+        (e.translationX > 0 && atMin) || (e.translationX < 0 && atMax);
+      dragX.value = e.translationX * (blocked ? 0.18 : 0.42);
+    })
+    .onEnd((e) => {
+      'worklet';
+      // Swipe left → next period, swipe right → previous period.
+      const delta = e.translationX < 0 ? 1 : -1;
+      const passed =
+        Math.abs(e.translationX) > 56 || Math.abs(e.velocityX) > 550;
+      const blocked = (delta < 0 && atMin) || (delta > 0 && atMax);
+      if (passed && !blocked) {
+        runOnJS(step)(delta);
+      }
+      dragX.value = withTiming(0, { duration: 180 });
+    });
+
+  const swipeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: dragX.value }],
+  }));
 
   const goToday = () => {
     setSelected(null);
@@ -864,33 +906,37 @@ function CalendarView({
         </View>
       </View>
 
-      {calendarMode === 'year' ? (
-        <View style={styles.yearGrid}>
-          {Array.from({ length: 12 }, (_, m) => (
-            <View key={m} style={styles.yearTileWrap}>
-              <MiniMonth
-                year={cursor.year}
-                month={m}
-                events={eventsByDay}
-                spans={spanEvents}
-                todayISO={today}
-                onPress={() => onSelectYearMonth(m)}
-                disabled={!isMonthInBounds(m)}
-              />
+      <GestureDetector gesture={swipeGesture}>
+        <Animated.View style={swipeStyle}>
+          {calendarMode === 'year' ? (
+            <View style={styles.yearGrid}>
+              {Array.from({ length: 12 }, (_, m) => (
+                <View key={m} style={styles.yearTileWrap}>
+                  <MiniMonth
+                    year={cursor.year}
+                    month={m}
+                    events={eventsByDay}
+                    spans={spanEvents}
+                    todayISO={today}
+                    onPress={() => onSelectYearMonth(m)}
+                    disabled={!isMonthInBounds(m)}
+                  />
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
-      ) : (
-        <CalendarGrid
-          year={cursor.year}
-          month={cursor.month}
-          events={eventsByDay}
-          spans={spanEvents}
-          todayISO={today}
-          selectedISO={selected}
-          onSelectDay={(iso) => setSelected((cur) => (cur === iso ? null : iso))}
-        />
-      )}
+          ) : (
+            <CalendarGrid
+              year={cursor.year}
+              month={cursor.month}
+              events={eventsByDay}
+              spans={spanEvents}
+              todayISO={today}
+              selectedISO={selected}
+              onSelectDay={(iso) => setSelected((cur) => (cur === iso ? null : iso))}
+            />
+          )}
+        </Animated.View>
+      </GestureDetector>
 
       {calendarMode === 'month' ? (
         <View style={{ gap: 8 }}>

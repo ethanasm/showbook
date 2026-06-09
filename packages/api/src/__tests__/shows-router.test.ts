@@ -262,6 +262,57 @@ describe('showsRouter (unit)', () => {
     });
   });
 
+  describe('setTicketStatus', () => {
+    it('throws NOT_FOUND when update returns nothing', async () => {
+      const db = makeFakeDb({ updateResults: [[]] });
+      await assert.rejects(
+        () => caller(db).setTicketStatus({ showId: SHOW_ID, status: 'sold_out' }),
+        (err: unknown) => err instanceof TRPCError && err.code === 'NOT_FOUND',
+      );
+    });
+
+    it('sets a sold_out override', async () => {
+      const updated = { id: SHOW_ID, ticketStatus: 'sold_out' };
+      const db = makeFakeDb({ updateResults: [[updated]] });
+      const result = await caller(db).setTicketStatus({
+        showId: SHOW_ID,
+        status: 'sold_out',
+      });
+      assert.equal((result as { ticketStatus: string }).ticketStatus, 'sold_out');
+    });
+
+    it('sets a cancelled override', async () => {
+      const updated = { id: SHOW_ID, ticketStatus: 'cancelled' };
+      const db = makeFakeDb({ updateResults: [[updated]] });
+      const result = await caller(db).setTicketStatus({
+        showId: SHOW_ID,
+        status: 'cancelled',
+      });
+      assert.equal((result as { ticketStatus: string }).ticketStatus, 'cancelled');
+    });
+
+    it('clears the override with null', async () => {
+      const updated = { id: SHOW_ID, ticketStatus: null };
+      const db = makeFakeDb({ updateResults: [[updated]] });
+      const result = await caller(db).setTicketStatus({
+        showId: SHOW_ID,
+        status: null,
+      });
+      assert.equal((result as { ticketStatus: string | null }).ticketStatus, null);
+    });
+
+    it('rejects an unknown status value', async () => {
+      const db = makeFakeDb();
+      await assert.rejects(() =>
+        caller(db).setTicketStatus({
+          showId: SHOW_ID,
+          // @ts-expect-error — exercising the zod enum guard
+          status: 'bogus',
+        }),
+      );
+    });
+  });
+
   describe('updateState', () => {
     it('throws NOT_FOUND when show does not exist', async () => {
       const db = makeFakeDb({ selectResults: [[]] });

@@ -111,6 +111,7 @@ export interface ShowDetail {
   id: string;
   kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'film' | 'unknown';
   state: 'past' | 'ticketed' | 'watching';
+  ticketStatus?: 'sold_out' | 'cancelled' | null;
   date: string | null;
   endDate: string | null;
   seat: string | null;
@@ -694,6 +695,27 @@ function StateChipOnDark({ state }: { state: ShowState }): React.JSX.Element | n
   );
 }
 
+function TicketStatusPillOnDark({
+  status,
+}: {
+  status: 'sold_out' | 'cancelled';
+}): React.JSX.Element {
+  const label = status === 'sold_out' ? 'SOLD OUT' : 'CANCELLED';
+  // sold-out reads as a red alert; cancelled is a neutral frosted pill.
+  const bg = status === 'sold_out' ? 'rgba(230,57,70,0.92)' : 'rgba(0,0,0,0.55)';
+  return (
+    <View
+      testID={`ticket-status-${status}`}
+      style={[
+        heroStyles.statePill,
+        { backgroundColor: bg, borderColor: 'rgba(255,255,255,0.32)' },
+      ]}
+    >
+      <Text style={[heroStyles.statePillText, { color: '#fff' }]}>{label}</Text>
+    </View>
+  );
+}
+
 function HeaderStrip({
   show,
   onBack,
@@ -809,6 +831,9 @@ function HeaderStrip({
           </View>
         </View>
         <View style={heroStyles.topRightStack} pointerEvents="box-none">
+          {show.ticketStatus ? (
+            <TicketStatusPillOnDark status={show.ticketStatus} />
+          ) : null}
           {show.state !== 'past' ? (
             <StateChipOnDark state={show.state as ShowState} />
           ) : (

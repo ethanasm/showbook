@@ -111,6 +111,32 @@ button:active:not(:disabled) {
   border: 1px solid var(--ink);
 }
 
+/* TicketStatusBadge — manual sold-out / cancelled override */
+.ticket-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.ticket-status-badge--sold_out {
+  background: color-mix(in srgb, #e63946 14%, transparent);
+  color: #e63946;
+  border: 1px solid color-mix(in srgb, #e63946 45%, transparent);
+}
+
+.ticket-status-badge--cancelled {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--rule-strong);
+}
+
 /* Shared sign-in visual language */
 .glow-backdrop {
   position: absolute;

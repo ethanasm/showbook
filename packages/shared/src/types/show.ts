@@ -6,6 +6,7 @@ export interface Show {
   userId: string;
   kind: 'concert' | 'theatre' | 'comedy' | 'festival';
   state: 'past' | 'ticketed' | 'watching';
+  ticketStatus?: 'sold_out' | 'cancelled' | null;
   venueId: string;
   date: string;
   endDate?: string | null;
