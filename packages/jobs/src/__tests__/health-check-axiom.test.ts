@@ -6,7 +6,7 @@
 import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { queryAxiom, _testing } from '../health-check/axiom';
+import { queryAxiom, axiomDataset, _testing } from '../health-check/axiom';
 
 interface FakeRow extends Record<string, unknown> {
   cnt: number;
@@ -25,6 +25,7 @@ beforeEach(() => {
   delete process.env.AXIOM_QUERY_TOKEN;
   delete process.env.AXIOM_ORG_ID;
   delete process.env.AXIOM_QUERY_DATASET;
+  delete process.env.AXIOM_DATASET;
 });
 
 afterEach(() => {
@@ -72,7 +73,7 @@ describe('queryAxiom', () => {
     });
 
     const result = await queryAxiom<FakeRow>(
-      '["prod-server"] | where event in ("job.failed","tm.request.failed") | summarize cnt = count() by event',
+      '["prod-v2"] | where event in ("job.failed","tm.request.failed") | summarize cnt = count() by event',
     );
 
     assert.equal(result.ok, true);
@@ -141,5 +142,22 @@ describe('queryAxiom', () => {
   it('handles tabular responses with no tables gracefully', () => {
     const rows = _testing.tabularToRows<FakeRow>({});
     assert.deepEqual(rows, []);
+  });
+});
+
+describe('axiomDataset', () => {
+  it('defaults to prod-v2 when no env override is set', () => {
+    assert.equal(axiomDataset(), 'prod-v2');
+  });
+
+  it('falls back to AXIOM_DATASET so the name is set in one place', () => {
+    process.env.AXIOM_DATASET = 'prod-v2';
+    assert.equal(axiomDataset(), 'prod-v2');
+  });
+
+  it('prefers AXIOM_QUERY_DATASET as an explicit read override', () => {
+    process.env.AXIOM_DATASET = 'prod-v2';
+    process.env.AXIOM_QUERY_DATASET = 'some-other-dataset';
+    assert.equal(axiomDataset(), 'some-other-dataset');
   });
 });
