@@ -15,8 +15,11 @@
  *     toggle controls as web Preferences (capped at 5 per user via
  *     `preferences.addRegion`).
  *   - APPEARANCE section: Theme (Light / Dark / System) + Density
- *     (Comfortable / Compact). Density is persisted locally via
- *     useTheme().setDensity (see lib/theme.ts).
+ *     (Comfortable / Compact). Theme is a device-local preference;
+ *     Density writes the server-synced `preferences.compactMode` (the
+ *     same field web's Preferences toggle uses) so the row-density
+ *     choice follows the user across web + mobile and the Shows
+ *     timeline honours it.
  *   - ACCOUNT section: Sign out (destructive).
  *   - ADMIN section: operator-only, rendered only when `admin.amIAdmin`
  *     returns true. Mirrors the web /admin page — the section + its
@@ -64,6 +67,8 @@ import { useAuth } from '@/lib/auth';
 import { trpc } from '@/lib/trpc';
 import { useNetwork, useOfflineSync } from '@/lib/network';
 import { useFeedback } from '@/lib/feedback';
+import { runOptimisticMutation } from '@/lib/mutations';
+import { getCacheOutbox } from '@/lib/cache';
 import { useSpotifyConnection } from '@/lib/spotify-connection';
 import {
   readLastWarmup,
@@ -552,8 +557,71 @@ function formatRelative(d: Date): string {
   return `${days}d ago`;
 }
 
+/**
+ * Density control — writes the server-synced `preferences.compactMode`
+ * (web's Preferences toggle writes the same field) so the choice follows
+ * the user across surfaces and the Shows timeline renders compact vs
+ * comfortable rows accordingly. Routed through `runOptimisticMutation`
+ * so the flip survives offline / kill via the `pending_writes` outbox —
+ * the OfflineBridge dispatcher already handles `preferences.update`.
+ */
 function DensitySelector(): React.JSX.Element {
-  const { density, setDensity } = useTheme();
+  const { token } = useAuth();
+  const utils = trpc.useUtils();
+  const { showToast } = useFeedback();
+  const prefsQuery = trpc.preferences.get.useQuery(undefined, {
+    enabled: Boolean(token),
+  });
+  const compactMode = prefsQuery.data?.preferences?.compactMode ?? false;
+  const density: Density = compactMode ? 'compact' : 'comfortable';
+  const [pending, setPending] = React.useState(false);
+
+  const onChange = React.useCallback(
+    async (value: Density) => {
+      const nextCompact = value === 'compact';
+      if (pending || nextCompact === compactMode) return;
+      setPending(true);
+      try {
+        await runOptimisticMutation({
+          mutation: 'preferences.update',
+          input: { compactMode: nextCompact },
+          outbox: getCacheOutbox(),
+          call: (input) => utils.client.preferences.update.mutate(input),
+          optimistic: {
+            snapshot: () => utils.preferences.get.getData(),
+            apply: (input) => {
+              utils.preferences.get.setData(undefined, (prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      preferences: {
+                        ...prev.preferences,
+                        compactMode: input.compactMode ?? false,
+                      },
+                    }
+                  : prev,
+              );
+            },
+            rollback: (snapshot) => {
+              utils.preferences.get.setData(undefined, snapshot);
+            },
+          },
+          reconcile: () => {
+            void utils.preferences.get.invalidate();
+          },
+        });
+      } catch (err) {
+        showToast({
+          kind: 'error',
+          text: err instanceof Error ? err.message : 'Could not update density',
+        });
+      } finally {
+        setPending(false);
+      }
+    },
+    [pending, compactMode, showToast, utils],
+  );
+
   return (
     <SegmentedControl<Density>
       options={[
@@ -561,7 +629,7 @@ function DensitySelector(): React.JSX.Element {
         { value: 'compact', label: 'Compact' },
       ]}
       value={density}
-      onChange={setDensity}
+      onChange={(value) => void onChange(value)}
     />
   );
 }

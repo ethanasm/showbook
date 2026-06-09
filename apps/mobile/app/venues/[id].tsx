@@ -755,6 +755,12 @@ function YourShows({
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const { token } = useAuth();
+  // Row density follows the server-synced preferences.compactMode, same as
+  // the Shows timeline and web's list views.
+  const compact =
+    trpc.preferences.get.useQuery(undefined, { enabled: Boolean(token) }).data
+      ?.preferences?.compactMode ?? false;
   return (
     <Section title="Your shows" icon={<Music size={13} color={colors.ink} strokeWidth={2} />}>
       {loading && shows.length === 0 ? (
@@ -773,7 +779,7 @@ function YourShows({
         <View style={styles.showsList}>
           {shows.map((s) => (
             <Link key={s.id} href={`/show/${s.id}`} asChild>
-              <ShowCard show={toShowCard(s, venueName, venueCity)} />
+              <ShowCard show={toShowCard(s, venueName, venueCity)} compact={compact} />
             </Link>
           ))}
         </View>
