@@ -435,6 +435,7 @@ export function ShowDetailTabsView({
     <OverviewTab
       cells={overviewCells}
       lineup={lineupEntries}
+      lineupLabel={show.kind === 'theatre' ? 'Cast' : 'Lineup'}
       actions={[
         ...(show.state === 'watching'
           ? [

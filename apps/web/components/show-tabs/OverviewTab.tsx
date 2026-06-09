@@ -26,6 +26,11 @@ interface OverviewTabProps {
   onAddToCalendarHref: string;
   onDelete: () => void;
   /**
+   * Header for the performers section. Theatre shows label it "Cast";
+   * everything else uses the default "Lineup".
+   */
+  lineupLabel?: string;
+  /**
    * Placeholders to drop in the music-layer slot (pre-show: vibe
    * radar + fan loyalty empty states). Pass nothing to hide the
    * music-layer block entirely.
@@ -49,6 +54,7 @@ export function OverviewTab({
   onEdit,
   onAddToCalendarHref,
   onDelete,
+  lineupLabel = "Lineup",
   musicLayerPlaceholder,
 }: OverviewTabProps) {
   const showActions: { label: string; icon: React.ReactNode; onClick?: () => void; href?: string; danger?: boolean; primary?: boolean; testId?: string }[] = [];
@@ -91,7 +97,7 @@ export function OverviewTab({
         </SectionFrame>
       )}
 
-      <SectionFrame title="Lineup" count={lineup.length}>
+      <SectionFrame title={lineupLabel} count={lineup.length}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {lineup.map((entry) => (
             <Link

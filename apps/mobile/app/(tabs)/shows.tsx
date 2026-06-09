@@ -523,7 +523,17 @@ function TimelineView({
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const { token } = useAuth();
   const sections = React.useMemo(() => buildTimelineSections(rows), [rows]);
+
+  // Row density mirrors web: driven by the server-synced
+  // `preferences.compactMode` so the choice follows the user across
+  // devices (web's ShowsListView reads the same field). Until the
+  // query resolves we fall back to the comfortable card style.
+  const prefsQuery = trpc.preferences.get.useQuery(undefined, {
+    enabled: Boolean(token),
+  });
+  const compact = prefsQuery.data?.preferences?.compactMode ?? false;
 
   // SectionList virtualises rows, so a power user with hundreds of past
   // shows doesn't pay a per-row mount on first render. Sticky headers
@@ -578,7 +588,7 @@ function TimelineView({
             selected={selectedShowId === item.id}
             onSelect={onSelect}
             onLongPress={() => onLongPressShow(item)}
-            compact
+            compact={compact}
           />
         </View>
       )}

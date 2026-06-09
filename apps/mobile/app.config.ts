@@ -4,9 +4,8 @@ import type { ExpoConfig } from 'expo/config';
 // ticket BrandMark. icon.png is 1024×1024 with the #0C0C0C background
 // baked in; adaptive-icon.png is the same foreground on transparent so
 // Android can composite it over the bg color below; splash.png is a
-// 1080×1180 tightly-framed mark rendered as a centered logo by the JS
-// <BrandSplash/> (components/BrandSplash.tsx) — the native splash itself
-// is image-less black (see the expo-splash-screen plugin below for why).
+// 1080×1180 tightly-framed mark rendered as a centered logo (sized via
+// the splash plugin's `imageWidth` below), not a full-bleed background.
 // The source SVG + render script live under `assets/logo-mocks/` so the
 // masters stay revisable.
 //
@@ -174,22 +173,39 @@ const config: ExpoConfig = {
     [
       'expo-splash-screen',
       {
-        // Deliberately image-LESS: the native splash is a plain #0C0C0C
-        // screen with NO logo. iOS/Android paint this OS-level launch
-        // screen before any JS runs, and a logo here rendered noticeably
-        // smaller than the JS <BrandSplash/> that follows — producing a
-        // jarring "tiny icon → normal icon" pop on cold launch. By keeping
-        // the native splash blank-black, the first thing the user actually
-        // sees is the correctly-sized <BrandSplash/> (app/_layout.tsx,
-        // same #0C0C0C background, so the swap is seamless) rather than a
-        // mismatched small mark. The brand mark / wordmark / tagline lives
-        // entirely in <BrandSplash/> now.
+        // splash.png is a *tightly-framed* gold-on-black brand mark (ticket +
+        // "showbook" wordmark + tagline filling the canvas — see
+        // assets/logo-mocks/_build_assets.py make_splash). expo-splash-screen
+        // renders `image` as a centered logo sized by `imageWidth` (dp) and
+        // centered on `backgroundColor` — NOT full-bleed. `imageWidth` keeps
+        // the mark a moderate, centered size (~half a phone's width); do NOT
+        // add `enableFullScreenImage_legacy` — it forces iOS into full-screen
+        // aspect-fit, which blows the logo up to the full width.
+        //
+        // `image` MUST stay set. withAndroidSplashStyles unconditionally emits
+        // `windowSplashScreenAnimatedIcon -> @drawable/splashscreen_logo`, but
+        // that drawable is only generated when an image is present — an
+        // image-less config fails the release Android build at
+        // `processReleaseResources` ("resource drawable/splashscreen_logo not
+        // found"). To make the splash blank, point at a blank image; don't drop
+        // the key.
+        image: './assets/splash.png',
+        // Keep in sync with SPLASH_IMAGE_WIDTH in lib/splash.ts (BrandSplash's
+        // box) — app.config.ts can't import it (the Expo config loader doesn't
+        // resolve transitive .ts imports), so the coupling is enforced by
+        // lib/__tests__/splash.test.ts instead.
+        imageWidth: 200,
         backgroundColor: '#0C0C0C',
-        // Dark-mode variant. Showbook is dark-everywhere, so this only
-        // pins the same black background when userInterfaceStyle resolves
-        // to `dark`.
+        resizeMode: 'contain',
+        // Dark-mode variant. Kicks in when userInterfaceStyle resolves
+        // to `dark`. Showbook is dark-everywhere so this differs only
+        // in the explicit `backgroundColor` hint to native splash; the
+        // asset is already gold-on-#0C0C0C so it reuses the same file.
         dark: {
+          image: './assets/splash.png',
+          imageWidth: 200, // keep in sync with SPLASH_IMAGE_WIDTH (see above)
           backgroundColor: '#0C0C0C',
+          resizeMode: 'contain',
         },
       },
     ],
