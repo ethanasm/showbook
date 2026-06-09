@@ -260,22 +260,21 @@ export default function HomeScreen(): React.JSX.Element {
         (r) =>
           (r.state === 'ticketed' || r.state === 'watching') &&
           r.date !== null &&
-          // Filtered view has no hero, so today's ticketed show belongs in
-          // the upcoming list; the default view promotes it to the hero
-          // instead and keeps the list strictly future-dated.
-          (isFiltered ? r.date >= today : r.date > today) &&
-          (isFiltered || r.id !== nowPlaying?.id),
+          // Today's ticketed show is promoted to the hero in every view, so
+          // the list stays strictly future-dated and excludes the hero.
+          r.date > today &&
+          r.id !== nowPlaying?.id,
       )
       .sort((a, b) => (a.date! < b.date! ? -1 : 1));
 
     // The hero promotes the first ticketed show on deck (or today's, if
     // there is one) into a full-bleed treatment. Everything else in the
-    // upcoming bucket renders as rows beneath it. A kind filter drops the
-    // hero entirely and renders a flat list of up to four upcoming shows.
-    const hero = isFiltered ? null : (nowPlaying ?? upcomingAll[0] ?? null);
-    const upcoming = isFiltered
-      ? upcomingAll.slice(0, 4)
-      : hero === nowPlaying
+    // upcoming bucket renders as rows beneath it. A kind filter scopes the
+    // hero to that kind rather than dropping it — the signature treatment
+    // survives the filter so the home screen never loses its anchor.
+    const hero = nowPlaying ?? upcomingAll[0] ?? null;
+    const upcoming =
+      hero === nowPlaying
         ? upcomingAll.slice(0, 3)
         : upcomingAll.slice(1, 4);
 
@@ -392,22 +391,33 @@ export default function HomeScreen(): React.JSX.Element {
                 rather than a silently missing section. */}
             {sections.isFiltered ? (
               <>
-                <Section
-                  title="Upcoming"
-                  paddingTop={4}
-                  href={{ pathname: '/(tabs)/shows', params: { bucket: 'upcoming' } }}
-                  hrefA11yLabel="See all upcoming shows"
-                >
-                  {sections.upcoming.length > 0 ? (
-                    sections.upcoming.map((s) => (
+                {/* Suppress the empty placeholder when a hero is already
+                    promoting a show of this kind — "No upcoming X shows"
+                    under an X hero reads as a contradiction. The hero is the
+                    upcoming bucket in that case. */}
+                {sections.upcoming.length > 0 ? (
+                  <Section
+                    title="Upcoming"
+                    paddingTop={4}
+                    href={{ pathname: '/(tabs)/shows', params: { bucket: 'upcoming' } }}
+                    hrefA11yLabel="See all upcoming shows"
+                  >
+                    {sections.upcoming.map((s) => (
                       <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
-                    ))
-                  ) : (
+                    ))}
+                  </Section>
+                ) : sections.hero ? null : (
+                  <Section
+                    title="Upcoming"
+                    paddingTop={4}
+                    href={{ pathname: '/(tabs)/shows', params: { bucket: 'upcoming' } }}
+                    hrefA11yLabel="See all upcoming shows"
+                  >
                     <KindSectionEmpty
                       text={`No upcoming ${kindFilterNoun(kindFilter as Kind)} shows.`}
                     />
-                  )}
-                </Section>
+                  </Section>
+                )}
 
                 <Section
                   title="Recently attended"
