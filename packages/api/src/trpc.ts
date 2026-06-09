@@ -14,12 +14,19 @@ export interface Session {
 
 export interface CreateContextOptions {
   session: Session | null;
+  /**
+   * Best-effort client IP, used to rate-limit unauthenticated public
+   * procedures (e.g. `telemetry.logEvent`). Optional: server-side callers
+   * (RSC prefetch) don't supply it.
+   */
+  ip?: string | null;
 }
 
 export function createContext(opts: CreateContextOptions) {
   return {
     db,
     session: opts.session,
+    ip: opts.ip ?? null,
   };
 }
 

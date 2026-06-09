@@ -54,7 +54,9 @@ export const dynamic = 'force-dynamic';
 const log = child({ component: 'web.admin.sql' });
 
 const MAX_ROWS = 1000;
-const STATEMENT_TIMEOUT_MS = 5000;
+// Kept tight so a single expensive query (e.g. a heavy aggregate) can't pin
+// a backend for long; diagnostic SELECTs return well under this.
+const STATEMENT_TIMEOUT_MS = 3000;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 30;
 

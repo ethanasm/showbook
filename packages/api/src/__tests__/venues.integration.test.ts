@@ -426,6 +426,11 @@ describe('venues router', () => {
     it('saves a scrape config and reads it back via scrapeStatus', async () => {
       const venueId = fakeUuid(PREFIX, 'vsc');
       await createTestVenue({ id: venueId, name: `${PREFIX} ScrapeVenue`, city: 'Austin' });
+      // Scrape config is gated on follow/ownership — USER_A must follow it.
+      await db
+        .insert(userVenueFollows)
+        .values({ userId: USER_A, venueId })
+        .onConflictDoNothing();
       const res = await callerFor(USER_A).venues.saveScrapeConfig({
         venueId,
         config: { url: 'https://example.com/calendar', frequencyDays: 7 },
@@ -440,6 +445,10 @@ describe('venues router', () => {
     it('clearing the config (config=null) removes it', async () => {
       const venueId = fakeUuid(PREFIX, 'vscclr');
       await createTestVenue({ id: venueId, name: `${PREFIX} ClearVenue`, city: 'Austin' });
+      await db
+        .insert(userVenueFollows)
+        .values({ userId: USER_A, venueId })
+        .onConflictDoNothing();
       // Save then clear
       await callerFor(USER_A).venues.saveScrapeConfig({
         venueId,
@@ -454,13 +463,16 @@ describe('venues router', () => {
       assert.equal(status.config, null);
     });
 
-    it('scrapeStatus throws NOT_FOUND for unknown venue', async () => {
+    it('scrapeStatus throws FORBIDDEN for a venue the caller does not follow', async () => {
+      // The follow/ownership gate runs before the venue-existence check, so an
+      // unknown (or simply unfollowed) venue surfaces as FORBIDDEN — the caller
+      // can't hold a follow on a row they have no relationship with.
       await assert.rejects(
         () =>
           callerFor(USER_A).venues.scrapeStatus({
             venueId: '00000000-0000-0000-0000-000000000000',
           }),
-        (err: unknown) => err instanceof TRPCError && err.code === 'NOT_FOUND',
+        (err: unknown) => err instanceof TRPCError && err.code === 'FORBIDDEN',
       );
     });
   });

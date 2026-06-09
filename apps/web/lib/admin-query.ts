@@ -112,5 +112,17 @@ export function validateAdminQuery(input: unknown): ValidationResult {
     };
   }
 
+  // Reject recursive CTEs. A `WITH RECURSIVE` can spin a self-referencing
+  // term that burns CPU/memory right up to the statement_timeout — the
+  // READ ONLY transaction doesn't bound compute, only writes. Plain CTEs are
+  // fine. `RECURSIVE` must follow `WITH` directly in Postgres, so anchoring
+  // on the (comment-stripped) start is sufficient.
+  if (verb === 'WITH' && /^WITH\s+RECURSIVE\b/i.test(stripped)) {
+    return {
+      ok: false,
+      reason: 'recursive CTEs are not allowed on the read-only diagnostic endpoint',
+    };
+  }
+
   return { ok: true, query: input };
 }
