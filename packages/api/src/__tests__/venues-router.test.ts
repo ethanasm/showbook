@@ -251,8 +251,20 @@ describe('venuesRouter (unit)', () => {
   });
 
   describe('saveScrapeConfig', () => {
+    it('throws FORBIDDEN when caller has no follow and no show at the venue', async () => {
+      const db = makeFakeDb({ selectResults: [[], []] });
+      await assert.rejects(
+        () =>
+          caller(db).saveScrapeConfig({
+            venueId: VENUE_ID,
+            config: { url: 'https://example.com', frequencyDays: 3 },
+          }),
+        (err: unknown) => err instanceof TRPCError && err.code === 'FORBIDDEN',
+      );
+    });
+
     it('clears the config when null is passed', async () => {
-      const db = makeFakeDb();
+      const db = makeFakeDb({ selectResults: [[{ venueId: VENUE_ID }]] }); // follow exists
       const result = await caller(db).saveScrapeConfig({
         venueId: VENUE_ID,
         config: null,
@@ -261,7 +273,7 @@ describe('venuesRouter (unit)', () => {
     });
 
     it('accepts a parsed config', async () => {
-      const db = makeFakeDb();
+      const db = makeFakeDb({ selectResults: [[{ venueId: VENUE_ID }]] }); // follow exists
       const result = await caller(db).saveScrapeConfig({
         venueId: VENUE_ID,
         config: { url: 'https://example.com', frequencyDays: 3 },
@@ -368,8 +380,16 @@ describe('venuesRouter (unit)', () => {
   });
 
   describe('scrapeStatus', () => {
+    it('throws FORBIDDEN when caller has no follow and no show at the venue', async () => {
+      const db = makeFakeDb({ selectResults: [[], []] });
+      await assert.rejects(
+        () => caller(db).scrapeStatus({ venueId: VENUE_ID }),
+        (err: unknown) => err instanceof TRPCError && err.code === 'FORBIDDEN',
+      );
+    });
+
     it('throws NOT_FOUND when venue does not exist', async () => {
-      const db = makeFakeDb({ selectResults: [[]] });
+      const db = makeFakeDb({ selectResults: [[{ venueId: VENUE_ID }], []] }); // follow exists, venue missing
       await assert.rejects(
         () => caller(db).scrapeStatus({ venueId: VENUE_ID }),
         (err: unknown) =>
@@ -382,6 +402,7 @@ describe('venuesRouter (unit)', () => {
       const lastRun = { id: 'r1', venueId: VENUE_ID, startedAt: new Date(), status: 'success' };
       const db = makeFakeDb({
         selectResults: [
+          [{ venueId: VENUE_ID }], // follow exists
           [{ scrapeConfig: config }],
           [lastRun],
         ],
@@ -394,6 +415,7 @@ describe('venuesRouter (unit)', () => {
     it('returns null lastRun when no runs exist', async () => {
       const db = makeFakeDb({
         selectResults: [
+          [{ venueId: VENUE_ID }], // follow exists
           [{ scrapeConfig: null }],
           [],
         ],

@@ -95,7 +95,9 @@ describe('telemetryRouter.logEvent', () => {
     await caller(makeFakeDb()).logEvent({
       event: 'upload.put.failed',
       message: 'huge',
-      context: { bigBlob: big },
+      // `key` is allowlisted, so a huge value survives the key filter and
+      // exercises the byte-cap path.
+      context: { key: big },
     });
 
     const log = captured[0]!;
@@ -105,8 +107,42 @@ describe('telemetryRouter.logEvent', () => {
       (log.payload._preview as string).length <= 8 * 1024,
       'preview should be clipped to 8 KB',
     );
-    // The raw `bigBlob` key should NOT have leaked through.
-    assert.equal(log.payload.bigBlob, undefined);
+    // The raw `key` value should NOT have leaked through unclipped.
+    assert.equal(log.payload.key, undefined);
+  });
+
+  it('drops context keys outside the allowlist so a client cannot widen the Axiom schema', async () => {
+    await caller(makeFakeDb()).logEvent({
+      event: 'upload.put.failed',
+      message: 'mixed',
+      context: { status: 500, attackerKey1: 'x', attackerKey2: 'y' },
+    });
+
+    const log = captured[0]!;
+    // Allowlisted key survives...
+    assert.equal(log.payload.status, 500);
+    // ...arbitrary keys are dropped and only counted.
+    assert.equal(log.payload.attackerKey1, undefined);
+    assert.equal(log.payload.attackerKey2, undefined);
+    assert.equal(log.payload._droppedKeys, 2);
+  });
+
+  it('cannot be tricked into forging event or userId via the context bag', async () => {
+    const ctx = { db: makeFakeDb(), session: { user: { id: 'real-user' } } };
+    const c = telemetryRouter!.createCaller(ctx as never);
+    await c.logEvent({
+      event: 'upload.put.failed',
+      message: 'spoof attempt',
+      context: {
+        event: 'auth.user_created',
+        userId: 'victim-user',
+      } as Record<string, unknown>,
+    });
+
+    const log = captured[0]!;
+    // Server-controlled fields win; the spoofed values are ignored entirely.
+    assert.equal(log.payload.event, 'mobile.upload.put.failed');
+    assert.equal(log.payload.userId, 'real-user');
   });
 
   it('returns ok:true so the caller can await + ignore', async () => {

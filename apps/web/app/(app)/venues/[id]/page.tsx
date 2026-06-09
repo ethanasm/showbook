@@ -457,10 +457,13 @@ export default function VenueDetailPage() {
           gap: 28,
         }}
       >
-        {/* Scrape config — only for venues not covered by Ticketmaster */}
-        {!venue.ticketmasterVenueId && (
-          <ScrapeConfigSection venueId={venueId} venueName={venue.name} />
-        )}
+        {/* Scrape config — only for venues not covered by Ticketmaster, and
+            only for users with access to it (the read/write tRPC procedures
+            require a follow or a show at this venue). */}
+        {!venue.ticketmasterVenueId &&
+          (venue.isFollowed || venue.userShowCount > 0) && (
+            <ScrapeConfigSection venueId={venueId} venueName={venue.name} />
+          )}
 
         {/* Your shows — show this FIRST. The user's own history is the
             primary content of this page; upcoming announcements are

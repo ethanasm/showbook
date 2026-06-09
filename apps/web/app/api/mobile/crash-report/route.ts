@@ -16,19 +16,30 @@
  *
  * Anti-abuse: hard cap on each field (rejection rather than truncation,
  * so a runaway client doesn't push us toward the 257-column Axiom cap),
- * no DB write, no rate-limit (showbook is single-tenant — we'll add one
- * if abuse becomes a problem). Drops empty / malformed payloads with
- * 400 silently.
+ * a per-IP rate limit so an unauthenticated flood can't spam the log
+ * pipeline, no DB write. Drops empty / malformed payloads with 400
+ * silently and over-limit callers with 429.
  */
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { child } from '@showbook/observability';
+import { isRateLimited } from '@showbook/api';
 
 const log = child({ component: 'web.api.mobile.crash-report' });
 
 const MAX_MESSAGE_LEN = 2000;
 const MAX_STACK_LEN = 8000;
+const RATE_LIMIT = { max: 60, windowMs: 60_000 };
+
+/** Best-effort client IP for rate-limiting this unauthenticated endpoint. */
+function clientIp(req: Request): string {
+  const h = req.headers;
+  const direct = h.get('cf-connecting-ip') ?? h.get('x-real-ip');
+  if (direct) return direct;
+  const first = h.get('x-forwarded-for')?.split(',')[0]?.trim();
+  return first || 'anonymous';
+}
 
 const schema = z.object({
   message: z.string().min(1).max(MAX_MESSAGE_LEN),
@@ -44,6 +55,13 @@ const schema = z.object({
 export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
+  if (isRateLimited(`crash-report:${clientIp(req)}`, RATE_LIMIT)) {
+    return NextResponse.json(
+      { ok: false },
+      { status: 429, headers: { 'retry-after': '60' } },
+    );
+  }
+
   let body: unknown;
   try {
     body = await req.json();
