@@ -490,8 +490,10 @@ function IntegrationRowView({
  *    Showbook backend (`TICKETMASTER_API_KEY` / `GOOGLE_PLACES_API_KEY`),
  *    so they're effectively always-on for every signed-in user. The
  *    `[id].tsx` detail screen explains this when tapped.
- *  - Gmail is a per-user OAuth flow on web; the mobile OAuth bridge
- *    isn't wired up yet, so it stays on the placeholder.
+ *  - Gmail isn't a persistent connection — it's a one-time inbox scan
+ *    (`integrations/gmail.tsx`) that pulls past tickets into the logbook,
+ *    so "Not connected" misreads as a broken integration. Label it for
+ *    what it is.
  */
 function useIntegrationStatus(id: IntegrationRow['id']): string {
   // The hook always renders — we read it unconditionally and ignore the
@@ -499,6 +501,7 @@ function useIntegrationStatus(id: IntegrationRow['id']): string {
   const spotify = useSpotifyConnection();
   if (id === 'ticketmaster' || id === 'google-places' || id === 'wikidata')
     return 'Connected · Built-in';
+  if (id === 'gmail') return 'One-time import';
   if (id !== 'spotify') return 'Not connected';
   if (spotify.connection.status === 'loading') return 'Checking…';
   if (spotify.connection.status === 'disconnected') return 'Not connected';
