@@ -22,6 +22,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Linking,
+  type GestureResponderEvent,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -648,14 +649,23 @@ function UpcomingRow({
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const router = useRouter();
   const { showToast } = useFeedback();
   const { month, day, dow } = parseDate(item.showDate);
   const accent = tokens.kindColor(item.kind);
   const title = item.productionName ?? item.headliner;
-  const location = [item.venue.name, item.venue.city]
-    .filter((p): p is string => Boolean(p))
-    .join(' · ');
+  // Live (ephemeral) TM rows have no persisted venue, so `venue.id` is null
+  // and the name stays plain text. Stored rows link through to venue detail.
+  const venueId = item.venue.id;
   const ticketUrl = item.ticketUrl;
+
+  const openVenue = (e: GestureResponderEvent): void => {
+    // Claim the touch so the row's onPress (action sheet) doesn't also fire.
+    e.stopPropagation();
+    if (!venueId) return;
+    void hapticSelection();
+    router.push(`/venues/${venueId}`);
+  };
 
   return (
     <Pressable
@@ -688,13 +698,26 @@ function UpcomingRow({
         >
           {title}
         </Text>
-        {location ? (
+        {item.venue.name ? (
           <Text
             style={[styles.upcomingVenue, { color: colors.muted }]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
-            {location}
+            {venueId ? (
+              <Text
+                onPress={openVenue}
+                accessibilityRole="link"
+                accessibilityLabel={`${item.venue.name} — open venue`}
+                testID={`artist-upcoming-venue-${item.id}`}
+                style={{ color: colors.ink }}
+              >
+                {item.venue.name}
+              </Text>
+            ) : (
+              item.venue.name
+            )}
+            {item.venue.city ? ` · ${item.venue.city}` : ''}
           </Text>
         ) : null}
       </View>
