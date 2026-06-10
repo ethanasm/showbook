@@ -1,0 +1,93 @@
+name: Start Postgres
+description: >-
+  Pull and start the Postgres container CI jobs talk to on localhost, with an
+  explicit retry/backoff around `docker pull`. A GitHub Actions `services:`
+  container pulls its image *before any step runs* and the runner retries that
+  pull only ~3 times with a short, non-configurable backoff — so a Docker Hub
+  blip (registry-1.docker.io connection timeouts) fails the whole job before a
+  line of our own code executes. Starting the container ourselves lets us retry
+  the pull with real backoff instead.
+
+inputs:
+  image:
+    description: Postgres image to pull and run.
+    default: postgres:16-alpine
+  container-name:
+    description: Name for the running container.
+    default: showbook-ci-postgres
+  host-port:
+    description: Host port to publish Postgres on (steps reach it at localhost:<host-port>).
+    default: "5433"
+  postgres-user:
+    description: POSTGRES_USER for the container.
+    default: showbook
+  postgres-password:
+    description: POSTGRES_PASSWORD for the container.
+    default: showbook_dev
+  postgres-db:
+    description: POSTGRES_DB for the container.
+    default: showbook
+
+runs:
+  using: composite
+  steps:
+    - name: Pull Postgres image (with retry)
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+      run: |
+        set -uo pipefail
+        attempts=5
+        delay=5
+        max_delay=30
+        for i in $(seq 1 "$attempts"); do
+          if docker pull "$IMAGE"; then
+            echo "pulled $IMAGE on attempt $i"
+            exit 0
+          fi
+          if [ "$i" -lt "$attempts" ]; then
+            echo "::warning::docker pull $IMAGE failed (attempt $i/$attempts); retrying in ${delay}s"
+            sleep "$delay"
+            delay=$(( delay * 2 ))
+            [ "$delay" -gt "$max_delay" ] && delay="$max_delay"
+          fi
+        done
+        echo "::error::docker pull $IMAGE failed after $attempts attempts"
+        exit 1
+
+    - name: Start Postgres container
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        CONTAINER_NAME: ${{ inputs.container-name }}
+        HOST_PORT: ${{ inputs.host-port }}
+        POSTGRES_USER: ${{ inputs.postgres-user }}
+        POSTGRES_PASSWORD: ${{ inputs.postgres-password }}
+        POSTGRES_DB: ${{ inputs.postgres-db }}
+      run: |
+        set -euo pipefail
+        docker run -d \
+          --name "$CONTAINER_NAME" \
+          -e POSTGRES_USER="$POSTGRES_USER" \
+          -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+          -e POSTGRES_DB="$POSTGRES_DB" \
+          -p "$HOST_PORT:5432" \
+          "$IMAGE"
+
+    - name: Wait for Postgres
+      shell: bash
+      env:
+        CONTAINER_NAME: ${{ inputs.container-name }}
+        HOST_PORT: ${{ inputs.host-port }}
+        POSTGRES_USER: ${{ inputs.postgres-user }}
+      run: |
+        set -uo pipefail
+        for i in $(seq 1 30); do
+          if pg_isready -h localhost -p "$HOST_PORT" -U "$POSTGRES_USER"; then
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "::error::Postgres did not become ready"
+        docker logs "$CONTAINER_NAME" || true
+        exit 1
