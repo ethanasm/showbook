@@ -71,16 +71,18 @@ export interface EventRun {
  * (headliner, venue, kind) into one run.
  *
  * - theatre: always group.
- * - concert: group only when 3+ dates within 30 days (residency heuristic).
- *            Otherwise emit individual events (touring concerts at the same
- *            venue weeks/months apart should stay separate).
- * - comedy: never group.
+ * - concert / comedy: group only when 3+ dates within 30 days (residency /
+ *   multi-night-engagement heuristic). Otherwise emit individual events — a
+ *   touring act or a comic playing the same venue weeks/months apart should
+ *   stay separate rows. A multi-night stand at one club (e.g. a comedian's
+ *   four-night run) collapses into a single date-range row, the same way a
+ *   concert residency does.
  * - festival: group duplicate pass/day/tier listings into one festival row.
  */
 export function shouldGroup(kind: Kind, dates: string[]): boolean {
   if (kind === 'theatre') return dates.length >= 2;
   if (kind === 'festival') return dates.length >= 2;
-  if (kind === 'concert') {
+  if (kind === 'concert' || kind === 'comedy') {
     if (dates.length < 3) return false;
     const sorted = [...dates].sort();
     const first = new Date(sorted[0]!);
