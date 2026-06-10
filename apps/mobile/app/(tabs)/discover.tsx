@@ -104,10 +104,13 @@ type DiscoverTab = 'venues' | 'artists' | 'regions';
 // reflect the full filtered set; only the AnnouncementRow tree is sliced.
 // With 800+ Region announcements rendered into a non-virtualized ScrollView
 // the tab swap stalled for several seconds — paginating the render keeps
-// the totals honest without paying that cost. Flat views slice globally;
-// the grouped All-regions view applies this as a per-region page size so
-// every region surfaces its first page (see `buildRegionGroupedNodes`).
+// the totals honest without paying that cost. Flat views (a selected
+// region/venue chip, the Venues/Artists tabs) slice globally at PAGE_SIZE;
+// the grouped All-regions view pages each region independently at the
+// smaller REGION_GROUP_PAGE_SIZE so several regions' first pages fit on
+// screen without one region dominating (see `buildRegionGroupedNodes`).
 const PAGE_SIZE = 50;
+const REGION_GROUP_PAGE_SIZE = 25;
 
 /**
  * Multi-night runs (e.g. Phantom of the Opera at the Orpheum) carry a
@@ -224,9 +227,9 @@ export default function DiscoverScreen(): React.JSX.Element {
   // Per-region render budgets for the grouped (All-regions) view. A single
   // global slice let the densest region eat the whole first page, so the
   // other regions looked like a subset of their real feed. Each region now
-  // paginates independently: first PAGE_SIZE rows, then a per-section
-  // "load more" that reveals that region's next page. Keyed by region id;
-  // an absent entry means the default first page.
+  // paginates independently: first REGION_GROUP_PAGE_SIZE rows, then a
+  // per-section "load more" that reveals that region's next page. Keyed by
+  // region id; an absent entry means the default first page.
   const [regionVisibleCounts, setRegionVisibleCounts] = React.useState<
     Record<string, number>
   >({});
@@ -632,21 +635,23 @@ export default function DiscoverScreen(): React.JSX.Element {
     } else if (isRegionGrouped) {
       // The grouped view paginates per region (not via the global
       // `visibleItems` slice): every region renders its real total in the
-      // sticky header, its first PAGE_SIZE rows, and its own "load more"
-      // button for the next page.
+      // sticky header, its first REGION_GROUP_PAGE_SIZE rows, and its own
+      // "load more" button for the next page.
       const built = buildRegionGroupedNodes({
         items: filteredItems as NearbyAnnouncementItem[],
         groups: groupList,
         watchedSet,
         onToggleWatch,
         compact,
-        pageSize: PAGE_SIZE,
+        pageSize: REGION_GROUP_PAGE_SIZE,
         visibleCounts: regionVisibleCounts,
         onShowMore: (regionId) => {
           hapticSelection();
           setRegionVisibleCounts((prev) => ({
             ...prev,
-            [regionId]: (prev[regionId] ?? PAGE_SIZE) + PAGE_SIZE,
+            [regionId]:
+              (prev[regionId] ?? REGION_GROUP_PAGE_SIZE) +
+              REGION_GROUP_PAGE_SIZE,
           }));
         },
         bg: colors.bg,
