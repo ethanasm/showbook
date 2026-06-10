@@ -1,0 +1,128 @@
+name: showbook-e2e
+
+# Mobile-e2e backend compose: the long-lived backend that the Maestro
+# Android suite (.github/workflows/mobile-e2e.yml) talks to. Runs the
+# same sealed image as prod against its own postgres, so the baked-in
+# MAESTRO_E2E_TOKEN authenticates against an isolated database with an
+# isolated AUTH_SECRET — never against prod data.
+#
+# Lockdown posture (this stack must NOT be public):
+#   - Both ports bind to 127.0.0.1 only. There is no Cloudflare Tunnel
+#     ingress for this stack — do not add one. The only intended client
+#     is the Android emulator on this same host, which reaches the web
+#     service via http://10.0.2.2:3004 (the emulator NAT's alias for
+#     the host's loopback). That URL is what the EXPO_PUBLIC_API_URL
+#     repo secret should hold.
+#   - AUTH_SECRET is distinct from prod's, so an e2e token leaking via
+#     CI logs or an APK is worthless against prod.
+#   - The allowlist pins access to the synthetic Maestro user; a real
+#     user's prod token (signed with a different secret) can't resolve
+#     here either.
+#   - No external API keys: Ticketmaster / setlist.fm / Spotify / Groq
+#     enrichment paths are all non-blocking by design and just log
+#     locally. WIKIDATA_ENRICHMENT_DISABLED keeps the keyless Wikidata
+#     hook offline too. No AXIOM_TOKEN — logs stay in `docker logs`.
+#   - /api/test/* stays disabled (ENABLE_TEST_ROUTES unset): the
+#     Maestro flows self-seed through the real API (add-show creates
+#     "Maestro Test Headliner"), so the wipe-and-reseed routes would
+#     only add attack surface.
+#
+# Ports follow the stack convention (dev 3001/5433, prod 3002/5434,
+# Playwright dev server 3003): e2e web on 3004, postgres on 5435.
+#
+# The web image is the same ghcr.io/ethanasm/showbook-web:latest that
+# prod runs. `pnpm e2e:up` deliberately does NOT pull — it rides the
+# image the last prod deploy fetched, and deploy.yml refreshes this
+# stack (guarded on .env.e2e existing) right after prod, while its
+# GHCR login is still valid. For a manual pull: `docker login ghcr.io`
+# first, then `docker compose --env-file .env.e2e -f
+# infra/docker-compose.e2e.yml pull web`.
+#
+# Usage:
+#   pnpm e2e:up           # start (uses local image)
+#   pnpm e2e:db:migrate   # drizzle migrations inside the web container
+#   pnpm e2e:logs         # follow web logs
+#
+# Required env (in .env.e2e at repo root — gitignored):
+#   POSTGRES_PASSWORD   Strong unique password for the showbook_e2e role.
+#   AUTH_SECRET         `openssl rand -base64 48` — must be e2e-specific,
+#                       NOT prod's. This is the secret mint:e2e-token
+#                       signs with and this stack verifies with.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: showbook-e2e-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: showbook_e2e
+      POSTGRES_USER: showbook_e2e
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.e2e}
+    ports:
+      - "127.0.0.1:5435:5432"
+    volumes:
+      - showbook_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U showbook_e2e -d showbook_e2e"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  web:
+    image: ghcr.io/ethanasm/showbook-web:${WEB_IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      target: prod
+    container_name: showbook-e2e-web
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3001/api/health/live > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+    stop_grace_period: 30s
+    env_file:
+      - path: ../.env.e2e
+        required: true
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://showbook_e2e:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.e2e}@db:5432/showbook_e2e
+      PORT: "3001"
+      # The prod WSL box also hosts prod web (4 GB cap), the Android
+      # emulator (2 GB AVD), and Gradle (2 GB heap) during e2e runs —
+      # keep this stack's ceiling modest so it can't tip the box over.
+      NODE_OPTIONS: "--max-old-space-size=2048"
+      # The bearer path verifies with AUTH_SECRET; NEXTAUTH_SECRET is
+      # mirrored for the same-value parity apps/web's start:e2e script
+      # uses. Both come from the single AUTH_SECRET in .env.e2e.
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set in .env.e2e}
+      NEXTAUTH_SECRET: ${AUTH_SECRET}
+      # Cookie-OAuth is unused here (the only client authenticates via
+      # Bearer JWT), but NextAuth wants a canonical URL.
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3004}
+      # Pin sign-in/bearer access to the synthetic Maestro user. An
+      # empty allowlist would mean allow-everyone (see
+      # apps/web/lib/auth-allowlist.ts) — never leave this unset here.
+      AUTH_ALLOWED_EMAILS: ${AUTH_ALLOWED_EMAILS:-maestro-e2e@showbook.test}
+      # 32-byte key for the Spotify token crypto helpers; resolved
+      # lazily on first Spotify use, which never happens on this stack
+      # — a fixed dummy keeps .env.e2e down to two real secrets.
+      TOKEN_KEY: ${TOKEN_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      # Keep the keyless Wikidata fire-and-forget hook offline, same as
+      # the test scripts (add-show creates performers on every run).
+      WIKIDATA_ENRICHMENT_DISABLED: "1"
+    ports:
+      - "127.0.0.1:3004:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  showbook_pgdata:
