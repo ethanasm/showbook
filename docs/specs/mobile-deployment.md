@@ -240,6 +240,41 @@ When you're ready for the real submission:
    safety form (mirrors Apple's privacy declarations — email + user ID
    for app functionality).
 
+### Android Maps key (do this before the `.aab` build)
+
+The Map tab uses Google Maps on Android (`react-native-maps` →
+`PROVIDER_GOOGLE`), which needs a **Maps SDK for Android** key baked into
+the build. iOS uses Apple Maps and needs no key.
+
+**Committing a *restricted* key to `eas.json` `preview.env` is fine** —
+same posture as the OAuth client IDs already there. A Maps key isn't a
+secret: it ships inside the APK/AAB, so anyone can extract it. Security
+comes from restrictions, not from hiding it. Lock it down *before* you
+commit.
+
+1. Google Cloud Console → the project you already use for Places/OAuth.
+   Confirm **billing is enabled** (Maps requires it even within the free
+   monthly credit).
+2. **APIs & Services → Library → enable "Maps SDK for Android"** (distinct
+   from Places / Maps SDK for iOS).
+3. **Credentials → Create credentials → API key** (you get an `AIza…`).
+4. Edit the key → **Application restrictions → Android apps**, add **two**
+   package + SHA-1 entries:
+   - `me.ethanasm.showbook` + the **EAS keystore SHA-1**
+     (`eas credentials -p android` → the profile's keystore shows it).
+   - `me.ethanasm.showbook` + the **Play app-signing SHA-1** (Play Console
+     → your app → Test and release → App integrity → App signing). Play
+     re-signs the app, so without this the map breaks once delivered
+     through Play. One key can hold multiple package+SHA-1 entries.
+5. **API restrictions → Restrict key → Maps SDK for Android** only. Save.
+6. Provide it to the build: `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` in `eas.json`
+   `preview.env` (and an EAS env var for `production`, which has no inline
+   `env`). **Rebuild** — the key is baked at build time, so an OTA
+   `eas update` won't apply it.
+
+A restriction mismatch fails **silently** (blank gray map, no error), so
+if the map is blank with the key present, re-check the SHA-1s.
+
 ### 3.2 Build an `.aab`
 
 ```bash
