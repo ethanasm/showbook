@@ -452,6 +452,21 @@ function FeedSection({
         onSelect={setSelectedGroupId}
         totalCount={totalCount}
         hideCounts
+        searchable
+        pickerTitle={
+          groupBy === "artist"
+            ? "All artists"
+            : groupBy === "region"
+              ? "All regions"
+              : "All venues"
+        }
+        searchPlaceholder={
+          groupBy === "artist"
+            ? "Search artists…"
+            : groupBy === "region"
+              ? "Search regions…"
+              : "Search venues…"
+        }
       />
 
       {/* Feed */}
