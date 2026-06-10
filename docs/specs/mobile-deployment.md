@@ -22,6 +22,80 @@ via `expo-auth-session`, `expo-secure-store`, `expo-notifications`).
 
 ---
 
+## Operator runbook (concrete sequence)
+
+The command-forward path from where the project is now to testers and the
+stores. The Parts below carry the full detail and rationale; this is the
+sequence you actually run. Bundle ID / package: `me.ethanasm.showbook`.
+
+**Already done (one-time):** Expo/EAS login, Apple Developer Program, Play
+Console account, the iOS/Android/web OAuth client IDs (in `eas.json`
+`preview.env`), backend `GOOGLE_OAUTH_MOBILE_AUDIENCES`, brand assets, a
+restricted Maps SDK for Android key (in `preview.env`, locked to the
+package + EAS keystore **and** Play app-signing SHA-1s), and on-device
+`preview` builds on iOS + Android.
+
+**1 — Pre-flight (every build).**
+
+```bash
+pnpm mobile:typecheck && pnpm mobile:lint && pnpm mobile:test
+# bump `version` in apps/mobile/app.config.ts (EAS auto-bumps buildNumber/versionCode)
+```
+
+**2 — Beta to testers (no public release).** Uses the `preview-store`
+profile, which inherits `preview.env` — so every `EXPO_PUBLIC_*` (incl. the
+Maps key) is already baked in and you do **not** need the production env
+vars from step 3 yet.
+
+```bash
+# Android → Play internal testing
+eas build  --profile preview-store --platform android
+eas submit --profile preview-store --platform android --latest   # → Play 'internal' track
+
+# iOS → TestFlight
+eas build  --profile preview-store --platform ios
+eas submit --profile preview-store --platform ios --latest       # first run prompts for an App Store Connect API key
+```
+
+Then add testers: Play Console → Testing → Internal testing → tester
+emails + opt-in link; App Store Connect → TestFlight → Internal Testing →
+up to 100 testers, no review.
+
+**3 — Production env (once, before any `production`-profile build).** The
+`production` profile has no inline `env`; set each var as an EAS env var
+(`eas env:create --help` for exact flags on your CLI version):
+
+```bash
+eas env:create --environment production --visibility plaintext --name EXPO_PUBLIC_API_URL                     --value https://showbook.ethanasm.me
+eas env:create --environment production --visibility plaintext --name EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS     --value <ios-client-id>
+eas env:create --environment production --visibility plaintext --name EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID --value <android-client-id>
+eas env:create --environment production --visibility plaintext --name EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB     --value <web-client-id>
+eas env:create --environment production --visibility plaintext --name EXPO_PUBLIC_GOOGLE_MAPS_API_KEY            --value <maps-key>
+eas env:list   --environment production    # verify before building
+```
+
+**4 — Store release (production).** Prereqs: App Store Connect + Play app
+records; legal URLs live (`/privacy`, `/terms`, `/account-deletion`) with
+`LEGAL_CONTACT_EMAIL` in `.env.prod`; a demo Google account for Apple's
+reviewer.
+
+```bash
+eas build  --profile production --platform all
+eas submit --profile production --platform all --latest
+```
+
+- App Store Connect → new version → attach build → screenshots (6.7" / 6.1" / iPad) → demo account in *App Review Information* → Submit for Review.
+- Play Console → Production → new release → attach AAB → release notes → staged rollout (start 10–20%).
+
+**5 — Ongoing.**
+
+```bash
+eas update --branch production --message "..."   # JS/asset only — ships in seconds, no store review
+# native deps / app.config.ts / permissions changed → fresh build + submit (steps 1 + 4)
+```
+
+---
+
 ## Prerequisites (one-time, both platforms)
 
 **Accounts and tooling**
@@ -395,11 +469,11 @@ auto-bumps `ios.buildNumber` and `android.versionCode` if you set
       `GOOGLE_PLACES_API_KEY`). `preview` / `preview-store` Android builds
       now render the map after a rebuild. iOS uses Apple Maps (`map.tsx`
       picks `PROVIDER_DEFAULT`) and needs no key.
-- [ ] Map tab on Android (production + Play follow-ups): the `production`
-      profile has no inline `env`, so it needs the key as an EAS env var;
-      and add the **Play app-signing SHA-1** to the key after the first
-      AAB upload (Play re-signs, so the EAS keystore SHA-1 alone won't
-      cover Play-delivered installs).
+- [x] Play app-signing SHA-1 added to the restricted Maps key — covers
+      Play-delivered Android installs (Play re-signs the app, so the EAS
+      keystore SHA-1 alone wouldn't). *(The `production` profile still
+      needs the Maps key as an EAS env var — covered by the `production`
+      env item above.)*
 - [ ] Legal pages reachable at public URLs and pasted into both consoles:
       `/privacy`, `/terms`, and `/account-deletion` (Google Play *requires*
       the data-deletion URL). They live under `apps/web/app/(public)/`; the
