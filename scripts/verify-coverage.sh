@@ -97,12 +97,13 @@ else
   run_step "Lint" lint pnpm lint
 fi
 
-# ── Mobile typecheck ────────────────────────────────────────────────────
+# ── Typecheck (web + mobile + packages) ─────────────────────────────────
 # `next build` type-checks the web app, but nothing type-checks the mobile
-# app in CI — so a `tsc`-level break (e.g. an Expo SDK bump dropping
-# StyleSheet.absoluteFillObject) sails through build / lint / unit. Run the
-# mobile compiler explicitly so the gate catches it.
-run_step "Typecheck (mobile)" typecheck-mobile pnpm mobile:typecheck
+# app or the packages/libs in CI — so a `tsc`-level break (an Expo SDK bump
+# dropping StyleSheet.absoluteFillObject, a package type regression) sails
+# through build / lint / unit. Fan `tsc --noEmit` out across every project
+# via `nx run-many -t typecheck`. Lint (above) is likewise comprehensive.
+run_step "Typecheck" typecheck pnpm typecheck
 
 # ── Unit tests with coverage (Nx caches per-project) ────────────────────
 run_step "Unit tests + coverage" unit-tests pnpm exec nx run-many -t test:coverage
