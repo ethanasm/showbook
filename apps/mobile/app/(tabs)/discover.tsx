@@ -104,7 +104,9 @@ type DiscoverTab = 'venues' | 'artists' | 'regions';
 // reflect the full filtered set; only the AnnouncementRow tree is sliced.
 // With 800+ Region announcements rendered into a non-virtualized ScrollView
 // the tab swap stalled for several seconds — paginating the render keeps
-// the totals honest without paying that cost.
+// the totals honest without paying that cost. Flat views slice globally;
+// the grouped All-regions view applies this as a per-region page size so
+// every region surfaces its first page (see `buildRegionGroupedNodes`).
 const PAGE_SIZE = 50;
 
 /**
@@ -219,6 +221,16 @@ export default function DiscoverScreen(): React.JSX.Element {
   // page 1 rather than carrying the previous tab's expanded budget.
   const [visibleCount, setVisibleCount] = React.useState(PAGE_SIZE);
 
+  // Per-region render budgets for the grouped (All-regions) view. A single
+  // global slice let the densest region eat the whole first page, so the
+  // other regions looked like a subset of their real feed. Each region now
+  // paginates independently: first PAGE_SIZE rows, then a per-section
+  // "load more" that reveals that region's next page. Keyed by region id;
+  // an absent entry means the default first page.
+  const [regionVisibleCounts, setRegionVisibleCounts] = React.useState<
+    Record<string, number>
+  >({});
+
   // Clear filter when switching tabs — chips reset per-tab.
   React.useEffect(() => {
     setSelectedGroupId(null);
@@ -227,6 +239,7 @@ export default function DiscoverScreen(): React.JSX.Element {
 
   React.useEffect(() => {
     setVisibleCount(PAGE_SIZE);
+    setRegionVisibleCounts({});
   }, [tab, selectedGroupId, selectedRegionVenueId, kindFilter]);
 
   // Clear the venue sub-filter whenever the user changes the region
@@ -617,32 +630,31 @@ export default function DiscoverScreen(): React.JSX.Element {
         </View>
       );
     } else if (isRegionGrouped) {
+      // The grouped view paginates per region (not via the global
+      // `visibleItems` slice): every region renders its real total in the
+      // sticky header, its first PAGE_SIZE rows, and its own "load more"
+      // button for the next page.
       const built = buildRegionGroupedNodes({
-        items: visibleItems as NearbyAnnouncementItem[],
+        items: filteredItems as NearbyAnnouncementItem[],
         groups: groupList,
         watchedSet,
         onToggleWatch,
         compact,
+        pageSize: PAGE_SIZE,
+        visibleCounts: regionVisibleCounts,
+        onShowMore: (regionId) => {
+          hapticSelection();
+          setRegionVisibleCounts((prev) => ({
+            ...prev,
+            [regionId]: (prev[regionId] ?? PAGE_SIZE) + PAGE_SIZE,
+          }));
+        },
         bg: colors.bg,
         ink: colors.ink,
         muted: colors.muted,
         rule: colors.rule,
       });
-      const nodes = built.nodes;
-      if (hasMore) {
-        nodes.push(
-          <LoadMoreButton
-            key="load-more"
-            remaining={remainingCount}
-            pageSize={PAGE_SIZE}
-            onPress={() => {
-              hapticSelection();
-              setVisibleCount((c) => c + PAGE_SIZE);
-            }}
-          />,
-        );
-      }
-      scrollBody = nodes;
+      scrollBody = built.nodes;
       stickyHeaderIndices = built.stickyIndices;
     } else {
       scrollBody = (
@@ -995,10 +1007,12 @@ function LoadMoreButton({
   remaining,
   pageSize,
   onPress,
+  testID = 'discover-load-more',
 }: {
   remaining: number;
   pageSize: number;
   onPress: () => void;
+  testID?: string;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -1009,7 +1023,7 @@ function LoadMoreButton({
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={`Load ${next} more`}
-        testID="discover-load-more"
+        testID={testID}
         style={({ pressed }) => [
           styles.loadMoreButton,
           { borderColor: colors.rule, backgroundColor: colors.surface },
@@ -1045,6 +1059,9 @@ function buildRegionGroupedNodes({
   watchedSet,
   onToggleWatch,
   compact,
+  pageSize,
+  visibleCounts,
+  onShowMore,
   bg,
   ink,
   muted,
@@ -1055,6 +1072,9 @@ function buildRegionGroupedNodes({
   watchedSet: Set<string>;
   onToggleWatch: WatchToggle;
   compact?: boolean;
+  pageSize: number;
+  visibleCounts: Record<string, number>;
+  onShowMore: (regionId: string) => void;
   bg: string;
   ink: string;
   muted: string;
@@ -1075,6 +1095,13 @@ function buildRegionGroupedNodes({
 
   for (const g of orderedGroups) {
     const groupItems = buckets.get(g.id) ?? [];
+    // Each region paginates on its own budget. The header keeps the real
+    // total ("814 upcoming") while only the visible slice is rendered —
+    // the per-region button below reveals the next page for this region
+    // without touching the others.
+    const visible = visibleCounts[g.id] ?? pageSize;
+    const shownItems = groupItems.slice(0, visible);
+    const remaining = groupItems.length - shownItems.length;
     // The header's index in the flat node list is what makes it sticky.
     stickyIndices.push(nodes.length);
     nodes.push(
@@ -1098,7 +1125,7 @@ function buildRegionGroupedNodes({
         key={`region-rows-${g.id}`}
         style={[styles.regionRows, compact && styles.regionRowsCompact]}
       >
-        {groupItems.map((item) => (
+        {shownItems.map((item) => (
           <AnnouncementRow
             key={item.id}
             item={item}
@@ -1109,6 +1136,17 @@ function buildRegionGroupedNodes({
         ))}
       </View>,
     );
+    if (remaining > 0) {
+      nodes.push(
+        <LoadMoreButton
+          key={`region-load-more-${g.id}`}
+          remaining={remaining}
+          pageSize={pageSize}
+          testID={`discover-load-more-${g.id}`}
+          onPress={() => onShowMore(g.id)}
+        />,
+      );
+    }
   }
 
   return { nodes, stickyIndices };
