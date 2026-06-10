@@ -5,14 +5,20 @@ and (2) ship it to the App Store and Google Play. This is opinionated to the
 state of `apps/mobile` today (Expo SDK 55, Expo Router, native Google OAuth
 via `expo-auth-session`, `expo-secure-store`, `expo-notifications`).
 
-> Status: written 2026-05-01, updated 2026-06-09. The app is now
+> Status: written 2026-05-01, updated 2026-06-10. The app is now
 > feature-complete (M1–M6) and an EAS project + `eas.json` exist
 > (`extra.eas.projectId` is wired). Real brand artwork (icon / adaptive
-> icon / splash) is committed under `apps/mobile/assets/`. What remains
-> before a first submission is the store-account / credential setup and
-> confirming the `production` EAS profile resolves the required
-> `EXPO_PUBLIC_*` env (see the checklist at the bottom). The steps below
-> are the path forward; the per-step notes call out what's already done.
+> icon / splash) is committed under `apps/mobile/assets/`. **`preview`
+> (internal-distribution) builds are installed and running on a physical
+> iOS and a physical Android device (one each)** — so the EAS project, the
+> iOS ad-hoc provisioning / device registration, the Google OAuth client
+> IDs, and the backend `/api/auth/mobile-token` audience are all proven
+> end-to-end. What remains before a first *store* submission is the
+> store-account setup (Play Console account, App Store Connect + Play app
+> records, reviewer demo account), wiring the `production` EAS profile's
+> `EXPO_PUBLIC_*` env (it has no inline block), and the Android Maps key
+> (see the checklist at the bottom). The steps below are the path forward;
+> the per-step notes call out what's already done.
 
 ---
 
@@ -321,11 +327,19 @@ auto-bumps `ios.buildNumber` and `android.versionCode` if you set
 
 ## Checklist before the first submission
 
-- [ ] Apple Developer Program active.
-- [ ] Google Play Console account active.
-- [ ] iOS + Android OAuth client IDs created in Google Cloud Console.
-- [ ] Backend `GOOGLE_OAUTH_MOBILE_AUDIENCES` set in `.env.prod`,
-      backend redeployed.
+- [x] **`preview` internal builds installed + running on a physical iOS
+      and a physical Android device** (one each) — proves the EAS project,
+      iOS ad-hoc provisioning / device registration, and Android APK install.
+- [x] Apple Developer Program active (required for the on-device iOS
+      internal / ad-hoc build).
+- [ ] Google Play Console account active. *(Not proven by the Android
+      preview — that APK is sideloaded; Play Console is only needed once
+      you push to an internal-testing/store track.)*
+- [x] iOS + Android OAuth client IDs created in Google Cloud Console
+      (inlined in `eas.json` `preview.env`; native sign-in works on-device).
+- [x] Backend `GOOGLE_OAUTH_MOBILE_AUDIENCES` set in `.env.prod`, backend
+      redeployed. *(Proven: sign-in succeeds on the preview builds against
+      `https://showbook.ethanasm.me`.)*
 - [x] `apps/mobile/assets/icon.png`, `splash.png`, `adaptive-icon.png`
       are real brand artwork (see § 2.1).
 - [x] `apps/mobile/eas.json` exists with a `production` profile and
