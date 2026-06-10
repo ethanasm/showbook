@@ -724,7 +724,7 @@ function UpcomingShows({
                         display: "block",
                       }}
                     >
-                      {a.headliner}
+                      {a.productionName ?? a.headliner}
                     </Link>
                   ) : (
                     <div
@@ -739,7 +739,7 @@ function UpcomingShows({
                         textOverflow: "ellipsis",
                       }}
                     >
-                      {a.headliner}
+                      {a.productionName ?? a.headliner}
                     </div>
                   )}
                   {a.support && a.support.length > 0 && (
