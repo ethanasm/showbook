@@ -611,9 +611,20 @@ jobs:
             exit 0   # don't fail the job over the debug-publish step itself
           fi
 
-          # Extract the JSON array (script prints log lines before it).
-          URLS_JSON=$(echo "$OUTPUT" | sed -n '/^\[$/,/^\]$/p')
-          IMAGES_MD=$(echo "$URLS_JSON" | jq -r '.[] | "![\(.name)](\(.url))"')
+          # Extract the JSON array (the script prints log lines before it) and
+          # render it as markdown image links. Use node, not jq: the
+          # self-hosted runner has node (the whole build depends on it) but no
+          # jq binary, and the missing jq was silently killing this step with
+          # exit 127 so the debug comment never posted.
+          IMAGES_MD=$(printf '%s' "$OUTPUT" | node -e '
+            const text = require("fs").readFileSync(0, "utf8");
+            const lines = text.split("\n");
+            const start = lines.findIndex((l) => l.trim() === "[");
+            const end = lines.findIndex((l) => l.trim() === "]");
+            if (start === -1 || end === -1 || end < start) process.exit(0);
+            const arr = JSON.parse(lines.slice(start, end + 1).join("\n"));
+            console.log(arr.map((x) => "![" + x.name + "](" + x.url + ")").join("\n"));
+          ')
 
           # Inline the text= nodes from the cold-launch UI dump
           # directly in the PR comment — small enough to fit, readable

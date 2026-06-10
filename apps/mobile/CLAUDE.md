@@ -119,9 +119,31 @@ directly in the workflow step env (matching the `e2e` profile in
 
 - `EXPO_PUBLIC_E2E_MODE=1` flips `lib/auth.ts` into bypass mode.
 - `EXPO_PUBLIC_E2E_TEST_TOKEN` is the Showbook JWT for the test user,
-  minted ahead of time against the e2e backend.
+  minted ahead of time against the e2e backend (sourced from the
+  `MAESTRO_E2E_TOKEN` repo secret in CI).
 - `EXPO_PUBLIC_E2E_TEST_USER_JSON` is the JSON-serialised
-  `SessionUser` the JWT identifies.
+  `SessionUser` the JWT identifies (from `MAESTRO_E2E_USER_JSON`).
+
+**Re-minting the token.** The JWT carries an expiry (NextAuth default
+30 days), and the tRPC bearer path rejects an expired / wrong-secret
+token with `UNAUTHORIZED` — which surfaces as "Couldn't load shows —
+UNAUTHORIZED" on the Shows screen and breaks every flow that loads
+data (e.g. `show-card-row-0` never appears). The sign-in step still
+"passes" because E2E mode loads the baked-in session locally without
+validating it. When that happens, re-mint and update the two repo
+secrets. On a host with the e2e `DATABASE_URL` + `AUTH_SECRET`:
+
+```bash
+AUTH_SECRET=... DATABASE_URL=postgresql://.../showbook_e2e \
+  pnpm mint:e2e-token --email maestro-e2e@showbook.test
+# prints MAESTRO_E2E_TOKEN=... and MAESTRO_E2E_USER_JSON=...
+```
+
+The helper (`scripts/mint-e2e-token.mjs`) signs the token exactly like
+`apps/web/lib/mobile-token.ts` (`encodeMobileToken`: same secret +
+`authjs.session-token` salt) and defaults to a 365-day lifetime so the
+CI-only credential doesn't expire mid-PR. Paste both printed values
+into Settings → Secrets and variables → Actions.
 
 All three are inlined at build time, so `loadE2ETestSession` returns
 the bundled session as soon as the user taps "Continue with Google"

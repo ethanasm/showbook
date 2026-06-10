@@ -39,6 +39,7 @@
     "prod:db:migrate": "docker compose --env-file .env.prod -f infra/docker-compose.prod.yml exec web pnpm --filter @showbook/db drizzle-kit migrate",
     "prod:query": "node scripts/prod-query.mjs",
     "db:check-duplicates": "node scripts/check-external-id-duplicates.mjs",
+    "mint:e2e-token": "node scripts/mint-e2e-token.mjs",
     "mobile:start": "pnpm --filter mobile start",
     "mobile:start:dev-client": "pnpm --filter mobile start:dev-client",
     "mobile:start:go": "pnpm --filter mobile start:go",
