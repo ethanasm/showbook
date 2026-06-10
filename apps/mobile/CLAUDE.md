@@ -41,7 +41,7 @@ been fully addressed).
   - `useFormState.ts`, `env.ts`
   - `feedback.ts`, `network.ts`, `theme.ts`, `responsive.ts`,
     `search.ts` (`useDebouncedValue` now lives in `@showbook/shared/hooks`)
-- `e2e/flows/` — Maestro flow YAML (sign-in / add-show / sign-out)
+- `e2e/flows/` — Maestro flow YAML
 
 ## Auth bridge
 
@@ -112,29 +112,43 @@ scope fails CI, and the report identifies which scope fell short.
 
 ## Maestro E2E flows
 
-Three flows live under `e2e/flows/` — sign-in, add-show, sign-out.
-CI sets `EXPO_PUBLIC_E2E_MODE=1` plus the test-session env vars
-directly in the workflow step env (matching the `e2e` profile in
-`eas.json` for parity with local EAS builds):
+The flows live under `e2e/flows/` (sign-in, add-show, sign-out, plus
+the Phase-10 show-detail / setlist / Spotify flows). CI sets
+`EXPO_PUBLIC_E2E_MODE=1` plus the test-session env vars directly in
+the workflow step env (matching the `e2e` profile in `eas.json` for
+parity with local EAS builds):
 
-- `EXPO_PUBLIC_E2E_MODE=1` flips `lib/auth.ts` into bypass mode.
+- `EXPO_PUBLIC_E2E_MODE=1` flips `lib/auth.ts` into bypass mode (and
+  enables the Android cleartext exception for the `10.0.2.2` backend
+  — see the `IS_E2E_BUILD` plugin in `app.config.ts`).
 - `EXPO_PUBLIC_E2E_TEST_TOKEN` is the Showbook JWT for the test user,
-  minted ahead of time against the e2e backend (sourced from the
-  `MAESTRO_E2E_TOKEN` repo secret in CI).
+  minted ahead of time against the e2e backend stack (sourced from
+  the `MAESTRO_E2E_TOKEN` repo secret in CI).
 - `EXPO_PUBLIC_E2E_TEST_USER_JSON` is the JSON-serialised
   `SessionUser` the JWT identifies (from `MAESTRO_E2E_USER_JSON`).
+- `EXPO_PUBLIC_API_URL` (repo secret) is `http://10.0.2.2:3004` — the
+  emulator's alias for the runner host's loopback, where the
+  `showbook-e2e` compose stack listens. The backend the suite talks
+  to is **not prod**: it's `infra/docker-compose.e2e.yml` with its
+  own database, `AUTH_SECRET`, and allowlist. Full runbook in
+  `docs/specs/operations.md` § "Mobile e2e backend".
 
-**Re-minting the token.** The JWT carries an expiry (NextAuth default
-30 days), and the tRPC bearer path rejects an expired / wrong-secret
-token with `UNAUTHORIZED` — which surfaces as "Couldn't load shows —
-UNAUTHORIZED" on the Shows screen and breaks every flow that loads
-data (e.g. `show-card-row-0` never appears). The sign-in step still
-"passes" because E2E mode loads the baked-in session locally without
-validating it. When that happens, re-mint and update the two repo
-secrets. On a host with the e2e `DATABASE_URL` + `AUTH_SECRET`:
+**Re-minting the token.** The tRPC bearer path rejects an expired /
+wrong-secret token with `UNAUTHORIZED` — which surfaces as "Couldn't
+load shows — UNAUTHORIZED" on the Shows screen and breaks every flow
+that loads data (e.g. `show-card-row-0` never appears). The sign-in
+step still "passes" because E2E mode loads the baked-in session
+locally without validating it. **The token must be signed with the
+e2e stack's `AUTH_SECRET` — prod's secret will not work** (and a
+correct-secret token for a user missing from the stack's
+`AUTH_ALLOWED_EMAILS` is also rejected; that variant logs
+`auth.mobile_session_denied` in `docker logs showbook-e2e-web`).
+To re-mint, on the prod box:
 
 ```bash
-AUTH_SECRET=... DATABASE_URL=postgresql://.../showbook_e2e \
+cd /opt/showbook
+set -a; source .env.e2e; set +a
+DATABASE_URL="postgresql://showbook_e2e:${POSTGRES_PASSWORD}@localhost:5435/showbook_e2e" \
   pnpm mint:e2e-token --email maestro-e2e@showbook.test
 # prints MAESTRO_E2E_TOKEN=... and MAESTRO_E2E_USER_JSON=...
 ```

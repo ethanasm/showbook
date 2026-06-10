@@ -52,20 +52,31 @@ jobs:
     #
     # One-time setup the runner still needs (none of which the gate
     # could have detected anyway):
-    #   1. Secrets under Settings → Secrets and variables → Actions:
-    #        - MAESTRO_E2E_TOKEN     (Showbook JWT for the test user)
+    #   1. Bring up the e2e backend stack on the prod box — the
+    #      loopback-only showbook-e2e-web / showbook-e2e-db pair the
+    #      emulator talks to. See docs/specs/operations.md § "Mobile
+    #      e2e backend" for the full runbook (.env.e2e, `pnpm e2e:up`,
+    #      `pnpm e2e:db:migrate`, `pnpm mint:e2e-token`). deploy.yml
+    #      keeps the stack on prod's image after that.
+    #   2. Secrets under Settings → Secrets and variables → Actions:
+    #        - MAESTRO_E2E_TOKEN     (Showbook JWT for the test user,
+    #          minted with the e2e stack's AUTH_SECRET — NOT prod's)
     #        - MAESTRO_E2E_USER_JSON (JSON-serialized SessionUser)
-    #        - EXPO_PUBLIC_API_URL   (full backend URL the APK targets —
-    #          e.g. https://showbook-e2e.your-host.dev). Without it the
-    #          tRPC client builds relative URLs and React Native rejects
-    #          them with "Invalid URL: /api/trpc/...".
+    #        - EXPO_PUBLIC_API_URL   (full backend URL the APK targets.
+    #          For the self-hosted runner this is http://10.0.2.2:3004
+    #          — the Android emulator's alias for the runner host's
+    #          loopback, where showbook-e2e-web listens. The APK build
+    #          allows cleartext for e2e builds only — see the
+    #          IS_E2E_BUILD plugin in apps/mobile/app.config.ts.)
+    #          Without it the tRPC client builds relative URLs and
+    #          React Native rejects them with "Invalid URL: /api/trpc/...".
     #      The first two are inlined into the APK at build time via
     #      EXPO_PUBLIC_E2E_TEST_TOKEN / EXPO_PUBLIC_E2E_TEST_USER_JSON,
     #      so `lib/auth.ts` can sign in without any deeplink seeding
     #      step. No EXPO_TOKEN / MAESTRO_CLOUD_API_KEY needed.
-    #   2. Optional: set repo variable `ANDROID_SDK_ROOT` to the install
+    #   3. Optional: set repo variable `ANDROID_SDK_ROOT` to the install
     #      path on the runner; defaults to /opt/android-sdk.
-    #   3. Run scripts/setup-runner.sh on the prod box (already done if
+    #   4. Run scripts/setup-runner.sh on the prod box (already done if
     #      the runner is up), then scripts/setup-runner-android.sh once
     #      to install Android SDK (incl. build-tools + NDK), create the
     #      e2e AVD, and install Maestro.
