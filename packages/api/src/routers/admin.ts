@@ -10,6 +10,7 @@ import {
 } from '@showbook/db';
 import { findTmVenueId } from '../venue-matcher';
 import { geocodeVenue } from '../geocode';
+import { isVenuePlaceholder } from '@showbook/shared';
 import { enforceRateLimit } from '../rate-limit';
 import { isAdminEmail } from '../admin';
 import {
@@ -37,6 +38,12 @@ const log = child({ component: 'api.admin' });
 // rate limit is defense in depth: it caps how often an admin can torch the
 // API budget, even by accident from a stuck dev tool.
 const BACKFILL_RATE_LIMIT = { max: 4, windowMs: 60 * 60 * 1000 } as const;
+
+// Per-row location edit is far cheaper than the global backfills (one row,
+// at most one geocode call) so it gets a looser ceiling — enough to fix a
+// handful of Gmail-imported venues in one sitting without letting a stuck
+// client hammer the geocoder.
+const LOCATION_EDIT_RATE_LIMIT = { max: 30, windowMs: 60 * 60 * 1000 } as const;
 
 export const adminRouter = router({
   /**
@@ -86,6 +93,115 @@ export const adminRouter = router({
         'Canonical venue name updated by admin',
       );
       return { id: updated.id, name: updated.name };
+    }),
+
+  /**
+   * Edit a venue's CANONICAL location — the shared `venues.city`,
+   * `stateRegion`, and `country` every user sees. This is the operator
+   * escape hatch for a venue whose city came in as the literal "Unknown"
+   * (Gmail / free-text / festival-poster imports default to it when the
+   * source carried no city), which nothing else can fix: the coordinate
+   * and Ticketmaster backfills both *skip* `city = 'Unknown'` rows, so an
+   * unknown-city venue is otherwise stuck forever.
+   *
+   * When the corrected city is real and the venue still has no
+   * coordinates, we opportunistically geocode so it lands on the map and
+   * picks up a Place-backed region — best effort, a geocode miss/throw
+   * still persists the city the admin typed.
+   */
+  updateVenueLocation: adminProcedure
+    .input(
+      z.object({
+        venueId: z.string().uuid(),
+        city: z.string().trim().min(1).max(200),
+        stateRegion: z.string().trim().max(200).nullish(),
+        country: z.string().trim().min(1).max(120),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      enforceRateLimit(
+        `admin.update_venue_location:${userId}`,
+        LOCATION_EDIT_RATE_LIMIT,
+      );
+
+      const city = input.city.trim();
+      const country = input.country.trim();
+      const stateRegion = input.stateRegion?.trim() || null;
+
+      const [existing] = await ctx.db
+        .select()
+        .from(venues)
+        .where(eq(venues.id, input.venueId))
+        .limit(1);
+      if (!existing) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Venue not found' });
+      }
+
+      const updates: {
+        city: string;
+        stateRegion: string | null;
+        country: string;
+        latitude?: number;
+        longitude?: number;
+      } = { city, stateRegion, country };
+
+      // Only reach for the geocoder when we now have a real city but no
+      // coordinates — fixing "Unknown" is exactly the case that unblocks
+      // a map pin. Failures are swallowed so the city edit always lands.
+      let geocoded = false;
+      if (existing.latitude == null && !isVenuePlaceholder(city)) {
+        try {
+          const geo = await geocodeVenue(existing.name, city, stateRegion);
+          if (geo) {
+            updates.latitude = geo.lat;
+            updates.longitude = geo.lng;
+            if (!stateRegion && geo.stateRegion) {
+              updates.stateRegion = geo.stateRegion;
+            }
+            geocoded = true;
+          }
+        } catch (err) {
+          log.warn(
+            {
+              err,
+              event: 'admin.venue.location_geocode_failed',
+              userId,
+              venueId: input.venueId,
+            },
+            'Geocode after venue location edit failed; persisting city anyway',
+          );
+        }
+      }
+
+      const [updated] = await ctx.db
+        .update(venues)
+        .set(updates)
+        .where(eq(venues.id, input.venueId))
+        .returning();
+      if (!updated) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Venue not found' });
+      }
+
+      log.info(
+        {
+          event: 'admin.venue.location_updated',
+          userId,
+          venueId: input.venueId,
+          geocoded,
+        },
+        'Canonical venue location updated by admin',
+      );
+
+      return {
+        id: updated.id,
+        city: updated.city,
+        stateRegion: updated.stateRegion,
+        country: updated.country,
+        latitude: updated.latitude,
+        longitude: updated.longitude,
+        geocoded,
+      };
     }),
 
   /**

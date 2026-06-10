@@ -43,6 +43,7 @@ import { KindBadge } from '../../components/KindBadge';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { MediaGrid, type MediaGridItem } from '../../components/MediaGrid';
 import { RenameVenueSheet } from '../../components/RenameVenueSheet';
+import { EditVenueLocationSheet } from '../../components/EditVenueLocationSheet';
 import { GoogleMapsMark, TicketmasterMark } from '../../components/BrandIcons';
 import { UpcomingAnnouncementActionSheet } from '../../components/UpcomingAnnouncementActionSheet';
 import { buildGoogleMapsOpenPlan } from '@/lib/google-maps-deep-link';
@@ -50,7 +51,7 @@ import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { hapticSelection, hapticImpactMedium } from '@/lib/haptics';
-import { isNonWatchableKind } from '@showbook/shared';
+import { isNonWatchableKind, formatVenueLocation } from '@showbook/shared';
 import { useAuth } from '@/lib/auth';
 import { trpc, type RouterOutput } from '@/lib/trpc';
 import { useCachedQuery } from '@/lib/cache';
@@ -298,9 +299,11 @@ function Hero({
   const { colors } = tokens;
   const { token } = useAuth();
   const source = venueImageSource(venue, token);
-  const location = [venue.city, venue.stateRegion, venue.country]
-    .filter((p): p is string => Boolean(p))
-    .join(', ');
+  const location = formatVenueLocation({
+    city: venue.city,
+    stateRegion: venue.stateRegion,
+    country: venue.country,
+  });
   const summary = [
     venue.userShowCount > 0
       ? `${venue.userShowCount} show${venue.userShowCount === 1 ? '' : 's'}`
@@ -330,6 +333,12 @@ function Hero({
     void hapticImpactMedium();
     setRenameOpen(true);
   }, [canRename]);
+
+  const [locationOpen, setLocationOpen] = React.useState(false);
+  const openLocation = React.useCallback(() => {
+    void hapticImpactMedium();
+    setLocationOpen(true);
+  }, []);
 
   return (
     <View style={styles.heroWrap}>
@@ -382,6 +391,25 @@ function Hero({
             <Text style={[styles.heroLocationText, { color: colors.muted }]}>{location}</Text>
           </View>
         ) : null}
+        {amIAdmin ? (
+          <Pressable
+            onPress={openLocation}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Edit venue location for everyone"
+            testID="venue-edit-location-button"
+            style={({ pressed }) => [
+              styles.heroEditLocation,
+              pressed && { opacity: 0.6 },
+            ]}
+          >
+            <Text style={[styles.heroEditLocationText, { color: colors.accent }]}>
+              {location
+                ? 'admin · edit location'
+                : 'admin · location missing · add city'}
+            </Text>
+          </Pressable>
+        ) : null}
         {summary ? <Text style={[styles.heroSummary, { color: colors.muted }]}>{summary}</Text> : null}
         <View style={styles.heroActions}>
           <FollowVenueButton venueId={venueId} isFollowed={venue.isFollowed} />
@@ -396,6 +424,16 @@ function Hero({
           currentName={venue.name}
           canonicalName={venue.canonicalName}
           isAdmin={amIAdmin}
+        />
+      ) : null}
+      {amIAdmin ? (
+        <EditVenueLocationSheet
+          open={locationOpen}
+          onClose={() => setLocationOpen(false)}
+          venueId={venueId}
+          city={venue.city}
+          stateRegion={venue.stateRegion}
+          country={venue.country}
         />
       ) : null}
     </View>
@@ -931,6 +969,15 @@ const styles = StyleSheet.create({
   heroLocationText: {
     fontFamily: 'Geist Sans 400',
     fontSize: 13,
+  },
+  heroEditLocation: {
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  heroEditLocationText: {
+    fontFamily: 'Geist Mono',
+    fontSize: 11,
+    letterSpacing: 0.2,
   },
   heroSummary: {
     fontFamily: 'Geist Sans 400',
