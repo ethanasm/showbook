@@ -674,7 +674,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                     href={`/shows/${s.id}`}
                     style={{ color: "var(--ink)", textDecoration: "none" }}
                   >
-                    {s.showPerformers?.[0]?.performer?.name ?? s.productionName ?? "Untitled"}
+                    {getHeadliner(s)}
                   </Link>
                   {i < dateTbdShows.length - 1 ? " · " : ""}
                 </span>
