@@ -574,6 +574,94 @@ export default function DiscoverScreen(): React.JSX.Element {
   const remainingCount = Math.max(0, filterCount - visibleItems.length);
   const hasMore = remainingCount > 0;
 
+  // True once we're past the loading / empty / error / offline gates and
+  // actually rendering the feed. Drives the fixed summary bar (rendered
+  // outside the ScrollView so the "N upcoming" count stays pinned) and the
+  // sticky region subheaders inside it.
+  const showContent = !showOfflineEmpty && !isLoading && !isErrored && !isEmpty;
+
+  // Whether the regions feed is showing its grouped (all-regions) view —
+  // the only place sticky subheaders apply. A selected region / venue or a
+  // non-regions tab renders the flat list with no per-group headers.
+  const isRegionGrouped =
+    showContent && tab === 'regions' && !selectedGroupId && filterCount > 0;
+
+  // Build the scrollable feed body. The regions-grouped view emits a flat
+  // sequence of [header, rows, header, rows, …] so the region subheaders can
+  // be pinned via the ScrollView's `stickyHeaderIndices`: each header stays
+  // put until the next one scrolls up to take its place (the iOS
+  // section-header behaviour the user asked for). Every other view renders a
+  // single body node with no sticky headers.
+  let scrollBody: React.ReactNode = null;
+  let stickyHeaderIndices: number[] | undefined;
+  if (showContent) {
+    if (filterCount === 0) {
+      scrollBody = (
+        <View style={styles.inlineEmpty}>
+          <Text style={[styles.inlineEmptyText, { color: colors.muted }]}>
+            {ingestPolling.isPolling
+              ? 'Hang tight — pulling in shows for what you just followed.'
+              : 'No upcoming announcements yet. New ones land here automatically.'}
+          </Text>
+        </View>
+      );
+    } else if (isRegionGrouped) {
+      const built = buildRegionGroupedNodes({
+        items: visibleItems as NearbyAnnouncementItem[],
+        groups: groupList,
+        watchedSet,
+        onToggleWatch,
+        compact,
+        bg: colors.bg,
+        ink: colors.ink,
+        muted: colors.muted,
+        rule: colors.rule,
+      });
+      const nodes = built.nodes;
+      if (hasMore) {
+        nodes.push(
+          <LoadMoreButton
+            key="load-more"
+            remaining={remainingCount}
+            pageSize={PAGE_SIZE}
+            onPress={() => {
+              hapticSelection();
+              setVisibleCount((c) => c + PAGE_SIZE);
+            }}
+          />,
+        );
+      }
+      scrollBody = nodes;
+      stickyHeaderIndices = built.stickyIndices;
+    } else {
+      scrollBody = (
+        <>
+          <View style={[styles.list, compact && styles.listCompact]}>
+            {visibleItems.map((item) => (
+              <AnnouncementRow
+                key={item.id}
+                item={item}
+                isWatching={watchedSet.has(item.id)}
+                onToggleWatch={onToggleWatch}
+                compact={compact}
+              />
+            ))}
+          </View>
+          {hasMore && (
+            <LoadMoreButton
+              remaining={remainingCount}
+              pageSize={PAGE_SIZE}
+              onPress={() => {
+                hapticSelection();
+                setVisibleCount((c) => c + PAGE_SIZE);
+              }}
+            />
+          )}
+        </>
+      );
+    }
+  }
+
   // Long-press a chip → open the unfollow sheet for that group. The "All"
   // chip and the leading "+" action don't get this affordance (handled in
   // FilterChipsRow, which only wires onLongPress to per-group chips).
@@ -800,6 +888,34 @@ export default function DiscoverScreen(): React.JSX.Element {
           />
         )}
 
+      {/* Fixed summary bar. Lives outside the ScrollView so the "N
+          upcoming" count + refresh status stay pinned in place while the
+          feed scrolls underneath. */}
+      {showContent && (
+        <View style={styles.summaryRow}>
+          <SummaryIcon tab={tab} color={colors.muted} />
+          <Text style={[styles.summaryText, { color: colors.muted }]}>
+            {filterCount} upcoming ·{' '}
+            {ingestPolling.isPolling
+              ? 'discovering more shows…'
+              : isBackgroundRefetching
+                ? 'updating…'
+                : 'pull to refresh'}
+          </Text>
+          {(ingestPolling.isPolling || isBackgroundRefetching) && (
+            <ActivityIndicator
+              size="small"
+              color={colors.muted}
+              style={styles.summarySpinner}
+              testID="discover-ingest-spinner"
+              accessibilityLabel={
+                ingestPolling.isPolling ? 'Discovering more shows' : 'Updating'
+              }
+            />
+          )}
+        </View>
+      )}
+
       <ScrollView
         contentContainerStyle={
           isLoading || isEmpty || showOfflineEmpty
@@ -807,6 +923,7 @@ export default function DiscoverScreen(): React.JSX.Element {
             : styles.scrollContent
         }
         refreshControl={refreshControl}
+        stickyHeaderIndices={stickyHeaderIndices}
       >
         {showOfflineEmpty ? (
           <OfflineEmptyState
@@ -839,71 +956,7 @@ export default function DiscoverScreen(): React.JSX.Element {
             onOpenAdd={(t) => setAddSheetTab(t)}
           />
         ) : (
-          <>
-            <View style={styles.summaryRow}>
-              <SummaryIcon tab={tab} color={colors.muted} />
-              <Text style={[styles.summaryText, { color: colors.muted }]}>
-                {filterCount} upcoming ·{' '}
-                {ingestPolling.isPolling
-                  ? 'discovering more shows…'
-                  : isBackgroundRefetching
-                    ? 'updating…'
-                    : 'pull to refresh'}
-              </Text>
-              {(ingestPolling.isPolling || isBackgroundRefetching) && (
-                <ActivityIndicator
-                  size="small"
-                  color={colors.muted}
-                  style={styles.summarySpinner}
-                  testID="discover-ingest-spinner"
-                  accessibilityLabel={
-                    ingestPolling.isPolling
-                      ? 'Discovering more shows'
-                      : 'Updating'
-                  }
-                />
-              )}
-            </View>
-            {filterCount === 0 ? (
-              <View style={styles.inlineEmpty}>
-                <Text style={[styles.inlineEmptyText, { color: colors.muted }]}>
-                  {ingestPolling.isPolling
-                    ? 'Hang tight — pulling in shows for what you just followed.'
-                    : 'No upcoming announcements yet. New ones land here automatically.'}
-                </Text>
-              </View>
-            ) : tab === 'regions' && !selectedGroupId ? (
-              <RegionGroupedList
-                items={visibleItems as NearbyAnnouncementItem[]}
-                groups={groupList}
-                watchedSet={watchedSet}
-                onToggleWatch={onToggleWatch}
-                compact={compact}
-              />
-            ) : (
-              <View style={[styles.list, compact && styles.listCompact]}>
-                {visibleItems.map((item) => (
-                  <AnnouncementRow
-                    key={item.id}
-                    item={item}
-                    isWatching={watchedSet.has(item.id)}
-                    onToggleWatch={onToggleWatch}
-                    compact={compact}
-                  />
-                ))}
-              </View>
-            )}
-            {hasMore && (
-              <LoadMoreButton
-                remaining={remainingCount}
-                pageSize={PAGE_SIZE}
-                onPress={() => {
-                  hapticSelection();
-                  setVisibleCount((c) => c + PAGE_SIZE);
-                }}
-              />
-            )}
-          </>
+          scrollBody
         )}
       </ScrollView>
     </ScreenWrapper>
@@ -963,67 +1016,91 @@ function LoadMoreButton({
   );
 }
 
-function RegionGroupedList({
+/**
+ * Build the regions-grouped feed as a flat sequence of direct ScrollView
+ * children — `[header, rows, header, rows, …]` — alongside the indices of
+ * the header nodes. The caller hands those indices to the ScrollView's
+ * `stickyHeaderIndices` so each region subheader pins to the top of the
+ * feed and stays there until the next subheader scrolls up to replace it.
+ *
+ * Returning flat nodes (rather than the nested `<View>` per group the
+ * earlier `RegionGroupedList` used) is load-bearing: `stickyHeaderIndices`
+ * only sees the ScrollView's *direct* children, so the headers can't be
+ * wrapped in a per-group container if they're to stick.
+ */
+function buildRegionGroupedNodes({
   items,
   groups,
   watchedSet,
   onToggleWatch,
   compact,
+  bg,
+  ink,
+  muted,
+  rule,
 }: {
   items: NearbyAnnouncementItem[];
   groups: FilterGroup[];
   watchedSet: Set<string>;
   onToggleWatch: WatchToggle;
   compact?: boolean;
-}): React.JSX.Element {
-  const { tokens } = useTheme();
-  const { colors } = tokens;
+  bg: string;
+  ink: string;
+  muted: string;
+  rule: string;
+}): { nodes: React.ReactNode[]; stickyIndices: number[] } {
   // Bucket items by region id; preserve the group order from the chip list
   // (which is count-desc) so the densest region floats to the top.
-  const buckets = React.useMemo(() => {
-    const map = new Map<string, NearbyAnnouncementItem[]>();
-    for (const item of items) {
-      const key = item.regionId ?? '__unknown';
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(item);
-    }
-    return map;
-  }, [items]);
+  const buckets = new Map<string, NearbyAnnouncementItem[]>();
+  for (const item of items) {
+    const key = item.regionId ?? '__unknown';
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key)!.push(item);
+  }
 
   const orderedGroups = groups.filter((g) => buckets.has(g.id));
+  const nodes: React.ReactNode[] = [];
+  const stickyIndices: number[] = [];
 
-  return (
-    <View style={[styles.list, compact && styles.listCompact]}>
-      {orderedGroups.map((g) => {
-        const groupItems = buckets.get(g.id) ?? [];
-        return (
-          <View
-            key={g.id}
-            style={[styles.regionGroup, compact && styles.regionGroupCompact]}
-          >
-            <View style={styles.regionHeader}>
-              <Text style={[styles.regionHeaderName, { color: colors.ink }]}>
-                {g.name}
-              </Text>
-              <Text style={[styles.regionHeaderMeta, { color: colors.muted }]}>
-                {g.sublabel ? `${g.sublabel} · ` : ''}
-                {groupItems.length} upcoming
-              </Text>
-            </View>
-            {groupItems.map((item) => (
-              <AnnouncementRow
-                key={item.id}
-                item={item}
-                isWatching={watchedSet.has(item.id)}
-                onToggleWatch={onToggleWatch}
-                compact={compact}
-              />
-            ))}
-          </View>
-        );
-      })}
-    </View>
-  );
+  for (const g of orderedGroups) {
+    const groupItems = buckets.get(g.id) ?? [];
+    // The header's index in the flat node list is what makes it sticky.
+    stickyIndices.push(nodes.length);
+    nodes.push(
+      <View
+        key={`region-header-${g.id}`}
+        style={[
+          styles.regionHeaderSticky,
+          { backgroundColor: bg, borderBottomColor: rule },
+        ]}
+        testID={`discover-region-header-${g.id}`}
+      >
+        <Text style={[styles.regionHeaderName, { color: ink }]}>{g.name}</Text>
+        <Text style={[styles.regionHeaderMeta, { color: muted }]}>
+          {g.sublabel ? `${g.sublabel} · ` : ''}
+          {groupItems.length} upcoming
+        </Text>
+      </View>,
+    );
+    nodes.push(
+      <View
+        key={`region-rows-${g.id}`}
+        style={[styles.regionRows, compact && styles.regionRowsCompact]}
+      >
+        {groupItems.map((item) => (
+          <AnnouncementRow
+            key={item.id}
+            item={item}
+            isWatching={watchedSet.has(item.id)}
+            onToggleWatch={onToggleWatch}
+            compact={compact}
+          />
+        ))}
+      </View>,
+    );
+  }
+
+  return { nodes, stickyIndices };
 }
 
 function SummaryIcon({
@@ -1598,15 +1675,24 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     letterSpacing: 0.4,
   },
-  regionGroup: {
-    gap: 10,
-  },
-  regionHeader: {
+  // Sticky region subheader. Needs an opaque background (set inline from
+  // the theme) so feed rows scrolling underneath the pinned header don't
+  // bleed through, plus a hairline bottom rule so the pinned bar reads as
+  // a divider against the rows below it.
+  regionHeaderSticky: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
-    paddingTop: 6,
-    paddingBottom: 2,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  regionRows: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 14,
+    gap: 10,
   },
   regionHeaderName: {
     fontFamily: 'Geist Sans 600',
@@ -1668,7 +1754,10 @@ const styles = StyleSheet.create({
   listCompact: {
     gap: 0,
   },
-  regionGroupCompact: {
+  // Compact regions feed: collapse the inter-row gap so rows read as one
+  // continuous ruled list (each compact row supplies its own bottom rule).
+  regionRowsCompact: {
+    paddingTop: 6,
     gap: 0,
   },
   stateBar: {
