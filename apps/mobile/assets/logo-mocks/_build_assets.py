@@ -5,6 +5,7 @@ Produces:
   apps/mobile/assets/adaptive-icon.png 1024×1024  foreground only (transparent)
   apps/mobile/assets/favicon.png       48×48      downscaled master
   apps/mobile/assets/splash.png        1284×2778  ticket + wordmark centered
+  apps/mobile/assets/splash-blank.png  200×200    fully transparent (Android native splash)
   apps/web/public/showbook-mark.svg    inline SVG for web UI (no bg, no shadow)
   apps/web/app/icon.svg                32×32 favicon-style SVG for next/icon
 
@@ -115,6 +116,23 @@ def make_splash(svg_xml: str) -> None:
     print(f"  wrote {out.relative_to(REPO_ROOT)}")
 
 
+def make_splash_blank() -> None:
+    """200×200 fully transparent PNG used as the *Android* native splash image.
+
+    The Android 12+ system splash renders the splash drawable circle-masked at
+    a fixed OS icon size — always smaller than the 200dp JS <BrandSplash/>, so
+    any visible mark here produces the cold-launch "small icon → normal icon"
+    pop. The image can't simply be omitted either: expo-splash-screen's
+    withAndroidSplashStyles unconditionally references
+    @drawable/splashscreen_logo and the release build fails without it. Hence:
+    a transparent image. See the expo-splash-screen plugin block in
+    app.config.ts."""
+    img = Image.new("RGBA", (200, 200), (0, 0, 0, 0))
+    out = MOBILE_ASSETS / "splash-blank.png"
+    img.save(out, "PNG", optimize=True)
+    print(f"  wrote {out.relative_to(REPO_ROOT)}")
+
+
 def make_inline_mark_svg(svg_xml: str) -> None:
     """Simplified mark for in-UI use — same silhouette, solid gold (no
     gradient/shadow/highlight). Renders crisply at 16-48 px. The S retains the
@@ -170,6 +188,7 @@ def main() -> None:
     make_adaptive_icon(svg_xml)
     make_favicon(svg_xml)
     make_splash(svg_xml)
+    make_splash_blank()
     make_inline_mark_svg(svg_xml)
     print("done.")
 

@@ -5,7 +5,9 @@ import type { ExpoConfig } from 'expo/config';
 // baked in; adaptive-icon.png is the same foreground on transparent so
 // Android can composite it over the bg color below; splash.png is a
 // 1080×1180 tightly-framed mark rendered as a centered logo (sized via
-// the splash plugin's `imageWidth` below), not a full-bleed background.
+// the splash plugin's `imageWidth` below), not a full-bleed background —
+// iOS only. The Android native splash uses splash-blank.png (fully
+// transparent) instead; see the expo-splash-screen plugin block for why.
 // The source SVG + render script live under `assets/logo-mocks/` so the
 // masters stay revisable.
 //
@@ -173,22 +175,40 @@ const config: ExpoConfig = {
     [
       'expo-splash-screen',
       {
-        // splash.png is a *tightly-framed* gold-on-black brand mark (ticket +
-        // "showbook" wordmark + tagline filling the canvas — see
-        // assets/logo-mocks/_build_assets.py make_splash). expo-splash-screen
-        // renders `image` as a centered logo sized by `imageWidth` (dp) and
-        // centered on `backgroundColor` — NOT full-bleed. `imageWidth` keeps
-        // the mark a moderate, centered size (~half a phone's width); do NOT
-        // add `enableFullScreenImage_legacy` — it forces iOS into full-screen
-        // aspect-fit, which blows the logo up to the full width.
+        // The native splash is split per platform because the two OSes render
+        // it in irreconcilable ways:
         //
-        // `image` MUST stay set. withAndroidSplashStyles unconditionally emits
+        // iOS — the storyboard lays `image` into an `imageWidth × imageWidth`
+        // aspect-fit box, centered. With imageWidth matching the JS
+        // <BrandSplash/> box (SPLASH_IMAGE_WIDTH in lib/splash.ts), the
+        // native→JS handoff is pixel-identical, so iOS keeps the real logo.
+        // Don't add `enableFullScreenImage_legacy` — it forces full-screen
+        // aspect-fit, blowing the logo up to the full width.
+        //
+        // Android 12+ — the OS system splash ignores `imageWidth` entirely: it
+        // renders `windowSplashScreenAnimatedIcon` circle-masked at the fixed
+        // OS icon size, always smaller than the 200dp JS splash. That size
+        // CANNOT be configured, so a logo here is what produced the
+        // "small icon → normal icon" pop on every cold launch (the thing
+        // #506/#516/#517/#523/#533/#539 kept circling). The only way to kill
+        // it is to give Android NO visible mark: `android.image` points at a
+        // fully transparent png, so the native splash is plain #0C0C0C and the
+        // first visible mark is the correctly-sized <BrandSplash/>.
+        //
+        // `android.image` MUST stay set (transparent, not absent):
+        // withAndroidSplashStyles unconditionally emits
         // `windowSplashScreenAnimatedIcon -> @drawable/splashscreen_logo`, but
-        // that drawable is only generated when an image is present — an
-        // image-less config fails the release Android build at
+        // the drawable is only generated when an image is present — the
+        // image-less config #533 shipped fails the release Android build at
         // `processReleaseResources` ("resource drawable/splashscreen_logo not
-        // found"). To make the splash blank, point at a blank image; don't drop
-        // the key.
+        // found"). #539 fixed that build break by restoring splash.png on both
+        // platforms, which silently regressed the pop; the blank image is the
+        // fix its own comment prescribed. Both invariants are pinned by
+        // lib/__tests__/splash.test.ts.
+        //
+        // splash.png is the tightly-framed gold-on-black brand mark;
+        // splash-blank.png is a 200×200 fully transparent png (see
+        // assets/logo-mocks/_build_assets.py).
         image: './assets/splash.png',
         // Keep in sync with SPLASH_IMAGE_WIDTH in lib/splash.ts (BrandSplash's
         // box) — app.config.ts can't import it (the Expo config loader doesn't
@@ -206,6 +226,17 @@ const config: ExpoConfig = {
           imageWidth: 200, // keep in sync with SPLASH_IMAGE_WIDTH (see above)
           backgroundColor: '#0C0C0C',
           resizeMode: 'contain',
+        },
+        // Android override: transparent icon → plain-black system splash (see
+        // the block comment above). The plugin merges this over the root
+        // config per-key (`{...root, ...android, dark: {...root.dark,
+        // ...android.dark}}`), so `dark.image` must ALSO be overridden here or
+        // dark mode inherits the root logo and the pop comes back at night.
+        android: {
+          image: './assets/splash-blank.png',
+          dark: {
+            image: './assets/splash-blank.png',
+          },
         },
       },
     ],

@@ -83,11 +83,13 @@ export default function RootLayout(): React.JSX.Element {
   React.useEffect(() => {
     let cancelled = false;
     // Dismiss the native splash as soon as JS is mounted and hand off to the
-    // full-screen <BrandSplash/> below. The native splash on Android 12+ can
-    // only render a small circle-masked icon, so we keep it up for the
-    // shortest possible window and let our own splash be the readable logo +
-    // wordmark the user actually sees. Both share the #0C0C0C background, so
-    // the swap is seamless.
+    // full-screen <BrandSplash/> below. On Android the native splash is a
+    // plain #0C0C0C screen (its image is the transparent splash-blank.png —
+    // the 12+ system splash can only render an icon small and circle-masked,
+    // see app.config.ts), so BrandSplash is where the mark first appears. On
+    // iOS the native splash already shows the same logo at the same 200dp.
+    // All three surfaces share the #0C0C0C background, so the swap is
+    // seamless.
     SplashScreen.hideAsync().catch(() => undefined);
     const timer = setTimeout(() => {
       if (!cancelled) setMinSplashElapsed(true);

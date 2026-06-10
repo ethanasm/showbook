@@ -3,18 +3,24 @@
  *
  * On cold launch iOS/Android paint a *native* splash first (the storyboard /
  * drawable generated from the `expo-splash-screen` config in app.config.ts),
- * then hand off to JS once React Native has initialised. To make that handoff
- * seamless — no size "pop", no flash — this renders the **same `splash.png`
- * asset** at the **same centered size** as the native splash, on the same
- * #0C0C0C background. expo-splash-screen lays the native image into an
+ * then hand off to JS once React Native has initialised. The handoff is made
+ * seamless per platform:
+ *
+ * iOS — the storyboard renders the same `splash.png` in an
  * `imageWidth × imageWidth` aspect-fit box, centered; this mirrors that with a
  * `SPLASH_IMAGE_WIDTH × SPLASH_IMAGE_WIDTH` `contain` box reading the SAME
  * shared constant (see lib/splash.ts), so the two are pixel-identical and the
- * native→JS transition is invisible. The root layout holds this until fonts
- * are ready (see app/_layout.tsx).
+ * native→JS transition is invisible.
  *
+ * Android — the 12+ system splash can only render its icon small and
+ * circle-masked (no size control), so the native splash carries a transparent
+ * image (`splash-blank.png` in app.config.ts) and shows as plain #0C0C0C.
+ * This component, sharing that background, is then the FIRST place the mark
+ * appears — black → correctly-sized logo, no "small icon → normal icon" pop.
+ *
+ * The root layout holds this until fonts are ready (see app/_layout.tsx).
  * Using the bundled asset (not a redrawn SVG) is deliberate: it guarantees the
- * JS splash matches whatever the native splash shows, and the background color
+ * JS splash matches what the iOS native splash shows, and the background color
  * matches too, so even the frame before the image decodes is the right color.
  */
 
