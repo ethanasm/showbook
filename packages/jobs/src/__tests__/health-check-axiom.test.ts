@@ -24,7 +24,6 @@ function installFetch(handler: (url: string, init: RequestInit) => Response | Pr
 beforeEach(() => {
   delete process.env.AXIOM_QUERY_TOKEN;
   delete process.env.AXIOM_ORG_ID;
-  delete process.env.AXIOM_QUERY_DATASET;
   delete process.env.AXIOM_DATASET;
 });
 
@@ -150,14 +149,8 @@ describe('axiomDataset', () => {
     assert.equal(axiomDataset(), 'showbook-prod');
   });
 
-  it('falls back to AXIOM_DATASET so the name is set in one place', () => {
-    process.env.AXIOM_DATASET = 'showbook-prod';
-    assert.equal(axiomDataset(), 'showbook-prod');
-  });
-
-  it('prefers AXIOM_QUERY_DATASET as an explicit read override', () => {
-    process.env.AXIOM_DATASET = 'showbook-prod';
-    process.env.AXIOM_QUERY_DATASET = 'some-other-dataset';
+  it('reads AXIOM_DATASET so the name is set in one place', () => {
+    process.env.AXIOM_DATASET = 'some-other-dataset';
     assert.equal(axiomDataset(), 'some-other-dataset');
   });
 });

@@ -65,10 +65,9 @@ new — its context keys fold into `fields`, and it never logs `Error` objects.
 
 ### Read side
 
-`packages/jobs/src/health-check/axiom.ts` `axiomDataset()` now resolves
-`AXIOM_QUERY_DATASET ?? AXIOM_DATASET ?? 'showbook-prod'`, so the dataset name is
-set once via `AXIOM_DATASET`; `AXIOM_QUERY_DATASET` remains an optional
-override for reading a different dataset.
+`packages/jobs/src/health-check/axiom.ts` `axiomDataset()` resolves
+`AXIOM_DATASET ?? 'showbook-prod'` — it reads the same dataset prod ships to,
+so the name lives in exactly one env var.
 
 ### Querying folded fields
 
@@ -128,9 +127,9 @@ sub-keys count against the cap) and the design silently fails.
    ```
    AXIOM_DATASET=showbook-prod
    ```
-   Remove `AXIOM_MOBILE_DATASET` (no longer read). `AXIOM_QUERY_DATASET` can
-   also be removed — it now defaults to `AXIOM_DATASET`. These live **only in
-   `.env.prod`** (dev never ships to Axiom; CI doesn't ship logs). Then
+   Remove `AXIOM_MOBILE_DATASET` and `AXIOM_QUERY_DATASET` (neither is read
+   any more — the health-check cron reads `AXIOM_DATASET`). These live **only
+   in `.env.prod`** (dev never ships to Axiom; CI doesn't ship logs). Then
    `pnpm prod:up` to reload and confirm the values inside the container.
 
 5. **Repoint the read side.** Health-check cron default is now `showbook-prod`

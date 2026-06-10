@@ -11,15 +11,12 @@ const REQUEST_TIMEOUT_MS = 15_000;
  * The Axiom dataset the health-check queries read from. Callers embed
  * this in the APL `[...]` source selector (the dataset is part of the
  * query text, not a request parameter), so this is the single source of
- * truth for "which dataset do we read". Defaults to the same dataset prod
- * ships logs to (`AXIOM_DATASET`); `AXIOM_QUERY_DATASET` is an optional
- * override for reading a different dataset without a code change. See
+ * truth for "which dataset do we read". Reads the same `AXIOM_DATASET`
+ * the prod app ships logs to, so there's one place to set the name. See
  * `docs/specs/operations/axiom-map-fields.md`.
  */
 export function axiomDataset(): string {
-  return (
-    process.env.AXIOM_QUERY_DATASET ?? process.env.AXIOM_DATASET ?? DEFAULT_DATASET
-  );
+  return process.env.AXIOM_DATASET ?? DEFAULT_DATASET;
 }
 
 export interface AxiomQueryConfig {
@@ -27,7 +24,7 @@ export interface AxiomQueryConfig {
   token?: string;
   /** Defaults to `AXIOM_ORG_ID` env or `showbook-egap`. */
   orgId?: string;
-  /** Defaults to `AXIOM_QUERY_DATASET` env, then `AXIOM_DATASET`, then `showbook-prod`. */
+  /** Defaults to `AXIOM_DATASET` env, then `showbook-prod`. */
   dataset?: string;
 }
 
