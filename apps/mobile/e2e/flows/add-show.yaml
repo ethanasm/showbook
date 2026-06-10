@@ -64,7 +64,7 @@ tags:
     text: "New show"
 
 - tapOn:
-    id: "headliner-input"
+    id: "title-input"
 - inputText: "Maestro Test Headliner"
 
 - tapOn:
