@@ -56,6 +56,35 @@ export function reportClientEvent(payload: ClientEventPayload): void {
 }
 
 /**
+ * Throttle gate for UNAUTHORIZED tRPC relays.
+ *
+ * A stale/expired bearer token 401s EVERY query the app fires — screens,
+ * retries, and the ~30-step cache warm-up walker. Relaying each one
+ * through `telemetry.logEvent` flooded Axiom with 139 error-level
+ * `mobile.trpc.error` rows in a single 8-minute session (2026-06-10),
+ * polluting the `error_volume` morning health gauge. The server already
+ * logs every 401 per-path as a `trpc.error` warn, so the client-side
+ * relay only needs to carry the "this device is stuck with a dead
+ * token" signal — once per cooldown window, not once per query.
+ *
+ * Returns true (and arms the cooldown) for the first call; false for
+ * every call within the next `UNAUTHORIZED_REPORT_COOLDOWN_MS`.
+ */
+const UNAUTHORIZED_REPORT_COOLDOWN_MS = 5 * 60_000;
+let lastUnauthorizedReportAt: number | null = null;
+
+export function shouldReportUnauthorized(now: number = Date.now()): boolean {
+  if (
+    lastUnauthorizedReportAt !== null &&
+    now - lastUnauthorizedReportAt < UNAUTHORIZED_REPORT_COOLDOWN_MS
+  ) {
+    return false;
+  }
+  lastUnauthorizedReportAt = now;
+  return true;
+}
+
+/**
  * Coerce an arbitrary thrown value into a short, readable message
  * suitable for the `message` field (clipped at 2000 chars on the
  * server). Non-Error values are stringified with a fallback.
@@ -73,4 +102,5 @@ export function describeError(err: unknown): string {
 /** Test-only — reset module state between tests. */
 export function __resetTelemetryForTests(): void {
   logger = null;
+  lastUnauthorizedReportAt = null;
 }

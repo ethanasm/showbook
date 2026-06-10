@@ -47,6 +47,8 @@ interface BuildClientOptions {
   performersFollowed?: unknown;
   /** Procedure paths (e.g. 'shows.detail') that should reject. */
   reject?: ReadonlySet<string>;
+  /** Procedure paths that should reject with a TRPCClientError-shaped 401. */
+  reject401?: ReadonlySet<string>;
   tracker?: InFlightTracker;
   /** Optional artificial latency per call so concurrency can be observed. */
   delayMs?: number;
@@ -58,6 +60,7 @@ function buildClient(opts: BuildClientOptions = {}): {
 } {
   const calls: CallLog[] = [];
   const reject = opts.reject ?? new Set<string>();
+  const reject401 = opts.reject401 ?? new Set<string>();
   const tracker = opts.tracker;
   const delay = opts.delayMs ?? 0;
 
@@ -71,6 +74,13 @@ function buildClient(opts: BuildClientOptions = {}): {
       if (delay > 0) await new Promise((r) => setTimeout(r, delay));
       if (reject.has(procedure)) {
         throw new Error(`${procedure} failed`);
+      }
+      if (reject401.has(procedure)) {
+        // Mirror the TRPCClientError shape the vanilla client throws on a
+        // 401 — `data.code` / `data.httpStatus` alongside the message.
+        throw Object.assign(new Error('UNAUTHORIZED'), {
+          data: { code: 'UNAUTHORIZED', httpStatus: 401 },
+        });
       }
       return payload;
     } finally {
@@ -312,6 +322,69 @@ describe('warmCacheForOfflineUse', () => {
     assert.ok(result.failures[0]?.message.includes('venues.list failed'));
     // Other steps still ran and succeeded.
     assert.ok(result.succeeded >= 9);
+  });
+
+  it('aborts the walk on the first UNAUTHORIZED failure', async () => {
+    // A dead bearer token 401s every request — the walker must stop after
+    // the first one instead of firing ~30 doomed queries that each land a
+    // `trpc.error` warn in Axiom (the 2026-06-10 flood).
+    const { client, calls } = buildClient({
+      showsList: [{ id: 's1', state: 'past' }],
+      reject401: new Set(['shows.list']),
+    });
+    const qc = new QueryClient();
+    const result = await warmCacheForOfflineUse({
+      client,
+      queryClient: qc,
+      skipReplay: true,
+    });
+
+    // Only the first step fired; everything downstream short-circuited.
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.procedure, 'shows.list');
+    assert.equal(result.aborted, true);
+    assert.equal(result.failed, 1);
+    assert.equal(result.failures[0]?.label, 'shows.list');
+    // No last-synced stamp — the cache wasn't refreshed, so the 6h
+    // foreground gate must retry after the user signs back in.
+    assert.equal(readLastWarmup(qc), null);
+  });
+
+  it('a mid-walk 401 stops the remaining steps but keeps earlier results', async () => {
+    const { client, calls } = buildClient({
+      showsList: [{ id: 's1', state: 'ticketed' }],
+      reject401: new Set(['venues.followed']),
+    });
+    const qc = new QueryClient();
+    const result = await warmCacheForOfflineUse({
+      client,
+      queryClient: qc,
+      skipReplay: true,
+    });
+
+    // Steps before the 401 ran and their payloads stayed cached.
+    assert.deepEqual(qc.getQueryData(['mobile', 'venues', 'list']), []);
+    // Steps after the 401 never fired (phase 1 tail + all fan-out).
+    const fired = new Set(calls.map((c) => c.procedure));
+    assert.ok(!fired.has('preferences.get'));
+    assert.ok(!fired.has('shows.detail'));
+    assert.equal(result.aborted, true);
+  });
+
+  it('a non-401 failure does not abort the walk', async () => {
+    const { client, calls } = buildClient({
+      reject: new Set(['venues.list']),
+    });
+    const qc = new QueryClient();
+    const result = await warmCacheForOfflineUse({
+      client,
+      queryClient: qc,
+      skipReplay: true,
+    });
+    assert.notEqual(result.aborted, true);
+    const fired = new Set(calls.map((c) => c.procedure));
+    assert.ok(fired.has('preferences.get'), 'walk continued past the failure');
+    assert.ok(readLastWarmup(qc) !== null, 'lastWarmupAt still written');
   });
 
   it('writes lastWarmupAt on completion', async () => {

@@ -147,6 +147,13 @@ export interface WarmupResult {
   succeeded: number;
   failed: number;
   failures: WarmupFailure[];
+  /**
+   * True when the walk stopped early because a step failed UNAUTHORIZED.
+   * The bearer token is dead — every remaining step would 401 the same
+   * way, so the walker bails instead of firing ~30 doomed requests that
+   * each land a `trpc.error` warn in Axiom.
+   */
+  aborted?: boolean;
 }
 
 export interface WarmupOptions {
@@ -247,6 +254,18 @@ function seedDiscoverFeed(
   }
 }
 
+/**
+ * True when a tRPC client error is a 401 — the bearer token is missing,
+ * expired, or invalid. Matches the TRPCClientError shape (`data.code` /
+ * `data.httpStatus`) the vanilla client throws.
+ */
+function isUnauthorizedError(err: unknown): boolean {
+  const data = (
+    err as { data?: { httpStatus?: number; code?: string } } | null | undefined
+  )?.data;
+  return data?.code === 'UNAUTHORIZED' || data?.httpStatus === 401;
+}
+
 // ---------------------------------------------------------------------------
 // Concurrency helper
 // ---------------------------------------------------------------------------
@@ -321,7 +340,14 @@ export async function warmCacheForOfflineUse(
     });
   };
 
+  // Flipped on the first UNAUTHORIZED failure: the token is dead, so every
+  // remaining step would 401 identically. Subsequent steps short-circuit
+  // without firing, capping the walk at one failed request instead of ~30
+  // (each of which lands a server-side `trpc.error` warn in Axiom).
+  let unauthorizedAbort = false;
+
   async function step<T>(label: string, fn: () => Promise<T>): Promise<T | null> {
+    if (unauthorizedAbort) return null;
     emit(label);
     try {
       const value = await fn();
@@ -335,6 +361,7 @@ export async function warmCacheForOfflineUse(
       return value;
     } catch (err) {
       failed += 1;
+      if (isUnauthorizedError(err)) unauthorizedAbort = true;
       const message = err instanceof Error ? err.message : String(err);
       failures.push({ label, message });
       opts.onProgress?.({
@@ -603,7 +630,13 @@ export async function warmCacheForOfflineUse(
   // ──────────────── Finalise ────────────────
 
   const finishedAt = now();
-  writeLastWarmup(qc, finishedAt);
+  // An unauthorized abort refreshed (almost) nothing — don't stamp the
+  // last-synced marker, or `useForegroundWarmup`'s 6h gate would treat
+  // the stale cache as fresh and skip the retry after the user signs
+  // back in.
+  if (!unauthorizedAbort) {
+    writeLastWarmup(qc, finishedAt);
+  }
 
   return {
     startedAt,
@@ -612,5 +645,6 @@ export async function warmCacheForOfflineUse(
     succeeded: completed,
     failed,
     failures,
+    aborted: unauthorizedAbort,
   };
 }

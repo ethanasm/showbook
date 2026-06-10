@@ -18,7 +18,11 @@ import superjson from 'superjson';
 import type { AppRouter } from '@showbook/api';
 import { API_URL } from './env';
 import { hapticSuccess, hapticWarning } from './haptics';
-import { reportClientEvent, describeError } from './telemetry';
+import {
+  reportClientEvent,
+  describeError,
+  shouldReportUnauthorized,
+} from './telemetry';
 
 export const trpc = createTRPCReact<AppRouter>();
 
@@ -82,11 +86,17 @@ export function createQueryClient(): QueryClient {
  * failures that today are invisible to the server (the user sees a toast,
  * but ops have no record of the procedure that blew up).
  *
- * Two important guards:
+ * Three important guards:
  *   1. Skip the `telemetry.logEvent` op itself — otherwise a logging
  *      failure would trigger another logging call and so on.
  *   2. Swallow any reporting error so the original procedure error still
  *      surfaces to the UI exactly as it did before.
+ *   3. UNAUTHORIZED is downgraded to `warn` and throttled via
+ *      `shouldReportUnauthorized` (one relay per 5-minute window). A
+ *      stale bearer 401s every query the app fires, the server already
+ *      warn-logs each one per-path as `trpc.error`, and the error-level
+ *      flood was tripping the `error_volume` health gauge — see the
+ *      throttle's docblock in `telemetry.ts`.
  */
 function errorReporterLink(): TRPCLink<AppRouter> {
   return () =>
@@ -98,17 +108,21 @@ function errorReporterLink(): TRPCLink<AppRouter> {
             if (op.path !== 'telemetry.logEvent') {
               try {
                 const data = (err as { data?: { httpStatus?: number; code?: string } })?.data;
-                reportClientEvent({
-                  event: 'trpc.error',
-                  message: describeError(err),
-                  level: 'error',
-                  context: {
-                    path: op.path,
-                    type: op.type,
-                    httpStatus: data?.httpStatus,
-                    code: data?.code,
-                  },
-                });
+                const unauthorized =
+                  data?.code === 'UNAUTHORIZED' || data?.httpStatus === 401;
+                if (!unauthorized || shouldReportUnauthorized()) {
+                  reportClientEvent({
+                    event: 'trpc.error',
+                    message: describeError(err),
+                    level: unauthorized ? 'warn' : 'error',
+                    context: {
+                      path: op.path,
+                      type: op.type,
+                      httpStatus: data?.httpStatus,
+                      code: data?.code,
+                    },
+                  });
+                }
               } catch {
                 // never let telemetry derail the original error.
               }

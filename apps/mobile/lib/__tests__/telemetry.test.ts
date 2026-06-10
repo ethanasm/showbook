@@ -5,6 +5,7 @@ import {
   reportClientEvent,
   setMobileTelemetryLogger,
   describeError,
+  shouldReportUnauthorized,
   __resetTelemetryForTests,
   type ClientEventPayload,
 } from '../telemetry';
@@ -84,5 +85,32 @@ describe('telemetry — reportClientEvent', () => {
     reportClientEvent({ event: 'c', message: 'd' });
     assert.equal(received.length, 1);
     assert.equal(received[0]?.event, 'a');
+  });
+});
+
+describe('telemetry — shouldReportUnauthorized', () => {
+  it('allows the first report and arms the cooldown', () => {
+    assert.equal(shouldReportUnauthorized(1_000), true);
+  });
+
+  it('suppresses repeats inside the 5-minute window', () => {
+    assert.equal(shouldReportUnauthorized(1_000), true);
+    assert.equal(shouldReportUnauthorized(1_001), false);
+    // A burst like the 2026-06-10 one (139 relays in ~8 min) collapses to
+    // two reports: one at the start, one after the window rolls over.
+    assert.equal(shouldReportUnauthorized(1_000 + 5 * 60_000 - 1), false);
+  });
+
+  it('allows a fresh report once the window has elapsed', () => {
+    assert.equal(shouldReportUnauthorized(1_000), true);
+    assert.equal(shouldReportUnauthorized(1_000 + 5 * 60_000), true);
+    // ...and the new report re-arms the cooldown from its own timestamp.
+    assert.equal(shouldReportUnauthorized(1_000 + 5 * 60_000 + 1), false);
+  });
+
+  it('resets with the test helper', () => {
+    assert.equal(shouldReportUnauthorized(1_000), true);
+    __resetTelemetryForTests();
+    assert.equal(shouldReportUnauthorized(1_001), true);
   });
 });
