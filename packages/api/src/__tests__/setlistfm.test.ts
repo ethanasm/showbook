@@ -490,6 +490,80 @@ test('isSetlistFmInCooldown: false initially, true after consecutive 429s open t
   assert.equal(isSetlistFmInCooldown(), true);
 });
 
+// ── transient transport retry ──────────────────────────────────────────
+// Regression: the nightly corpus-fill / MBID-backfill crons surfaced
+// undici `TimeoutError` and `TypeError: fetch failed` blips as
+// setlist.corpus_fill.failed / performer.mbid.failed errors because the
+// client had no transport-level retry (only the 429 path retried). These
+// mirror the fetchWithRetry behaviour already in google-places.ts.
+
+function fetchFailedError(): TypeError {
+  return new TypeError('fetch failed');
+}
+
+function timeoutError(): Error {
+  const err = new Error('The operation was aborted due to timeout');
+  err.name = 'TimeoutError';
+  return err;
+}
+
+test('apiFetch: retries after a transient "fetch failed" and returns the retry body', { timeout: 10_000 }, async () => {
+  let n = 0;
+  stubFetch(async () => {
+    n++;
+    if (n === 1) throw fetchFailedError();
+    return jsonResponse({
+      artist: [{ mbid: 'm', name: 'X', sortName: 'X' }],
+      total: 1,
+      page: 1,
+      itemsPerPage: 30,
+    });
+  });
+
+  const result = await searchArtist('X');
+  assert.equal(n, 2);
+  assert.equal(result.length, 1);
+});
+
+test('apiFetch: retries after an undici TimeoutError', { timeout: 10_000 }, async () => {
+  let n = 0;
+  stubFetch(async () => {
+    n++;
+    if (n === 1) throw timeoutError();
+    return jsonResponse({ artist: [], total: 0, page: 1, itemsPerPage: 30 });
+  });
+
+  const result = await searchArtist('X');
+  assert.equal(n, 2);
+  assert.deepEqual(result, []);
+});
+
+test('apiFetch: throws after exhausting transport retries', { timeout: 10_000 }, async () => {
+  let n = 0;
+  stubFetch(async () => {
+    n++;
+    throw fetchFailedError();
+  });
+
+  await assert.rejects(searchArtist('X'), (err: unknown) => {
+    assert.ok(err instanceof TypeError);
+    assert.equal((err as Error).message, 'fetch failed');
+    return true;
+  });
+  assert.equal(n, 3, 'should attempt three times before giving up');
+});
+
+test('apiFetch: does not retry non-transient throws', { timeout: 10_000 }, async () => {
+  let n = 0;
+  stubFetch(async () => {
+    n++;
+    throw new Error('totally unexpected');
+  });
+
+  await assert.rejects(searchArtist('X'), /totally unexpected/);
+  assert.equal(n, 1, 'non-transient errors must propagate without retry');
+});
+
 // ── rate limit branch ──────────────────────────────────────────────────
 
 test('apiFetch: rate-limit waits between back-to-back calls (covers MIN_INTERVAL branch)', { timeout: 10_000 }, async () => {
