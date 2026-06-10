@@ -18,7 +18,8 @@
         "EXPO_PUBLIC_API_URL": "https://showbook.ethanasm.me",
         "EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS": "222563763412-v5hj97rgnhnl2uesff3kvefvn2n4na2a.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID": "222563763412-noa32760ohv25v56b8kka0ba9rf49529.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB": "222563763412-i4g7a2t7to8qce4oa9j0msmhk9bmejal.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB": "222563763412-i4g7a2t7to8qce4oa9j0msmhk9bmejal.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyAwQyMwb2NcFlTrH9gdrk88M2mbBHL_Cig"
       }
     },
     "preview-store": {
