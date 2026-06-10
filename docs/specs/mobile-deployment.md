@@ -267,6 +267,33 @@ This uploads the `.aab` to Play Console. From there:
 
 ---
 
+## Beta (TestFlight + Play internal testing)
+
+"Beta" here means getting the app to real testers **without** a full public
+store release. It's a subset of Part 2 / Part 3 — same artifacts, fewer
+review gates:
+
+- **iOS — TestFlight internal testing.** Build the `production` (or
+  `preview-store`) profile, `eas submit` to App Store Connect, then add
+  testers under TestFlight → Internal Testing (up to 100, no Apple review,
+  live within minutes). External testing (up to 10 000) needs a one-time
+  ~24 h beta review. The Map tab uses Apple Maps on iOS, so no Maps key is
+  required for the iOS beta.
+- **Android — Play internal testing.** Build `preview-store` (app-bundle)
+  and `eas submit --profile preview-store --platform android` (its submit
+  config targets the `internal` track). Internal testing is instantaneous.
+  The Android Map tab needs `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` wired into the
+  build (see the checklist) or it renders blank.
+- **Known beta caveat — push notifications.** The Preferences push toggle
+  and the permission prompt are live, but server-side delivery isn't wired
+  yet (`docs/specs/planned-improvements.md`). Testers can flip the toggle
+  and will never receive a push — call this out in your beta notes, or hide
+  the toggle for the beta build.
+
+Both beta tracks share the same backend prerequisites as production:
+`GOOGLE_OAUTH_MOBILE_AUDIENCES` set on the backend, and the backend
+reachable at the `EXPO_PUBLIC_API_URL` baked into the build.
+
 ## Ongoing release workflow
 
 Once both stores have at least one approved version, the steady-state
@@ -311,8 +338,21 @@ auto-bumps `ios.buildNumber` and `android.versionCode` if you set
       `eas env:list --environment production` before the first build —
       an unset `EXPO_PUBLIC_API_URL` ships a build with a broken backend
       and dead sign-in.
-- [x] Privacy policy and support URLs published and submitted with the
-      store applications.
+- [ ] Map tab on Android: `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` is in **no**
+      `eas.json` profile `env` block today, so a beta/store Android build
+      renders a blank map until you provide it — add it to `preview.env`
+      (inherited by `preview-store`, the Play internal-testing profile) or
+      set it as an EAS env var. Create a *separate* "Maps SDK for Android"
+      key in Google Cloud, restricted to package `me.ethanasm.showbook` +
+      the EAS upload **and** Play app-signing SHA-1s (don't reuse the
+      backend `GOOGLE_PLACES_API_KEY`). iOS uses Apple Maps (`map.tsx`
+      picks `PROVIDER_DEFAULT` on iOS) and needs no key.
+- [ ] Legal pages reachable at public URLs and pasted into both consoles:
+      `/privacy`, `/terms`, and `/account-deletion` (Google Play *requires*
+      the data-deletion URL). They live under `apps/web/app/(public)/`; the
+      contact address is env-driven — set `LEGAL_CONTACT_EMAIL` (and
+      `LEGAL_GOVERNING_LAW`) in `.env.prod` so the pages don't show the
+      `@showbook.app` placeholder. Apple also wants a support URL.
 - [ ] App Store Connect + Play Console app records created with bundle
       ID `me.ethanasm.showbook`.
 - [ ] Demo Google account ready to hand to Apple's reviewer.
