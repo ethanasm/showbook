@@ -54,7 +54,7 @@ const DATE_PATTERNS = [
   // March 15, 2026
   /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(?:,?\s*\d{4})?\b/i,
   // 03/15/2026 or 3-15-26
-  /\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/,
+  /\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/,
   // 2026-03-15
   /\b\d{4}-\d{2}-\d{2}\b/,
 ];

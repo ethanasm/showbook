@@ -1,6 +1,7 @@
 import { db } from '@showbook/db';
 import {
   announcements,
+  showAnnouncementLinks,
   userVenueFollows,
   userPerformerFollows,
   userRegions,
@@ -22,7 +23,9 @@ import {
 import {
   dedupeTierVariants,
   groupEventsIntoRuns,
+  shouldGroup,
   type EventRun,
+  type Kind,
   type NormalizedEvent,
 } from './run-grouping';
 import { child } from '@showbook/observability';
@@ -444,6 +447,178 @@ export async function consolidateFestivalDuplicates(
   );
 }
 
+type AnnouncementRow = typeof announcements.$inferSelect;
+
+/** Kinds whose scattered single-night rows can be healed into a run. */
+const GROUPABLE_SINGLE_KINDS = ['concert', 'theatre', 'comedy'] as const;
+
+/**
+ * Fold a cluster of single-night rows for one (venue, headliner, kind) into a
+ * single canonical run row. Mirrors `consolidateFestivalDuplicates`' merge +
+ * guarded delete: the canonical row absorbs every night's date and source id,
+ * the duplicates are deleted unless a user has linked them to a watched show.
+ *
+ * `linkedSet` is the set of announcement ids referenced by
+ * `show_announcement_links` — a linked row is preferred as the survivor and is
+ * never deleted (its date already lives in the canonical run's
+ * `performance_dates` regardless).
+ */
+async function mergeSinglesIntoRun(
+  cluster: AnnouncementRow[],
+  linkedSet: Set<string>,
+): Promise<number> {
+  const ordered = [...cluster].sort((a, b) => {
+    const aLinked = linkedSet.has(a.id) ? 0 : 1;
+    const bLinked = linkedSet.has(b.id) ? 0 : 1;
+    if (aLinked !== bLinked) return aLinked - bLinked;
+    return (a.discoveredAt?.getTime() ?? 0) - (b.discoveredAt?.getTime() ?? 0);
+  });
+  const canonical = ordered[0]!;
+  const duplicates = ordered.slice(1);
+
+  const dateSet = new Set<string>(
+    canonical.performanceDates ?? [canonical.showDate],
+  );
+  const extras = new Set<string>(canonical.extraSourceEventIds ?? []);
+  for (const dup of duplicates) {
+    for (const d of dup.performanceDates ?? [dup.showDate]) dateSet.add(d);
+    if (dup.sourceEventId) extras.add(dup.sourceEventId);
+    for (const id of dup.extraSourceEventIds ?? []) extras.add(id);
+  }
+  if (canonical.sourceEventId) extras.delete(canonical.sourceEventId);
+
+  const dates = Array.from(dateSet).sort();
+  const extraIds = Array.from(extras);
+
+  await db
+    .update(announcements)
+    .set({
+      runStartDate: dates[0]!,
+      runEndDate: dates[dates.length - 1]!,
+      performanceDates: dates,
+      showDate: dates[0]!,
+      // makeRun pins productionName to the headliner for every run kind. Match
+      // that here so a later new night for the same act finds this row via
+      // findExistingRunRow (which keys on venue+productionName+kind) and
+      // extends it, instead of inserting a parallel duplicate run.
+      productionName: canonical.productionName ?? canonical.headliner,
+      extraSourceEventIds: extraIds.length > 0 ? extraIds : null,
+    })
+    .where(eq(announcements.id, canonical.id));
+
+  const deletableIds = duplicates
+    .filter((d) => !linkedSet.has(d.id))
+    .map((d) => d.id);
+  if (deletableIds.length > 0) {
+    await db
+      .delete(announcements)
+      .where(
+        and(
+          inArray(announcements.id, deletableIds),
+          sql`NOT EXISTS (
+            SELECT 1
+            FROM show_announcement_links sal
+            WHERE sal.announcement_id = ${announcements.id}
+          )`,
+        ),
+      );
+  }
+
+  log.info(
+    {
+      event: 'discover.ingest.singles_consolidated',
+      venueId: canonical.venueId,
+      headliner: canonical.headliner,
+      kind: canonical.kind,
+      canonicalId: canonical.id,
+      mergedRows: duplicates.length,
+      deletedRows: deletableIds.length,
+      finalDateCount: dates.length,
+    },
+    'Consolidated single-night rows into a run',
+  );
+
+  return 1;
+}
+
+/**
+ * Heal scattered single-night announcement rows into one multi-date run.
+ *
+ * Run grouping normally happens at first ingest (`groupEventsIntoRuns`), but a
+ * cluster only collapses when its nights arrive in the same pass as *new*
+ * events: the dedup short-circuit (`existingSourceIds`) routes already-seen
+ * events to the refresh path, which never re-runs `groupEventsIntoRuns`. So
+ * nights ingested across separate passes — or comedy rows created before
+ * comedy became a groupable kind — stay individual singles indefinitely.
+ *
+ * This sweep re-applies `shouldGroup` to single-night rows clustered by
+ * (venueId, lower(headliner), kind) and folds a qualifying cluster into one
+ * canonical run row. Festivals keep their dedicated `consolidateFestivalDuplicates`
+ * path and are excluded here.
+ *
+ * Pass `venueId` to scope the sweep to a single venue (the targeted
+ * follow-a-venue ingest); omit it for the nightly table-wide pass. Returns the
+ * number of clusters collapsed into runs.
+ */
+export async function consolidateGroupableSingles(
+  opts: { venueId?: string } = {},
+): Promise<number> {
+  const rows = await db
+    .select()
+    .from(announcements)
+    .where(
+      and(
+        eq(announcements.source, 'ticketmaster'),
+        inArray(announcements.kind, [...GROUPABLE_SINGLE_KINDS]),
+        sql`coalesce(array_length(${announcements.performanceDates}, 1), 1) = 1`,
+        ...(opts.venueId ? [eq(announcements.venueId, opts.venueId)] : []),
+      ),
+    );
+
+  // Cluster by venue + case-insensitive headliner + kind.
+  const clusters = new Map<string, AnnouncementRow[]>();
+  for (const row of rows) {
+    const key = `${row.venueId}::${row.headliner.toLowerCase()}::${row.kind}`;
+    const bucket = clusters.get(key);
+    if (bucket) bucket.push(row);
+    else clusters.set(key, [row]);
+  }
+
+  // Resolve which candidate rows are linked to a watched show once, up front —
+  // a linked row must never be deleted and is preferred as the survivor.
+  const candidateIds = rows.map((r) => r.id);
+  const linkedSet = new Set<string>();
+  if (candidateIds.length > 0) {
+    const links = await db
+      .select({ announcementId: showAnnouncementLinks.announcementId })
+      .from(showAnnouncementLinks)
+      .where(inArray(showAnnouncementLinks.announcementId, candidateIds));
+    for (const l of links) linkedSet.add(l.announcementId);
+  }
+
+  let consolidated = 0;
+  for (const cluster of clusters.values()) {
+    if (cluster.length < 2) continue;
+    const dates = cluster.map((r) => r.showDate);
+    if (!shouldGroup(cluster[0]!.kind as Kind, dates)) continue;
+    try {
+      consolidated += await mergeSinglesIntoRun(cluster, linkedSet);
+    } catch (err) {
+      log.error(
+        {
+          err,
+          event: 'discover.ingest.consolidate_singles.cluster_failed',
+          venueId: cluster[0]!.venueId,
+          headliner: cluster[0]!.headliner,
+          kind: cluster[0]!.kind,
+        },
+        'Failed to consolidate single-night cluster into a run',
+      );
+    }
+  }
+  return consolidated;
+}
+
 /**
  * Refresh mutable fields on an already-ingested TM event. Without this, a
  * show that flips from on_sale → sold_out (or has its sale window/ticket URL
@@ -665,6 +840,17 @@ export async function ingestVenue(venueId: string): Promise<{ events: number }> 
     endDateTime: futureISO(INGEST_HORIZON_MONTHS),
   });
   const created = await ingestTmEvents(events, existingSourceIds, venue.id);
+  // Heal any scattered single-night rows at this venue (e.g. a comedian's
+  // multi-night stand whose nights were ingested across separate passes) into
+  // one run, so following a comedy club immediately collapses its residencies.
+  try {
+    await consolidateGroupableSingles({ venueId: venue.id });
+  } catch (err) {
+    log.error(
+      { err, event: 'discover.ingest.targeted.venue_consolidate_failed', venueId },
+      'Targeted venue consolidation failed',
+    );
+  }
   log.info(
     {
       event: 'discover.ingest.targeted.venue',
@@ -964,6 +1150,26 @@ export async function runDiscoverIngest(): Promise<{
   // Quiet "unused import" — followedVenueIdSet is referenced for clarity.
   void followedVenueIdSet;
   void inArray;
+
+  // ==========================================================================
+  // Phase 3.5: Heal scattered single-night rows into runs (comedy residencies,
+  // late-arriving concert/theatre nights). Runs before cleanup so a freshly
+  // consolidated run's runEndDate is what Phase 4 measures against.
+  // ==========================================================================
+
+  let consolidated = 0;
+  try {
+    consolidated = await consolidateGroupableSingles();
+  } catch (err) {
+    log.error(
+      { err, event: 'discover.ingest.consolidate_singles.failed' },
+      'Single-night consolidation pass failed',
+    );
+  }
+  log.info(
+    { event: 'discover.ingest.consolidate_singles', consolidated },
+    'Phase 3.5 (single-night consolidation) complete',
+  );
 
   // ==========================================================================
   // Phase 4: Cleanup — delete old announcements

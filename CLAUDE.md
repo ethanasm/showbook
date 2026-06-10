@@ -68,7 +68,7 @@ What the sandbox actually *can't* do, for the avoidance of further wrong excuses
   infrastructure, decisions. Index at
   [`docs/specs/README.md`](docs/specs/README.md).
 - `docs/specs/TASKS.md` — Master task list with dependency DAG.
-- `docs/specs/phases/VERIFICATION.md` — Playwright testing + visual
+- `docs/specs/VERIFICATION.md` — Playwright testing + visual
   verification strategy.
 - `docs/specs/mobile-roadmap.md` — Mobile build plan; the app
   is feature-complete against the design handoff.
@@ -146,12 +146,22 @@ Cloudflare Tunnel reaches web via loopback.
 
 ## Verification
 
-- `pnpm verify` — build + lint + unit tests with end-of-run status summary
+- `pnpm verify` — build + lint + typecheck + unit tests with end-of-run
+  status summary.
 - `pnpm verify:e2e` — adds Playwright e2e (or set `RUN_E2E=1`)
-- `pnpm verify:coverage` — build + lint + unit + integration with merged
-  Node native code coverage; **fails if any of lines / branches / functions
-  is below 80%**, scored independently for the web scope and the mobile
-  scope (`apps/mobile/lib/**`). CI runs this on every push and PR to `main`.
+- `pnpm verify:coverage` — build + lint + typecheck + unit + integration with
+  merged Node native code coverage; **fails if any of lines / branches /
+  functions is below 80%**, scored independently for the web scope and the
+  mobile scope (`apps/mobile/lib/**`). CI runs this on every push and PR to
+  `main`.
+- **Lint and typecheck both fan out across every project.** `pnpm lint`
+  (`nx run-many -t lint`) runs eslint on web (`eslint-config-next`), mobile
+  (`eslint-config-expo`), and every package under `packages/*` (the shared
+  `eslint.config.packages.mjs`). `pnpm typecheck` (`nx run-many -t typecheck`)
+  runs `tsc --noEmit` on all nine projects. `pnpm build` only type-checks the
+  web app via `next build`, so the explicit typecheck pass is what catches a
+  mobile or package `tsc` break before it lands on `main`. Add a `lint` /
+  `typecheck` script to any new package so `run-many` picks it up.
 - `pnpm test:unit` — unit tests across all packages (uses `node:test`)
 - Integration tests live in `*.integration.test.ts` and are excluded from
   the unit-test glob; run with `pnpm test:integration`. Each integration
@@ -242,6 +252,7 @@ The stdout copy in the prod web container (`docker logs showbook-prod-web`) is a
 - `venue.follow`, `venue.follow.place_backfill_failed` — `venues.follow` lazy backfill.
 - `venue.rename`, `venue.rename.reset` — per-user venue-name alias set / cleared via `venues.rename` / `venues.resetName` (writes `user_venue_names`, not the shared `venues.name`). `admin.venue.rename` is the operator-only global canonical rename (`admin.renameVenue`).
 - `discover.ingest.{performer,venue,region,targeted,*}.complete` — pg-boss discover-ingest jobs.
+- `discover.ingest.consolidate_singles` / `discover.ingest.singles_consolidated` — the Phase 3.5 self-healing sweep (`consolidateGroupableSingles`) that folds scattered single-night announcement rows for the same (venueId, lower(headliner), kind) into one multi-date run when `shouldGroup` is satisfied (comedy / concert residencies whose nights were ingested across separate passes, so they never went back through `groupEventsIntoRuns`). `consolidate_singles` is the per-run rollup (`{consolidated}`); `singles_consolidated` is the per-cluster merge (`{venueId, headliner, kind, canonicalId, mergedRows, deletedRows, finalDateCount}`). Failures log `discover.ingest.consolidate_singles.failed` (whole pass), `discover.ingest.consolidate_singles.cluster_failed` (one cluster), and `discover.ingest.targeted.venue_consolidate_failed` (the venue-scoped pass run after a follow-a-venue ingest). Festivals keep their own `discover.ingest.festival_consolidated` path.
 - `shows.nightly.summary`, `setlist.retry.summary` — nightly transition + setlist-retry jobs.
 - `shows.create.{tm_enrichment_failed,venue_place_backfill_failed,mbid_resolve_failed}` — `shows.create` non-blocking enrichments. `mbid_resolve_failed` fires when the inline setlist.fm MBID lookup for a future concert errors; the nightly backfill at 04:30 ET catches the gap.
 - `backfill.performer_images.summary`, `backfill.performer_mbids.summary`, `backfill.performer_ticketmaster_ids.summary`, `backfill.performer_spotify_ids.summary`, `backfill.venue_photos.summary` — scheduled backfill jobs (daily 05:30 / 04:30 / 06:00 / 06:30 / 05:45 ET). The MBID, TM-id, and Spotify-id summaries are also emitted on operator-triggered runs from the `/admin` page.

@@ -29,7 +29,7 @@ function makeFakeLangfuse() {
       };
       update(o: { output?: unknown }): void;
     } {
-      const t = { name: opts.name };
+      const t: RecordedCall = { name: opts.name };
       traces.push(t);
       return {
         generation(o) {

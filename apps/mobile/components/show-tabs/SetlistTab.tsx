@@ -74,12 +74,12 @@ export type AnyPrediction =
   | {
       style: 'special_event';
       copy: string;
-      pastEvents: ReadonlyArray<{
+      pastEvents: readonly {
         date: string;
         performanceDate: string;
         venueName: string | null;
         songCount: number;
-      }>;
+      }[];
     };
 
 interface SetCountPredictionShape {
