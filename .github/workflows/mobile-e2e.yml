@@ -366,6 +366,15 @@ jobs:
           fi
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
           pnpm exec expo prebuild --platform android --non-interactive --no-install
+          # EXPO_PUBLIC_* values are inlined by Metro at bundle time, but a
+          # changed env var does NOT invalidate Gradle's up-to-date check or
+          # Metro's transform cache (env isn't a tracked input). On this
+          # persistent self-hosted workspace that means the JS bundle is
+          # reused across runs and a changed EXPO_PUBLIC_API_URL never gets
+          # re-inlined — the exact bug the post-build URL assertion caught
+          # (stale prod URL baked in). Clear Metro's caches and force the
+          # bundle task to re-run so the current env is inlined.
+          rm -rf "${TMPDIR:-/tmp}"/metro-* "${TMPDIR:-/tmp}"/haste-map-* node_modules/.cache 2>/dev/null || true
           cd android
           # --build-cache uses the restored gradle caches; --no-daemon
           # keeps the runner clean between invocations.
@@ -375,6 +384,14 @@ jobs:
           # runner past the 2 GiB Gradle heap / 512 MiB metaspace
           # budget — when it OOMs mid-task the runner reports it as
           # "The operation was canceled" rather than a Gradle failure.
+          #
+          # Force a fresh JS bundle first (--rerun-tasks, scoped to the
+          # bundle task so native compile stays cached/incremental), THEN
+          # assemble. assembleRelease re-packages because the bundle output
+          # changed, while the heavy native tasks reuse the workspace's
+          # incremental state.
+          ./gradlew :app:createBundleReleaseJsAndAssets \
+            --rerun-tasks --no-daemon --console=plain
           ./gradlew :app:assembleRelease \
             -x lintVitalAnalyzeRelease -x lintVitalRelease \
             --no-daemon --console=plain \
