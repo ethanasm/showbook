@@ -28,9 +28,43 @@ Implementation tasks structured for parallel execution by Claude Code agent team
 
 | File | What it is |
 |------|-----------|
-| [`phases/TASKS.md`](./phases/TASKS.md) | Master task list — 32 tasks across 5 waves, dependency DAG, parallelism summary |
-| [`phases/VERIFICATION.md`](./phases/VERIFICATION.md) | Playwright testing strategy, screenshot conventions, data integrity checks, visual checklist |
-| [`phases/LAUNCH.md`](./phases/LAUNCH.md) | Agent team launch guide — CLAUDE.md template, the full prompt, acceptance criteria, monitoring tips |
+| [`TASKS.md`](./TASKS.md) | Master task list — 32 tasks across 5 waves, dependency DAG, parallelism summary |
+| [`VERIFICATION.md`](./VERIFICATION.md) | Playwright testing strategy, screenshot conventions, data integrity checks, visual checklist |
+| [`LAUNCH.md`](./LAUNCH.md) | Agent-team launch guide for the **original greenfield build** (historical — see the file header) |
+
+### Mobile
+
+| File | What it covers |
+|------|---------------|
+| [`mobile-roadmap.md`](mobile-roadmap.md) | Milestones (M1–M6), stack decisions, status tracker |
+| [`mobile-m2-m6-plan.md`](mobile-m2-m6-plan.md) | M2–M6 parallel-execution plan with dependency arrows |
+| [`mobile-deployment.md`](mobile-deployment.md) | Run on a device, EAS build/submit, beta (TestFlight + Play internal), first-submission checklist |
+| [`mobile-testing-strategy.md`](mobile-testing-strategy.md) | Tiered mobile test strategy; the `lib/**`-scoped 80% gate; Maestro waves |
+
+### Operations
+
+| File | What it covers |
+|------|---------------|
+| [`operations.md`](operations.md) | Operator runbook — self-hosted runner / CD, prod DB query endpoint, dev/prod ports |
+| [`operations/axiom-map-fields.md`](operations/axiom-map-fields.md) | Axiom map-field reshape that bounds the per-dataset column cap |
+| [`operations/axiom-dataset-cutover.md`](operations/axiom-dataset-cutover.md) | Superseded prod-server/prod-mobile split (kept for history) |
+| [`operations/backups.md`](operations/backups.md) | Postgres + R2 backup procedure |
+| [`cloudflare-tunnel-setup.md`](cloudflare-tunnel-setup.md) | Cloudflare Tunnel ingress for the self-hosted stack |
+
+### Setlist intelligence
+
+Predicting what an artist plays at an upcoming show. Full sub-tree under
+[`setlist-intelligence/`](setlist-intelligence/README.md) — feature plan,
+music layer, phase docs (00–11), UI spec, eval harness.
+
+### Reviews & feature plans (point-in-time, kept for reference)
+
+`codebase-review-2026-05-04.md`, `security-review-2026-04-30.md`,
+`security-review-2026-06-09.md`, `preferences-review-2026-04-29.md`,
+`data-model-deletion-cascades-2026-04-29.md`,
+`email-ingestion-improvements-2026-05-08.md`,
+`feature-brainstorm-2026-05-02.md`, `feature-plan-*.md`, and
+[`planned-improvements.md`](planned-improvements.md) (the live follow-up backlog).
 
 ## Key Decisions (quick reference)
 

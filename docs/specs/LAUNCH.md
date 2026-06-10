@@ -1,5 +1,12 @@
 # Showbook — Agent Team Launch Guide
 
+> **Historical (greenfield build).** This is the agent-team guide used to
+> build Showbook from zero — 32 tasks, five waves, a now-superseded model
+> pin, and a "work on `main`, no feature branches" workflow the repo has
+> since moved past. Kept as a record of the original build, **not** a
+> current runbook. To ship the mobile app to beta or the stores, see
+> [`mobile-deployment.md`](mobile-deployment.md).
+
 ---
 
 ## Pre-flight
@@ -35,8 +42,8 @@ Personal entertainment tracker for live shows — concerts, theatre, comedy, fes
 
 Read these files in order:
 1. `docs/specs/README.md` — index of all specs
-2. `docs/specs/phases/TASKS.md` — 32 tasks, 5 waves, dependency DAG
-3. `docs/specs/phases/VERIFICATION.md` — Playwright testing strategy
+2. `docs/specs/TASKS.md` — 32 tasks, 5 waves, dependency DAG
+3. `docs/specs/VERIFICATION.md` — Playwright testing strategy
 
 ## Stack
 - TypeScript everywhere (Next.js 15 + Expo + Drizzle + tRPC)
@@ -103,8 +110,8 @@ claude
 ```
 /model opus-4-6
 
-Read docs/specs/README.md, then docs/specs/phases/TASKS.md, then
-docs/specs/phases/VERIFICATION.md.
+Read docs/specs/README.md, then docs/specs/TASKS.md, then
+docs/specs/VERIFICATION.md.
 
 This is a greenfield build of Showbook. The specs directory has complete schemas,
 data source mappings, enrichment pipelines, infrastructure decisions, and a task graph.
