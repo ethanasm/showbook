@@ -29,6 +29,7 @@ export interface PerformerData {
   sortOrder: number;
   tmAttractionId?: string;
   musicbrainzId?: string;
+  wikidataQid?: string;
   imageUrl?: string;
 }
 

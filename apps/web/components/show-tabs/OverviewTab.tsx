@@ -2,7 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Ticket, CalendarPlus, Trash2, MoreHorizontal } from "lucide-react";
+import {
+  Ticket,
+  CalendarPlus,
+  Trash2,
+  MoreHorizontal,
+  XOctagon,
+  Ban,
+} from "lucide-react";
 import { SectionFrame } from "./SectionFrame";
 import { StatRow, type StatCell } from "./StatRow";
 import "./show-tabs.css";
@@ -25,6 +32,15 @@ interface OverviewTabProps {
   onEdit: () => void;
   onAddToCalendarHref: string;
   onDelete: () => void;
+  /** Current manual ticket-status override, or null when unset. */
+  ticketStatus?: "sold_out" | "cancelled" | null;
+  /** Toggle a ticket-status override on/off (clears when already active). */
+  onToggleTicketStatus?: (status: "sold_out" | "cancelled") => void;
+  /**
+   * Header for the performers section. Theatre shows label it "Cast";
+   * everything else uses the default "Lineup".
+   */
+  lineupLabel?: string;
   /**
    * Placeholders to drop in the music-layer slot (pre-show: vibe
    * radar + fan loyalty empty states). Pass nothing to hide the
@@ -49,9 +65,12 @@ export function OverviewTab({
   onEdit,
   onAddToCalendarHref,
   onDelete,
+  ticketStatus = null,
+  onToggleTicketStatus,
+  lineupLabel = "Lineup",
   musicLayerPlaceholder,
 }: OverviewTabProps) {
-  const showActions: { label: string; icon: React.ReactNode; onClick?: () => void; href?: string; danger?: boolean; primary?: boolean; testId?: string }[] = [];
+  const showActions: { label: string; icon: React.ReactNode; onClick?: () => void; href?: string; danger?: boolean; primary?: boolean; active?: boolean; testId?: string }[] = [];
   if (state === "ticketed" && onMarkAttended) {
     showActions.push({
       label: "Mark as attended",
@@ -68,6 +87,24 @@ export function OverviewTab({
     // testid; keep the name stable across the layout swap.
     testId: "action-edit-show",
   });
+  if (onToggleTicketStatus) {
+    const soldOut = ticketStatus === "sold_out";
+    const cancelled = ticketStatus === "cancelled";
+    showActions.push({
+      label: soldOut ? "Clear sold out" : "Mark sold out",
+      icon: <XOctagon size={13} />,
+      onClick: () => onToggleTicketStatus("sold_out"),
+      active: soldOut,
+      testId: "action-mark-sold-out",
+    });
+    showActions.push({
+      label: cancelled ? "Clear cancelled" : "Mark cancelled",
+      icon: <Ban size={13} />,
+      onClick: () => onToggleTicketStatus("cancelled"),
+      active: cancelled,
+      testId: "action-mark-cancelled",
+    });
+  }
   showActions.push({
     label: "Add to calendar",
     icon: <CalendarPlus size={13} />,
@@ -91,7 +128,7 @@ export function OverviewTab({
         </SectionFrame>
       )}
 
-      <SectionFrame title="Lineup" count={lineup.length}>
+      <SectionFrame title={lineupLabel} count={lineup.length}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {lineup.map((entry) => (
             <Link
@@ -163,10 +200,14 @@ export function OverviewTab({
           {showActions.map((action) => {
             const style: React.CSSProperties = {
               padding: "10px 14px",
-              background: action.primary ? "var(--accent)" : "transparent",
+              background: action.primary
+                ? "var(--accent)"
+                : action.active
+                  ? "var(--surface)"
+                  : "transparent",
               border: action.primary
                 ? "none"
-                : `1px solid ${action.danger ? "rgba(230,57,70,0.25)" : "var(--rule-strong)"}`,
+                : `1px solid ${action.danger ? "rgba(230,57,70,0.25)" : action.active ? "var(--ink)" : "var(--rule-strong)"}`,
               color: action.primary
                 ? "var(--accent-text)"
                 : action.danger

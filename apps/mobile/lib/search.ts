@@ -10,7 +10,7 @@ export interface SearchShow {
   id: string;
   title: string;
   date: string | null;
-  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports' | 'film' | 'unknown';
+  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'film' | 'unknown';
   state: 'past' | 'ticketed' | 'watching';
   venueName: string;
   venueCity: string | null;

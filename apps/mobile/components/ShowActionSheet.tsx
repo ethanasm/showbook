@@ -23,11 +23,13 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  Ban,
   CheckCircle,
   ListMusic,
   Pencil,
   Ticket,
   Trash2,
+  XOctagon,
 } from 'lucide-react-native';
 
 import { Sheet } from './Sheet';
@@ -42,6 +44,13 @@ export interface ShowActionSheetProps {
   onClose: () => void;
   showId: string;
   state: ShowState;
+  /**
+   * Current manual ticket-status override. Pass it (including `null`) to
+   * surface the Mark sold out / Mark cancelled toggle rows — done on the
+   * show-detail screen. Omit on list long-press where the value isn't to
+   * hand, so the rows stay hidden.
+   */
+  ticketStatus?: 'sold_out' | 'cancelled' | null;
   /** When true, popping the show after delete returns to /(tabs)/shows. */
   popAfterDelete?: boolean;
   /**
@@ -56,6 +65,7 @@ export function ShowActionSheet({
   onClose,
   showId,
   state,
+  ticketStatus,
   popAfterDelete = false,
   onMarkTicketed,
 }: ShowActionSheetProps): React.JSX.Element {
@@ -118,6 +128,47 @@ export function ShowActionSheet({
     }
   };
 
+  const toggleTicketStatus = async (
+    target: 'sold_out' | 'cancelled',
+  ): Promise<void> => {
+    // Tapping the active status clears it; otherwise set it (which also
+    // replaces the other value since it's a single column).
+    const next = ticketStatus === target ? null : target;
+    const detailKey = [['shows', 'detail'], { input: { showId }, type: 'query' }];
+    try {
+      await runOptimisticMutation({
+        mutation: 'shows.setTicketStatus',
+        input: { showId, status: next },
+        outbox: getCacheOutbox(),
+        call: (input) => utils.client.shows.setTicketStatus.mutate(input),
+        optimistic: {
+          snapshot: () => queryClient.getQueryData(detailKey),
+          apply: () => {
+            queryClient.setQueryData(detailKey, (prev: unknown) => {
+              if (!prev || typeof prev !== 'object') return prev;
+              return { ...prev, ticketStatus: next };
+            });
+          },
+          rollback: (snap) => queryClient.setQueryData(detailKey, snap),
+        },
+        reconcile: () => {
+          void utils.shows.list.invalidate();
+          invalidateShowsList(queryClient);
+          void utils.shows.detail.invalidate({ showId });
+        },
+      });
+      showToast({
+        kind: 'success',
+        text: next === null ? 'Status cleared' : 'Status updated',
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed';
+      showToast({ kind: 'error', text: message });
+    } finally {
+      onClose();
+    }
+  };
+
   const performDelete = async (): Promise<void> => {
     try {
       await runOptimisticMutation({
@@ -155,7 +206,11 @@ export function ShowActionSheet({
   };
 
   return (
-    <Sheet open={open} onClose={onClose} snapPoints={['44%']}>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      snapPoints={[ticketStatus !== undefined ? '58%' : '44%']}
+    >
       <View style={styles.body}>
         <ActionRow
           icon={<Pencil size={18} color={colors.ink} strokeWidth={2} />}
@@ -182,6 +237,28 @@ export function ShowActionSheet({
             onPress={() => void markWatched()}
             testID="action-mark-watched"
           />
+        ) : null}
+        {ticketStatus !== undefined ? (
+          <>
+            <ActionRow
+              icon={<XOctagon size={18} color={colors.ink} strokeWidth={2} />}
+              label={
+                ticketStatus === 'sold_out' ? 'Clear sold out' : 'Mark sold out'
+              }
+              onPress={() => void toggleTicketStatus('sold_out')}
+              testID="action-mark-sold-out"
+            />
+            <ActionRow
+              icon={<Ban size={18} color={colors.ink} strokeWidth={2} />}
+              label={
+                ticketStatus === 'cancelled'
+                  ? 'Clear cancelled'
+                  : 'Mark cancelled'
+              }
+              onPress={() => void toggleTicketStatus('cancelled')}
+              testID="action-mark-cancelled"
+            />
+          </>
         ) : null}
         <ActionRow
           icon={<Trash2 size={18} color={colors.danger} strokeWidth={2} />}

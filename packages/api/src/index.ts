@@ -33,15 +33,39 @@ export {
   pickPrimaryEventUrl,
   normalizeFestivalText,
   extractFestivalName,
+  determineOnSaleStatus,
+  parseOnSaleDate,
+  type OnSaleStatus,
   type TMEvent,
   type TMVenue,
   type TMAttraction,
 } from './ticketmaster';
+export {
+  normalizeLiveAttractionEvents,
+  shapeStoredUpcoming,
+  dedupeUpcomingAgainstUserShows,
+  type PerformerUpcomingRow,
+  type StoredAnnouncementForShaping,
+  type VenueForShaping,
+} from './performer-upcoming';
 export { matchOrCreateVenue, isUniqueViolation } from './venue-matcher';
+export {
+  loadVenueNameOverrides,
+  applyVenueNameOverrides,
+  applyNestedVenueNameOverrides,
+} from './venue-names';
 export { geocodeVenue } from './geocode';
 export type { GeocodeResult } from './geocode';
 export { matchOrCreatePerformer } from './performer-matcher';
 export { resolvePerformerSpotifyId } from './resolve-performer-spotify-id';
+export { resolvePerformerWikidataId } from './resolve-performer-wikidata-id';
+export type { ResolvePerformerWikidataIdOutcome } from './resolve-performer-wikidata-id';
+export {
+  searchWikidataPeople,
+  resolveWikidataEntity,
+  commonsFilePathUrl,
+} from './wikidata';
+export type { WikidataPerson, WikidataEntityData } from './wikidata';
 export {
   runSongIndexRebuild,
   type SongIndexRebuildScope,

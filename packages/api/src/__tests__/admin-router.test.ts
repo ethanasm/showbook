@@ -117,6 +117,51 @@ describe('adminRouter', () => {
       );
     });
 
+    it('renameVenue throws FORBIDDEN for a non-admin caller', async () => {
+      const db = makeFakeDb({
+        authUserId: null,
+        selectResults: [[{ id: 'test-user', email: NON_ADMIN_EMAIL }]],
+      });
+      await assert.rejects(
+        () =>
+          caller(db).renameVenue({
+            venueId: '11111111-1111-4111-8111-111111111111',
+            name: 'New Canonical',
+          }),
+        (err: unknown) => err instanceof TRPCError && err.code === 'FORBIDDEN',
+      );
+    });
+
+    it('renameVenue updates the canonical name for an admin caller', async () => {
+      const venueId = '11111111-1111-4111-8111-111111111111';
+      const db = makeFakeDb({
+        authUserId: null,
+        selectResults: [[{ id: 'test-user', email: ADMIN_EMAIL }]],
+        updateResults: [[{ id: venueId, name: 'New Canonical' }]],
+      });
+      const result = await caller(db).renameVenue({
+        venueId,
+        name: '  New Canonical  ',
+      });
+      assert.deepEqual(result, { id: venueId, name: 'New Canonical' });
+    });
+
+    it('renameVenue throws NOT_FOUND when the venue is missing', async () => {
+      const db = makeFakeDb({
+        authUserId: null,
+        selectResults: [[{ id: 'test-user', email: ADMIN_EMAIL }]],
+        updateResults: [[]],
+      });
+      await assert.rejects(
+        () =>
+          caller(db).renameVenue({
+            venueId: '11111111-1111-4111-8111-111111111111',
+            name: 'Whatever',
+          }),
+        (err: unknown) => err instanceof TRPCError && err.code === 'NOT_FOUND',
+      );
+    });
+
     it('enqueueSetlistCorpusFill throws NOT_FOUND when no performer matches', async () => {
       const db = makeFakeDb({
         authUserId: null,

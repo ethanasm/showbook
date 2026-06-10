@@ -35,6 +35,7 @@ globalThis.fetch = (async () => {
 import {
   db,
   userVenueFollows,
+  userVenueNames,
   announcements,
 } from '@showbook/db';
 import { eq, and, sql } from 'drizzle-orm';
@@ -60,6 +61,10 @@ const VENUE_UNAUTHORIZED = fakeUuid(PREFIX, 'vun');
 const VENUE_FOR_FOLLOW = fakeUuid(PREFIX, 'vff');
 const VENUE_FOR_UNFOLLOW = fakeUuid(PREFIX, 'vuf');
 const VENUE_SEARCH = fakeUuid(PREFIX, 'vsrch');
+const VENUE_OVERRIDE = fakeUuid(PREFIX, 'vovr');
+const SHOW_OVERRIDE = fakeUuid(PREFIX, 'sovr');
+const USER_CASCADE = `${PREFIX}-user-cascade`;
+const VENUE_CASCADE = fakeUuid(PREFIX, 'vcas');
 
 const SHOW_PAST = fakeUuid(PREFIX, 'spast');
 const SHOW_FUTURE = fakeUuid(PREFIX, 'sftr');
@@ -69,6 +74,9 @@ const ANN_PAST = fakeUuid(PREFIX, 'apt');
 
 async function preCleanup(): Promise<void> {
   const p = `${PREFIX}%`;
+  await db.execute(
+    sql`DELETE FROM user_venue_names WHERE venue_id IN (SELECT id FROM venues WHERE id::text LIKE ${p})`,
+  );
   await db.execute(
     sql`DELETE FROM user_venue_follows WHERE venue_id IN (SELECT id FROM venues WHERE id::text LIKE ${p})`,
   );
@@ -133,6 +141,11 @@ describe('venues router', () => {
       name: `${PREFIX} SearchUniqueXyz`,
       city: 'Denver',
     });
+    await createTestVenue({
+      id: VENUE_OVERRIDE,
+      name: `${PREFIX} Canonical Override Venue`,
+      city: 'Portland',
+    });
 
     // USER_A has shows at VENUE_WITH_SHOWS (past + future) and
     // VENUE_FOR_DETAIL.
@@ -159,6 +172,16 @@ describe('venues router', () => {
       kind: 'concert',
       state: 'past',
       date: '2024-04-01',
+    });
+    // USER_A has a show at VENUE_OVERRIDE → standing to set a per-user alias,
+    // and the venue shows up in shows.list for the cross-surface assertion.
+    await createTestShow({
+      id: SHOW_OVERRIDE,
+      userId: USER_A,
+      venueId: VENUE_OVERRIDE,
+      kind: 'concert',
+      state: 'past',
+      date: '2024-07-04',
     });
 
     // USER_A follows VENUE_FOLLOWED_ONLY directly (no shows).
@@ -403,6 +426,11 @@ describe('venues router', () => {
     it('saves a scrape config and reads it back via scrapeStatus', async () => {
       const venueId = fakeUuid(PREFIX, 'vsc');
       await createTestVenue({ id: venueId, name: `${PREFIX} ScrapeVenue`, city: 'Austin' });
+      // Scrape config is gated on follow/ownership — USER_A must follow it.
+      await db
+        .insert(userVenueFollows)
+        .values({ userId: USER_A, venueId })
+        .onConflictDoNothing();
       const res = await callerFor(USER_A).venues.saveScrapeConfig({
         venueId,
         config: { url: 'https://example.com/calendar', frequencyDays: 7 },
@@ -417,6 +445,10 @@ describe('venues router', () => {
     it('clearing the config (config=null) removes it', async () => {
       const venueId = fakeUuid(PREFIX, 'vscclr');
       await createTestVenue({ id: venueId, name: `${PREFIX} ClearVenue`, city: 'Austin' });
+      await db
+        .insert(userVenueFollows)
+        .values({ userId: USER_A, venueId })
+        .onConflictDoNothing();
       // Save then clear
       await callerFor(USER_A).venues.saveScrapeConfig({
         venueId,
@@ -431,14 +463,107 @@ describe('venues router', () => {
       assert.equal(status.config, null);
     });
 
-    it('scrapeStatus throws NOT_FOUND for unknown venue', async () => {
+    it('scrapeStatus throws FORBIDDEN for a venue the caller does not follow', async () => {
+      // The follow/ownership gate runs before the venue-existence check, so an
+      // unknown (or simply unfollowed) venue surfaces as FORBIDDEN — the caller
+      // can't hold a follow on a row they have no relationship with.
       await assert.rejects(
         () =>
           callerFor(USER_A).venues.scrapeStatus({
             venueId: '00000000-0000-0000-0000-000000000000',
           }),
-        (err: unknown) => err instanceof TRPCError && err.code === 'NOT_FOUND',
+        (err: unknown) => err instanceof TRPCError && err.code === 'FORBIDDEN',
       );
+    });
+  });
+
+  describe('per-user venue name overrides', () => {
+    it('rename is user-specific: it does not touch the canonical name or other users', async () => {
+      await callerFor(USER_A).venues.rename({
+        venueId: VENUE_OVERRIDE,
+        name: 'My Private Spot',
+      });
+
+      // USER_A sees the alias as `name`, with canonicalName preserved.
+      const detailA = await callerFor(USER_A).venues.detail({ venueId: VENUE_OVERRIDE });
+      assert.equal(detailA.name, 'My Private Spot');
+      assert.equal(detailA.canonicalName, `${PREFIX} Canonical Override Venue`);
+      assert.equal(detailA.hasCustomName, true);
+
+      // USER_B sees the untouched canonical name (no alias of their own).
+      const detailB = await callerFor(USER_B).venues.detail({ venueId: VENUE_OVERRIDE });
+      assert.equal(detailB.name, `${PREFIX} Canonical Override Venue`);
+      assert.equal(detailB.hasCustomName, false);
+
+      // The shared `venues.name` row is unchanged.
+      const [row] = await db.execute(
+        sql`SELECT name FROM venues WHERE id = ${VENUE_OVERRIDE}`,
+      ) as unknown as Array<{ name: string }>;
+      assert.equal(row!.name, `${PREFIX} Canonical Override Venue`);
+    });
+
+    it('the alias is reflected in the cross-surface shows.list venue', async () => {
+      const shows = await callerFor(USER_A).shows.list({});
+      const showAtOverride = shows.find((s) => s.venue?.id === VENUE_OVERRIDE);
+      assert.ok(showAtOverride);
+      assert.equal(showAtOverride!.venue!.name, 'My Private Spot');
+    });
+
+    it('renaming again upserts a single row (no duplicates)', async () => {
+      await callerFor(USER_A).venues.rename({
+        venueId: VENUE_OVERRIDE,
+        name: 'My Private Spot v2',
+      });
+      const rows = await db
+        .select()
+        .from(userVenueNames)
+        .where(
+          and(
+            eq(userVenueNames.userId, USER_A),
+            eq(userVenueNames.venueId, VENUE_OVERRIDE),
+          ),
+        );
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0]!.customName, 'My Private Spot v2');
+    });
+
+    it('resetName clears the alias and falls back to the canonical name', async () => {
+      const res = await callerFor(USER_A).venues.resetName({ venueId: VENUE_OVERRIDE });
+      assert.equal(res.name, `${PREFIX} Canonical Override Venue`);
+      assert.equal(res.customName, null);
+
+      const detail = await callerFor(USER_A).venues.detail({ venueId: VENUE_OVERRIDE });
+      assert.equal(detail.name, `${PREFIX} Canonical Override Venue`);
+      assert.equal(detail.hasCustomName, false);
+
+      const rows = await db
+        .select()
+        .from(userVenueNames)
+        .where(
+          and(
+            eq(userVenueNames.userId, USER_A),
+            eq(userVenueNames.venueId, VENUE_OVERRIDE),
+          ),
+        );
+      assert.equal(rows.length, 0);
+    });
+
+    it('deleting the user cascades the override row away', async () => {
+      await createTestUser(USER_CASCADE);
+      await createTestVenue({ id: VENUE_CASCADE, name: `${PREFIX} Cascade Venue`, city: 'Reno' });
+      await db.insert(userVenueNames).values({
+        userId: USER_CASCADE,
+        venueId: VENUE_CASCADE,
+        customName: 'Doomed Alias',
+      });
+
+      await db.execute(sql`DELETE FROM users WHERE id = ${USER_CASCADE}`);
+
+      const rows = await db
+        .select()
+        .from(userVenueNames)
+        .where(eq(userVenueNames.venueId, VENUE_CASCADE));
+      assert.equal(rows.length, 0);
     });
   });
 });

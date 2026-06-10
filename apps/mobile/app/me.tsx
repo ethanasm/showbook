@@ -15,8 +15,11 @@
  *     toggle controls as web Preferences (capped at 5 per user via
  *     `preferences.addRegion`).
  *   - APPEARANCE section: Theme (Light / Dark / System) + Density
- *     (Comfortable / Compact). Density is persisted locally via
- *     useTheme().setDensity (see lib/theme.ts).
+ *     (Comfortable / Compact). Theme is a device-local preference;
+ *     Density writes the server-synced `preferences.compactMode` (the
+ *     same field web's Preferences toggle uses) so the row-density
+ *     choice follows the user across web + mobile and the Shows
+ *     timeline honours it.
  *   - ACCOUNT section: Sign out (destructive).
  *   - ADMIN section: operator-only, rendered only when `admin.amIAdmin`
  *     returns true. Mirrors the web /admin page — the section + its
@@ -50,6 +53,9 @@ import {
   CloudUpload,
   Music,
   RefreshCw,
+  Building2,
+  MicVocal,
+  Library,
 } from 'lucide-react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { ScreenWrapper } from '../components/ScreenWrapper';
@@ -61,6 +67,8 @@ import { useAuth } from '@/lib/auth';
 import { trpc } from '@/lib/trpc';
 import { useNetwork, useOfflineSync } from '@/lib/network';
 import { useFeedback } from '@/lib/feedback';
+import { runOptimisticMutation } from '@/lib/mutations';
+import { getCacheOutbox } from '@/lib/cache';
 import { useSpotifyConnection } from '@/lib/spotify-connection';
 import {
   readLastWarmup,
@@ -68,22 +76,27 @@ import {
 } from '@/lib/cache/warmup';
 
 interface IntegrationRow {
-  id: 'gmail' | 'ticketmaster' | 'google-places' | 'spotify';
+  id: 'gmail' | 'ticketmaster' | 'google-places' | 'spotify' | 'wikidata';
   label: string;
   icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 }
 
-// INTEGRATIONS: the prefs router exposes user preferences + saved regions
-// but not third-party connection status for Gmail / Ticketmaster /
-// Google Places. Spotify is the exception — Phase 0 of setlist-
-// intelligence shipped `useSpotifyConnection` which the Spotify row
-// special-cases below to surface "Connected to {handle}" + a tap that
-// drives connect/disconnect.
-const INTEGRATIONS: readonly IntegrationRow[] = [
+// User integrations: per-account connections the user signs in to. Spotify
+// and Gmail use the user's own OAuth, so their status is account-specific
+// (Spotify is special-cased in `useIntegrationStatus` via the Phase-0
+// `useSpotifyConnection` hook).
+const USER_INTEGRATIONS: readonly IntegrationRow[] = [
   { id: 'spotify', label: 'Spotify', icon: Music },
   { id: 'gmail', label: 'Gmail', icon: Mail },
+] as const;
+
+// Built-in integrations: enrichment data sources Showbook talks to through
+// shared, app-wide keys (or no key, for Wikidata). They aren't tied to the
+// user's account and need no sign-in — every account uses the same ones.
+const BUILTIN_INTEGRATIONS: readonly IntegrationRow[] = [
   { id: 'ticketmaster', label: 'Ticketmaster', icon: Ticket },
   { id: 'google-places', label: 'Google Places', icon: MapPin },
+  { id: 'wikidata', label: 'Wikidata', icon: Library },
 ] as const;
 
 const APP_VERSION = `v${Constants.expoConfig?.version ?? '0.1.0'}`;
@@ -201,7 +214,7 @@ export default function MeScreen(): React.JSX.Element {
           </View>
         </View>
 
-        {/* INTEGRATIONS */}
+        {/* INTEGRATIONS (per-account) */}
         <Text style={[styles.sectionLabel, { color: colors.muted }]}>INTEGRATIONS</Text>
         <View
           style={[
@@ -210,14 +223,88 @@ export default function MeScreen(): React.JSX.Element {
             { backgroundColor: colors.surface, borderColor: colors.rule },
           ]}
         >
-          {INTEGRATIONS.map((row, i) => (
+          {USER_INTEGRATIONS.map((row, i) => (
             <IntegrationRowView
               key={row.id}
               row={row}
-              isLast={i === INTEGRATIONS.length - 1}
+              isLast={i === USER_INTEGRATIONS.length - 1}
               onPress={() => router.push(`/integrations/${row.id}`)}
             />
           ))}
+        </View>
+
+        {/* BUILT-IN INTEGRATIONS (app-wide, not account-specific) */}
+        <Text style={[styles.sectionLabel, { color: colors.muted }]}>
+          BUILT-IN INTEGRATIONS
+        </Text>
+        <Text style={[styles.sectionCaption, { color: colors.faint }]}>
+          Shared data sources Showbook uses to enrich shows — same for every
+          account, no sign-in needed.
+        </Text>
+        <View
+          style={[
+            styles.card,
+            styles.cardNoPad,
+            { backgroundColor: colors.surface, borderColor: colors.rule },
+          ]}
+        >
+          {BUILTIN_INTEGRATIONS.map((row, i) => (
+            <IntegrationRowView
+              key={row.id}
+              row={row}
+              isLast={i === BUILTIN_INTEGRATIONS.length - 1}
+              onPress={() => router.push(`/integrations/${row.id}`)}
+            />
+          ))}
+        </View>
+
+        {/* LIBRARY — venues + artists collections. Mobile has no top-level
+            Venues / Artists tabs (web does), so these rows are the entry
+            point into the full `/venues` and `/artists` list screens. */}
+        <Text style={[styles.sectionLabel, { color: colors.muted }]}>LIBRARY</Text>
+        <View
+          style={[
+            styles.card,
+            styles.cardNoPad,
+            { backgroundColor: colors.surface, borderColor: colors.rule },
+          ]}
+        >
+          <Pressable
+            onPress={() => router.push('/venues')}
+            accessibilityRole="button"
+            accessibilityLabel="View all venues"
+            testID="me-venues-row"
+            style={({ pressed }) => [
+              styles.row,
+              { borderBottomColor: colors.rule, borderBottomWidth: StyleSheet.hairlineWidth },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Building2 size={18} color={colors.muted} strokeWidth={2} />
+            <View style={styles.rowText}>
+              <Text style={[styles.rowLabel, { color: colors.ink }]}>Venues</Text>
+              <Text style={[styles.rowSub, { color: colors.muted }]} numberOfLines={1}>
+                Every stage you have logged or followed
+              </Text>
+            </View>
+            <ChevronRight size={16} color={colors.faint} strokeWidth={2} />
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/artists')}
+            accessibilityRole="button"
+            accessibilityLabel="View all artists"
+            testID="me-artists-row"
+            style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+          >
+            <MicVocal size={18} color={colors.muted} strokeWidth={2} />
+            <View style={styles.rowText}>
+              <Text style={[styles.rowLabel, { color: colors.ink }]}>Artists</Text>
+              <Text style={[styles.rowSub, { color: colors.muted }]} numberOfLines={1}>
+                Your full lineup of performers
+              </Text>
+            </View>
+            <ChevronRight size={16} color={colors.faint} strokeWidth={2} />
+          </Pressable>
         </View>
 
         {/* REGION */}
@@ -408,14 +495,18 @@ function IntegrationRowView({
  *    Showbook backend (`TICKETMASTER_API_KEY` / `GOOGLE_PLACES_API_KEY`),
  *    so they're effectively always-on for every signed-in user. The
  *    `[id].tsx` detail screen explains this when tapped.
- *  - Gmail is a per-user OAuth flow on web; the mobile OAuth bridge
- *    isn't wired up yet, so it stays on the placeholder.
+ *  - Gmail isn't a persistent connection — it's a one-time inbox scan
+ *    (`integrations/gmail.tsx`) that pulls past tickets into the logbook,
+ *    so "Not connected" misreads as a broken integration. Label it for
+ *    what it is.
  */
 function useIntegrationStatus(id: IntegrationRow['id']): string {
   // The hook always renders — we read it unconditionally and ignore the
   // value for non-Spotify rows. Cheap (cached connectionStatus query).
   const spotify = useSpotifyConnection();
-  if (id === 'ticketmaster' || id === 'google-places') return 'Connected · Built-in';
+  if (id === 'ticketmaster' || id === 'google-places' || id === 'wikidata')
+    return 'Connected · Built-in';
+  if (id === 'gmail') return 'One-time import';
   if (id !== 'spotify') return 'Not connected';
   if (spotify.connection.status === 'loading') return 'Checking…';
   if (spotify.connection.status === 'disconnected') return 'Not connected';
@@ -466,8 +557,71 @@ function formatRelative(d: Date): string {
   return `${days}d ago`;
 }
 
+/**
+ * Density control — writes the server-synced `preferences.compactMode`
+ * (web's Preferences toggle writes the same field) so the choice follows
+ * the user across surfaces and the Shows timeline renders compact vs
+ * comfortable rows accordingly. Routed through `runOptimisticMutation`
+ * so the flip survives offline / kill via the `pending_writes` outbox —
+ * the OfflineBridge dispatcher already handles `preferences.update`.
+ */
 function DensitySelector(): React.JSX.Element {
-  const { density, setDensity } = useTheme();
+  const { token } = useAuth();
+  const utils = trpc.useUtils();
+  const { showToast } = useFeedback();
+  const prefsQuery = trpc.preferences.get.useQuery(undefined, {
+    enabled: Boolean(token),
+  });
+  const compactMode = prefsQuery.data?.preferences?.compactMode ?? false;
+  const density: Density = compactMode ? 'compact' : 'comfortable';
+  const [pending, setPending] = React.useState(false);
+
+  const onChange = React.useCallback(
+    async (value: Density) => {
+      const nextCompact = value === 'compact';
+      if (pending || nextCompact === compactMode) return;
+      setPending(true);
+      try {
+        await runOptimisticMutation({
+          mutation: 'preferences.update',
+          input: { compactMode: nextCompact },
+          outbox: getCacheOutbox(),
+          call: (input) => utils.client.preferences.update.mutate(input),
+          optimistic: {
+            snapshot: () => utils.preferences.get.getData(),
+            apply: (input) => {
+              utils.preferences.get.setData(undefined, (prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      preferences: {
+                        ...prev.preferences,
+                        compactMode: input.compactMode ?? false,
+                      },
+                    }
+                  : prev,
+              );
+            },
+            rollback: (snapshot) => {
+              utils.preferences.get.setData(undefined, snapshot);
+            },
+          },
+          reconcile: () => {
+            void utils.preferences.get.invalidate();
+          },
+        });
+      } catch (err) {
+        showToast({
+          kind: 'error',
+          text: err instanceof Error ? err.message : 'Could not update density',
+        });
+      } finally {
+        setPending(false);
+      }
+    },
+    [pending, compactMode, showToast, utils],
+  );
+
   return (
     <SegmentedControl<Density>
       options={[
@@ -475,7 +629,7 @@ function DensitySelector(): React.JSX.Element {
         { value: 'compact', label: 'Compact' },
       ]}
       value={density}
-      onChange={setDensity}
+      onChange={(value) => void onChange(value)}
     />
   );
 }
@@ -524,6 +678,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 8,
+  },
+  sectionCaption: {
+    fontFamily: 'Geist Sans 400',
+    fontSize: 12,
+    lineHeight: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    marginTop: -4,
   },
   card: {
     marginHorizontal: 16,

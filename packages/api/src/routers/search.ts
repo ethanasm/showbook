@@ -11,6 +11,7 @@ import {
   userVenueFollows,
 } from '@showbook/db';
 import { enforceRateLimit } from '../rate-limit';
+import { loadVenueNameOverrides } from '../venue-names';
 import {
   searchEvents,
   inferKind,
@@ -26,7 +27,7 @@ const RESULT_LIMIT = 8;
 export type GlobalShowResult = {
   id: string;
   date: string | null;
-  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports' | 'film' | 'unknown';
+  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'film' | 'unknown';
   state: 'past' | 'ticketed' | 'watching';
   title: string;
   venueName: string;
@@ -59,7 +60,7 @@ export type GlobalSearchResults = {
  * flow with the headliner / lineup / venue / date pre-filled.
  *
  * `kind` is narrowed to the four watchable kinds: Ticketmaster events
- * that infer to `sports` / `film` / `unknown` are filtered out so the
+ * that infer to `film` / `unknown` are filtered out so the
  * section only surfaces things the user can actually log — the same
  * watchability rule the Discover feed applies.
  */
@@ -81,7 +82,7 @@ export type FutureShowResult = {
 /**
  * Map a Ticketmaster event to a `FutureShowResult`, or `null` when it
  * should be dropped — either it inferred to a non-watchable kind
- * (sports/film/unknown) or it has no venue name (the Discover
+ * (film/unknown) or it has no venue name (the Discover
  * normalizer refuses those too).
  */
 function mapTmEventToFutureShow(event: TMEvent): FutureShowResult | null {
@@ -155,6 +156,14 @@ export const searchRouter = router({
               },
             });
 
+      // Resolve per-user venue-name overrides for the matched shows so the
+      // displayed `venueName` reflects the user's alias, not the canonical.
+      const showVenueOverrides = await loadVenueNameOverrides(
+        ctx.db,
+        userId,
+        showRows.map((s) => s.venue.id),
+      );
+
       const showResults: GlobalShowResult[] = showRows
         .sort((a, b) => {
           // Dateless rows (state='watching' with no committed performance
@@ -180,7 +189,7 @@ export const searchRouter = router({
             kind: s.kind,
             state: s.state,
             title,
-            venueName: s.venue.name,
+            venueName: showVenueOverrides.get(s.venue.id) ?? s.venue.name,
             venueCity: s.venue.city ?? null,
           };
         });
@@ -263,10 +272,18 @@ export const searchRouter = router({
             counts.map((c) => [c.venueId, Number(c.showCount)]),
           );
 
+          // Match is on the canonical name/city (above); display the user's
+          // alias when they have one.
+          const venueNameOverrides = await loadVenueNameOverrides(
+            ctx.db,
+            userId,
+            matchedIds,
+          );
+
           venueRows = matchedVenues
             .map((v) => ({
               id: v.id,
-              name: v.name,
+              name: venueNameOverrides.get(v.id) ?? v.name,
               city: v.city ?? null,
               showCount: countById.get(v.id) ?? 0,
             }))
@@ -291,7 +308,7 @@ export const searchRouter = router({
    * Future-shows search — Ticketmaster events starting from now,
    * surfaced as a separate section in global search. Results are
    * filtered with the same watchability rule as Discover (no
-   * sports / film / unknown), so every row deep-links cleanly into
+   * film / unknown), so every row deep-links cleanly into
    * the Add flow.
    *
    * Best-effort: a Ticketmaster outage (or a missing API key) yields

@@ -20,6 +20,7 @@ import {
   enqueueBackfillPerformerMbids,
   enqueueBackfillPerformerTicketmasterIds,
   enqueueBackfillPerformerSpotifyIds,
+  enqueueBackfillPerformerWikidataIds,
   enqueueBackfillShowTicketUrls,
 } from '../job-queue';
 import { child } from '@showbook/observability';
@@ -52,6 +53,40 @@ export const adminRouter = router({
       .limit(1);
     return { isAdmin: isAdminEmail(user?.email) };
   }),
+
+  /**
+   * Rename a venue's CANONICAL name globally — the shared `venues.name` that
+   * every user sees as the baseline. This is the operator escape hatch for
+   * fixing a genuine typo in the canonical record; the per-user
+   * `venues.rename` alias (in `user_venue_names`) is unaffected and still
+   * overrides this for users who set one.
+   */
+  renameVenue: adminProcedure
+    .input(
+      z.object({
+        venueId: z.string().uuid(),
+        name: z.string().min(1).max(300),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [updated] = await ctx.db
+        .update(venues)
+        .set({ name: input.name.trim() })
+        .where(eq(venues.id, input.venueId))
+        .returning();
+      if (!updated) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Venue not found' });
+      }
+      log.info(
+        {
+          event: 'admin.venue.rename',
+          userId: ctx.session.user.id,
+          venueId: input.venueId,
+        },
+        'Canonical venue name updated by admin',
+      );
+      return { id: updated.id, name: updated.name };
+    }),
 
   /**
    * Fill in missing latitude/longitude/stateRegion/country for every venue
@@ -431,6 +466,28 @@ export const adminRouter = router({
           jobId,
         },
         'Admin enqueued backfill-performer-spotify-ids job',
+      );
+      return { jobId };
+    },
+  ),
+
+  /**
+   * Enqueue the `backfill/performer-wikidata-ids` cron on demand. Resolves
+   * a Wikidata QID (+ headshot + MBID when present) for every theatre cast
+   * / non-TM performer without one. Already runs daily at 07:15 ET. Use
+   * this after adding theatre shows to catch up the cast backlog.
+   */
+  enqueueBackfillPerformerWikidataIds: adminProcedure.mutation(
+    async ({ ctx }) => {
+      const userId = ctx.session.user.id;
+      const jobId = await enqueueBackfillPerformerWikidataIds();
+      log.info(
+        {
+          event: 'admin.backfill_performer_wikidata_qids.enqueue',
+          userId,
+          jobId,
+        },
+        'Admin enqueued backfill-performer-wikidata-ids job',
       );
       return { jobId };
     },

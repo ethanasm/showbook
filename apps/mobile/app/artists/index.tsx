@@ -20,17 +20,20 @@ import {
   FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, Search } from 'lucide-react-native';
+import { ChevronLeft } from 'lucide-react-native';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
 import { EmptyStateHero } from '../../components/design-system';
 import { EmptyState } from '../../components/EmptyState';
 import { ArtistCard, type ArtistCardArtist } from '../../components/ArtistCard';
+import { ListSearchBar } from '../../components/ListSearchBar';
 import { RowSkeleton } from '../../components/skeletons';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme } from '@/lib/theme';
 import { useAuth } from '@/lib/auth';
 import { trpc, type RouterOutput } from '@/lib/trpc';
 import { useCachedQuery } from '@/lib/cache';
+import { filterByQuery } from '@/lib/list-search';
+import { useDebouncedValue } from '@showbook/shared/hooks';
 
 type UtilsClient = ReturnType<typeof trpc.useUtils>['client'];
 type PerformerListRow = RouterOutput<UtilsClient['performers']['list']['query']>[number];
@@ -44,6 +47,8 @@ export default function ArtistsListScreen(): React.JSX.Element {
   const router = useRouter();
   const { token } = useAuth();
   const utils = trpc.useUtils();
+  const [query, setQuery] = React.useState('');
+  const debouncedQuery = useDebouncedValue(query, 150);
 
   const listQuery = useCachedQuery<PerformerListRow[]>({
     queryKey: ['mobile', 'artists', 'list'],
@@ -82,6 +87,11 @@ export default function ArtistsListScreen(): React.JSX.Element {
     return [...followedOnly, ...withShows];
   }, [listQuery.data, followedQuery.data]);
 
+  const filtered = React.useMemo(
+    () => filterByQuery(merged, debouncedQuery, (a) => [a.name]),
+    [merged, debouncedQuery],
+  );
+
   const isLoading = listQuery.isLoading && followedQuery.isLoading;
   const isErrored =
     !isLoading &&
@@ -105,19 +115,8 @@ export default function ArtistsListScreen(): React.JSX.Element {
     </Pressable>
   );
 
-  const searchAction = (
-    <Pressable
-      onPress={() => router.push('/search')}
-      hitSlop={12}
-      accessibilityRole="button"
-      accessibilityLabel="Search"
-    >
-      <Search size={20} color={colors.ink} strokeWidth={2} />
-    </Pressable>
-  );
-
   return (
-    <ScreenWrapper title="Artists" eyebrow="LINEUP" leading={back} rightAction={searchAction} large>
+    <ScreenWrapper title="Artists" eyebrow="LINEUP" leading={back} large>
       {isLoading ? (
         <View style={styles.skeletonWrap}>
           {Array.from({ length: 6 }).map((_, i) => (
@@ -151,30 +150,47 @@ export default function ArtistsListScreen(): React.JSX.Element {
           />
         </View>
       ) : (
-        <FlatList
-          data={merged}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-          refreshControl={refreshControl}
-          // Virtualisation tuning for power users with deep rosters —
-          // see comment in `app/(tabs)/shows.tsx` for the rationale.
-          initialNumToRender={14}
-          maxToRenderPerBatch={10}
-          windowSize={11}
-          removeClippedSubviews
-          renderItem={({ item }) => (
-            <ArtistCard
-              artist={item}
-              onPress={() => router.push(`/artists/${item.id}`)}
-            />
-          )}
-          ListHeaderComponent={
-            <Text style={[styles.listLabel, { color: colors.muted }]}>
-              {merged.length} {merged.length === 1 ? 'ARTIST' : 'ARTISTS'}
-            </Text>
-          }
-        />
+        <>
+          <ListSearchBar
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Filter artists…"
+            accessibilityLabel="Filter artists"
+          />
+          <FlatList
+            data={filtered}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+            refreshControl={refreshControl}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            // Virtualisation tuning for power users with deep rosters —
+            // see comment in `app/(tabs)/shows.tsx` for the rationale.
+            initialNumToRender={14}
+            maxToRenderPerBatch={10}
+            windowSize={11}
+            removeClippedSubviews
+            renderItem={({ item }) => (
+              <ArtistCard
+                artist={item}
+                onPress={() => router.push(`/artists/${item.id}`)}
+              />
+            )}
+            ListHeaderComponent={
+              <Text style={[styles.listLabel, { color: colors.muted }]}>
+                {filtered.length} {filtered.length === 1 ? 'ARTIST' : 'ARTISTS'}
+              </Text>
+            }
+            ListEmptyComponent={
+              <View style={styles.noResults}>
+                <Text style={[styles.noResultsText, { color: colors.muted }]}>
+                  No artists match “{debouncedQuery.trim()}”.
+                </Text>
+              </View>
+            }
+          />
+        </>
       )}
     </ScreenWrapper>
   );
@@ -206,5 +222,14 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: 8,
+  },
+  noResults: {
+    paddingHorizontal: 4,
+    paddingTop: 12,
+  },
+  noResultsText: {
+    fontFamily: 'Geist Sans',
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

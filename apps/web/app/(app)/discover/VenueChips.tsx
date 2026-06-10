@@ -41,6 +41,7 @@ export function VenueChips({
   totalCount,
   allLabel = "All",
   pickerTitle = "All filters",
+  hideCounts = false,
 }: {
   venues: ChipOption[];
   selected: string | null;
@@ -48,6 +49,12 @@ export function VenueChips({
   totalCount: number;
   allLabel?: string;
   pickerTitle?: string;
+  /** Suppress the numeric count / badge on the *inline* chips. Mirrors
+   *  the mobile `FilterChipsRow` prop so the Discover rail stays short
+   *  and more followed-entity chips fit on one line. The `count` is
+   *  still used for ordering and the fit math, and the overflow picker
+   *  menu always shows it so the per-group metadata stays one tap away. */
+  hideCounts?: boolean;
 }) {
   // Pin the active selection to the front so it stays inline (and so a
   // pick from the dropdown surfaces without a horizontal hunt).
@@ -142,7 +149,7 @@ export function VenueChips({
         {label}
         {sub ? <span className="discover-chip__sub"> · {sub}</span> : null}
       </span>
-      {badge.length > 0 ? (
+      {!hideCounts && badge.length > 0 ? (
         <span className="discover-chip__count">{badge}</span>
       ) : null}
     </>

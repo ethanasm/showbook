@@ -115,16 +115,20 @@ beforeEach(() => {
   delete process.env.RESEND_API_KEY;
   delete process.env.ADMIN_EMAILS;
   delete process.env.AXIOM_QUERY_TOKEN;
+  // Keep ci_health offline + deterministic ("unknown") — no real GitHub call.
+  delete process.env.GITHUB_HEALTH_TOKEN;
+  delete process.env.GITHUB_TOKEN;
 });
 
 describe('runHealthCheck', () => {
   it('runs every check and rolls up status (ok when all clean and Axiom unset)', async () => {
     const result = await runHealthCheck({ pings: noopPings, resend: null, generatePreamble: noPreamble });
     // 6 ok (db, queue, freshness, stalled, missed_schedules, external)
-    // + 2 unknown (the remaining axiom-backed checks: failed_jobs, error_volume).
-    assert.equal(result.checks.length, 8);
+    // + 3 unknown (the token-gated checks: failed_jobs, error_volume,
+    //   ci_health — Axiom + GitHub tokens are unset in the test env).
+    assert.equal(result.checks.length, 9);
     assert.equal(result.failCount, 0);
-    assert.equal(result.unknownCount, 2);
+    assert.equal(result.unknownCount, 3);
     assert.equal(result.okCount, 6);
     assert.equal(result.status, 'ok');
     assert.equal(result.emailSent, false); // no recipient configured
@@ -268,7 +272,7 @@ describe('runHealthCheck', () => {
       resend: fake,
       generatePreamble,
     });
-    assert.equal(capturedCount, 8);
+    assert.equal(capturedCount, 9);
     assert.ok(['ok', 'warn', 'fail', 'unknown'].includes(capturedStatus ?? ''));
   });
 

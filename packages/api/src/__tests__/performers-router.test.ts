@@ -136,6 +136,44 @@ describe('performersRouter (unit)', () => {
         globalThis.fetch = origFetch;
       }
     });
+
+    it('routes kind=theatre to Wikidata and returns QID + subtitle, tmAttractionId null', async () => {
+      const origFetch = globalThis.fetch;
+      const json = (body: unknown) =>
+        ({ ok: true, status: 200, json: async () => body }) as unknown as Response;
+      globalThis.fetch = (async (input: string | URL) => {
+        const url = String(input);
+        if (url.includes('wbsearchentities')) {
+          return json({
+            search: [{ id: 'Q40281836', label: 'Cole Escola', description: 'American actor' }],
+          });
+        }
+        return json({
+          entities: {
+            Q40281836: {
+              claims: {
+                P31: [{ mainsnak: { datavalue: { value: { id: 'Q5' } } } }],
+                P18: [{ mainsnak: { datavalue: { value: 'Cole.png' } } }],
+              },
+            },
+          },
+        });
+      }) as typeof globalThis.fetch;
+      try {
+        const db = makeFakeDb();
+        const result = await caller(db).searchExternal({
+          query: 'Cole Escola',
+          kind: 'theatre',
+        });
+        assert.equal(result.length, 1);
+        assert.equal(result[0].wikidataQid, 'Q40281836');
+        assert.equal(result[0].tmAttractionId, null);
+        assert.equal(result[0].subtitle, 'American actor');
+        assert.match(result[0].imageUrl ?? '', /commons\.wikimedia\.org/);
+      } finally {
+        globalThis.fetch = origFetch;
+      }
+    });
   });
 
   describe('list', () => {
@@ -299,6 +337,121 @@ describe('performersRouter (unit)', () => {
       };
       const result = await caller(db).followed();
       assert.equal(result.length, 2);
+    });
+  });
+
+  describe('upcomingAnnouncements', () => {
+    const performerRow = (over: Record<string, unknown> = {}) => ({
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      name: 'Test Artist',
+      ticketmasterAttractionId: null,
+      ...over,
+    });
+
+    it('throws NOT_FOUND when the performer does not exist', async () => {
+      const db = makeFakeDb({ selectResults: [[]] });
+      await assert.rejects(
+        () =>
+          caller(db).upcomingAnnouncements({
+            performerId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          }),
+        (err: unknown) => err instanceof TRPCError && err.code === 'NOT_FOUND',
+      );
+    });
+
+    it('shapes stored announcements (no live fetch) when stored data exists', async () => {
+      const stored = {
+        announcement: {
+          id: 'ann-1',
+          kind: 'concert',
+          headliner: 'Test Artist',
+          headlinerPerformerId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          support: ['Opener'],
+          productionName: null,
+          showDate: '2999-08-01',
+          onSaleStatus: 'on_sale',
+          onSaleDate: null,
+          ticketUrl: null,
+        },
+        venue: { id: 'v-1', name: 'Big Hall', city: 'NYC', stateRegion: 'NY' },
+      };
+      const db = makeFakeDb({
+        selectResults: [
+          [performerRow()], // performer lookup
+          [], // user shows featuring performer
+          [], // linked announcement ids
+          [stored], // stored announcements ⨝ venue
+        ],
+      });
+      const result = await caller(db).upcomingAnnouncements({
+        performerId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      });
+      assert.equal(result.length, 1);
+      assert.equal(result[0]!.id, 'ann-1');
+      assert.equal(result[0]!.ephemeral, false);
+      assert.equal(result[0]!.venue.id, 'v-1');
+    });
+
+    it('drops a stored row the user already linked to one of their shows', async () => {
+      const stored = {
+        announcement: {
+          id: 'ann-linked',
+          kind: 'concert',
+          headliner: 'Test Artist',
+          headlinerPerformerId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          support: null,
+          productionName: null,
+          showDate: '2999-08-01',
+          onSaleStatus: 'on_sale',
+          onSaleDate: null,
+          ticketUrl: null,
+        },
+        venue: { id: 'v-1', name: 'Big Hall', city: 'NYC', stateRegion: 'NY' },
+      };
+      const db = makeFakeDb({
+        selectResults: [
+          [performerRow()],
+          [],
+          [{ announcementId: 'ann-linked' }], // already linked → dropped
+          [stored],
+        ],
+      });
+      const result = await caller(db).upcomingAnnouncements({
+        performerId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      });
+      assert.deepEqual(result, []);
+    });
+
+    it('returns [] with no stored data and no Ticketmaster id (no live fetch)', async () => {
+      const db = makeFakeDb({
+        selectResults: [
+          [performerRow({ ticketmasterAttractionId: null })],
+          [],
+          [],
+          [], // no stored rows
+        ],
+      });
+      const result = await caller(db).upcomingAnnouncements({
+        performerId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      });
+      assert.deepEqual(result, []);
+    });
+
+    it('falls back to a live TM lookup when stored is empty and a TM id exists', async () => {
+      // No TICKETMASTER_API_KEY in the unit env → searchEvents short-circuits
+      // to an empty result, so the live branch returns [] without a real call.
+      const db = makeFakeDb({
+        selectResults: [
+          [performerRow({ ticketmasterAttractionId: 'K8vZ-live' })],
+          [],
+          [],
+          [], // no stored rows → live path
+        ],
+      });
+      const result = await caller(db, 'live-fetch-user').upcomingAnnouncements({
+        performerId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      });
+      assert.deepEqual(result, []);
     });
   });
 

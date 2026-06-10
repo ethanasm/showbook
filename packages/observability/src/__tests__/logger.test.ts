@@ -6,7 +6,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { logger, child, getLogger, flushLogger, serializeErr } from '../logger';
+import { logger, child, getLogger, flushLogger, serializeErr, _testing } from '../logger';
 
 describe('logger', () => {
   it('getLogger returns a singleton', () => {
@@ -154,5 +154,65 @@ describe('serializeErr', () => {
     assert.equal(serialized.randomAttachedField, undefined);
     assert.equal(serialized.anotherJunkField, undefined);
     assert.equal(serialized.message, 'boom');
+  });
+});
+
+// Mobile telemetry is fanned to its own Axiom dataset (AXIOM_MOBILE_DATASET)
+// by matching the bound `component` on serialized lines — keeping the
+// high-cardinality mobile field surface off the server dataset's column
+// budget. See docs/specs/operations/axiom-dataset-cutover.md.
+describe('isMobileRecord', () => {
+  const { isMobileRecord, MOBILE_COMPONENT } = _testing;
+
+  it('matches a real pino line bound with the mobile component', () => {
+    const line = JSON.stringify({
+      level: 50,
+      component: MOBILE_COMPONENT,
+      event: 'mobile.upload.put.failed',
+      msg: 'upload failed',
+    });
+    assert.equal(isMobileRecord(line), true);
+  });
+
+  it('does not match server lines from other components', () => {
+    const line = JSON.stringify({
+      level: 30,
+      component: 'health-check.axiom',
+      event: 'job.complete',
+    });
+    assert.equal(isMobileRecord(line), false);
+  });
+
+  it('does not match a line that merely mentions the component name in a value', () => {
+    // The marker is the top-level `component`, not a loose substring — a
+    // message that happens to contain the words must not be misrouted.
+    const line = JSON.stringify({
+      level: 30,
+      component: 'api.trpc',
+      msg: 'forwarded to mobile.telemetry sink',
+    });
+    assert.equal(isMobileRecord(line), false);
+  });
+
+  it('does not match a server line that embeds a mobile row in its payload', () => {
+    // Regression: the error_volume health check lists its top error events
+    // in `top`, which can include a mobile.telemetry row. The server line's
+    // own component is health-check, so it must stay in the server dataset
+    // — a substring match on the raw line would misroute it to prod-mobile.
+    const line = JSON.stringify({
+      level: 30,
+      component: 'health-check',
+      event: 'health.check.error_volume.ok',
+      top: [
+        { event: 'mobile.trpc.error', component: MOBILE_COMPONENT, cnt: 13 },
+      ],
+    });
+    assert.equal(isMobileRecord(line), false);
+  });
+
+  it('treats a malformed (non-JSON) line as non-mobile', () => {
+    // Shouldn't happen from pino, but if it does we keep the line in the
+    // server dataset rather than dropping it.
+    assert.equal(isMobileRecord('not json {'), false);
   });
 });

@@ -21,6 +21,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Linking,
+  type GestureResponderEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Link } from 'expo-router';
@@ -317,8 +318,12 @@ function Hero({
 
   // Mirror the web app's rename gate (`packages/api/src/routers/venues.ts`):
   // only show the rename affordance when the user already has standing at
-  // the venue — server still enforces this on submit.
-  const canRename = venue.isFollowed || venue.userShowCount > 0;
+  // the venue — server still enforces this on submit. Admins can always open
+  // the sheet to edit the canonical name.
+  const amIAdmin =
+    trpc.admin.amIAdmin.useQuery(undefined, { staleTime: 5 * 60_000 }).data
+      ?.isAdmin ?? false;
+  const canRename = venue.isFollowed || venue.userShowCount > 0 || amIAdmin;
   const [renameOpen, setRenameOpen] = React.useState(false);
   const openRename = React.useCallback(() => {
     if (!canRename) return;
@@ -389,6 +394,8 @@ function Hero({
           onClose={() => setRenameOpen(false)}
           venueId={venueId}
           currentName={venue.name}
+          canonicalName={venue.canonicalName}
+          isAdmin={amIAdmin}
         />
       ) : null}
     </View>
@@ -657,11 +664,23 @@ function UpcomingRow({
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const router = useRouter();
   const { showToast } = useFeedback();
   const { month, day, dow } = parseDate(item.showDate);
   const accent = tokens.kindColor(item.kind);
   const title = item.productionName ?? item.headliner;
+  // Only stored announcements with a resolved headliner performer can deep-link
+  // to artist detail; festival / unresolved rows leave the title as plain text.
+  const performerId = item.headlinerPerformerId;
   const ticketUrl = item.ticketUrl;
+
+  const openArtist = (e: GestureResponderEvent): void => {
+    // Claim the touch so the row's onPress (action sheet) doesn't also fire.
+    e.stopPropagation();
+    if (!performerId) return;
+    void hapticSelection();
+    router.push(`/artists/${performerId}`);
+  };
 
   return (
     <Pressable
@@ -691,6 +710,14 @@ function UpcomingRow({
           style={[styles.upcomingTitle, { color: colors.ink }]}
           numberOfLines={2}
           ellipsizeMode="tail"
+          {...(performerId
+            ? {
+                onPress: openArtist,
+                accessibilityRole: 'link' as const,
+                accessibilityLabel: `${title} — open artist`,
+                testID: `venue-upcoming-artist-${item.id}`,
+              }
+            : {})}
         >
           {title}
         </Text>
@@ -734,6 +761,12 @@ function YourShows({
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const { token } = useAuth();
+  // Row density follows the server-synced preferences.compactMode, same as
+  // the Shows timeline and web's list views.
+  const compact =
+    trpc.preferences.get.useQuery(undefined, { enabled: Boolean(token) }).data
+      ?.preferences?.compactMode ?? false;
   return (
     <Section title="Your shows" icon={<Music size={13} color={colors.ink} strokeWidth={2} />}>
       {loading && shows.length === 0 ? (
@@ -752,7 +785,7 @@ function YourShows({
         <View style={styles.showsList}>
           {shows.map((s) => (
             <Link key={s.id} href={`/show/${s.id}`} asChild>
-              <ShowCard show={toShowCard(s, venueName, venueCity)} />
+              <ShowCard show={toShowCard(s, venueName, venueCity)} compact={compact} />
             </Link>
           ))}
         </View>

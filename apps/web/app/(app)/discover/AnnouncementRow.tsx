@@ -45,6 +45,7 @@ export function AnnouncementRow({
     announcement.onSaleStatus === "on_sale" ||
     announcement.onSaleStatus === "presale";
   const isSoldOut = announcement.onSaleStatus === "sold_out";
+  const isCancelled = announcement.onSaleStatus === "cancelled";
   const runMode = isRun(announcement);
   const runDateLabel =
     runMode && announcement.runStartDate && announcement.runEndDate
@@ -58,7 +59,7 @@ export function AnnouncementRow({
 
   return (
     <div
-      className={`discover-row discover-row--${announcement.kind} ${isWatching ? "discover-row--watched" : ""} ${runMode ? "discover-row--run" : ""} ${groupBy === "region" ? "discover-row--region" : ""} ${isSoldOut ? "discover-row--sold-out" : ""}`}
+      className={`discover-row discover-row--${announcement.kind} ${isWatching ? "discover-row--watched" : ""} ${runMode ? "discover-row--run" : ""} ${groupBy === "region" ? "discover-row--region" : ""} ${isSoldOut ? "discover-row--sold-out" : ""} ${isCancelled ? "discover-row--cancelled" : ""}`}
     >
       {/* Date */}
       <div>
@@ -147,7 +148,7 @@ export function AnnouncementRow({
             </div>
             {announcement.support && announcement.support.length > 0 && (
               <div className="discover-row__support">
-                {announcement.kind === "sports" && announcement.support.length === 1 ? "vs" : "+"}{" "}
+                {"+"}{" "}
                 {announcement.support.join(", ")}
               </div>
             )}

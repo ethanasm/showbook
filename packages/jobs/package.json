@@ -9,8 +9,8 @@
     "backfill-song-index": "tsx scripts/backfill-song-index.ts",
     "email:smoke": "tsx scripts/email-smoke.ts",
     "bootstrap-pgboss": "node scripts/bootstrap-pgboss.mjs",
-    "test": "find src/__tests__ -name '*.test.ts' -not -name '*.integration.test.ts' -print0 | xargs -0 node --import tsx --test --experimental-test-module-mocks",
-    "test:coverage": "mkdir -p coverage && find src/__tests__ -name '*.test.ts' -not -name '*.integration.test.ts' -print0 | xargs -0 node --import tsx --test --experimental-test-module-mocks --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/unit.info --test-reporter=spec --test-reporter-destination=stdout",
+    "test": "find src/__tests__ -name '*.test.ts' -not -name '*.integration.test.ts' -print0 | xargs -0 env WIKIDATA_ENRICHMENT_DISABLED=1 node --import tsx --test --experimental-test-module-mocks",
+    "test:coverage": "mkdir -p coverage && find src/__tests__ -name '*.test.ts' -not -name '*.integration.test.ts' -print0 | xargs -0 env WIKIDATA_ENRICHMENT_DISABLED=1 node --import tsx --test --experimental-test-module-mocks --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/unit.info --test-reporter=spec --test-reporter-destination=stdout",
     "test:integration": "node ../../scripts/run-integration.mjs packages/jobs",
     "test:integration:coverage": "mkdir -p coverage && LCOV_OUT=$PWD/coverage/integration.info node ../../scripts/run-integration.mjs packages/jobs --coverage",
     "typecheck": "tsc --noEmit -p tsconfig.json"
@@ -27,7 +27,7 @@
     "resend": "^6.12.4"
   },
   "devDependencies": {
-    "tsx": "^4.22.3",
+    "tsx": "^4.22.4",
     "typescript": "~6.0.3"
   }
 }

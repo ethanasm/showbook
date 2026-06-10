@@ -393,6 +393,41 @@
       "when": 1795968540000,
       "tag": "0055_null_resale_ticket_urls",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1795968600000,
+      "tag": "0056_remove_sports_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1795968660000,
+      "tag": "0057_cancelled_on_sale_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1795968720000,
+      "tag": "0058_performer_wikidata_qid",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1795968780000,
+      "tag": "0059_ticket_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1795968840000,
+      "tag": "0060_user_venue_names",
+      "breakpoints": true
     }
   ]
 }

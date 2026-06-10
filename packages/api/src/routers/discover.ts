@@ -631,7 +631,7 @@ export const discoverRouter = router({
       }
 
       if (isNonWatchableKind(announcement.kind)) {
-        // Sports / film / unknown are surfaced on Discover but Showbook
+        // Film / unknown are surfaced on Discover but Showbook
         // doesn't (yet) model them as watchable shows.
         const label = KIND_LABELS[announcement.kind as keyof typeof KIND_LABELS] ?? announcement.kind;
         throw new TRPCError({

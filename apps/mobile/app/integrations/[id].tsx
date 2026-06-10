@@ -5,8 +5,9 @@
  * never lands here. The remaining three rows split into two buckets:
  *
  *   - Ticketmaster + Google Places are app-wide API keys baked into the
- *     Showbook backend (`TICKETMASTER_API_KEY` / `GOOGLE_PLACES_API_KEY`).
- *     They power show enrichment + the city / venue search on every
+ *     Showbook backend (`TICKETMASTER_API_KEY` / `GOOGLE_PLACES_API_KEY`),
+ *     and Wikidata is a keyless public API. They power show enrichment +
+ *     the city / venue search + theatre-cast enrichment on every
  *     signed-in account without any per-user connect step, so the
  *     detail screen explains the always-on status instead of dead-ending
  *     on "Not yet on mobile".
@@ -25,13 +26,19 @@ import {
   Check,
   MapPin,
   Ticket,
+  Library,
 } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { EmptyState } from '../../components/EmptyState';
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 
-type IntegrationId = 'gmail' | 'ticketmaster' | 'google-places' | 'spotify';
+type IntegrationId =
+  | 'gmail'
+  | 'ticketmaster'
+  | 'google-places'
+  | 'spotify'
+  | 'wikidata';
 
 interface IntegrationCopy {
   title: string;
@@ -69,6 +76,19 @@ const INTEGRATIONS: Record<IntegrationId, IntegrationCopy> = {
         'City search when adding a region',
         'Venue lookup + follow-from-search',
         'Map photos + addresses for venue cards',
+      ],
+    },
+  },
+  wikidata: {
+    title: 'Wikidata',
+    builtIn: {
+      icon: Library,
+      blurb:
+        'Showbook queries the public Wikidata API (no key, no sign-in) to enrich theatre cast members — the people who mostly have no Ticketmaster page.',
+      powers: [
+        'Cast typeahead suggestions when adding a theatre show',
+        'Cast headshots from Wikimedia Commons',
+        'MusicBrainz links that unify stage-and-screen performers',
       ],
     },
   },

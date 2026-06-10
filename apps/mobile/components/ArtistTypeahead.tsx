@@ -34,8 +34,12 @@ export interface ArtistSuggestion {
   name: string;
   imageUrl?: string | null;
   tmAttractionId?: string | null;
+  /** Wikidata QID for theatre cast (no Ticketmaster page). */
+  wikidataQid?: string | null;
   musicbrainzId?: string | null;
-  /** Pill copy — typically "Ticketmaster" or "Followed". */
+  /** Disambiguating description for Wikidata people, e.g. "American actor". */
+  subtitle?: string | null;
+  /** Pill copy — typically "Ticketmaster", "Wikidata" or "Followed". */
   source?: string;
 }
 
@@ -150,6 +154,14 @@ export function ArtistTypeahead({
                 >
                   {artist.name}
                 </Text>
+                {artist.subtitle ? (
+                  <Text
+                    style={[styles.rowSubtitle, { color: colors.muted }]}
+                    numberOfLines={1}
+                  >
+                    {artist.subtitle}
+                  </Text>
+                ) : null}
                 {artist.source ? (
                   <Text
                     style={[styles.rowMeta, { color: colors.muted }]}
@@ -211,6 +223,11 @@ const styles = StyleSheet.create({
   rowName: {
     fontFamily: 'Geist Sans 600',
     fontSize: 14,
+  },
+  rowSubtitle: {
+    fontFamily: 'Geist Sans 400',
+    fontSize: 11.5,
+    marginTop: 1,
   },
   rowMeta: {
     fontFamily: 'Geist Sans 400',

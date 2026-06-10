@@ -44,7 +44,7 @@ interface ShowDetailShowPerformer {
 }
 interface ShowDetail {
   id: string;
-  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports' | 'film' | 'unknown';
+  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'film' | 'unknown';
   state: 'past' | 'ticketed' | 'watching';
   date: string | null;
   endDate: string | null;
@@ -137,6 +137,10 @@ export default function ShowDetailScreen(
           onClose={() => setActionSheetOpen(false)}
           showId={show.id}
           state={show.state as ShowState}
+          ticketStatus={
+            (show as { ticketStatus?: 'sold_out' | 'cancelled' | null })
+              .ticketStatus ?? null
+          }
           popAfterDelete
           onMarkTicketed={() => setMarkTicketedOpen(true)}
         />

@@ -38,10 +38,6 @@ describe('dark mode kind colors', () => {
   it('festival dark = #2A9D8F', () => {
     assert.equal(getKindColor('festival', 'dark'), '#2A9D8F');
   });
-
-  it('sports dark = #E8772E', () => {
-    assert.equal(getKindColor('sports', 'dark'), '#E8772E');
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -64,10 +60,6 @@ describe('light mode kind colors', () => {
   it('festival light = #238577', () => {
     assert.equal(getKindColor('festival', 'light'), '#238577');
   });
-
-  it('sports light = #D06A28', () => {
-    assert.equal(getKindColor('sports', 'light'), '#D06A28');
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -75,7 +67,7 @@ describe('light mode kind colors', () => {
 // ---------------------------------------------------------------------------
 
 describe('getKindColor mode switching', () => {
-  const kinds = ['concert', 'theatre', 'comedy', 'festival', 'sports'] as const;
+  const kinds = ['concert', 'theatre', 'comedy', 'festival'] as const;
 
   for (const kind of kinds) {
     it(`${kind}: dark ≠ light, both valid hex`, () => {
@@ -86,6 +78,32 @@ describe('getKindColor mode switching', () => {
       assert.match(light, /^#[0-9A-Fa-f]{6}$/);
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// 3b. Unknown / unmapped kinds fall back instead of throwing
+// ---------------------------------------------------------------------------
+
+describe('getKindColor fallback for unmapped kinds', () => {
+  // The Discoverable map feed plumbs `kind` straight from the DB enum, so a
+  // value this bundle doesn't know about (a legacy `sports` row, a future
+  // server-first kind) must degrade to the neutral `unknown` swatch rather
+  // than throw — otherwise the Map tab hard-crashes when that row renders.
+  for (const kind of ['sports', 'opera', '', 'totally-unknown']) {
+    it(`"${kind}" falls back to the unknown swatch (dark)`, () => {
+      assert.equal(getKindColor(kind, 'dark'), getKindColor('unknown', 'dark'));
+    });
+    it(`"${kind}" falls back to the unknown swatch (light)`, () => {
+      assert.equal(
+        getKindColor(kind, 'light'),
+        getKindColor('unknown', 'light'),
+      );
+    });
+  }
+
+  it('does not throw on an unmapped kind', () => {
+    assert.doesNotThrow(() => getKindColor('sports', 'dark'));
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 
 interface Candidate {
   id: string;
-  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports' | 'film' | 'unknown';
+  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'film' | 'unknown';
   productionName: string | null;
   date: string | null;
   tmVenueId: string | null;

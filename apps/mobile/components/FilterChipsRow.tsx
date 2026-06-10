@@ -49,6 +49,12 @@ export interface FilterChipsLeadingAction {
 /** Horizontal gap between inline chips — kept in sync with `styles.row.gap`
  *  so the fit calculation matches the rendered layout. */
 const CHIP_GAP = 6;
+/** Horizontal padding on the outer `wrap` (kept in sync with
+ *  `styles.wrap.paddingHorizontal`). The container's `onLayout` width
+ *  includes this padding, but the chip row lives inside it — so the fit
+ *  calculation has to subtract both sides or the trailing chip overflows
+ *  past the (clipped) right edge. */
+const WRAP_H_PADDING = 16;
 /** Reserved keys for the non-group chips in the measuring pass. */
 const LEAD_KEY = '__lead';
 const ALL_KEY = '__all';
@@ -61,6 +67,7 @@ export function FilterChipsRow({
   selected,
   onSelect,
   onLongPress,
+  onRemove,
   totalCount,
   allLabel = 'All',
   showAll = true,
@@ -68,15 +75,22 @@ export function FilterChipsRow({
   testIdPrefix,
   leadingAction,
   pickerTitle = 'All filters',
+  hideCounts = false,
+  hideInlineSublabel = false,
 }: {
   groups: FilterGroup[];
   selected: string | null;
   onSelect: (id: string | null) => void;
-  /** Long-press a group chip (or tap its trash affordance in the overflow
-   *  dropdown picker) — used by Discover to open the unfollow action
-   *  sheet. Wired to per-group entries only (never "All" or the leading
-   *  "+" action). The parent owns the confirm sheet + mutation. */
+  /** Long-press a group chip — used by Discover to open the unfollow
+   *  confirm sheet. Wired to per-group inline chips only (never "All" or
+   *  the leading "+" action). The parent owns the confirm sheet + mutation. */
   onLongPress?: (id: string) => void;
+  /** Tap the trash affordance on a row in the overflow dropdown picker.
+   *  Fires the removal directly (the trash tap is itself the explicit
+   *  intent, so no second confirm sheet) and leaves the picker open so
+   *  the row simply vanishes — stacking a confirm `Modal` over the open
+   *  picker `Modal` is what crashed the screen. Per-group rows only. */
+  onRemove?: (id: string) => void;
   /** Count rendered in the "All" chip; ignored when `showAll` is false. */
   totalCount?: number;
   allLabel?: string;
@@ -92,6 +106,18 @@ export function FilterChipsRow({
   leadingAction?: FilterChipsLeadingAction;
   /** Heading shown above the overflow dropdown picker. */
   pickerTitle?: string;
+  /** Suppress the numeric count / badge on the *inline* chips (and the
+   *  measuring pass). Used by Discover to keep the rail short so more
+   *  followed-entity chips fit on one line. The `count` is still used
+   *  for ordering and the fit calculation — only its rendering on the
+   *  rail is dropped. The overflow picker sheet always shows the count,
+   *  so the per-group metadata stays available one tap away. */
+  hideCounts?: boolean;
+  /** Suppress the `· sublabel` on the *visible* inline chips (and the
+   *  measuring pass) while keeping it in the overflow picker sheet. Used
+   *  by Discover so the venue chips read as bare venue names on the rail
+   *  but still disambiguate by city in the "All filters" sheet. */
+  hideInlineSublabel?: boolean;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -127,7 +153,9 @@ export function FilterChipsRow({
   );
 
   const onContainerLayout = React.useCallback((e: LayoutChangeEvent) => {
-    setAvailWidth(e.nativeEvent.layout.width);
+    // Subtract the wrap's horizontal padding: the chips render inside it,
+    // so the usable row width is the measured width minus both sides.
+    setAvailWidth(e.nativeEvent.layout.width - WRAP_H_PADDING * 2);
   }, []);
 
   const captureWidth = React.useCallback((key: string, w: number) => {
@@ -151,15 +179,16 @@ export function FilterChipsRow({
     [onSelect, selected, showAll],
   );
 
-  // The overflow dropdown's trash affordance routes through the same
-  // parent long-press handler the inline chips use. Close the picker
-  // first so the parent's confirm sheet isn't stacked on top of it.
+  // The overflow dropdown's trash affordance removes directly and keeps
+  // the picker open — the removed row just disappears as the parent's
+  // optimistic mutation prunes the group list. We deliberately do NOT
+  // dismiss the picker and open a confirm sheet: stacking that second
+  // `Modal` over the still-animating picker `Modal` crashed the screen.
   const requestRemove = React.useCallback(
     (id: string) => {
-      setSheetOpen(false);
-      onLongPress?.(id);
+      onRemove?.(id);
     },
-    [onLongPress],
+    [onRemove],
   );
 
   return (
@@ -170,44 +199,17 @@ export function FilterChipsRow({
     >
       {/* Off-screen measuring pass: render every possible chip once so
           we know its natural width, then lay out only what fits. */}
-      <View
-        style={styles.measure}
-        pointerEvents="none"
-        aria-hidden
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-      >
-        {hasLead && leadingAction ? (
-          <MeasuredChip onWidth={(w) => captureWidth(LEAD_KEY, w)}>
-            <LeadingChipBody label={leadingAction.label} colors={colors} />
-          </MeasuredChip>
-        ) : null}
-        {showAll ? (
-          <MeasuredChip onWidth={(w) => captureWidth(ALL_KEY, w)}>
-            <ChipBody
-              label={allLabel}
-              count={totalCount ?? 0}
-              active={false}
-              colors={colors}
-            />
-          </MeasuredChip>
-        ) : null}
-        {groups.map((g) => (
-          <MeasuredChip key={g.id} onWidth={(w) => captureWidth(g.id, w)}>
-            <ChipBody
-              label={g.name}
-              sublabel={g.sublabel}
-              count={g.count}
-              badgeText={g.badgeText}
-              active={false}
-              colors={colors}
-            />
-          </MeasuredChip>
-        ))}
-        <MeasuredChip onWidth={(w) => captureWidth(MORE_KEY, w)}>
-          <MoreChipBody count={groups.length} colors={colors} />
-        </MeasuredChip>
-      </View>
+      <MeasurePass
+        groups={groups}
+        colors={colors}
+        hasLead={hasLead}
+        showAll={showAll}
+        allLabel={allLabel}
+        totalCount={totalCount ?? 0}
+        captureWidth={captureWidth}
+        hideCounts={hideCounts}
+        hideInlineSublabel={hideInlineSublabel}
+      />
 
       {/* Visible single line. */}
       <View style={styles.row}>
@@ -228,7 +230,7 @@ export function FilterChipsRow({
               },
             ]}
           >
-            <LeadingChipBody label={leadingAction.label} colors={colors} />
+            <LeadingChipBody colors={colors} />
           </Pressable>
         ) : null}
 
@@ -239,6 +241,7 @@ export function FilterChipsRow({
             active={selected === null}
             onPress={() => onSelect(null)}
             colors={colors}
+            hideCounts={hideCounts}
             testID={testIdPrefix ? `${testIdPrefix}-all` : undefined}
           />
         ) : null}
@@ -256,6 +259,8 @@ export function FilterChipsRow({
             }
             onLongPress={onLongPress ? () => onLongPress(g.id) : undefined}
             colors={colors}
+            hideCounts={hideCounts}
+            hideInlineSublabel={hideInlineSublabel}
             testID={testIdPrefix ? `${testIdPrefix}-${g.id}` : undefined}
           />
         ))}
@@ -310,7 +315,7 @@ export function FilterChipsRow({
                 badgeText={g.badgeText}
                 active={selected === g.id}
                 onPress={() => handlePick(g.id)}
-                onRemove={onLongPress ? () => requestRemove(g.id) : undefined}
+                onRemove={onRemove ? () => requestRemove(g.id) : undefined}
                 colors={colors}
                 testID={
                   testIdPrefix ? `${testIdPrefix}-sheet-${g.id}` : undefined
@@ -380,6 +385,86 @@ function computeLayout({
   return { inline, overflow };
 }
 
+/**
+ * Off-screen measuring pass, memoized.
+ *
+ * It renders one hidden chip per group (plus the lead / all / more
+ * chips) purely to capture each natural width. With 150+ followed
+ * artists that's 150+ hidden Pressable+Text trees — re-rendering them
+ * on every parent tick (ingest polling, watched-set updates) *and* on
+ * every `widths` setState from this very pass was the dominant source
+ * of Discover's lag. Memoizing on the inputs that actually change the
+ * measured geometry (groups / colors / lead+all presence / total-count
+ * digit width) decouples it from the parent's frequent re-renders and
+ * from the `widths` map it feeds, so the chips are laid out once and
+ * left alone. `captureWidth` is a stable `useCallback` from the parent.
+ */
+const MeasurePass = React.memo(function MeasurePass({
+  groups,
+  colors,
+  hasLead,
+  showAll,
+  allLabel,
+  totalCount,
+  captureWidth,
+  hideCounts,
+  hideInlineSublabel,
+}: {
+  groups: FilterGroup[];
+  colors: ColorTokens;
+  hasLead: boolean;
+  showAll: boolean;
+  allLabel: string;
+  totalCount: number;
+  captureWidth: (key: string, w: number) => void;
+  hideCounts: boolean;
+  hideInlineSublabel: boolean;
+}): React.JSX.Element {
+  return (
+    <View
+      style={styles.measure}
+      pointerEvents="none"
+      aria-hidden
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      {hasLead ? (
+        <MeasuredChip onWidth={(w) => captureWidth(LEAD_KEY, w)}>
+          <LeadingChipBody colors={colors} />
+        </MeasuredChip>
+      ) : null}
+      {showAll ? (
+        <MeasuredChip onWidth={(w) => captureWidth(ALL_KEY, w)}>
+          <ChipBody
+            label={allLabel}
+            count={totalCount}
+            active={false}
+            colors={colors}
+            hideCounts={hideCounts}
+          />
+        </MeasuredChip>
+      ) : null}
+      {groups.map((g) => (
+        <MeasuredChip key={g.id} onWidth={(w) => captureWidth(g.id, w)}>
+          <ChipBody
+            label={g.name}
+            sublabel={g.sublabel}
+            count={g.count}
+            badgeText={g.badgeText}
+            active={false}
+            colors={colors}
+            hideCounts={hideCounts}
+            hideInlineSublabel={hideInlineSublabel}
+          />
+        </MeasuredChip>
+      ))}
+      <MeasuredChip onWidth={(w) => captureWidth(MORE_KEY, w)}>
+        <MoreChipBody count={groups.length} colors={colors} />
+      </MeasuredChip>
+    </View>
+  );
+});
+
 /** Wraps a chip body in an absolutely-positioned measuring host. */
 function MeasuredChip({
   children,
@@ -407,6 +492,8 @@ function Chip({
   onPress,
   onLongPress,
   colors,
+  hideCounts = false,
+  hideInlineSublabel = false,
   testID,
 }: {
   label: string;
@@ -417,6 +504,8 @@ function Chip({
   onPress: () => void;
   onLongPress?: () => void;
   colors: ColorTokens;
+  hideCounts?: boolean;
+  hideInlineSublabel?: boolean;
   testID?: string;
 }): React.JSX.Element {
   return (
@@ -444,6 +533,8 @@ function Chip({
         badgeText={badgeText}
         active={active}
         colors={colors}
+        hideCounts={hideCounts}
+        hideInlineSublabel={hideInlineSublabel}
       />
     </Pressable>
   );
@@ -458,6 +549,8 @@ function ChipBody({
   badgeText,
   active,
   colors,
+  hideCounts = false,
+  hideInlineSublabel = false,
 }: {
   label: string;
   sublabel?: string;
@@ -465,8 +558,12 @@ function ChipBody({
   badgeText?: string;
   active: boolean;
   colors: ColorTokens;
+  hideCounts?: boolean;
+  hideInlineSublabel?: boolean;
 }): React.JSX.Element {
-  const renderedBadge = badgeText !== undefined ? badgeText : String(count);
+  const renderedBadge =
+    hideCounts ? '' : badgeText !== undefined ? badgeText : String(count);
+  const showSublabel = Boolean(sublabel) && !hideInlineSublabel;
   return (
     <>
       <Text
@@ -480,7 +577,7 @@ function ChipBody({
         ]}
       >
         {label}
-        {sublabel ? (
+        {showSublabel ? (
           <Text
             style={[
               styles.chipSublabel,
@@ -509,24 +606,17 @@ function ChipBody({
   );
 }
 
+/** Leading action chip body — a bare "+" glyph. The label is intentionally
+ *  dropped from the visible chip (the accessibility label on the parent
+ *  Pressable still carries the full "Follow venue" / "Add region" text);
+ *  a compact "+" keeps the rail short so a long followed-entity name never
+ *  pushes a real chip off the right edge. */
 function LeadingChipBody({
-  label,
   colors,
 }: {
-  label: string;
   colors: ColorTokens;
 }): React.JSX.Element {
-  return (
-    <>
-      <Plus size={12} color={colors.accent} strokeWidth={2.5} />
-      <Text
-        numberOfLines={1}
-        style={[styles.chipLabel, { color: colors.accent, fontWeight: '600' }]}
-      >
-        {label}
-      </Text>
-    </>
-  );
+  return <Plus size={15} color={colors.accent} strokeWidth={2.5} />;
 }
 
 function MoreChipBody({
@@ -568,7 +658,11 @@ function PickerRow({
   testID?: string;
 }): React.JSX.Element {
   const renderedBadge =
-    badgeText !== undefined ? badgeText : count !== undefined ? String(count) : '';
+    badgeText !== undefined
+      ? badgeText
+      : count !== undefined
+        ? String(count)
+        : '';
   return (
     <Pressable
       accessibilityRole="button"

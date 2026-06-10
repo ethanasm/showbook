@@ -55,6 +55,8 @@ import { newPerformerRowId } from '../../components/LineupEditor';
 import { isYmd, normalizeDateInput } from '@/lib/dateInput';
 import { useVenueSearch } from '@/lib/useVenueSearch';
 import { FestivalPosterHowToSheet } from '../../components/FestivalPosterHowToSheet';
+import { PlaybillExtractSheet } from '../../components/PlaybillExtractSheet';
+import { mergeCastRows } from '@/lib/playbill/castToPerformerRows';
 
 const SCREEN_OPTIONS = { presentation: 'modal', gestureEnabled: true } as const;
 
@@ -187,6 +189,7 @@ export default function AddFormScreen(): React.JSX.Element {
 
   const [submitting, setSubmitting] = React.useState(false);
   const [posterSheetOpen, setPosterSheetOpen] = React.useState(false);
+  const [playbillSheetOpen, setPlaybillSheetOpen] = React.useState(false);
 
   const submit = React.useCallback(async () => {
     // Try to canonicalize the date field one more time at submit
@@ -329,7 +332,7 @@ export default function AddFormScreen(): React.JSX.Element {
         />
 
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1 }}
         >
           <NestableScrollContainer
@@ -347,12 +350,20 @@ export default function AddFormScreen(): React.JSX.Element {
               errors={errors}
               clearError={clearError}
               onExtractLineup={() => setPosterSheetOpen(true)}
+              onExtractCast={() => setPlaybillSheetOpen(true)}
             />
           </NestableScrollContainer>
         </KeyboardAvoidingView>
         <FestivalPosterHowToSheet
           open={posterSheetOpen}
           onClose={() => setPosterSheetOpen(false)}
+        />
+        <PlaybillExtractSheet
+          open={playbillSheetOpen}
+          onClose={() => setPlaybillSheetOpen(false)}
+          onExtracted={(rows) =>
+            set('performers', mergeCastRows(values.performers, rows))
+          }
         />
       </View>
     </>

@@ -37,6 +37,16 @@ if (!AUTH_SECRET) {
   );
 }
 
+/** Best-effort client IP for rate-limiting public procedures. */
+function clientIp(req: Request): string | null {
+  const h = req.headers;
+  const direct = h.get('cf-connecting-ip') ?? h.get('x-real-ip');
+  if (direct) return direct;
+  const fwd = h.get('x-forwarded-for');
+  const first = fwd?.split(',')[0]?.trim();
+  return first || null;
+}
+
 const handler = async (req: Request) => {
   // Resolve the session via the pure helper. The helper deliberately
   // doesn't call any IO so it can be unit-tested; this handler binds the
@@ -59,7 +69,7 @@ const handler = async (req: Request) => {
     endpoint: '/api/trpc',
     req,
     router: appRouter,
-    createContext: () => createContext({ session }),
+    createContext: () => createContext({ session, ip: clientIp(req) }),
     onError: ({ path, error }) => {
       // 4xx-equivalent codes are expected client conditions (stale
       // session cookie after a user is deleted, missing required input,

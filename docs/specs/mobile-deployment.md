@@ -5,9 +5,14 @@ and (2) ship it to the App Store and Google Play. This is opinionated to the
 state of `apps/mobile` today (Expo SDK 55, Expo Router, native Google OAuth
 via `expo-auth-session`, `expo-secure-store`, `expo-notifications`).
 
-> Status: written 2026-05-01. The mobile app is mid-M1; no EAS project,
-> no Apple/Google developer accounts, and no `eas.json` exist yet. The
-> steps below are the *path forward*, not a record of what's been done.
+> Status: written 2026-05-01, updated 2026-06-09. The app is now
+> feature-complete (M1–M6) and an EAS project + `eas.json` exist
+> (`extra.eas.projectId` is wired). Real brand artwork (icon / adaptive
+> icon / splash) is committed under `apps/mobile/assets/`. What remains
+> before a first submission is the store-account / credential setup and
+> confirming the `production` EAS profile resolves the required
+> `EXPO_PUBLIC_*` env (see the checklist at the bottom). The steps below
+> are the path forward; the per-step notes call out what's already done.
 
 ---
 
@@ -145,16 +150,22 @@ it "internal testing" or "the path to App Store").
 
 ## Part 2 — Ship to the App Store (iOS)
 
-### 2.1 Replace placeholder assets
+### 2.1 Brand assets (done)
 
-`apps/mobile/app.config.ts` currently points at 1×1 placeholder PNGs.
-Apple will reject the submission if the icon contains alpha or doesn't
-match 1024×1024. Replace, in `apps/mobile/assets/`:
+Real artwork is already committed under `apps/mobile/assets/` and wired
+through `app.config.ts` (the gold-ticket BrandMark — source SVG + render
+script live under `assets/logo-mocks/`):
 
-- `icon.png` → 1024×1024, no alpha, no rounded corners (Apple rounds them).
-- `splash.png` → at least 1242×2688, centered logo on the brand
-  background `#0C0C0C`.
-- `adaptive-icon.png` → 432×432 foreground (Android, but do it now).
+- `icon.png` — 1024×1024, **no alpha** (RGB), `#0C0C0C` background baked
+  in. Apple rejects icons with alpha / non-1024², so keep it RGB.
+- `adaptive-icon.png` — 1024×1024 RGBA foreground composited over
+  `android.adaptiveIcon.backgroundColor` (`#0C0C0C`).
+- `splash.png` — 1080×1180 centered mark. Note the native splash is
+  deliberately image-less black (see the `expo-splash-screen` plugin in
+  `app.config.ts`); the visible logo is the JS `<BrandSplash/>`.
+
+No action needed here — this section is kept as a record of the asset
+contract. If you re-render the masters, preserve those formats.
 
 ### 2.2 Create the App Store Connect record
 
@@ -288,14 +299,20 @@ auto-bumps `ios.buildNumber` and `android.versionCode` if you set
 - [ ] iOS + Android OAuth client IDs created in Google Cloud Console.
 - [ ] Backend `GOOGLE_OAUTH_MOBILE_AUDIENCES` set in `.env.prod`,
       backend redeployed.
-- [ ] `apps/mobile/assets/icon.png`, `splash.png`, `adaptive-icon.png`
-      replaced with real artwork.
-- [ ] `EXPO_PUBLIC_API_URL` points at the prod Cloudflare tunnel
-      hostname in the `production` EAS profile.
-- [ ] `apps/mobile/eas.json` exists with `production` profile and
+- [x] `apps/mobile/assets/icon.png`, `splash.png`, `adaptive-icon.png`
+      are real brand artwork (see § 2.1).
+- [x] `apps/mobile/eas.json` exists with a `production` profile and
       `autoIncrement: true`.
-- [ ] Privacy policy and support URLs published (link from the
-      Showbook web app footer is fine).
+- [ ] `production` EAS profile resolves the required client env —
+      `EXPO_PUBLIC_API_URL`, the iOS/Android/web `GOOGLE_OAUTH_CLIENT_ID_*`,
+      and `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`. Unlike `preview`, the
+      `production` profile carries no inline `env` block, so these must
+      come from EAS environment variables/secrets. Confirm with
+      `eas env:list --environment production` before the first build —
+      an unset `EXPO_PUBLIC_API_URL` ships a build with a broken backend
+      and dead sign-in.
+- [x] Privacy policy and support URLs published and submitted with the
+      store applications.
 - [ ] App Store Connect + Play Console app records created with bundle
       ID `me.ethanasm.showbook`.
 - [ ] Demo Google account ready to hand to Apple's reviewer.

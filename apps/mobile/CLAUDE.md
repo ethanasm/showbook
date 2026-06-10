@@ -285,8 +285,6 @@ fast; let Maestro be the gate.
 
 ## Known limitations
 
-- **Asset placeholders are 1x1 PNGs.** Splash, icon, and adaptive
-  icon need real artwork before TestFlight / Play Store submission.
 - **Push notifications are not yet delivered.** The toggle in
   Preferences and the client-side permission prompt exist; the
   server side (Expo push token persistence + digest emission +

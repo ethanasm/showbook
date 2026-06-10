@@ -87,4 +87,79 @@ describe('renderHealthSummary', () => {
     const html = await renderHealthSummary({ ...baseProps, preamble: null });
     assert.match(html, /checks passing/);
   });
+
+  it('renders the CI Health section with per-job detail', async () => {
+    const html = await renderHealthSummary({
+      ...baseProps,
+      status: 'fail',
+      checks: [
+        { name: 'database', status: 'ok', summary: 'Postgres reachable' },
+        {
+          name: 'ci_health',
+          status: 'fail',
+          summary: '1/2 CI workflows failing on main: Deploy',
+          detail: {
+            ci: {
+              repo: 'ethanasm/showbook',
+              branch: 'main',
+              runs: [
+                {
+                  workflowName: 'CI',
+                  runNumber: 42,
+                  status: 'completed',
+                  conclusion: 'success',
+                  branch: 'main',
+                  commitSha: 'abc1234',
+                  title: 'fix things',
+                  url: 'https://github.com/o/r/actions/runs/101',
+                  jobs: [
+                    { name: 'build', status: 'completed', conclusion: 'success', url: null },
+                    { name: 'e2e', status: 'completed', conclusion: 'success', url: null },
+                  ],
+                },
+                {
+                  workflowName: 'Deploy',
+                  runNumber: 7,
+                  status: 'completed',
+                  conclusion: 'failure',
+                  branch: 'main',
+                  commitSha: 'def5678',
+                  title: 'deploy prod',
+                  url: 'https://github.com/o/r/actions/runs/200',
+                  jobs: [
+                    { name: 'deploy', status: 'completed', conclusion: 'failure', url: null },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      ],
+    });
+    assert.match(html, /CI Health/);
+    // Per-workflow names and per-job names both render.
+    assert.match(html, /Deploy/);
+    assert.match(html, />\s*build\s*</);
+    assert.match(html, />\s*e2e\s*</);
+    assert.match(html, />\s*deploy\s*</);
+    // Hero headline counts CI as a failure even though it's rendered in
+    // its own section rather than the generic Failing bucket.
+    assert.match(html, /1 failing/);
+  });
+
+  it('renders the CI section even when the detail payload is missing', async () => {
+    const html = await renderHealthSummary({
+      ...baseProps,
+      status: 'warn',
+      checks: [
+        {
+          name: 'ci_health',
+          status: 'warn',
+          summary: 'GitHub API query failed: github http 500',
+        },
+      ],
+    });
+    assert.match(html, /CI Health/);
+    assert.match(html, /github http 500/);
+  });
 });

@@ -41,6 +41,7 @@ import {
   buildBulkScanQueries,
 } from '../gmail';
 import { geocodeVenue } from '../geocode';
+import { loadVenueNameOverrides } from '../venue-names';
 
 /**
  * Deterministic confirmation copy assembled from show fields, used
@@ -313,6 +314,13 @@ export const enrichmentRouter = router({
       if (!show) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
       }
+      // Use the user's venue alias (if any) in the confirmation message.
+      const venueNameOverrides = await loadVenueNameOverrides(
+        ctx.db,
+        userId,
+        [show.venue.id],
+      );
+      const venueName = venueNameOverrides.get(show.venue.id) ?? show.venue.name;
       const sorted = [...show.showPerformers].sort((a, b) => a.sortOrder - b.sortOrder);
       const headlinerRow = sorted.find((p) => p.role === 'headliner');
       const supportingActs = sorted
@@ -327,7 +335,7 @@ export const enrichmentRouter = router({
       const fallback = buildShowSavedFallback({
         kind: show.kind as 'concert' | 'theatre' | 'comedy' | 'festival',
         title,
-        venueName: show.venue.name,
+        venueName,
         date: show.date ?? null,
       });
 
@@ -337,7 +345,7 @@ export const enrichmentRouter = router({
           summarizeShowSaved({
             kind: show.kind as 'concert' | 'theatre' | 'comedy' | 'festival',
             title,
-            venueName: show.venue.name,
+            venueName,
             venueCity: show.venue.city,
             date: show.date ?? null,
             endDate: show.endDate ?? null,

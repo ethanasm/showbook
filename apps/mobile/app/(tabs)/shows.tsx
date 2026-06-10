@@ -28,11 +28,20 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  runOnJS,
+} from 'react-native-reanimated';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { RADII } from '@/lib/theme-utils';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
+import { KindFilterControl } from '../../components/KindFilterControl';
+import { kindFilterNoun, type KindFilterValue } from '../../components/KindFilterMenu';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { FilterChipsRow, type FilterGroup } from '../../components/FilterChipsRow';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
@@ -235,6 +244,9 @@ export default function ShowsScreen(): React.JSX.Element {
     state: ShowState;
   } | null>(null);
   const [markTicketedForId, setMarkTicketedForId] = React.useState<string | null>(null);
+  // Header kind filter, applied on top of the Upcoming/Past bucket. Feeds
+  // every mode (timeline / calendar / stats) since they all derive from `rows`.
+  const [kindFilter, setKindFilter] = React.useState<KindFilterValue>('all');
 
   const showsQuery = useCachedQuery<ShowsListItem[]>({
     queryKey: ['mobile', 'shows.list'],
@@ -272,12 +284,20 @@ export default function ShowsScreen(): React.JSX.Element {
   // Apply the Upcoming/Past state filter. Stats only makes sense for
   // Past; if the user lands on Upcoming with stats selected, force back
   // to timeline.
-  const rows: ShowRow[] = React.useMemo(() => {
+  const bucketRows: ShowRow[] = React.useMemo(() => {
     if (stateBucket === 'upcoming') {
       return allRows.filter((r) => r.state === 'watching' || r.state === 'ticketed');
     }
     return allRows.filter((r) => r.state === 'past');
   }, [allRows, stateBucket]);
+
+  // Layer the header kind filter on top of the bucket. `bucketRows` (kind
+  // unfiltered) is kept so the empty state can tell "no shows in this
+  // bucket at all" apart from "no shows of this kind".
+  const rows: ShowRow[] = React.useMemo(() => {
+    if (kindFilter === 'all') return bucketRows;
+    return bucketRows.filter((r) => r.kind === kindFilter);
+  }, [bucketRows, kindFilter]);
 
   React.useEffect(() => {
     if (stateBucket === 'upcoming' && mode === 'stats') {
@@ -312,7 +332,21 @@ export default function ShowsScreen(): React.JSX.Element {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
-      <TopBar title="Shows" eyebrow={eyebrow} rightAction={<MeTopBarAction />} large />
+      <TopBar
+        title="Shows"
+        eyebrow={eyebrow}
+        rightAction={
+          <View style={styles.headerActions}>
+            <KindFilterControl
+              value={kindFilter}
+              onChange={setKindFilter}
+              testIDPrefix="shows"
+            />
+            <MeTopBarAction />
+          </View>
+        }
+        large
+      />
 
       <View style={{ paddingHorizontal: 20, paddingBottom: 12 }}>
         <SegmentedControl<'upcoming' | 'past'>
@@ -354,6 +388,26 @@ export default function ShowsScreen(): React.JSX.Element {
             title="Couldn't load shows"
             subtitle={showsQuery.error.message}
             cta={{ label: 'Try again', onPress: () => void showsQuery.refetch() }}
+          />
+        </ScrollView>
+      ) : rows.length === 0 && kindFilter !== 'all' ? (
+        // A kind filter is active and nothing in this bucket matches it —
+        // surface a kind-specific empty state with a one-tap clear rather
+        // than the onboarding hero (which would wrongly imply an empty log).
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+          refreshControl={refreshControl}
+        >
+          <EmptyState
+            title={`No ${kindFilterNoun(kindFilter as Kind)} shows ${
+              stateBucket === 'upcoming' ? 'coming up' : 'logged'
+            }`}
+            subtitle={
+              bucketRows.length > 0
+                ? 'Try a different kind, or clear the filter to see everything.'
+                : undefined
+            }
+            cta={{ label: 'Clear filter', onPress: () => setKindFilter('all') }}
           />
         </ScrollView>
       ) : rows.length === 0 ? (
@@ -476,7 +530,17 @@ function TimelineView({
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
+  const { token } = useAuth();
   const sections = React.useMemo(() => buildTimelineSections(rows), [rows]);
+
+  // Row density mirrors web: driven by the server-synced
+  // `preferences.compactMode` so the choice follows the user across
+  // devices (web's ShowsListView reads the same field). Until the
+  // query resolves we fall back to the comfortable card style.
+  const prefsQuery = trpc.preferences.get.useQuery(undefined, {
+    enabled: Boolean(token),
+  });
+  const compact = prefsQuery.data?.preferences?.compactMode ?? false;
 
   // SectionList virtualises rows, so a power user with hundreds of past
   // shows doesn't pay a per-row mount on first render. Sticky headers
@@ -531,7 +595,7 @@ function TimelineView({
             selected={selectedShowId === item.id}
             onSelect={onSelect}
             onLongPress={() => onLongPressShow(item)}
-            compact
+            compact={compact}
           />
         </View>
       )}
@@ -714,18 +778,53 @@ function CalendarView({
   const atMin = calendarMode === 'year' ? atMinYear : atMinMonth;
   const atMax = calendarMode === 'year' ? atMaxYear : atMaxMonth;
 
-  const step = (delta: number) => {
-    setSelected(null);
-    if (calendarMode === 'year') {
-      setCursor((c) => {
-        const next = c.year + delta;
-        if (next < bounds.min.year || next > bounds.max.year) return c;
-        return { year: next, month: c.month };
-      });
-    } else {
-      setCursor((c) => stepCursor(c, delta, bounds));
-    }
-  };
+  const step = React.useCallback(
+    (delta: number) => {
+      setSelected(null);
+      if (calendarMode === 'year') {
+        setCursor((c) => {
+          const next = c.year + delta;
+          if (next < bounds.min.year || next > bounds.max.year) return c;
+          return { year: next, month: c.month };
+        });
+      } else {
+        setCursor((c) => stepCursor(c, delta, bounds));
+      }
+    },
+    [calendarMode, bounds],
+  );
+
+  // Horizontal swipe to step between periods (month or year), mirroring the
+  // prev/next arrow buttons. The grid follows the finger with a damped drag
+  // (extra resistance when a swipe would cross a navigation bound) and a swipe
+  // past the threshold commits the step. `activeOffsetX` keeps day-cell taps
+  // working, and `failOffsetY` defers vertical drags to the parent ScrollView.
+  const dragX = useSharedValue(0);
+  const swipeGesture = Gesture.Pan()
+    .activeOffsetX([-20, 20])
+    .failOffsetY([-16, 16])
+    .onUpdate((e) => {
+      'worklet';
+      const blocked =
+        (e.translationX > 0 && atMin) || (e.translationX < 0 && atMax);
+      dragX.value = e.translationX * (blocked ? 0.18 : 0.42);
+    })
+    .onEnd((e) => {
+      'worklet';
+      // Swipe left → next period, swipe right → previous period.
+      const delta = e.translationX < 0 ? 1 : -1;
+      const passed =
+        Math.abs(e.translationX) > 56 || Math.abs(e.velocityX) > 550;
+      const blocked = (delta < 0 && atMin) || (delta > 0 && atMax);
+      if (passed && !blocked) {
+        runOnJS(step)(delta);
+      }
+      dragX.value = withTiming(0, { duration: 180 });
+    });
+
+  const swipeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: dragX.value }],
+  }));
 
   const goToday = () => {
     setSelected(null);
@@ -807,33 +906,37 @@ function CalendarView({
         </View>
       </View>
 
-      {calendarMode === 'year' ? (
-        <View style={styles.yearGrid}>
-          {Array.from({ length: 12 }, (_, m) => (
-            <View key={m} style={styles.yearTileWrap}>
-              <MiniMonth
-                year={cursor.year}
-                month={m}
-                events={eventsByDay}
-                spans={spanEvents}
-                todayISO={today}
-                onPress={() => onSelectYearMonth(m)}
-                disabled={!isMonthInBounds(m)}
-              />
+      <GestureDetector gesture={swipeGesture}>
+        <Animated.View style={swipeStyle}>
+          {calendarMode === 'year' ? (
+            <View style={styles.yearGrid}>
+              {Array.from({ length: 12 }, (_, m) => (
+                <View key={m} style={styles.yearTileWrap}>
+                  <MiniMonth
+                    year={cursor.year}
+                    month={m}
+                    events={eventsByDay}
+                    spans={spanEvents}
+                    todayISO={today}
+                    onPress={() => onSelectYearMonth(m)}
+                    disabled={!isMonthInBounds(m)}
+                  />
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
-      ) : (
-        <CalendarGrid
-          year={cursor.year}
-          month={cursor.month}
-          events={eventsByDay}
-          spans={spanEvents}
-          todayISO={today}
-          selectedISO={selected}
-          onSelectDay={(iso) => setSelected((cur) => (cur === iso ? null : iso))}
-        />
-      )}
+          ) : (
+            <CalendarGrid
+              year={cursor.year}
+              month={cursor.month}
+              events={eventsByDay}
+              spans={spanEvents}
+              todayISO={today}
+              selectedISO={selected}
+              onSelectDay={(iso) => setSelected((cur) => (cur === iso ? null : iso))}
+            />
+          )}
+        </Animated.View>
+      </GestureDetector>
 
       {calendarMode === 'month' ? (
         <View style={{ gap: 8 }}>
@@ -1141,6 +1244,11 @@ function StatTile({ value, label }: { value: string; label: string }): React.JSX
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
   sectionHeader: {
     paddingHorizontal: 20,
     paddingVertical: 10,

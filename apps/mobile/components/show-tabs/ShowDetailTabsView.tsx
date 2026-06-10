@@ -15,6 +15,7 @@
 
 import React from 'react';
 import {
+  Alert,
   Linking,
   Pressable,
   RefreshControl,
@@ -108,8 +109,9 @@ interface PerformerSetlist {
 }
 export interface ShowDetail {
   id: string;
-  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'sports' | 'film' | 'unknown';
+  kind: 'concert' | 'theatre' | 'comedy' | 'festival' | 'film' | 'unknown';
   state: 'past' | 'ticketed' | 'watching';
+  ticketStatus?: 'sold_out' | 'cancelled' | null;
   date: string | null;
   endDate: string | null;
   seat: string | null;
@@ -350,6 +352,26 @@ export function ShowDetailTabsView({
       router.replace('/(tabs)/shows');
     },
   });
+  // Delete is irreversible, so the Overview "Delete" pill confirms via
+  // Alert.alert before firing — mirroring ShowActionSheet.askDelete (and
+  // the web DeleteShowConfirmModal) so both delete entry points on the
+  // detail screen get a Cancel / Delete prompt.
+  const confirmDelete = React.useCallback(() => {
+    Alert.alert(
+      'Delete this show?',
+      'This removes the show, its setlists, and any tagged media. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void deleteShow.mutateAsync({ showId: show.id });
+          },
+        },
+      ],
+    );
+  }, [deleteShow, show.id]);
 
   // ──────────────────────────── Panels ────────────────────────────
   const overviewCells = React.useMemo(() => {
@@ -414,6 +436,7 @@ export function ShowDetailTabsView({
     <OverviewTab
       cells={overviewCells}
       lineup={lineupEntries}
+      lineupLabel={show.kind === 'theatre' ? 'Cast' : 'Lineup'}
       actions={[
         ...(show.state === 'watching'
           ? [
@@ -467,9 +490,7 @@ export function ShowDetailTabsView({
           label: 'Delete',
           danger: true,
           testID: 'action-delete-show',
-          onPress: () => {
-            void deleteShow.mutateAsync({ showId: show.id });
-          },
+          onPress: confirmDelete,
         },
       ]}
       isPast={isPast}
@@ -674,6 +695,27 @@ function StateChipOnDark({ state }: { state: ShowState }): React.JSX.Element | n
   );
 }
 
+function TicketStatusPillOnDark({
+  status,
+}: {
+  status: 'sold_out' | 'cancelled';
+}): React.JSX.Element {
+  const label = status === 'sold_out' ? 'SOLD OUT' : 'CANCELLED';
+  // sold-out reads as a red alert; cancelled is a neutral frosted pill.
+  const bg = status === 'sold_out' ? 'rgba(230,57,70,0.92)' : 'rgba(0,0,0,0.55)';
+  return (
+    <View
+      testID={`ticket-status-${status}`}
+      style={[
+        heroStyles.statePill,
+        { backgroundColor: bg, borderColor: 'rgba(255,255,255,0.32)' },
+      ]}
+    >
+      <Text style={[heroStyles.statePillText, { color: '#fff' }]}>{label}</Text>
+    </View>
+  );
+}
+
 function HeaderStrip({
   show,
   onBack,
@@ -789,6 +831,9 @@ function HeaderStrip({
           </View>
         </View>
         <View style={heroStyles.topRightStack} pointerEvents="box-none">
+          {show.ticketStatus ? (
+            <TicketStatusPillOnDark status={show.ticketStatus} />
+          ) : null}
           {show.state !== 'past' ? (
             <StateChipOnDark state={show.state as ShowState} />
           ) : (

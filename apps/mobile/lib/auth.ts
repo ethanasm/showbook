@@ -46,6 +46,7 @@ import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
+import { exchangeCodeAsync } from 'expo-auth-session';
 import { API_URL } from './env';
 import {
   GOOGLE_OAUTH_CLIENT_ID_ANDROID,
@@ -82,6 +83,16 @@ export interface AuthContextValue {
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
   markFirstRunComplete: () => Promise<void>;
+  /**
+   * Manually finish the OAuth flow from the `oauthredirect` Expo Router
+   * route. Used when ASWebAuthenticationSession fails to intercept the
+   * Google callback URL (typically when Google's flow includes a
+   * `prompt=consent` 301 chain — see `app/oauthredirect.tsx`).
+   */
+  completeOAuthCallback: (args: {
+    code: string;
+    state: string;
+  }) => Promise<void>;
 }
 
 const AuthContext = React.createContext<AuthContextValue>({
@@ -94,6 +105,7 @@ const AuthContext = React.createContext<AuthContextValue>({
   signIn: async () => undefined,
   signOut: async () => undefined,
   markFirstRunComplete: async () => undefined,
+  completeOAuthCallback: async () => undefined,
 });
 
 export function AuthProvider({
@@ -110,6 +122,13 @@ export function AuthProvider({
   const [isFirstRun, setIsFirstRun] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
+  // Tracked for `completeOAuthCallback`'s fast-exit when the happy path
+  // already signed the user in.
+  const userRef = React.useRef(user);
+  React.useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
   // expo-auth-session's hook MUST be called in the render body.
   // We use useIdTokenAuthRequest (not useAuthRequest) because it asks the
   // hook to populate `response.params.id_token` after the internal code
@@ -123,7 +142,7 @@ export function AuthProvider({
   // `signIn` guards on `describeGoogleOAuthMisconfiguration` before ever
   // invoking `promptAsync`, so the placeholder is never used.
   const PLACEHOLDER_CLIENT_ID = 'unconfigured.apps.googleusercontent.com';
-  const [, response, promptAsync] = Google.useIdTokenAuthRequest({
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     iosClientId: GOOGLE_OAUTH_CLIENT_ID_IOS ?? PLACEHOLDER_CLIENT_ID,
     androidClientId: GOOGLE_OAUTH_CLIENT_ID_ANDROID ?? PLACEHOLDER_CLIENT_ID,
     webClientId: GOOGLE_OAUTH_CLIENT_ID_WEB ?? PLACEHOLDER_CLIENT_ID,
@@ -136,6 +155,16 @@ export function AuthProvider({
   React.useEffect(() => {
     promptAsyncRef.current = promptAsync;
   }, [promptAsync]);
+
+  // The `request` carries the PKCE codeVerifier and the random state used
+  // to build the auth URL. We need both to complete the OAuth flow
+  // manually from `app/oauthredirect.tsx` when ASWebAuthenticationSession
+  // fails to intercept the callback. Tracked in a ref so
+  // `completeOAuthCallback`'s closure stays stable.
+  const requestRef = React.useRef(request);
+  React.useEffect(() => {
+    requestRef.current = request;
+  }, [request]);
 
   // signIn's "in-flight" guard. Held in a ref so the callback's deps stay
   // empty (avoiding callback identity churn that would force consumers to
@@ -206,6 +235,74 @@ export function AuthProvider({
       setIsSigningIn(false);
     }
   }, []);
+
+  // Fallback OAuth completion used by `app/oauthredirect.tsx` when
+  // ASWebAuthenticationSession fails to intercept Google's callback URL.
+  // The route reads `code` and `state` from the URL params and calls this
+  // to (a) verify state, (b) exchange the code for tokens via Google's
+  // token endpoint using the AuthRequest's PKCE codeVerifier, and (c)
+  // hand the id_token off to `exchangeAndPersist` for the normal
+  // sign-in tail. The happy path (ASWebAuthenticationSession intercepts
+  // and the response useEffect below fires first) short-circuits via
+  // the userRef + isSigningInRef checks so the auth code isn't redeemed
+  // twice (Google's token endpoint rejects the second exchange with
+  // `invalid_grant`, which would surface as a confusing error after a
+  // successful sign-in).
+  const completeOAuthCallback = React.useCallback(
+    async ({ code, state }: { code: string; state: string }) => {
+      // Already signed in (happy path won the race) → no-op.
+      if (userRef.current) return;
+      // A sign-in is already in flight (response useEffect fired first
+      // or another deeplink dispatched). Don't double-trigger.
+      if (isSigningInRef.current) return;
+
+      const req = requestRef.current;
+      if (!req) {
+        // The AuthRequest hasn't loaded yet (no prior `promptAsync` call,
+        // or the app cold-started on the callback URL). Without the PKCE
+        // codeVerifier the manual exchange can't succeed — surface a
+        // generic error so the user can retry.
+        setError(describeSignInError(new Error('oauth_error')));
+        return;
+      }
+      if (state !== req.state) {
+        setError(describeSignInError(new Error('oauth_error')));
+        return;
+      }
+
+      isSigningInRef.current = true;
+      setIsSigningIn(true);
+      try {
+        const tokenResponse = await exchangeCodeAsync(
+          {
+            clientId: req.clientId,
+            code,
+            redirectUri: req.redirectUri,
+            extraParams: {
+              code_verifier: req.codeVerifier ?? '',
+            },
+          },
+          { tokenEndpoint: 'https://oauth2.googleapis.com/token' },
+        );
+        const idToken = tokenResponse.idToken;
+        if (!idToken) {
+          setError(describeSignInError(new Error('invalid_response')));
+          isSigningInRef.current = false;
+          setIsSigningIn(false);
+          return;
+        }
+        // `exchangeAndPersist` owns the isSigningIn reset on its own
+        // try/finally, so the only branches that need to reset are the
+        // ones that don't reach it (the early returns above).
+        await exchangeAndPersist(idToken);
+      } catch (err) {
+        setError(describeSignInError(err));
+        isSigningInRef.current = false;
+        setIsSigningIn(false);
+      }
+    },
+    [exchangeAndPersist],
+  );
 
   // Watch the auth-session response for success. The id_token is only
   // available here (not from the imperative promptAsync return value) on
@@ -345,6 +442,7 @@ export function AuthProvider({
       signIn,
       signOut,
       markFirstRunComplete,
+      completeOAuthCallback,
     }),
     [
       user,
@@ -356,6 +454,7 @@ export function AuthProvider({
       signIn,
       signOut,
       markFirstRunComplete,
+      completeOAuthCallback,
     ],
   );
 

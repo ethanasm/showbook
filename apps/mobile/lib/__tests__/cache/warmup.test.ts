@@ -179,6 +179,32 @@ describe('warmCacheForOfflineUse', () => {
     assert.ok(result.succeeded >= 10, 'at least 10 root steps succeeded');
   });
 
+  it('does not downgrade a fuller Discover feed the screen already loaded', async () => {
+    // Regression: warm-up's tiny snapshot used to clobber the screen's full
+    // feed when its request resolved after the screen's mount refetch,
+    // pinning Discover to "1 upcoming" until a manual pull-to-refresh. The
+    // seed guard must keep the fuller cached feed and drop the smaller
+    // snapshot. Here the stubbed feeds return `{ items: [] }` (count 0), so a
+    // pre-seeded 3-item feed must survive.
+    const { client } = buildClient();
+    const qc = new QueryClient();
+    const fullNearby = { items: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] };
+    const fullVenues = { items: [{ id: 'v1' }, { id: 'v2' }] };
+    qc.setQueryData(['mobile', 'discover', 'nearbyFeed'], fullNearby);
+    qc.setQueryData(['mobile', 'discover', 'followedFeed'], fullVenues);
+
+    await warmCacheForOfflineUse({ client, queryClient: qc, skipReplay: true });
+
+    // Fuller feeds preserved — the empty snapshot did not shrink them.
+    assert.deepEqual(qc.getQueryData(['mobile', 'discover', 'nearbyFeed']), fullNearby);
+    assert.deepEqual(qc.getQueryData(['mobile', 'discover', 'followedFeed']), fullVenues);
+    // An absent feed still gets seeded (equal-or-larger writes through).
+    assert.deepEqual(
+      qc.getQueryData(['mobile', 'discover', 'followedArtistsFeed']),
+      { items: [] },
+    );
+  });
+
   it('phase 2 walks every show id and includes past-only queries only for past shows', async () => {
     const { client, calls } = buildClient({
       showsList: [

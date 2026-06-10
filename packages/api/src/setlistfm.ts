@@ -3,11 +3,13 @@
 
 import { child } from '@showbook/observability';
 import type { PerformerSetlist, SetlistSection } from '@showbook/shared';
+import { isTransientFetchError, transientErrorCode } from './transient-fetch';
 
 const log = child({ component: 'api.setlistfm', provider: 'setlistfm' });
 
 const BASE_URL = "https://api.setlist.fm/rest/1.0";
 const MIN_REQUEST_INTERVAL_MS = 500;
+const TRANSPORT_RETRY_ATTEMPTS = 3;
 
 // ---------------------------------------------------------------------------
 // Types – API response shapes
@@ -150,6 +152,48 @@ async function rateLimit(): Promise<void> {
 // Core fetch wrapper
 // ---------------------------------------------------------------------------
 
+// Retry transient transport failures (socket resets, undici timeouts)
+// before giving up — mirrors fetchWithRetry in google-places.ts /
+// wikidata.ts. HTTP responses (including 429) return to apiFetch's
+// status handling; only thrown transport errors are retried. A transient
+// error that survives every attempt still propagates so a real
+// setlist.fm outage trips the error_volume health gauge.
+async function fetchWithRetry(
+  url: string,
+  apiKey: string,
+  path: string,
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= TRANSPORT_RETRY_ATTEMPTS; attempt++) {
+    try {
+      // Each attempt gets its own 10s deadline on a fresh connection.
+      return await fetch(url, {
+        headers: {
+          "x-api-key": apiKey,
+          Accept: "application/json",
+        },
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch (err) {
+      lastErr = err;
+      if (attempt >= TRANSPORT_RETRY_ATTEMPTS || !isTransientFetchError(err)) {
+        throw err;
+      }
+      log.warn(
+        { event: 'setlistfm.request.retry', path, code: transientErrorCode(err) },
+        'Transient setlist.fm network error; retrying',
+      );
+      // Back off at the rate-limiter cadence so retries don't outpace the
+      // sequential 500ms request interval the rest of the client honours.
+      await new Promise((resolve) =>
+        setTimeout(resolve, attempt * MIN_REQUEST_INTERVAL_MS),
+      );
+      lastRequestTime = Date.now();
+    }
+  }
+  throw lastErr;
+}
+
 async function apiFetch<T>(path: string): Promise<T> {
   const apiKey = process.env.SETLISTFM_API_KEY;
   if (!apiKey) {
@@ -177,13 +221,7 @@ async function apiFetch<T>(path: string): Promise<T> {
 
   const url = `${BASE_URL}${path}`;
   const startedAt = Date.now();
-  const res = await fetch(url, {
-    headers: {
-      "x-api-key": apiKey,
-      Accept: "application/json",
-    },
-    signal: AbortSignal.timeout(10_000),
-  });
+  const res = await fetchWithRetry(url, apiKey, path);
   log.debug({ event: 'setlistfm.request', path, status: res.status, durationMs: Date.now() - startedAt }, 'setlist.fm request');
 
   // 429 – retry once after a longer delay
@@ -191,13 +229,7 @@ async function apiFetch<T>(path: string): Promise<T> {
     log.warn({ event: 'setlistfm.request.rate_limited', path }, 'setlist.fm 429, retrying');
     await new Promise((resolve) => setTimeout(resolve, 2000));
     lastRequestTime = Date.now();
-    const retry = await fetch(url, {
-      headers: {
-        "x-api-key": apiKey,
-        Accept: "application/json",
-      },
-      signal: AbortSignal.timeout(10_000),
-    });
+    const retry = await fetchWithRetry(url, apiKey, path);
     if (!retry.ok) {
       if (retry.status === 429) {
         // Second 429 in a row → daily quota is genuinely gone. Open the

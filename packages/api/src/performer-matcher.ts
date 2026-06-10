@@ -2,6 +2,7 @@ import { db, performers, type Database } from '@showbook/db';
 import { eq, sql } from 'drizzle-orm';
 import { child } from '@showbook/observability';
 import { resolvePerformerSpotifyId } from './resolve-performer-spotify-id';
+import { resolvePerformerWikidataId } from './resolve-performer-wikidata-id';
 
 const log = child({ component: 'api.performer-matcher' });
 
@@ -14,6 +15,7 @@ export interface PerformerInput {
   tmAttractionId?: string;
   musicbrainzId?: string;
   spotifyArtistId?: string;
+  wikidataQid?: string;
   imageUrl?: string;
 }
 
@@ -33,7 +35,11 @@ export function buildUpdate(
   input: PerformerInput,
 ): Partial<
   Record<
-    'imageUrl' | 'musicbrainzId' | 'ticketmasterAttractionId' | 'spotifyArtistId',
+    | 'imageUrl'
+    | 'musicbrainzId'
+    | 'ticketmasterAttractionId'
+    | 'spotifyArtistId'
+    | 'wikidataQid',
     string
   >
 > | null {
@@ -50,6 +56,9 @@ export function buildUpdate(
   }
   if (!existing.spotifyArtistId && input.spotifyArtistId) {
     updates.spotifyArtistId = input.spotifyArtistId;
+  }
+  if (!existing.wikidataQid && input.wikidataQid) {
+    updates.wikidataQid = input.wikidataQid;
   }
 
   return Object.keys(updates).length > 0 ? updates : null;
@@ -106,6 +115,34 @@ export async function matchOrCreatePerformer(
       );
     });
   }
+
+  // Fire-and-forget Wikidata enrichment for newly-created rows that have no
+  // Ticketmaster id — i.e. theatre cast entered via the typeahead /
+  // playbill extraction and other manual non-TM adds. TM-backed performers
+  // already get an image + (via externalLinks) an MBID, so scoping to
+  // `!ticketmasterAttractionId` keeps the Wikidata name-search off the hot
+  // concert-ingest path and targets exactly the population Wikidata is the
+  // only source for. The `backfill-performer-wikidata-ids` cron is the
+  // safety net. Caller never waits; errors are logged inside the resolver.
+  if (
+    result.created &&
+    !result.performer.wikidataQid &&
+    !result.performer.ticketmasterAttractionId
+  ) {
+    void resolvePerformerWikidataId(
+      result.performer.id,
+      result.performer.name,
+    ).catch((err) => {
+      log.warn(
+        {
+          err,
+          event: 'performer.wikidata_qid.resolve_inline_uncaught',
+          performerId: result.performer.id,
+        },
+        'Inline Wikidata QID resolver threw',
+      );
+    });
+  }
   return result;
 }
 
@@ -127,7 +164,22 @@ async function matchOrCreatePerformerInner(
     }
   }
 
-  // 2. MusicBrainz ID match — same shape.
+  // 2. Wikidata QID match — same shape. Backed by partial UNIQUE index.
+  //    Lets a theatre cast member entered on one show dedupe to the same
+  //    row on another (and onto a concert row if the MBID lined them up).
+  if (input.wikidataQid) {
+    const [match] = await db
+      .select()
+      .from(performers)
+      .where(eq(performers.wikidataQid, input.wikidataQid))
+      .limit(1);
+
+    if (match) {
+      return { performer: await applyUpdates(db, match, input), created: false };
+    }
+  }
+
+  // 3. MusicBrainz ID match — same shape.
   if (input.musicbrainzId) {
     const [match] = await db
       .select()
@@ -140,7 +192,7 @@ async function matchOrCreatePerformerInner(
     }
   }
 
-  // 3. Case-insensitive name match + create-if-missing under a transaction
+  // 4. Case-insensitive name match + create-if-missing under a transaction
   //    advisory lock. The lock is keyed on lower(name) so two concurrent
   //    requests for the same artist serialize, while different names
   //    proceed in parallel. Without it, both would miss the SELECT and
@@ -172,6 +224,7 @@ async function matchOrCreatePerformerInner(
             ticketmasterAttractionId: input.tmAttractionId ?? null,
             musicbrainzId: input.musicbrainzId ?? null,
             spotifyArtistId: input.spotifyArtistId ?? null,
+            wikidataQid: input.wikidataQid ?? null,
             imageUrl: input.imageUrl ?? null,
           })
           .returning(),
@@ -194,19 +247,23 @@ async function matchOrCreatePerformerInner(
       );
       return { performer: created, created: true };
     } catch (err) {
-      // External-ID unique-violation (different name but same TM/MBID) —
-      // fall back to whatever already exists for that ID.
+      // External-ID unique-violation (different name but same TM / MBID /
+      // Wikidata QID) — fall back to whatever already exists for that ID.
       if (isUniqueViolation(err)) {
-        const conflictId = input.tmAttractionId ?? input.musicbrainzId;
-        if (conflictId) {
+        const conflictColumn = input.tmAttractionId
+          ? performers.ticketmasterAttractionId
+          : input.wikidataQid
+            ? performers.wikidataQid
+            : input.musicbrainzId
+              ? performers.musicbrainzId
+              : null;
+        const conflictValue =
+          input.tmAttractionId ?? input.wikidataQid ?? input.musicbrainzId;
+        if (conflictColumn && conflictValue) {
           const [existing] = await tx
             .select()
             .from(performers)
-            .where(
-              input.tmAttractionId
-                ? eq(performers.ticketmasterAttractionId, input.tmAttractionId)
-                : eq(performers.musicbrainzId, input.musicbrainzId!),
-            )
+            .where(eq(conflictColumn, conflictValue))
             .limit(1);
           if (existing) {
             log.warn(
@@ -214,7 +271,11 @@ async function matchOrCreatePerformerInner(
                 event: 'performer.match.race_recovered',
                 performerId: existing.id,
                 name: existing.name,
-                conflictKey: input.tmAttractionId ? 'tm' : 'mbid',
+                conflictKey: input.tmAttractionId
+                  ? 'tm'
+                  : input.wikidataQid
+                    ? 'wikidata'
+                    : 'mbid',
               },
               'Recovered from concurrent insert race via external-ID re-select',
             );

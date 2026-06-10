@@ -30,6 +30,18 @@ export async function GET(req: NextRequest) {
   const isSecure = baseUrl.startsWith('https');
   const cookieName = isSecure ? '__Secure-authjs.session-token' : 'authjs.session-token';
 
+  // Fail closed: never sign a session JWT with an empty secret. An empty
+  // string is a valid argument to `encode()` but produces a forgeable,
+  // zero-entropy token. The route is already gated to the e2e DB, but a
+  // signing secret must never silently default to nothing.
+  const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    return NextResponse.json(
+      { error: 'AUTH_SECRET (or NEXTAUTH_SECRET) must be set to mint a test session' },
+      { status: 500 },
+    );
+  }
+
   const token = await encode({
     token: {
       sub: user.id,
@@ -37,7 +49,7 @@ export async function GET(req: NextRequest) {
       name: user.name,
       email: user.email,
     },
-    secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? '',
+    secret,
     salt: cookieName,
   });
 

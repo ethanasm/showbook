@@ -6,6 +6,8 @@
 
 import { describe, it, before, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { PgDialect } from 'drizzle-orm/pg-core';
+import type { SQL } from 'drizzle-orm';
 
 interface ScriptedExecute {
   results: unknown[];
@@ -352,6 +354,31 @@ describe('checkPgBossQueue', () => {
     ];
     const r = await checks.checkPgBossQueue();
     assert.equal(r.status, 'ok');
+  });
+
+  it('bounds the failed-job count and breakdown to the last 24h', async () => {
+    // Stale terminally-failed rows linger in pgboss.job for the per-queue
+    // retention (7–14d); without a window this check warns every morning
+    // until they age out, contradicting failed_jobs (24h). Lock in that
+    // both the count filter and the top-queue breakdown carry the window.
+    EXECUTE.results = [
+      [{ failed: 1, active_stuck: 0, active_total: 0, retry: 0 }],
+      [{ name: 'enrichment/album-metadata-fill', failed: 1 }],
+    ];
+    await checks.checkPgBossQueue();
+    const dialect = new PgDialect();
+    const rendered = EXECUTE.calls.map((c) =>
+      dialect.sqlToQuery(c.query as SQL).sql,
+    );
+    // The aggregate count query and the breakdown query both run; both
+    // must scope `state = 'failed'` to the 24h window.
+    assert.equal(rendered.length, 2);
+    for (const q of rendered) {
+      assert.match(q, /interval '24 hours'/);
+    }
+    // The stuck-active detection keeps its own 2h window (current state),
+    // so the aggregate query carries both intervals.
+    assert.match(rendered[0]!, /interval '2 hours'/);
   });
 });
 

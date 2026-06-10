@@ -1,7 +1,12 @@
 import { sql } from 'drizzle-orm';
 import { db } from '@showbook/db';
 import { child } from '@showbook/observability';
-import { queryAxiom as defaultQueryAxiom } from './axiom';
+import { queryAxiom as defaultQueryAxiom, axiomDataset } from './axiom';
+import {
+  fetchCiHealth as defaultFetchCiHealth,
+  type FetchCiHealthFn,
+  type CiWorkflowRun,
+} from './github';
 
 const log = child({ component: 'health-check.checks' });
 
@@ -35,7 +40,7 @@ interface FailedJobRow {
 export async function checkFailedJobs(
   queryAxiom: QueryAxiomFn = defaultQueryAxiom,
 ): Promise<CheckResult> {
-  const apl = `["showbook-prod"]
+  const apl = `["${axiomDataset()}"]
     | where _time > ago(24h) and event == "job.failed"
     | project _time, job, jobId, msg
     | order by _time desc
@@ -224,7 +229,7 @@ interface ErrorVolumeRow {
 export async function checkErrorVolume(
   queryAxiom: QueryAxiomFn = defaultQueryAxiom,
 ): Promise<CheckResult> {
-  const apl = `["showbook-prod"]
+  const apl = `["${axiomDataset()}"]
     | where _time > ago(24h) and level == "error"
     | summarize cnt = count() by event, component
     | order by cnt desc
@@ -297,9 +302,23 @@ interface QueueFailureRow {
 
 export async function checkPgBossQueue(): Promise<CheckResult> {
   try {
+    // Failed-job count is bounded to the last 24h. pg-boss v12 keeps
+    // terminally-failed rows in `pgboss.job` for the per-queue retention
+    // (7–14 days) before the maintenance loop deletes them, so an
+    // un-bounded `state = 'failed'` count surfaces failures from nights
+    // *days* ago — long after the underlying bug was fixed — and trips
+    // the morning warning every day until the rows age out. Worse, it
+    // contradicts the `failed_jobs` check (Axiom, 24h window), which goes
+    // green the morning after a fix lands while this check stays yellow.
+    // Bounding on `completed_on` (set when a job enters the terminal
+    // `failed` state; `created_on` is the fallback for the rare row that
+    // failed before `started_on` was stamped) keeps the two checks
+    // consistent: this gauge answers "did a job fail *last night*?", not
+    // "is there any failed row still in the table?". Stuck / active /
+    // retry counts stay un-bounded — those are inherently current state.
     const result = await db.execute(sql`
       select
-        count(*) filter (where state = 'failed') as failed,
+        count(*) filter (where state = 'failed' and coalesce(completed_on, created_on) > now() - interval '24 hours') as failed,
         count(*) filter (where state = 'active' and created_on < now() - interval '2 hours') as active_stuck,
         count(*) filter (where state = 'active') as active_total,
         count(*) filter (where state = 'retry') as retry
@@ -328,7 +347,7 @@ export async function checkPgBossQueue(): Promise<CheckResult> {
       const breakdown = await db.execute(sql`
         select name, count(*)::int as failed
         from pgboss.job
-        where state = 'failed'
+        where state = 'failed' and coalesce(completed_on, created_on) > now() - interval '24 hours'
         group by name
         order by count(*) desc
         limit 5
@@ -353,8 +372,8 @@ export async function checkPgBossQueue(): Promise<CheckResult> {
       };
       const summary =
         stuck > 0
-          ? `${stuck} stuck active · ${failed} failed · top: ${topQueue?.name ?? '(unknown)'} (${topQueue?.failed ?? 0})`
-          : `${failed} failed · top: ${topQueue?.name ?? '(unknown)'} (${topQueue?.failed ?? 0})`;
+          ? `${stuck} stuck active · ${failed} failed (24h) · top: ${topQueue?.name ?? '(unknown)'} (${topQueue?.failed ?? 0})`
+          : `${failed} failed (24h) · top: ${topQueue?.name ?? '(unknown)'} (${topQueue?.failed ?? 0})`;
       return { name: 'pgboss_queue', status, summary, detail };
     }
 
@@ -499,6 +518,76 @@ export async function checkExternalApis(
         : `${failed.length}/${entries.length} external APIs failing: ${failed.join(', ')}`,
     detail: { perApi },
   };
+}
+
+// ── CI health check (GitHub Actions) ───────────────────────────────────
+
+/** Conclusions that mean a run is genuinely broken (vs. cancelled/skipped). */
+const CI_FAIL_CONCLUSIONS = new Set(['failure', 'timed_out', 'startup_failure']);
+/** Conclusions that warrant a heads-up but aren't a hard failure. */
+const CI_WARN_CONCLUSIONS = new Set(['cancelled', 'action_required', 'stale']);
+
+function classifyRun(run: CiWorkflowRun): 'fail' | 'warn' | 'ok' {
+  // Still running / queued — not a failure, just unsettled.
+  if (run.status !== 'completed' || run.conclusion === null) return 'ok';
+  if (CI_FAIL_CONCLUSIONS.has(run.conclusion)) return 'fail';
+  if (CI_WARN_CONCLUSIONS.has(run.conclusion)) return 'warn';
+  return 'ok';
+}
+
+/**
+ * Latest GitHub Actions run per workflow on the trunk branch, with each
+ * run's per-job breakdown surfaced in `detail.ci` for the email's CI
+ * section. Mirrors the Axiom-skip semantics: no token → `unknown` so the
+ * operator can tell "CI is green" apart from "we couldn't ask GitHub".
+ */
+export async function checkCiHealth(
+  fetchCi: FetchCiHealthFn = defaultFetchCiHealth,
+): Promise<CheckResult> {
+  const res = await fetchCi();
+
+  if (res.skipped) {
+    return {
+      name: 'ci_health',
+      status: 'unknown',
+      summary: 'GitHub token unset — skipped',
+    };
+  }
+  if (!res.ok || !res.data) {
+    return {
+      name: 'ci_health',
+      status: 'warn',
+      summary: `GitHub API query failed: ${res.error ?? 'unknown error'}`,
+    };
+  }
+
+  const { runs, branch } = res.data;
+  if (runs.length === 0) {
+    return {
+      name: 'ci_health',
+      status: 'warn',
+      summary: `No CI runs found on ${branch}`,
+      detail: { ci: res.data },
+    };
+  }
+
+  const failing = runs.filter((r) => classifyRun(r) === 'fail');
+  const warning = runs.filter((r) => classifyRun(r) === 'warn');
+
+  const status: CheckStatus =
+    failing.length > 0 ? 'fail' : warning.length > 0 ? 'warn' : 'ok';
+  const summary =
+    failing.length > 0
+      ? `${failing.length}/${runs.length} CI workflow${failing.length === 1 ? '' : 's'} failing on ${branch}: ${failing
+          .map((r) => r.workflowName)
+          .join(', ')}`
+      : warning.length > 0
+        ? `${warning.length}/${runs.length} CI workflow${warning.length === 1 ? '' : 's'} need attention on ${branch}: ${warning
+            .map((r) => r.workflowName)
+            .join(', ')}`
+        : `All ${runs.length} CI workflow${runs.length === 1 ? '' : 's'} green on ${branch}`;
+
+  return { name: 'ci_health', status, summary, detail: { ci: res.data } };
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────

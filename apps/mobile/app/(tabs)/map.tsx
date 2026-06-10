@@ -3,12 +3,18 @@
  *
  * Personal map of every show the signed-in user has logged. Pins are
  * positioned at venue coordinates, bucketed into a grid that re-evaluates
- * as the user pans/zooms, and tapping a pin opens a venue sheet listing
- * every visit at that venue.
+ * as the user pans/zooms. Tapping a single-venue pin opens a sheet listing
+ * every visit at that venue; tapping a multi-venue *aggregate* opens the
+ * same sheet scoped to the whole cluster — every show across its venues,
+ * filterable by venue, with a "Zoom in" affordance to spread the pins
+ * apart on the map. (Aggregates used to only nudge the camera, which left
+ * tightly-clustered / coincident venues permanently un-openable.)
  *
  * Data source: trpc.shows.listForMap (already returns the headliner name
- * and venue lat/lng). We do NOT call a region-scoped procedure — the
- * "Refresh map" affordance is a pan-detection re-cluster only.
+ * and venue lat/lng). We do NOT call a region-scoped procedure — clusters
+ * re-evaluate client-side as the user pans/zooms. The map refetches
+ * whenever the tab regains focus, so adding or removing a show (logbook or
+ * discovery) on another screen is reflected automatically on return.
  *
  * Clustering is hand-rolled grid bucketing — no external cluster lib.
  * Cell size scales with the visible longitude delta so clusters break
@@ -26,8 +32,8 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { MapPin, RefreshCw, X } from 'lucide-react-native';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { MapPin, X, ZoomIn } from 'lucide-react-native';
 import MapView, {
   Marker,
   PROVIDER_GOOGLE,
@@ -37,6 +43,8 @@ import MapView, {
 import type { Kind } from '@showbook/shared';
 import { TopBar } from '../../components/TopBar';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
+import { KindFilterControl } from '../../components/KindFilterControl';
+import { type KindFilterValue } from '../../components/KindFilterMenu';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { Sheet } from '../../components/Sheet';
@@ -126,15 +134,6 @@ const MAX_VISIBLE_MARKERS = 60;
 // shows the continental US end-to-end.
 const MAX_REGION_LAT_DELTA = 60;
 const MAX_REGION_LNG_DELTA = 120;
-
-const KIND_FILTERS: readonly { k: 'all' | Kind; label: string }[] = [
-  { k: 'all', label: 'all' },
-  { k: 'concert', label: 'concert' },
-  { k: 'theatre', label: 'theatre' },
-  { k: 'comedy', label: 'comedy' },
-  { k: 'festival', label: 'festival' },
-  { k: 'sports', label: 'sports' },
-];
 
 // Which layer of shows the map plots. `all` / `past` / `upcoming` split the
 // user's own logbook by show state (`all` is the whole logbook); `discoverable`
@@ -324,16 +323,6 @@ function fitRegion(venues: VenueGroup[]): Region {
   };
 }
 
-/** Crude distance metric in degrees; used to detect "user has panned". */
-function regionDelta(a: Region, b: Region): number {
-  return (
-    Math.abs(a.latitude - b.latitude) +
-    Math.abs(a.longitude - b.longitude) +
-    Math.abs(a.latitudeDelta - b.latitudeDelta) +
-    Math.abs(a.longitudeDelta - b.longitudeDelta)
-  );
-}
-
 function formatDate(date: string | Date | null): string {
   if (!date) return '';
   const d = typeof date === 'string' ? new Date(date) : date;
@@ -408,10 +397,12 @@ export default function MapScreen(): React.JSX.Element {
 
   const [layer, setLayer] = React.useState<MapMode>('past');
   const [pendingRefit, setPendingRefit] = React.useState(false);
-  const [kindFilter, setKindFilter] = React.useState<'all' | Kind>('all');
+  const [kindFilter, setKindFilter] = React.useState<KindFilterValue>('all');
   const [region, setRegion] = React.useState<Region>(DEFAULT_REGION);
-  const [loadedRegion, setLoadedRegion] = React.useState<Region>(DEFAULT_REGION);
-  const [selectedClusterId, setSelectedClusterId] = React.useState<string | null>(null);
+  // The opened cluster is held as a *snapshot* (not just an id) so the
+  // sheet keeps rendering its contents even if a pan/zoom re-buckets the
+  // grid and changes a multi-venue cluster's synthetic `c:<key>` id.
+  const [selectedCluster, setSelectedCluster] = React.useState<Cluster | null>(null);
   const [didFitOnce, setDidFitOnce] = React.useState(false);
   const [activeFocusId, setActiveFocusId] = React.useState<string | null>(null);
 
@@ -481,12 +472,6 @@ export default function MapScreen(): React.JSX.Element {
     };
   }, [loggedShows, discoverableShows]);
 
-  const kindCounts = React.useMemo<Record<string, number>>(() => {
-    const counts: Record<string, number> = { all: allShows.length };
-    for (const s of allShows) counts[s.kind] = (counts[s.kind] ?? 0) + 1;
-    return counts;
-  }, [allShows]);
-
   const filteredShows = React.useMemo(
     () =>
       kindFilter === 'all' ? allShows : allShows.filter((s) => s.kind === kindFilter),
@@ -520,7 +505,6 @@ export default function MapScreen(): React.JSX.Element {
     if (allVenues.length === 0) return;
     const fit = fitRegion(allVenues);
     setRegion(fit);
-    setLoadedRegion(fit);
     mapRef.current?.animateToRegion(fit, 400);
     setDidFitOnce(true);
   }, [showsQuery.isSuccess, allShows, didFitOnce, focusVenueId]);
@@ -550,16 +534,22 @@ export default function MapScreen(): React.JSX.Element {
       longitudeDelta: 0.05,
     };
     setRegion(next);
-    setLoadedRegion(next);
     mapRef.current?.animateToRegion(next, 400);
     setDidFitOnce(true);
-    setSelectedClusterId(`v:${target.venueId}`);
+    setSelectedCluster({
+      id: `v:${target.venueId}`,
+      lat: target.lat,
+      lng: target.lng,
+      count: target.shows.length,
+      dominantKind: dominantKind(target.shows),
+      venues: [target],
+    });
     router.setParams({ focusVenueId: '' });
   }, [focusVenueId, showsQuery.isSuccess, allShows, router]);
 
   const onLayerChange = React.useCallback((next: MapMode) => {
     setLayer(next);
-    setSelectedClusterId(null);
+    setSelectedCluster(null);
     setPendingRefit(true);
   }, []);
 
@@ -572,7 +562,6 @@ export default function MapScreen(): React.JSX.Element {
     if (layerVenues.length === 0) return;
     const fit = fitRegion(layerVenues);
     setRegion(fit);
-    setLoadedRegion(fit);
     mapRef.current?.animateToRegion(fit, 400);
     setPendingRefit(false);
   }, [pendingRefit, allShows]);
@@ -581,13 +570,21 @@ export default function MapScreen(): React.JSX.Element {
     setRegion(next);
   }, []);
 
-  const onMarkerPress = React.useCallback(
+  // Every cluster — single-venue or aggregate — opens the sheet on tap.
+  // Aggregates used to only zoom, which left clusters of coincident /
+  // very-close venues permanently un-openable once the zoom step hit its
+  // floor (those were the "circles I can't click"). The sheet now exposes
+  // every show in the aggregate, filterable by venue, and offers an
+  // explicit "Zoom in" affordance to spread the pins apart on the map.
+  const onMarkerPress = React.useCallback((cluster: Cluster) => {
+    setSelectedCluster(cluster);
+  }, []);
+
+  // Animate the camera one zoom step into a cluster's center — used by the
+  // sheet's "Zoom in" action so the user can still drill the map down to
+  // finer-grain pins when an aggregate spans separable venues.
+  const zoomToCluster = React.useCallback(
     (cluster: Cluster) => {
-      if (cluster.venues.length === 1) {
-        setSelectedClusterId(cluster.id);
-        return;
-      }
-      // Multi-venue cluster — zoom in toward the cluster center.
       const next: Region = {
         latitude: cluster.lat,
         longitude: cluster.lng,
@@ -599,28 +596,21 @@ export default function MapScreen(): React.JSX.Element {
     [region],
   );
 
-  const selectedCluster = React.useMemo(
-    () => clusters.find((c) => c.id === selectedClusterId) ?? null,
-    [clusters, selectedClusterId],
+  // Keep the map fresh without a manual "Refresh map" button: refetch both
+  // feeds whenever the tab regains focus. Adding or removing a show (logbook
+  // or discovery) happens on another screen, so returning to Map picks up
+  // the change automatically. The one-time camera fit is gated by
+  // `didFitOnce`, so a refetch updates the pins in place without re-framing.
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!token) return;
+      void showsQuery.refetch();
+      void mapFeedQuery.refetch();
+      // Intentionally exclude the query objects from deps — refetch on every
+      // focus, not on every query-identity change.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [token]),
   );
-  const selectedVenue = selectedCluster?.venues[0] ?? null;
-
-  // "Refresh map" appears once the user has panned far enough away from
-  // the last region we acknowledged. Tapping it refetches the user's
-  // shows and commits the current region as the new baseline so the
-  // indicator hides until the next pan. (Server-side bbox filtering
-  // isn't wired — shows.listForMap returns the user's full set and
-  // clusters update live as the camera moves.)
-  const panDelta = regionDelta(region, loadedRegion);
-  const shouldShowSearchArea =
-    didFitOnce &&
-    panDelta >
-      Math.max(loadedRegion.latitudeDelta, loadedRegion.longitudeDelta) * 0.25;
-
-  const onSearchAreaPress = React.useCallback(() => {
-    setLoadedRegion(region);
-    void showsQuery.refetch();
-  }, [region, showsQuery]);
 
   // -- Render -------------------------------------------------------------
 
@@ -633,17 +623,20 @@ export default function MapScreen(): React.JSX.Element {
       <TopBar
         title="Map"
         eyebrow={`${venues.length} ${venues.length === 1 ? 'VENUE' : 'VENUES'}`}
-        rightAction={<MeTopBarAction />}
+        rightAction={
+          <View style={styles.headerActions}>
+            <KindFilterControl value={kindFilter} onChange={setKindFilter} testIDPrefix="map" />
+            <MeTopBarAction />
+          </View>
+        }
         large
       />
 
-      {/* Layer toggle — past / upcoming / discoverable */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterScroll}
-        contentContainerStyle={styles.modeStrip}
-      >
+      {/* Layer toggle — all / past / upcoming / discoverable. Fixed
+          non-scrolling row: chips size to their label (so "all" stays
+          compact and "discoverable" gets the room it needs) and can shrink
+          to fit narrow screens rather than scrolling. Counts were dropped. */}
+      <View style={styles.modeStrip}>
         {MODE_FILTERS.map(({ m, label }) => {
           const active = m === layer;
           return (
@@ -655,6 +648,7 @@ export default function MapScreen(): React.JSX.Element {
               accessibilityLabel={`${label} (${modeCounts[m]})`}
               style={[
                 styles.filterChip,
+                styles.modeChip,
                 {
                   borderColor: active ? colors.ink : colors.ruleStrong,
                   backgroundColor: active ? colors.ink : 'transparent',
@@ -662,6 +656,9 @@ export default function MapScreen(): React.JSX.Element {
               ]}
             >
               <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
                 style={[
                   styles.filterLabel,
                   { color: active ? colors.bg : colors.muted },
@@ -669,83 +666,14 @@ export default function MapScreen(): React.JSX.Element {
               >
                 {label}
               </Text>
-              <Text
-                style={[
-                  styles.filterCount,
-                  {
-                    color: active ? colors.bg : colors.muted,
-                    opacity: active ? 0.7 : 1,
-                  },
-                ]}
-              >
-                {modeCounts[m]}
-              </Text>
             </Pressable>
           );
         })}
-      </ScrollView>
+      </View>
 
-      {/* Kind filter strip */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterScroll}
-        contentContainerStyle={[
-          styles.filterStrip,
-          { borderBottomColor: colors.rule },
-        ]}
-      >
-        {KIND_FILTERS.map(({ k, label }) => {
-          const active = k === kindFilter;
-          const count = kindCounts[k] ?? 0;
-          return (
-            <Pressable
-              key={k}
-              onPress={() => setKindFilter(k)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={`${label} (${count})`}
-              style={[
-                styles.filterChip,
-                {
-                  borderColor: active ? colors.ink : colors.ruleStrong,
-                  backgroundColor: active ? colors.ink : 'transparent',
-                },
-              ]}
-            >
-              {k !== 'all' && (
-                <View
-                  style={[
-                    styles.filterDot,
-                    { backgroundColor: tokens.kindColor(k) },
-                  ]}
-                />
-              )}
-              <Text
-                style={[
-                  styles.filterLabel,
-                  { color: active ? colors.bg : colors.muted },
-                ]}
-              >
-                {label}
-              </Text>
-              <Text
-                style={[
-                  styles.filterCount,
-                  {
-                    color: active ? colors.bg : colors.muted,
-                    opacity: active ? 0.7 : 1,
-                  },
-                ]}
-              >
-                {count}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      {/* Map area */}
+      {/* Map area — the kind filter that used to live in a pill strip here
+          now lives in the header filter button, giving the map the full
+          height between the mode strip and the tab bar. */}
       <View style={{ flex: 1, backgroundColor: colors.surfaceRaised }}>
         {isLoading ? (
           <View style={styles.centered}>
@@ -817,7 +745,7 @@ export default function MapScreen(): React.JSX.Element {
               {visibleClusters.map((cluster) => {
                 const color = tokens.kindColor(cluster.dominantKind);
                 const r = pinRadius(cluster.count);
-                const selected = cluster.id === selectedClusterId;
+                const selected = cluster.id === selectedCluster?.id;
                 return (
                   <Marker
                     key={cluster.id}
@@ -868,24 +796,6 @@ export default function MapScreen(): React.JSX.Element {
                 );
               })}
             </MapView>
-
-            {shouldShowSearchArea && (
-              <Pressable
-                onPress={onSearchAreaPress}
-                style={[
-                  styles.searchAreaButton,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.ruleStrong,
-                  },
-                ]}
-              >
-                <RefreshCw size={14} color={colors.ink} />
-                <Text style={[styles.searchAreaLabel, { color: colors.ink }]}>
-                  Refresh map
-                </Text>
-              </Pressable>
-            )}
 
             {focusRegions.length > 0 && (
               <View
@@ -940,15 +850,23 @@ export default function MapScreen(): React.JSX.Element {
       </View>
 
       <Sheet
-        open={selectedCluster !== null && selectedVenue !== null}
-        onClose={() => setSelectedClusterId(null)}
-        snapPoints={['45%', '85%']}
+        open={selectedCluster !== null}
+        onClose={() => setSelectedCluster(null)}
+        snapPoints={[
+          selectedCluster && selectedCluster.venues.length > 1 ? '80%' : '55%',
+        ]}
       >
-        {selectedVenue && (
-          <VenueSheetContents
-            venue={selectedVenue}
-            onClose={() => setSelectedClusterId(null)}
+        {selectedCluster && (
+          <ClusterSheetContents
+            key={selectedCluster.id}
+            cluster={selectedCluster}
+            onClose={() => setSelectedCluster(null)}
             layer={layer}
+            onZoomIn={() => {
+              const target = selectedCluster;
+              setSelectedCluster(null);
+              zoomToCluster(target);
+            }}
           />
         )}
       </Sheet>
@@ -960,41 +878,79 @@ export default function MapScreen(): React.JSX.Element {
 // Sheet contents
 // ---------------------------------------------------------------------------
 
-function VenueSheetContents({
-  venue,
+function ClusterSheetContents({
+  cluster,
   onClose,
   layer,
+  onZoomIn,
 }: {
-  venue: VenueGroup;
+  cluster: Cluster;
   onClose: () => void;
   layer: MapMode;
+  onZoomIn: () => void;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const router = useRouter();
 
-  const totalSpent = venue.shows.reduce((acc, s) => {
-    const n = toNumber(s.pricePaid);
-    return acc + (n && n > 0 ? n : 0);
-  }, 0);
+  const isAggregate = cluster.venues.length > 1;
 
-  const uniqueArtists = new Set(
-    venue.shows.map((s) => s.headlinerName).filter((n): n is string => Boolean(n)),
-  ).size;
+  // Venue filter for an aggregate. `all` shows every venue in the cluster;
+  // selecting a venue narrows the list to that one. The sheet is keyed by
+  // cluster id at the call site, so this remounts (and resets to `all`)
+  // whenever a different cluster is opened — no reset-in-effect needed.
+  const [venueFilter, setVenueFilter] = React.useState<'all' | string>('all');
+
+  const activeVenue =
+    venueFilter === 'all'
+      ? null
+      : (cluster.venues.find((v) => v.venueId === venueFilter) ?? null);
+
+  // When a single venue is in focus (single-venue cluster, or an aggregate
+  // narrowed to one venue) the header reads as that venue and rows omit the
+  // venue line. Otherwise the header summarises the area.
+  const focusVenue = isAggregate ? activeVenue : cluster.venues[0]!;
+  const showVenueLine = isAggregate && !activeVenue;
 
   // Past visits read newest-first; upcoming / discoverable shows read
   // soonest-first so the next thing to happen sits at the top.
-  const sortedShows = React.useMemo(
-    () =>
-      [...venue.shows].sort((a, b) => {
-        const ad = a.date ? new Date(a.date).getTime() : 0;
-        const bd = b.date ? new Date(b.date).getTime() : 0;
-        return layer === 'past' ? bd - ad : ad - bd;
-      }),
-    [venue, layer],
-  );
+  const sortedShows = React.useMemo(() => {
+    const source = activeVenue
+      ? activeVenue.shows.map((s) => ({ show: s, venue: activeVenue }))
+      : cluster.venues.flatMap((v) => v.shows.map((s) => ({ show: s, venue: v })));
+    return source.sort((a, b) => {
+      const ad = a.show.date ? new Date(a.show.date).getTime() : 0;
+      const bd = b.show.date ? new Date(b.show.date).getTime() : 0;
+      return layer === 'past' ? bd - ad : ad - bd;
+    });
+  }, [cluster, activeVenue, layer]);
 
-  const locationLine = [venue.city, venue.stateRegion].filter(Boolean).join(', ');
+  const totalSpent = sortedShows.reduce((acc, { show }) => {
+    const n = toNumber(show.pricePaid);
+    return acc + (n && n > 0 ? n : 0);
+  }, 0);
+  const uniqueArtists = new Set(
+    sortedShows
+      .map(({ show }) => show.headlinerName)
+      .filter((n): n is string => Boolean(n)),
+  ).size;
+
+  // Header copy. A focused venue shows its own city/state; an unfiltered
+  // aggregate summarises the spread of cities it covers.
+  const cities = Array.from(
+    new Set(
+      cluster.venues.map((v) => v.city).filter((c): c is string => Boolean(c)),
+    ),
+  );
+  const areaLine =
+    cities.length === 1
+      ? cities[0]!
+      : cities.length > 1
+        ? `${cities.length} cities`
+        : '';
+  const focusLocationLine = focusVenue
+    ? [focusVenue.city, focusVenue.stateRegion].filter(Boolean).join(', ')
+    : '';
 
   return (
     <View style={styles.sheetContainer}>
@@ -1003,26 +959,38 @@ function VenueSheetContents({
           <View style={styles.sheetEyebrowRow}>
             <MapPin size={11} color={colors.faint} />
             <Text style={[styles.sheetEyebrow, { color: colors.faint }]}>
-              Selected
+              {showVenueLine ? 'This area' : 'Selected'}
             </Text>
           </View>
-          <Pressable
-            onPress={() => {
-              onClose();
-              router.push(`/venues/${venue.venueId}`);
-            }}
-            accessibilityRole="link"
-            accessibilityLabel={`Open ${venue.name}`}
-            hitSlop={4}
-            style={({ pressed }) => [pressed && { opacity: 0.6 }]}
-          >
-            <Text style={[styles.venueTitle, { color: colors.ink }]} numberOfLines={2}>
-              {venue.name}
+          {focusVenue ? (
+            <Pressable
+              onPress={() => {
+                onClose();
+                router.push(`/venues/${focusVenue.venueId}`);
+              }}
+              accessibilityRole="link"
+              accessibilityLabel={`Open ${focusVenue.name}`}
+              hitSlop={4}
+              style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+            >
+              <Text
+                style={[styles.venueTitle, { color: colors.ink }]}
+                numberOfLines={2}
+              >
+                {focusVenue.name}
+              </Text>
+            </Pressable>
+          ) : (
+            <Text
+              style={[styles.venueTitle, { color: colors.ink }]}
+              numberOfLines={2}
+            >
+              {cluster.venues.length} venues
             </Text>
-          </Pressable>
-          {locationLine.length > 0 && (
+          )}
+          {(focusVenue ? focusLocationLine : areaLine).length > 0 && (
             <Text style={[styles.venueLocation, { color: colors.muted }]}>
-              {locationLine}
+              {focusVenue ? focusLocationLine : areaLine}
             </Text>
           )}
         </View>
@@ -1035,20 +1003,108 @@ function VenueSheetContents({
         </Pressable>
       </View>
 
+      {/* Venue filter rail — only for aggregates. Lets the user scope the
+          show list to any single venue inside the cluster (the "filterable
+          by venue" view of an aggregate that has no separable pins yet). */}
+      {isAggregate && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.venueFilterScroll}
+          contentContainerStyle={styles.venueFilterRail}
+        >
+          {[
+            { id: 'all' as const, name: 'All venues', count: cluster.count },
+            ...cluster.venues
+              .slice()
+              .sort((a, b) => b.shows.length - a.shows.length)
+              .map((v) => ({
+                id: v.venueId,
+                name: v.name,
+                count: v.shows.length,
+              })),
+          ].map((chip) => {
+            const active = chip.id === venueFilter;
+            return (
+              <Pressable
+                key={chip.id}
+                onPress={() => setVenueFilter(chip.id)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={`${chip.name} (${chip.count})`}
+                style={[
+                  styles.venueFilterChip,
+                  {
+                    borderColor: active ? colors.ink : colors.ruleStrong,
+                    backgroundColor: active ? colors.ink : 'transparent',
+                  },
+                ]}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.venueFilterLabel,
+                    { color: active ? colors.bg : colors.muted },
+                  ]}
+                >
+                  {chip.name}
+                </Text>
+                <Text
+                  style={[
+                    styles.venueFilterCount,
+                    { color: active ? colors.bg : colors.faint },
+                  ]}
+                >
+                  {chip.count}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
+
       <View style={[styles.statRow, { borderColor: colors.rule }]}>
-        <Stat label="Shows" value={String(venue.shows.length)} />
+        {showVenueLine && (
+          <>
+            <Stat label="Venues" value={String(cluster.venues.length)} />
+            <View style={[styles.statDivider, { backgroundColor: colors.rule }]} />
+          </>
+        )}
+        <Stat label="Shows" value={String(sortedShows.length)} />
         <View style={[styles.statDivider, { backgroundColor: colors.rule }]} />
         <Stat label="Artists" value={String(uniqueArtists)} />
-        <View style={[styles.statDivider, { backgroundColor: colors.rule }]} />
-        <Stat
-          label="Spent"
-          value={totalSpent > 0 ? `$${Math.round(totalSpent)}` : '—'}
-        />
+        {!showVenueLine && (
+          <>
+            <View style={[styles.statDivider, { backgroundColor: colors.rule }]} />
+            <Stat
+              label="Spent"
+              value={totalSpent > 0 ? `$${Math.round(totalSpent)}` : '—'}
+            />
+          </>
+        )}
       </View>
+
+      {isAggregate && (
+        <Pressable
+          onPress={onZoomIn}
+          accessibilityRole="button"
+          accessibilityLabel="Zoom in to separate these venues on the map"
+          style={({ pressed }) => [
+            styles.zoomButton,
+            { borderColor: colors.ruleStrong },
+            pressed && { opacity: 0.7 },
+          ]}
+        >
+          <ZoomIn size={14} color={colors.ink} />
+          <Text style={[styles.zoomButtonLabel, { color: colors.ink }]}>
+            Zoom in on map
+          </Text>
+        </Pressable>
+      )}
 
       <View style={styles.visitsHeader}>
         <Text style={[styles.visitsTitle, { color: colors.ink }]}>
-          {layer === 'past' ? 'All visits' : 'Shows'}
+          {layer === 'past' && !showVenueLine ? 'All visits' : 'Shows'}
         </Text>
         <Text style={[styles.visitsCount, { color: colors.faint }]}>
           {sortedShows.length}
@@ -1056,7 +1112,7 @@ function VenueSheetContents({
       </View>
 
       <ScrollView style={{ flex: 1 }}>
-        {sortedShows.map((show) => {
+        {sortedShows.map(({ show, venue }) => {
           const price = formatPrice(show.pricePaid);
           const date = formatDate(show.date ?? null);
           const goToShow = () => {
@@ -1111,13 +1167,24 @@ function VenueSheetContents({
                     {show.headlinerName ?? 'Untitled show'}
                   </Text>
                 )}
-                {show.seat && (
+                {/* In the unfiltered aggregate view, surface which venue
+                    each show belongs to so the list stays legible. */}
+                {showVenueLine ? (
                   <Text
                     style={[styles.visitSeat, { color: colors.muted }]}
                     numberOfLines={1}
                   >
-                    {show.seat}
+                    {venue.name}
                   </Text>
+                ) : (
+                  show.seat && (
+                    <Text
+                      style={[styles.visitSeat, { color: colors.muted }]}
+                      numberOfLines={1}
+                    >
+                      {show.seat}
+                    </Text>
+                  )
                 )}
               </View>
               {price && (
@@ -1151,14 +1218,23 @@ function Stat({ label, value }: { label: string; value: string }): React.JSX.Ele
 
 const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  filterScroll: { flexGrow: 0 },
   modeStrip: {
     paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 8,
-    gap: 6,
+    // No top padding: the large TopBar already supplies the header gap, so
+    // the lone (post-kind-strip-removal) filter row sits tight under it
+    // instead of floating in blank space. Centred so the four chips read as
+    // a balanced group rather than left-anchored.
+    paddingTop: 0,
+    paddingBottom: 10,
+    gap: 8,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Mode chips size to their label (not equal-width) and may shrink to fit
+  // a narrow screen instead of overflowing the fixed, non-scrolling row.
+  modeChip: {
+    flexShrink: 1,
   },
   filterStrip: {
     paddingHorizontal: 20,
@@ -1178,36 +1254,20 @@ const styles = StyleSheet.create({
     gap: 5,
     flexShrink: 0,
   },
-  filterDot: { width: 5, height: 5, borderRadius: RADII.pill },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
   filterLabel: {
     fontFamily: 'Geist Sans 500',
     fontSize: 11,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
-  filterCount: {
-    fontFamily: 'Geist Mono 400',
-    fontSize: 10,
-  },
   pinOuter: { alignItems: 'center', justifyContent: 'center' },
   pinInner: { alignItems: 'center', justifyContent: 'center' },
   pinCount: { fontFamily: 'Geist Sans 600' },
-  searchAreaButton: {
-    position: 'absolute',
-    top: 12,
-    alignSelf: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderRadius: RADII.pill,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  searchAreaLabel: {
-    fontFamily: 'Geist Sans 600',
-    fontSize: 12,
-  },
   focusToggle: {
     position: 'absolute',
     bottom: 16,
@@ -1272,6 +1332,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
+  },
+  // A horizontal ScrollView is a flex child and would otherwise stretch to
+  // fill the column's free space; pin it to its content height.
+  venueFilterScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  venueFilterRail: {
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+    gap: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  venueFilterChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    borderWidth: 1,
+    borderRadius: RADII.pill,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: 200,
+  },
+  venueFilterLabel: {
+    fontFamily: 'Geist Sans 500',
+    fontSize: 12,
+    flexShrink: 1,
+  },
+  venueFilterCount: {
+    fontFamily: 'Geist Mono 500',
+    fontSize: 10,
+  },
+  zoomButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    marginHorizontal: 20,
+    marginTop: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderRadius: RADII.md,
+  },
+  zoomButtonLabel: {
+    fontFamily: 'Geist Sans 500',
+    fontSize: 12,
+    letterSpacing: 0.4,
   },
   statRow: {
     flexDirection: 'row',

@@ -222,24 +222,17 @@ export async function GET(req: NextRequest) {
   }
 
   if (isMobile) {
-    // Diagnostic: confirm the callback success path actually ran and
-    // capture the granted scope + a non-PII fingerprint of the access
-    // token so we can correlate against the scan endpoint's view of the
-    // same token. The fingerprint is just length + first/last chars —
-    // enough to detect mid-flight corruption (truncation, URL re-encoding)
-    // without surfacing the bearer secret in logs. Pino's redact rule
-    // strips `*.token`, so the field is named `tokenInfo` to slip past it
-    // intentionally — we control the shape and never include the body.
+    // Diagnostic: confirm the callback success path actually ran and capture
+    // the granted scope. We log only the access token's *length* — no head /
+    // tail / body — so no fragment of the live bearer secret lands in the log
+    // store. Length alone is still enough to catch gross mid-flight
+    // corruption (truncation to zero, etc.).
     logger.info(
       {
         event: 'gmail.callback.success',
         userId: session.user.id,
         scope: grantedScopes.join(' '),
-        tokenInfo: {
-          length: accessTokenRaw.length,
-          head: accessTokenRaw.slice(0, 8),
-          tail: accessTokenRaw.slice(-4),
-        },
+        tokenInfo: { length: accessTokenRaw.length },
       },
       'Gmail OAuth callback succeeded (mobile)',
     );

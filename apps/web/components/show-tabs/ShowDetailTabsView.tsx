@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import {
@@ -27,8 +27,10 @@ import {
   countFestivalActualSongs,
 } from "@/lib/show-accessors";
 import { MediaSection } from "@/components/media";
+import { TicketStatusBadge } from "@/components/design-system";
 import { ShowTabs } from "./ShowTabs";
 import { OverviewTab, type OverviewLineupEntry } from "./OverviewTab";
+import { DeleteShowConfirmModal } from "./DeleteShowConfirmModal";
 import { SetlistTab, SetlistTabComingSoon, type ActualSong } from "./SetlistTab";
 import {
   FestivalSetlistTab,
@@ -49,8 +51,9 @@ interface ShowDetailTabsViewProps {
   // `@showbook/shared/show-accessors` covers the field set we read.
   show: ShowLike & {
     id: string;
-    kind: "concert" | "theatre" | "comedy" | "festival" | "sports" | "film" | "unknown";
+    kind: "concert" | "theatre" | "comedy" | "festival" | "film" | "unknown";
     state: "past" | "ticketed" | "watching";
+    ticketStatus?: "sold_out" | "cancelled" | null;
     date: string | null;
     endDate: string | null;
     seat: string | null;
@@ -91,6 +94,11 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
   const utils = trpc.useUtils();
   const isPast = show.state === "past";
   const isFestival = show.kind === "festival";
+
+  // Drives the delete-confirmation popup. Replaces the old
+  // `window.confirm()` so the destructive action gets a styled,
+  // dismissable Delete / Cancel prompt.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   // Predicted-setlist query. Eligibility gate lives server-side; the
   // procedure returns the cold empty state for non-concert/festival
@@ -146,10 +154,20 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
       utils.shows.detail.invalidate({ showId: show.id });
     },
   });
+  const setTicketStatus = trpc.shows.setTicketStatus.useMutation({
+    onSuccess: () => {
+      utils.shows.detail.invalidate({ showId: show.id });
+    },
+  });
   const deleteShow = trpc.shows.delete.useMutation({
     meta: { successToast: "Show deleted" },
     onSuccess: () => {
       router.push(isPast ? "/logbook" : "/upcoming");
+    },
+    onError: () => {
+      // Keep the user on the page so they can retry; the modal closed
+      // optimistically on confirm, so just drop the in-flight flag.
+      setConfirmingDelete(false);
     },
   });
 
@@ -316,14 +334,28 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
     router.push(`/add?editId=${show.id}`);
   }, [router, show.id]);
   const handleDelete = useCallback(() => {
-    if (!window.confirm("Delete this show? This cannot be undone.")) return;
+    setConfirmingDelete(true);
+  }, []);
+  const handleConfirmDelete = useCallback(() => {
     void deleteShow.mutateAsync({ showId: show.id });
   }, [deleteShow, show.id]);
+  const handleCancelDelete = useCallback(() => {
+    setConfirmingDelete(false);
+  }, []);
   const handleSaveNotes = useCallback(
     async (next: string) => {
       await setNotes.mutateAsync({ showId: show.id, notes: next });
     },
     [show.id, setNotes],
+  );
+  const handleToggleTicketStatus = useCallback(
+    (status: "sold_out" | "cancelled") => {
+      // Toggle: clicking the active status clears it, otherwise set it
+      // (which also replaces the other status since it's one column).
+      const next = show.ticketStatus === status ? null : status;
+      void setTicketStatus.mutateAsync({ showId: show.id, status: next });
+    },
+    [show.id, show.ticketStatus, setTicketStatus],
   );
 
   const mediaLineup = lineupEntries.map((entry) => ({
@@ -415,12 +447,15 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
       state={show.state}
       cells={cells}
       lineup={lineupEntries}
+      lineupLabel={show.kind === "theatre" ? "Cast" : "Lineup"}
       onMarkAttended={
         show.state === "ticketed" ? handleMarkAttended : undefined
       }
       onEdit={handleEdit}
       onAddToCalendarHref={`/api/shows/${show.id}/ical`}
       onDelete={handleDelete}
+      ticketStatus={show.ticketStatus ?? null}
+      onToggleTicketStatus={handleToggleTicketStatus}
       musicLayerPlaceholder={musicLayerPlaceholder}
     />
   );
@@ -478,6 +513,14 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
       }}
     >
       <FullTrackDriverMount />
+      {confirmingDelete && (
+        <DeleteShowConfirmModal
+          showName={headlinerName}
+          deleting={deleteShow.isPending}
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+        />
+      )}
       <ShowHeaderStrip
         show={show}
         showPrimingStat={isPast}
@@ -659,6 +702,17 @@ function ShowHeaderStrip({
             </span>
           )}
         </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            gap: 8,
+            flexWrap: "wrap",
+          }}
+        >
+        {show.ticketStatus ? (
+          <TicketStatusBadge status={show.ticketStatus} />
+        ) : null}
         {isPast ? (
           <span
             style={{
@@ -706,6 +760,7 @@ function ShowHeaderStrip({
             watching
           </span>
         )}
+        </div>
       </div>
       {showPrimingStat && <PrimingStat showId={show.id} />}
     </header>

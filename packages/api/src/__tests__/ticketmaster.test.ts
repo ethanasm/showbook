@@ -576,7 +576,7 @@ test('inferKind: when no classification is primary, picks the first', () => {
   assert.equal(
     inferKind([
       { primary: false, segment: { id: 'KZFzniwnSyZfZ7v7nJ', name: 'Music' }, genre: { id: 'g', name: 'Rock' } },
-      { primary: false, segment: { id: 'KZFzniwnSyZfZ7v7nE', name: 'Sports' } },
+      { primary: false, segment: { id: 'KZFzniwnSyZfZ7v7nn', name: 'Film' } },
     ]),
     'concert',
   );

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { child } from '@showbook/observability';
+import { isTransientFetchError, transientErrorCode } from './transient-fetch';
 
 const log = child({ component: 'api.google-places' });
 
@@ -7,6 +8,39 @@ const BASE_URL = 'https://places.googleapis.com/v1';
 
 function getApiKey() {
   return process.env.GOOGLE_PLACES_API_KEY ?? '';
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Retry transient network failures a couple of times with short backoff.
+// HTTP error *responses* (4xx/5xx) don't throw from `fetch`, so they bypass
+// this and are handled by each caller's `res.ok` check. A non-transient throw
+// (or a transient one that survives every attempt — i.e. a real Google Places
+// outage) propagates so it still surfaces under the `error_volume` health gauge.
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  call: string,
+  attempts = 3,
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      // Each attempt gets its own 8s deadline on a fresh connection.
+      return await fetch(url, { ...init, signal: AbortSignal.timeout(8_000) });
+    } catch (err) {
+      lastErr = err;
+      if (attempt >= attempts || !isTransientFetchError(err)) throw err;
+      log.warn(
+        { event: 'places.request.retry', call, code: transientErrorCode(err) },
+        'Transient Google Places network error; retrying',
+      );
+      await sleep(attempt * 300);
+    }
+  }
+  throw lastErr;
 }
 
 export interface PlaceSuggestion {
@@ -102,15 +136,18 @@ export async function autocomplete(
     body.includedPrimaryTypes = types;
   }
 
-  const res = await fetch(`${BASE_URL}/places:autocomplete`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': API_KEY,
+  const res = await fetchWithRetry(
+    `${BASE_URL}/places:autocomplete`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': API_KEY,
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(8_000),
-  });
+    'autocomplete',
+  );
 
   if (!res.ok) {
     const errorText = await res.text();
@@ -149,15 +186,15 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
   if (!API_KEY) return null;
 
   const fieldMask = 'displayName,formattedAddress,location,addressComponents,photos';
-  const res = await fetch(
+  const res = await fetchWithRetry(
     `${BASE_URL}/places/${placeId}?languageCode=en`,
     {
       headers: {
         'X-Goog-Api-Key': API_KEY,
         'X-Goog-FieldMask': fieldMask,
       },
-      signal: AbortSignal.timeout(8_000),
     },
+    'getPlaceDetails',
   );
 
   if (!res.ok) return null;

@@ -112,20 +112,28 @@ export function ShowCard({
       {/* 3px left edge state bar */}
       <View style={[styles.stateBar, { backgroundColor: barColor }]} />
 
-      {/* Date block — 44pt min width */}
+      {/* Date block — 44pt min width. Compact drops the day-of-week and
+          year lines (year already shows in the timeline section header)
+          and shrinks the day number so the row collapses height-wise. */}
       <View style={styles.dateBlock}>
         <Text style={[styles.dateMonth, { color: colors.muted }]}>{show.month}</Text>
-        <Text style={[styles.dateDay, { color: colors.ink }]}>{show.day}</Text>
-        <Text style={[styles.dateDow, { color: colors.faint }]}>{show.dow}</Text>
-        {show.year ? (
+        <Text style={[compact ? styles.dateDayCompact : styles.dateDay, { color: colors.ink }]}>
+          {show.day}
+        </Text>
+        {!compact && (
+          <Text style={[styles.dateDow, { color: colors.faint }]}>{show.dow}</Text>
+        )}
+        {!compact && show.year ? (
           <Text style={[styles.dateYear, { color: colors.faint }]}>{show.year}</Text>
         ) : null}
       </View>
 
       {/* Optional headliner avatar — opt-in via `show.avatarUrl`. When the
           URL is missing the kind-coloured monogram fallback still renders,
-          which is the point: every row gets a face. */}
-      {show.avatarUrl !== undefined ? (
+          which is the point: every row gets a face. Hidden in compact mode:
+          it's the tallest element in the row and the densest layout trades
+          the decorative face for shorter rows + more headliner width. */}
+      {!compact && show.avatarUrl !== undefined ? (
         <RemoteImage
           uri={show.avatarUrl}
           headers={show.avatarHeaders}
@@ -136,26 +144,44 @@ export function ShowCard({
         />
       ) : null}
 
-      {/* Content column */}
-      <View style={styles.content}>
-        {/* Badges row */}
-        <View style={styles.badgeRow}>
-          <KindBadge kind={show.kind} size="sm" />
-          {show.state !== 'past' && <StateChip state={show.state} />}
-        </View>
+      {/* Content column. Comfortable stacks three lines (badges → headliner
+          → venue); compact collapses to two: a kind badge inline with the
+          headliner, then venue. The StateChip is dropped in compact because
+          the coloured left edge bar already encodes the show state. */}
+      <View style={[styles.content, compact && styles.contentCompact]}>
+        {compact ? (
+          <View style={styles.compactHeadlineRow}>
+            <KindBadge kind={show.kind} size="sm" />
+            <Text
+              style={[styles.headlinerCompact, { color: colors.ink }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {show.headliner}
+            </Text>
+          </View>
+        ) : (
+          <>
+            {/* Badges row */}
+            <View style={styles.badgeRow}>
+              <KindBadge kind={show.kind} size="sm" />
+              {show.state !== 'past' && <StateChip state={show.state} />}
+            </View>
 
-        {/* Headliner — Geist Sans (sans), NOT Fraunces */}
-        <Text
-          style={[styles.headliner, { color: colors.ink }]}
-          numberOfLines={1}
-          ellipsizeMode="tail"
-        >
-          {show.headliner}
-        </Text>
+            {/* Headliner — Geist Sans (sans), NOT Fraunces */}
+            <Text
+              style={[styles.headliner, { color: colors.ink }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {show.headliner}
+            </Text>
+          </>
+        )}
 
         {/* Venue · city */}
         <Text
-          style={[styles.venue, { color: colors.muted }]}
+          style={[compact ? styles.venueCompact : styles.venue, { color: colors.muted }]}
           numberOfLines={1}
           ellipsizeMode="tail"
         >
@@ -207,7 +233,7 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   compact: {
-    paddingVertical: 12,
+    paddingVertical: 7,
     paddingRight: 0,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
@@ -242,6 +268,11 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 26,
   },
+  dateDayCompact: {
+    fontFamily: 'Geist Sans 700',
+    fontSize: 17,
+    lineHeight: 19,
+  },
   dateDow: {
     fontFamily: 'Geist Sans 400',
     fontSize: 10,
@@ -258,6 +289,15 @@ const styles = StyleSheet.create({
     minWidth: 0,
     gap: 4,
   },
+  contentCompact: {
+    gap: 1,
+    justifyContent: 'center',
+  },
+  compactHeadlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -269,10 +309,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 21,
   },
+  headlinerCompact: {
+    fontFamily: 'Geist Sans 700',
+    fontSize: 15,
+    lineHeight: 19,
+    flex: 1,
+    minWidth: 0,
+  },
   venue: {
     fontFamily: 'Geist Sans 400',
     fontSize: 13,
     lineHeight: 18,
+  },
+  venueCompact: {
+    fontFamily: 'Geist Sans 400',
+    fontSize: 12,
+    lineHeight: 15,
   },
   chevronContainer: {
     justifyContent: 'center',

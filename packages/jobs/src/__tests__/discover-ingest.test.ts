@@ -133,18 +133,19 @@ function eventWithSales(opts: {
   } as unknown as TMEvent;
 }
 
-test('determineOnSaleStatus: canceled status → sold_out', () => {
-  // TM Discovery API uses American spelling.
+test('determineOnSaleStatus: canceled status → cancelled', () => {
+  // TM Discovery API uses American spelling; a cancelled show is a distinct
+  // outcome from sold_out (the show isn't happening at all).
   assert.equal(
     determineOnSaleStatus(eventWithSales({ statusCode: 'canceled' })),
-    'sold_out',
+    'cancelled',
   );
 });
 
-test('determineOnSaleStatus: cancelled status → sold_out (defensive)', () => {
+test('determineOnSaleStatus: cancelled status → cancelled (defensive)', () => {
   assert.equal(
     determineOnSaleStatus(eventWithSales({ statusCode: 'cancelled' })),
-    'sold_out',
+    'cancelled',
   );
 });
 

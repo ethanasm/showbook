@@ -43,7 +43,7 @@ import {
   type LayoutChangeEvent,
 } from 'react-native';
 import Svg, { Line } from 'react-native-svg';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import {
   Calendar,
   ChevronRight,
@@ -83,6 +83,8 @@ import {
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
 import { PickPerformanceDateSheet } from '../../components/PickPerformanceDateSheet';
+import { KindFilterControl } from '../../components/KindFilterControl';
+import { type KindFilterValue } from '../../components/KindFilterMenu';
 
 type UtilsClient = ReturnType<typeof trpc.useUtils>['client'];
 type FollowedFeed = RouterOutput<UtilsClient['discover']['followedFeed']['query']>;
@@ -141,6 +143,7 @@ const ON_SALE_LABEL: Record<AnnouncementItem['onSaleStatus'], string> = {
   presale: 'Presale',
   on_sale: 'On sale',
   sold_out: 'Sold out',
+  cancelled: 'Cancelled',
 };
 
 /**
@@ -204,6 +207,11 @@ export default function DiscoverScreen(): React.JSX.Element {
     string | null
   >(null);
 
+  // Kind filter — `all` shows everything the feed surfaces; the four
+  // watchable kinds narrow the list. Driven by the dropdown opened from the
+  // filter button next to search.
+  const [kindFilter, setKindFilter] = React.useState<KindFilterValue>('all');
+
   // Render budget for the current feed. Reset whenever the tab or any
   // chip filter changes so a freshly-selected scope always starts at
   // page 1 rather than carrying the previous tab's expanded budget.
@@ -217,7 +225,7 @@ export default function DiscoverScreen(): React.JSX.Element {
 
   React.useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [tab, selectedGroupId, selectedRegionVenueId]);
+  }, [tab, selectedGroupId, selectedRegionVenueId, kindFilter]);
 
   // Clear the venue sub-filter whenever the user changes the region
   // selection above it; otherwise a stale venue id could leave the
@@ -241,10 +249,22 @@ export default function DiscoverScreen(): React.JSX.Element {
   // followedFeed / followedArtistsFeed page at 100, nearbyFeed takes the
   // server default. Mobile previously capped these much tighter (50 / 50 / 25)
   // which made Regions in particular look thin against the web equivalent.
+  //
+  // `refetchOnMount: 'always'` is load-bearing: the offline warm-up
+  // (`lib/cache/warmup.ts`) pre-seeds these exact query keys with a
+  // deliberately tiny snapshot (followedFeed `limit: 12`, nearbyFeed
+  // `perRegionLimit: 8`) so a cold offline open renders something. That
+  // `setQueryData` write is marked fresh, so without forcing a mount
+  // refetch the default 30s `staleTime` would leave the screen pinned to
+  // the warm-up placeholder — "8 venues" until the user pulled to refresh.
+  // Forcing the refetch loads the full `limit: 100` / `perRegionLimit:
+  // 2500` set automatically (the warm-up rows render instantly as a
+  // placeholder while the background fetch runs).
   const followedVenuesQuery = useCachedQuery<FollowedFeed>({
     queryKey: ['mobile', 'discover', 'followedFeed'],
     queryFn: () => utils.client.discover.followedFeed.query({ limit: 100 }),
     enabled: Boolean(token),
+    refetchOnMount: 'always',
     refetchInterval: ingestPolling.intervals.venues,
   });
 
@@ -252,6 +272,7 @@ export default function DiscoverScreen(): React.JSX.Element {
     queryKey: ['mobile', 'discover', 'followedArtistsFeed'],
     queryFn: () => utils.client.discover.followedArtistsFeed.query({ limit: 100 }),
     enabled: Boolean(token),
+    refetchOnMount: 'always',
     refetchInterval: ingestPolling.intervals.artists,
   });
 
@@ -259,6 +280,7 @@ export default function DiscoverScreen(): React.JSX.Element {
     queryKey: ['mobile', 'discover', 'nearbyFeed'],
     queryFn: () => utils.client.discover.nearbyFeed.query({}),
     enabled: Boolean(token),
+    refetchOnMount: 'always',
     refetchInterval: ingestPolling.intervals.nearby,
   });
 
@@ -304,8 +326,37 @@ export default function DiscoverScreen(): React.JSX.Element {
         ? followedArtistsQuery
         : nearbyQuery;
 
+  // Auto-refresh on focus. Tab screens mount once and stay mounted, so
+  // `refetchOnMount: 'always'` only fires on the very first visit — and even
+  // that first fetch raced the offline warm-up, which could clobber the full
+  // feed back down to its tiny snapshot (now blocked by `seedDiscoverFeed` in
+  // warmup.ts). Refetching the active feed every time the tab regains focus
+  // guarantees the full set loads in over the warm-up placeholder without a
+  // manual pull-to-refresh — the behaviour the user expects and the same
+  // pattern the Map tab uses. A "latest ref" (updated in a commit effect, not
+  // during render) keeps the focus callback stable on `[token]` so it fires
+  // on focus / sign-in rather than on every query-identity change.
+  const activeQueryRef = React.useRef(activeQuery);
+  React.useEffect(() => {
+    activeQueryRef.current = activeQuery;
+  });
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!token) return;
+      void activeQueryRef.current.refetch();
+    }, [token]),
+  );
+
+  // True while the active feed is refetching in the background with rows
+  // already on screen — the warm-up-placeholder → full-feed focus refetch,
+  // a pull-to-refresh, or a feed re-fetch the ingest poll triggered. Drives
+  // the inline "updating…" status so the count isn't silently stale while
+  // the full set loads in over the small warm-up snapshot.
+  const isBackgroundRefetching =
+    activeQuery.isFetching && !activeQuery.isLoading;
+
   const refreshControl = useThemedRefreshControl(
-    activeQuery.isFetching && !activeQuery.isLoading,
+    isBackgroundRefetching,
     () => {
       void activeQuery.refetch();
     },
@@ -313,6 +364,11 @@ export default function DiscoverScreen(): React.JSX.Element {
 
   const searchAction = (
     <View style={styles.actions}>
+      <KindFilterControl
+        value={kindFilter}
+        onChange={setKindFilter}
+        testIDPrefix="discover"
+      />
       <Pressable
         onPress={() => router.push('/search')}
         hitSlop={12}
@@ -363,6 +419,9 @@ export default function DiscoverScreen(): React.JSX.Element {
         seen.set(r.id, {
           id: r.id,
           name: r.cityName,
+          // Radius is suppressed on the inline pills (hideInlineSublabel)
+          // but kept here so the overflow "All regions" sheet still shows
+          // each region's search radius.
           sublabel: `${r.radiusMiles}mi`,
           count: 0,
         });
@@ -458,6 +517,9 @@ export default function DiscoverScreen(): React.JSX.Element {
         (item) => item.venue.id === selectedRegionVenueId,
       );
     }
+    if (kindFilter !== 'all') {
+      result = result.filter((item) => item.kind === kindFilter);
+    }
     return result;
   }, [
     items,
@@ -465,6 +527,7 @@ export default function DiscoverScreen(): React.JSX.Element {
     selectedRegionVenueId,
     tab,
     followedArtistIdSet,
+    kindFilter,
   ]);
 
   // Does the user follow anything on this tab yet? Seeds the decision to
@@ -515,28 +578,54 @@ export default function DiscoverScreen(): React.JSX.Element {
     setUnfollowChip({ tab, id, name: group?.name ?? '' });
   };
 
-  const handleUnfollowConfirm = async (): Promise<void> => {
-    if (!unfollowChip) return;
-    const { tab: target, id, name } = unfollowChip;
+  // Unfollow / remove a single Discover entity, scoped to the tab it
+  // belongs to. Shared by the long-press confirm sheet and the overflow
+  // picker's trash affordance (which removes directly, no confirm sheet).
+  const performUnfollow = async (
+    target: DiscoverTab,
+    id: string,
+    name: string,
+  ): Promise<void> => {
     // Drop the filter if it pointed at the chip we're removing so the feed
     // doesn't get stuck filtered to a now-gone group.
     setSelectedGroupId((prev) => (prev === id ? null : prev));
+    if (target === 'regions') {
+      setSelectedRegionVenueId(null);
+    }
     try {
       if (target === 'venues') {
         const key = ['mobile', 'venues', 'followed'];
+        const feedKey = ['mobile', 'discover', 'followedFeed'];
         await runOptimisticMutation({
           mutation: 'venues.unfollow',
           input: { venueId: id },
           outbox: getCacheOutbox(),
           call: (input) => utils.client.venues.unfollow.mutate(input),
           optimistic: {
-            snapshot: () => queryClient.getQueryData<{ id: string }[]>(key),
+            // Snapshot + prune the feed alongside the followed list: the
+            // chip rail re-seeds groups from the cached feed items, so
+            // dropping the follow row alone leaves the chip (and its rows)
+            // lingering until the background refetch. Each announcement
+            // belongs to exactly one venue, so pruning by venue id is
+            // unambiguous — the chip and its rows vanish on confirm.
+            snapshot: () => ({
+              list: queryClient.getQueryData<{ id: string }[]>(key),
+              feed: queryClient.getQueryData<FollowedFeed>(feedKey),
+            }),
             apply: () => {
               queryClient.setQueryData<{ id: string }[]>(key, (prev) =>
                 (prev ?? []).filter((v) => v.id !== id),
               );
+              queryClient.setQueryData<FollowedFeed>(feedKey, (prev) =>
+                prev
+                  ? { ...prev, items: prev.items.filter((it) => it.venue.id !== id) }
+                  : prev,
+              );
             },
-            rollback: (snap) => queryClient.setQueryData(key, snap),
+            rollback: (snap) => {
+              queryClient.setQueryData(key, snap.list);
+              queryClient.setQueryData(feedKey, snap.feed);
+            },
           },
           reconcile: () => {
             invalidateDiscoverFeeds(queryClient);
@@ -551,6 +640,13 @@ export default function DiscoverScreen(): React.JSX.Element {
           outbox: getCacheOutbox(),
           call: (input) => utils.client.performers.unfollow.mutate(input),
           optimistic: {
+            // Feed left untouched on purpose: the artist chip already
+            // vanishes immediately (the rail filters artist chips through
+            // the followed-set we prune here), and an announcement can
+            // still belong to the followed-artists feed via a headliner
+            // you follow when only a support act was unfollowed — pruning
+            // by performer id would wrongly drop those. The refetch in
+            // reconcile clears any genuinely orphaned rows.
             snapshot: () => queryClient.getQueryData<{ id: string }[]>(key),
             apply: () => {
               queryClient.setQueryData<{ id: string }[]>(key, (prev) =>
@@ -566,13 +662,21 @@ export default function DiscoverScreen(): React.JSX.Element {
         });
       } else {
         const key = ['mobile', 'preferences', 'get'];
+        const feedKey = ['mobile', 'discover', 'nearbyFeed'];
         await runOptimisticMutation({
           mutation: 'preferences.removeRegion',
           input: { regionId: id },
           outbox: getCacheOutbox(),
           call: (input) => utils.client.preferences.removeRegion.mutate(input),
           optimistic: {
-            snapshot: () => queryClient.getQueryData<PreferencesPayload>(key),
+            // As with venues: prune the nearby feed too so the region
+            // chip and its grouped rows clear on confirm rather than
+            // lingering until the refetch. Each nearby announcement
+            // carries a single owning regionId, so the prune is exact.
+            snapshot: () => ({
+              prefs: queryClient.getQueryData<PreferencesPayload>(key),
+              feed: queryClient.getQueryData<NearbyFeed>(feedKey),
+            }),
             apply: () => {
               queryClient.setQueryData<PreferencesPayload>(key, (prev) =>
                 prev
@@ -582,10 +686,29 @@ export default function DiscoverScreen(): React.JSX.Element {
                     }
                   : prev,
               );
+              queryClient.setQueryData<NearbyFeed>(feedKey, (prev) =>
+                prev
+                  ? { ...prev, items: prev.items.filter((it) => it.regionId !== id) }
+                  : prev,
+              );
             },
-            rollback: (snap) => queryClient.setQueryData(key, snap),
+            rollback: (snap) => {
+              queryClient.setQueryData(key, snap.prefs);
+              queryClient.setQueryData(feedKey, snap.feed);
+            },
           },
-          reconcile: () => invalidateDiscoverFeeds(queryClient),
+          reconcile: () => {
+            invalidateDiscoverFeeds(queryClient);
+            // The Discover readers above live under `['mobile', …]` keys,
+            // but the region cap in `AddToDiscoverSheet` (and the regions
+            // editor) reads the tRPC-native `preferences.get` query — which
+            // `invalidateDiscoverFeeds` never touches. Without this the add
+            // sheet keeps the pre-delete count and shows "at limit" until a
+            // force-quit clears the in-memory cache. Mirrors the native
+            // `utils.venues.list` / `utils.performers.list` invalidation the
+            // venues / artists branches above already do.
+            void utils.preferences.get.invalidate();
+          },
         });
       }
       showToast({
@@ -631,7 +754,13 @@ export default function DiscoverScreen(): React.JSX.Element {
           selected={selectedGroupId}
           onSelect={setSelectedGroupId}
           onLongPress={handleChipLongPress}
+          onRemove={(id) => {
+            const group = groupList.find((g) => g.id === id);
+            void performUnfollow(tab, id, group?.name ?? '');
+          }}
           totalCount={items.length}
+          hideCounts
+          hideInlineSublabel
           testIdPrefix="discover-group"
           pickerTitle={groupPickerTitle(tab)}
           leadingAction={{
@@ -661,6 +790,7 @@ export default function DiscoverScreen(): React.JSX.Element {
             totalCount={regionVenueList.reduce((n, g) => n + g.count, 0)}
             allLabel="All venues"
             variant="sub"
+            hideCounts
             testIdPrefix="discover-venue-chip"
           />
         )}
@@ -708,15 +838,24 @@ export default function DiscoverScreen(): React.JSX.Element {
             <View style={styles.summaryRow}>
               <SummaryIcon tab={tab} color={colors.muted} />
               <Text style={[styles.summaryText, { color: colors.muted }]}>
-                {filterCount} upcoming · {ingestPolling.isPolling ? 'discovering more shows…' : 'pull to refresh'}
+                {filterCount} upcoming ·{' '}
+                {ingestPolling.isPolling
+                  ? 'discovering more shows…'
+                  : isBackgroundRefetching
+                    ? 'updating…'
+                    : 'pull to refresh'}
               </Text>
-              {ingestPolling.isPolling && (
+              {(ingestPolling.isPolling || isBackgroundRefetching) && (
                 <ActivityIndicator
                   size="small"
                   color={colors.muted}
                   style={styles.summarySpinner}
                   testID="discover-ingest-spinner"
-                  accessibilityLabel="Discovering more shows"
+                  accessibilityLabel={
+                    ingestPolling.isPolling
+                      ? 'Discovering more shows'
+                      : 'Updating'
+                  }
                 />
               )}
             </View>
@@ -772,7 +911,9 @@ export default function DiscoverScreen(): React.JSX.Element {
       tab={unfollowChip?.tab ?? tab}
       name={unfollowChip?.name ?? null}
       onConfirm={() => {
-        void handleUnfollowConfirm();
+        if (unfollowChip) {
+          void performUnfollow(unfollowChip.tab, unfollowChip.id, unfollowChip.name);
+        }
       }}
     />
     </>
@@ -968,10 +1109,14 @@ function addChipAccessibilityLabel(tab: DiscoverTab): string {
 
 /**
  * Renders -45° diagonal stripes scaled to the parent card's measured
- * dimensions. Used as a background layer on sold-out announcements so the
- * row is recognisably struck through without obscuring the text. The
- * comment in this file's header (iOS #263) explains why SVG Pattern/Mask
- * is off the table — we draw explicit <Line> elements instead.
+ * dimensions. Used as a background layer on sold-out and cancelled
+ * announcements so the row is recognisably struck through without obscuring
+ * the text. The comment in this file's header (iOS #263) explains why SVG
+ * Pattern/Mask is off the table — we draw explicit <Line> elements instead.
+ *
+ * The stripes are deliberately pronounced: tighter spacing, thicker strokes
+ * and higher opacity than a hairline so the struck-through treatment reads at
+ * a glance.
  */
 function SoldOutStripes({
   color,
@@ -983,7 +1128,7 @@ function SoldOutStripes({
   height: number;
 }): React.JSX.Element | null {
   if (width <= 0 || height <= 0) return null;
-  const spacing = 9;
+  const spacing = 6;
   const lines: React.ReactElement[] = [];
   for (let x = -height; x < width; x += spacing) {
     lines.push(
@@ -994,8 +1139,8 @@ function SoldOutStripes({
         x2={x + height}
         y2={height}
         stroke={color}
-        strokeWidth={1}
-        opacity={0.5}
+        strokeWidth={1.5}
+        opacity={0.7}
       />,
     );
   }
@@ -1011,7 +1156,13 @@ function SoldOutStripes({
   );
 }
 
-function AnnouncementRow({
+// Memoized: the feed renders up to PAGE_SIZE (50) of these, and the
+// Discover screen re-renders on every ingest-poll tick / watched-set
+// update / refetch `isFetching` toggle. Without memo all 50 rows
+// reconciled on each of those — the bulk of the scroll/tab lag. Props
+// are stable (`item` from the query cache, `onToggleWatch` a stable
+// `useCallback`); only the toggled row's `isWatching` changes.
+const AnnouncementRow = React.memo(function AnnouncementRow({
   item,
   isWatching,
   onToggleWatch,
@@ -1030,6 +1181,9 @@ function AnnouncementRow({
   const onSaleLabel = ON_SALE_LABEL[item.onSaleStatus];
   const ticketUrl = item.ticketUrl;
   const isSoldOut = item.onSaleStatus === 'sold_out';
+  const isCancelled = item.onSaleStatus === 'cancelled';
+  // Both sold-out and cancelled rows get the struck-through stripe treatment.
+  const isStruck = isSoldOut || isCancelled;
   const runMode = isRun(item);
   const runEndLabel =
     runMode && item.runEndDate ? formatRunEnd(item.runEndDate) : null;
@@ -1071,7 +1225,7 @@ function AnnouncementRow({
   const venueLabel = [item.venue.name, item.venue.city].filter(Boolean).join(' · ');
   const support =
     item.support && item.support.length > 0
-      ? `${item.kind === 'sports' && item.support.length === 1 ? 'vs' : '+'} ${item.support.join(', ')}`
+      ? `+ ${item.support.join(', ')}`
       : null;
   // Theatre productions use the productionName as the title and don't
   // carry a meaningful headlinerPerformerId for navigation — match the
@@ -1092,20 +1246,20 @@ function AnnouncementRow({
     <>
     <Pressable
       onPress={onPress}
-      onLayout={isSoldOut ? onCardLayout : undefined}
+      onLayout={isStruck ? onCardLayout : undefined}
       accessibilityRole="button"
       accessibilityLabel={`${title} — open actions`}
       testID={`discover-row-${item.id}`}
       style={({ pressed }) => [
         styles.card,
         { backgroundColor: colors.surface },
-        isSoldOut && styles.cardSoldOut,
+        isStruck && styles.cardSoldOut,
         pressed && { opacity: 0.9 },
       ]}
     >
-      {isSoldOut && (
+      {isStruck && (
         <SoldOutStripes
-          color={colors.rule}
+          color={isCancelled ? colors.danger : colors.ruleStrong}
           width={cardSize.w}
           height={cardSize.h}
         />
@@ -1156,9 +1310,20 @@ function AnnouncementRow({
         <View style={styles.badgeRow}>
           <KindBadge kind={item.kind as Kind} size="sm" />
           <View
-            style={[styles.statusBadge, { backgroundColor: accent + '22' }]}
+            style={[
+              styles.statusBadge,
+              {
+                backgroundColor:
+                  (isCancelled ? colors.danger : accent) + '22',
+              },
+            ]}
           >
-            <Text style={[styles.statusLabel, { color: accent }]}>
+            <Text
+              style={[
+                styles.statusLabel,
+                { color: isCancelled ? colors.danger : accent },
+              ]}
+            >
               {onSaleLabel}
             </Text>
           </View>
@@ -1288,7 +1453,7 @@ function AnnouncementRow({
     )}
     </>
   );
-}
+});
 
 const styles = StyleSheet.create({
   actions: {

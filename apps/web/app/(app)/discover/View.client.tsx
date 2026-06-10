@@ -451,6 +451,7 @@ function FeedSection({
         selected={selectedGroupId}
         onSelect={setSelectedGroupId}
         totalCount={totalCount}
+        hideCounts
       />
 
       {/* Feed */}

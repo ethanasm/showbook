@@ -61,6 +61,7 @@ export const JOB_NAMES = {
   BACKFILL_PERFORMER_MBIDS: 'backfill/performer-mbids',
   BACKFILL_PERFORMER_TICKETMASTER_IDS: 'backfill/performer-ticketmaster-ids',
   BACKFILL_PERFORMER_SPOTIFY_IDS: 'backfill/performer-spotify-ids',
+  BACKFILL_PERFORMER_WIKIDATA_IDS: 'backfill/performer-wikidata-ids',
   BACKFILL_SHOW_TICKET_URLS: 'backfill/show-ticket-urls',
 } as const;
 
@@ -208,6 +209,31 @@ export async function enqueueBackfillPerformerSpotifyIds(): Promise<
         queue: JOB_NAMES.BACKFILL_PERFORMER_SPOTIFY_IDS,
       },
       'enqueueBackfillPerformerSpotifyIds failed',
+    );
+    return null;
+  }
+}
+
+/**
+ * Trigger the Wikidata-QID backfill outside its 07:15 ET cron — used by
+ * the admin "Backfill performer Wikidata IDs" button to catch the backlog
+ * of theatre cast / non-TM performers created before the fire-and-forget
+ * `resolvePerformerWikidataId` hook in `matchOrCreatePerformer` landed.
+ */
+export async function enqueueBackfillPerformerWikidataIds(): Promise<
+  string | null
+> {
+  try {
+    const boss = await getSender();
+    return await boss.send(JOB_NAMES.BACKFILL_PERFORMER_WIKIDATA_IDS, {});
+  } catch (err) {
+    log.error(
+      {
+        err,
+        event: 'job_queue.enqueue.failed',
+        queue: JOB_NAMES.BACKFILL_PERFORMER_WIKIDATA_IDS,
+      },
+      'enqueueBackfillPerformerWikidataIds failed',
     );
     return null;
   }

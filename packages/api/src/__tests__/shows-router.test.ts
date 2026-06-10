@@ -109,7 +109,7 @@ describe('showsRouter (unit)', () => {
           venue: { id: 'v1', name: 'V', city: 'NYC', stateRegion: 'NY', latitude: null, longitude: null, photoUrl: null },
         },
       ];
-      const db = makeFakeDb({ selectResults: [shows] });
+      const db = makeFakeDb({ selectResults: [shows, []] });
       const result = await caller(db).listForMap();
       assert.equal(result.length, 1);
       assert.equal(result[0]!.headlinerName, 'Hamilton');
@@ -138,7 +138,7 @@ describe('showsRouter (unit)', () => {
         // another headliner sortOrder=1 — tier 1
         { showId: 'show-1', performerId: 'h1', name: 'Co', imageUrl: null, role: 'headliner', sortOrder: 1 },
       ];
-      const db = makeFakeDb({ selectResults: [shows, performerRows] });
+      const db = makeFakeDb({ selectResults: [shows, performerRows, []] });
       const result = await caller(db).listForMap();
       assert.equal(result[0]!.headlinerName, 'Main');
       assert.equal(result[0]!.headlinerId, 'h0');
@@ -162,7 +162,7 @@ describe('showsRouter (unit)', () => {
       const performerRows = [
         { showId: 'show-1', performerId: 's2', name: 'Only', imageUrl: null, role: 'support', sortOrder: 5 },
       ];
-      const db = makeFakeDb({ selectResults: [shows, performerRows] });
+      const db = makeFakeDb({ selectResults: [shows, performerRows, []] });
       const result = await caller(db).listForMap();
       assert.equal(result[0]!.headlinerName, 'Only');
     });
@@ -258,6 +258,57 @@ describe('showsRouter (unit)', () => {
       const db = makeFakeDb();
       await assert.rejects(() =>
         caller(db).setTicketUrl({ showId: SHOW_ID, ticketUrl: 'not-a-url' }),
+      );
+    });
+  });
+
+  describe('setTicketStatus', () => {
+    it('throws NOT_FOUND when update returns nothing', async () => {
+      const db = makeFakeDb({ updateResults: [[]] });
+      await assert.rejects(
+        () => caller(db).setTicketStatus({ showId: SHOW_ID, status: 'sold_out' }),
+        (err: unknown) => err instanceof TRPCError && err.code === 'NOT_FOUND',
+      );
+    });
+
+    it('sets a sold_out override', async () => {
+      const updated = { id: SHOW_ID, ticketStatus: 'sold_out' };
+      const db = makeFakeDb({ updateResults: [[updated]] });
+      const result = await caller(db).setTicketStatus({
+        showId: SHOW_ID,
+        status: 'sold_out',
+      });
+      assert.equal((result as { ticketStatus: string }).ticketStatus, 'sold_out');
+    });
+
+    it('sets a cancelled override', async () => {
+      const updated = { id: SHOW_ID, ticketStatus: 'cancelled' };
+      const db = makeFakeDb({ updateResults: [[updated]] });
+      const result = await caller(db).setTicketStatus({
+        showId: SHOW_ID,
+        status: 'cancelled',
+      });
+      assert.equal((result as { ticketStatus: string }).ticketStatus, 'cancelled');
+    });
+
+    it('clears the override with null', async () => {
+      const updated = { id: SHOW_ID, ticketStatus: null };
+      const db = makeFakeDb({ updateResults: [[updated]] });
+      const result = await caller(db).setTicketStatus({
+        showId: SHOW_ID,
+        status: null,
+      });
+      assert.equal((result as { ticketStatus: string | null }).ticketStatus, null);
+    });
+
+    it('rejects an unknown status value', async () => {
+      const db = makeFakeDb();
+      await assert.rejects(() =>
+        caller(db).setTicketStatus({
+          showId: SHOW_ID,
+          // @ts-expect-error — exercising the zod enum guard
+          status: 'bogus',
+        }),
       );
     });
   });
@@ -519,7 +570,7 @@ describe('showsRouter (unit)', () => {
           venue: { id: 'v', name: 'V', city: 'SF', stateRegion: 'CA', latitude: null, longitude: null, photoUrl: null },
         },
       ];
-      const db = makeFakeDb({ selectResults: [shows] });
+      const db = makeFakeDb({ selectResults: [shows, []] });
       const result = await caller(db).listForMap();
       assert.equal(result[0]!.headlinerName, 'Outside Lands');
     });
@@ -538,7 +589,7 @@ describe('showsRouter (unit)', () => {
           venue: { id: 'v', name: 'V', city: 'C', stateRegion: 'NY', latitude: null, longitude: null, photoUrl: null },
         },
       ];
-      const db = makeFakeDb({ selectResults: [shows, []] });
+      const db = makeFakeDb({ selectResults: [shows, [], []] });
       const result = await caller(db).listForMap();
       assert.equal(result[0]!.headlinerName, null);
       assert.equal(result[0]!.headlinerId, null);

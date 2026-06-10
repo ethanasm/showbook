@@ -37,11 +37,20 @@ fi
 if ! command -v pnpm >/dev/null 2>&1; then
   log "Enabling pnpm via corepack..."
   corepack enable
-  corepack prepare pnpm@9.15.4 --activate
+  # Match the packageManager pin in package.json (pnpm@10.33.4). Activating a
+  # different pnpm here makes install rewrite pnpm-lock.yaml because pnpm
+  # minor versions serialize peer-dependency keys differently.
+  corepack prepare pnpm@10.33.4 --activate
 fi
 
+# Use --frozen-lockfile so install never rewrites pnpm-lock.yaml. A plain
+# `pnpm install` "fixes up" the lockfile's peer-dependency serialization on
+# every boot, leaving an uncommitted `M pnpm-lock.yaml` that every agent then
+# flags. The lockfile is committed and authoritative; CI installs the same way.
+# If deps genuinely change, update the lockfile in a commit rather than letting
+# session-start mutate it out from under the agent.
 log "Installing pnpm dependencies..."
-pnpm install --prefer-offline
+pnpm install --frozen-lockfile --prefer-offline
 
 # 3. Bring up the Postgres container (the web container needs .env.local and is
 #    not required for tests — Playwright spins up its own dev server).

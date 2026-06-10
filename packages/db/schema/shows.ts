@@ -22,12 +22,21 @@ export const kindEnum = pgEnum('kind', [
   'theatre',
   'comedy',
   'festival',
-  'sports',
   'film',
   'unknown',
 ]);
 
 export const stateEnum = pgEnum('state', ['past', 'ticketed', 'watching']);
+
+// Per-user manual override for a show's ticket availability. Nullable means
+// "no override" (the normal case). `sold_out` and `cancelled` are mutually
+// exclusive and orthogonal to `state` — a past show can have been cancelled,
+// a watching show can be sold out. Distinct from the announcements-side
+// `on_sale_status` enum, which is TM-derived for the public discovery feed.
+export const ticketStatusEnum = pgEnum('ticket_status', [
+  'sold_out',
+  'cancelled',
+]);
 
 export const performerRoleEnum = pgEnum('performer_role', [
   'headliner',
@@ -44,6 +53,8 @@ export const shows = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     kind: kindEnum('kind').notNull(),
     state: stateEnum('state').notNull(),
+    // Manual per-user override; null = no override. See ticketStatusEnum.
+    ticketStatus: ticketStatusEnum('ticket_status'),
     venueId: uuid('venue_id')
       .notNull()
       .references(() => venues.id),
