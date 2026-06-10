@@ -65,11 +65,22 @@ test('shouldGroup: concerts group only with 3+ dates within 30 days', () => {
   );
 });
 
-test('shouldGroup: comedy never groups, festivals group duplicate listings', () => {
+test('shouldGroup: comedy groups like concerts (3+ dates within 30 days)', () => {
+  // Two nights: stays separate (matches the concert two-date rule).
+  assert.equal(shouldGroup('comedy', ['2026-08-01', '2026-08-02']), false);
+  // 3+ within 30 days: a multi-night club stand collapses into one run.
   assert.equal(
     shouldGroup('comedy', ['2026-08-01', '2026-08-02', '2026-08-03']),
+    true,
+  );
+  // 3 dates spanning more than 30 days: a touring comic, stays separate.
+  assert.equal(
+    shouldGroup('comedy', ['2026-08-01', '2026-09-15', '2026-10-30']),
     false,
   );
+});
+
+test('shouldGroup: festivals group duplicate listings', () => {
   assert.equal(
     shouldGroup('festival', ['2026-08-01', '2026-08-02']),
     true,
@@ -185,30 +196,57 @@ test('groupEventsIntoRuns: 3-night concert tour spanning 60 days does NOT group'
   assert.equal(singles.length, 3);
 });
 
-test('groupEventsIntoRuns: comedy nights stay separate even at the same venue', () => {
+test('groupEventsIntoRuns: a multi-night comedy stand collapses into one run', () => {
   const events = [
     makeEvent({
       date: '2026-08-01',
       kind: 'comedy',
       headliner: 'John Mulaney',
       headlinerPerformerId: 'jm',
+      sourceEventId: 'c1',
     }),
     makeEvent({
       date: '2026-08-02',
       kind: 'comedy',
       headliner: 'John Mulaney',
       headlinerPerformerId: 'jm',
+      sourceEventId: 'c2',
     }),
     makeEvent({
       date: '2026-08-03',
       kind: 'comedy',
       headliner: 'John Mulaney',
       headlinerPerformerId: 'jm',
+      sourceEventId: 'c3',
+    }),
+  ];
+  const { runs, singles } = groupEventsIntoRuns(events);
+  assert.equal(runs.length, 1);
+  assert.equal(singles.length, 0);
+  assert.equal(runs[0]!.performanceDates.length, 3);
+  assert.equal(runs[0]!.kind, 'comedy');
+});
+
+test('groupEventsIntoRuns: two comedy nights stay separate (under the 3-date floor)', () => {
+  const events = [
+    makeEvent({
+      date: '2026-08-01',
+      kind: 'comedy',
+      headliner: 'Nate Bargatze',
+      headlinerPerformerId: 'nb',
+      sourceEventId: 'n1',
+    }),
+    makeEvent({
+      date: '2026-08-02',
+      kind: 'comedy',
+      headliner: 'Nate Bargatze',
+      headlinerPerformerId: 'nb',
+      sourceEventId: 'n2',
     }),
   ];
   const { runs, singles } = groupEventsIntoRuns(events);
   assert.equal(runs.length, 0);
-  assert.equal(singles.length, 3);
+  assert.equal(singles.length, 2);
 });
 
 test('groupEventsIntoRuns: festival pass and day listings collapse into one representative run', () => {
