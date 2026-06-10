@@ -14,8 +14,8 @@ via `expo-auth-session`, `expo-secure-store`, `expo-notifications`).
 > iOS ad-hoc provisioning / device registration, the Google OAuth client
 > IDs, and the backend `/api/auth/mobile-token` audience are all proven
 > end-to-end. What remains before a first *store* submission is the
-> store-account setup (Play Console account, App Store Connect + Play app
-> records, reviewer demo account), wiring the `production` EAS profile's
+> store-account setup (App Store Connect + Play app records, reviewer
+> demo account), wiring the `production` EAS profile's
 > `EXPO_PUBLIC_*` env (it has no inline block), and the Android Maps key
 > (see the checklist at the bottom). The steps below are the path forward;
 > the per-step notes call out what's already done.
@@ -332,9 +332,9 @@ auto-bumps `ios.buildNumber` and `android.versionCode` if you set
       iOS ad-hoc provisioning / device registration, and Android APK install.
 - [x] Apple Developer Program active (required for the on-device iOS
       internal / ad-hoc build).
-- [ ] Google Play Console account active. *(Not proven by the Android
-      preview — that APK is sideloaded; Play Console is only needed once
-      you push to an internal-testing/store track.)*
+- [x] Google Play Console account active. *(eas.json's `preview-store`
+      submit config already targets the Play `internal` track via
+      `play-service-account.json`.)*
 - [x] iOS + Android OAuth client IDs created in Google Cloud Console
       (inlined in `eas.json` `preview.env`; native sign-in works on-device).
 - [x] Backend `GOOGLE_OAUTH_MOBILE_AUDIENCES` set in `.env.prod`, backend
