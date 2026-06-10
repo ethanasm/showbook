@@ -34,6 +34,8 @@ import {
   formatDateMedium as formatDateLong,
   formatDateParts,
   formatOnSaleDate,
+  formatVenueLocation,
+  isVenuePlaceholder,
 } from "@showbook/shared";
 
 type Performer = {
@@ -173,6 +175,14 @@ export default function VenueDetailPage() {
       utils.venues.list.invalidate();
     },
   });
+  const adminUpdateLocationMutation = trpc.admin.updateVenueLocation.useMutation({
+    meta: { successToast: "Venue location updated" },
+    onSuccess: () => {
+      utils.venues.detail.invalidate();
+      utils.venues.followed.invalidate();
+      utils.venues.list.invalidate();
+    },
+  });
 
   const invalidateSidebarCounts = useInvalidateSidebarCounts();
 
@@ -269,9 +279,11 @@ export default function VenueDetailPage() {
       )}
     >
       {(venue) => {
-        const locationLine = [venue.city, venue.stateRegion, venue.country]
-          .filter(Boolean)
-          .join(", ");
+        const locationLine = formatVenueLocation({
+          city: venue.city,
+          stateRegion: venue.stateRegion,
+          country: venue.country,
+        });
         return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* Breadcrumb */}
@@ -378,6 +390,20 @@ export default function VenueDetailPage() {
                   adminRenameMutation.mutate({ venueId: venue.id, name })
                 }
                 pending={adminRenameMutation.isPending}
+              />
+            )}
+            {amIAdmin && (
+              <AdminVenueLocation
+                city={venue.city}
+                stateRegion={venue.stateRegion}
+                country={venue.country}
+                onSave={(loc) =>
+                  adminUpdateLocationMutation.mutate({
+                    venueId: venue.id,
+                    ...loc,
+                  })
+                }
+                pending={adminUpdateLocationMutation.isPending}
               />
             )}
           </div>
@@ -902,6 +928,157 @@ function AdminCanonicalName({
       title="Edit the canonical name everyone sees"
     >
       admin · canonical “{canonicalName}” · edit for everyone
+    </button>
+  );
+}
+
+
+// ── Admin: edit the canonical (shared) venue location ─────────────────────
+function AdminVenueLocation({
+  city,
+  stateRegion,
+  country,
+  onSave,
+  pending,
+}: {
+  city: string;
+  stateRegion: string | null;
+  country: string;
+  onSave: (loc: {
+    city: string;
+    stateRegion: string | null;
+    country: string;
+  }) => void;
+  pending: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [cityDraft, setCityDraft] = useState(city);
+  const [regionDraft, setRegionDraft] = useState(stateRegion ?? "");
+  const [countryDraft, setCountryDraft] = useState(country);
+
+  const labelStyle: React.CSSProperties = {
+    fontFamily: "var(--font-geist-mono), monospace",
+    fontSize: 11.5,
+    color: "var(--muted)",
+    letterSpacing: ".02em",
+  };
+
+  function startEditing() {
+    setCityDraft(city);
+    setRegionDraft(stateRegion ?? "");
+    setCountryDraft(country);
+    setEditing(true);
+  }
+
+  function commit() {
+    const trimmedCity = cityDraft.trim();
+    const trimmedCountry = countryDraft.trim();
+    const trimmedRegion = regionDraft.trim();
+    setEditing(false);
+    if (!trimmedCity || !trimmedCountry) return;
+    const next = {
+      city: trimmedCity,
+      stateRegion: trimmedRegion || null,
+      country: trimmedCountry,
+    };
+    const unchanged =
+      next.city === city &&
+      next.stateRegion === (stateRegion ?? null) &&
+      next.country === country;
+    if (!unchanged) onSave(next);
+  }
+
+  const inputStyle: React.CSSProperties = {
+    ...labelStyle,
+    background: "transparent",
+    border: "none",
+    borderBottom: "1px solid var(--accent)",
+    outline: "none",
+    padding: "2px 0",
+    minWidth: 0,
+  };
+
+  if (editing) {
+    return (
+      <div
+        style={{
+          marginTop: 6,
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        <input
+          autoFocus
+          value={cityDraft}
+          onChange={(e) => setCityDraft(e.target.value)}
+          placeholder="City"
+          style={{ ...inputStyle, flex: "1 1 90px" }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") setEditing(false);
+          }}
+        />
+        <input
+          value={regionDraft}
+          onChange={(e) => setRegionDraft(e.target.value)}
+          placeholder="State / region"
+          style={{ ...inputStyle, flex: "1 1 90px" }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") setEditing(false);
+          }}
+        />
+        <input
+          value={countryDraft}
+          onChange={(e) => setCountryDraft(e.target.value)}
+          placeholder="Country"
+          style={{ ...inputStyle, flex: "1 1 90px" }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") setEditing(false);
+          }}
+        />
+        <button
+          type="button"
+          onClick={commit}
+          style={{
+            ...labelStyle,
+            color: "var(--accent)",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: 0,
+          }}
+        >
+          save
+        </button>
+      </div>
+    );
+  }
+
+  const needsCity = isVenuePlaceholder(city);
+  return (
+    <button
+      type="button"
+      onClick={startEditing}
+      disabled={pending}
+      style={{
+        ...labelStyle,
+        marginTop: 6,
+        padding: 0,
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        textAlign: "left",
+        color: needsCity ? "var(--accent)" : "var(--muted)",
+      }}
+      title="Edit the city / region / country everyone sees"
+    >
+      {needsCity
+        ? "admin · location missing · add city for everyone"
+        : "admin · edit location for everyone"}
     </button>
   );
 }
