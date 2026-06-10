@@ -15,10 +15,10 @@ via `expo-auth-session`, `expo-secure-store`, `expo-notifications`).
 > IDs, and the backend `/api/auth/mobile-token` audience are all proven
 > end-to-end. What remains before a first *store* submission is the
 > store-account setup (App Store Connect + Play app records, reviewer
-> demo account), wiring the `production` EAS profile's
-> `EXPO_PUBLIC_*` env (it has no inline block), and the Android Maps key
-> (see the checklist at the bottom). The steps below are the path forward;
-> the per-step notes call out what's already done.
+> demo account) and wiring the `production` EAS profile's `EXPO_PUBLIC_*`
+> env (it has no inline block — including the Maps key, which is already
+> wired for `preview`). See the checklist at the bottom. The steps below
+> are the path forward; the per-step notes call out what's already done.
 
 ---
 
@@ -387,15 +387,19 @@ auto-bumps `ios.buildNumber` and `android.versionCode` if you set
       `eas env:list --environment production` before the first build —
       an unset `EXPO_PUBLIC_API_URL` ships a build with a broken backend
       and dead sign-in.
-- [ ] Map tab on Android: `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` is in **no**
-      `eas.json` profile `env` block today, so a beta/store Android build
-      renders a blank map until you provide it — add it to `preview.env`
-      (inherited by `preview-store`, the Play internal-testing profile) or
-      set it as an EAS env var. Create a *separate* "Maps SDK for Android"
-      key in Google Cloud, restricted to package `me.ethanasm.showbook` +
-      the EAS upload **and** Play app-signing SHA-1s (don't reuse the
-      backend `GOOGLE_PLACES_API_KEY`). iOS uses Apple Maps (`map.tsx`
-      picks `PROVIDER_DEFAULT` on iOS) and needs no key.
+- [x] Map tab on Android (preview): `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` is
+      wired into `eas.json` `preview.env` (inherited by `preview-store`) —
+      a *restricted* "Maps SDK for Android" key (Application restriction:
+      package `me.ethanasm.showbook` + EAS keystore SHA-1; API restriction:
+      Maps SDK for Android only; a *separate* key from the backend
+      `GOOGLE_PLACES_API_KEY`). `preview` / `preview-store` Android builds
+      now render the map after a rebuild. iOS uses Apple Maps (`map.tsx`
+      picks `PROVIDER_DEFAULT`) and needs no key.
+- [ ] Map tab on Android (production + Play follow-ups): the `production`
+      profile has no inline `env`, so it needs the key as an EAS env var;
+      and add the **Play app-signing SHA-1** to the key after the first
+      AAB upload (Play re-signs, so the EAS keystore SHA-1 alone won't
+      cover Play-delivered installs).
 - [ ] Legal pages reachable at public URLs and pasted into both consoles:
       `/privacy`, `/terms`, and `/account-deletion` (Google Play *requires*
       the data-deletion URL). They live under `apps/web/app/(public)/`; the
