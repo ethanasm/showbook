@@ -1361,6 +1361,19 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
         paddingVertical: 4,
       }
     : null;
+  // The kind / status badges carry only a ~13%-alpha tint, so the stripes
+  // bleed straight through them. On struck rows wrap each badge in an opaque
+  // surface plate (same pill radius) so the tint sits on a solid base and the
+  // badge text reads — `alignSelf: 'flex-start'` keeps the plate hugging the
+  // badge instead of stretching the row.
+  const struckBadgePlate: ViewStyle | null = isStruck
+    ? {
+        backgroundColor: colors.surface,
+        borderRadius: RADII.pill,
+        alignSelf: 'flex-start',
+        overflow: 'hidden',
+      }
+    : null;
 
   return (
     <>
@@ -1451,7 +1464,9 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
         {compact ? (
           <>
             <View style={styles.compactHeadlineRow}>
-              <KindBadge kind={item.kind as Kind} size="sm" />
+              <View style={struckBadgePlate}>
+                <KindBadge kind={item.kind as Kind} size="sm" />
+              </View>
               <Text
                 style={[styles.cardTitleCompact, { color: colors.ink }]}
                 numberOfLines={1}
@@ -1471,24 +1486,28 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
         ) : (
           <>
             <View style={styles.badgeRow}>
-              <KindBadge kind={item.kind as Kind} size="sm" />
-              <View
-                style={[
-                  styles.statusBadge,
-                  {
-                    backgroundColor:
-                      (isCancelled ? colors.danger : accent) + '22',
-                  },
-                ]}
-              >
-                <Text
+              <View style={struckBadgePlate}>
+                <KindBadge kind={item.kind as Kind} size="sm" />
+              </View>
+              <View style={struckBadgePlate}>
+                <View
                   style={[
-                    styles.statusLabel,
-                    { color: isCancelled ? colors.danger : accent },
+                    styles.statusBadge,
+                    {
+                      backgroundColor:
+                        (isCancelled ? colors.danger : accent) + '22',
+                    },
                   ]}
                 >
-                  {onSaleLabel}
-                </Text>
+                  <Text
+                    style={[
+                      styles.statusLabel,
+                      { color: isCancelled ? colors.danger : accent },
+                    ]}
+                  >
+                    {onSaleLabel}
+                  </Text>
+                </View>
               </View>
             </View>
 
