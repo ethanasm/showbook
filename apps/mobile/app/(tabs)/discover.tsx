@@ -308,8 +308,17 @@ export default function DiscoverScreen(): React.JSX.Element {
   // Row density mirrors the Shows / Home tabs — the server-synced
   // `preferences.compactMode` collapses announcement rows to the same
   // dense, single-glance treatment so Discover reads as the same row
-  // family. Falls back to comfortable until the query resolves.
-  const compact = preferencesQuery.data?.preferences?.compactMode ?? false;
+  // family. Read it from the tRPC-native `preferences.get` query (the
+  // key the Me-tab density toggle writes its optimistic update +
+  // reconcile to, and that Home / Shows read) rather than the
+  // mobile-prefixed `useCachedQuery` above — that cached copy is only
+  // refreshed on Discover's own refetch, so toggling the setting from
+  // the Me tab would leave Discover stale (compact-when-comfortable).
+  // Falls back to comfortable until the query resolves.
+  const densityPrefsQuery = trpc.preferences.get.useQuery(undefined, {
+    enabled: Boolean(token),
+  });
+  const compact = densityPrefsQuery.data?.preferences?.compactMode ?? false;
 
   // Watched-event set drives the per-row "Watching" indicator. Cached so a
   // cold offline open renders the correct state instead of flashing every

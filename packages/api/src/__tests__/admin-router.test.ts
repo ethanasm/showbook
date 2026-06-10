@@ -162,6 +162,82 @@ describe('adminRouter', () => {
       );
     });
 
+    it('updateVenueLocation throws FORBIDDEN for a non-admin caller', async () => {
+      const db = makeFakeDb({
+        authUserId: null,
+        selectResults: [[{ id: 'test-user', email: NON_ADMIN_EMAIL }]],
+      });
+      await assert.rejects(
+        () =>
+          caller(db).updateVenueLocation({
+            venueId: '11111111-1111-4111-8111-111111111111',
+            city: 'New York',
+            stateRegion: 'New York',
+            country: 'United States',
+          }),
+        (err: unknown) => err instanceof TRPCError && err.code === 'FORBIDDEN',
+      );
+    });
+
+    it('updateVenueLocation updates the canonical location (geocode skipped when coords exist)', async () => {
+      const venueId = '11111111-1111-4111-8111-111111111111';
+      const db = makeFakeDb({
+        authUserId: null,
+        selectResults: [
+          [{ id: 'test-user', email: ADMIN_EMAIL }], // adminProcedure auth
+          // existing venue already has coordinates → geocode is skipped, so
+          // no external call is made and the test stays offline.
+          [{ id: venueId, name: 'Winter Garden Theatre', latitude: 40.7 }],
+        ],
+        updateResults: [
+          [
+            {
+              id: venueId,
+              city: 'New York',
+              stateRegion: 'New York',
+              country: 'United States',
+              latitude: 40.7,
+              longitude: -73.9,
+            },
+          ],
+        ],
+      });
+      const result = await caller(db).updateVenueLocation({
+        venueId,
+        city: '  New York  ',
+        stateRegion: '  New York  ',
+        country: '  United States  ',
+      });
+      assert.deepEqual(result, {
+        id: venueId,
+        city: 'New York',
+        stateRegion: 'New York',
+        country: 'United States',
+        latitude: 40.7,
+        longitude: -73.9,
+        geocoded: false,
+      });
+    });
+
+    it('updateVenueLocation throws NOT_FOUND when the venue is missing', async () => {
+      const db = makeFakeDb({
+        authUserId: null,
+        selectResults: [
+          [{ id: 'test-user', email: ADMIN_EMAIL }],
+          [], // existing venue lookup returns nothing
+        ],
+      });
+      await assert.rejects(
+        () =>
+          caller(db).updateVenueLocation({
+            venueId: '11111111-1111-4111-8111-111111111111',
+            city: 'New York',
+            country: 'United States',
+          }),
+        (err: unknown) => err instanceof TRPCError && err.code === 'NOT_FOUND',
+      );
+    });
+
     it('enqueueSetlistCorpusFill throws NOT_FOUND when no performer matches', async () => {
       const db = makeFakeDb({
         authUserId: null,
