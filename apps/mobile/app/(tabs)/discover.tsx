@@ -303,6 +303,11 @@ export default function DiscoverScreen(): React.JSX.Element {
     queryFn: () => utils.client.preferences.get.query(),
     enabled: Boolean(token),
   });
+  // Row density mirrors the Shows / Home tabs — the server-synced
+  // `preferences.compactMode` collapses announcement rows to the same
+  // dense, single-glance treatment so Discover reads as the same row
+  // family. Falls back to comfortable until the query resolves.
+  const compact = preferencesQuery.data?.preferences?.compactMode ?? false;
 
   // Watched-event set drives the per-row "Watching" indicator. Cached so a
   // cold offline open renders the correct state instead of flashing every
@@ -873,15 +878,17 @@ export default function DiscoverScreen(): React.JSX.Element {
                 groups={groupList}
                 watchedSet={watchedSet}
                 onToggleWatch={onToggleWatch}
+                compact={compact}
               />
             ) : (
-              <View style={styles.list}>
+              <View style={[styles.list, compact && styles.listCompact]}>
                 {visibleItems.map((item) => (
                   <AnnouncementRow
                     key={item.id}
                     item={item}
                     isWatching={watchedSet.has(item.id)}
                     onToggleWatch={onToggleWatch}
+                    compact={compact}
                   />
                 ))}
               </View>
@@ -961,11 +968,13 @@ function RegionGroupedList({
   groups,
   watchedSet,
   onToggleWatch,
+  compact,
 }: {
   items: NearbyAnnouncementItem[];
   groups: FilterGroup[];
   watchedSet: Set<string>;
   onToggleWatch: WatchToggle;
+  compact?: boolean;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -984,11 +993,14 @@ function RegionGroupedList({
   const orderedGroups = groups.filter((g) => buckets.has(g.id));
 
   return (
-    <View style={styles.list}>
+    <View style={[styles.list, compact && styles.listCompact]}>
       {orderedGroups.map((g) => {
         const groupItems = buckets.get(g.id) ?? [];
         return (
-          <View key={g.id} style={styles.regionGroup}>
+          <View
+            key={g.id}
+            style={[styles.regionGroup, compact && styles.regionGroupCompact]}
+          >
             <View style={styles.regionHeader}>
               <Text style={[styles.regionHeaderName, { color: colors.ink }]}>
                 {g.name}
@@ -1004,6 +1016,7 @@ function RegionGroupedList({
                 item={item}
                 isWatching={watchedSet.has(item.id)}
                 onToggleWatch={onToggleWatch}
+                compact={compact}
               />
             ))}
           </View>
@@ -1166,10 +1179,12 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
   item,
   isWatching,
   onToggleWatch,
+  compact = false,
 }: {
   item: AnnouncementItem;
   isWatching: boolean;
   onToggleWatch: WatchToggle;
+  compact?: boolean;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -1252,7 +1267,9 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
       testID={`discover-row-${item.id}`}
       style={({ pressed }) => [
         styles.card,
-        { backgroundColor: colors.surface },
+        compact ? styles.cardCompact : null,
+        { backgroundColor: compact ? 'transparent' : colors.surface },
+        compact && { borderBottomColor: colors.rule },
         isStruck && styles.cardSoldOut,
         pressed && { opacity: 0.9 },
       ]}
@@ -1272,7 +1289,15 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
       {/* Date column — single-date rows stack MONTH / DAY / DOW / YEAR;
           multi-night runs reuse the same narrow column, closing the range
           with a compact "– END" line and an "N dates" count. */}
-      {runMode && runEndLabel ? (
+      {compact ? (
+        // Compact mirrors the Shows-tab ShowCard: month + a shrunk day,
+        // dropping the day-of-week / year / run-range lines so the row
+        // collapses height-wise.
+        <View style={styles.dateBlock}>
+          <Text style={[styles.dateMonth, { color: colors.muted }]}>{month}</Text>
+          <Text style={[styles.dateDayCompact, { color: colors.ink }]}>{day}</Text>
+        </View>
+      ) : runMode && runEndLabel ? (
         <View style={styles.dateBlock} testID={`discover-row-run-${item.id}`}>
           <Text style={[styles.dateMonth, { color: colors.muted }]}>{month}</Text>
           <Text style={[styles.dateDay, { color: colors.ink }]}>{day}</Text>
@@ -1296,40 +1321,70 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
 
       {/* Headliner artwork — joined from the performer record. Falls back
           to the kind-coloured monogram when the announcement has no matched
-          performer (most theatre / festival productions). */}
-      <RemoteImage
-        uri={item.headlinerImageUrl ?? null}
-        name={title}
-        kind={item.kind as Kind}
-        size="thumb"
-        style={styles.avatar}
-      />
+          performer (most theatre / festival productions). Hidden in compact:
+          it's the tallest element in the row, so dropping it is what lets the
+          row collapse (matches the Shows-tab ShowCard). */}
+      {!compact ? (
+        <RemoteImage
+          uri={item.headlinerImageUrl ?? null}
+          name={title}
+          kind={item.kind as Kind}
+          size="thumb"
+          style={styles.avatar}
+        />
+      ) : null}
 
-      {/* Content column */}
-      <View style={styles.content}>
-        <View style={styles.badgeRow}>
-          <KindBadge kind={item.kind as Kind} size="sm" />
-          <View
-            style={[
-              styles.statusBadge,
-              {
-                backgroundColor:
-                  (isCancelled ? colors.danger : accent) + '22',
-              },
-            ]}
-          >
+      {/* Content column. Compact collapses the comfortable stack (badges →
+          title → support → venue → on-sale) to two lines: a kind badge inline
+          with the title, then the venue — matching the Shows-tab ShowCard.
+          Sold-out / cancelled rows still read via the struck stripe overlay,
+          so dropping the status badge in compact loses no signal. */}
+      <View style={[styles.content, compact && styles.contentCompact]}>
+        {compact ? (
+          <>
+            <View style={styles.compactHeadlineRow}>
+              <KindBadge kind={item.kind as Kind} size="sm" />
+              <Text
+                style={[styles.cardTitleCompact, { color: colors.ink }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {title}
+              </Text>
+            </View>
             <Text
-              style={[
-                styles.statusLabel,
-                { color: isCancelled ? colors.danger : accent },
-              ]}
+              style={[styles.cardVenueCompact, { color: colors.muted }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
             >
-              {onSaleLabel}
+              {venueLabel}
             </Text>
-          </View>
-        </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.badgeRow}>
+              <KindBadge kind={item.kind as Kind} size="sm" />
+              <View
+                style={[
+                  styles.statusBadge,
+                  {
+                    backgroundColor:
+                      (isCancelled ? colors.danger : accent) + '22',
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.statusLabel,
+                    { color: isCancelled ? colors.danger : accent },
+                  ]}
+                >
+                  {onSaleLabel}
+                </Text>
+              </View>
+            </View>
 
-        {headlinerLinkId ? (
+            {headlinerLinkId ? (
           <Text
             onPress={() => router.push(`/artists/${headlinerLinkId}`)}
             accessibilityRole="link"
@@ -1389,6 +1444,8 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
             {item.onSaleStatus === 'on_sale' ? 'On sale since ' : 'On sale '}
             {onSale}
           </Text>
+        )}
+          </>
         )}
       </View>
 
@@ -1572,6 +1629,47 @@ const styles = StyleSheet.create({
   },
   cardSoldOut: {
     overflow: 'hidden',
+  },
+  // Compact row family — mirrors the Shows-tab ShowCard's compact mode:
+  // transparent background, a bottom hairline rule, and a shorter row.
+  cardCompact: {
+    borderRadius: 0,
+    paddingVertical: 7,
+    paddingRight: 0,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  dateDayCompact: {
+    fontFamily: 'Geist Sans 700',
+    fontSize: 17,
+    lineHeight: 19,
+  },
+  contentCompact: {
+    gap: 1,
+  },
+  compactHeadlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  cardTitleCompact: {
+    fontFamily: 'Geist Sans 700',
+    fontSize: 15,
+    lineHeight: 19,
+    flex: 1,
+    minWidth: 0,
+  },
+  cardVenueCompact: {
+    fontFamily: 'Geist Sans 400',
+    fontSize: 12,
+    lineHeight: 15,
+  },
+  // Collapse the inter-row gap so compact rows read as one continuous
+  // ruled list (the per-row bottom rule supplies the separation).
+  listCompact: {
+    gap: 0,
+  },
+  regionGroupCompact: {
+    gap: 0,
   },
   stateBar: {
     width: 3,

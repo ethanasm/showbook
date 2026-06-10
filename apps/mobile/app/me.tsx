@@ -606,15 +606,46 @@ function DensitySelector(): React.JSX.Element {
               utils.preferences.get.setData(undefined, snapshot);
             },
           },
-          reconcile: () => {
-            void utils.preferences.get.invalidate();
+          reconcile: (result) => {
+            // Apply the canonical server row directly instead of firing a
+            // fresh `invalidate()` refetch — the mutation already returns the
+            // updated preferences, so a refetch is a redundant round trip
+            // that can itself race / fail on a flaky connection.
+            utils.preferences.get.setData(undefined, (prev) =>
+              prev ? { ...prev, preferences: result } : prev,
+            );
           },
         });
       } catch (err) {
-        showToast({
-          kind: 'error',
-          text: err instanceof Error ? err.message : 'Could not update density',
-        });
+        // The write is durably enqueued in the outbox before the network
+        // call, so a transient/transport failure — flaky cell, a non-JSON
+        // edge response that surfaces as a raw "JSON Parse error: Unexpected
+        // character: <", a 5xx — is not a dead end: OfflineBridge replays it
+        // on reconnect. Rolling the toggle back and dumping that cryptic
+        // parse error on the user (which the old catch did) fights the
+        // offline-first design. Keep the optimistic state and stay quiet for
+        // those; only a genuine client rejection (4xx) is worth surfacing.
+        const status =
+          (err as { data?: { httpStatus?: number } } | null | undefined)?.data
+            ?.httpStatus ?? 0;
+        const isTransient = status === 0 || status >= 500;
+        if (isTransient) {
+          // runOptimisticMutation rolled the cache back before throwing;
+          // re-apply so the UI reflects the change that's now queued.
+          utils.preferences.get.setData(undefined, (prev) =>
+            prev
+              ? {
+                  ...prev,
+                  preferences: { ...prev.preferences, compactMode: nextCompact },
+                }
+              : prev,
+          );
+        } else {
+          showToast({
+            kind: 'error',
+            text: 'Could not update density. Please try again.',
+          });
+        }
       } finally {
         setPending(false);
       }
