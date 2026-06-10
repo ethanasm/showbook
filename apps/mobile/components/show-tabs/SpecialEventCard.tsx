@@ -17,7 +17,7 @@ interface PastEvent {
 
 export interface SpecialEventCardProps {
   copy: string;
-  pastEvents: ReadonlyArray<PastEvent>;
+  pastEvents: readonly PastEvent[];
 }
 
 export function SpecialEventCard({

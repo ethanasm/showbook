@@ -10,7 +10,9 @@
   },
   "scripts": {
     "test": "find src/__tests__ -name '*.test.ts' -print0 | xargs -0 node --import tsx --test",
-    "test:coverage": "mkdir -p coverage && find src/__tests__ -name '*.test.ts' -print0 | xargs -0 node --import tsx --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/unit.info --test-reporter=spec --test-reporter-destination=stdout"
+    "test:coverage": "mkdir -p coverage && find src/__tests__ -name '*.test.ts' -print0 | xargs -0 node --import tsx --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/unit.info --test-reporter=spec --test-reporter-destination=stdout",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint --no-config-lookup -c ../../eslint.config.packages.mjs src"
   },
   "devDependencies": {
     "tsx": "^4.22.4",

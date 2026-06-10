@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "next start --port 3001",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
     "test": "TSX_TSCONFIG_PATH=tsconfig.test.json find lib/__tests__ components/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' \\) -not -name '*.integration.test.ts' -print0 | xargs -0 env TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./test-setup.ts --test --experimental-test-module-mocks",
     "test:coverage": "mkdir -p coverage && find lib/__tests__ components/__tests__ \\( -name '*.test.ts' -o -name '*.test.tsx' \\) -not -name '*.integration.test.ts' -print0 | xargs -0 env TSX_TSCONFIG_PATH=tsconfig.test.json node --import tsx --import ./test-setup.ts --test --experimental-test-module-mocks --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/unit.info --test-reporter=spec --test-reporter-destination=stdout",
     "test:integration": "node ../../scripts/run-integration.mjs apps/web",

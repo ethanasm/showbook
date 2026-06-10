@@ -127,8 +127,8 @@ export async function resolvePersonalChips(
 
   // 💛 saved + ⭐ top_track both rely on a fresh user token. Skip
   // both gracefully if the user hasn't connected Spotify.
-  let saved = new Set<string>();
-  let topTrack = new Set<string>();
+  const saved = new Set<string>();
+  const topTrack = new Set<string>();
   if (trackIds.length > 0) {
     let accessToken: string | null = null;
     try {

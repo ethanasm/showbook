@@ -729,7 +729,7 @@ export async function runDailyDigest(
           subject,
           html,
           headers: {
-            'List-Unsubscribe': `<mailto:unsubscribe@${(getFromAddress().match(/@([^>]+)/) ?? [, 'showbook.app'])[1]}?subject=unsubscribe>, <${unsubscribeUrl}>`,
+            'List-Unsubscribe': `<mailto:unsubscribe@${(getFromAddress().match(/@([^>]+)/) ?? [undefined, 'showbook.app'])[1]}?subject=unsubscribe>, <${unsubscribeUrl}>`,
             'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
           },
         },

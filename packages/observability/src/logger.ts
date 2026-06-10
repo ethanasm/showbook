@@ -294,10 +294,12 @@ export function child(bindings: Record<string, unknown>): Logger {
 export async function flushLogger(): Promise<void> {
   const lg = getLogger();
   await new Promise<void>((resolve) => {
-    lg.flush?.((err?: Error | null) => {
-      void err;
-      resolve();
-    }) ?? resolve();
+    if (lg.flush) {
+      lg.flush((err?: Error | null) => {
+        void err;
+      });
+    }
+    resolve();
   });
 }
 

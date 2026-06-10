@@ -80,14 +80,16 @@ skip_step() {
 }
 
 # ── Steps ────────────────────────────────────────────────────────────────
+# Lint and Typecheck both fan out across web, mobile, AND every package via
+# `nx run-many` (see the root `lint` / `typecheck` scripts). `pnpm build`
+# only type-checks the web app (via `next build`), so without the explicit
+# Typecheck pass a `tsc`-level break in the mobile app or a package — an Expo
+# SDK bump dropping StyleSheet.absoluteFillObject, a package type regression —
+# slips straight through build / lint / unit. Likewise Lint now gates the
+# mobile app and the libraries, not just web.
 run_step "Build"      build      pnpm build
 run_step "Lint"       lint       pnpm lint
-# `pnpm build` type-checks the web app via `next build`, but the mobile
-# app is never type-checked by build / lint / unit — so a `tsc`-level
-# break (e.g. an Expo SDK bump dropping an API like
-# StyleSheet.absoluteFillObject) slips straight through. Run the mobile
-# compiler explicitly here.
-run_step "Typecheck (mobile)" typecheck-mobile pnpm mobile:typecheck
+run_step "Typecheck"  typecheck  pnpm typecheck
 run_step "Unit tests" unit-tests pnpm exec nx run-many -t test
 
 if [ "$RUN_E2E" = "1" ]; then
