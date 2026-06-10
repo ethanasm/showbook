@@ -41,6 +41,8 @@ import {
   ActivityIndicator,
   Linking,
   type LayoutChangeEvent,
+  type TextStyle,
+  type ViewStyle,
 } from 'react-native';
 import Svg, { Line } from 'react-native-svg';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -1334,6 +1336,45 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
     setSheetOpen(true);
   };
 
+  // On struck (sold-out / cancelled) rows the diagonal stripes are drawn
+  // across the whole card, so any text that sits directly over them loses
+  // contrast. Punch the stripes out behind each text run with an opaque
+  // surface field — the same "hollowed out" treatment that already keeps
+  // the Ticketmaster pill readable — so the title / venue / date stay legible
+  // at a glance. `alignSelf: 'flex-start'` keeps the field hugging the text
+  // (not the full content width); the negative margin offsets the padding so
+  // the glyphs stay left-aligned with the un-struck rows.
+  const struckTextStyle: TextStyle | null = isStruck
+    ? {
+        backgroundColor: colors.surface,
+        alignSelf: 'flex-start',
+        borderRadius: 4,
+        paddingHorizontal: 5,
+        marginLeft: -5,
+        overflow: 'hidden',
+      }
+    : null;
+  const struckDateStyle: ViewStyle | null = isStruck
+    ? {
+        backgroundColor: colors.surface,
+        borderRadius: 6,
+        paddingVertical: 4,
+      }
+    : null;
+  // The kind / status badges carry only a ~13%-alpha tint, so the stripes
+  // bleed straight through them. On struck rows wrap each badge in an opaque
+  // surface plate (same pill radius) so the tint sits on a solid base and the
+  // badge text reads — `alignSelf: 'flex-start'` keeps the plate hugging the
+  // badge instead of stretching the row.
+  const struckBadgePlate: ViewStyle | null = isStruck
+    ? {
+        backgroundColor: colors.surface,
+        borderRadius: RADII.pill,
+        alignSelf: 'flex-start',
+        overflow: 'hidden',
+      }
+    : null;
+
   return (
     <>
     <Pressable
@@ -1370,12 +1411,15 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
         // Compact mirrors the Shows-tab ShowCard: month + a shrunk day,
         // dropping the day-of-week / year / run-range lines so the row
         // collapses height-wise.
-        <View style={styles.dateBlock}>
+        <View style={[styles.dateBlock, struckDateStyle]}>
           <Text style={[styles.dateMonth, { color: colors.muted }]}>{month}</Text>
           <Text style={[styles.dateDayCompact, { color: colors.ink }]}>{day}</Text>
         </View>
       ) : runMode && runEndLabel ? (
-        <View style={styles.dateBlock} testID={`discover-row-run-${item.id}`}>
+        <View
+          style={[styles.dateBlock, struckDateStyle]}
+          testID={`discover-row-run-${item.id}`}
+        >
           <Text style={[styles.dateMonth, { color: colors.muted }]}>{month}</Text>
           <Text style={[styles.dateDay, { color: colors.ink }]}>{day}</Text>
           <Text style={[styles.dateRunEnd, { color: colors.ink }]}>
@@ -1386,7 +1430,7 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
           </Text>
         </View>
       ) : (
-        <View style={styles.dateBlock}>
+        <View style={[styles.dateBlock, struckDateStyle]}>
           <Text style={[styles.dateMonth, { color: colors.muted }]}>{month}</Text>
           <Text style={[styles.dateDay, { color: colors.ink }]}>{day}</Text>
           {dow ? (
@@ -1420,7 +1464,9 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
         {compact ? (
           <>
             <View style={styles.compactHeadlineRow}>
-              <KindBadge kind={item.kind as Kind} size="sm" />
+              <View style={struckBadgePlate}>
+                <KindBadge kind={item.kind as Kind} size="sm" />
+              </View>
               <Text
                 style={[styles.cardTitleCompact, { color: colors.ink }]}
                 numberOfLines={1}
@@ -1440,24 +1486,28 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
         ) : (
           <>
             <View style={styles.badgeRow}>
-              <KindBadge kind={item.kind as Kind} size="sm" />
-              <View
-                style={[
-                  styles.statusBadge,
-                  {
-                    backgroundColor:
-                      (isCancelled ? colors.danger : accent) + '22',
-                  },
-                ]}
-              >
-                <Text
+              <View style={struckBadgePlate}>
+                <KindBadge kind={item.kind as Kind} size="sm" />
+              </View>
+              <View style={struckBadgePlate}>
+                <View
                   style={[
-                    styles.statusLabel,
-                    { color: isCancelled ? colors.danger : accent },
+                    styles.statusBadge,
+                    {
+                      backgroundColor:
+                        (isCancelled ? colors.danger : accent) + '22',
+                    },
                   ]}
                 >
-                  {onSaleLabel}
-                </Text>
+                  <Text
+                    style={[
+                      styles.statusLabel,
+                      { color: isCancelled ? colors.danger : accent },
+                    ]}
+                  >
+                    {onSaleLabel}
+                  </Text>
+                </View>
               </View>
             </View>
 
@@ -1466,7 +1516,7 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
             onPress={() => router.push(`/artists/${headlinerLinkId}`)}
             accessibilityRole="link"
             accessibilityLabel={`Open ${title}`}
-            style={[styles.cardTitle, { color: colors.ink }]}
+            style={[styles.cardTitle, { color: colors.ink }, struckTextStyle]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
@@ -1474,7 +1524,7 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
           </Text>
         ) : (
           <Text
-            style={[styles.cardTitle, { color: colors.ink }]}
+            style={[styles.cardTitle, { color: colors.ink }, struckTextStyle]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
@@ -1484,7 +1534,7 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
 
         {support && (
           <Text
-            style={[styles.cardSupport, { color: colors.muted }]}
+            style={[styles.cardSupport, { color: colors.muted }, struckTextStyle]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
@@ -1497,7 +1547,7 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
             onPress={() => router.push(`/venues/${item.venue.id}`)}
             accessibilityRole="link"
             accessibilityLabel={`Open ${item.venue.name}`}
-            style={[styles.cardVenue, { color: colors.muted }]}
+            style={[styles.cardVenue, { color: colors.muted }, struckTextStyle]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
@@ -1505,7 +1555,7 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
           </Text>
         ) : (
           <Text
-            style={[styles.cardVenue, { color: colors.muted }]}
+            style={[styles.cardVenue, { color: colors.muted }, struckTextStyle]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
@@ -1515,7 +1565,7 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
 
         {onSale && (
           <Text
-            style={[styles.onSaleText, { color: colors.faint }]}
+            style={[styles.onSaleText, { color: colors.faint }, struckTextStyle]}
             numberOfLines={1}
           >
             {item.onSaleStatus === 'on_sale' ? 'On sale since ' : 'On sale '}

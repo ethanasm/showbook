@@ -62,7 +62,8 @@ prefixed `EXPO_PUBLIC_` so Expo inlines them at build time.
 | `EXPO_PUBLIC_API_URL` | - | tRPC client target. Use `https://localhost:3001` for an iOS simulator pointed at the local web stack with the dev cert, or a LAN/tunnel URL for a physical device. |
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS` | - | Sign in with Google on iOS |
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID` | - | Sign in with Google on Android |
-| `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB` | - | Sign in with Google on Expo web preview |
+| `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB` | - | Sign-in on **every** platform — `expo-auth-session` uses the web client ID as the ID-token audience on native iOS/Android too, so it's required, not web-preview-only. |
+| `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` | - | The Map tab (`react-native-maps`). Optional on iOS (Apple Maps is the default provider); **required on Android** or the map renders blank. Resolved at build time from your local `.env.local`/shell or an EAS env/secret — see [`docs/specs/mobile-deployment.md`](../../docs/specs/mobile-deployment.md). Not a backend/`.env.prod` var. |
 
 The backend (`apps/web`) needs `GOOGLE_OAUTH_MOBILE_AUDIENCES` set
 to the comma-separated list of these client IDs so it accepts the

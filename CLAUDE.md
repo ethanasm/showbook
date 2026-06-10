@@ -68,7 +68,7 @@ What the sandbox actually *can't* do, for the avoidance of further wrong excuses
   infrastructure, decisions. Index at
   [`docs/specs/README.md`](docs/specs/README.md).
 - `docs/specs/TASKS.md` — Master task list with dependency DAG.
-- `docs/specs/phases/VERIFICATION.md` — Playwright testing + visual
+- `docs/specs/VERIFICATION.md` — Playwright testing + visual
   verification strategy.
 - `docs/specs/mobile-roadmap.md` — Mobile build plan; the app
   is feature-complete against the design handoff.

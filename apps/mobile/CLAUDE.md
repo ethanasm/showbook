@@ -72,6 +72,7 @@ Set locally via shell or `.env.local`. Mobile-side vars are prefixed
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS` | - | iOS sign-in |
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID` | - | Android sign-in |
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB` | - | Sign-in on every platform. `expo-auth-session/providers/google` uses the web client ID as the ID-token audience even on native iOS/Android, so this is required not just for web preview. |
+| `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` | - | The Map tab (`react-native-maps`). Optional on iOS (Apple Maps is the default provider); **required on Android** or the map renders blank. Read by `app.config.ts` at config-resolution time; supply via local `.env.local`/shell or an EAS env/secret. It is *not* in any `eas.json` profile `env` block today (neither `preview` nor `production`), so a store/beta build needs it added as an EAS env var — see [`docs/specs/mobile-deployment.md`](../../docs/specs/mobile-deployment.md). |
 | `EXPO_PUBLIC_E2E_MODE` | unset | Maestro Cloud only — bypasses Google OAuth and reads a pre-baked JWT from SecureStore. Production builds ship with this unset; the bypass is dead code there. |
 | `EXPO_PUBLIC_FORCE_OFFLINE` | unset | Set to `1` to pin `NetworkProvider` offline at module eval (skips the NetInfo subscription entirely). Used by the Playwright web harness + Maestro flows that need to exercise offline UX without flipping airplane mode. Production builds leave this unset. Runtime tests can also flip it via `__setForceOfflineForTest`. |
 
