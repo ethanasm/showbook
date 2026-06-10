@@ -140,7 +140,7 @@ export function FilterChipsRow({
     return copy;
   }, [groups, selected]);
 
-  const { inline, overflow } = React.useMemo(
+  const { inline, overflow, ready } = React.useMemo(
     () =>
       computeLayout({
         availWidth,
@@ -211,8 +211,12 @@ export function FilterChipsRow({
         hideInlineSublabel={hideInlineSublabel}
       />
 
-      {/* Visible single line. */}
-      <View style={styles.row}>
+      {/* Visible single line. Until the measuring pass lands, every
+          group renders inline — keep that pre-layout frame invisible so
+          the user never sees chips spill past the edge before they
+          collapse behind the dropdown. The chips still lay out, so the
+          rail holds its height and there's no vertical jump. */}
+      <View style={[styles.row, !ready && styles.rowMeasuring]}>
         {hasLead && leadingAction ? (
           <Pressable
             accessibilityRole="button"
@@ -330,9 +334,9 @@ export function FilterChipsRow({
 }
 
 /** Greedily fit chips on one line; everything else goes to overflow.
- *  Returns all groups inline (no overflow) until measurements land, so
- *  the first paint shows the real chips (clipped) rather than a flash
- *  of the dropdown. */
+ *  Returns all groups inline with `ready: false` until measurements
+ *  land — the caller renders that pre-layout pass invisibly (to hold
+ *  the rail's height) so the user never sees the un-collapsed row. */
 function computeLayout({
   availWidth,
   widths,
@@ -345,7 +349,7 @@ function computeLayout({
   groups: FilterGroup[];
   hasLead: boolean;
   showAll: boolean;
-}): { inline: FilterGroup[]; overflow: FilterGroup[] } {
+}): { inline: FilterGroup[]; overflow: FilterGroup[]; ready: boolean } {
   const ready =
     availWidth !== null &&
     (!hasLead || widths[LEAD_KEY] !== undefined) &&
@@ -353,7 +357,7 @@ function computeLayout({
     widths[MORE_KEY] !== undefined &&
     groups.every((g) => widths[g.id] !== undefined);
   if (!ready || availWidth === null) {
-    return { inline: groups, overflow: [] };
+    return { inline: groups, overflow: [], ready: false };
   }
 
   const fixed =
@@ -364,7 +368,7 @@ function computeLayout({
   const fullWidth =
     fixed + groups.reduce((sum, g) => sum + widths[g.id] + CHIP_GAP, 0);
   if (fullWidth - CHIP_GAP <= availWidth) {
-    return { inline: groups, overflow: [] };
+    return { inline: groups, overflow: [], ready: true };
   }
 
   // Reserve room for the dropdown chip and fill the rest greedily.
@@ -381,8 +385,10 @@ function computeLayout({
       overflow.push(g);
     }
   }
-  if (overflow.length === 0) return { inline: groups, overflow: [] };
-  return { inline, overflow };
+  if (overflow.length === 0) {
+    return { inline: groups, overflow: [], ready: true };
+  }
+  return { inline, overflow, ready: true };
 }
 
 /**
@@ -739,6 +745,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: CHIP_GAP,
+  },
+  rowMeasuring: {
+    opacity: 0,
+    pointerEvents: 'none',
   },
   chip: {
     flexDirection: 'row',
