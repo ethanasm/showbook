@@ -55,28 +55,22 @@ jobs:
     #   1. Bring up the e2e backend stack on the prod box — the
     #      loopback-only showbook-e2e-web / showbook-e2e-db pair the
     #      emulator talks to. See docs/specs/operations.md § "Mobile
-    #      e2e backend" for the full runbook (.env.e2e, `pnpm e2e:up`,
-    #      `pnpm e2e:db:migrate`, `pnpm mint:e2e-token`). deploy.yml
-    #      keeps the stack on prod's image after that.
-    #   2. Secrets under Settings → Secrets and variables → Actions:
-    #        - MAESTRO_E2E_TOKEN     (Showbook JWT for the test user,
-    #          minted with the e2e stack's AUTH_SECRET — NOT prod's)
-    #        - MAESTRO_E2E_USER_JSON (JSON-serialized SessionUser)
-    #        - EXPO_PUBLIC_API_URL   (full backend URL the APK targets.
-    #          For the self-hosted runner this is http://10.0.2.2:3004
-    #          — the Android emulator's alias for the runner host's
-    #          loopback, where showbook-e2e-web listens. The APK build
-    #          allows cleartext for e2e builds only — see the
-    #          IS_E2E_BUILD plugin in apps/mobile/app.config.ts.)
-    #          Without it the tRPC client builds relative URLs and
-    #          React Native rejects them with "Invalid URL: /api/trpc/...".
-    #      The first two are inlined into the APK at build time via
-    #      EXPO_PUBLIC_E2E_TEST_TOKEN / EXPO_PUBLIC_E2E_TEST_USER_JSON,
-    #      so `lib/auth.ts` can sign in without any deeplink seeding
-    #      step. No EXPO_TOKEN / MAESTRO_CLOUD_API_KEY needed.
-    #   3. Optional: set repo variable `ANDROID_SDK_ROOT` to the install
+    #      e2e backend" for the runbook (.env.e2e, `pnpm e2e:up`,
+    #      `pnpm e2e:db:migrate`). deploy.yml keeps the stack on prod's
+    #      image after that. The session token + backend URL are NO
+    #      longer repo secrets — the "Mint e2e session" step below reads
+    #      the stack's own AUTH_SECRET and encodes the bearer in-container
+    #      each run, and EXPO_PUBLIC_API_URL is hardcoded to the
+    #      deterministic emulator→host alias http://10.0.2.2:3004 (the
+    #      old secrets kept drifting to the prod URL / a stale secret and
+    #      silently 401'd). The APK build allows cleartext for that
+    #      http:// host only in e2e builds — see the IS_E2E_BUILD plugin
+    #      in apps/mobile/app.config.ts. The MAESTRO_E2E_TOKEN /
+    #      MAESTRO_E2E_USER_JSON / EXPO_PUBLIC_API_URL secrets are now
+    #      unused and can be deleted.
+    #   2. Optional: set repo variable `ANDROID_SDK_ROOT` to the install
     #      path on the runner; defaults to /opt/android-sdk.
-    #   4. Run scripts/setup-runner.sh on the prod box (already done if
+    #   3. Run scripts/setup-runner.sh on the prod box (already done if
     #      the runner is up), then scripts/setup-runner-android.sh once
     #      to install Android SDK (incl. build-tools + NDK), create the
     #      e2e AVD, and install Maestro.
@@ -255,6 +249,69 @@ jobs:
       - name: Validate Maestro flow YAML
         run: pnpm --filter mobile e2e:dry
 
+      # Mint the e2e bearer session from the running backend, rather than
+      # from hand-maintained repo secrets. This runner is the same box the
+      # showbook-e2e stack runs on, so we can read the stack's own
+      # AUTH_SECRET and encode the token with the *exact* next-auth the
+      # decoder uses — eliminating the entire class of "token signed with
+      # the wrong/stale secret → UNAUTHORIZED" failures that plague
+      # out-of-band minting (the secret churns whenever .env.e2e is
+      # regenerated). The token is short-lived (7 days) and masked.
+      #
+      # Requires the showbook-e2e stack to be up (deploy.yml keeps it
+      # running; first-time setup is `pnpm e2e:up` — see
+      # docs/specs/operations.md § "Mobile e2e backend"). The
+      # MAESTRO_E2E_TOKEN / MAESTRO_E2E_USER_JSON / EXPO_PUBLIC_API_URL
+      # repo secrets are no longer consulted.
+      - name: Mint e2e session from the running backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! docker ps --format '{{.Names}}' | grep -qx 'showbook-e2e-web'; then
+            echo "::error::showbook-e2e-web container is not running — bring the stack up with 'pnpm e2e:up' on the box (docs/specs/operations.md § Mobile e2e backend)"
+            exit 1
+          fi
+          EMAIL="maestro-e2e@showbook.test"
+          # Ensure the synthetic test user row exists; capture its id so the
+          # token's `id` claim points at a real users row (shows.create FKs
+          # against it).
+          USERID=$(docker exec showbook-e2e-db psql -U showbook_e2e -d showbook_e2e -tAc \
+            "SELECT id FROM users WHERE email='${EMAIL}' LIMIT 1;" | tr -d '[:space:]')
+          if [ -z "$USERID" ]; then
+            USERID=$(cat /proc/sys/kernel/random/uuid)
+            docker exec showbook-e2e-db psql -U showbook_e2e -d showbook_e2e -tAc \
+              "INSERT INTO users (id,email,name) VALUES ('${USERID}','${EMAIL}','Maestro E2E');" >/dev/null
+          fi
+          # Encode the bearer INSIDE the web container: its next-auth +
+          # AUTH_SECRET + salt are exactly what the tRPC bearer path decodes
+          # with, so the round-trip can't drift.
+          TOKEN=$(docker exec -e USERID="$USERID" -e EMAIL="$EMAIL" showbook-e2e-web node -e '
+            import("next-auth/jwt").then(async ({ encode }) => {
+              const t = await encode({
+                token: { sub: process.env.USERID, id: process.env.USERID, email: process.env.EMAIL, name: "Maestro E2E", picture: null },
+                secret: process.env.AUTH_SECRET,
+                salt: "authjs.session-token",
+                maxAge: 7 * 24 * 60 * 60,
+              });
+              process.stdout.write(t);
+            }).catch((e) => { console.error(e.message); process.exit(1); });
+          ')
+          if [ -z "${TOKEN:-}" ]; then
+            echo "::error::failed to mint e2e token from showbook-e2e-web"
+            exit 1
+          fi
+          USERJSON=$(printf '{"id":"%s","email":"%s","name":"Maestro E2E","image":null}' "$USERID" "$EMAIL")
+          # Mask the token so it never appears in build logs, then hand both
+          # values to later steps via the job environment.
+          echo "::add-mask::$TOKEN"
+          {
+            echo "E2E_TEST_TOKEN<<__E2E_EOF__"
+            echo "$TOKEN"
+            echo "__E2E_EOF__"
+            echo "E2E_TEST_USER_JSON=$USERJSON"
+          } >> "$GITHUB_ENV"
+          echo "Minted e2e session for ${EMAIL} (user ${USERID})"
+
       # Build the APK locally on the runner instead of going through EAS
       # Build. The runner has Android SDK + build-tools + NDK from
       # scripts/setup-runner-android.sh, and EAS Build's free tier is
@@ -278,13 +335,18 @@ jobs:
         working-directory: apps/mobile
         env:
           EXPO_PUBLIC_E2E_MODE: '1'
-          EXPO_PUBLIC_E2E_TEST_TOKEN: ${{ secrets.MAESTRO_E2E_TOKEN }}
-          EXPO_PUBLIC_E2E_TEST_USER_JSON: ${{ secrets.MAESTRO_E2E_USER_JSON }}
-          # Phase 11 follow-up — inline the backend base URL so the tRPC
-          # client builds absolute fetches. Without this every flow
-          # crashes on the Shows tab with "Invalid URL: /api/trpc/..."
-          # (React Native's fetch rejects relative URLs).
-          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
+          # Session minted from the running backend in the previous step.
+          EXPO_PUBLIC_E2E_TEST_TOKEN: ${{ env.E2E_TEST_TOKEN }}
+          EXPO_PUBLIC_E2E_TEST_USER_JSON: ${{ env.E2E_TEST_USER_JSON }}
+          # The Android emulator on this self-hosted runner reaches the
+          # loopback-only showbook-e2e-web (127.0.0.1:3004) via the AVD's
+          # host alias 10.0.2.2. This is deterministic for the self-hosted
+          # setup, so it's hardcoded rather than a secret — the old
+          # EXPO_PUBLIC_API_URL secret kept drifting to the prod URL and
+          # silently sent the e2e token to prod (→ UNAUTHORIZED → empty
+          # Shows list). Cleartext for this http:// host is allowed only
+          # in e2e builds via the IS_E2E_BUILD plugin in app.config.ts.
+          EXPO_PUBLIC_API_URL: http://10.0.2.2:3004
           # Spotify App Remote SDK client id — consumed at prebuild
           # time by `apps/mobile/modules/showbook-spotify-sdk/plugin/
           # index.js` which writes it into Info.plist (iOS) and
@@ -299,11 +361,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${EXPO_PUBLIC_E2E_TEST_TOKEN:-}" ] || [ -z "${EXPO_PUBLIC_E2E_TEST_USER_JSON:-}" ]; then
-            echo "::error::MAESTRO_E2E_TOKEN / MAESTRO_E2E_USER_JSON secrets are unset"
-            exit 1
-          fi
-          if [ -z "${EXPO_PUBLIC_API_URL:-}" ]; then
-            echo "::error::EXPO_PUBLIC_API_URL secret is unset — every tRPC call will fail with 'Invalid URL: /api/trpc/...'. See the MOBILE_E2E_API_URL_CONFIGURED gate at the top of this workflow."
+            echo "::error::e2e session env is empty — the 'Mint e2e session' step did not run or failed"
             exit 1
           fi
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
@@ -324,6 +382,16 @@ jobs:
           APK="app/build/outputs/apk/release/app-release.apk"
           ls -lh "$APK"
           cp "$APK" /tmp/showbook-e2e.apk
+          # Fail fast (here, not 20 min later in Maestro) if the backend URL
+          # didn't get inlined into the JS bundle. EXPO_PUBLIC_* values are
+          # baked at bundle time; this assertion is the guard that would have
+          # caught the prod-URL-in-the-APK regression immediately.
+          if ! unzip -p /tmp/showbook-e2e.apk assets/index.android.bundle 2>/dev/null \
+               | strings | grep -aq 'http://10.0.2.2:3004'; then
+            echo "::error::APK bundle is missing http://10.0.2.2:3004 — EXPO_PUBLIC_API_URL was not inlined into the build"
+            exit 1
+          fi
+          echo "APK backend URL verified: http://10.0.2.2:3004"
           echo "::group::Memory after build"
           free -h || true
           df -h "$HOME" || true

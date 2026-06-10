@@ -113,45 +113,45 @@ scope fails CI, and the report identifies which scope fell short.
 ## Maestro E2E flows
 
 The flows live under `e2e/flows/` (sign-in, add-show, sign-out, plus
-the Phase-10 show-detail / setlist / Spotify flows). CI sets
-`EXPO_PUBLIC_E2E_MODE=1` plus the test-session env vars directly in
-the workflow step env (matching the `e2e` profile in `eas.json` for
-parity with local EAS builds):
+the Phase-10 show-detail / setlist / Spotify flows). The CI workflow
+is **self-provisioning** — it mints the session from the running
+backend and hardcodes the backend URL, so there are no
+session/URL repo secrets to keep in sync:
 
 - `EXPO_PUBLIC_E2E_MODE=1` flips `lib/auth.ts` into bypass mode (and
   enables the Android cleartext exception for the `10.0.2.2` backend
   — see the `IS_E2E_BUILD` plugin in `app.config.ts`).
-- `EXPO_PUBLIC_E2E_TEST_TOKEN` is the Showbook JWT for the test user,
-  minted ahead of time against the e2e backend stack (sourced from
-  the `MAESTRO_E2E_TOKEN` repo secret in CI).
-- `EXPO_PUBLIC_E2E_TEST_USER_JSON` is the JSON-serialised
-  `SessionUser` the JWT identifies (from `MAESTRO_E2E_USER_JSON`).
-- `EXPO_PUBLIC_API_URL` (repo secret) is `http://10.0.2.2:3004` — the
-  emulator's alias for the runner host's loopback, where the
-  `showbook-e2e` compose stack listens. The backend the suite talks
-  to is **not prod**: it's `infra/docker-compose.e2e.yml` with its
-  own database, `AUTH_SECRET`, and allowlist. Full runbook in
+- `EXPO_PUBLIC_E2E_TEST_TOKEN` / `EXPO_PUBLIC_E2E_TEST_USER_JSON` are
+  minted by the **"Mint e2e session from the running backend"** step:
+  it reads the `showbook-e2e-web` container's own `AUTH_SECRET` and
+  `encode`s the bearer *inside the container* (same `next-auth` the
+  decoder uses), and upserts the `maestro-e2e@showbook.test` user row
+  in `showbook_e2e`. Because encode and decode share one library +
+  secret, the token can't drift out of sync.
+- `EXPO_PUBLIC_API_URL` is hardcoded to `http://10.0.2.2:3004` in the
+  workflow — the emulator's alias for the runner host's loopback,
+  where the `showbook-e2e` compose stack listens. The backend is
+  **not prod**: it's `infra/docker-compose.e2e.yml` with its own
+  database, `AUTH_SECRET`, and allowlist. Full runbook in
   `docs/specs/operations.md` § "Mobile e2e backend".
+- A post-build assertion greps the APK bundle for
+  `http://10.0.2.2:3004` and fails the build immediately if the URL
+  wasn't inlined — no more discovering it 20 minutes later in Maestro.
 
-**Re-minting the token.** The tRPC bearer path rejects an expired /
-wrong-secret token with `UNAUTHORIZED` — which surfaces as "Couldn't
-load shows — UNAUTHORIZED" on the Shows screen and breaks every flow
-that loads data (e.g. `show-card-row-0` never appears). The sign-in
-step still "passes" because E2E mode loads the baked-in session
-locally without validating it. **The token must be signed with the
-e2e stack's `AUTH_SECRET` — prod's secret will not work** (and a
-correct-secret token for a user missing from the stack's
-`AUTH_ALLOWED_EMAILS` is also rejected; that variant logs
-`auth.mobile_session_denied` in `docker logs showbook-e2e-web`).
-To re-mint, on the prod box:
+The legacy `MAESTRO_E2E_TOKEN` / `MAESTRO_E2E_USER_JSON` /
+`EXPO_PUBLIC_API_URL` repo secrets are no longer read and can be
+deleted. `scripts/mint-e2e-token.mjs` (+ `pnpm mint:e2e-token`)
+remains for ad-hoc local minting / curl smoke tests against the
+stack on `localhost:5435`, but CI no longer depends on it.
 
-```bash
-cd /opt/showbook
-set -a; source .env.e2e; set +a
-DATABASE_URL="postgresql://showbook_e2e:${POSTGRES_PASSWORD}@localhost:5435/showbook_e2e" \
-  pnpm mint:e2e-token --email maestro-e2e@showbook.test
-# prints MAESTRO_E2E_TOKEN=... and MAESTRO_E2E_USER_JSON=...
-```
+**If a run 401s anyway** ("Couldn't load shows — UNAUTHORIZED",
+`show-card-row-0` never appears; the sign-in step still "passes"
+because E2E mode loads the baked session without validating it), the
+mint step couldn't have produced a mismatched token — so look at the
+**backend**: is `showbook-e2e-web` up (`pnpm e2e:logs`), and is
+`maestro-e2e@showbook.test` on its `AUTH_ALLOWED_EMAILS` (an
+allowlist miss logs `auth.mobile_session_denied` in
+`docker logs showbook-e2e-web`)?
 
 The helper (`scripts/mint-e2e-token.mjs`) signs the token exactly like
 `apps/web/lib/mobile-token.ts` (`encodeMobileToken`: same secret +
