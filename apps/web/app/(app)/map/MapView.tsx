@@ -46,18 +46,23 @@ const KINDS = [
   { k: "festival", label: "Festival" },
 ] as const;
 
-// Which layer of shows the map plots. `past` / `upcoming` split the user's
-// own logbook by show state; `discoverable` swaps in the announcements that
+// Which layer of shows the map plots. `all` / `past` / `upcoming` split the
+// user's own logbook by show state (`all` is the whole logbook, labelled
+// "My shows" in the UI); `discoverable` swaps in the announcements that
 // power the three Discover tabs (followed venues / artists / regions).
-type MapMode = "past" | "upcoming" | "discoverable";
+// The filter bar renders the logbook modes and `discoverable` as separate
+// segmented groups so the dataset switch doesn't read as a fourth logbook
+// subset (mirrors the divider on the mobile map's mode strip).
+type MapMode = "all" | "past" | "upcoming" | "discoverable";
 
-const MODES = [
-  { m: "past", label: "Past shows" },
+const LOGBOOK_MODES = [
+  { m: "all", label: "My shows" },
+  { m: "past", label: "Past" },
   { m: "upcoming", label: "Upcoming" },
-  { m: "discoverable", label: "Discoverable" },
 ] as const satisfies ReadonlyArray<{ m: MapMode; label: string }>;
 
 const MODE_DESCRIPTIONS: Record<MapMode, string> = {
+  all: "Every show you've logged",
   past: "Shows you've been to",
   upcoming: "Upcoming shows you're going to",
   discoverable: "Shows to discover near you",
@@ -338,19 +343,32 @@ function FilterBar({
         </div>
       </div>
 
-      <div className="segmented-filter" role="group" aria-label="Show layer">
-        {MODES.map(({ m, label }) => (
+      <div className="map-filterbar__layers" role="group" aria-label="Show layer">
+        <div className="segmented-filter">
+          {LOGBOOK_MODES.map(({ m, label }) => (
+            <button
+              key={m}
+              className={`segmented-filter__btn ${
+                m === mode ? "segmented-filter__btn--active" : ""
+              }`}
+              onClick={() => setMode(m)}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="segmented-filter">
           <button
-            key={m}
             className={`segmented-filter__btn ${
-              m === mode ? "segmented-filter__btn--active" : ""
+              mode === "discoverable" ? "segmented-filter__btn--active" : ""
             }`}
-            onClick={() => setMode(m)}
+            onClick={() => setMode("discoverable")}
             type="button"
           >
-            {label}
+            Discoverable
           </button>
-        ))}
+        </div>
       </div>
 
       <div className="segmented-filter">
@@ -546,7 +564,8 @@ function VenueInspector({
   }, [venue.shows]);
 
   // Past visits read newest-first; upcoming / discoverable shows read
-  // soonest-first so the next thing to happen sits at the top.
+  // soonest-first so the next thing to happen sits at the top. The whole
+  // logbook (`all`) reads chronologically, oldest first (matches mobile).
   const sortedShows = useMemo(() => {
     const copy = [...venue.shows];
     copy.sort((a, b) =>
@@ -648,7 +667,11 @@ function VenueInspector({
         </div>
         <div className="venue-inspector__visits-count">
           {venue.shows.length} &middot;{" "}
-          {mode === "past" ? "newest first" : "soonest first"}
+          {mode === "past"
+            ? "newest first"
+            : mode === "all"
+              ? "oldest first"
+              : "soonest first"}
         </div>
       </div>
 
@@ -760,13 +783,14 @@ export default function MapView() {
   const { data: prefs } = trpc.preferences.get.useQuery();
 
   // The active layer. `discoverable` swaps in the Discover announcements;
-  // `past` / `upcoming` split the personal logbook by show state
-  // (`past` vs. ticketed/watching).
+  // `all` is the whole personal logbook; `past` / `upcoming` split it by
+  // show state (`past` vs. ticketed/watching).
   const shows = useMemo<MapShowRow[]>(() => {
     if (mode === "discoverable") {
       return (discoverableShows ?? []) as MapShowRow[];
     }
     const logged = (loggedShows ?? []) as MapShowRow[];
+    if (mode === "all") return logged;
     return mode === "past"
       ? logged.filter((s) => s.state === "past")
       : logged.filter((s) => s.state !== "past");
@@ -954,7 +978,12 @@ export default function MapView() {
       body: "Pulling announcements from your follows.",
     };
   } else if (venueGroups.length === 0) {
-    if (mode === "past") {
+    if (mode === "all") {
+      emptyHint = {
+        title: "No shows to map",
+        body: "Shows you've logged at a venue land here.",
+      };
+    } else if (mode === "past") {
       emptyHint = {
         title: "No past shows to map",
         body: "Shows you've logged at a venue land here.",

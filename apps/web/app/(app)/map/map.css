@@ -166,6 +166,16 @@
   letter-spacing: 0.03em;
 }
 
+/* The show-layer control is two adjacent segmented groups: the logbook
+   modes (My shows / Past / Upcoming) slice the user's own shows, while
+   Discoverable plots a different dataset (the Discover announcements
+   feed) — the gap keeps it from reading as a fourth logbook subset. */
+.map-filterbar__layers {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* The layer / year / kind filter groups reuse the shared
    apps/web/components/design-system/segmented-filter.css markup. On the
    map they adopt the compact Geist Mono "stats filter" treatment from the
@@ -865,7 +875,8 @@
     flex-wrap: wrap;
   }
 
-  .map-filterbar .segmented-filter {
+  .map-filterbar .segmented-filter,
+  .map-filterbar__layers {
     flex-wrap: wrap;
   }
 }
