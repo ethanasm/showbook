@@ -336,6 +336,91 @@ export function BulkImportModal({ scan, isDuplicate, gmailScanAccepted }: BulkIm
           </div>
         )}
 
+        {/* Zero-results explanation — a finished scan that found nothing
+            looks like a failure unless we say why and what to try. Only
+            for the OAuth sources: setlist.fm re-renders its username
+            form on empty results instead. */}
+        {!loading
+          && !error
+          && results.length === 0
+          && ((importSource === "gmail" && gmailAccessToken)
+            || (importSource === "eventbrite" && eventbriteAccessToken))
+          && (
+          <div
+            data-testid="bulk-import-no-results"
+            style={{
+              padding: "20px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 13,
+                lineHeight: 1.6,
+                color: "var(--ink)",
+              }}
+            >
+              {importSource === "gmail"
+                ? "The scan came up empty — it looks for ticket receipts (Ticketmaster, AXS, Dice, Eventbrite, venue box offices) in this inbox."
+                : "No past orders found on this Eventbrite account."}
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: 11,
+                lineHeight: 1.7,
+                color: "var(--muted)",
+                letterSpacing: ".02em",
+              }}
+            >
+              {importSource === "gmail"
+                ? "If your tickets live in another Google account, run the scan again and pick that account. Or skip the inbox entirely — describe a show in one sentence on the Add page."
+                : "If your orders live under another email, sign in with that account — or add the shows from the Add page."}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
+              <button
+                type="button"
+                onClick={() => startOauthPopup(importSource, gmailScanAccepted)}
+                style={{
+                  padding: "9px 14px",
+                  border: "1px solid var(--rule-strong)",
+                  background: "transparent",
+                  color: "var(--ink)",
+                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontSize: 10.5,
+                  letterSpacing: ".06em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                }}
+              >
+                Try another account
+              </button>
+              <a
+                href="/add"
+                style={{
+                  padding: "9px 14px",
+                  border: "none",
+                  background: "var(--ink)",
+                  color: "var(--bg)",
+                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontSize: 10.5,
+                  letterSpacing: ".06em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                }}
+              >
+                Describe a show instead
+              </a>
+            </div>
+          </div>
+        )}
+
         {/* Results list */}
         {results.length > 0 && (
           <div style={{

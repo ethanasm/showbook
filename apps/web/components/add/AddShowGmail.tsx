@@ -102,8 +102,10 @@ export function AddShowGmail({ gmail, headlinerName, onSelect }: AddShowGmailPro
         </div>
       )}
       {!gmail.scanning && gmail.results.length === 0 && (
-        <div style={{ padding: "14px 16px", fontFamily: mono, fontSize: 11, color: "var(--faint)", letterSpacing: ".04em" }}>
-          No ticket emails found
+        <div style={{ padding: "14px 16px", fontFamily: mono, fontSize: 11, color: "var(--faint)", letterSpacing: ".04em", lineHeight: 1.6 }}>
+          No ticket emails matched &ldquo;{headlinerName}&rdquo; in that inbox.
+          If the receipt lives in another account, scan again and pick it —
+          or just fill in the fields below.
         </div>
       )}
       {gmail.results.map((result, i) => (

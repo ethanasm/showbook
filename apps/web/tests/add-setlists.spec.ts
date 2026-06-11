@@ -15,7 +15,7 @@ test.describe('Add page — per-performer setlist input', () => {
   });
 
   test('shows setlist input blocks for headliner on past concerts', async ({ page }) => {
-    await page.goto('/add');
+    await page.goto('/add?mode=form');
 
     // Select "past" timeframe
     await page.getByText('past').first().click();
@@ -52,7 +52,7 @@ test.describe('Add page — per-performer setlist input', () => {
   });
 
   test('shows "Search setlist.fm" button for headliner', async ({ page }) => {
-    await page.goto('/add');
+    await page.goto('/add?mode=form');
     await page.getByText('past').first().click();
     await page.getByText('Concert').first().click();
 

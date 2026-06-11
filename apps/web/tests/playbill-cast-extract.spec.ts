@@ -83,7 +83,7 @@ test.describe('Playbill cast extraction (Groq vision)', () => {
 
   test('extracts only main cast — no swings, understudies, or orchestra', async ({ page }) => {
     await loginAsTestUser(page);
-    await page.goto('/add');
+    await page.goto('/add?mode=form');
     await page.waitForLoadState('networkidle');
 
     // Pick theatre so the playbill upload field renders.
@@ -126,7 +126,7 @@ test.describe('Playbill cast extraction (Groq vision)', () => {
     const productionName = `Hadestown Test ${Date.now()}`;
 
     await loginAsTestUser(page);
-    await page.goto('/add');
+    await page.goto('/add?mode=form');
     await page.waitForLoadState('networkidle');
 
     // 1. Pick theatre.

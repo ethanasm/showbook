@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Eye, Music, Plus, X, ArrowRight, Mail, Ticket } from "lucide-react";
+import { Eye, Music, Plus, X, ArrowRight, Mail, Ticket, Check, Circle } from "lucide-react";
 import { isFeatureOn } from "@showbook/shared";
+import { useDismissableFlag } from "@/lib/dismissable-flag";
 import { SpotifyImportModal } from "@/components/preferences/SpotifyImportModal";
 import "@/components/design-system/design-system.css";
 
@@ -12,30 +13,22 @@ const STORAGE_KEY = "showbook:get-started-dismissed";
 const MONO = "var(--font-geist-mono), monospace";
 
 export function useGetStartedDismissed() {
-  const [dismissed, setDismissed] = useState(false);
-
-  useEffect(() => {
-    try {
-      if (typeof window === "undefined") return;
-      setDismissed(window.localStorage.getItem(STORAGE_KEY) === "1");
-    } catch {
-      // localStorage unavailable (private mode, SSR) — treat as not dismissed.
-    }
-  }, []);
-
-  const dismiss = useCallback(() => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, "1");
-    } catch {
-      // ignore — UI still flips via state below
-    }
-    setDismissed(true);
-  }, []);
-
-  return { dismissed, dismiss };
+  return useDismissableFlag(STORAGE_KEY);
 }
 
 type Variant = "expanded" | "card";
+
+/**
+ * One row of the Get Started checklist (card variant). Steps are
+ * computed by the home view from live queries — the hub stays
+ * presentational so it renders without a tRPC provider.
+ */
+export interface GetStartedStep {
+  id: string;
+  label: string;
+  done: boolean;
+  href: string;
+}
 
 interface Door {
   id: string;
@@ -53,9 +46,12 @@ interface Door {
 export function GetStartedHub({
   variant,
   onDismiss,
+  steps,
 }: {
   variant: Variant;
   onDismiss?: () => void;
+  /** Checklist rows for the card variant; ignored by `expanded`. */
+  steps?: GetStartedStep[];
 }) {
   const [spotifyOpen, setSpotifyOpen] = useState(false);
 
@@ -96,9 +92,9 @@ export function GetStartedHub({
     {
       id: "spotify",
       icon: <Music size={16} color="var(--accent)" />,
-      title: "Import artists from Spotify",
+      title: "Follow your Spotify artists",
       shortTitle: "Spotify",
-      subtitle: "Powers your Discover feed (doesn't add shows directly).",
+      subtitle: "Seeds Discover with their announcements — it won't add shows.",
       primary: true,
       onClick: () => setSpotifyOpen(true),
     },
@@ -121,6 +117,8 @@ export function GetStartedHub({
   ];
 
   if (variant === "card") {
+    const checklist = steps ?? [];
+    const doneCount = checklist.filter((s) => s.done).length;
     return (
       <div className="get-started-card" data-testid="get-started-card">
         <button
@@ -134,15 +132,37 @@ export function GetStartedHub({
         <div className="get-started-card__copy">
           <div
             style={{
-              fontFamily: MONO,
-              fontSize: 10,
-              letterSpacing: ".1em",
-              textTransform: "uppercase",
-              color: "var(--faint)",
+              display: "flex",
+              alignItems: "baseline",
+              gap: 10,
               marginBottom: 4,
             }}
           >
-            Get started
+            <div
+              style={{
+                fontFamily: MONO,
+                fontSize: 10,
+                letterSpacing: ".1em",
+                textTransform: "uppercase",
+                color: "var(--faint)",
+              }}
+            >
+              Get started
+            </div>
+            {checklist.length > 0 && (
+              <div
+                data-testid="get-started-progress"
+                style={{
+                  fontFamily: MONO,
+                  fontSize: 10,
+                  color: "var(--accent)",
+                  letterSpacing: ".06em",
+                  fontFeatureSettings: '"tnum"',
+                }}
+              >
+                {doneCount} of {checklist.length}
+              </div>
+            )}
           </div>
           <div
             style={{
@@ -153,64 +173,34 @@ export function GetStartedHub({
               lineHeight: 1.5,
             }}
           >
-            Backfill past shows, find upcoming events, or seed your follow
-            graph.
+            A couple of steps and Showbook starts working for you.
           </div>
         </div>
-        <div className="get-started-card__buttons">
-          {doors.map((d) => {
-            const content = (
+        <div className="get-started-card__steps">
+          {checklist.map((s) =>
+            s.done ? (
               <span
-                key={d.id}
-                title={d.subtitle}
-                className="get-started-card__door"
+                key={s.id}
+                data-testid={`get-started-step-${s.id}`}
+                className="get-started-card__step get-started-card__step--done"
               >
-                {d.icon}
-                <span className="get-started-card__door-label get-started-card__door-label--desktop">
-                  {d.title}
-                </span>
-                <span className="get-started-card__door-label get-started-card__door-label--mobile">
-                  {d.shortTitle}
-                </span>
+                <Check size={13} color="var(--accent)" strokeWidth={2.4} />
+                <span className="get-started-card__step-label">{s.label}</span>
               </span>
-            );
-            if (d.href) {
-              return (
-                <Link
-                  key={d.id}
-                  href={d.href}
-                  style={{ textDecoration: "none", display: "block" }}
-                >
-                  {content}
-                </Link>
-              );
-            }
-            return (
-              <button
-                key={d.id}
-                type="button"
-                onClick={d.onClick}
-                style={{
-                  background: "none",
-                  border: "none",
-                  padding: 0,
-                  cursor: "pointer",
-                  textAlign: "left",
-                  display: "block",
-                  width: "100%",
-                }}
+            ) : (
+              <Link
+                key={s.id}
+                href={s.href}
+                data-testid={`get-started-step-${s.id}`}
+                className="get-started-card__step"
               >
-                {content}
-              </button>
-            );
-          })}
+                <Circle size={11} color="var(--faint)" strokeWidth={2} />
+                <span className="get-started-card__step-label">{s.label}</span>
+                <ArrowRight size={11} color="var(--accent)" />
+              </Link>
+            ),
+          )}
         </div>
-        {spotifyOpen && (
-          <SpotifyImportModal
-            open={spotifyOpen}
-            onClose={() => setSpotifyOpen(false)}
-          />
-        )}
       </div>
     );
   }

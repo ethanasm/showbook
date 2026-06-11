@@ -77,7 +77,7 @@ test('theatre cast typeahead + populated cast section', async ({ page }) => {
   });
 
   await loginAndSeedAsWorker(page);
-  await page.goto('/add');
+  await page.goto('/add?mode=form');
   await page.addStyleTag({ content: HIDE_DEV_INDICATOR });
 
   // Pick the Theatre kind (auto-waits for the button to be actionable;

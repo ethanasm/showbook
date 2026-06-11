@@ -1686,10 +1686,10 @@ a.show-row__support-link:hover {
   .home-recent-headers { display: none; }
 }
 
-/* ── GetStartedHub: card variant ───────────────────────────
-   Desktop: text on left, button cluster on right (wraps below at
-   narrow desktop). Mobile: stacked — text on top, 2x3 grid of
-   buttons below. */
+/* ── GetStartedHub: card variant (setup checklist) ─────────
+   Desktop: copy on left, step pills on right (wrap below at narrow
+   desktop). Mobile: stacked — copy on top, one full-width step row
+   per line. */
 .get-started-card {
   margin: 12px var(--page-pad-x) 0;
   padding: 14px 16px;
@@ -1709,7 +1709,7 @@ a.show-row__support-link:hover {
   min-width: 0;
 }
 
-.get-started-card__buttons {
+.get-started-card__steps {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -1725,14 +1725,13 @@ a.show-row__support-link:hover {
   display: inline-flex;
 }
 
-.get-started-card__door {
+.get-started-card__step {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 10px;
+  gap: 7px;
+  padding: 8px 12px;
   border: 1px solid var(--rule);
-  border-radius: 6px;
+  border-radius: 999px;
   font-family: var(--font-geist-mono), monospace;
   font-size: 10.5px;
   color: var(--ink);
@@ -1744,15 +1743,29 @@ a.show-row__support-link:hover {
   text-overflow: ellipsis;
   background: transparent;
   min-width: 0;
+  transition: border-color 0.12s, background 0.12s;
 }
 
-.get-started-card__door-label {
+.get-started-card__step:hover {
+  border-color: var(--rule-strong);
+  background: var(--bg);
+}
+
+.get-started-card__step--done {
+  cursor: default;
+  color: var(--muted);
+  border-style: dashed;
+}
+
+.get-started-card__step--done:hover {
+  border-color: var(--rule);
+  background: transparent;
+}
+
+.get-started-card__step-label {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-.get-started-card__door-label--mobile { display: none; }
-.get-started-card__door-label--desktop { display: inline; }
 
 @media (max-width: 899px) {
   .get-started-card {
@@ -1770,18 +1783,17 @@ a.show-row__support-link:hover {
     top: 8px;
     right: 8px;
   }
-  .get-started-card__buttons {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 8px;
+  .get-started-card__steps {
+    flex-direction: column;
+    gap: 6px;
     width: 100%;
   }
-  .get-started-card__door {
-    justify-content: flex-start;
+  .get-started-card__step {
     width: 100%;
   }
-  .get-started-card__door-label--mobile { display: inline; }
-  .get-started-card__door-label--desktop { display: none; }
+  .get-started-card__step > svg:last-child {
+    margin-left: auto;
+  }
 }
 
 /* ── GetStartedHub: expanded variant (empty-state hub) ──── */

@@ -56,6 +56,7 @@ import { isYmd, normalizeDateInput } from '@/lib/dateInput';
 import { useVenueSearch } from '@/lib/useVenueSearch';
 import { FestivalPosterHowToSheet } from '../../components/FestivalPosterHowToSheet';
 import { PlaybillExtractSheet } from '../../components/PlaybillExtractSheet';
+import { TicketStatusHint } from '../../components/TicketStatusHint';
 import { mergeCastRows } from '@/lib/playbill/castToPerformerRows';
 
 const SCREEN_OPTIONS = { presentation: 'modal', gestureEnabled: true } as const;
@@ -190,6 +191,14 @@ export default function AddFormScreen(): React.JSX.Element {
   const [submitting, setSubmitting] = React.useState(false);
   const [posterSheetOpen, setPosterSheetOpen] = React.useState(false);
   const [playbillSheetOpen, setPlaybillSheetOpen] = React.useState(false);
+
+  // One-time watching-vs-ticketed hint, shown only once the entered
+  // date parses and lands today-or-later (a past show is just "past").
+  // Local date, not UTC — a show tonight is still "future" after 5pm PT.
+  const now = new Date();
+  const todayYmd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const normalizedHintDate = normalizeDateInput(values.date);
+  const isFutureDate = isYmd(normalizedHintDate) && normalizedHintDate >= todayYmd;
 
   const submit = React.useCallback(async () => {
     // Try to canonicalize the date field one more time at submit
@@ -351,6 +360,7 @@ export default function AddFormScreen(): React.JSX.Element {
               clearError={clearError}
               onExtractLineup={() => setPosterSheetOpen(true)}
               onExtractCast={() => setPlaybillSheetOpen(true)}
+              belowDateSlot={isFutureDate ? <TicketStatusHint /> : null}
             />
           </NestableScrollContainer>
         </KeyboardAvoidingView>

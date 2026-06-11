@@ -92,6 +92,12 @@ export interface ShowFormFieldsProps {
    * Add flow's playbill upload). The parent screen owns the sheet.
    */
   onExtractCast?: () => void;
+  /**
+   * Rendered directly under the date row. The Add screen uses it for
+   * the one-time watching-vs-ticketed hint (gated on a future date);
+   * Edit leaves it unset.
+   */
+  belowDateSlot?: React.ReactNode;
 }
 
 export function ShowFormFields({
@@ -105,6 +111,7 @@ export function ShowFormFields({
   clearError,
   onExtractLineup,
   onExtractCast,
+  belowDateSlot,
 }: ShowFormFieldsProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -225,6 +232,8 @@ export function ShowFormFields({
           />
         ) : null}
       </FormRow>
+
+      {belowDateSlot}
 
       {values.kind === 'concert' ? (
         <FormField

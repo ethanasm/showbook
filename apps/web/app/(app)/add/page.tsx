@@ -9,6 +9,7 @@ import { AddShowChat } from "@/components/add/AddShowChat";
 import { AddShowGmail, useAddShowGmail } from "@/components/add/AddShowGmail";
 import { MediaUploadSection } from "@/components/add/MediaUploadSection";
 import { useAddShowForm } from "./useAddShowForm";
+import { useDismissableFlag } from "@/lib/dismissable-flag";
 import { IMPORT_SOURCES, KIND_CONFIG, TIMEFRAME_CONFIG, mono, sans } from "./constants";
 
 // ── Main Component ───────────────────────────────────────────
@@ -127,14 +128,16 @@ export default function AddPage() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        {/* Mode Tabs — hidden in edit mode */}
+        {/* Mode Tabs — hidden in edit mode. Chat leads: it's the
+            default door, with the structured form one tap away. */}
         {!isEditMode && (
           <div style={{ display: "inline-flex", border: `1px solid var(--rule-strong)` }}>
-            {(["Form", "Chat"] as const).map((m, i) => (
+            {(["Chat", "Form"] as const).map((m, i) => (
               <button
                 key={m}
                 type="button"
                 onClick={() => setMode(m)}
+                data-testid={`add-mode-${m.toLowerCase()}`}
                 style={{
                   padding: "7px 14px",
                   background: mode === m ? "var(--ink)" : "transparent",
@@ -152,7 +155,7 @@ export default function AddPage() {
                   gap: 6,
                 }}
               >
-                {m === "Form" ? "FORM" : "CONVERSATIONAL"}
+                {m === "Form" ? "FORM" : "CHAT"}
               </button>
             ))}
           </div>
@@ -1042,6 +1045,9 @@ export default function AddPage() {
             </div>
           )}
         </div>
+        {!isEditMode && timeframe !== "past" && (
+          <TicketStatusHint />
+        )}
       </div>
 
       {/* Festival: End Date — sized to match the Date field above */}
@@ -1663,6 +1669,67 @@ export default function AddPage() {
 }
 
 // ── Sub-components ───────────────────────────────────────────
+
+/**
+ * One-time hint shown under the Timeframe selector for future-dated
+ * shows. The watching → ticketed flip is driven by seat / price (see
+ * `shows.create`'s state derivation), which nothing else on the form
+ * explains — without this, users pick "upcoming", skip More details,
+ * and wonder why the show says "watching".
+ */
+function TicketStatusHint() {
+  const { dismissed, dismiss } = useDismissableFlag(
+    "showbook:hint:ticket-status",
+  );
+  if (dismissed) return null;
+  return (
+    <div
+      data-testid="ticket-status-hint"
+      style={{
+        marginTop: 10,
+        padding: "9px 12px",
+        background: "var(--surface)",
+        borderLeft: "2px solid var(--accent)",
+        display: "flex",
+        alignItems: "baseline",
+        gap: 10,
+      }}
+    >
+      <div
+        style={{
+          flex: 1,
+          fontFamily: mono,
+          fontSize: 10.5,
+          color: "var(--muted)",
+          letterSpacing: ".03em",
+          lineHeight: 1.6,
+        }}
+      >
+        Future shows save as <span style={{ color: "var(--ink)" }}>watching</span> until
+        they have a seat or price (under More details) — then they flip to{" "}
+        <span style={{ color: "var(--ink)" }}>ticketed</span>.
+      </div>
+      <button
+        type="button"
+        onClick={dismiss}
+        style={{
+          background: "none",
+          border: "none",
+          padding: 0,
+          color: "var(--accent)",
+          fontFamily: mono,
+          fontSize: 10,
+          letterSpacing: ".08em",
+          textTransform: "uppercase",
+          cursor: "pointer",
+          whiteSpace: "nowrap",
+        }}
+      >
+        Got it
+      </button>
+    </div>
+  );
+}
 
 function FieldLabel({
   children,
