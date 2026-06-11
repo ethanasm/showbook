@@ -222,6 +222,11 @@ export default function SpotifyIntegrationScreen(): React.JSX.Element {
                 Plan · {connection.product}
               </Text>
             ) : null}
+            <Text style={[styles.body3, { color: colors.muted }]}>
+              Showbook uses Spotify to import the artists you follow, make
+              playlists, identify songs, and surface stats about your shows.
+            </Text>
+            <ExternalSourceDisclaimer source="spotify" />
             {importFlow.importedCount !== null ? (
               <Text style={[styles.body3, { color: colors.accent }]}>
                 Imported {importFlow.importedCount} artist
@@ -288,8 +293,12 @@ export default function SpotifyIntegrationScreen(): React.JSX.Element {
             hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="Back"
+            style={styles.back}
           >
             <ChevronLeft size={22} color={colors.ink} />
+            <Text style={[styles.backLabel, { color: colors.muted }]}>
+              Back
+            </Text>
           </Pressable>
         }
       />
@@ -309,6 +318,15 @@ export default function SpotifyIntegrationScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
+  back: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  backLabel: {
+    fontFamily: 'Geist Sans 500',
+    fontSize: 12,
+  },
   center: {
     flex: 1,
     alignItems: 'center',
