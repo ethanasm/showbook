@@ -26,7 +26,7 @@ been fully addressed).
   `ArtistCard`), chrome (`TopBar`, `Sheet`, `Banner`, `Toast`),
   shared kit (`SegmentedControl`, `PullToRefresh`, `Skeleton`,
   `EmptyState`, `ErrorBoundary`), media (`MediaTile`, `MediaGrid`,
-  `Uploader`), and the iPad `ThreePaneLayout`.
+  `Uploader`), and the tablet `SplitViewLayout` (two-pane Shows list / detail; the tab bar itself becomes a left icon rail on tablet via `tabBarPosition` in `(tabs)/_layout.tsx`).
 - `lib/` — non-UI code:
   - `auth.ts` — Google ID token round-trip + token storage
   - `trpc.ts` — bearer-auth tRPC client targeting `@showbook/api`

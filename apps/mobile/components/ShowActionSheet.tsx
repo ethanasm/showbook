@@ -54,6 +54,12 @@ export interface ShowActionSheetProps {
   /** When true, popping the show after delete returns to /(tabs)/shows. */
   popAfterDelete?: boolean;
   /**
+   * Fires after a successful delete, once the sheet has closed. The
+   * tablet split view uses this to clear the detail-pane selection
+   * instead of popping the router.
+   */
+  onDeleted?: () => void;
+  /**
    * Fires when the user picks "I have tickets". The parent is responsible
    * for rendering the `MarkTicketedSheet` — see the file header for why.
    */
@@ -67,6 +73,7 @@ export function ShowActionSheet({
   state,
   ticketStatus,
   popAfterDelete = false,
+  onDeleted,
   onMarkTicketed,
 }: ShowActionSheetProps): React.JSX.Element {
   const { tokens } = useTheme();
@@ -180,6 +187,7 @@ export function ShowActionSheet({
       });
       showToast({ kind: 'success', text: 'Show deleted' });
       onClose();
+      onDeleted?.();
       if (popAfterDelete) router.replace('/(tabs)/shows');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed';

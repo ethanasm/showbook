@@ -16,6 +16,7 @@ import { AlertCircle } from 'lucide-react-native';
 import type { PerformerSetlist } from '@showbook/shared';
 
 import { EmptyState } from '../../components/EmptyState';
+import { useSelectedShow } from '../../components/SplitViewLayout';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
 import { MarkTicketedSheet } from '../../components/MarkTicketedSheet';
 import {
@@ -61,8 +62,15 @@ interface ShowDetail {
 }
 
 export interface ShowDetailScreenProps {
-  /** Override the route param — used by the iPad three-pane layout. */
+  /** Override the route param — used by the tablet split-view detail pane. */
   showIdProp?: string;
+  /**
+   * True when mounted inside the Shows tab split view rather than pushed
+   * as a stack route. Suppresses the hero back button (the list stays
+   * visible alongside, there's nothing to go back to) and swaps the
+   * after-delete router pop for clearing the pane selection.
+   */
+  embeddedInSplitView?: boolean;
 }
 
 export default function ShowDetailScreen(
@@ -75,6 +83,8 @@ export default function ShowDetailScreen(
   const params = useLocalSearchParams<{ id: string; tab?: string }>();
   const paramId = typeof params.id === 'string' ? params.id : '';
   const showId = props.showIdProp ?? paramId;
+  const embedded = props.embeddedInSplitView ?? false;
+  const { setShowId } = useSelectedShow();
 
   const query = trpc.shows.detail.useQuery(
     { showId },
@@ -122,7 +132,8 @@ export default function ShowDetailScreen(
       {show ? (
         <ShowDetailTabsView
           show={show as TabbedShowDetail}
-          onBack={onBack}
+          embeddedInSplitView={embedded}
+          onBack={embedded ? undefined : onBack}
           onMore={() => setActionSheetOpen(true)}
           initialTab={
             typeof params.tab === 'string'
@@ -141,7 +152,8 @@ export default function ShowDetailScreen(
             (show as { ticketStatus?: 'sold_out' | 'cancelled' | null })
               .ticketStatus ?? null
           }
-          popAfterDelete
+          popAfterDelete={!embedded}
+          onDeleted={embedded ? () => setShowId(null) : undefined}
           onMarkTicketed={() => setMarkTicketedOpen(true)}
         />
       ) : null}

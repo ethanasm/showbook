@@ -1,11 +1,13 @@
 /**
  * Responsive helpers — phone vs tablet breakpoint at 900pt window width.
  *
- * Single source of truth for the iPad three-pane / phone five-tab split
- * decided in (tabs)/_layout.tsx. The threshold matches the design source's
- * iPad-portrait floor; iPhone Pro Max landscape (~932pt) DOES count as
- * "tablet" by this rule, which is the intended behaviour — three panes
- * fit fine at that width.
+ * Single source of truth for the tablet split-view decision: the tab
+ * shell renders on every breakpoint, but at "tablet" the Shows tab
+ * composes a two-pane list / detail split (components/SplitViewLayout)
+ * instead of pushing detail as a stack route. The threshold matches the
+ * design source's iPad-portrait floor; iPhone Pro Max landscape (~932pt)
+ * DOES count as "tablet" by this rule, which is the intended behaviour —
+ * a sidebar + detail pair fits fine at that width.
  *
  * Why the require() dance for react-native: this module is imported by
  * the test runner (apps/mobile/lib/__tests__/responsive.test.ts) in plain
@@ -28,6 +30,26 @@ export function isLargeScreen(width: number): boolean {
 export function breakpointForWidth(width: number): Breakpoint {
   if (!Number.isFinite(width) || width <= 0) return 'phone';
   return isLargeScreen(width) ? 'tablet' : 'phone';
+}
+
+export const SPLIT_SIDEBAR_MIN_WIDTH = 320;
+export const SPLIT_SIDEBAR_MAX_WIDTH = 380;
+const SPLIT_SIDEBAR_FRACTION = 0.32;
+
+/**
+ * Width of the Shows split-view list sidebar for a given window width:
+ * ~32% of the window, clamped to 320–380pt — the iPad-sidebar register
+ * (Apple's split-view sidebars sit around 320pt). The floor keeps
+ * ShowCard headliners from truncating; the cap stops the sidebar from
+ * stretching cards into a sparse, hard-to-scan strip on a 13" iPad in
+ * landscape (1366pt → 380 + 986 split).
+ */
+export function splitSidebarWidth(width: number): number {
+  if (!Number.isFinite(width) || width <= 0) return SPLIT_SIDEBAR_MIN_WIDTH;
+  return Math.min(
+    SPLIT_SIDEBAR_MAX_WIDTH,
+    Math.max(SPLIT_SIDEBAR_MIN_WIDTH, Math.round(width * SPLIT_SIDEBAR_FRACTION)),
+  );
 }
 
 interface DimensionsApi {
