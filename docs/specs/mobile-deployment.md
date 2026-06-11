@@ -152,26 +152,35 @@ rule above):
 - A **manual** version edit in the triggering merge (e.g. the 1.0.0
   jump) is detected and respected — the workflow ships it without
   bumping again.
-- **The bump-back push must get past `main`'s branch protection**
-  ("changes must be made through a pull request" — it rejected the
-  first bump run, 2026-06-11, GH006). Two supported setups, in
-  preference order:
-  1. **Ruleset bypass (recommended, no secrets):** recreate the
-     protection as a repository ruleset (Settings → Rules → Rulesets →
-     new branch ruleset targeting `main`, require a pull request) and
-     add the **GitHub Actions** app to the ruleset's bypass list, then
-     delete the overlapping classic protection rule. The workflow's
-     default `GITHUB_TOKEN` push then goes through — and
-     `GITHUB_TOKEN` pushes never trigger workflows, so the bump can't
-     re-trigger CI or the deploy. Classic branch protection has no app
-     bypass list, which is why it has to become a ruleset.
+- **The bump-back push must get past `main`'s required-PR rule** (it
+  rejected the first bump run, 2026-06-11, GH006), and the built-in
+  **github-actions app cannot be added to a ruleset bypass list** — a
+  known GitHub limitation; the bypass picker only offers roles, teams,
+  deploy keys, and *installed* GitHub Apps. The protection must be a
+  repository ruleset (classic branch protection has no deploy-key/app
+  bypass at all), and then, in preference order:
+  1. **Deploy-key bypass (recommended — no expiry):** check **Deploy
+     keys** in the ruleset's bypass list; generate a key
+     (`ssh-keygen -t ed25519 -f showbook-release -N ""`), add the
+     public half as a repo deploy key **with write access** (Settings
+     → Deploy keys), and save the private half as the
+     `RELEASE_DEPLOY_KEY` secret. The workflow's checkout switches the
+     remote to SSH when that secret is set, so the bump push
+     authenticates as the deploy key and bypasses the rule.
   2. **`RELEASE_PUSH_TOKEN` secret:** a fine-grained PAT scoped to
-     this repo with Contents read/write, from an actor the protection
-     doesn't apply to. The workflow's checkout prefers it over
-     `GITHUB_TOKEN` automatically. PAT pushes DO trigger workflows —
-     the `[skip ci]` in the bump commit message suppresses CI (and the
-     deploy only runs off CI completion or manual dispatch, so neither
-     can loop). PATs expire; rotation is on you.
+     this repo with Contents read/write, from an actor on the bypass
+     list (e.g. check the **Repository admin** role and mint the PAT
+     yourself). PATs expire; rotation is on you.
+  3. A custom GitHub App installed on the repo can also sit on the
+     bypass list, but the workflow would need an
+     `actions/create-github-app-token` step to use it — not wired;
+     reach for it only if deploy keys are ever disallowed.
+
+  Bypass entries must be set to **Always**, not "For pull requests
+  only". Deploy-key and PAT pushes DO trigger workflows — the
+  `[skip ci]` in the bump commit message suppresses CI, and the
+  deploy itself only runs off CI completion or manual dispatch, so
+  the bump can't loop either workflow.
 - The commit and tag are pushed with `--atomic`, so a rejected push
   can't leave an orphan `mobile-v*` tag (the first bump run did
   exactly that — the tag ref was accepted before branch protection
