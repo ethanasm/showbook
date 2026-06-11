@@ -35,11 +35,15 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, {
+  Easing,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
+  withSequence,
   withTiming,
   runOnJS,
 } from 'react-native-reanimated';
+import * as SecureStore from 'expo-secure-store';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { RADII } from '@/lib/theme-utils';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
@@ -59,6 +63,7 @@ import {
   type CalendarEvent,
   type CalendarSpan,
 } from '../../components/CalendarGrid';
+import { CalendarSwipeHint } from '../../components/CalendarSwipeHint';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
 import { MarkTicketedSheet } from '../../components/MarkTicketedSheet';
 import { SplitViewLayout, useSelectedShow } from '../../components/SplitViewLayout';
@@ -868,6 +873,51 @@ function CalendarView({
   // past the threshold commits the step. `activeOffsetX` keeps day-cell taps
   // working, and `failOffsetY` defers vertical drags to the parent ScrollView.
   const dragX = useSharedValue(0);
+
+  // One-time swipe-discovery hint. The Pan gesture is invisible, so a
+  // first-time user only ever finds the prev/next arrows. We surface a
+  // transient animated caption ("Swipe to change months") and a one-shot
+  // grid nudge until the user either swipes or taps the hint away, then
+  // persist the flag (expo-secure-store, matching TicketStatusHint).
+  // `null` = still reading storage — keeps the hint from flashing for
+  // users who already saw it.
+  const [swipeHintSeen, setSwipeHintSeen] = React.useState<boolean | null>(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    SecureStore.getItemAsync('showbook.hint.calendar-swipe')
+      .then((v) => {
+        if (!cancelled) setSwipeHintSeen(v === '1');
+      })
+      // Fail "seen": a storage read error shouldn't strand an
+      // un-dismissable nag (the matching write would fail too).
+      .catch(() => {
+        if (!cancelled) setSwipeHintSeen(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const markSwipeHintSeen = React.useCallback(() => {
+    setSwipeHintSeen(true);
+    SecureStore.setItemAsync('showbook.hint.calendar-swipe', '1').catch(() => {
+      // ignore — local state already flipped the hint off
+    });
+  }, []);
+
+  // Play the grid nudge once, the first time we know the hint is unseen.
+  const nudgedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (swipeHintSeen !== false || nudgedRef.current) return;
+    nudgedRef.current = true;
+    dragX.value = withDelay(
+      450,
+      withSequence(
+        withTiming(-26, { duration: 340, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: 520, easing: Easing.inOut(Easing.quad) }),
+      ),
+    );
+  }, [swipeHintSeen, dragX]);
+
   const swipeGesture = Gesture.Pan()
     .activeOffsetX([-20, 20])
     .failOffsetY([-16, 16])
@@ -884,8 +934,11 @@ function CalendarView({
       const passed =
         Math.abs(e.translationX) > 56 || Math.abs(e.velocityX) > 550;
       const blocked = (delta < 0 && atMin) || (delta > 0 && atMax);
-      if (passed && !blocked) {
-        runOnJS(step)(delta);
+      if (passed) {
+        // A committed swipe (even one blocked at a bound) means the user
+        // found the gesture — retire the hint.
+        runOnJS(markSwipeHintSeen)();
+        if (!blocked) runOnJS(step)(delta);
       }
       dragX.value = withTiming(0, { duration: 180 });
     });
@@ -973,6 +1026,12 @@ function CalendarView({
           </Pressable>
         </View>
       </View>
+
+      <CalendarSwipeHint
+        visible={swipeHintSeen === false}
+        period={calendarMode === 'year' ? 'year' : 'month'}
+        onDismiss={markSwipeHintSeen}
+      />
 
       <GestureDetector gesture={swipeGesture}>
         <Animated.View style={swipeStyle}>
