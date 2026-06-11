@@ -63,7 +63,17 @@ those first.
 
 Use `mcp__github__create_pull_request`. Constraints:
 
-- Title under 70 chars; details go in the body.
+- Title is a **conventional commit** — `type(scope)?: imperative
+  summary`, under 70 chars; details go in the body. The squash-merged
+  title is what `mobile-deploy.yml`'s version-bump scan reads, so the
+  type drives the mobile app's version at the next native build:
+  `feat:` → MINOR bump (use it for any user-visible feature —
+  under-typing a feature loses the release signal, over-typing
+  inflates the version); `fix:` / `docs:` / `chore:` / `ci:` /
+  `refactor:` / `perf:` / `test:` → patch; a breaking `!` (`feat!:`)
+  → major, mapped to minor pre-1.0. Full case table in repo-root
+  `CLAUDE.md` → "Commit and PR hygiene"; scheme rationale in
+  `docs/specs/decisions.md` D25.
 - Body has `## Summary` (1–3 bullets) and `## Test plan` (markdown
   checklist). No `https://claude.ai/code/session_…` footer, no
   `Co-authored-by: Claude` trailer, no "Generated with Claude Code"
