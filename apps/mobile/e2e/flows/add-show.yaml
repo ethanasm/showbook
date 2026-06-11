@@ -73,9 +73,19 @@ tags:
 
 # Fill the date input — placeholder is "YYYY-MM-DD"; tapping the
 # placeholder text targets the input directly.
+#
+# Use a PAST date on purpose: the Shows tab opens on the "Past ·
+# Timeline" segment by default, and a future-dated show lands under
+# "Upcoming" where neither this flow's read-back nor the downstream
+# flows (which tap `show-card-row-0` in the default view) would ever
+# see it. A past date puts the fixture in the default timeline as
+# row-0 — exactly what show-detail-tabs.yaml / setlist-stable.yaml /
+# spotify-hype.yaml rely on. (Past also gives the setlist tab a
+# real "actual setlist" / cold-state to render, and the Heard-rather-
+# than-Hype playlist variant, which those flows already handle.)
 - tapOn:
     text: "YYYY-MM-DD"
-- inputText: "2026-12-31"
+- inputText: "2026-05-15"
 
 # Dismiss the IME before tapping Save. With the keyboard open the
 # Gboard's content-description elements compete with the TopBar's
