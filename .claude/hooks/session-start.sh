@@ -54,6 +54,40 @@ pnpm install --frozen-lockfile --prefer-offline
 
 # 3. Bring up the Postgres container (the web container needs .env.local and is
 #    not required for tests — Playwright spins up its own dev server).
+#    The compose file lives under infra/, so pin it explicitly — a bare
+#    `docker compose` from the repo root finds no configuration file unless
+#    the environment happens to export COMPOSE_FILE.
+export COMPOSE_FILE="$CLAUDE_PROJECT_DIR/infra/docker-compose.yml"
+
+# Docker Hub rate-limits unauthenticated pulls aggressively enough that a
+# fresh sandbox often can't pull the db image at all ("You have reached your
+# unauthenticated pull rate limit"), which used to kill this hook and block
+# everything that needs Postgres — migrations, Playwright e2e, and the
+# pr-screenshots web captures. The registries below are pull-through mirrors
+# of the official Docker Hub images — byte-identical content, no auth, no
+# practical rate limit — so fall back through them and retag locally under
+# the canonical name the compose file expects.
+DB_IMAGE=$(grep -m1 -E '^\s*image:' "$COMPOSE_FILE" | awk '{print $2}')
+if ! docker image inspect "$DB_IMAGE" >/dev/null 2>&1; then
+  log "Pulling $DB_IMAGE..."
+  if ! docker pull "$DB_IMAGE" >/dev/null 2>&1; then
+    pulled=""
+    for mirror in "mirror.gcr.io/library/$DB_IMAGE" "public.ecr.aws/docker/library/$DB_IMAGE"; do
+      log "Docker Hub pull failed (rate limit?); trying $mirror..."
+      if docker pull "$mirror" >/dev/null 2>&1; then
+        docker tag "$mirror" "$DB_IMAGE"
+        log "Pulled $DB_IMAGE via $mirror."
+        pulled=1
+        break
+      fi
+    done
+    if [ -z "$pulled" ]; then
+      log "ERROR: could not pull $DB_IMAGE from Docker Hub or any mirror."
+      exit 1
+    fi
+  fi
+fi
+
 log "Starting postgres container..."
 docker compose up -d db
 

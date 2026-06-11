@@ -51,6 +51,20 @@ until pg_isready -h localhost -p 5433 -U showbook >/dev/null 2>&1; do sleep 1; d
 pnpm dev:db:prepare:e2e                              # if you need the e2e DB
 ```
 
+If `up -d db` fails because the `postgres:16-alpine` image isn't cached and
+Docker Hub answers "You have reached your unauthenticated pull rate limit,"
+**do not stop there** — pull the identical image from a no-auth mirror and
+retag it (the session-start hook does this automatically, but a mid-session
+dockerd restart wipes nothing, so you only need this if the image never landed):
+
+```bash
+sudo docker pull mirror.gcr.io/library/postgres:16-alpine \
+  || sudo docker pull public.ecr.aws/docker/library/postgres:16-alpine
+sudo docker tag mirror.gcr.io/library/postgres:16-alpine postgres:16-alpine 2>/dev/null \
+  || sudo docker tag public.ecr.aws/docker/library/postgres:16-alpine postgres:16-alpine
+sudo docker compose -f infra/docker-compose.yml up -d db
+```
+
 After that, web Playwright (`pr-screenshots`, `pnpm test:e2e`) works exactly as documented — webServer boots its own `next dev`, talks to Postgres on `localhost:5433`. Never tell the user "the sandbox has no Postgres" without first running the restart sequence above and confirming it failed. Same applies to "no Docker" — Docker is installed; if the daemon is down, restart it.
 
 What the sandbox actually *can't* do, for the avoidance of further wrong excuses: run iOS Simulator, run a KVM-backed Android emulator, reach external networks blocked by the environment's policy. Mobile capture in this sandbox is the Expo Web bundle via `apps/mobile/web-tests/*.spec.ts` (Playwright, tRPC mocked) — *not* the unreachable iOS/Android paths. For real native mobile capture, attach `mobile-visual` so the GitHub-Actions self-hosted Android runner picks it up.
