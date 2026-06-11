@@ -142,12 +142,17 @@
   display: flex;
   align-items: center;
   gap: 24px;
+  /* Wrap instead of crushing the Viewing label when the filter groups
+     outgrow the row (the layer control widened with the My shows mode). */
+  flex-wrap: wrap;
+  row-gap: 10px;
 }
 
 .map-filterbar__viewing {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex-shrink: 0;
 }
 
 .map-filterbar__viewing-label {
