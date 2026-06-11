@@ -28,13 +28,14 @@ name: Mobile Deploy (preview)
 # none). The bump-back push uses GITHUB_TOKEN, whose pushes never
 # trigger workflows, so it cannot re-trigger CI or this deploy.
 #
-# **Android builds auto-submit to the Play Console internal testing
-# track** (via `eas submit`) using the service account JSON in the
-# `PLAY_SERVICE_ACCOUNT_JSON` secret. Testers on Play Internal pick
-# up the new build through the Play Store once Google finishes
-# processing the upload — no sideload, no Advanced Protection
-# friction. iOS still produces a plain preview IPA; auto-submit on
-# the iOS side waits on an Apple Developer account.
+# **Builds auto-submit to the preview store track on BOTH platforms**
+# (via `eas submit`): Android to the Play Console internal testing
+# track using the service account JSON in the
+# `PLAY_SERVICE_ACCOUNT_JSON` secret, iOS to TestFlight internal
+# testing using the App Store Connect API key in the `ASC_API_KEY_*`
+# secrets. Testers pick up the new build through the Play Store /
+# TestFlight once the store finishes processing the upload — no
+# sideload, no Advanced Protection friction, no manual IPA handling.
 #
 # Runs on a GitHub-hosted runner — EAS Build/Submit/Update all
 # execute in Expo's cloud, so there's nothing to host locally. The
@@ -48,6 +49,18 @@ name: Mobile Deploy (preview)
 #    releases" permission on the Showbook app. Without it the
 #    Android submit step fails fast (intentionally — better than
 #    silently shipping nothing).
+#  - ASC_API_KEY_P8 — full contents of the App Store Connect API
+#    private key (.p8) generated under App Store Connect → Users and
+#    Access → Integrations → App Store Connect API (role: App
+#    Manager or Developer is enough for TestFlight uploads).
+#  - ASC_API_KEY_ID — the key ID of that .p8 (shown next to the key).
+#  - ASC_API_KEY_ISSUER_ID — the issuer ID shown at the top of the
+#    same Integrations page.
+#  - ASC_APP_ID — the numeric Apple ID of the Showbook app record
+#    (App Store Connect → App Information → Apple ID). Required
+#    because non-interactive `eas submit` can't prompt for the app.
+#    Like the Play secret, a missing ASC_* secret fails the iOS
+#    submit step fast.
 #
 # Optional secrets (enable the failure-notification email — without
 # them a failed deploy just relies on GitHub's stock "run failed"
@@ -69,7 +82,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "update (OTA JS) or build (new native binary; Android auto-submits to Play internal)"
+        description: "update (OTA JS) or build (new native binary; auto-submits to Play internal / TestFlight)"
         type: choice
         options:
           - update
@@ -114,10 +127,11 @@ jobs:
            github.event.workflow_run.head_branch == 'main' &&
            github.event.workflow_run.event != 'pull_request') }}
     runs-on: ubuntu-latest
-    # 45 min covers a fresh Android build (~10-15 min on EAS) plus the
-    # synchronous submit step (~1-2 min) plus an iOS build kickoff
-    # (--no-wait). 25 min was the fire-and-forget-only budget.
-    timeout-minutes: 45
+    # 75 min covers a fresh Android build (~10-15 min on EAS) plus an
+    # iOS build (~15-25 min) plus the synchronous submit steps (~1-2
+    # min each), run sequentially. 45 min was the Android-submit-only
+    # budget back when iOS was a fire-and-forget --no-wait kickoff.
+    timeout-minutes: 75
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:
@@ -402,10 +416,20 @@ jobs:
           # Best-effort cleanup; runner is ephemeral anyway.
           rm -f "$SA"
 
-      - name: Build iOS IPA (preview profile)
-        # iOS keeps the fire-and-forget --no-wait pattern: no auto-submit
-        # path yet (needs an Apple Developer account + App Store Connect
-        # API key), so there's nothing for the runner to do after kickoff.
+      # iOS mirrors the Android build/submit split above. The
+      # `preview-store` profile produces an App Store-signed IPA
+      # (`distribution: store`) that App Store Connect accepts, while
+      # inheriting the `preview` channel + OAuth env from `preview` so
+      # OTA updates still reach TestFlight-installed copies. --wait
+      # replaces the old fire-and-forget --no-wait kickoff so
+      # `eas submit --latest` has a finished artifact to find.
+      # Prereq (one-time, interactive): the App Store distribution
+      # certificate + provisioning profile must already be in EAS
+      # credentials — run `eas build --profile preview-store --platform
+      # ios` once locally to let EAS generate them; CI can't answer the
+      # credential prompts.
+      - name: Build iOS IPA (preview-store profile)
+        id: build-ios
         if: >-
           (github.event_name == 'workflow_dispatch' && inputs.mode == 'build'
             && (inputs.platform == 'ios' || inputs.platform == 'all'))
@@ -413,10 +437,52 @@ jobs:
         working-directory: apps/mobile
         run: |
           pnpm dlx eas-cli build \
-            --profile preview \
+            --profile preview-store \
             --platform ios \
             --non-interactive \
-            --no-wait 2>&1 | tee -a "$GITHUB_WORKSPACE/eas-output.log"
+            --wait 2>&1 | tee -a "$GITHUB_WORKSPACE/eas-output.log"
+
+      - name: Submit iOS IPA to TestFlight internal testing
+        # Same outcome-gating rationale as the Android submit step.
+        if: steps.build-ios.outcome == 'success'
+        working-directory: apps/mobile
+        env:
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_KEY_ISSUER_ID: ${{ secrets.ASC_API_KEY_ISSUER_ID }}
+          ASC_APP_ID: ${{ secrets.ASC_APP_ID }}
+        run: |
+          for v in ASC_API_KEY_P8 ASC_API_KEY_ID ASC_API_KEY_ISSUER_ID ASC_APP_ID; do
+            if [ -z "${!v:-}" ]; then
+              echo "$v secret is not set — cannot submit to TestFlight." >&2
+              echo "See workflow header comment for setup." >&2
+              exit 1
+            fi
+          done
+          # Like the Android step, the key file path has to come from the
+          # submit profile in eas.json (`ascApiKeyPath`, relative to
+          # eas.json itself) — write the secret to that exact path. The
+          # key ID / issuer ID / ASC app ID also have no CLI flag and
+          # eas.json has no env-var substitution, so inject them into the
+          # submit profile with jq. The edit only lives on the ephemeral
+          # runner; the .p8 itself is gitignored at the repo level so a
+          # misconfigured `git add` can't commit it.
+          KEY="./asc-api-key.p8"
+          printf '%s' "$ASC_API_KEY_P8" > "$KEY"
+          chmod 600 "$KEY"
+          jq --arg keyId "$ASC_API_KEY_ID" \
+             --arg issuerId "$ASC_API_KEY_ISSUER_ID" \
+             --arg appId "$ASC_APP_ID" \
+             '.submit."preview-store".ios += {ascApiKeyId: $keyId, ascApiKeyIssuerId: $issuerId, ascAppId: $appId}' \
+             eas.json > eas.json.tmp && mv eas.json.tmp eas.json
+          pnpm dlx eas-cli submit \
+            --profile preview-store \
+            --platform ios \
+            --latest \
+            --non-interactive 2>&1 | tee -a "$GITHUB_WORKSPACE/eas-output.log"
+          # Best-effort cleanup; runner is ephemeral anyway.
+          rm -f "$KEY"
+          git checkout -- eas.json || true
 
       # On any deploy failure, email the eas-cli error summary + a direct
       # link to the EAS build page so the failure is actionable from the
