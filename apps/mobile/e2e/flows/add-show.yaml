@@ -1,22 +1,22 @@
 # Add-show flow — Maestro
 #
-# This flow is a UI smoke test for the add-show path: sign-in,
-# navigate to the Add tab, open the structured form, fill every
-# required field, tap Save. It does NOT verify backend persistence
-# — `runOptimisticMutation` in apps/mobile/app/add/form.tsx calls
-# `shows.create` via tRPC, and the e2e runner doesn't currently
-# expose a backend that the Android emulator can reach. Without
-# EXPO_PUBLIC_API_URL pointing at a working showbook web stack the
-# mutation throws and we'd see an error toast (`Could not save`)
-# instead of `Show added`. The Save tap still fires submit() and
-# exercises the form's validation + state plumbing on the way, so
-# the UI-side regressions this flow catches (testID drift, form
-# field labels, navigation) still surface here.
+# End-to-end add-show path: sign-in, navigate to the Add tab, open
+# the structured form, fill every required field, tap Save, verify
+# the backend round-trip. `runOptimisticMutation` in
+# apps/mobile/app/add/form.tsx calls `shows.create` via tRPC against
+# the e2e backend stack (infra/docker-compose.e2e.yml), which the
+# emulator reaches at EXPO_PUBLIC_API_URL=http://10.0.2.2:3004 — the
+# emulator NAT's alias for the runner host's loopback.
 #
-# When a CI-reachable backend is wired up, restore the
-# `assertVisible: "Show added"` and `assertVisible: "Maestro Test
-# Headliner"` steps at the bottom of this file to verify the
-# server side too.
+# The created show ("Maestro Test Headliner") persists in the e2e
+# database across flows and runs — show-detail-tabs / setlist-stable
+# / spotify-hype rely on it as their `show-card-row-0` target. If
+# the trailing assertions here fail while the form steps pass,
+# suspect the backend triad first: stack down on the prod box
+# (`pnpm e2e:logs`), expired / wrong-secret MAESTRO_E2E_TOKEN
+# (re-mint — see apps/mobile/CLAUDE.md), or allowlist drift in
+# .env.e2e. All three surface as a "Could not save show" toast on
+# the form instead of the saved-confirmation card.
 appId: me.ethanasm.showbook
 name: add-show
 tags:
@@ -64,7 +64,7 @@ tags:
     text: "New show"
 
 - tapOn:
-    id: "headliner-input"
+    id: "title-input"
 - inputText: "Maestro Test Headliner"
 
 - tapOn:
@@ -73,9 +73,19 @@ tags:
 
 # Fill the date input — placeholder is "YYYY-MM-DD"; tapping the
 # placeholder text targets the input directly.
+#
+# Use a PAST date on purpose: the Shows tab opens on the "Past ·
+# Timeline" segment by default, and a future-dated show lands under
+# "Upcoming" where neither this flow's read-back nor the downstream
+# flows (which tap `show-card-row-0` in the default view) would ever
+# see it. A past date puts the fixture in the default timeline as
+# row-0 — exactly what show-detail-tabs.yaml / setlist-stable.yaml /
+# spotify-hype.yaml rely on. (Past also gives the setlist tab a
+# real "actual setlist" / cold-state to render, and the Heard-rather-
+# than-Hype playlist variant, which those flows already handle.)
 - tapOn:
     text: "YYYY-MM-DD"
-- inputText: "2026-12-31"
+- inputText: "2026-05-15"
 
 # Dismiss the IME before tapping Save. With the keyboard open the
 # Gboard's content-description elements compete with the TopBar's
@@ -91,7 +101,22 @@ tags:
 - tapOn:
     point: "95%,8%"
 
-# Backend assertions removed pending CI backend wiring — see flow
-# header. The Save tap above still exercises the form's submit()
-# callback; any UI regression that prevents tapping or filling
-# fields surfaces in the steps above this comment.
+# Server-side persistence assertions. On an online success the form
+# routes back to the Add chat tab with ?savedShowId=<server id> and
+# the confirmation card (testID add-saved-confirmation) mounts — it
+# only renders when `shows.create` returned a real id, so its
+# presence proves the backend committed. The error path stays on the
+# form and toasts "Could not save show" instead. (The card's copy is
+# Groq-polished with a deterministic fallback, so assert on the
+# testID, not the message text — the e2e stack runs keyless.)
+- assertVisible:
+    id: "add-saved-confirmation"
+
+# Read-back through the backend: the Shows list is server-fed, so the
+# new headliner appearing there proves the row survives a refetch,
+# not just the optimistic cache.
+- tapOn:
+    text: "Shows"
+
+- assertVisible:
+    text: "Maestro Test Headliner"

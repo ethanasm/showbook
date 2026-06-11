@@ -65,6 +65,12 @@ export interface ShowCardProps {
   onPress?: () => void;
   onLongPress?: () => void;
   compact?: boolean;
+  /**
+   * Optional testID applied to the row's root Pressable. The Shows tab
+   * passes `show-card-row-${index}` so Maestro flows can tap into the
+   * first row (`show-card-row-0`); leave unset elsewhere.
+   */
+  testID?: string;
 }
 
 export function ShowCard({
@@ -72,6 +78,7 @@ export function ShowCard({
   onPress,
   onLongPress,
   compact = false,
+  testID,
 }: ShowCardProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -91,6 +98,7 @@ export function ShowCard({
 
   return (
     <Pressable
+      testID={testID}
       onPress={onPress}
       onLongPress={
         onLongPress

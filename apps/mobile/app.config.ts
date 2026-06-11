@@ -1,4 +1,5 @@
 import type { ExpoConfig } from 'expo/config';
+import { withAndroidManifest, type ConfigPlugin } from 'expo/config-plugins';
 
 // Asset files in ./assets are the production brand assets — the gold
 // ticket BrandMark. icon.png is 1024×1024 with the #0C0C0C background
@@ -49,6 +50,26 @@ const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
 // logic in the provider source is unambiguous: it uses `applicationId`, with
 // the reversed-client-id alternative explicitly commented out upstream.
 const ANDROID_PACKAGE = 'me.ethanasm.showbook';
+
+// E2E builds (and only E2E builds) target the loopback-only e2e backend
+// stack through the emulator's host alias — EXPO_PUBLIC_API_URL is
+// http://10.0.2.2:3004 (see infra/docker-compose.e2e.yml). Android
+// API 28+ release builds block cleartext HTTP by default, which would
+// fail every tRPC call with a network error before it left the device,
+// so the e2e APK needs `android:usesCleartextTraffic="true"` in its
+// manifest. Gated on EXPO_PUBLIC_E2E_MODE exactly like the auth bypass
+// in lib/auth.ts: TestFlight / Play Store builds never set it, so the
+// shipped manifest keeps the strict HTTPS-only policy.
+const IS_E2E_BUILD = process.env.EXPO_PUBLIC_E2E_MODE === '1';
+
+const withE2EAndroidCleartext: ConfigPlugin = (cfg) =>
+  withAndroidManifest(cfg, (manifestCfg) => {
+    const application = manifestCfg.modResults.manifest.application?.[0];
+    if (application) {
+      application.$['android:usesCleartextTraffic'] = 'true';
+    }
+    return manifestCfg;
+  });
 
 const config: ExpoConfig = {
   name: 'Showbook',
@@ -243,4 +264,9 @@ const config: ExpoConfig = {
   },
 };
 
-export default config;
+// Config plugins are plain `config → config` functions, so the e2e-only
+// cleartext mod is applied to the export directly rather than via the
+// `plugins` array (whose ExpoConfig type models app.json and only
+// admits string / tuple entries). Non-e2e builds export `config`
+// untouched — the mod never exists in their plugin graph.
+export default IS_E2E_BUILD ? withE2EAndroidCleartext(config) : config;

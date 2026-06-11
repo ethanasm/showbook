@@ -16,6 +16,7 @@ simultaneously.
 |-------|--------------|---------|----------|---------|----------------|
 | dev   | `infra/docker-compose.yml`      | `showbook-dev`  | `127.0.0.1:3001` | `127.0.0.1:5433` | `showbook` / `showbook` |
 | prod  | `infra/docker-compose.prod.yml` | `showbook-prod` | `127.0.0.1:3002` | `127.0.0.1:5434` | `showbook_prod` / `showbook_prod` |
+| e2e   | `infra/docker-compose.e2e.yml`  | `showbook-e2e`  | `127.0.0.1:3004` | `127.0.0.1:5435` | `showbook_e2e` / `showbook_e2e` |
 
 Playwright's E2E dev server defaults to `3003` (override with
 `PLAYWRIGHT_PORT`) so it doesn't fight with either stack. The
@@ -29,6 +30,89 @@ credentials, or a host port. The
 [`scripts/guard-not-prod-db.mjs`](../scripts/guard-not-prod-db.mjs)
 script refuses any dev/test workspace command whose `DATABASE_URL`
 points at a `showbook_prod*` database.
+
+## Mobile e2e backend (showbook-e2e)
+
+The Maestro Android suite
+([`.github/workflows/mobile-e2e.yml`](../.github/workflows/mobile-e2e.yml))
+needs a backend the emulator can call with a bearer token the workflow
+mints at build time. That backend is the `showbook-e2e` stack
+([`infra/docker-compose.e2e.yml`](../infra/docker-compose.e2e.yml)):
+the same sealed web image prod runs, against its own postgres, its own
+`AUTH_SECRET`, and an allowlist pinned to the synthetic
+`maestro-e2e@showbook.test` user. It is **not** the Playwright
+`showbook_e2e` database inside the dev postgres container — that one
+is wiped on every `pnpm test:e2e` run; this one is long-lived so the
+fixture shows the flows create persist between runs.
+
+**Lockdown posture.** Both ports bind to `127.0.0.1` only and there is
+no Cloudflare Tunnel ingress for this stack — do not add one. The only
+intended client is the Android emulator on the same host, which
+reaches web via `http://10.0.2.2:3004` (the emulator NAT's alias for
+the host loopback). The e2e `AUTH_SECRET` is distinct from prod's, so
+an e2e token is worthless against prod data; conversely a prod token
+can't authenticate here. No external API keys are configured
+(enrichment boundaries are non-blocking by design), `/api/test/*`
+stays disabled, and logs stay in `docker logs showbook-e2e-web` (no
+Axiom).
+
+**How CI authenticates (no secrets to manage).** The workflow runs on
+the same box as the stack, so its **"Mint e2e session from the running
+backend"** step reads `showbook-e2e-web`'s own `AUTH_SECRET` and
+`encode`s the bearer *inside the container* each run, upserting the
+`maestro-e2e@showbook.test` user row. The backend URL is hardcoded to
+`http://10.0.2.2:3004` in the workflow, and a post-build step asserts
+that URL was inlined into the APK. So there is nothing to keep in
+sync — the old `MAESTRO_E2E_TOKEN` / `MAESTRO_E2E_USER_JSON` /
+`EXPO_PUBLIC_API_URL` repo secrets are unused and can be deleted. (E2E
+APK builds carry a build-time cleartext exception for the `http://`
+host — see the `IS_E2E_BUILD` plugin in `apps/mobile/app.config.ts`;
+store builds keep the strict HTTPS-only policy.)
+
+**First-time setup** (on the prod box, in `/opt/showbook`) — just
+stand the stack up; CI handles credentials:
+
+```bash
+# Secrets file (gitignored). Two values, both e2e-specific — must NOT
+# match prod's:
+cat > .env.e2e <<EOF
+POSTGRES_PASSWORD=$(openssl rand -hex 24)
+AUTH_SECRET=$(openssl rand -base64 48)
+EOF
+chmod 600 .env.e2e
+
+# Start + migrate. e2e:up rides the local
+# ghcr.io/ethanasm/showbook-web:latest image the last prod deploy
+# pulled (no GHCR login needed); deploy.yml refreshes it thereafter.
+pnpm e2e:up
+pnpm e2e:db:migrate
+```
+
+That's it — the next Maestro run mints its own session against this
+stack. (`pnpm mint:e2e-token` / `scripts/mint-e2e-token.mjs` still
+exists for ad-hoc local minting + curl smoke tests against
+`localhost:5435`, but CI no longer needs it.)
+
+**Staying current.** `deploy.yml` re-runs `pnpm e2e:up` +
+`pnpm e2e:db:migrate` after every prod deploy (guarded on `.env.e2e`
+existing, non-fatal), so the e2e backend's API and schema track
+`main` without operator action. Manual refresh: same two commands.
+
+**Triaging `UNAUTHORIZED` in Maestro runs** ("Couldn't load shows" /
+"Could not save show" with the sign-in step passing — the bypass
+loads the minted session without re-validating it). Because CI mints
+the token in-container, a secret mismatch is no longer possible, so
+the cause is on the backend:
+
+1. **Stack down / unreachable** — the mint step fails fast
+   (`showbook-e2e-web container is not running`); bring it up with
+   `pnpm e2e:up`. A reachability problem in the *app* surfaces as
+   network errors, not `UNAUTHORIZED`; check `pnpm e2e:logs` and
+   `curl -s http://localhost:3004/api/health/live`.
+2. **Allowlist** — logs `auth.mobile_session_denied` in
+   `docker logs showbook-e2e-web`. The compose defaults
+   `AUTH_ALLOWED_EMAILS` to `maestro-e2e@showbook.test`; if you
+   overrode it in `.env.e2e`, keep that address on it.
 
 ## Continuous deployment
 
