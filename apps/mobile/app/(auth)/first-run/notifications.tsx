@@ -1,31 +1,35 @@
 /**
- * First-run step 1 of 5 — push notifications permission.
+ * First-run step 1 — push notifications permission.
  *
  * Shows a pre-explanation screen, then on Continue triggers the OS permission
  * prompt via expo-notifications. Whether the user grants or denies, we
  * advance to the next step (we re-prompt later from Settings if they denied).
+ *
+ * Step number / total and the next route come from `useFirstRunFlow`, which
+ * drops the region / gmail screens when the user already has regions / shows.
  */
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { Bell } from 'lucide-react-native';
 import { FirstRunStep, heroTitleStyle } from './_components';
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
+import { useFirstRunFlow } from '@/lib/useFirstRunFlow';
 
 const TAGS = ['On-sale alerts', 'Tour announcements', 'Doors at 7'];
 
 export default function FirstRunNotifications(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
-  const router = useRouter();
+  const { position, goNext } = useFirstRunFlow();
+  const pos = position('notifications');
   const [pending, setPending] = React.useState(false);
 
   const advance = React.useCallback(() => {
-    router.push('/(auth)/first-run/location');
-  }, [router]);
+    goNext('notifications');
+  }, [goNext]);
 
   const onPrimary = React.useCallback(async () => {
     if (pending) return;
@@ -44,9 +48,9 @@ export default function FirstRunNotifications(): React.JSX.Element {
 
   return (
     <FirstRunStep
-      step={1}
-      total={4}
-      eyebrow="STEP 1 OF 4"
+      step={pos.step}
+      total={pos.total}
+      eyebrow={`STEP ${pos.step} OF ${pos.total}`}
       title={
         <Text style={[heroTitleStyle, { color: colors.ink, textAlign: 'center' }]}>
           Don&apos;t miss the <Text style={{ color: colors.accent }}>on-sale.</Text>

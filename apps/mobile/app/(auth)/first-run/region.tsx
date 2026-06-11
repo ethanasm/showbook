@@ -21,13 +21,14 @@ import {
   TextInput,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import * as Location from 'expo-location';
 import { MapPin } from 'lucide-react-native';
 import { FirstRunStep, heroTitleStyle } from './_components';
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { trpc } from '@/lib/trpc';
+import { useFirstRunFlow } from '@/lib/useFirstRunFlow';
 
 type Mode =
   | { kind: 'idle' }
@@ -40,7 +41,8 @@ const RADIUS_OPTIONS = [15, 25, 50, 100] as const;
 export default function FirstRunRegion(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
-  const router = useRouter();
+  const { position, goNext } = useFirstRunFlow();
+  const pos = position('region');
   const params = useLocalSearchParams<{ lat?: string; lng?: string }>();
 
   const initialLat = params.lat ? Number(params.lat) : null;
@@ -63,8 +65,8 @@ export default function FirstRunRegion(): React.JSX.Element {
   const debounceTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const advance = React.useCallback(() => {
-    router.push('/(auth)/first-run/gmail');
-  }, [router]);
+    goNext('region');
+  }, [goNext]);
 
   const addRegion = trpc.preferences.addRegion.useMutation({
     onSuccess: () => advance(),
@@ -272,9 +274,9 @@ export default function FirstRunRegion(): React.JSX.Element {
 
   return (
     <FirstRunStep
-      step={3}
-      total={4}
-      eyebrow="STEP 3 OF 4"
+      step={pos.step}
+      total={pos.total}
+      eyebrow={`STEP ${pos.step} OF ${pos.total}`}
       title={
         <Text style={[heroTitleStyle, { color: colors.ink, textAlign: 'center' }]}>
           Your <Text style={{ color: colors.accent }}>home base.</Text>

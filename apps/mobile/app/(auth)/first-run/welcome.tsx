@@ -14,6 +14,7 @@ import { Bell, Image as ImageIcon, MapPin, Mail } from 'lucide-react-native';
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { useAuth } from '@/lib/auth';
+import { trpc } from '@/lib/trpc';
 
 interface AgendaRow {
   Icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
@@ -44,6 +45,15 @@ export default function FirstRunWelcome(): React.JSX.Element {
   const { colors } = tokens;
   const router = useRouter();
   const { user } = useAuth();
+  const utils = trpc.useUtils();
+
+  // Warm the regions + shows queries up front so the first-run flow can
+  // drop the region / past-tickets steps (for a user who already has them)
+  // before they're reached — no flash, correct "STEP n OF m" from step 1.
+  React.useEffect(() => {
+    void utils.preferences.get.prefetch();
+    void utils.shows.list.prefetch({});
+  }, [utils]);
 
   const displayName = user ? firstName(user) : 'there';
   const avatarLetter = user ? initial(user) : 'S';

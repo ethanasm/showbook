@@ -16,6 +16,7 @@ import { ExternalSourceDisclaimer } from '../../../components/ExternalSourceDisc
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { useAuth } from '@/lib/auth';
+import { useFirstRunFlow } from '@/lib/useFirstRunFlow';
 
 interface MockEmail {
   from: string;
@@ -36,6 +37,8 @@ export default function FirstRunGmail(): React.JSX.Element {
   const { colors } = tokens;
   const router = useRouter();
   const { markFirstRunComplete } = useAuth();
+  const { position } = useFirstRunFlow();
+  const pos = position('gmail');
   const [pending, setPending] = React.useState(false);
 
   const finish = React.useCallback(async () => {
@@ -90,9 +93,9 @@ export default function FirstRunGmail(): React.JSX.Element {
 
   return (
     <FirstRunStep
-      step={4}
-      total={4}
-      eyebrow="STEP 4 OF 4 · OPTIONAL"
+      step={pos.step}
+      total={pos.total}
+      eyebrow={`STEP ${pos.step} OF ${pos.total} · OPTIONAL`}
       title={
         <Text style={[heroTitleStyle, { color: colors.ink, textAlign: 'center' }]}>
           Pull in <Text style={{ color: colors.accent }}>past tickets.</Text>
