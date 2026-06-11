@@ -26,6 +26,31 @@ export function invalidateShowsList(queryClient: QueryClient): void {
 }
 
 /**
+ * Structural slice of `trpc.useUtils()` — just the bit
+ * `invalidateAllShowsLists` needs, so lib code stays decoupled from the
+ * full router type.
+ */
+type ShowsListUtils = {
+  shows: { list: { invalidate: () => Promise<unknown> } };
+};
+
+/**
+ * Full post-mutation fan-out for show writes: the tRPC-native
+ * `shows.list` key space (screens using `trpc.shows.list.useQuery`)
+ * AND the mobile-prefixed readers (Home + Shows tabs via
+ * `useCachedQuery`). Every show create/update/delete reconcile must
+ * hit both key spaces — calling only `utils.shows.list.invalidate()`
+ * leaves the Home and Shows tabs stale until `staleTime` elapses.
+ */
+export function invalidateAllShowsLists(
+  queryClient: QueryClient,
+  utils: ShowsListUtils,
+): void {
+  void utils.shows.list.invalidate();
+  invalidateShowsList(queryClient);
+}
+
+/**
  * The Discover screen (`app/(tabs)/discover.tsx`) reads every feed,
  * followed-list, preference, and the ingest-status snapshot through
  * `useCachedQuery` under `['mobile', 'discover', …]` / `['mobile',

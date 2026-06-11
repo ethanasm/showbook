@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
+import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
 import {
   PreviewPlayerProvider,
   usePreviewPlayer,
@@ -92,6 +93,7 @@ export function ShowDetailTabsView(props: ShowDetailTabsViewProps) {
 function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
   const router = useRouter();
   const utils = trpc.useUtils();
+  const invalidateSidebarCounts = useInvalidateSidebarCounts();
   const isPast = show.state === "past";
   const isFestival = show.kind === "festival";
 
@@ -162,6 +164,11 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
   const deleteShow = trpc.shows.delete.useMutation({
     meta: { successToast: "Show deleted" },
     onSuccess: () => {
+      // Same fan-out as useShowContextMenu.handleDelete — the Home rail,
+      // shows lists, and sidebar counts all hold the deleted row otherwise.
+      utils.shows.invalidate();
+      utils.performers.invalidate();
+      invalidateSidebarCounts();
       router.push(isPast ? "/logbook" : "/upcoming");
     },
     onError: () => {

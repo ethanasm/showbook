@@ -44,7 +44,7 @@ import { showCoverImageSource, venueImageSource } from '@/lib/images';
 import { useTheme, type Kind, type ShowState } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { trpc } from '@/lib/trpc';
-import { CACHE_DEFAULTS } from '@/lib/cache';
+import { CACHE_DEFAULTS, invalidateAllShowsLists } from '@/lib/cache';
 import { useQueryClient } from '@tanstack/react-query';
 import { runOptimisticMutation } from '@/lib/mutations';
 import { getCacheOutbox } from '@/lib/cache/db';
@@ -349,6 +349,10 @@ export function ShowDetailTabsView({
   });
   const deleteShow = trpc.shows.delete.useMutation({
     onSuccess: () => {
+      // The Home + Shows tabs read shows.list under mobile-prefixed
+      // keys; without this fan-out the deleted show lingers on both
+      // until staleTime elapses (or a pull-to-refresh).
+      invalidateAllShowsLists(queryClient, utils);
       router.replace('/(tabs)/shows');
     },
   });
