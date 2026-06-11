@@ -5,6 +5,10 @@ Produces:
   apps/mobile/assets/adaptive-icon.png 1024×1024  foreground only (transparent)
   apps/mobile/assets/favicon.png       48×48      downscaled master
   apps/mobile/assets/splash.png        1284×2778  ticket + wordmark centered
+  apps/mobile/assets/splash-icon-android.png
+                                       1024×1024  ticket only, transparent,
+                                                  padded for the Android 12+
+                                                  circular splash-icon mask
   apps/web/public/showbook-mark.svg    inline SVG for web UI (no bg, no shadow)
   apps/web/app/icon.svg                32×32 favicon-style SVG for next/icon
 
@@ -115,6 +119,40 @@ def make_splash(svg_xml: str) -> None:
     print(f"  wrote {out.relative_to(REPO_ROOT)}")
 
 
+def make_android_splash_icon(svg_xml: str) -> None:
+    """Android-only native splash icon (1024×1024, transparent).
+
+    On Android 12+ the system splash window always clips the
+    `windowSplashScreenAnimatedIcon` drawable into a *circle* (the OS icon
+    mask). Feeding it splash.png — a rectangular composition with the #0C0C0C
+    background baked in — produced a visible dark disc with a clipped ticket
+    inside it: the "ring" flash before the JS <BrandSplash/> takes over. iOS
+    has no such mask, so it keeps using splash.png via app.config.ts.
+
+    The fix is the same shape Android's own icon spec asks for: foreground
+    only (transparent background, so the circle clip is invisible against the
+    window's matching backgroundColor) and the content scaled to fit the
+    masked safe zone. The spec circle is 2/3 of the canvas (192 dp of a
+    288 dp asset). The ticket's furthest content from canvas center is its
+    rotated corner at √(368² + 256²) ≈ 448 px, ~470 px once the drop shadow
+    is included; the safe-zone radius on a 1024 canvas is ~341 px, so the
+    foreground is scaled by 0.70 about the center (radius ≈ 329 px) to sit
+    inside the mask with a small margin."""
+    scale = 0.70
+    fg = strip_background(svg_xml)
+    inner = fg.split("<svg", 1)[1].split(">", 1)[1].rsplit("</svg>", 1)[0]
+    icon_svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <g transform="translate(512 512) scale({scale}) translate(-512 -512)">
+    <svg width="1024" height="1024" viewBox="0 0 1024 1024" overflow="visible">
+      {inner}
+    </svg>
+  </g>
+</svg>"""
+    out = MOBILE_ASSETS / "splash-icon-android.png"
+    out.write_bytes(render_png(icon_svg, 1024, 1024))
+    print(f"  wrote {out.relative_to(REPO_ROOT)}")
+
+
 def make_inline_mark_svg(svg_xml: str) -> None:
     """Simplified mark for in-UI use — same silhouette, solid gold (no
     gradient/shadow/highlight). Renders crisply at 16-48 px. The S retains the
@@ -170,6 +208,7 @@ def main() -> None:
     make_adaptive_icon(svg_xml)
     make_favicon(svg_xml)
     make_splash(svg_xml)
+    make_android_splash_icon(svg_xml)
     make_inline_mark_svg(svg_xml)
     print("done.")
 

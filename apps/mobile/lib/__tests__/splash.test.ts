@@ -15,10 +15,18 @@
  *     app.config.ts can't import the shared SPLASH_IMAGE_WIDTH constant (the
  *     Expo config loader doesn't resolve transitive .ts imports), so this test
  *     pins the config literal to the constant BrandSplash uses.
+ *
+ *  3. Android 12+ clips the native splash icon into a circular mask, so the
+ *     rectangular splash.png (background baked in) rendered as a dark disc —
+ *     a visible ring flash before <BrandSplash/> mounted. The `android`
+ *     override must keep pointing at the transparent, mask-padded
+ *     splash-icon-android.png (light + dark), and the asset must exist.
  */
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { SPLASH_IMAGE_WIDTH } from '../splash.js';
 import appConfig from '../../app.config.js';
@@ -28,6 +36,7 @@ type SplashPluginConfig = {
   imageWidth?: number;
   backgroundColor?: string;
   dark?: { image?: string; imageWidth?: number; backgroundColor?: string };
+  android?: { image?: string; dark?: { image?: string } };
 };
 
 function findSplashPluginConfig(): SplashPluginConfig | undefined {
@@ -54,5 +63,15 @@ describe('expo-splash-screen config', () => {
   it('native imageWidth matches the JS BrandSplash box, so there is no cold-launch size pop', () => {
     assert.equal(splash?.imageWidth, SPLASH_IMAGE_WIDTH);
     assert.equal(splash?.dark?.imageWidth, SPLASH_IMAGE_WIDTH);
+  });
+
+  it('Android overrides to the transparent mask-padded icon, so the circular clip shows no ring', () => {
+    const androidImage = './assets/splash-icon-android.png';
+    assert.equal(splash?.android?.image, androidImage);
+    assert.equal(splash?.android?.dark?.image, androidImage);
+    assert.ok(
+      existsSync(join(import.meta.dirname, '../..', androidImage)),
+      `${androidImage} must exist — a missing splash image breaks the Android release build`,
+    );
   });
 });
