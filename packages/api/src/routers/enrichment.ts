@@ -678,7 +678,7 @@ export const enrichmentRouter = router({
       log.info({ event: 'gmail.bulk_scan.collected', total: allMessages.length, userId: ctx.session.user.id }, 'Collected Gmail messages');
 
       // Parse each message with LLM, dedup by show content
-      const tickets: Array<{
+      type TicketWithId = {
         gmailMessageId: string;
         headliner: string;
         production_name: string | null;
@@ -691,10 +691,9 @@ export const enrichmentRouter = router({
         ticket_count: number | null;
         kind_hint: 'concert' | 'theatre' | 'comedy' | 'festival' | null;
         confidence: 'high' | 'medium' | 'low';
-      }> = [];
+      };
 
       const BATCH_SIZE = 8;
-      type TicketWithId = typeof tickets[number];
       const allExtracted: TicketWithId[] = [];
 
       for (let i = 0; i < allMessages.length; i += BATCH_SIZE) {

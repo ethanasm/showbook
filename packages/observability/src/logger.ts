@@ -124,35 +124,86 @@ const baseOptions: LoggerOptions = {
 // into pino.multistream — no workers, no resolution gymnastics.
 
 /**
- * The `component` bound on the mobile-telemetry child logger (see
- * `packages/api/src/routers/telemetry.ts`). Every `mobile.*` event carries
- * this marker, which is how we split mobile telemetry into its own Axiom
- * dataset — see `isMobileRecord`. Keep in sync with the router.
+ * Keys that stay top-level columns in the Axiom dataset. Everything else a
+ * call-site logs is folded into the single `fields` map field (see
+ * `reshapeForAxiom`), which Axiom stores as key-value pairs in ONE column
+ * that does not count against the per-dataset field cap. Together with the
+ * bounded `err.*` sub-fields (see `ALLOWED_ERROR_FIELDS`) this list IS the
+ * dataset's permanent column schema, so keep it small: only add a key when it
+ * genuinely needs to be a real column — i.e. it's filtered / grouped /
+ * aggregated in APL (the health-check queries, dashboards) where folding it
+ * into the map would cost extra query-hours or lose its numeric type.
+ *
+ *   - `_time` / `time`      pino emits `time`; Axiom renames it to `_time` on
+ *                           ingest. Keep both so whichever appears survives.
+ *   - `level` / `msg` / `event`  core APL filter / group dimensions.
+ *   - `component`           grouped by in the error-volume health check; also
+ *                           marks mobile telemetry (`mobile.telemetry`).
+ *   - `job` / `jobId`       per-run filtering for pg-boss jobs.
+ *   - `userId`              high-value triage dimension.
+ *   - `err`                 already bounded by serializeErr; kept flat so
+ *                           `err.code` / `err.detail` stay directly queryable.
+ *   - `env` / `service` / `pid` / `hostname`  pino base bindings.
+ *   - `reason` / `status`   common triage disambiguators.
+ *   - `durationMs` / `elapsedMs`  numeric dims aggregated with summarize avg().
+ *
+ * NEVER add `fields` here: a call-site that logs a literal top-level `fields`
+ * key folds to `fields.fields`, which is exactly the bounding we want.
  */
-const MOBILE_COMPONENT = 'mobile.telemetry';
+const CORE_FIELDS = new Set<string>([
+  '_time',
+  'time',
+  'level',
+  'msg',
+  'event',
+  'component',
+  'job',
+  'jobId',
+  'userId',
+  'err',
+  'env',
+  'service',
+  'pid',
+  'hostname',
+  'reason',
+  'status',
+  'durationMs',
+  'elapsedMs',
+]);
 
 /**
- * Is this serialized pino line a mobile-telemetry record? pino flattens the
- * child's bound `component` field onto the top level of every line, so we
- * route on that.
+ * Reshape a serialized pino line for Axiom: keep `CORE_FIELDS` at the top
+ * level and fold every other key into a single `fields` map field, so the
+ * dataset's column count is bounded no matter what keys call-sites log. Pure
+ * string→string so it drops straight into the Axiom-bound Transform; stdout is
+ * left untouched (stays flat for `docker logs` / pino-pretty).
  *
- * We parse and check the **top-level** `component` rather than substring-
- * matching the raw line: server logs can legitimately *embed* a mobile row
- * inside their payload (e.g. the `error_volume` health check lists
- * `{event:"mobile.trpc.error", component:"mobile.telemetry"}` among its top
- * offenders), and a loose `line.includes('"component":"mobile.telemetry"')`
- * misroutes those server rollups into the mobile dataset. The line is
- * already JSON we're about to ship over the network, so the parse cost is
- * negligible. A malformed line (shouldn't happen from pino) is treated as
- * non-mobile so it still lands in the server dataset rather than vanishing.
+ * Defensive by design — a line that isn't a JSON object (malformed, primitive,
+ * array) is returned untouched so we never drop a log line.
  */
-function isMobileRecord(line: string): boolean {
+function reshapeForAxiom(line: string): string {
+  const hasNewline = line.endsWith('\n');
+  const body = hasNewline ? line.slice(0, -1) : line;
+
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(line) as { component?: unknown };
-    return parsed.component === MOBILE_COMPONENT;
+    parsed = JSON.parse(body);
   } catch {
-    return false;
+    return line;
   }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return line;
+  }
+
+  const out: Record<string, unknown> = {};
+  const fields: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (CORE_FIELDS.has(key)) out[key] = value;
+    else fields[key] = value;
+  }
+  if (Object.keys(fields).length > 0) out.fields = fields;
+
+  return JSON.stringify(out) + (hasNewline ? '\n' : '');
 }
 
 function buildStreams(): StreamEntry[] {
@@ -175,28 +226,25 @@ function buildStreams(): StreamEntry[] {
 
 /**
  * Build a PassThrough that pino can write to synchronously and, once the
- * async Axiom transport for `dataset` resolves, forwards only the lines
- * matching `keep` to it. Lines written before the pipe attaches buffer in
- * the PassThrough and flush as soon as it's wired — no log lines dropped.
- * `keep` defaults to forwarding everything (single-dataset mode).
+ * async Axiom transport for `dataset` resolves, reshapes each line
+ * (`reshapeForAxiom` — folds non-core keys into the `fields` map) and forwards
+ * it. Lines written before the pipe attaches buffer in the PassThrough and
+ * flush as soon as it's wired — no log lines dropped.
  */
-function buildAxiomStream(
-  dataset: string,
-  token: string,
-  keep: (line: string) => boolean = () => true,
-): PassThrough {
+function buildAxiomStream(dataset: string, token: string): PassThrough {
   const buffer = new PassThrough();
 
   void buildAxiomTransport({ dataset, token })
     .then((axiomStream) => {
-      const filter = new Transform({
+      const reshape = new Transform({
         transform(chunk, _enc, cb) {
-          // pino writes one full JSON line per chunk; `keep` parses it.
-          if (keep(chunk.toString())) this.push(chunk);
+          // pino writes one full JSON line per chunk; bound the dataset's
+          // column count by folding non-core fields into the `fields` map.
+          this.push(reshapeForAxiom(chunk.toString()));
           cb();
         },
       });
-      buffer.pipe(filter).pipe(axiomStream);
+      buffer.pipe(reshape).pipe(axiomStream);
     })
     .catch((err) => {
       process.stderr.write(
@@ -212,29 +260,17 @@ let _logger: Logger | null = null;
 function buildLogger(): Logger {
   const streams = buildStreams();
 
-  // Axiom shipping. The mobile app has no direct Axiom path — its telemetry
+  // Axiom shipping. Every record is reshaped by `reshapeForAxiom` so only
+  // `CORE_FIELDS` stay top-level columns and all other keys fold into the
+  // single `fields` map field — that keeps the dataset under its column cap no
+  // matter what call-sites log. Mobile telemetry has no direct Axiom path; it
   // arrives server-side via the `telemetry.logEvent` tRPC router under the
-  // `mobile.telemetry` component. We ship that to its own dataset
-  // (`AXIOM_MOBILE_DATASET`) so the high-cardinality, fast-growing mobile
-  // field surface doesn't share the server dataset's 257-column budget.
-  // When `AXIOM_MOBILE_DATASET` is unset we fall back to single-dataset
-  // mode: everything (mobile included) goes to `AXIOM_DATASET`.
+  // `mobile.telemetry` component and ships to this same dataset.
   const token = process.env.AXIOM_TOKEN;
-  const serverDataset = process.env.AXIOM_DATASET;
-  const mobileDataset = process.env.AXIOM_MOBILE_DATASET;
+  const dataset = process.env.AXIOM_DATASET;
 
-  if (token && serverDataset) {
-    const keepServer = mobileDataset
-      ? (line: string) => !isMobileRecord(line)
-      : undefined;
-    streams.push({ stream: buildAxiomStream(serverDataset, token, keepServer), level });
-  }
-
-  if (token && mobileDataset) {
-    streams.push({
-      stream: buildAxiomStream(mobileDataset, token, isMobileRecord),
-      level,
-    });
+  if (token && dataset) {
+    streams.push({ stream: buildAxiomStream(dataset, token), level });
   }
 
   return pino(baseOptions, pino.multistream(streams));
@@ -258,11 +294,13 @@ export function child(bindings: Record<string, unknown>): Logger {
 export async function flushLogger(): Promise<void> {
   const lg = getLogger();
   await new Promise<void>((resolve) => {
-    lg.flush?.((err?: Error | null) => {
-      void err;
-      resolve();
-    }) ?? resolve();
+    if (lg.flush) {
+      lg.flush((err?: Error | null) => {
+        void err;
+      });
+    }
+    resolve();
   });
 }
 
-export const _testing = { isMobileRecord, MOBILE_COMPONENT };
+export const _testing = { reshapeForAxiom, CORE_FIELDS };

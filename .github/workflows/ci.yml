@@ -73,20 +73,6 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: showbook
-          POSTGRES_PASSWORD: showbook_dev
-          POSTGRES_DB: showbook
-        ports:
-          - 5433:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
     env:
       DEV_DATABASE_URL: postgresql://showbook:showbook_dev@localhost:5433/showbook
       E2E_DATABASE_URL: postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e
@@ -118,13 +104,8 @@ jobs:
             nx-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
             nx-${{ runner.os }}-
 
-      - name: Wait for postgres
-        run: |
-          for i in {1..30}; do
-            if pg_isready -h localhost -p 5433 -U showbook; then exit 0; fi
-            sleep 1
-          done
-          echo "Postgres did not become ready"; exit 1
+      - name: Start Postgres (with docker pull retry)
+        uses: ./.github/actions/start-postgres
 
       - name: Create showbook_e2e database
         run: |
@@ -229,20 +210,6 @@ jobs:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: showbook
-          POSTGRES_PASSWORD: showbook_dev
-          POSTGRES_DB: showbook
-        ports:
-          - 5433:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
     env:
       DEV_DATABASE_URL: postgresql://showbook:showbook_dev@localhost:5433/showbook
       E2E_DATABASE_URL: postgresql://showbook:showbook_dev@localhost:5433/showbook_e2e
@@ -293,13 +260,8 @@ jobs:
             pnpm --filter web exec playwright install --with-deps chromium
           fi
 
-      - name: Wait for postgres
-        run: |
-          for i in {1..30}; do
-            if pg_isready -h localhost -p 5433 -U showbook; then exit 0; fi
-            sleep 1
-          done
-          echo "Postgres did not become ready"; exit 1
+      - name: Start Postgres (with docker pull retry)
+        uses: ./.github/actions/start-postgres
 
       - name: Prepare e2e database
         run: |

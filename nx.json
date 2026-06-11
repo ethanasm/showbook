@@ -9,7 +9,12 @@
       "dependsOn": ["^build"]
     },
     "lint": {
-      "cache": true
+      "cache": true,
+      "inputs": ["default", "{workspaceRoot}/eslint.config.packages.mjs"]
+    },
+    "typecheck": {
+      "cache": true,
+      "inputs": ["default", "^default", "{workspaceRoot}/tsconfig.base.json"]
     },
     "test": {
       "cache": true,

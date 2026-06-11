@@ -1349,6 +1349,57 @@ a.discover-row__headliner-link:hover {
     padding: 6px 8px 8px;
   }
 
+  .discover-chips__menu-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 4px 6px;
+    padding: 7px 10px;
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    border-radius: 9px;
+    color: var(--muted);
+  }
+
+  .discover-chips__menu-input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 0;
+    color: var(--ink);
+    font-family: var(--font-geist-sans), sans-serif;
+    font-size: 13.5px;
+  }
+
+  .discover-chips__menu-input::placeholder {
+    color: var(--faint);
+  }
+
+  .discover-chips__menu-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--faint);
+  }
+
+  .discover-chips__menu-clear:hover {
+    color: var(--muted);
+  }
+
+  .discover-chips__menu-empty {
+    padding: 10px 8px;
+    color: var(--muted);
+    font-family: var(--font-geist-sans), sans-serif;
+    font-size: 13px;
+    font-style: italic;
+  }
+
   .discover-chips__menu-row {
     display: flex;
     align-items: center;

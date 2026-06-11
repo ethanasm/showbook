@@ -157,62 +157,110 @@ describe('serializeErr', () => {
   });
 });
 
-// Mobile telemetry is fanned to its own Axiom dataset (AXIOM_MOBILE_DATASET)
-// by matching the bound `component` on serialized lines — keeping the
-// high-cardinality mobile field surface off the server dataset's column
-// budget. See docs/specs/operations/axiom-dataset-cutover.md.
-describe('isMobileRecord', () => {
-  const { isMobileRecord, MOBILE_COMPONENT } = _testing;
+// Every Axiom-bound line is reshaped so only CORE_FIELDS stay top-level
+// columns and everything else folds into the single `fields` map field,
+// keeping the dataset under its column cap no matter what call-sites log.
+// stdout is left untouched. See docs/specs/operations/axiom-map-fields.md.
+describe('reshapeForAxiom', () => {
+  const { reshapeForAxiom, CORE_FIELDS } = _testing;
+  const parse = (line: string) => JSON.parse(line) as Record<string, unknown>;
 
-  it('matches a real pino line bound with the mobile component', () => {
-    const line = JSON.stringify({
-      level: 50,
-      component: MOBILE_COMPONENT,
-      event: 'mobile.upload.put.failed',
-      msg: 'upload failed',
-    });
-    assert.equal(isMobileRecord(line), true);
+  it('keeps core fields top-level', () => {
+    const out = parse(
+      reshapeForAxiom(
+        JSON.stringify({
+          level: 30,
+          time: 1,
+          event: 'venue.follow',
+          component: 'api.venues',
+          msg: 'followed',
+          job: 'nightly',
+          jobId: 'j1',
+          userId: 'u1',
+        }),
+      ),
+    );
+    for (const key of ['level', 'time', 'event', 'component', 'msg', 'job', 'jobId', 'userId']) {
+      assert.ok(key in out, `${key} should stay top-level`);
+    }
+    assert.equal('fields' in out, false);
   });
 
-  it('does not match server lines from other components', () => {
-    const line = JSON.stringify({
-      level: 30,
-      component: 'health-check.axiom',
-      event: 'job.complete',
+  it('folds non-core keys into the fields map', () => {
+    const out = parse(
+      reshapeForAxiom(
+        JSON.stringify({
+          event: 'venue.follow',
+          venueId: 'v9',
+          spotifyTrackId: 't3',
+          assetId: 'a2',
+        }),
+      ),
+    );
+    assert.equal(out.event, 'venue.follow');
+    assert.deepEqual(out.fields, {
+      venueId: 'v9',
+      spotifyTrackId: 't3',
+      assetId: 'a2',
     });
-    assert.equal(isMobileRecord(line), false);
+    // The folded keys must not also appear at the top level.
+    for (const key of ['venueId', 'spotifyTrackId', 'assetId']) {
+      assert.equal(key in out, false);
+    }
   });
 
-  it('does not match a line that merely mentions the component name in a value', () => {
-    // The marker is the top-level `component`, not a loose substring — a
-    // message that happens to contain the words must not be misrouted.
-    const line = JSON.stringify({
-      level: 30,
-      component: 'api.trpc',
-      msg: 'forwarded to mobile.telemetry sink',
-    });
-    assert.equal(isMobileRecord(line), false);
+  it('omits the fields key when every key is core', () => {
+    const out = parse(
+      reshapeForAxiom(JSON.stringify({ level: 30, event: 'job.complete', msg: 'ok' })),
+    );
+    assert.equal('fields' in out, false);
   });
 
-  it('does not match a server line that embeds a mobile row in its payload', () => {
-    // Regression: the error_volume health check lists its top error events
-    // in `top`, which can include a mobile.telemetry row. The server line's
-    // own component is health-check, so it must stay in the server dataset
-    // — a substring match on the raw line would misroute it to prod-mobile.
-    const line = JSON.stringify({
-      level: 30,
-      component: 'health-check',
-      event: 'health.check.error_volume.ok',
-      top: [
-        { event: 'mobile.trpc.error', component: MOBILE_COMPONENT, cnt: 13 },
-      ],
-    });
-    assert.equal(isMobileRecord(line), false);
+  it('keeps err flat (already bounded by serializeErr)', () => {
+    const out = parse(
+      reshapeForAxiom(
+        JSON.stringify({ event: 'db.error', err: { code: '23505', message: 'dup' } }),
+      ),
+    );
+    assert.deepEqual(out.err, { code: '23505', message: 'dup' });
+    assert.equal('fields' in out, false);
   });
 
-  it('treats a malformed (non-JSON) line as non-mobile', () => {
-    // Shouldn't happen from pino, but if it does we keep the line in the
-    // server dataset rather than dropping it.
-    assert.equal(isMobileRecord('not json {'), false);
+  it('folds a literal top-level `fields` key into fields.fields', () => {
+    // `fields` is deliberately NOT in CORE_FIELDS, so a call-site that logs it
+    // gets bounded like any other ad-hoc key rather than colliding.
+    assert.equal(CORE_FIELDS.has('fields'), false);
+    const out = parse(
+      reshapeForAxiom(JSON.stringify({ event: 'x', fields: { a: 1 } })),
+    );
+    assert.deepEqual(out.fields, { fields: { a: 1 } });
+  });
+
+  it('keeps a mobile telemetry line\'s component top-level', () => {
+    const out = parse(
+      reshapeForAxiom(
+        JSON.stringify({
+          level: 50,
+          component: 'mobile.telemetry',
+          event: 'mobile.upload.put.failed',
+          errCode: 'ERR_X',
+        }),
+      ),
+    );
+    assert.equal(out.component, 'mobile.telemetry');
+    assert.deepEqual(out.fields, { errCode: 'ERR_X' });
+  });
+
+  it('preserves a trailing newline (and its absence)', () => {
+    const withNl = reshapeForAxiom(JSON.stringify({ event: 'x', venueId: 'v' }) + '\n');
+    assert.ok(withNl.endsWith('\n'));
+    const withoutNl = reshapeForAxiom(JSON.stringify({ event: 'x', venueId: 'v' }));
+    assert.equal(withoutNl.endsWith('\n'), false);
+  });
+
+  it('returns malformed or non-object lines untouched', () => {
+    assert.equal(reshapeForAxiom('not json {'), 'not json {');
+    assert.equal(reshapeForAxiom('42'), '42');
+    assert.equal(reshapeForAxiom('[1,2]'), '[1,2]');
   });
 });

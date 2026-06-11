@@ -10,7 +10,8 @@
   "scripts": {
     "dev": "nx dev web",
     "build": "nx build web",
-    "lint": "nx lint web",
+    "lint": "nx run-many -t lint",
+    "typecheck": "nx run-many -t typecheck",
     "dev:db:generate": "export DATABASE_URL=\"${DEV_DATABASE_URL:-postgresql://showbook:showbook_dev@localhost:5433/showbook}\" && node scripts/guard-not-prod-db.mjs && pnpm --filter @showbook/db drizzle-kit generate",
     "dev:db:migrate": "export DATABASE_URL=\"${DEV_DATABASE_URL:-postgresql://showbook:showbook_dev@localhost:5433/showbook}\" && node scripts/guard-not-prod-db.mjs && pnpm --filter @showbook/db drizzle-kit migrate",
     "dev:db:create:e2e": "docker compose -f infra/docker-compose.yml exec -T db sh -c \"psql -U showbook -d showbook -tAc \\\"SELECT 1 FROM pg_database WHERE datname = 'showbook_e2e'\\\" | grep -q 1 || createdb -U showbook showbook_e2e\"",
@@ -83,6 +84,7 @@
       "uuid@<14.0.0": "^14.0.0",
       "tmp@<0.2.6": "^0.2.6",
       "ws@>=8.0.0 <8.20.1": "^8.20.1",
+      "shell-quote@<1.8.4": "^1.8.4",
       "react": "19.2.3",
       "react-dom": "19.2.3",
       "react-test-renderer": "19.2.3",

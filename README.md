@@ -79,7 +79,8 @@ defaults and inline notes. The required groups are:
 - **Data sources** — `TICKETMASTER_API_KEY`, `SETLISTFM_API_KEY`, `GROQ_API_KEY`, `GOOGLE_PLACES_API_KEY`
 - **Media (Cloudflare R2)** — `R2_*` plus `MEDIA_*` quotas/limits
 - **Email (Resend)** — `RESEND_API_KEY`, `EMAIL_FROM` (unset → digest job logs and skips delivery)
-- **Health-check cron (optional)** — `AXIOM_QUERY_TOKEN` (Axiom Personal Access Token with Query capability on `prod-server`; unset → axiom-backed checks report "unknown" instead of "ok"). Optionally set `AXIOM_QUERY_DATASET` to read a different dataset (defaults to `prod-server`; must match the `AXIOM_DATASET` prod ships to — see [`docs/specs/operations/axiom-dataset-cutover.md`](./docs/specs/operations/axiom-dataset-cutover.md)). The morning summary email is sent to every address in `ADMIN_EMAILS` (the same allowlist that gates the in-app Admin tab); empty/unset → cron still runs and logs to Axiom but no email is sent. Both are optional in dev — the cron no-ops the relevant pieces gracefully.
+- **Legal (optional)** — `LEGAL_CONTACT_EMAIL`, `LEGAL_GOVERNING_LAW` set the contact address + governing law shown on the public `/privacy`, `/terms`, and `/account-deletion` pages; unset → a `@showbook.app` placeholder
+- **Health-check cron (optional)** — `AXIOM_QUERY_TOKEN` (Axiom Personal Access Token with Query capability on `showbook-prod`; unset → axiom-backed checks report "unknown" instead of "ok"). The cron reads from the same dataset prod ships to (`AXIOM_DATASET`, default `showbook-prod` — see [`docs/specs/operations/axiom-map-fields.md`](./docs/specs/operations/axiom-map-fields.md)). The morning summary email is sent to every address in `ADMIN_EMAILS` (the same allowlist that gates the in-app Admin tab); empty/unset → cron still runs and logs to Axiom but no email is sent. Both are optional in dev — the cron no-ops the relevant pieces gracefully.
 - **Observability (optional)** — Langfuse and Axiom keys
 - **Per-user guardrails (optional overrides)** — `SHOWBOOK_LLM_CALLS_PER_DAY` (default 50), `SHOWBOOK_BULK_SCAN_PER_HOUR` (default 5), `SHOWBOOK_BULK_SCAN_MESSAGE_CAP` (default 200). See [`docs/GUARDRAILS.md`](./docs/GUARDRAILS.md) for the full list.
 
@@ -207,6 +208,16 @@ and [`docs/specs/planned-improvements.md`](./docs/specs/planned-improvements.md)
 Found a vulnerability? Please report it privately — see [`docs/SECURITY.md`](./docs/SECURITY.md).
 
 For the operational guardrails (rate limits, per-user LLM caps, auth allowlist, test-route gating), see [`docs/GUARDRAILS.md`](./docs/GUARDRAILS.md).
+
+## Legal
+
+Public legal pages ship with the web app under `apps/web/app/(public)/` — these are the URLs the app stores ask for at submission:
+
+- `/privacy` — privacy policy (what's collected, retention, deletion)
+- `/terms` — terms of service
+- `/account-deletion` — data-deletion instructions (**required** by Google Play)
+
+Contact address and governing law are env-driven (`LEGAL_CONTACT_EMAIL`, `LEGAL_GOVERNING_LAW`); set them in `.env.prod` or the pages fall back to a `@showbook.app` placeholder.
 
 ## License
 

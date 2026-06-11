@@ -10,6 +10,7 @@
     "test:integration": "node ../../scripts/run-integration.mjs packages/api",
     "test:integration:coverage": "mkdir -p coverage && LCOV_OUT=$PWD/coverage/integration.info node ../../scripts/run-integration.mjs packages/api --coverage",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint --no-config-lookup -c ../../eslint.config.packages.mjs src",
     "probe-audio-features": "tsx scripts/probe-audio-features.ts"
   },
   "dependencies": {

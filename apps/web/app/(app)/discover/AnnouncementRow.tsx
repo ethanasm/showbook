@@ -140,10 +140,10 @@ export function AnnouncementRow({
                   className="discover-row__headliner-link"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {announcement.headliner}
+                  {announcement.productionName ?? announcement.headliner}
                 </Link>
               ) : (
-                announcement.headliner
+                announcement.productionName ?? announcement.headliner
               )}
             </div>
             {announcement.support && announcement.support.length > 0 && (

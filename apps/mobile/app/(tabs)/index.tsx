@@ -233,6 +233,16 @@ export default function HomeScreen(): React.JSX.Element {
     enabled: Boolean(token),
   });
 
+  // Row density mirrors the Shows tab: driven by the server-synced
+  // `preferences.compactMode` so the choice follows the user across
+  // surfaces. The hero keeps its full-bleed treatment; only the list
+  // rows beneath it collapse to compact. Falls back to comfortable
+  // until the query resolves.
+  const prefsQuery = trpc.preferences.get.useQuery(undefined, {
+    enabled: Boolean(token),
+  });
+  const compact = prefsQuery.data?.preferences?.compactMode ?? false;
+
   const refreshControl = useThemedRefreshControl(
     showsQuery.isFetching && !showsQuery.isLoading,
     () => {
@@ -403,7 +413,7 @@ export default function HomeScreen(): React.JSX.Element {
                     hrefA11yLabel="See all upcoming shows"
                   >
                     {sections.upcoming.map((s) => (
-                      <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
+                      <ShowCardLink key={s.id} show={s} compact={compact} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
                     ))}
                   </Section>
                 ) : sections.hero ? null : (
@@ -426,7 +436,7 @@ export default function HomeScreen(): React.JSX.Element {
                 >
                   {sections.recent.length > 0 ? (
                     sections.recent.map((s) => (
-                      <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
+                      <ShowCardLink key={s.id} show={s} compact={compact} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
                     ))
                   ) : (
                     <KindSectionEmpty
@@ -438,7 +448,7 @@ export default function HomeScreen(): React.JSX.Element {
                 {sections.wishlist.length > 0 ? (
                   <Section title="Wishlist">
                     {sections.wishlist.map((s) => (
-                      <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
+                      <ShowCardLink key={s.id} show={s} compact={compact} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
                     ))}
                   </Section>
                 ) : null}
@@ -452,7 +462,7 @@ export default function HomeScreen(): React.JSX.Element {
                     hrefA11yLabel="See all upcoming shows"
                   >
                     {sections.upcoming.map((s) => (
-                      <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
+                      <ShowCardLink key={s.id} show={s} compact={compact} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
                     ))}
                   </Section>
                 ) : null}
@@ -464,7 +474,7 @@ export default function HomeScreen(): React.JSX.Element {
                     hrefA11yLabel="See all past shows"
                   >
                     {sections.recent.map((s) => (
-                      <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
+                      <ShowCardLink key={s.id} show={s} compact={compact} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
                     ))}
                   </Section>
                 ) : null}
@@ -472,7 +482,7 @@ export default function HomeScreen(): React.JSX.Element {
                 {sections.wishlist.length > 0 ? (
                   <Section title="Wishlist">
                     {sections.wishlist.map((s) => (
-                      <ShowCardLink key={s.id} show={s} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
+                      <ShowCardLink key={s.id} show={s} compact={compact} onLongPress={() => setActionSheetFor({ id: s.id, state: s.state as ShowState })} />
                     ))}
                   </Section>
                 ) : null}
@@ -578,15 +588,17 @@ function KindSectionEmpty({ text }: { text: string }): React.JSX.Element {
 function ShowCardLink({
   show,
   onLongPress,
+  compact,
 }: {
   show: ShowsListItem;
   onLongPress: () => void;
+  compact?: boolean;
 }): React.JSX.Element {
   const { token } = useAuth();
   const card = React.useMemo(() => toShowCardShow(show, token), [show, token]);
   return (
     <Link href={`/show/${show.id}`} asChild>
-      <ShowCard show={card} onLongPress={onLongPress} />
+      <ShowCard show={card} compact={compact} onLongPress={onLongPress} />
     </Link>
   );
 }

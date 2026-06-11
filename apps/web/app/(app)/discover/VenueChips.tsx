@@ -20,7 +20,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Search, X } from "lucide-react";
 
 export interface ChipOption {
   id: string;
@@ -42,6 +42,8 @@ export function VenueChips({
   allLabel = "All",
   pickerTitle = "All filters",
   hideCounts = false,
+  searchable = false,
+  searchPlaceholder = "Search…",
 }: {
   venues: ChipOption[];
   selected: string | null;
@@ -49,6 +51,12 @@ export function VenueChips({
   totalCount: number;
   allLabel?: string;
   pickerTitle?: string;
+  /** Render a pinned search field under the picker heading that filters
+   *  the menu rows by name / sublabel. Mirrors the mobile `FilterChipsRow`
+   *  `pickerSearchable` prop. */
+  searchable?: boolean;
+  /** Placeholder for the pinned picker search field. */
+  searchPlaceholder?: string;
   /** Suppress the numeric count / badge on the *inline* chips. Mirrors
    *  the mobile `FilterChipsRow` prop so the Discover rail stays short
    *  and more followed-entity chips fit on one line. The `count` is
@@ -70,8 +78,30 @@ export function VenueChips({
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [visibleCount, setVisibleCount] = useState(ordered.length);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuQuery, setMenuQuery] = useState("");
+
+  // Clear any in-progress search whenever the popover closes so the next
+  // open starts fresh (and the "All" row reappears).
+  useEffect(() => {
+    if (!menuOpen) setMenuQuery("");
+  }, [menuOpen]);
+
+  const trimmedQuery = menuQuery.trim().toLowerCase();
+  const filteredVenues = useMemo(() => {
+    if (!searchable || trimmedQuery === "") return venues;
+    return venues.filter(
+      (v) =>
+        v.name.toLowerCase().includes(trimmedQuery) ||
+        (v.sublabel?.toLowerCase().includes(trimmedQuery) ?? false),
+    );
+  }, [searchable, trimmedQuery, venues]);
+
+  // Hide the "All" row while narrowing — a search is for finding a
+  // specific entity, not clearing the filter.
+  const showAllRow = trimmedQuery === "";
 
   const recompute = useCallback(() => {
     const wrap = wrapRef.current;
@@ -214,23 +244,53 @@ export function VenueChips({
       {menuOpen ? (
         <div className="discover-chips__menu" role="menu">
           <div className="discover-chips__menu-title">{pickerTitle}</div>
-          <button
-            type="button"
-            role="menuitemradio"
-            aria-checked={selected === null}
-            className={`discover-chips__menu-row ${selected === null ? "discover-chips__menu-row--active" : ""}`}
-            onClick={() => {
-              onSelect(null);
-              setMenuOpen(false);
-            }}
-          >
-            <span className="discover-chips__menu-check">
-              {selected === null ? <Check size={15} strokeWidth={2.5} /> : null}
-            </span>
-            <span className="discover-chips__menu-label">{allLabel}</span>
-            <span className="discover-chips__menu-count">{totalCount}</span>
-          </button>
-          {venues.map((v) => (
+          {searchable ? (
+            <div className="discover-chips__menu-search">
+              <Search size={13} strokeWidth={2} />
+              <input
+                ref={searchRef}
+                type="text"
+                value={menuQuery}
+                onChange={(e) => setMenuQuery(e.target.value)}
+                placeholder={searchPlaceholder}
+                aria-label={searchPlaceholder}
+                autoFocus
+                className="discover-chips__menu-input"
+              />
+              {menuQuery.length > 0 ? (
+                <button
+                  type="button"
+                  className="discover-chips__menu-clear"
+                  aria-label="Clear search"
+                  onClick={() => {
+                    setMenuQuery("");
+                    searchRef.current?.focus();
+                  }}
+                >
+                  <X size={13} strokeWidth={2} />
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {showAllRow ? (
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={selected === null}
+              className={`discover-chips__menu-row ${selected === null ? "discover-chips__menu-row--active" : ""}`}
+              onClick={() => {
+                onSelect(null);
+                setMenuOpen(false);
+              }}
+            >
+              <span className="discover-chips__menu-check">
+                {selected === null ? <Check size={15} strokeWidth={2.5} /> : null}
+              </span>
+              <span className="discover-chips__menu-label">{allLabel}</span>
+              <span className="discover-chips__menu-count">{totalCount}</span>
+            </button>
+          ) : null}
+          {filteredVenues.map((v) => (
             <button
               key={v.id}
               type="button"
@@ -256,6 +316,9 @@ export function VenueChips({
               </span>
             </button>
           ))}
+          {searchable && filteredVenues.length === 0 ? (
+            <div className="discover-chips__menu-empty">No matches.</div>
+          ) : null}
         </div>
       ) : null}
     </div>

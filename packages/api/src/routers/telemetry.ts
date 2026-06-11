@@ -41,15 +41,16 @@ const RATE_LIMIT = { max: 120, windowMs: 60_000 };
 /**
  * Allowlist of context keys that may be promoted to top-level log fields.
  *
- * The context bag is spread into the structured log payload, and every
- * distinct top-level field becomes a column in the `prod-mobile` Axiom
- * dataset, which has a hard 257-column cap (see root CLAUDE.md). An
- * unauthenticated caller sending arbitrary keys could permanently exhaust
- * that cap (silently dropping ALL subsequent mobile telemetry) — so we drop
- * any key not on this curated list. Keep it in sync with the keys the mobile
- * client actually emits (`apps/mobile/lib/**`) plus the canonical shared
- * keys. NEVER add `event` or `userId` here — those are set server-side and
- * must not be spoofable from the client.
+ * The context bag is spread into the structured log payload. Any key that
+ * isn't in `CORE_FIELDS` (see `packages/observability/src/logger.ts`) folds
+ * into the Axiom `fields` map field before ingest, so an unauthenticated
+ * caller sending arbitrary keys can no longer exhaust the dataset's column
+ * cap. We still drop any key not on this curated list, for query ergonomics
+ * (a stable, documented field surface) and to limit the unauthenticated abuse
+ * surface — keep it in sync with the keys the mobile client actually emits
+ * (`apps/mobile/lib/**`) plus the canonical shared keys. NEVER add `event` or
+ * `userId` here — those are set server-side and must not be spoofable from
+ * the client.
  */
 const ALLOWED_CONTEXT_KEYS = new Set<string>([
   'status',

@@ -41,6 +41,8 @@ import {
   ActivityIndicator,
   Linking,
   type LayoutChangeEvent,
+  type TextStyle,
+  type ViewStyle,
 } from 'react-native';
 import Svg, { Line } from 'react-native-svg';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -102,8 +104,13 @@ type DiscoverTab = 'venues' | 'artists' | 'regions';
 // reflect the full filtered set; only the AnnouncementRow tree is sliced.
 // With 800+ Region announcements rendered into a non-virtualized ScrollView
 // the tab swap stalled for several seconds — paginating the render keeps
-// the totals honest without paying that cost.
+// the totals honest without paying that cost. Flat views (a selected
+// region/venue chip, the Venues/Artists tabs) slice globally at PAGE_SIZE;
+// the grouped All-regions view pages each region independently at the
+// smaller REGION_GROUP_PAGE_SIZE so several regions' first pages fit on
+// screen without one region dominating (see `buildRegionGroupedNodes`).
 const PAGE_SIZE = 50;
+const REGION_GROUP_PAGE_SIZE = 25;
 
 /**
  * Multi-night runs (e.g. Phantom of the Opera at the Orpheum) carry a
@@ -217,6 +224,16 @@ export default function DiscoverScreen(): React.JSX.Element {
   // page 1 rather than carrying the previous tab's expanded budget.
   const [visibleCount, setVisibleCount] = React.useState(PAGE_SIZE);
 
+  // Per-region render budgets for the grouped (All-regions) view. A single
+  // global slice let the densest region eat the whole first page, so the
+  // other regions looked like a subset of their real feed. Each region now
+  // paginates independently: first REGION_GROUP_PAGE_SIZE rows, then a
+  // per-section "load more" that reveals that region's next page. Keyed by
+  // region id; an absent entry means the default first page.
+  const [regionVisibleCounts, setRegionVisibleCounts] = React.useState<
+    Record<string, number>
+  >({});
+
   // Clear filter when switching tabs — chips reset per-tab.
   React.useEffect(() => {
     setSelectedGroupId(null);
@@ -225,6 +242,7 @@ export default function DiscoverScreen(): React.JSX.Element {
 
   React.useEffect(() => {
     setVisibleCount(PAGE_SIZE);
+    setRegionVisibleCounts({});
   }, [tab, selectedGroupId, selectedRegionVenueId, kindFilter]);
 
   // Clear the venue sub-filter whenever the user changes the region
@@ -303,6 +321,20 @@ export default function DiscoverScreen(): React.JSX.Element {
     queryFn: () => utils.client.preferences.get.query(),
     enabled: Boolean(token),
   });
+  // Row density mirrors the Shows / Home tabs — the server-synced
+  // `preferences.compactMode` collapses announcement rows to the same
+  // dense, single-glance treatment so Discover reads as the same row
+  // family. Read it from the tRPC-native `preferences.get` query (the
+  // key the Me-tab density toggle writes its optimistic update +
+  // reconcile to, and that Home / Shows read) rather than the
+  // mobile-prefixed `useCachedQuery` above — that cached copy is only
+  // refreshed on Discover's own refetch, so toggling the setting from
+  // the Me tab would leave Discover stale (compact-when-comfortable).
+  // Falls back to comfortable until the query resolves.
+  const densityPrefsQuery = trpc.preferences.get.useQuery(undefined, {
+    enabled: Boolean(token),
+  });
+  const compact = densityPrefsQuery.data?.preferences?.compactMode ?? false;
 
   // Watched-event set drives the per-row "Watching" indicator. Cached so a
   // cold offline open renders the correct state instead of flashing every
@@ -569,6 +601,95 @@ export default function DiscoverScreen(): React.JSX.Element {
   const remainingCount = Math.max(0, filterCount - visibleItems.length);
   const hasMore = remainingCount > 0;
 
+  // True once we're past the loading / empty / error / offline gates and
+  // actually rendering the feed. Drives the fixed summary bar (rendered
+  // outside the ScrollView so the "N upcoming" count stays pinned) and the
+  // sticky region subheaders inside it.
+  const showContent = !showOfflineEmpty && !isLoading && !isErrored && !isEmpty;
+
+  // Whether the regions feed is showing its grouped (all-regions) view —
+  // the only place sticky subheaders apply. A selected region / venue or a
+  // non-regions tab renders the flat list with no per-group headers.
+  const isRegionGrouped =
+    showContent && tab === 'regions' && !selectedGroupId && filterCount > 0;
+
+  // Build the scrollable feed body. The regions-grouped view emits a flat
+  // sequence of [header, rows, header, rows, …] so the region subheaders can
+  // be pinned via the ScrollView's `stickyHeaderIndices`: each header stays
+  // put until the next one scrolls up to take its place (the iOS
+  // section-header behaviour the user asked for). Every other view renders a
+  // single body node with no sticky headers.
+  let scrollBody: React.ReactNode = null;
+  let stickyHeaderIndices: number[] | undefined;
+  if (showContent) {
+    if (filterCount === 0) {
+      scrollBody = (
+        <View style={styles.inlineEmpty}>
+          <Text style={[styles.inlineEmptyText, { color: colors.muted }]}>
+            {ingestPolling.isPolling
+              ? 'Hang tight — pulling in shows for what you just followed.'
+              : 'No upcoming announcements yet. New ones land here automatically.'}
+          </Text>
+        </View>
+      );
+    } else if (isRegionGrouped) {
+      // The grouped view paginates per region (not via the global
+      // `visibleItems` slice): every region renders its real total in the
+      // sticky header, its first REGION_GROUP_PAGE_SIZE rows, and its own
+      // "load more" button for the next page.
+      const built = buildRegionGroupedNodes({
+        items: filteredItems as NearbyAnnouncementItem[],
+        groups: groupList,
+        watchedSet,
+        onToggleWatch,
+        compact,
+        pageSize: REGION_GROUP_PAGE_SIZE,
+        visibleCounts: regionVisibleCounts,
+        onShowMore: (regionId) => {
+          hapticSelection();
+          setRegionVisibleCounts((prev) => ({
+            ...prev,
+            [regionId]:
+              (prev[regionId] ?? REGION_GROUP_PAGE_SIZE) +
+              REGION_GROUP_PAGE_SIZE,
+          }));
+        },
+        bg: colors.bg,
+        ink: colors.ink,
+        muted: colors.muted,
+        rule: colors.rule,
+      });
+      scrollBody = built.nodes;
+      stickyHeaderIndices = built.stickyIndices;
+    } else {
+      scrollBody = (
+        <>
+          <View style={[styles.list, compact && styles.listCompact]}>
+            {visibleItems.map((item) => (
+              <AnnouncementRow
+                key={item.id}
+                item={item}
+                isWatching={watchedSet.has(item.id)}
+                onToggleWatch={onToggleWatch}
+                compact={compact}
+              />
+            ))}
+          </View>
+          {hasMore && (
+            <LoadMoreButton
+              remaining={remainingCount}
+              pageSize={PAGE_SIZE}
+              onPress={() => {
+                hapticSelection();
+                setVisibleCount((c) => c + PAGE_SIZE);
+              }}
+            />
+          )}
+        </>
+      );
+    }
+  }
+
   // Long-press a chip → open the unfollow sheet for that group. The "All"
   // chip and the leading "+" action don't get this affordance (handled in
   // FilterChipsRow, which only wires onLongPress to per-group chips).
@@ -763,6 +884,8 @@ export default function DiscoverScreen(): React.JSX.Element {
           hideInlineSublabel
           testIdPrefix="discover-group"
           pickerTitle={groupPickerTitle(tab)}
+          pickerSearchable
+          pickerSearchPlaceholder={groupSearchPlaceholder(tab)}
           leadingAction={{
             label: addChipLabel(tab),
             onPress: () => setAddSheetTab(tab),
@@ -795,6 +918,34 @@ export default function DiscoverScreen(): React.JSX.Element {
           />
         )}
 
+      {/* Fixed summary bar. Lives outside the ScrollView so the "N
+          upcoming" count + refresh status stay pinned in place while the
+          feed scrolls underneath. */}
+      {showContent && (
+        <View style={styles.summaryRow}>
+          <SummaryIcon tab={tab} color={colors.muted} />
+          <Text style={[styles.summaryText, { color: colors.muted }]}>
+            {filterCount} upcoming ·{' '}
+            {ingestPolling.isPolling
+              ? 'discovering more shows…'
+              : isBackgroundRefetching
+                ? 'updating…'
+                : 'pull to refresh'}
+          </Text>
+          {(ingestPolling.isPolling || isBackgroundRefetching) && (
+            <ActivityIndicator
+              size="small"
+              color={colors.muted}
+              style={styles.summarySpinner}
+              testID="discover-ingest-spinner"
+              accessibilityLabel={
+                ingestPolling.isPolling ? 'Discovering more shows' : 'Updating'
+              }
+            />
+          )}
+        </View>
+      )}
+
       <ScrollView
         contentContainerStyle={
           isLoading || isEmpty || showOfflineEmpty
@@ -802,6 +953,7 @@ export default function DiscoverScreen(): React.JSX.Element {
             : styles.scrollContent
         }
         refreshControl={refreshControl}
+        stickyHeaderIndices={stickyHeaderIndices}
       >
         {showOfflineEmpty ? (
           <OfflineEmptyState
@@ -834,69 +986,7 @@ export default function DiscoverScreen(): React.JSX.Element {
             onOpenAdd={(t) => setAddSheetTab(t)}
           />
         ) : (
-          <>
-            <View style={styles.summaryRow}>
-              <SummaryIcon tab={tab} color={colors.muted} />
-              <Text style={[styles.summaryText, { color: colors.muted }]}>
-                {filterCount} upcoming ·{' '}
-                {ingestPolling.isPolling
-                  ? 'discovering more shows…'
-                  : isBackgroundRefetching
-                    ? 'updating…'
-                    : 'pull to refresh'}
-              </Text>
-              {(ingestPolling.isPolling || isBackgroundRefetching) && (
-                <ActivityIndicator
-                  size="small"
-                  color={colors.muted}
-                  style={styles.summarySpinner}
-                  testID="discover-ingest-spinner"
-                  accessibilityLabel={
-                    ingestPolling.isPolling
-                      ? 'Discovering more shows'
-                      : 'Updating'
-                  }
-                />
-              )}
-            </View>
-            {filterCount === 0 ? (
-              <View style={styles.inlineEmpty}>
-                <Text style={[styles.inlineEmptyText, { color: colors.muted }]}>
-                  {ingestPolling.isPolling
-                    ? 'Hang tight — pulling in shows for what you just followed.'
-                    : 'No upcoming announcements yet. New ones land here automatically.'}
-                </Text>
-              </View>
-            ) : tab === 'regions' && !selectedGroupId ? (
-              <RegionGroupedList
-                items={visibleItems as NearbyAnnouncementItem[]}
-                groups={groupList}
-                watchedSet={watchedSet}
-                onToggleWatch={onToggleWatch}
-              />
-            ) : (
-              <View style={styles.list}>
-                {visibleItems.map((item) => (
-                  <AnnouncementRow
-                    key={item.id}
-                    item={item}
-                    isWatching={watchedSet.has(item.id)}
-                    onToggleWatch={onToggleWatch}
-                  />
-                ))}
-              </View>
-            )}
-            {hasMore && (
-              <LoadMoreButton
-                remaining={remainingCount}
-                pageSize={PAGE_SIZE}
-                onPress={() => {
-                  hapticSelection();
-                  setVisibleCount((c) => c + PAGE_SIZE);
-                }}
-              />
-            )}
-          </>
+          scrollBody
         )}
       </ScrollView>
     </ScreenWrapper>
@@ -924,10 +1014,12 @@ function LoadMoreButton({
   remaining,
   pageSize,
   onPress,
+  testID = 'discover-load-more',
 }: {
   remaining: number;
   pageSize: number;
   onPress: () => void;
+  testID?: string;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -938,7 +1030,7 @@ function LoadMoreButton({
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={`Load ${next} more`}
-        testID="discover-load-more"
+        testID={testID}
         style={({ pressed }) => [
           styles.loadMoreButton,
           { borderColor: colors.rule, backgroundColor: colors.surface },
@@ -956,61 +1048,115 @@ function LoadMoreButton({
   );
 }
 
-function RegionGroupedList({
+/**
+ * Build the regions-grouped feed as a flat sequence of direct ScrollView
+ * children — `[header, rows, header, rows, …]` — alongside the indices of
+ * the header nodes. The caller hands those indices to the ScrollView's
+ * `stickyHeaderIndices` so each region subheader pins to the top of the
+ * feed and stays there until the next subheader scrolls up to replace it.
+ *
+ * Returning flat nodes (rather than the nested `<View>` per group the
+ * earlier `RegionGroupedList` used) is load-bearing: `stickyHeaderIndices`
+ * only sees the ScrollView's *direct* children, so the headers can't be
+ * wrapped in a per-group container if they're to stick.
+ */
+function buildRegionGroupedNodes({
   items,
   groups,
   watchedSet,
   onToggleWatch,
+  compact,
+  pageSize,
+  visibleCounts,
+  onShowMore,
+  bg,
+  ink,
+  muted,
+  rule,
 }: {
   items: NearbyAnnouncementItem[];
   groups: FilterGroup[];
   watchedSet: Set<string>;
   onToggleWatch: WatchToggle;
-}): React.JSX.Element {
-  const { tokens } = useTheme();
-  const { colors } = tokens;
+  compact?: boolean;
+  pageSize: number;
+  visibleCounts: Record<string, number>;
+  onShowMore: (regionId: string) => void;
+  bg: string;
+  ink: string;
+  muted: string;
+  rule: string;
+}): { nodes: React.ReactNode[]; stickyIndices: number[] } {
   // Bucket items by region id; preserve the group order from the chip list
   // (which is count-desc) so the densest region floats to the top.
-  const buckets = React.useMemo(() => {
-    const map = new Map<string, NearbyAnnouncementItem[]>();
-    for (const item of items) {
-      const key = item.regionId ?? '__unknown';
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(item);
-    }
-    return map;
-  }, [items]);
+  const buckets = new Map<string, NearbyAnnouncementItem[]>();
+  for (const item of items) {
+    const key = item.regionId ?? '__unknown';
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key)!.push(item);
+  }
 
   const orderedGroups = groups.filter((g) => buckets.has(g.id));
+  const nodes: React.ReactNode[] = [];
+  const stickyIndices: number[] = [];
 
-  return (
-    <View style={styles.list}>
-      {orderedGroups.map((g) => {
-        const groupItems = buckets.get(g.id) ?? [];
-        return (
-          <View key={g.id} style={styles.regionGroup}>
-            <View style={styles.regionHeader}>
-              <Text style={[styles.regionHeaderName, { color: colors.ink }]}>
-                {g.name}
-              </Text>
-              <Text style={[styles.regionHeaderMeta, { color: colors.muted }]}>
-                {g.sublabel ? `${g.sublabel} · ` : ''}
-                {groupItems.length} upcoming
-              </Text>
-            </View>
-            {groupItems.map((item) => (
-              <AnnouncementRow
-                key={item.id}
-                item={item}
-                isWatching={watchedSet.has(item.id)}
-                onToggleWatch={onToggleWatch}
-              />
-            ))}
-          </View>
-        );
-      })}
-    </View>
-  );
+  for (const g of orderedGroups) {
+    const groupItems = buckets.get(g.id) ?? [];
+    // Each region paginates on its own budget. The header keeps the real
+    // total ("814 upcoming") while only the visible slice is rendered —
+    // the per-region button below reveals the next page for this region
+    // without touching the others.
+    const visible = visibleCounts[g.id] ?? pageSize;
+    const shownItems = groupItems.slice(0, visible);
+    const remaining = groupItems.length - shownItems.length;
+    // The header's index in the flat node list is what makes it sticky.
+    stickyIndices.push(nodes.length);
+    nodes.push(
+      <View
+        key={`region-header-${g.id}`}
+        style={[
+          styles.regionHeaderSticky,
+          { backgroundColor: bg, borderBottomColor: rule },
+        ]}
+        testID={`discover-region-header-${g.id}`}
+      >
+        <Text style={[styles.regionHeaderName, { color: ink }]}>{g.name}</Text>
+        <Text style={[styles.regionHeaderMeta, { color: muted }]}>
+          {g.sublabel ? `${g.sublabel} · ` : ''}
+          {groupItems.length} upcoming
+        </Text>
+      </View>,
+    );
+    nodes.push(
+      <View
+        key={`region-rows-${g.id}`}
+        style={[styles.regionRows, compact && styles.regionRowsCompact]}
+      >
+        {shownItems.map((item) => (
+          <AnnouncementRow
+            key={item.id}
+            item={item}
+            isWatching={watchedSet.has(item.id)}
+            onToggleWatch={onToggleWatch}
+            compact={compact}
+          />
+        ))}
+      </View>,
+    );
+    if (remaining > 0) {
+      nodes.push(
+        <LoadMoreButton
+          key={`region-load-more-${g.id}`}
+          remaining={remaining}
+          pageSize={pageSize}
+          testID={`discover-load-more-${g.id}`}
+          onPress={() => onShowMore(g.id)}
+        />,
+      );
+    }
+  }
+
+  return { nodes, stickyIndices };
 }
 
 function SummaryIcon({
@@ -1101,6 +1247,12 @@ function groupPickerTitle(tab: DiscoverTab): string {
   return 'All regions';
 }
 
+function groupSearchPlaceholder(tab: DiscoverTab): string {
+  if (tab === 'venues') return 'Search venues…';
+  if (tab === 'artists') return 'Search artists…';
+  return 'Search regions…';
+}
+
 function addChipAccessibilityLabel(tab: DiscoverTab): string {
   if (tab === 'venues') return 'Follow a venue';
   if (tab === 'artists') return 'Follow an artist';
@@ -1166,10 +1318,12 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
   item,
   isWatching,
   onToggleWatch,
+  compact = false,
 }: {
   item: AnnouncementItem;
   isWatching: boolean;
   onToggleWatch: WatchToggle;
+  compact?: boolean;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -1242,6 +1396,45 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
     setSheetOpen(true);
   };
 
+  // On struck (sold-out / cancelled) rows the diagonal stripes are drawn
+  // across the whole card, so any text that sits directly over them loses
+  // contrast. Punch the stripes out behind each text run with an opaque
+  // surface field — the same "hollowed out" treatment that already keeps
+  // the Ticketmaster pill readable — so the title / venue / date stay legible
+  // at a glance. `alignSelf: 'flex-start'` keeps the field hugging the text
+  // (not the full content width); the negative margin offsets the padding so
+  // the glyphs stay left-aligned with the un-struck rows.
+  const struckTextStyle: TextStyle | null = isStruck
+    ? {
+        backgroundColor: colors.surface,
+        alignSelf: 'flex-start',
+        borderRadius: 4,
+        paddingHorizontal: 5,
+        marginLeft: -5,
+        overflow: 'hidden',
+      }
+    : null;
+  const struckDateStyle: ViewStyle | null = isStruck
+    ? {
+        backgroundColor: colors.surface,
+        borderRadius: 6,
+        paddingVertical: 4,
+      }
+    : null;
+  // The kind / status badges carry only a ~13%-alpha tint, so the stripes
+  // bleed straight through them. On struck rows wrap each badge in an opaque
+  // surface plate (same pill radius) so the tint sits on a solid base and the
+  // badge text reads — `alignSelf: 'flex-start'` keeps the plate hugging the
+  // badge instead of stretching the row.
+  const struckBadgePlate: ViewStyle | null = isStruck
+    ? {
+        backgroundColor: colors.surface,
+        borderRadius: RADII.pill,
+        alignSelf: 'flex-start',
+        overflow: 'hidden',
+      }
+    : null;
+
   return (
     <>
     <Pressable
@@ -1252,7 +1445,9 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
       testID={`discover-row-${item.id}`}
       style={({ pressed }) => [
         styles.card,
-        { backgroundColor: colors.surface },
+        compact ? styles.cardCompact : null,
+        { backgroundColor: compact ? 'transparent' : colors.surface },
+        compact && { borderBottomColor: colors.rule },
         isStruck && styles.cardSoldOut,
         pressed && { opacity: 0.9 },
       ]}
@@ -1272,8 +1467,19 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
       {/* Date column — single-date rows stack MONTH / DAY / DOW / YEAR;
           multi-night runs reuse the same narrow column, closing the range
           with a compact "– END" line and an "N dates" count. */}
-      {runMode && runEndLabel ? (
-        <View style={styles.dateBlock} testID={`discover-row-run-${item.id}`}>
+      {compact ? (
+        // Compact mirrors the Shows-tab ShowCard: month + a shrunk day,
+        // dropping the day-of-week / year / run-range lines so the row
+        // collapses height-wise.
+        <View style={[styles.dateBlock, struckDateStyle]}>
+          <Text style={[styles.dateMonth, { color: colors.muted }]}>{month}</Text>
+          <Text style={[styles.dateDayCompact, { color: colors.ink }]}>{day}</Text>
+        </View>
+      ) : runMode && runEndLabel ? (
+        <View
+          style={[styles.dateBlock, struckDateStyle]}
+          testID={`discover-row-run-${item.id}`}
+        >
           <Text style={[styles.dateMonth, { color: colors.muted }]}>{month}</Text>
           <Text style={[styles.dateDay, { color: colors.ink }]}>{day}</Text>
           <Text style={[styles.dateRunEnd, { color: colors.ink }]}>
@@ -1284,7 +1490,7 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
           </Text>
         </View>
       ) : (
-        <View style={styles.dateBlock}>
+        <View style={[styles.dateBlock, struckDateStyle]}>
           <Text style={[styles.dateMonth, { color: colors.muted }]}>{month}</Text>
           <Text style={[styles.dateDay, { color: colors.ink }]}>{day}</Text>
           {dow ? (
@@ -1296,45 +1502,81 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
 
       {/* Headliner artwork — joined from the performer record. Falls back
           to the kind-coloured monogram when the announcement has no matched
-          performer (most theatre / festival productions). */}
-      <RemoteImage
-        uri={item.headlinerImageUrl ?? null}
-        name={title}
-        kind={item.kind as Kind}
-        size="thumb"
-        style={styles.avatar}
-      />
+          performer (most theatre / festival productions). Hidden in compact:
+          it's the tallest element in the row, so dropping it is what lets the
+          row collapse (matches the Shows-tab ShowCard). */}
+      {!compact ? (
+        <RemoteImage
+          uri={item.headlinerImageUrl ?? null}
+          name={title}
+          kind={item.kind as Kind}
+          size="thumb"
+          style={styles.avatar}
+        />
+      ) : null}
 
-      {/* Content column */}
-      <View style={styles.content}>
-        <View style={styles.badgeRow}>
-          <KindBadge kind={item.kind as Kind} size="sm" />
-          <View
-            style={[
-              styles.statusBadge,
-              {
-                backgroundColor:
-                  (isCancelled ? colors.danger : accent) + '22',
-              },
-            ]}
-          >
+      {/* Content column. Compact collapses the comfortable stack (badges →
+          title → support → venue → on-sale) to two lines: a kind badge inline
+          with the title, then the venue — matching the Shows-tab ShowCard.
+          Sold-out / cancelled rows still read via the struck stripe overlay,
+          so dropping the status badge in compact loses no signal. */}
+      <View style={[styles.content, compact && styles.contentCompact]}>
+        {compact ? (
+          <>
+            <View style={styles.compactHeadlineRow}>
+              <View style={struckBadgePlate}>
+                <KindBadge kind={item.kind as Kind} size="sm" />
+              </View>
+              <Text
+                style={[styles.cardTitleCompact, { color: colors.ink }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {title}
+              </Text>
+            </View>
             <Text
-              style={[
-                styles.statusLabel,
-                { color: isCancelled ? colors.danger : accent },
-              ]}
+              style={[styles.cardVenueCompact, { color: colors.muted }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
             >
-              {onSaleLabel}
+              {venueLabel}
             </Text>
-          </View>
-        </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.badgeRow}>
+              <View style={struckBadgePlate}>
+                <KindBadge kind={item.kind as Kind} size="sm" />
+              </View>
+              <View style={struckBadgePlate}>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    {
+                      backgroundColor:
+                        (isCancelled ? colors.danger : accent) + '22',
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.statusLabel,
+                      { color: isCancelled ? colors.danger : accent },
+                    ]}
+                  >
+                    {onSaleLabel}
+                  </Text>
+                </View>
+              </View>
+            </View>
 
-        {headlinerLinkId ? (
+            {headlinerLinkId ? (
           <Text
             onPress={() => router.push(`/artists/${headlinerLinkId}`)}
             accessibilityRole="link"
             accessibilityLabel={`Open ${title}`}
-            style={[styles.cardTitle, { color: colors.ink }]}
+            style={[styles.cardTitle, { color: colors.ink }, struckTextStyle]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
@@ -1342,7 +1584,7 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
           </Text>
         ) : (
           <Text
-            style={[styles.cardTitle, { color: colors.ink }]}
+            style={[styles.cardTitle, { color: colors.ink }, struckTextStyle]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
@@ -1352,7 +1594,7 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
 
         {support && (
           <Text
-            style={[styles.cardSupport, { color: colors.muted }]}
+            style={[styles.cardSupport, { color: colors.muted }, struckTextStyle]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
@@ -1365,7 +1607,7 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
             onPress={() => router.push(`/venues/${item.venue.id}`)}
             accessibilityRole="link"
             accessibilityLabel={`Open ${item.venue.name}`}
-            style={[styles.cardVenue, { color: colors.muted }]}
+            style={[styles.cardVenue, { color: colors.muted }, struckTextStyle]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
@@ -1373,7 +1615,7 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
           </Text>
         ) : (
           <Text
-            style={[styles.cardVenue, { color: colors.muted }]}
+            style={[styles.cardVenue, { color: colors.muted }, struckTextStyle]}
             numberOfLines={1}
             ellipsizeMode="tail"
           >
@@ -1383,12 +1625,14 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
 
         {onSale && (
           <Text
-            style={[styles.onSaleText, { color: colors.faint }]}
+            style={[styles.onSaleText, { color: colors.faint }, struckTextStyle]}
             numberOfLines={1}
           >
             {item.onSaleStatus === 'on_sale' ? 'On sale since ' : 'On sale '}
             {onSale}
           </Text>
+        )}
+          </>
         )}
       </View>
 
@@ -1541,15 +1785,24 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     letterSpacing: 0.4,
   },
-  regionGroup: {
-    gap: 10,
-  },
-  regionHeader: {
+  // Sticky region subheader. Needs an opaque background (set inline from
+  // the theme) so feed rows scrolling underneath the pinned header don't
+  // bleed through, plus a hairline bottom rule so the pinned bar reads as
+  // a divider against the rows below it.
+  regionHeaderSticky: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
-    paddingTop: 6,
-    paddingBottom: 2,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  regionRows: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 14,
+    gap: 10,
   },
   regionHeaderName: {
     fontFamily: 'Geist Sans 600',
@@ -1572,6 +1825,50 @@ const styles = StyleSheet.create({
   },
   cardSoldOut: {
     overflow: 'hidden',
+  },
+  // Compact row family — mirrors the Shows-tab ShowCard's compact mode:
+  // transparent background, a bottom hairline rule, and a shorter row.
+  cardCompact: {
+    borderRadius: 0,
+    paddingVertical: 7,
+    paddingRight: 0,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  dateDayCompact: {
+    fontFamily: 'Geist Sans 700',
+    fontSize: 17,
+    lineHeight: 19,
+  },
+  contentCompact: {
+    gap: 1,
+  },
+  compactHeadlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  cardTitleCompact: {
+    fontFamily: 'Geist Sans 700',
+    fontSize: 15,
+    lineHeight: 19,
+    flex: 1,
+    minWidth: 0,
+  },
+  cardVenueCompact: {
+    fontFamily: 'Geist Sans 400',
+    fontSize: 12,
+    lineHeight: 15,
+  },
+  // Collapse the inter-row gap so compact rows read as one continuous
+  // ruled list (the per-row bottom rule supplies the separation).
+  listCompact: {
+    gap: 0,
+  },
+  // Compact regions feed: collapse the inter-row gap so rows read as one
+  // continuous ruled list (each compact row supplies its own bottom rule).
+  regionRowsCompact: {
+    paddingTop: 6,
+    gap: 0,
   },
   stateBar: {
     width: 3,

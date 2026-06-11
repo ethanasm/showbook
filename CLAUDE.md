@@ -51,6 +51,20 @@ until pg_isready -h localhost -p 5433 -U showbook >/dev/null 2>&1; do sleep 1; d
 pnpm dev:db:prepare:e2e                              # if you need the e2e DB
 ```
 
+If `up -d db` fails because the `postgres:16-alpine` image isn't cached and
+Docker Hub answers "You have reached your unauthenticated pull rate limit,"
+**do not stop there** — pull the identical image from a no-auth mirror and
+retag it (the session-start hook does this automatically, but a mid-session
+dockerd restart wipes nothing, so you only need this if the image never landed):
+
+```bash
+sudo docker pull mirror.gcr.io/library/postgres:16-alpine \
+  || sudo docker pull public.ecr.aws/docker/library/postgres:16-alpine
+sudo docker tag mirror.gcr.io/library/postgres:16-alpine postgres:16-alpine 2>/dev/null \
+  || sudo docker tag public.ecr.aws/docker/library/postgres:16-alpine postgres:16-alpine
+sudo docker compose -f infra/docker-compose.yml up -d db
+```
+
 After that, web Playwright (`pr-screenshots`, `pnpm test:e2e`) works exactly as documented — webServer boots its own `next dev`, talks to Postgres on `localhost:5433`. Never tell the user "the sandbox has no Postgres" without first running the restart sequence above and confirming it failed. Same applies to "no Docker" — Docker is installed; if the daemon is down, restart it.
 
 What the sandbox actually *can't* do, for the avoidance of further wrong excuses: run iOS Simulator, run a KVM-backed Android emulator, reach external networks blocked by the environment's policy. Mobile capture in this sandbox is the Expo Web bundle via `apps/mobile/web-tests/*.spec.ts` (Playwright, tRPC mocked) — *not* the unreachable iOS/Android paths. For real native mobile capture, attach `mobile-visual` so the GitHub-Actions self-hosted Android runner picks it up.
@@ -68,7 +82,7 @@ What the sandbox actually *can't* do, for the avoidance of further wrong excuses
   infrastructure, decisions. Index at
   [`docs/specs/README.md`](docs/specs/README.md).
 - `docs/specs/TASKS.md` — Master task list with dependency DAG.
-- `docs/specs/phases/VERIFICATION.md` — Playwright testing + visual
+- `docs/specs/VERIFICATION.md` — Playwright testing + visual
   verification strategy.
 - `docs/specs/mobile-roadmap.md` — Mobile build plan; the app
   is feature-complete against the design handoff.
@@ -157,12 +171,22 @@ has no tunnel ingress at all.
 
 ## Verification
 
-- `pnpm verify` — build + lint + unit tests with end-of-run status summary
+- `pnpm verify` — build + lint + typecheck + unit tests with end-of-run
+  status summary.
 - `pnpm verify:e2e` — adds Playwright e2e (or set `RUN_E2E=1`)
-- `pnpm verify:coverage` — build + lint + unit + integration with merged
-  Node native code coverage; **fails if any of lines / branches / functions
-  is below 80%**, scored independently for the web scope and the mobile
-  scope (`apps/mobile/lib/**`). CI runs this on every push and PR to `main`.
+- `pnpm verify:coverage` — build + lint + typecheck + unit + integration with
+  merged Node native code coverage; **fails if any of lines / branches /
+  functions is below 80%**, scored independently for the web scope and the
+  mobile scope (`apps/mobile/lib/**`). CI runs this on every push and PR to
+  `main`.
+- **Lint and typecheck both fan out across every project.** `pnpm lint`
+  (`nx run-many -t lint`) runs eslint on web (`eslint-config-next`), mobile
+  (`eslint-config-expo`), and every package under `packages/*` (the shared
+  `eslint.config.packages.mjs`). `pnpm typecheck` (`nx run-many -t typecheck`)
+  runs `tsc --noEmit` on all nine projects. `pnpm build` only type-checks the
+  web app via `next build`, so the explicit typecheck pass is what catches a
+  mobile or package `tsc` break before it lands on `main`. Add a `lint` /
+  `typecheck` script to any new package so `run-many` picks it up.
 - `pnpm test:unit` — unit tests across all packages (uses `node:test`)
 - Integration tests live in `*.integration.test.ts` and are excluded from
   the unit-test glob; run with `pnpm test:integration`. Each integration
@@ -208,10 +232,10 @@ All new code MUST use the shared `@showbook/observability` package — no `conso
 
 **Where logs go (per env):**
 - **dev / local** — stdout only, pretty-printed via `pino-pretty`. `AXIOM_TOKEN` and `AXIOM_DATASET` are intentionally unset in `.env.dev` / `apps/web/.env.local`, so dev runs never ship to Axiom. Tests rely on this — don't set `AXIOM_TOKEN` in CI.
-- **prod** — stdout (JSON via `pino`, captured by Docker) AND shipped to Axiom via `@axiomhq/pino`. **Two datasets:** app/server logs go to `prod-server` (`AXIOM_DATASET`); mobile telemetry (the `mobile.*` events relayed through the `telemetry.logEvent` tRPC router, bound with `component: 'mobile.telemetry'`) is fanned to `prod-mobile` (`AXIOM_MOBILE_DATASET`) so its fast-growing field surface keeps its own 257-column budget. The split is in `packages/observability/src/logger.ts` (`isMobileRecord`); if `AXIOM_MOBILE_DATASET` is unset the logger falls back to single-dataset mode and everything goes to `AXIOM_DATASET`. The `AXIOM_TOKEN` in `.env.prod` is **ingest-only by design** (a service token, not a query token) and must have ingest on both datasets; reading prod logs requires a separate user-scoped token (see "Querying Axiom" below). See `docs/specs/operations/axiom-dataset-cutover.md`.
+- **prod** — stdout (JSON via `pino`, captured by Docker) AND shipped to Axiom via `@axiomhq/pino`. **One dataset, `showbook-prod` (`AXIOM_DATASET`):** all logs land there — app/server logs plus mobile telemetry (the `mobile.*` events relayed through the `telemetry.logEvent` tRPC router, bound with `component: 'mobile.telemetry'`). Before ingest every record is reshaped by `reshapeForAxiom` in `packages/observability/src/logger.ts`: only the `CORE_FIELDS` allowlist stays as top-level columns and every other key folds into a single `fields` **map field**, so the dataset stays under Axiom's per-dataset column cap no matter what call-sites log (stdout / `docker logs` stay flat — the reshape is on the Axiom stream only). The `AXIOM_TOKEN` in `.env.prod` is **ingest-only by design** (a service token, not a query token) and must have ingest on `showbook-prod`; reading prod logs requires a separate user-scoped token (see "Querying Axiom" below). See `docs/specs/operations/axiom-map-fields.md`. (The earlier `prod-server` + `prod-mobile` split — `docs/specs/operations/axiom-dataset-cutover.md` — is superseded by this merge.)
 
 **Querying Axiom from the CLI (read access):**
-The repo-side `AXIOM_TOKEN` cannot read logs. To query, use a Personal Access Token (PAT) you create in the Axiom UI under Settings → Profile → Personal Access Tokens (or an advanced API token with the `Query` capability granted on the `prod-server` / `prod-mobile` datasets). PATs and most advanced API tokens require the `X-AXIOM-ORG-ID` header.
+The repo-side `AXIOM_TOKEN` cannot read logs. To query, use a Personal Access Token (PAT) you create in the Axiom UI under Settings → Profile → Personal Access Tokens (or an advanced API token with the `Query` capability granted on the `showbook-prod` dataset). PATs and most advanced API tokens require the `X-AXIOM-ORG-ID` header.
 
 ```bash
 # Get the org id once: it's the slug shown in Axiom URLs and is also returned
@@ -224,17 +248,19 @@ curl -sS -X POST "https://api.axiom.co/v1/datasets/_apl?format=tabular" \
   -H "Authorization: Bearer $TOKEN" \
   -H "X-AXIOM-ORG-ID: $ORG" \
   -H "Content-Type: application/json" \
-  -d '{"apl":"[\"prod-server\"] | where _time > ago(1h) and level in (\"warn\",\"error\") | project _time, level, event, msg | order by _time desc"}'
+  -d '{"apl":"[\"showbook-prod\"] | where _time > ago(1h) and level in (\"warn\",\"error\") | project _time, level, event, msg | order by _time desc"}'
 ```
+
+Fields that aren't in `CORE_FIELDS` are folded into the `fields` map field, so address them with map syntax: `['fields']['spotifyTrackId']` (or `fields.venueId`). e.g. `[\"showbook-prod\"] | where event == \"venue.follow\" | extend vid = ['fields']['venueId']`. The `_time`, `level`, `msg`, `event`, `component`, `job`, `jobId`, `userId`, `reason`, `status`, `durationMs`/`elapsedMs` fields and `err.*` stay top-level columns.
 
 The stdout copy in the prod web container (`docker logs showbook-prod-web`) is also a useful fallback when you need recent logs but Axiom retention has rolled them off.
 
-**Axiom column / field cap (257 per dataset).** Each unique top-level or dotted field name across all logged events becomes a column in the Axiom dataset. Every dataset has a hard cap of **257 columns**; once hit, every new write that introduces an unseen field is rejected with `adding 'X' and N other fields to dataset fields would exceed the column limit of 257` (visible only in stdout / `docker logs showbook-prod-web` — the rejection itself never reaches Axiom). The original single `showbook-prod` dataset hit this cap, and the mobile telemetry `mobile.*` events were the silent casualties for ~2 months in 2026-05 because new event-context fields kept getting refused. The fix was to split into `prod-server` + `prod-mobile` (each with its own budget) — see `docs/specs/operations/axiom-dataset-cutover.md`. Two failure modes worth knowing:
+**Axiom column / field cap (256 per dataset) — now bounded by a map field.** Each unique top-level or dotted field name across all logged events becomes a column in the Axiom dataset, and every dataset has a hard cap (256 on our plan); once hit, every new write that introduces an unseen field is rejected with `adding 'X' and N other fields to dataset fields would exceed the column limit` (visible only in stdout / `docker logs showbook-prod-web` — the rejection itself never reaches Axiom). The original `showbook-prod` dataset hit this in 2026-05; the fix split it into `prod-server` + `prod-mobile`, which only *doubled* the budget, and `prod-server` filled up again in 2026-06. **The current design recreates a single dataset (we reclaimed the `showbook-prod` name, fresh schema) and removes the cap as a failure mode:** `reshapeForAxiom` keeps only `CORE_FIELDS` (~18 keys) as real columns and folds everything else into the single `fields` map field, whose nested keys do **not** count against the cap. So the new `showbook-prod` sits at ~40 columns permanently and no call-site can widen it past that. See `docs/specs/operations/axiom-map-fields.md`. Still worth knowing:
 
-- **Error-object enumeration.** Pino's `stdSerializers.err` walks every enumerable property on an `Error` via `for (key in err)`. DOMException-like errors (RN, fetch on Node 22, Web Crypto) carry ~24 inherited constant properties (`ABORT_ERR`, `DATA_CLONE_ERR`, `HIERARCHY_REQUEST_ERR`, …); each became its own column the first time such an error was logged. The custom `serializeErr` in `packages/observability/src/logger.ts` is allowlist-based to prevent this — `ALLOWED_ERROR_FIELDS` is the schema's contract for error logs. Add fields there as new error shapes appear (don't reach for a permissive enumeration shortcut).
-- **Ad-hoc context fields.** A `log.X({ randomNewKey: ... })` callsite permanently widens the schema. Keep the field-name surface stable: reuse existing keys (`event`, `userId`, `jobId`, `assetId`, `key`, `host`, `bytes`, `elapsedMs`, etc.) instead of inventing a new shape per log line.
+- **Error-object enumeration.** Pino's `stdSerializers.err` walks every enumerable property on an `Error` via `for (key in err)`. DOMException-like errors (RN, fetch on Node 22, Web Crypto) carry ~24 inherited constant properties (`ABORT_ERR`, `DATA_CLONE_ERR`, `HIERARCHY_REQUEST_ERR`, …); each would become its own `err.*` column. `err` is kept as a top-level field (it's a hot triage path — `err.code` / `err.detail` stay directly queryable), so the custom `serializeErr` in `packages/observability/src/logger.ts` is still allowlist-based to bound it — `ALLOWED_ERROR_FIELDS` is the schema's contract for error logs. Add fields there as new error shapes appear (don't reach for a permissive enumeration shortcut).
+- **Ad-hoc context fields are no longer fatal, but prefer stable keys.** A `log.X({ randomNewKey: ... })` callsite now lands `randomNewKey` inside the `fields` map (zero column cost) instead of permanently widening the schema. It's still better to reuse existing keys (`event`, `userId`, `jobId`, `assetId`, `key`, `host`, `bytes`, `elapsedMs`, etc.) for query ergonomics: a folded field is queried as `['fields']['k']`, costs more query-hours, and is stored as a string. Promote a key into `CORE_FIELDS` only when it's filtered/grouped/aggregated in APL and the map-field cost or string typing actually hurts.
 
-**Recovery when the cap is hit.** Hidden fields (`PUT /v1/datasets/<name>/fields/<field>` with `{"hidden": true}`) still count against the cap and don't help. The only ways out are: (a) recreate the dataset (drops the 30-day window — instant fix, schema starts fresh); (b) change `AXIOM_DATASET` in `.env.prod` to a new name (e.g. `showbook-prod-v2`) and restart prod — old data is read-only for 30 days then expires, new events go to a clean schema; (c) ask Axiom support to raise the cap on this dataset. Option (b) is the least disruptive and is the default response when the message above shows up in docker logs.
+**If the cap is ever hit again** (shouldn't happen with the map field in place — would mean ~240 *new* top-level keys leaked past the allowlist): the durable fix is to verify the reshape is active and that whatever widened the schema is being folded, not to grow the budget. The blunt recoveries still exist — (a) recreate the dataset (drops the 30-day window, schema starts fresh); (b) point `AXIOM_DATASET` at a new name (e.g. `showbook-prod-v2`) and restart prod; (c) ask Axiom support to raise the cap — but reach for them only after confirming the map field isn't doing its job.
 
 **Structured event names worth knowing (curated list, prefix-grouped):**
 - `auth.user_created`, `auth.signin` — NextAuth lifecycle.
@@ -249,8 +275,9 @@ The stdout copy in the prod web container (`docker logs showbook-prod-web`) is a
 - `venue.photo.{updated,missing,failed,done,fatal}` — `backfill-venue-photos` job.
 - `venue.photo.proxy.{upstream_error,host_not_allowed,redirect_not_allowed}` — `/api/venue-photo/[venueId]` SSRF-guard and upstream-failure boundaries. `upstream_error` fires on a non-2xx / wrong-content-type final response; `host_not_allowed` fires when a persisted absolute `photoUrl` falls outside `ALLOWED_PROXY_HOSTS`; `redirect_not_allowed` fires when an upstream 3xx points to a host outside `ALLOWED_REDIRECT_HOSTS` (added 2026-05-17 alongside the one-hop redirect follow that restored Google-Places-backed venue photos broken by `redirect: 'manual'` in #192).
 - `venue.follow`, `venue.follow.place_backfill_failed` — `venues.follow` lazy backfill.
-- `venue.rename`, `venue.rename.reset` — per-user venue-name alias set / cleared via `venues.rename` / `venues.resetName` (writes `user_venue_names`, not the shared `venues.name`). `admin.venue.rename` is the operator-only global canonical rename (`admin.renameVenue`).
+- `venue.rename`, `venue.rename.reset` — per-user venue-name alias set / cleared via `venues.rename` / `venues.resetName` (writes `user_venue_names`, not the shared `venues.name`). `admin.venue.rename` is the operator-only global canonical rename (`admin.renameVenue`). `admin.venue.location_updated` (carries `{venueId, geocoded}`) is the operator-only canonical city/region/country edit (`admin.updateVenueLocation`) — the escape hatch for venues whose city imported as the literal "Unknown" (Gmail / free-text / festival-poster paths default to it), which the coordinate + Ticketmaster backfills both skip; `admin.venue.location_geocode_failed` (warn) fires when the opportunistic post-edit geocode throws (the city edit still persists).
 - `discover.ingest.{performer,venue,region,targeted,*}.complete` — pg-boss discover-ingest jobs.
+- `discover.ingest.consolidate_singles` / `discover.ingest.singles_consolidated` — the Phase 3.5 self-healing sweep (`consolidateGroupableSingles`) that folds scattered single-night announcement rows for the same (venueId, lower(headliner), kind) into one multi-date run when `shouldGroup` is satisfied (comedy / concert residencies whose nights were ingested across separate passes, so they never went back through `groupEventsIntoRuns`). `consolidate_singles` is the per-run rollup (`{consolidated}`); `singles_consolidated` is the per-cluster merge (`{venueId, headliner, kind, canonicalId, mergedRows, deletedRows, finalDateCount}`). Failures log `discover.ingest.consolidate_singles.failed` (whole pass), `discover.ingest.consolidate_singles.cluster_failed` (one cluster), and `discover.ingest.targeted.venue_consolidate_failed` (the venue-scoped pass run after a follow-a-venue ingest). Festivals keep their own `discover.ingest.festival_consolidated` path.
 - `shows.nightly.summary`, `setlist.retry.summary` — nightly transition + setlist-retry jobs.
 - `shows.create.{tm_enrichment_failed,venue_place_backfill_failed,mbid_resolve_failed}` — `shows.create` non-blocking enrichments. `mbid_resolve_failed` fires when the inline setlist.fm MBID lookup for a future concert errors; the nightly backfill at 04:30 ET catches the gap.
 - `backfill.performer_images.summary`, `backfill.performer_mbids.summary`, `backfill.performer_ticketmaster_ids.summary`, `backfill.performer_spotify_ids.summary`, `backfill.venue_photos.summary` — scheduled backfill jobs (daily 05:30 / 04:30 / 06:00 / 06:30 / 05:45 ET). The MBID, TM-id, and Spotify-id summaries are also emitted on operator-triggered runs from the `/admin` page.
