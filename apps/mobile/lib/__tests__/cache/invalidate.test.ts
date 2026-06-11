@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   invalidateShowsList,
+  invalidateAllShowsLists,
   invalidateDiscoverFeeds,
 } from '../../cache/invalidate.js';
 
@@ -31,6 +32,34 @@ describe('invalidateShowsList', () => {
     const { calls, client } = makeFakeClient();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     invalidateShowsList(client as any);
+    assert.deepEqual(calls, [
+      ['mobile', 'shows.list'],
+      ['mobile', 'home', 'shows.list'],
+    ]);
+  });
+});
+
+describe('invalidateAllShowsLists', () => {
+  it('hits the tRPC-native key space AND every mobile reader', () => {
+    const { calls, client } = makeFakeClient();
+    let trpcInvalidated = 0;
+    const utils = {
+      shows: {
+        list: {
+          invalidate: () => {
+            trpcInvalidated += 1;
+            return Promise.resolve();
+          },
+        },
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    invalidateAllShowsLists(client as any, utils);
+    assert.equal(
+      trpcInvalidated,
+      1,
+      'expected the tRPC-native shows.list invalidate to fire',
+    );
     assert.deepEqual(calls, [
       ['mobile', 'shows.list'],
       ['mobile', 'home', 'shows.list'],
