@@ -136,13 +136,13 @@ const MAX_REGION_LAT_DELTA = 60;
 const MAX_REGION_LNG_DELTA = 120;
 
 // Which layer of shows the map plots. `all` / `past` / `upcoming` split the
-// user's own logbook by show state (`all` is the whole logbook); `discoverable`
-// swaps in the announcements that power the three Discover tabs (followed
-// venues / artists / regions).
+// user's own logbook by show state (`all` is the whole logbook, labelled
+// "my shows" in the UI); `discoverable` swaps in the announcements that
+// power the three Discover tabs (followed venues / artists / regions).
 type MapMode = 'all' | 'past' | 'upcoming' | 'discoverable';
 
 const MODE_FILTERS: readonly { m: MapMode; label: string }[] = [
-  { m: 'all', label: 'all' },
+  { m: 'all', label: 'my shows' },
   { m: 'past', label: 'past' },
   { m: 'upcoming', label: 'upcoming' },
   { m: 'discoverable', label: 'discoverable' },
@@ -632,41 +632,50 @@ export default function MapScreen(): React.JSX.Element {
         large
       />
 
-      {/* Layer toggle — all / past / upcoming / discoverable. Fixed
-          non-scrolling row: chips size to their label (so "all" stays
-          compact and "discoverable" gets the room it needs) and can shrink
-          to fit narrow screens rather than scrolling. Counts were dropped. */}
+      {/* Layer toggle — my shows / past / upcoming, then discoverable
+          behind a divider: the first three slice the personal logbook,
+          while discoverable swaps in a different dataset (the Discover
+          announcements feed), so the rule keeps it from reading as a
+          fourth logbook subset. Fixed non-scrolling row: chips size to
+          their label and can shrink to fit narrow screens rather than
+          scrolling. Counts were dropped. */}
       <View style={styles.modeStrip}>
         {MODE_FILTERS.map(({ m, label }) => {
           const active = m === layer;
           return (
-            <Pressable
-              key={m}
-              onPress={() => onLayerChange(m)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={`${label} (${modeCounts[m]})`}
-              style={[
-                styles.filterChip,
-                styles.modeChip,
-                {
-                  borderColor: active ? colors.ink : colors.ruleStrong,
-                  backgroundColor: active ? colors.ink : 'transparent',
-                },
-              ]}
-            >
-              <Text
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.85}
+            <React.Fragment key={m}>
+              {m === 'discoverable' && (
+                <View
+                  style={[styles.modeDivider, { backgroundColor: colors.ruleStrong }]}
+                />
+              )}
+              <Pressable
+                onPress={() => onLayerChange(m)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={`${label} (${modeCounts[m]})`}
                 style={[
-                  styles.filterLabel,
-                  { color: active ? colors.bg : colors.muted },
+                  styles.filterChip,
+                  styles.modeChip,
+                  {
+                    borderColor: active ? colors.ink : colors.ruleStrong,
+                    backgroundColor: active ? colors.ink : 'transparent',
+                  },
                 ]}
               >
-                {label}
-              </Text>
-            </Pressable>
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.85}
+                  style={[
+                    styles.filterLabel,
+                    { color: active ? colors.bg : colors.muted },
+                  ]}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            </React.Fragment>
           );
         })}
       </View>
@@ -1219,14 +1228,16 @@ function Stat({ label, value }: { label: string; value: string }): React.JSX.Ele
 const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   modeStrip: {
-    paddingHorizontal: 20,
+    // Tighter than the old 20/8 — "my shows" + the divider need the extra
+    // room for all four labels to fit untruncated on a 390pt screen.
+    paddingHorizontal: 12,
     // No top padding: the large TopBar already supplies the header gap, so
     // the lone (post-kind-strip-removal) filter row sits tight under it
     // instead of floating in blank space. Centred so the four chips read as
     // a balanced group rather than left-anchored.
     paddingTop: 0,
     paddingBottom: 10,
-    gap: 8,
+    gap: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1235,6 +1246,12 @@ const styles = StyleSheet.create({
   // a narrow screen instead of overflowing the fixed, non-scrolling row.
   modeChip: {
     flexShrink: 1,
+  },
+  // Vertical rule between the logbook chips (my shows / past / upcoming)
+  // and discoverable, which plots a different dataset.
+  modeDivider: {
+    width: 1,
+    height: 16,
   },
   filterStrip: {
     paddingHorizontal: 20,
@@ -1246,7 +1263,7 @@ const styles = StyleSheet.create({
   },
   filterChip: {
     paddingVertical: 6,
-    paddingHorizontal: 11,
+    paddingHorizontal: 9,
     borderWidth: 1,
     borderRadius: RADII.pill,
     flexDirection: 'row',
@@ -1262,7 +1279,7 @@ const styles = StyleSheet.create({
   filterLabel: {
     fontFamily: 'Geist Sans 500',
     fontSize: 11,
-    letterSpacing: 0.6,
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
   pinOuter: { alignItems: 'center', justifyContent: 'center' },
