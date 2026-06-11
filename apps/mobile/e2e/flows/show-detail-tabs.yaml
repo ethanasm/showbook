@@ -33,10 +33,17 @@ tags:
       visible: "Set up showbook"
     commands:
       - tapOn: "Set up showbook"
-      - tapOn: "Skip"   # notifications
-      - tapOn: "Skip"   # photos
-      - tapOn: "Skip"   # location
-      - tapOn: "Skip"   # gmail
+      # The first-run flow now shows a variable number of steps: the
+      # region step is dropped when the user already has a region and
+      # the gmail step when they already have shows (the persisted
+      # Maestro show makes hasShows true here, so onboarding is < 4
+      # screens). Tap "Skip" until no step screen remains instead of a
+      # fixed count, so the loop is resilient to the step total.
+      - repeat:
+          while:
+            visible: "Skip"
+          commands:
+            - tapOn: "Skip"
 
 - assertVisible:
     text: "Shows"

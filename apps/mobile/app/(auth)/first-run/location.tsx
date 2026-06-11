@@ -1,10 +1,14 @@
 /**
- * First-run step 3 of 5 — coarse foreground location.
+ * First-run step 2 — coarse foreground location.
  *
  * We only ever ask for foreground permission — Showbook doesn't need
  * background tracking. On grant we read the device location once
  * (low accuracy is enough — we just need a city) and hand the coords
  * to the region step so the user can confirm or override.
+ *
+ * When the region step has been dropped from the flow (the user already
+ * has a region), the captured coords have nowhere to go, so we fall
+ * through to the flow's next screen (gmail) or finish onboarding.
  */
 
 import React from 'react';
@@ -14,21 +18,29 @@ import * as Location from 'expo-location';
 import { FirstRunStep, heroTitleStyle } from './_components';
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
+import { useFirstRunFlow } from '@/lib/useFirstRunFlow';
+import { FIRST_RUN_ROUTES } from '@/lib/first-run-flow';
 
 export default function FirstRunLocation(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const router = useRouter();
+  const { position, goNext } = useFirstRunFlow();
+  const pos = position('location');
   const [pending, setPending] = React.useState(false);
 
   const advance = React.useCallback(
-    (params?: { lat?: string; lng?: string }) => {
-      router.push({
-        pathname: '/(auth)/first-run/region',
-        params: params ?? {},
-      });
+    (params?: { lat: string; lng: string }) => {
+      // Only the region step consumes the device coords. If it's still in
+      // the flow, push it directly with the coords; otherwise hand off to
+      // the flow's next screen (or finish).
+      if (params && pos.nextRoute === FIRST_RUN_ROUTES.region) {
+        router.push({ pathname: '/(auth)/first-run/region', params });
+      } else {
+        goNext('location');
+      }
     },
-    [router],
+    [goNext, pos.nextRoute, router],
   );
 
   const onPrimary = React.useCallback(async () => {
@@ -92,9 +104,9 @@ export default function FirstRunLocation(): React.JSX.Element {
 
   return (
     <FirstRunStep
-      step={2}
-      total={4}
-      eyebrow="STEP 2 OF 4"
+      step={pos.step}
+      total={pos.total}
+      eyebrow={`STEP ${pos.step} OF ${pos.total}`}
       title={
         <Text style={[heroTitleStyle, { color: colors.ink, textAlign: 'center' }]}>
           Shows <Text style={{ color: colors.accent }}>near you.</Text>

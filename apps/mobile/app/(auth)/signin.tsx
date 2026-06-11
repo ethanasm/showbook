@@ -28,6 +28,7 @@ import { Redirect } from 'expo-router';
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { useAuth } from '@/lib/auth';
+import { useBreakpoint } from '@/lib/responsive';
 import { BrandMark } from '../../components/BrandMark';
 import { KindBadge } from '../../components/KindBadge';
 import { StackedCards } from '../../components/design-system';
@@ -36,6 +37,7 @@ export default function SignInScreen(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const { signIn, isSigningIn, error, user, isFirstRun } = useAuth();
+  const isTablet = useBreakpoint() === 'tablet';
 
   if (user) {
     return <Redirect href={isFirstRun ? '/(auth)/first-run/welcome' : '/(tabs)'} />;
@@ -45,9 +47,13 @@ export default function SignInScreen(): React.JSX.Element {
     <SafeAreaView style={[styles.root, { backgroundColor: colors.bg }]} edges={['top', 'bottom']}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, isTablet && styles.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
       >
+        {/* On a tablet the column is width-capped and centered (both axes)
+            so the sign-in copy doesn't stretch across the full iPad width.
+            On phone the inner wrapper is a no-op full-width column. */}
+        <View style={[styles.inner, isTablet && styles.innerTablet]}>
         {/* Top eyebrow */}
         <View style={styles.eyebrowRow}>
           <View style={[styles.dot, { backgroundColor: colors.accent }]} />
@@ -120,6 +126,7 @@ export default function SignInScreen(): React.JSX.Element {
             By continuing you agree to keep things tasteful. We only read your basic Google profile.
           </Text>
         </View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -136,7 +143,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 20,
     paddingBottom: 32,
+  },
+  scrollContentTablet: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+  },
+  inner: {
     gap: 24,
+  },
+  innerTablet: {
+    width: '100%',
+    maxWidth: 460,
+    alignSelf: 'center',
   },
   eyebrowRow: {
     flexDirection: 'row',
