@@ -6,9 +6,11 @@ import { withAndroidManifest, type ConfigPlugin } from 'expo/config-plugins';
 // baked in; adaptive-icon.png is the same foreground on transparent so
 // Android can composite it over the bg color below; splash.png is a
 // 1080×1180 tightly-framed mark rendered as a centered logo (sized via
-// the splash plugin's `imageWidth` below), not a full-bleed background.
-// The source SVG + render script live under `assets/logo-mocks/` so the
-// masters stay revisable.
+// the splash plugin's `imageWidth` below), not a full-bleed background;
+// splash-icon-android.png is the ticket mark alone on transparency, padded
+// for the Android 12+ circular splash-icon mask (see the splash plugin
+// config below). The source SVG + render script live under
+// `assets/logo-mocks/` so the masters stay revisable.
 //
 // Google Maps API key (used by react-native-maps on the Map tab):
 //   EXPO_PUBLIC_GOOGLE_MAPS_API_KEY  — single key sourced from the user's
@@ -227,6 +229,22 @@ const config: ExpoConfig = {
           imageWidth: 200, // keep in sync with SPLASH_IMAGE_WIDTH (see above)
           backgroundColor: '#0C0C0C',
           resizeMode: 'contain',
+        },
+        // Android 12+ always clips the native splash icon
+        // (`windowSplashScreenAnimatedIcon`) into a circular mask. splash.png
+        // is a rectangle with the #0C0C0C background baked in, so the OS
+        // splash showed it as a clipped dark disc — a visible ring flash
+        // before <BrandSplash/> mounted. Android therefore gets its own
+        // asset: ticket mark only, transparent background, padded to fit the
+        // 2/3-diameter masked safe zone (see make_android_splash_icon in
+        // assets/logo-mocks/_build_assets.py). imageWidth / backgroundColor /
+        // resizeMode inherit from the root props above; iOS (no mask) keeps
+        // splash.png.
+        android: {
+          image: './assets/splash-icon-android.png',
+          dark: {
+            image: './assets/splash-icon-android.png',
+          },
         },
       },
     ],
