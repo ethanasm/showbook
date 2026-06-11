@@ -14,12 +14,25 @@ import { withAndroidManifest, type ConfigPlugin } from 'expo/config-plugins';
 //
 // Google Maps API key (used by react-native-maps on the Map tab):
 //   EXPO_PUBLIC_GOOGLE_MAPS_API_KEY  — single key sourced from the user's
-//                                      local env (.env.local / EAS secret).
-// The key is read at config-resolution time and threaded into the native
-// iOS/Android Google Maps configs below. Never inline a key in this file.
-// On iOS the key is optional in dev (Apple Maps is the default provider);
-// on Android, react-native-maps requires Google Maps so the key must be set
-// for any non-empty map.
+//                                      local env (.env.local / eas.json env /
+//                                      EAS env var).
+// The key is read at config-resolution time and threaded into the
+// react-native-maps plugin props below (`androidGoogleMapsApiKey`), which is
+// what writes the `com.google.android.geo.API_KEY` meta-data into
+// AndroidManifest.xml at prebuild. Never inline a key in this file.
+//
+// Do NOT move the key back to `android.config.googleMaps.apiKey` /
+// `ios.config.googleMapsApiKey`: Expo SDK 56 dropped the prebuild handling
+// for those fields (`@expo/prebuild-config` no longer reads them — they're
+// dead config), and the react-native-maps plugin listed *without* props
+// actively REMOVES the API-key meta-data from the manifest. That combination
+// shipped an Android binary with no key, and the Google Maps SDK hard-crashes
+// the app the moment the Map tab's MapView initialises without one.
+// lib/__tests__/maps-config.test.ts pins the plugin-props wiring.
+//
+// iOS intentionally gets no key: the Map tab uses Apple Maps
+// (PROVIDER_DEFAULT), and passing `iosGoogleMapsApiKey` would pull the
+// Google Maps iOS pod + AppDelegate init into the build for nothing.
 
 const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
 
@@ -108,7 +121,6 @@ const config: ExpoConfig = {
     // mirrors it into Info.plist as ITSAppUsesNonExemptEncryption.
     config: {
       usesNonExemptEncryption: false,
-      ...(GOOGLE_MAPS_API_KEY ? { googleMapsApiKey: GOOGLE_MAPS_API_KEY } : {}),
     },
     // iPhone stays portrait-locked (matches the top-level `orientation`
     // above); iPad gets all four orientations so the M6.C three-pane
@@ -193,15 +205,16 @@ const config: ExpoConfig = {
       'android.permission.READ_MEDIA_VIDEO',
       'android.permission.READ_EXTERNAL_STORAGE',
     ],
-    config: GOOGLE_MAPS_API_KEY
-      ? { googleMaps: { apiKey: GOOGLE_MAPS_API_KEY } }
-      : undefined,
   },
   plugins: [
     'expo-router',
     'expo-font',
     'expo-secure-store',
-    'react-native-maps',
+    // The plugin props are the ONLY live path for the Android Maps key on
+    // SDK 56 — see the GOOGLE_MAPS_API_KEY comment block above. An empty
+    // string (key unset) makes the plugin strip the manifest meta-data,
+    // matching the old key-less behaviour.
+    ['react-native-maps', { androidGoogleMapsApiKey: GOOGLE_MAPS_API_KEY }],
     [
       'expo-splash-screen',
       {
