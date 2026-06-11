@@ -733,7 +733,7 @@ export default function VenueDetailPage() {
                             display: "block",
                           }}
                         >
-                          {a.headliner}
+                          {a.productionName ?? a.headliner}
                         </Link>
                       ) : (
                         <div
@@ -748,7 +748,7 @@ export default function VenueDetailPage() {
                             textOverflow: "ellipsis",
                           }}
                         >
-                          {a.headliner}
+                          {a.productionName ?? a.headliner}
                         </div>
                       )}
                       {a.support && a.support.length > 0 && (

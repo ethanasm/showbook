@@ -51,7 +51,7 @@ import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { hapticSelection, hapticImpactMedium } from '@/lib/haptics';
-import { isNonWatchableKind, formatVenueLocation } from '@showbook/shared';
+import { isNonWatchableKind, formatVenueLocation, getHeadliner } from '@showbook/shared';
 import { useAuth } from '@/lib/auth';
 import { trpc, type RouterOutput } from '@/lib/trpc';
 import { useCachedQuery } from '@/lib/cache';
@@ -96,11 +96,12 @@ function parseDate(iso: string): { month: string; day: string; dow: string; year
 
 function toShowCard(s: VenueShow, venueName: string, venueCity: string | null): ShowCardShow {
   const date = s.date ? parseDate(s.date) : { month: '—', day: '—', dow: '—', year: '' };
-  const headliner =
-    s.showPerformers.find((sp) => sp.role === 'headliner')?.performer.name ??
-    s.productionName ??
-    s.showPerformers[0]?.performer.name ??
-    'Untitled show';
+  // Festivals / theatre runs with a productionName show that name as the
+  // title — never a lineup member's name. getHeadliner enforces the
+  // production-label precedence; only fall back to 'Untitled show' when
+  // there's neither a production name nor any performer.
+  const resolved = getHeadliner(s);
+  const headliner = resolved === 'Unknown Artist' ? 'Untitled show' : resolved;
   const kind: Kind = isNonWatchableKind(s.kind) ? 'concert' : (s.kind as Kind);
   return {
     id: s.id,
