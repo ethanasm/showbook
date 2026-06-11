@@ -453,7 +453,14 @@ commit.
    `eas update` won't apply it.
 
 A restriction mismatch fails **silently** (blank gray map, no error), so
-if the map is blank with the key present, re-check the SHA-1s.
+if the map is blank with the key present, re-check the SHA-1s. A key
+that's *absent from the manifest* entirely is louder: the Google Maps
+SDK **crashes the app** when the Map tab's MapView initialises. On Expo
+SDK 56 the env var reaches the manifest only via the `react-native-maps`
+plugin's `androidGoogleMapsApiKey` prop in `app.config.ts` —
+`android.config.googleMaps.apiKey` is no longer read by prebuild, and the
+plugin listed without props strips the meta-data
+(`apps/mobile/lib/__tests__/maps-config.test.ts` pins the wiring).
 
 ### 3.2 Build an `.aab`
 
