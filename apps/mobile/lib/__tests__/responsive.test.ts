@@ -21,9 +21,12 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  SPLIT_SIDEBAR_MAX_WIDTH,
+  SPLIT_SIDEBAR_MIN_WIDTH,
   TABLET_MIN_WIDTH,
   breakpointForWidth,
   isLargeScreen,
+  splitSidebarWidth,
   useBreakpoint,
 } from '../responsive';
 
@@ -88,6 +91,41 @@ describe('breakpointForWidth (drives useBreakpoint)', () => {
     assert.equal(breakpointForWidth(-50), 'phone');
     assert.equal(breakpointForWidth(Number.NaN), 'phone');
     assert.equal(breakpointForWidth(Number.POSITIVE_INFINITY), 'phone');
+  });
+});
+
+describe('splitSidebarWidth', () => {
+  it('clamps to the 320pt floor at the narrow end of tablet', () => {
+    // Smallest windows that count as tablet (900 threshold, Pro Max
+    // landscape): 32% would dip below a readable card width.
+    assert.equal(splitSidebarWidth(900), SPLIT_SIDEBAR_MIN_WIDTH);
+    assert.equal(splitSidebarWidth(932), SPLIT_SIDEBAR_MIN_WIDTH);
+  });
+
+  it('is proportional (~32%) in the middle of the range', () => {
+    // 13" iPad portrait / 11" iPad landscape.
+    assert.equal(splitSidebarWidth(1024), Math.round(1024 * 0.32));
+    assert.equal(splitSidebarWidth(1180), Math.round(1180 * 0.32));
+  });
+
+  it('clamps to the 380pt cap on wide landscape', () => {
+    assert.equal(splitSidebarWidth(1366), SPLIT_SIDEBAR_MAX_WIDTH);
+  });
+
+  it('detail pane keeps the majority of the window at every tablet width', () => {
+    for (const width of [900, 932, 1024, 1180, 1366]) {
+      const sidebar = splitSidebarWidth(width);
+      assert.ok(
+        width - sidebar > sidebar,
+        `detail pane (${width - sidebar}) should out-measure the sidebar (${sidebar}) at ${width}pt`,
+      );
+    }
+  });
+
+  it('falls back to the floor for zero / negative / non-finite widths', () => {
+    assert.equal(splitSidebarWidth(0), SPLIT_SIDEBAR_MIN_WIDTH);
+    assert.equal(splitSidebarWidth(-50), SPLIT_SIDEBAR_MIN_WIDTH);
+    assert.equal(splitSidebarWidth(Number.NaN), SPLIT_SIDEBAR_MIN_WIDTH);
   });
 });
 

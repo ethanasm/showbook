@@ -66,6 +66,13 @@ export interface ShowCardProps {
   onLongPress?: () => void;
   compact?: boolean;
   /**
+   * Split-view sidebar rows pass a boolean: a defined value means the
+   * row selects in place (the push-navigation chevron is suppressed),
+   * and `true` paints the raised-surface selection highlight. Phone
+   * rows leave this unset and keep the chevron.
+   */
+  selected?: boolean;
+  /**
    * Optional testID applied to the row's root Pressable. The Shows tab
    * passes `show-card-row-${index}` so Maestro flows can tap into the
    * first row (`show-card-row-0`); leave unset elsewhere.
@@ -78,11 +85,17 @@ export function ShowCard({
   onPress,
   onLongPress,
   compact = false,
+  selected,
   testID,
 }: ShowCardProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const { showToast } = useFeedback();
+
+  // Split-view sidebar row (tablet): selection replaces push-navigation,
+  // and the type scales up a notch — the row sits in a wide window
+  // viewed at iPad distance, where the phone sizes read too small.
+  const sidebarRow = selected !== undefined;
 
   // Left edge bar color
   const barColor =
@@ -109,11 +122,13 @@ export function ShowCard({
           : undefined
       }
       delayLongPress={300}
+      accessibilityState={selected === undefined ? undefined : { selected }}
       style={({ pressed }) => [
         styles.container,
         compact ? styles.compact : styles.card,
         { backgroundColor: compact ? 'transparent' : colors.surface },
         compact && { borderBottomColor: colors.rule },
+        selected && { backgroundColor: colors.surfaceRaised },
         pressed && styles.pressed,
       ]}
     >
@@ -161,7 +176,11 @@ export function ShowCard({
           <View style={styles.compactHeadlineRow}>
             <KindBadge kind={show.kind} size="sm" />
             <Text
-              style={[styles.headlinerCompact, { color: colors.ink }]}
+              style={[
+                styles.headlinerCompact,
+                sidebarRow && styles.headlinerCompactSidebar,
+                { color: colors.ink },
+              ]}
               numberOfLines={1}
               ellipsizeMode="tail"
             >
@@ -178,7 +197,11 @@ export function ShowCard({
 
             {/* Headliner — Geist Sans (sans), NOT Fraunces */}
             <Text
-              style={[styles.headliner, { color: colors.ink }]}
+              style={[
+                styles.headliner,
+                sidebarRow && styles.headlinerSidebar,
+                { color: colors.ink },
+              ]}
               numberOfLines={1}
               ellipsizeMode="tail"
             >
@@ -189,7 +212,11 @@ export function ShowCard({
 
         {/* Venue · city */}
         <Text
-          style={[compact ? styles.venueCompact : styles.venue, { color: colors.muted }]}
+          style={[
+            compact ? styles.venueCompact : styles.venue,
+            sidebarRow && (compact ? styles.venueCompactSidebar : styles.venueSidebar),
+            { color: colors.muted },
+          ]}
           numberOfLines={1}
           ellipsizeMode="tail"
         >
@@ -221,10 +248,13 @@ export function ShowCard({
         </Pressable>
       ) : null}
 
-      {/* Chevron */}
-      <View style={styles.chevronContainer}>
-        <ChevronRight size={16} color={colors.faint} strokeWidth={2} />
-      </View>
+      {/* Chevron — push-navigation affordance, dropped for split-view
+          rows (selection happens in place, nothing is pushed). */}
+      {selected === undefined ? (
+        <View style={styles.chevronContainer}>
+          <ChevronRight size={16} color={colors.faint} strokeWidth={2} />
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -317,6 +347,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 21,
   },
+  headlinerSidebar: {
+    fontSize: 17,
+    lineHeight: 22,
+  },
   headlinerCompact: {
     fontFamily: 'Geist Sans 700',
     fontSize: 15,
@@ -324,15 +358,27 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  headlinerCompactSidebar: {
+    fontSize: 16,
+    lineHeight: 20,
+  },
   venue: {
     fontFamily: 'Geist Sans 400',
     fontSize: 13,
     lineHeight: 18,
   },
+  venueSidebar: {
+    fontSize: 14,
+    lineHeight: 19,
+  },
   venueCompact: {
     fontFamily: 'Geist Sans 400',
     fontSize: 12,
     lineHeight: 15,
+  },
+  venueCompactSidebar: {
+    fontSize: 13,
+    lineHeight: 16,
   },
   chevronContainer: {
     justifyContent: 'center',

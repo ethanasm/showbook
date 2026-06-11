@@ -10,21 +10,36 @@
  * -16) that lifts above the tab bar — this is the primary visual
  * affordance of the bottom nav.
  *
+ * Tablet (≥900pt window width): the same five sections, but the bar
+ * moves to a compact vertical icon rail on the left edge — the
+ * signature iPad navigation pattern — via the navigator's
+ * `tabBarPosition: 'left'` + `tabBarVariant: 'material'`. Routing,
+ * deep links, and tab state are identical to phone; only the chrome
+ * placement changes. The content area then belongs to the section:
+ * Map gets the full remaining width, and the Shows tab composes a
+ * two-pane list / detail split (`components/SplitViewLayout`) instead
+ * of pushing show detail as a stack route. This replaced the earlier
+ * three-pane shell that crammed Shows + detail + Map into one row and
+ * dropped Home / Add / Discover on iPad entirely.
+ *
  * The headerShown:false at the screenOptions level means each tab screen
  * owns its own TopBar; the tab bar itself is the only chrome rendered by
  * this layout. Tab bar colors, border, and label typography come from the
  * theme tokens so the bar tracks light/dark mode automatically.
  *
- * Bottom safe-area: tabBarStyle.paddingBottom and the bar's height are
- * extended by `insets.bottom` so the home-indicator on iPhones with no
- * physical home button doesn't overlap the icons/labels. Devices without
- * a home indicator get a small floor (4pt) so labels still breathe.
+ * Bottom safe-area (phone): tabBarStyle.paddingBottom and the bar's
+ * height are extended by `insets.bottom` so the home-indicator on
+ * iPhones with no physical home button doesn't overlap the icons/labels.
+ * Devices without a home indicator get a small floor (4pt) so labels
+ * still breathe.
  *
- * FAB tap target: the visible button is raised 16pt above the tab cell
- * with marginTop: -16, so the standard tab cell would not register taps
- * on the top half of the visible disc. We use `tabBarButton` with a
- * `Pressable` plus `hitSlop` so taps anywhere on the visible FAB (and
- * a small margin around it) trigger navigation to the Add tab.
+ * FAB tap target (phone): the visible button is raised 16pt above the
+ * tab cell with marginTop: -16, so the standard tab cell would not
+ * register taps on the top half of the visible disc. We use
+ * `tabBarButton` with a `Pressable` plus `hitSlop` so taps anywhere on
+ * the visible FAB (and a small margin around it) trigger navigation to
+ * the Add tab. On the rail the disc sits inline (no lift — there's no
+ * bar edge to pop above).
  */
 
 import React from 'react';
@@ -45,11 +60,6 @@ import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { useBreakpoint } from '@/lib/responsive';
 import { hapticSelection } from '@/lib/haptics';
-import { ThreePaneLayout, useSelectedShow } from '../../components/ThreePaneLayout';
-import { EmptyState } from '../../components/EmptyState';
-import ShowsScreen from './shows';
-import MapScreen from './map';
-import ShowDetailScreen from '../show/[id]';
 
 const TAB_BAR_BASE_HEIGHT = 50;
 
@@ -60,22 +70,8 @@ export default function TabsLayout(): React.JSX.Element {
   // Floor at 4pt so devices without a home indicator (older iPhones, most
   // Android phones) still leave a small breathing gap under the labels.
   const bottomPad = Math.max(insets.bottom, 4);
-  const breakpoint = useBreakpoint();
-
-  // iPad / large-screen shell: three-pane composition replaces the 5-tab
-  // bottom nav. Selection plumbing lives in `useSelectedShow()` from the
-  // ThreePaneLayout — the Shows pane writes a show id when the user
-  // taps a row, the middle pane reads it as ShowDetail's `showIdProp`,
-  // and a placeholder is rendered when nothing is selected yet.
-  if (breakpoint === 'tablet') {
-    return (
-      <ThreePaneLayout
-        left={<ShowsScreen />}
-        middle={<IpadDetailPane />}
-        right={<MapScreen />}
-      />
-    );
-  }
+  // Tablet: vertical icon rail on the left edge instead of bottom tabs.
+  const rail = useBreakpoint() === 'tablet';
 
   return (
     <Tabs
@@ -90,16 +86,32 @@ export default function TabsLayout(): React.JSX.Element {
         headerShown: false,
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.muted,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.rule,
-          borderTopWidth: StyleSheet.hairlineWidth,
-          paddingBottom: bottomPad,
-          height: TAB_BAR_BASE_HEIGHT + bottomPad,
-        },
+        // 'material' is the navigator's side-rail variant; it's only
+        // valid with a left/right position, hence the paired switch.
+        // Labels default to beside-icon on a side bar (a wide Mail-style
+        // sidebar) — forcing below-icon collapses it to the compact
+        // icon rail so the content area keeps the width.
+        tabBarPosition: rail ? 'left' : 'bottom',
+        tabBarVariant: rail ? 'material' : 'uikit',
+        tabBarLabelPosition: rail ? 'below-icon' : undefined,
+        tabBarStyle: rail
+          ? {
+              backgroundColor: colors.surface,
+              borderRightColor: colors.rule,
+              borderRightWidth: StyleSheet.hairlineWidth,
+            }
+          : {
+              backgroundColor: colors.surface,
+              borderTopColor: colors.rule,
+              borderTopWidth: StyleSheet.hairlineWidth,
+              paddingBottom: bottomPad,
+              height: TAB_BAR_BASE_HEIGHT + bottomPad,
+            },
         tabBarLabelStyle: {
           fontFamily: 'Geist Sans 500',
-          fontSize: 10,
+          // The rail has room for a legible label; the bottom bar keeps
+          // the tight 10pt to fit five cells on small phones.
+          fontSize: rail ? 12 : 10,
           letterSpacing: 0.2,
         },
       }}
@@ -134,6 +146,7 @@ export default function TabsLayout(): React.JSX.Element {
           tabBarButton: (props) => (
             <AddTabButton
               {...props}
+              vertical={rail}
               fabColor={colors.accent}
               iconColor={colors.accentText}
             />
@@ -158,22 +171,6 @@ export default function TabsLayout(): React.JSX.Element {
   );
 }
 
-function IpadDetailPane(): React.JSX.Element {
-  const { showId } = useSelectedShow();
-  const { tokens } = useTheme();
-  if (!showId) {
-    return (
-      <View style={{ flex: 1, backgroundColor: tokens.colors.bg }}>
-        <EmptyState
-          title="Select a show"
-          subtitle="Tap a show on the left to see its details and map preview here."
-        />
-      </View>
-    );
-  }
-  return <ShowDetailScreen showIdProp={showId} />;
-}
-
 // We avoid importing BottomTabBarButtonProps from @react-navigation/bottom-tabs
 // because the package isn't a direct dep of @showbook/mobile (it ships as
 // a transitive dep of expo-router and isn't exposed to TS resolution).
@@ -192,6 +189,9 @@ interface AddTabButtonOwnProps {
 }
 
 interface AddTabButtonProps extends AddTabButtonOwnProps {
+  /** True on the tablet rail — the disc sits inline in the column
+   *  instead of lifting above the bottom bar. */
+  vertical?: boolean;
   fabColor: string;
   iconColor: string;
 }
@@ -204,6 +204,7 @@ function AddTabButton({
   testID,
   style,
   android_ripple,
+  vertical = false,
   fabColor,
   iconColor,
 }: AddTabButtonProps): React.JSX.Element {
@@ -218,14 +219,20 @@ function AddTabButton({
       accessibilityLabel={accessibilityLabel ?? 'Add'}
       testID={testID}
       android_ripple={android_ripple ?? undefined}
-      // The visible disc lifts 16pt above the cell, so extend the hit
-      // target up by 20pt to cover the whole disc plus a tap margin.
-      hitSlop={{ top: 20, bottom: 8, left: 8, right: 8 }}
-      style={[styles.addCell, style]}
+      // Bottom bar: the visible disc lifts 16pt above the cell, so extend
+      // the hit target up by 20pt to cover the whole disc plus a tap
+      // margin. Rail: the disc is inline, a symmetric margin suffices.
+      hitSlop={
+        vertical
+          ? { top: 8, bottom: 8, left: 8, right: 8 }
+          : { top: 20, bottom: 8, left: 8, right: 8 }
+      }
+      style={[vertical ? styles.addCellVertical : styles.addCell, style]}
     >
       <View
         style={[
           styles.addFab,
+          !vertical && styles.addFabLifted,
           { backgroundColor: fabColor, shadowColor: fabColor },
         ]}
       >
@@ -241,19 +248,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  addCellVertical: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+  },
   addFab: {
     width: 48,
     height: 48,
     borderRadius: RADII.pill,
     justifyContent: 'center',
     alignItems: 'center',
-    // Raise the FAB above the tab bar baseline so it visually pops out,
-    // matching the design source (BottomNav, marginTop: -16). Hit-slop on
-    // the parent Pressable makes the lifted region tappable too.
-    marginTop: -16,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.27,
     shadowRadius: 16,
     elevation: 6,
+  },
+  addFabLifted: {
+    // Raise the FAB above the tab bar baseline so it visually pops out,
+    // matching the design source (BottomNav, marginTop: -16). Hit-slop on
+    // the parent Pressable makes the lifted region tappable too.
+    marginTop: -16,
   },
 });

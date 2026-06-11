@@ -16,6 +16,11 @@
  *   - Stats:    headline counts (shows / spent / venues / artists), a
  *     by-kind mix bar, and top-5 lists for performers and venues. Derived
  *     from the same list — no separate `shows.stats` procedure exists yet.
+ *
+ * At the tablet breakpoint the screen composes a two-pane split view:
+ * the list above becomes a fixed-width sidebar and the selected show's
+ * detail renders in place in the right pane (SplitViewLayout). On phone
+ * the list fills the screen and rows push /show/[id] as a stack route.
  */
 
 import React from 'react';
@@ -56,9 +61,11 @@ import {
 } from '../../components/CalendarGrid';
 import { ShowActionSheet } from '../../components/ShowActionSheet';
 import { MarkTicketedSheet } from '../../components/MarkTicketedSheet';
-import { useSelectedShow } from '../../components/ThreePaneLayout';
+import { SplitViewLayout, useSelectedShow } from '../../components/SplitViewLayout';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '@/lib/theme';
+import { useBreakpoint } from '@/lib/responsive';
+import ShowDetailScreen from '../show/[id]';
 import { trpc } from '@/lib/trpc';
 import { useCachedQuery } from '@/lib/cache';
 import { useAuth } from '@/lib/auth';
@@ -216,6 +223,35 @@ type ShowsListData = Awaited<
 type ShowsListItem = ShowsListData[number];
 
 export default function ShowsScreen(): React.JSX.Element {
+  const breakpoint = useBreakpoint();
+  // Tablet: classic two-pane split — the list becomes a sidebar and the
+  // selected show renders in place on the right. Phone: the list owns
+  // the screen and rows push /show/[id].
+  if (breakpoint === 'tablet') {
+    return (
+      <SplitViewLayout list={<ShowsListPane />} detail={<ShowsDetailPane />} />
+    );
+  }
+  return <ShowsListPane />;
+}
+
+function ShowsDetailPane(): React.JSX.Element {
+  const { showId } = useSelectedShow();
+  const { tokens } = useTheme();
+  if (!showId) {
+    return (
+      <View style={{ flex: 1, backgroundColor: tokens.colors.bg }}>
+        <EmptyState
+          title="Select a show"
+          subtitle="Tap a show in the list to see its details here."
+        />
+      </View>
+    );
+  }
+  return <ShowDetailScreen showIdProp={showId} embeddedInSplitView />;
+}
+
+function ShowsListPane(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
   const insets = useSafeAreaInsets();
@@ -324,11 +360,11 @@ export default function ShowsScreen(): React.JSX.Element {
     setActionSheetFor({ id: row.id, state: row.state });
   }, []);
 
-  // On iPad three-pane the tap selects the row in the middle pane via
-  // the SelectedShow context; on phone we fall back to the existing
+  // In the tablet split view a tap selects the row into the detail pane
+  // via the SelectedShow context; on phone we fall back to the existing
   // `<Link>` push to /show/[id]. The branch is local to each row so
   // the same TimelineView / CalendarView code works in both layouts.
-  const { showId: selectedShowId, setShowId, isThreePane } = useSelectedShow();
+  const { showId: selectedShowId, setShowId, isSplitView } = useSelectedShow();
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
@@ -435,7 +471,7 @@ export default function ShowsScreen(): React.JSX.Element {
           rows={rows}
           refreshControl={refreshControl}
           onLongPressShow={onLongPressShow}
-          isThreePane={isThreePane}
+          isSplitView={isSplitView}
           selectedShowId={selectedShowId}
           onSelect={setShowId}
         />
@@ -445,7 +481,7 @@ export default function ShowsScreen(): React.JSX.Element {
           stateBucket={stateBucket}
           refreshControl={refreshControl}
           onLongPressShow={onLongPressShow}
-          isThreePane={isThreePane}
+          isSplitView={isSplitView}
           selectedShowId={selectedShowId}
           onSelect={setShowId}
         />
@@ -460,6 +496,14 @@ export default function ShowsScreen(): React.JSX.Element {
           showId={actionSheetFor.id}
           state={actionSheetFor.state}
           onMarkTicketed={() => setMarkTicketedForId(actionSheetFor.id)}
+          // In the split view, deleting the show that's open in the
+          // detail pane must clear the selection so the pane doesn't
+          // keep rendering a dead show.
+          onDeleted={
+            isSplitView && actionSheetFor.id === selectedShowId
+              ? () => setShowId(null)
+              : undefined
+          }
         />
       ) : null}
       {markTicketedForId ? (
@@ -517,14 +561,14 @@ function TimelineView({
   rows,
   refreshControl,
   onLongPressShow,
-  isThreePane,
+  isSplitView,
   selectedShowId,
   onSelect,
 }: {
   rows: ShowRow[];
   refreshControl: React.ReactElement<import('react-native').RefreshControlProps>;
   onLongPressShow: (row: ShowRow) => void;
-  isThreePane: boolean;
+  isSplitView: boolean;
   selectedShowId: string | null;
   onSelect: (id: string) => void;
 }): React.JSX.Element {
@@ -604,7 +648,7 @@ function TimelineView({
         <View style={{ paddingHorizontal: 20 }}>
           <RowCard
             row={item}
-            isThreePane={isThreePane}
+            isSplitView={isSplitView}
             selected={selectedShowId === item.id}
             onSelect={onSelect}
             onLongPress={() => onLongPressShow(item)}
@@ -619,12 +663,13 @@ function TimelineView({
 
 /**
  * Single row that branches navigation based on whether we're inside the
- * iPad three-pane shell. On iPad: tap → context selection. On phone:
- * tap → push the /show/[id] route via expo-router's Link.
+ * tablet split view. Split view: tap → context selection, row renders a
+ * highlight instead of a push chevron. Phone: tap → push the /show/[id]
+ * route via expo-router's Link.
  */
 function RowCard({
   row,
-  isThreePane,
+  isSplitView,
   selected,
   onSelect,
   onLongPress,
@@ -632,7 +677,7 @@ function RowCard({
   testID,
 }: {
   row: ShowRow;
-  isThreePane: boolean;
+  isSplitView: boolean;
   selected: boolean;
   onSelect: (id: string) => void;
   onLongPress: () => void;
@@ -641,18 +686,19 @@ function RowCard({
 }): React.JSX.Element {
   const { token } = useAuth();
   const card = toShowCard(row, token);
-  if (isThreePane) {
+  if (isSplitView) {
     return (
       <ShowCard
         show={card}
         compact={compact}
+        selected={selected}
         onPress={() => onSelect(row.id)}
         onLongPress={onLongPress}
         testID={testID}
       />
     );
   }
-  // Suppress the unused-selected warning on phone — selection is iPad-only.
+  // Suppress the unused-selected warning on phone — selection is tablet-only.
   void selected;
   return (
     <Link href={`/show/${row.id}`} asChild>
@@ -675,7 +721,7 @@ function CalendarView({
   stateBucket,
   refreshControl,
   onLongPressShow,
-  isThreePane,
+  isSplitView,
   selectedShowId,
   onSelect,
 }: {
@@ -683,7 +729,7 @@ function CalendarView({
   stateBucket: 'upcoming' | 'past';
   refreshControl: React.ReactElement<import('react-native').RefreshControlProps>;
   onLongPressShow: (row: ShowRow) => void;
-  isThreePane: boolean;
+  isSplitView: boolean;
   selectedShowId: string | null;
   onSelect: (id: string) => void;
 }): React.JSX.Element {
@@ -976,7 +1022,7 @@ function CalendarView({
               <RowCard
                 key={row.id}
                 row={row}
-                isThreePane={isThreePane}
+                isSplitView={isSplitView}
                 selected={selectedShowId === row.id}
                 onSelect={onSelect}
                 onLongPress={() => onLongPressShow(row)}

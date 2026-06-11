@@ -8,9 +8,12 @@
  *    count, photo count, notes indicator).
  *  - One tRPC fetch per data dependency (prediction, hype gate, badges,
  *    previews) so the tabs share data and don't double-fetch.
- *  - When the iPad three-pane provider is mounted (`useSelectedShow().
- *    isThreePane`), the right rail is suppressed here — the iPad
- *    layout owns its own rail at the outer level.
+ *  - Tablet adaptations: when mounted inside the Shows tab split view
+ *    (`embeddedInSplitView`) the inline right rail is suppressed — the
+ *    pane shares the window with the shows list and the hype playlist
+ *    is still reachable on the Setlist tab. The Overview tab gains an
+ *    inline venue mini-map (VenueMapCard) on tablet in both embedded
+ *    and pushed presentations.
  */
 
 import React from 'react';
@@ -59,6 +62,7 @@ import {
 import { MediaTab } from './MediaTab';
 import { NotesTab } from './NotesTab';
 import { ShowDetailRightRail } from './ShowDetailRightRail';
+import { VenueMapCard } from './VenueMapCard';
 import { HypePlaylistCard } from './HypePlaylistCard';
 import { KindBadge } from '../KindBadge';
 import { MediaGrid, type MediaGridItem } from '../MediaGrid';
@@ -99,6 +103,11 @@ interface ShowVenue {
   stateRegion: string | null;
   photoUrl?: string | null;
   googlePlaceId?: string | null;
+  /** Present on the shows.detail payload (full venue row); feeds the
+   *  tablet VenueMapCard. Numeric strings tolerated — Drizzle returns
+   *  doublePrecision as number but older cached payloads may differ. */
+  latitude?: number | string | null;
+  longitude?: number | string | null;
 }
 interface PerformerSetlistSection {
   kind: string;
@@ -129,9 +138,10 @@ export interface ShowDetail {
 
 export interface ShowDetailTabsViewProps {
   show: ShowDetail;
-  /** When true, the iPad three-pane is mounting this view in its
-   *  middle pane — suppress the inline right rail. */
-  embeddedInThreePane?: boolean;
+  /** When true, the Shows tab split view is mounting this view in its
+   *  detail pane — suppress the inline right rail (the pane already
+   *  shares the window with the shows list). */
+  embeddedInSplitView?: boolean;
   /** Optional initial tab override (deep link). */
   initialTab?: ShowTabKey;
   /** Floating hero chrome callbacks. When provided, `HeaderStrip` renders
@@ -143,7 +153,7 @@ export interface ShowDetailTabsViewProps {
 
 export function ShowDetailTabsView({
   show,
-  embeddedInThreePane = false,
+  embeddedInSplitView = false,
   initialTab,
   onBack,
   onMore,
@@ -503,6 +513,22 @@ export function ShowDetailTabsView({
       // Until then the slot stays empty rather than teasing the feature
       // with a placeholder card.
       musicLayerSlot={null}
+      // Tablet: inline venue mini-map, the two-column successor to the
+      // retired three-pane shell's dedicated map column. The card
+      // no-ops when the venue has no coordinates.
+      venueMapSlot={
+        breakpoint === 'tablet' ? (
+          <VenueMapCard
+            venue={{
+              id: show.venue.id,
+              name: show.venue.name,
+              city: show.venue.city ?? null,
+              latitude: show.venue.latitude ?? null,
+              longitude: show.venue.longitude ?? null,
+            }}
+          />
+        ) : null
+      }
     />
   );
 
@@ -559,10 +585,12 @@ export function ShowDetailTabsView({
     />
   );
 
-  // Right rail (iPad only when not embedded already, since the iPad
-  // three-pane mounts its rail at the outer level).
+  // Right rail: tablet full-screen presentation only (show detail
+  // pushed as a stack route from Home / artist / venue pages). The
+  // split-view detail pane skips it — it already shares the window
+  // with the shows list, and the hype card lives on the Setlist tab.
   const showInlineRail =
-    breakpoint === 'tablet' && !embeddedInThreePane;
+    breakpoint === 'tablet' && !embeddedInSplitView;
   const railHypeMeta = React.useMemo(() => {
     if (!hypePlaylistEnabled) return null;
     if (isPast) return null;

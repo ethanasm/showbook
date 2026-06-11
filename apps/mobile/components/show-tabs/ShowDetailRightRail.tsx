@@ -1,7 +1,10 @@
 /**
- * ShowDetailRightRail (iPad) — the persistent right pane on the iPad
- * three-pane shell. In v1 it pins the HypePlaylistCard (pre-show) +
- * FanLoyaltyRing (post-show, once P7 lands). Hidden on phones.
+ * ShowDetailRightRail (tablet) — companion column rendered when show
+ * detail is presented full-screen on a tablet (pushed as a stack route
+ * from Home / artist / venue pages). It pins the HypePlaylistCard
+ * (pre-show) + FanLoyaltyRing (post-show, once P7 lands). Hidden on
+ * phones and inside the Shows tab split view, where the detail pane
+ * already shares the window with the shows list.
  *
  * The component is intentionally a thin wrapper around the slot props
  * so the SetlistTab can share the same atom instances when needed.

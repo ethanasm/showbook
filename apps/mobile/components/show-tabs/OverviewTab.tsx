@@ -47,6 +47,11 @@ export interface OverviewTabProps {
   lineupLabel?: string;
   actions: OverviewAction[];
   musicLayerSlot?: React.ReactNode;
+  /**
+   * Tablet-only inline venue mini-map (VenueMapCard). Phone leaves it
+   * null — the Map tab is one tap away and vertical space is scarcer.
+   */
+  venueMapSlot?: React.ReactNode;
   isPast: boolean;
   onOpenPerformer?: (performerId: string) => void;
 }
@@ -57,6 +62,7 @@ export function OverviewTab({
   lineupLabel = 'Lineup',
   actions,
   musicLayerSlot,
+  venueMapSlot,
   isPast,
   onOpenPerformer,
 }: OverviewTabProps): React.JSX.Element {
@@ -174,6 +180,8 @@ export function OverviewTab({
           ) : null}
         </View>
       </SectionFrame>
+
+      {venueMapSlot}
 
       <SectionFrame title="Actions">
         <View style={styles.actionRow}>
