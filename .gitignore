@@ -8,6 +8,10 @@ node_modules/
 # this in; it's a write-access credential to the Play Console release
 # track.
 apps/mobile/play-service-account.json
+# Same deal for iOS — App Store Connect API private key written at CI
+# submit time from the ASC_API_KEY_P8 secret. Write access to TestFlight
+# / App Store submission for the team.
+apps/mobile/asc-api-key.p8
 
 # Next.js
 .next/

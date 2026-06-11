@@ -61,6 +61,18 @@ Then add testers: Play Console → Testing → Internal testing → tester
 emails + opt-in link; App Store Connect → TestFlight → Internal Testing →
 up to 100 testers, no review.
 
+> CI does this automatically: `.github/workflows/mobile-deploy.yml`
+> runs the same `preview-store` build + submit pair on **both**
+> platforms whenever a CI-green push to `main` touches a
+> native-affecting path (or via the workflow_dispatch build mode).
+> Android submits with the `PLAY_SERVICE_ACCOUNT_JSON` secret, iOS
+> with the `ASC_API_KEY_P8` / `ASC_API_KEY_ID` / `ASC_API_KEY_ISSUER_ID`
+> / `ASC_APP_ID` secrets — see the workflow header for setup. The
+> manual commands above remain the fallback / first-run path (the
+> first iOS store build must run interactively once so EAS can
+> generate the App Store distribution certificate + provisioning
+> profile).
+
 **3 — Production env (once, before any `production`-profile build).** The
 `production` profile has no inline `env`; set each var as an EAS env var
 (`eas env:create --help` for exact flags on your CLI version):

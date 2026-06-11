@@ -55,6 +55,9 @@
       "android": {
         "track": "internal",
         "serviceAccountKeyPath": "./play-service-account.json"
+      },
+      "ios": {
+        "ascApiKeyPath": "./asc-api-key.p8"
       }
     }
   }
