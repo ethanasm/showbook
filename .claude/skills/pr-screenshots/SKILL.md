@@ -1,31 +1,37 @@
 ---
 name: pr-screenshots
-description: Use after opening a PR whose diff touches UI. Captures targeted Playwright screenshots for web changes and triggers the label-gated Maestro Cloud workflow for mobile changes, then embeds the visual review material into the PR body so reviewers don't have to pull the branch. Invoked by the creating-prs skill.
+description: Use after opening a PR whose diff touches UI. Captures targeted Playwright screenshots for web changes AND for mobile changes (Expo Web bundle), embeds inline before/after for every touched surface into the PR body, and additionally triggers the label-gated native Maestro workflow for mobile diffs. Invoked by the creating-prs skill.
 ---
 
 # PR screenshots
 
 ## Overview
 
-Visual review happens inline in the PR description. Two surfaces, two
-capture paths:
+Visual review happens inline in the PR description. **Every surface
+the diff touches gets inline before/after screenshots in the PR body
+before this skill is done** — the mobile-visual label / native
+workflow is a supplement, never a substitute. If the diff touches
+both web and mobile, the body gets both sets. Capture paths:
 
 - **Web** — Playwright runs locally (the sandbox has Chromium and the
-  Next.js dev server) and produces full-page PNGs of the affected
-  routes. PNGs are pushed to an orphan `pr-screenshots` branch in this
-  repo and embedded as `https://github.com/ethanasm/showbook/raw/...`
-  URLs. Cost: ~30–60s of dev-server + Chromium time per run; storage
-  is free (orphan branch).
-- **Mobile** — the sandbox can't run iOS or KVM-backed Android, so
-  capture happens on Maestro Cloud via the existing `mobile-e2e`
-  workflow. The skill attaches the `mobile-visual` label to the PR;
-  the workflow does the build, runs the flows, and edits the
-  `## Mobile screenshots` section into the PR body itself. Cost: 1
-  EAS build + 3 Maestro flows per labelled PR (free tier handles
-  ~30 PRs/month combined).
-
-There is no sandbox-local mobile capture path. That's a
-Linux-without-KVM constraint, not a skill choice.
+  Next.js dev server) and produces PNGs of the affected routes. PNGs
+  are pushed to an orphan `pr-screenshots` branch in this repo and
+  embedded as `https://github.com/ethanasm/showbook/raw/...` URLs.
+  Cost: ~30–60s of dev-server + Chromium time per run; storage is
+  free (orphan branch).
+- **Mobile, inline (mandatory for mobile diffs)** — the sandbox can't
+  run iOS or a KVM-backed Android emulator, but it CAN render the
+  Expo **Web** bundle (`pnpm mobile:web:build`, then Playwright at
+  390×844 against `dist-web/` — same harness as
+  `apps/mobile/web-tests/*.spec.ts`; see "Headless web verification"
+  in `apps/mobile/CLAUDE.md`). Capture the changed screen here and
+  embed before/after exactly like the web flow. Details in "Mobile
+  flow" below.
+- **Mobile, native (supplementary)** — attaching the `mobile-visual`
+  label triggers the self-hosted `mobile-e2e` workflow (Android build
+  + Maestro flows). On success it only links the run and uploads the
+  screenshots as a CI artifact — reviewers won't see them inline,
+  which is exactly why the Expo-web captures above are not optional.
 
 ## When to use
 
@@ -117,6 +123,10 @@ The script publishes PNGs to `pr-screenshots:<branch>/<name>.png` and
 prints a JSON array of `{ name, url }`. The orphan branch is created
 on first run.
 
+**The script wipes `<branch>/` on every run** before copying, so a
+re-upload must stage *every* PNG the PR body references (web + mobile,
+before + after) in one `--dir`, or previously-embedded images 404.
+
 ### 4. Update the PR body
 
 Read the current body via `mcp__github__pull_request_read` and append
@@ -131,7 +141,10 @@ so re-runs replace cleanly:
 <!-- web-screenshots:end -->
 ```
 
-Edit via `mcp__github__update_pull_request`.
+Edit via `mcp__github__update_pull_request`. Note: the MCP write path
+strips HTML comments, so don't count on the sentinels surviving —
+after the first update, locate the section by its `## Screenshots`
+heading (everything up to the next `##`) when replacing it.
 
 ### 5. Pixel-diff the captures and pick a layout the reader can see
 
@@ -228,24 +241,72 @@ or surface the blocker to the user explicitly.
 
 ## Mobile flow
 
-### 1. Add the label
+### 1. Capture inline before/after from the Expo Web bundle
+
+This is the part reviewers actually see — do it for every mobile
+diff, even when the native workflow is also triggered.
+
+1. Build the bundle at HEAD: `pnpm mobile:web:build` (writes
+   `apps/mobile/dist-web/`).
+2. Stage a temporary spec under `apps/mobile/web-tests/` (don't
+   commit it; delete after). Copy the patterns from the existing
+   specs there: seed the session via `page.addInitScript` writing the
+   `secureStore::showbook.auth.*` localStorage keys, mock
+   `**/api/trpc/**` with `page.route` fixtures shaped like the
+   procedures the screen calls, navigate to the route
+   (`/(tabs)/<tab>` or a stack route), wait on a stable on-screen
+   assertion, then screenshot. Capture **both** a full-screen shot
+   (context) and an element/clip crop of the changed region (the
+   thing the pixel-diff gate judges). The harness viewport is 390×844
+   @2x, so full-screen PNGs are 780px wide — readable at GitHub's
+   render width.
+3. The "before" set needs a **rebuild**, not just a file revert — the
+   bundle bakes the source in: `git checkout <base> -- <changed
+   mobile files>`, `pnpm mobile:web:build`, re-run the spec with a
+   `…-before.png` output name, then `git checkout HEAD -- <files>`
+   and rebuild if you need the after-state bundle again.
+4. Pixel-diff and embed exactly like web steps 3–5 (same orphan
+   branch, same upload script, same `## Screenshots` section — use a
+   `### Mobile` subsection beside the `### Web` one).
+
+Caveats: the Expo-web render uses `web-shims/` (native maps render as
+an empty dark area, no SQLite cache), so frame the capture around the
+UI you changed, not map tiles. See "Headless web verification" in
+`apps/mobile/CLAUDE.md` for what the web bundle can and cannot show —
+if the changed UI is native-only (e.g. map markers, camera), say so
+in the PR body and lean on the native workflow below.
+
+### 2. Add the label for the native (Android) capture
 
 Use `mcp__github__issue_write` with action `add_labels` and label
 `mobile-visual`. The `mobile-e2e` workflow's PR trigger is gated on
-this label, so attaching it kicks off the build + flows.
+this label, so attaching it kicks off the self-hosted Android build +
+Maestro flows.
 
-### 2. Hand back to creating-prs
+### 3. Hand back to creating-prs
 
-The workflow does the rest — it captures the Maestro Cloud upload URL
-and edits a `## Mobile screenshots` section into the PR body itself
-(bracketed with `<!-- mobile-screenshots:start -->` sentinels for
-clean replacement on re-runs).
+The workflow edits its own section into the PR body when it finishes.
+Know what it does and doesn't give you: on **success** it links the
+run and stores the Maestro screenshots as the `maestro-debug-<run-id>`
+artifact (not inline); on **failure** it pushes screenshots to the
+orphan branch under `mobile-e2e/run-<id>/` and comments with raw
+URLs. Either way it does not replace the inline Expo-web captures
+from step 1.
 
 `creating-prs` is already subscribed to PR activity, so the user sees
 the workflow finish and the body update arrive as webhook events.
 
 ## Anti-patterns
 
+- **Covering a mobile diff with only the `mobile-visual` label.** The
+  native workflow's screenshots land in a CI artifact, not the PR
+  body — a reviewer opening the PR sees nothing. A diff that touches
+  `apps/mobile/{app,components}` is not done until inline Expo-web
+  before/after captures are embedded; a diff touching both surfaces
+  needs both a `### Web` and a `### Mobile` set.
+- Capturing the mobile "before" by reverting source files without
+  rebuilding `dist-web` — the bundle is baked at export time, so both
+  captures come out as AFTER.
 - Capturing every page in the app on every PR — pick targeted routes
   from the diff or ask the user.
 - Committing `apps/web/tests/.pr-screenshots.json` — it's gitignored
@@ -255,8 +316,8 @@ the workflow finish and the body update arrive as webhook events.
 - Manually attaching mobile screenshots from a teammate's device —
   the Maestro Cloud capture is reproducible; ad-hoc captures aren't.
 - Re-running the mobile workflow without removing the label first
-  when the user only wanted one capture — they're EAS-build-minutes
-  expensive.
+  when the user only wanted one capture — each run is a full Android
+  build + emulator boot on the self-hosted runner.
 - **Posting before/after PNGs without running the pixel-diff in step 5.**
   Identical hashes, < 2% diff at thumbnail render size, or a
   full-page frame for a 4 px CSS change — all of these ship a PR
