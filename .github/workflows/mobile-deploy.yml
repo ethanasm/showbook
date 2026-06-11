@@ -25,8 +25,14 @@ name: Mobile Deploy (preview)
 # triggering merge (the version line changed in the diff) is respected
 # — the workflow ships it as-is instead of double-bumping. The
 # workflow_dispatch `bump` input can override the scan (patch / minor /
-# none). The bump-back push uses GITHUB_TOKEN, whose pushes never
-# trigger workflows, so it cannot re-trigger CI or this deploy.
+# none). The bump-back push has to get past main's branch protection:
+# either the GitHub Actions app is on the protection ruleset's bypass
+# list (then the default GITHUB_TOKEN works), or the RELEASE_PUSH_TOKEN
+# secret holds a fine-grained PAT that can push to main — see the
+# Versioning section of docs/specs/mobile-deployment.md. Neither path
+# can re-trigger CI or this deploy: GITHUB_TOKEN pushes never trigger
+# workflows, and the PAT path is covered by [skip ci] in the bump
+# commit message (this deploy only runs off CI completion / dispatch).
 #
 # **Android builds auto-submit to the Play Console internal testing
 # track** (via `eas submit`) using the service account JSON in the
@@ -125,6 +131,16 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # main is branch-protected ("changes must be made through a pull
+          # request"), which rejects GITHUB_TOKEN pushes — that's what
+          # failed the first bump run. RELEASE_PUSH_TOKEN is a fine-grained
+          # PAT (repo-scoped, Contents: read/write) from an actor allowed
+          # to bypass the protection; when set, checkout wires it into the
+          # repo's push credentials so `Bump app version` can land the
+          # bump commit + tag. Falls back to GITHUB_TOKEN, which works
+          # only if the GitHub Actions app is on the protection's bypass
+          # list (repo rulesets support that; classic protection doesn't).
+          token: ${{ secrets.RELEASE_PUSH_TOKEN || github.token }}
           # Full history + tags. Two consumers:
           #  - `Detect native changes` diffs HEAD against HEAD~1 to decide
           #    OTA vs. build (with the old default fetch-depth: 1, HEAD~1
@@ -299,13 +315,28 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B main
           git add apps/mobile/app.config.ts
-          # [skip ci] is belt-and-braces: GITHUB_TOKEN pushes never trigger
-          # workflows, so this commit can't re-run CI or this deploy.
+          # [skip ci] matters: when RELEASE_PUSH_TOKEN (a PAT) does the
+          # push, the push WOULD trigger the CI workflow — [skip ci]
+          # suppresses that, and the deploy itself only runs off CI
+          # completion or manual dispatch, so the bump commit can't
+          # re-trigger either workflow. (With the GITHUB_TOKEN fallback,
+          # pushes never trigger workflows at all.)
           git commit -m "chore(release): mobile v${NEW} [skip ci]"
           git tag "mobile-v${NEW}"
+          # --atomic: the commit and the tag land together or not at all.
+          # The first bump run pushed non-atomically and branch protection
+          # rejected main AFTER the tag ref was accepted, leaving an
+          # orphan mobile-v0.1.2 tag pointing at a commit main never got.
           for i in 1 2 3; do
-            if git push origin main "mobile-v${NEW}"; then
+            if git push --atomic origin main "mobile-v${NEW}" 2>&1 | tee /tmp/bump-push.log; then
               break
+            fi
+            # A branch-protection rejection is a configuration problem,
+            # not a push race — retrying can't fix it. Fail immediately
+            # with the remedy spelled out.
+            if grep -qiE 'protected branch|GH006|GH013' /tmp/bump-push.log; then
+              echo "::error::Branch protection on main rejected the version-bump push. Fix (pick one): add the 'GitHub Actions' app to the ruleset's bypass list, OR create a fine-grained PAT (Contents: read/write, owner must be able to bypass the protection) and save it as the RELEASE_PUSH_TOKEN repo secret. Details: docs/specs/mobile-deployment.md → Versioning."
+              exit 1
             fi
             if [ "$i" = 3 ]; then
               echo "Could not push the version-bump commit after 3 attempts." >&2

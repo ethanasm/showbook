@@ -152,9 +152,32 @@ rule above):
 - A **manual** version edit in the triggering merge (e.g. the 1.0.0
   jump) is detected and respected — the workflow ships it without
   bumping again.
-- The bump-back push uses `GITHUB_TOKEN`, whose pushes never trigger
-  workflows, so it can't re-trigger CI or the deploy (the `[skip ci]`
-  in the message is belt-and-braces).
+- **The bump-back push must get past `main`'s branch protection**
+  ("changes must be made through a pull request" — it rejected the
+  first bump run, 2026-06-11, GH006). Two supported setups, in
+  preference order:
+  1. **Ruleset bypass (recommended, no secrets):** recreate the
+     protection as a repository ruleset (Settings → Rules → Rulesets →
+     new branch ruleset targeting `main`, require a pull request) and
+     add the **GitHub Actions** app to the ruleset's bypass list, then
+     delete the overlapping classic protection rule. The workflow's
+     default `GITHUB_TOKEN` push then goes through — and
+     `GITHUB_TOKEN` pushes never trigger workflows, so the bump can't
+     re-trigger CI or the deploy. Classic branch protection has no app
+     bypass list, which is why it has to become a ruleset.
+  2. **`RELEASE_PUSH_TOKEN` secret:** a fine-grained PAT scoped to
+     this repo with Contents read/write, from an actor the protection
+     doesn't apply to. The workflow's checkout prefers it over
+     `GITHUB_TOKEN` automatically. PAT pushes DO trigger workflows —
+     the `[skip ci]` in the bump commit message suppresses CI (and the
+     deploy only runs off CI completion or manual dispatch, so neither
+     can loop). PATs expire; rotation is on you.
+- The commit and tag are pushed with `--atomic`, so a rejected push
+  can't leave an orphan `mobile-v*` tag (the first bump run did
+  exactly that — the tag ref was accepted before branch protection
+  rejected `main`). A protection rejection fails the job immediately
+  with the remedy in the error message; only genuine push races are
+  retried (rebase + re-push, 3 attempts).
 
 ---
 
