@@ -914,6 +914,9 @@ export default function DiscoverScreen(): React.JSX.Element {
             allLabel="All venues"
             variant="sub"
             hideCounts
+            pickerTitle="All venues"
+            pickerSearchable
+            pickerSearchPlaceholder="Search venues…"
             testIdPrefix="discover-venue-chip"
           />
         )}

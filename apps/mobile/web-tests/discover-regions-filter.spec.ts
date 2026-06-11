@@ -226,6 +226,128 @@ test.describe('mobile web — discover regions venue filter', () => {
       animations: 'disabled',
     });
   });
+
+  // The venue sub-rail's overflow picker sheet carries a pinned search
+  // bar (parity with the Venues tab's "All venues" picker). Seed enough
+  // venues to force the rail past one line so the "+N" dropdown — and the
+  // sheet it opens — are reachable, then assert the search field filters.
+  test('regions venue picker sheet has a pinned search bar that filters', async ({ page }) => {
+    const MANY_VENUES = Array.from({ length: 12 }, (_, i) => {
+      const names = [
+        'Bowery Ballroom',
+        'Madison Square Garden',
+        'Brooklyn Steel',
+        'Webster Hall',
+        'Terminal 5',
+        'Music Hall of Williamsburg',
+        'Beacon Theatre',
+        'Radio City Music Hall',
+        'Irving Plaza',
+        'Mercury Lounge',
+        'Knockdown Center',
+        'Kings Theatre',
+      ];
+      const vid = `venue-${i}`;
+      return {
+        id: `m-${i}`,
+        showDate: FUTURE(5 + i),
+        kind: 'concert',
+        headliner: `Headliner ${i}`,
+        productionName: null,
+        support: [],
+        headlinerPerformerId: `mp-${i}`,
+        supportPerformerIds: [],
+        venue: { id: vid, name: names[i], city: 'New York' },
+        venueId: vid,
+        regionId: 'region-nyc',
+        regionCityName: 'New York',
+        regionRadiusMiles: 30,
+        onSaleDate: FUTURE(1),
+        onSaleStatus: 'on_sale',
+        sourceUrl: null,
+      };
+    });
+
+    await page.addInitScript(
+      ({ token, userJson }) => {
+        window.localStorage.setItem('secureStore::showbook.auth.token', token);
+        window.localStorage.setItem('secureStore::showbook.auth.user', userJson);
+        window.localStorage.setItem('secureStore::showbook.auth.firstRunComplete', 'true');
+      },
+      { token: TEST_SESSION.token, userJson: JSON.stringify(TEST_SESSION.user) },
+    );
+
+    await page.route('**/api/trpc/**', async (route) => {
+      const url = new URL(route.request().url());
+      const procedurePath = url.pathname.split('/api/trpc/')[1] ?? '';
+      const baseProcedure = procedurePath.split('?')[0] ?? '';
+      const isBatch = url.searchParams.get('batch') === '1';
+      const procedures = isBatch ? baseProcedure.split(',') : [baseProcedure];
+
+      const dataFor = (proc: string): unknown => {
+        if (proc === 'discover.nearbyFeed') {
+          return { items: MANY_VENUES, hasRegions: true, nextCursors: {} };
+        }
+        if (proc === 'discover.followedFeed' || proc === 'discover.followedArtistsFeed') {
+          return { items: [], nextCursor: null };
+        }
+        if (proc === 'preferences.get') {
+          return {
+            regions: REGIONS,
+            notifications: { email: false, push: false },
+            emailDigest: { enabled: false },
+          };
+        }
+        if (proc === 'venues.followed' || proc === 'performers.followed') {
+          return [];
+        }
+        if (proc === 'shows.list') return [];
+        return null;
+      };
+
+      const results = procedures.map((p) => ({ result: { data: { json: dataFor(p) } } }));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(isBatch ? results : results[0]),
+      });
+    });
+
+    await page.goto('/discover');
+    await page.waitForLoadState('networkidle');
+
+    await page.getByRole('button', { name: 'Regions' }).first().click();
+    await page.waitForTimeout(500);
+
+    // Open the venue rail's overflow sheet via the trailing "+N" dropdown.
+    const more = page.getByTestId('discover-venue-chip-more');
+    await expect(more).toHaveCount(1);
+    await more.first().click();
+    await page.waitForTimeout(300);
+
+    // The pinned search bar is present at the top of the sheet.
+    const search = page.getByTestId('discover-venue-chip-sheet-search');
+    await expect(search).toBeVisible();
+
+    await page.screenshot({
+      path: join(OUT_DIR, '15-discover-regions-venue-sheet-search.png'),
+      fullPage: true,
+      animations: 'disabled',
+    });
+
+    // Typing narrows the list: "Beacon" leaves the Beacon Theatre row and
+    // drops the unrelated venues.
+    await search.fill('Beacon');
+    await page.waitForTimeout(200);
+    await expect(page.getByTestId('discover-venue-chip-sheet-venue-6')).toBeVisible();
+    await expect(page.getByTestId('discover-venue-chip-sheet-venue-0')).toHaveCount(0);
+
+    await page.screenshot({
+      path: join(OUT_DIR, '16-discover-regions-venue-sheet-search-filtered.png'),
+      fullPage: true,
+      animations: 'disabled',
+    });
+  });
 });
 
 /**
