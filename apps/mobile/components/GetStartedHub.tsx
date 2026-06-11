@@ -9,16 +9,28 @@
  *
  * Two variants:
  *   - "expanded" — replaces the Home-tab empty state for a brand-new user.
- *   - "card" — slim banner above the dashboard once the user has shows but
- *      no follows yet. Dismissible; persistence via expo-secure-store
- *      (matches the existing pattern in lib/theme.ts).
+ *   - "card" — slim setup checklist above the dashboard once the user has
+ *      shows; each step tracks live data (first show / first follow /
+ *      home region) and the card retires itself when everything is done.
+ *      Dismissible; persistence via expo-secure-store (matches the
+ *      existing pattern in lib/theme.ts).
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
-import { ArrowRight, Compass, Mail, Music, Plus, X } from 'lucide-react-native';
+import {
+  ArrowRight,
+  Check,
+  ChevronRight,
+  Circle,
+  Compass,
+  Mail,
+  Music,
+  Plus,
+  X,
+} from 'lucide-react-native';
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { Eyebrow, GlowBackdrop, GradientEmphasis } from './design-system';
@@ -63,12 +75,27 @@ interface Door {
   href: string;
 }
 
+/**
+ * One row of the setup checklist (card variant). Mirrors the web hub's
+ * `GetStartedStep` — steps are computed by the Home tab from live
+ * queries so the hub stays presentational.
+ */
+export interface GetStartedStep {
+  id: string;
+  label: string;
+  done: boolean;
+  href: string;
+}
+
 export function GetStartedHub({
   variant,
   onDismiss,
+  steps,
 }: {
   variant: Variant;
   onDismiss?: () => void;
+  /** Checklist rows for the card variant; ignored by `expanded`. */
+  steps?: GetStartedStep[];
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -99,21 +126,33 @@ export function GetStartedHub({
     },
     {
       id: 'spotify',
-      title: 'Import from Spotify',
-      subtitle: 'Powers your Discover feed (manage from the web app).',
+      title: 'Follow your Spotify artists',
+      subtitle: "Seeds Discover with their announcements — it won't add shows. Manage from the web app.",
       icon: <Music size={18} color={colors.muted} />,
       href: '/integrations/spotify',
     },
   ];
 
   if (variant === 'card') {
+    const checklist = steps ?? [];
+    const doneCount = checklist.filter((s) => s.done).length;
     return (
       <View
         testID="get-started-card"
         style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.rule }]}
       >
         <View style={styles.cardHeader}>
-          <Text style={[styles.cardEyebrow, { color: colors.faint }]}>GET STARTED</Text>
+          <View style={styles.cardHeaderLeft}>
+            <Text style={[styles.cardEyebrow, { color: colors.faint }]}>GET STARTED</Text>
+            {checklist.length > 0 ? (
+              <Text
+                testID="get-started-progress"
+                style={[styles.cardProgress, { color: colors.accent }]}
+              >
+                {doneCount} of {checklist.length}
+              </Text>
+            ) : null}
+          </View>
           {onDismiss ? (
             <Pressable
               onPress={onDismiss}
@@ -125,25 +164,42 @@ export function GetStartedHub({
             </Pressable>
           ) : null}
         </View>
-        <Text style={[styles.cardSubtitle, { color: colors.muted }]}>
-          Backfill past shows, find upcoming events, or seed your follow graph.
-        </Text>
-        <View style={styles.cardActions}>
-          {doors.map((d) => (
-            <Pressable
-              key={d.id}
-              onPress={() => router.push(d.href)}
-              style={({ pressed }) => [
-                styles.cardChip,
-                { borderColor: colors.rule, opacity: pressed ? 0.6 : 1 },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={d.title}
-            >
-              {d.icon}
-              <Text style={[styles.cardChipLabel, { color: colors.ink }]}>{d.title}</Text>
-            </Pressable>
-          ))}
+        <View style={styles.cardSteps}>
+          {checklist.map((s) =>
+            s.done ? (
+              <View
+                key={s.id}
+                testID={`get-started-step-${s.id}`}
+                style={styles.cardStep}
+              >
+                <Check size={14} color={colors.accent} strokeWidth={2.4} />
+                <Text
+                  numberOfLines={1}
+                  style={[styles.cardStepLabel, { color: colors.muted }]}
+                >
+                  {s.label}
+                </Text>
+              </View>
+            ) : (
+              <Pressable
+                key={s.id}
+                testID={`get-started-step-${s.id}`}
+                onPress={() => router.push(s.href)}
+                accessibilityRole="button"
+                accessibilityLabel={s.label}
+                style={({ pressed }) => [styles.cardStep, pressed && { opacity: 0.6 }]}
+              >
+                <Circle size={12} color={colors.faint} strokeWidth={2} />
+                <Text
+                  numberOfLines={1}
+                  style={[styles.cardStepLabel, { color: colors.ink }]}
+                >
+                  {s.label}
+                </Text>
+                <ChevronRight size={14} color={colors.accent} strokeWidth={2} />
+              </Pressable>
+            ),
+          )}
         </View>
       </View>
     );
@@ -261,29 +317,29 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     fontFamily: 'Geist Sans',
   },
-  cardSubtitle: {
-    fontSize: 12,
-    fontFamily: 'Geist Sans',
-    lineHeight: 16,
-  },
-  cardActions: {
+  cardHeaderLeft: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 4,
+    alignItems: 'baseline',
+    gap: 8,
   },
-  cardChip: {
+  cardProgress: {
+    fontSize: 10,
+    fontFamily: 'Geist Mono',
+    letterSpacing: 0.6,
+  },
+  cardSteps: {
+    gap: 2,
+  },
+  cardStep: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderRadius: RADII.sm,
+    gap: 10,
+    paddingVertical: 8,
   },
-  cardChipLabel: {
-    fontSize: 11,
+  cardStepLabel: {
+    flex: 1,
+    fontSize: 13,
     fontFamily: 'Geist Sans',
-    letterSpacing: 0.3,
+    letterSpacing: 0.1,
   },
 });

@@ -37,7 +37,11 @@ import { MeTopBarAction } from '../../components/MeTopBarAction';
 import { KindFilterControl } from '../../components/KindFilterControl';
 import { kindFilterNoun, type KindFilterValue } from '../../components/KindFilterMenu';
 import { EmptyState } from '../../components/EmptyState';
-import { GetStartedHub } from '../../components/GetStartedHub';
+import {
+  GetStartedHub,
+  useGetStartedDismissed,
+  type GetStartedStep,
+} from '../../components/GetStartedHub';
 import { ShowCard, type ShowCardShow } from '../../components/ShowCard';
 import { HeroShowCard } from '../../components/HeroShowCard';
 import { ShowCardListSkeleton } from '../../components/skeletons';
@@ -243,6 +247,21 @@ export default function HomeScreen(): React.JSX.Element {
   });
   const compact = prefsQuery.data?.preferences?.compactMode ?? false;
 
+  // Setup-checklist inputs. Cache keys match the Discover tab's so a
+  // follow made there checks the step off here without a refetch.
+  const followedVenuesQuery = useCachedQuery<{ id: string }[]>({
+    queryKey: ['mobile', 'venues', 'followed'],
+    queryFn: () => utils.client.venues.followed.query(),
+    enabled: Boolean(token),
+  });
+  const followedArtistsQuery = useCachedQuery<{ id: string }[]>({
+    queryKey: ['mobile', 'artists', 'followed'],
+    queryFn: () => utils.client.performers.followed.query(),
+    enabled: Boolean(token),
+  });
+  const { dismissed: checklistDismissed, dismiss: dismissChecklist } =
+    useGetStartedDismissed();
+
   const refreshControl = useThemedRefreshControl(
     showsQuery.isFetching && !showsQuery.isLoading,
     () => {
@@ -320,6 +339,30 @@ export default function HomeScreen(): React.JSX.Element {
     };
   }, [showsQuery.data]);
 
+  // Setup checklist: shown above the dashboard until every step is done
+  // (or the user dismisses it). Mirrors the web home's card so the two
+  // surfaces agree on what "set up" means.
+  const hasFollows =
+    (followedVenuesQuery.data?.length ?? 0) > 0 ||
+    (followedArtistsQuery.data?.length ?? 0) > 0;
+  const hasRegion = (prefsQuery.data?.regions?.length ?? 0) > 0;
+  const checklistSteps: GetStartedStep[] = [
+    { id: 'add', label: 'Add your first show', done: sections.total > 0, href: '/add' },
+    { id: 'follow', label: 'Follow an artist or venue', done: hasFollows, href: '/discover' },
+    { id: 'region', label: 'Set a home region', done: hasRegion, href: '/discover' },
+  ];
+  // Wait for every input before rendering so a cold load doesn't flash
+  // unchecked steps at a fully set-up user.
+  const checklistReady =
+    followedVenuesQuery.data !== undefined &&
+    followedArtistsQuery.data !== undefined &&
+    prefsQuery.data !== undefined;
+  const showChecklist =
+    !checklistDismissed &&
+    checklistReady &&
+    sections.total > 0 &&
+    checklistSteps.some((s) => !s.done);
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
       <HomeHeader
@@ -369,6 +412,15 @@ export default function HomeScreen(): React.JSX.Element {
           <GetStartedHub variant="expanded" />
         ) : (
           <>
+            {showChecklist ? (
+              <View style={styles.checklistWrap}>
+                <GetStartedHub
+                  variant="card"
+                  steps={checklistSteps}
+                  onDismiss={dismissChecklist}
+                />
+              </View>
+            ) : null}
             {sections.hero ? (
               <Section
                 title={sections.heroIsToday ? 'Tonight' : 'Next up'}
@@ -614,6 +666,10 @@ const styles = StyleSheet.create({
   skeletonWrap: {
     paddingTop: 12,
     gap: 16,
+  },
+  checklistWrap: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
   },
   section: {
     paddingTop: 18,

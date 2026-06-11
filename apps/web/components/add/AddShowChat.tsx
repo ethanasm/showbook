@@ -12,6 +12,14 @@ interface ChatMessage {
   content: string;
 }
 
+// Tappable examples that teach the input format by showing it — same
+// set the mobile chat composer uses.
+const SUGGESTIONS = [
+  "Phoebe Bridgers at the Greek 8/15 GA",
+  "Hadestown at Walter Kerr Aug 14 8pm",
+  "Tyler the Creator MSG Sep 22 sec 224",
+];
+
 type ParseChatMutation = ReturnType<typeof trpc.enrichment.parseChat.useMutation>;
 type CreateShowMutation = ReturnType<typeof trpc.shows.create.useMutation>;
 
@@ -270,6 +278,44 @@ export function AddShowChat({
           </div>
         )}
       </div>
+
+      {/* Example pills — until the first message goes out, show what a
+          parseable sentence looks like. Clicking fills the composer so
+          the user can edit before sending. */}
+      {chatMessages.length === 1 && !parseChat.isPending && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+          {SUGGESTIONS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setChatInput(s)}
+              data-testid="chat-suggestion"
+              style={{
+                padding: "9px 13px",
+                background: "var(--surface)",
+                border: `1px solid var(--rule)`,
+                borderRadius: 999,
+                color: "var(--muted)",
+                fontFamily: sans,
+                fontSize: 12.5,
+                letterSpacing: -0.1,
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--rule-strong)";
+                e.currentTarget.style.color = "var(--ink)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "var(--rule)";
+                e.currentTarget.style.color = "var(--muted)";
+              }}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Ticketmaster "did you mean one of these?" picker */}
       {tmMatches && tmMatches.length > 0 && (

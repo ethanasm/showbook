@@ -34,11 +34,17 @@ import {
   Check,
   ChevronRight,
   Image as ImageIcon,
+  Plus,
   Sparkles,
   PenLine,
   Ticket,
   X,
 } from 'lucide-react-native';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  deriveFollowSuggestions,
+  type FollowSeedEntity,
+} from '@showbook/shared';
 
 import { TopBar } from '../../components/TopBar';
 import { useTheme } from '@/lib/theme';
@@ -46,6 +52,8 @@ import { RADII } from '@/lib/theme-utils';
 import { trpc } from '@/lib/trpc';
 import { useFeedback } from '@/lib/feedback';
 import { toUserMessage } from '@/lib/errors';
+import { runOptimisticMutation } from '@/lib/mutations';
+import { getCacheOutbox } from '@/lib/cache';
 import { WalletShareHowToSheet } from '../../components/WalletShareHowToSheet';
 import { FestivalPosterHowToSheet } from '../../components/FestivalPosterHowToSheet';
 import {
@@ -130,10 +138,95 @@ export default function AddChatScreen(): React.JSX.Element {
   // in when the round-trip resolves.
   const summarize = trpc.enrichment.summarizeShowSaved.useMutation();
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
   const [confirmation, setConfirmation] = React.useState<{
     showId: string;
     message: string;
   } | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // Follow seeding
+  // ---------------------------------------------------------------------------
+  // The saved show names exactly the artist and venue the user cares
+  // about — offer one-tap follows in the confirmation card so Discover
+  // stops being a cold start. Chips are derived from the canonical
+  // show detail (post-matchOrCreate*) minus anything already followed.
+  type FollowChip = FollowSeedEntity & {
+    type: 'performer' | 'venue';
+    state: 'idle' | 'pending' | 'done';
+  };
+  const [followSeed, setFollowSeed] = React.useState<{
+    showId: string;
+    chips: FollowChip[];
+  } | null>(null);
+
+  const handleFollowChip = React.useCallback(
+    async (chip: FollowChip) => {
+      const setChipState = (state: FollowChip['state']) =>
+        setFollowSeed((prev) =>
+          prev
+            ? {
+                ...prev,
+                chips: prev.chips.map((c) =>
+                  c.type === chip.type ? { ...c, state } : c,
+                ),
+              }
+            : prev,
+        );
+      setChipState('pending');
+      const followedKey =
+        chip.type === 'performer'
+          ? ['mobile', 'artists', 'followed']
+          : ['mobile', 'venues', 'followed'];
+      // Shared optimistic wiring — append the followed row so the
+      // Discover rail / checklist see the follow before the refetch.
+      const optimistic = {
+        snapshot: () => queryClient.getQueryData<{ id: string }[]>(followedKey),
+        apply: () => {
+          queryClient.setQueryData<{ id: string }[]>(followedKey, (prev) => {
+            const list = prev ?? [];
+            if (list.some((row) => row.id === chip.id)) return list;
+            return [...list, { id: chip.id }];
+          });
+        },
+        rollback: (snap: { id: string }[] | undefined) =>
+          queryClient.setQueryData(followedKey, snap),
+      };
+      try {
+        if (chip.type === 'performer') {
+          await runOptimisticMutation({
+            mutation: 'performers.follow',
+            input: { performerId: chip.id },
+            outbox: getCacheOutbox(),
+            call: (input) => utils.client.performers.follow.mutate(input),
+            optimistic,
+            reconcile: () => {
+              void utils.performers.followed.invalidate();
+            },
+          });
+        } else {
+          await runOptimisticMutation({
+            mutation: 'venues.follow',
+            input: { venueId: chip.id },
+            outbox: getCacheOutbox(),
+            call: (input) => utils.client.venues.follow.mutate(input),
+            optimistic,
+            reconcile: () => {
+              void utils.venues.followed.invalidate();
+            },
+          });
+        }
+        setChipState('done');
+      } catch (err) {
+        setChipState('idle');
+        showToast({
+          kind: 'error',
+          text: toUserMessage(err, `Couldn't follow ${chip.name} — try again`),
+        });
+      }
+    },
+    [queryClient, utils, showToast],
+  );
 
   React.useEffect(() => {
     const savedShowId = paramString(params.savedShowId);
@@ -144,6 +237,7 @@ export default function AddChatScreen(): React.JSX.Element {
       showId: savedShowId,
       message: 'Saved. Polishing the recap…',
     });
+    setFollowSeed(null);
     // Strip the param so a later focus / re-mount doesn't re-fire.
     router.setParams({ savedShowId: '' });
 
@@ -169,8 +263,35 @@ export default function AddChatScreen(): React.JSX.Element {
     // user's first guess.
     utils.client.shows.detail
       .query({ showId: savedShowId })
-      .then((detail) => {
+      .then(async (detail) => {
         if (!detail) return;
+
+        // Follow seeding — best-effort: filter the headliner / venue
+        // against what's already followed and surface the rest as
+        // one-tap chips on the confirmation card.
+        try {
+          const [followedPerformers, followedVenues] = await Promise.all([
+            utils.client.performers.followed.query().catch(() => []),
+            utils.client.venues.followed.query().catch(() => []),
+          ]);
+          const suggestions = deriveFollowSuggestions(detail, {
+            followedPerformerIds: followedPerformers.map((p) => p.id),
+            followedVenueIds: followedVenues.map((v) => v.id),
+          });
+          const chips: FollowChip[] = [];
+          if (suggestions.performer) {
+            chips.push({ ...suggestions.performer, type: 'performer', state: 'idle' });
+          }
+          if (suggestions.venue) {
+            chips.push({ ...suggestions.venue, type: 'venue', state: 'idle' });
+          }
+          if (chips.length > 0) {
+            setFollowSeed({ showId: savedShowId, chips });
+          }
+        } catch {
+          // No chips — the confirmation card still works without them.
+        }
+
         const performers = [...(detail.showPerformers ?? [])].sort(
           (a, b) => a.sortOrder - b.sortOrder,
         );
@@ -235,6 +356,7 @@ export default function AddChatScreen(): React.JSX.Element {
       // Sending a new message clears the previous confirmation card and
       // any stale Ticketmaster picker — the user is moving on.
       setConfirmation(null);
+      setFollowSeed(null);
       setTmMatches(null);
       setPendingForm(null);
       try {
@@ -396,9 +518,66 @@ export default function AddChatScreen(): React.JSX.Element {
                     <ChevronRight size={12} color={colors.accent} strokeWidth={2.4} />
                   </Pressable>
                 </View>
+                {followSeed &&
+                followSeed.showId === confirmation.showId &&
+                followSeed.chips.length > 0 ? (
+                  <View style={styles.followSeed}>
+                    <Text style={[styles.followSeedHint, { color: colors.muted }]}>
+                      Catch the next one — announcements land in Discover.
+                    </Text>
+                    <View style={styles.followSeedChips}>
+                      {followSeed.chips.map((chip) => (
+                        <Pressable
+                          key={chip.type}
+                          onPress={() => void handleFollowChip(chip)}
+                          disabled={chip.state !== 'idle'}
+                          accessibilityRole="button"
+                          accessibilityLabel={
+                            chip.state === 'done'
+                              ? `Following ${chip.name}`
+                              : `Follow ${chip.name}`
+                          }
+                          testID={`follow-seed-${chip.type}`}
+                          style={({ pressed }) => [
+                            styles.followSeedChip,
+                            {
+                              borderColor:
+                                chip.state === 'done' ? colors.accent : colors.rule,
+                              opacity:
+                                chip.state === 'pending' ? 0.5 : pressed ? 0.7 : 1,
+                            },
+                          ]}
+                        >
+                          {chip.state === 'done' ? (
+                            <Check size={12} color={colors.accent} strokeWidth={2.6} />
+                          ) : (
+                            <Plus size={12} color={colors.ink} strokeWidth={2.4} />
+                          )}
+                          <Text
+                            numberOfLines={1}
+                            style={[
+                              styles.followSeedChipLabel,
+                              {
+                                color:
+                                  chip.state === 'done' ? colors.accent : colors.ink,
+                              },
+                            ]}
+                          >
+                            {chip.state === 'done'
+                              ? `Following ${chip.name}`
+                              : `Follow ${chip.name}`}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
               </View>
               <Pressable
-                onPress={() => setConfirmation(null)}
+                onPress={() => {
+                  setConfirmation(null);
+                  setFollowSeed(null);
+                }}
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel="Dismiss"
@@ -508,6 +687,33 @@ export default function AddChatScreen(): React.JSX.Element {
               </Pressable>
             ))}
           </View>
+
+          {/* Manual-entry door — same destination as the pen icon in the
+              top bar, surfaced as a full door so form-first users don't
+              have to discover the chat is skippable. */}
+          <Pressable
+            onPress={() => router.push('/add/form')}
+            accessibilityRole="button"
+            accessibilityLabel="Add a show manually"
+            testID="add-manual-entry"
+            style={({ pressed }) => [
+              styles.posterDoor,
+              { borderColor: colors.rule, backgroundColor: colors.surface, opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <View style={[styles.posterIcon, { backgroundColor: colors.surfaceRaised }]}>
+              <PenLine size={18} color={colors.accent} strokeWidth={1.8} />
+            </View>
+            <View style={styles.posterBody}>
+              <Text style={[styles.posterTitle, { color: colors.ink }]}>
+                Add a show manually
+              </Text>
+              <Text style={[styles.posterSub, { color: colors.muted }]}>
+                Skip the chat — fill in the form yourself.
+              </Text>
+            </View>
+            <ArrowRight size={16} color={colors.faint} strokeWidth={2} />
+          </Pressable>
 
           {/* Festival poster door — opens a how-to sheet that runs the
               picker inline (mirrors the Apple Wallet door). On a successful
@@ -788,5 +994,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 1,
+  },
+  followSeed: {
+    gap: 8,
+    marginTop: 2,
+  },
+  followSeedHint: {
+    fontFamily: 'Geist Sans',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  followSeedChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  followSeedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderRadius: RADII.pill,
+    maxWidth: 240,
+  },
+  followSeedChipLabel: {
+    fontFamily: 'Geist Sans 600',
+    fontSize: 12,
+    flexShrink: 1,
   },
 });
