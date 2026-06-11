@@ -25,8 +25,16 @@ name: Mobile Deploy (preview)
 # triggering merge (the version line changed in the diff) is respected
 # — the workflow ships it as-is instead of double-bumping. The
 # workflow_dispatch `bump` input can override the scan (patch / minor /
-# none). The bump-back push uses GITHUB_TOKEN, whose pushes never
-# trigger workflows, so it cannot re-trigger CI or this deploy.
+# none). The bump-back push has to get past main's required-PR rule,
+# and the built-in github-actions app can NOT be put on a ruleset
+# bypass list — so the push authenticates as a deploy key
+# (RELEASE_DEPLOY_KEY secret + "Deploy keys" checked in the ruleset's
+# bypass list; recommended) or as a bypass-listed actor's fine-grained
+# PAT (RELEASE_PUSH_TOKEN secret) — see the Versioning section of
+# docs/specs/mobile-deployment.md. Neither path can loop this deploy:
+# deploy-key/PAT pushes do trigger workflows, but [skip ci] in the bump
+# commit message suppresses CI, and this deploy only runs off CI
+# completion / manual dispatch.
 #
 # **Builds auto-submit to the preview store track on BOTH platforms**
 # (via `eas submit`): Android to the Play Console internal testing
@@ -139,6 +147,24 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # main's ruleset requires PRs, which rejects GITHUB_TOKEN pushes
+          # — that's what failed the first bump run. The built-in
+          # github-actions app can NOT be put on a ruleset bypass list
+          # (GitHub limitation), so the bump-back push authenticates with
+          # one of these instead, in preference order:
+          #  1. RELEASE_DEPLOY_KEY — private half of a repo deploy key
+          #     with write access; "Deploy keys" is checked in the
+          #     ruleset's bypass list. Keys don't expire. When set,
+          #     checkout switches the remote to SSH and pushes
+          #     authenticate as the deploy key.
+          #  2. RELEASE_PUSH_TOKEN — fine-grained PAT (Contents:
+          #     read/write) from an actor on the bypass list (e.g. the
+          #     Repository admin role).
+          #  3. GITHUB_TOKEN fallback — can fetch, but its bump push WILL
+          #     be rejected while the required-PR rule has no usable
+          #     bypass for it; the bump step then fails with the remedy.
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
+          token: ${{ secrets.RELEASE_PUSH_TOKEN || github.token }}
           # Full history + tags. Two consumers:
           #  - `Detect native changes` diffs HEAD against HEAD~1 to decide
           #    OTA vs. build (with the old default fetch-depth: 1, HEAD~1
@@ -313,13 +339,28 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B main
           git add apps/mobile/app.config.ts
-          # [skip ci] is belt-and-braces: GITHUB_TOKEN pushes never trigger
-          # workflows, so this commit can't re-run CI or this deploy.
+          # [skip ci] matters: when RELEASE_PUSH_TOKEN (a PAT) does the
+          # push, the push WOULD trigger the CI workflow — [skip ci]
+          # suppresses that, and the deploy itself only runs off CI
+          # completion or manual dispatch, so the bump commit can't
+          # re-trigger either workflow. (With the GITHUB_TOKEN fallback,
+          # pushes never trigger workflows at all.)
           git commit -m "chore(release): mobile v${NEW} [skip ci]"
           git tag "mobile-v${NEW}"
+          # --atomic: the commit and the tag land together or not at all.
+          # The first bump run pushed non-atomically and branch protection
+          # rejected main AFTER the tag ref was accepted, leaving an
+          # orphan mobile-v0.1.2 tag pointing at a commit main never got.
           for i in 1 2 3; do
-            if git push origin main "mobile-v${NEW}"; then
+            if git push --atomic origin main "mobile-v${NEW}" 2>&1 | tee /tmp/bump-push.log; then
               break
+            fi
+            # A branch-protection rejection is a configuration problem,
+            # not a push race — retrying can't fix it. Fail immediately
+            # with the remedy spelled out.
+            if grep -qiE 'protected branch|GH006|GH013' /tmp/bump-push.log; then
+              echo "::error::main's protection rejected the version-bump push. The built-in github-actions app cannot be added to a ruleset bypass list, so configure one of: (1) recommended — check 'Deploy keys' in the ruleset's bypass list, add a write-access deploy key to the repo, and save its private key as the RELEASE_DEPLOY_KEY secret; (2) a PAT from a bypass-listed actor as RELEASE_PUSH_TOKEN. Details: docs/specs/mobile-deployment.md → Versioning."
+              exit 1
             fi
             if [ "$i" = 3 ]; then
               echo "Could not push the version-bump commit after 3 attempts." >&2
