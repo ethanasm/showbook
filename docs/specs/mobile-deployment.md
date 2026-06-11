@@ -39,8 +39,11 @@ package + EAS keystore **and** Play app-signing SHA-1s), and on-device
 
 ```bash
 pnpm mobile:typecheck && pnpm mobile:lint && pnpm mobile:test
-# bump `version` in apps/mobile/app.config.ts (EAS auto-bumps buildNumber/versionCode)
-# — see "Versioning" below for when/what to bump (0.x while in beta)
+# version: hands-off — the mobile-deploy workflow bumps app.config.ts
+# automatically on the build path (see "Versioning" below). Only edit
+# the version by hand for the deliberate 1.0.0 jump; the workflow
+# detects the manual change and won't double-bump. EAS auto-bumps
+# buildNumber/versionCode either way.
 ```
 
 **2 — Beta to testers (no public release).** Uses the `preview-store`
@@ -123,6 +126,35 @@ App Store Connect upload.
   incompatible bundles (the 0.1.0 → 0.1.1 SDK-56 lesson). JS-only
   releases ship via `eas update` **without** a bump; bumping for an
   OTA-only release would target a runtime no installed binary has.
+
+**Bumping is automated.** The `mobile-deploy.yml` workflow owns it on
+the build path (and only there — the OTA path never bumps, per the
+rule above):
+
+- Before `eas build`, the workflow runs
+  `scripts/bump-mobile-version.mjs`, commits the new version back to
+  `main` (`chore(release): mobile vX.Y.Z [skip ci]`), tags it
+  `mobile-vX.Y.Z`, pushes, then builds. The tag history doubles as the
+  release log.
+- **Minor vs patch** comes from a conventional-commit scan of the
+  squash-merge subjects on `main` since the last `mobile-v*` tag
+  (everything in that range rides the new binary, including changes
+  already OTA-shipped under the old version): any `feat:` /
+  `feat(scope):` subject → minor; a breaking marker (`type!:`) →
+  major, which maps to minor while we're pre-1.0 (D25); anything
+  unprefixed → patch. **Prefix feature PR titles with `feat:`** —
+  squash-merge makes the PR title the commit subject the scan reads.
+  An unprefixed feature ships as a patch bump, which is harmless but
+  loses the signal.
+- The `workflow_dispatch` build mode has a `bump` input
+  (`auto`/`patch`/`minor`/`none`) to override the scan; `none` ships
+  whatever version is already in `app.config.ts`.
+- A **manual** version edit in the triggering merge (e.g. the 1.0.0
+  jump) is detected and respected — the workflow ships it without
+  bumping again.
+- The bump-back push uses `GITHUB_TOKEN`, whose pushes never trigger
+  workflows, so it can't re-trigger CI or the deploy (the `[skip ci]`
+  in the message is belt-and-braces).
 
 ---
 
