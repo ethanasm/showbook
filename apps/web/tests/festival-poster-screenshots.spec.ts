@@ -102,7 +102,7 @@ test('festival lineup upload field + picker modal', async ({ page }) => {
   });
 
   await loginAndSeedAsWorker(page);
-  await page.goto('/add');
+  await page.goto('/add?mode=form');
   await page.waitForLoadState('networkidle');
   await page.addStyleTag({ content: HIDE_DEV_INDICATOR });
 
@@ -184,7 +184,7 @@ test('festival lineup upload field + picker modal', async ({ page }) => {
   // row (textarea + new paperclip button + send).
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: /add to show/i })).toBeHidden();
-  await page.getByRole('button', { name: /^conversational$/i }).first().click();
+  await page.getByRole('button', { name: /^chat$/i }).first().click();
 
   const chatArea = page.getByPlaceholder(/Describe your show/i);
   await expect(chatArea).toBeVisible();

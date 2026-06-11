@@ -5,7 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { EmptyState, HeroCard } from "@/components/design-system";
-import { GetStartedHub, useGetStartedDismissed } from "@/components/home/GetStartedHub";
+import {
+  GetStartedHub,
+  useGetStartedDismissed,
+  type GetStartedStep,
+} from "@/components/home/GetStartedHub";
 import "@/components/design-system/design-system.css";
 import type { ShowKind } from "@/components/design-system/KindBadge";
 import {
@@ -50,6 +54,7 @@ export default function HomeView() {
   const { data: shows, isLoading } = trpc.shows.list.useQuery({});
   const { data: followedArtists } = trpc.performers.followed.useQuery();
   const { data: followedVenues } = trpc.venues.followed.useQuery();
+  const { data: prefs } = trpc.preferences.get.useQuery();
   const { dismissed, dismiss } = useGetStartedDismissed();
   const {
     openContextMenu: handleRecentContextMenu,
@@ -168,12 +173,38 @@ export default function HomeView() {
   }
 
   const noShows = !isLoading && shows !== undefined && shows.length === 0;
-  const noFollows =
-    (followedArtists?.length ?? 0) === 0 &&
-    (followedVenues?.length ?? 0) === 0;
-  // Card appears once the user has shows but hasn't seeded a follow graph
-  // yet. Once they have both, or dismiss explicitly, the card is gone.
-  const showHubCard = !dismissed && !noShows && noFollows;
+  // Setup checklist. The card stays above the dashboard until every step
+  // is done (or the user dismisses it) — each step is tracked against
+  // live data so finishing one elsewhere checks it off here.
+  const hasFollows =
+    (followedArtists?.length ?? 0) > 0 || (followedVenues?.length ?? 0) > 0;
+  const hasRegion = (prefs?.regions?.length ?? 0) > 0;
+  const checklistSteps: GetStartedStep[] = [
+    { id: "add", label: "Add your first show", done: !noShows, href: "/add" },
+    {
+      id: "follow",
+      label: "Follow an artist or venue",
+      done: hasFollows,
+      href: "/discover",
+    },
+    {
+      id: "region",
+      label: "Set a home region",
+      done: hasRegion,
+      href: "/discover?tab=regions",
+    },
+  ];
+  // Wait for all three queries before showing the card so a cold load
+  // doesn't flash unchecked steps at a fully set-up user.
+  const checklistReady =
+    followedArtists !== undefined &&
+    followedVenues !== undefined &&
+    prefs !== undefined;
+  const showHubCard =
+    !dismissed &&
+    !noShows &&
+    checklistReady &&
+    checklistSteps.some((s) => !s.done);
 
   if (noShows) {
     return (
@@ -287,7 +318,11 @@ export default function HomeView() {
         }}
       >
         {showHubCard && (
-          <GetStartedHub variant="card" onDismiss={dismiss} />
+          <GetStartedHub
+            variant="card"
+            onDismiss={dismiss}
+            steps={checklistSteps}
+          />
         )}
         {/* ── NEXT UP Section ─────────────────────────────── */}
         <section>

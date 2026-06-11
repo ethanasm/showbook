@@ -24,6 +24,12 @@ export {
 export { buildIcs, defaultShowTime, slugifyForFilename, type IcsEvent } from './ical';
 export { isUpcomingDateHint, tmDateWindow } from './chat-tm-match';
 export {
+  deriveFollowSuggestions,
+  type FollowSeedEntity,
+  type FollowSeedShowLike,
+  type FollowSeedSuggestions,
+} from './follow-seed';
+export {
   normalizeShowName,
   showMatchesAnnouncement,
   type ShowForDedup,
