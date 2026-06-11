@@ -158,3 +158,14 @@ Resolved decisions and remaining open questions for the data layer.
 - The page-local filters on Shows / Discover / Artists / Venues remain — global search complements them rather than replacing them.
 
 **Rationale:** Most user lookups are page-local, but jumping between an artist, a show they were at, and the venue is a common cross-list query. A single keyboard-first palette is the lowest-friction surface.
+
+### D25: Mobile app versioning → SemVer; 0.x is the beta line, 1.0.0 is the first public release
+**Decision:** The mobile app uses plain numeric SemVer (`MAJOR.MINOR.PATCH`) in `apps/mobile/app.config.ts`. All beta builds (TestFlight / Play internal track, `preview-store` profile) live on the `0.MINOR.PATCH` line: bump MINOR for a feature batch, PATCH for a fix-only build. `1.0.0` is reserved for the first `production`-profile store submission. Build numbers are owned entirely by EAS (`appVersionSource: "remote"` + `autoIncrement`) — monotonic per platform, never reset, never set by hand, no semantic meaning.
+
+**Rules:**
+- **No pre-release suffixes.** `1.0.0-beta.1` is invalid as an iOS `CFBundleShortVersionString` (Apple requires up to three period-separated integers), so the beta marker is the major-version-zero line itself — which is exactly what SemVer reserves 0.x for ("initial development; anything may change").
+- **Version bumps are coupled to native builds**, because `runtimeVersion: { policy: 'appVersion' }` derives the OTA runtime from the version string. Any build with native changes (SDK upgrade, native dep, `app.config.ts`, permissions) MUST bump the version so old binaries refuse incompatible bundles. Conversely, JS-only releases ship via `eas update` *without* a bump — bumping for an OTA-only release would target a runtime no installed binary has, so nobody would receive it.
+- **After 1.0.0, "beta" is a distribution property, not a version property.** A `1.x` build goes to TestFlight / Play internal first and the *same artifact* is promoted to public when ready; the `preview` vs `production` update channels keep beta and prod OTAs apart even when version strings coincide. (One store record per bundle id — a permanently forked beta version line isn't possible anyway.)
+- The web app's `package.json` version is not user-facing and does not track the mobile version; web deploys are continuous.
+
+**Rationale:** Matches what's already shipped (`0.1.1` build 7 on devices), requires zero changes to `eas.json`, keeps the user-visible promise simple (0.x = beta, ≥1.0 = released), and respects the two hard constraints: Apple's numeric-only version format and expo-updates' appVersion runtime policy.

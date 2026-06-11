@@ -40,6 +40,7 @@ package + EAS keystore **and** Play app-signing SHA-1s), and on-device
 ```bash
 pnpm mobile:typecheck && pnpm mobile:lint && pnpm mobile:test
 # bump `version` in apps/mobile/app.config.ts (EAS auto-bumps buildNumber/versionCode)
+# — see "Versioning" below for when/what to bump (0.x while in beta)
 ```
 
 **2 — Beta to testers (no public release).** Uses the `preview-store`
@@ -93,6 +94,35 @@ eas submit --profile production --platform all --latest
 eas update --branch production --message "..."   # JS/asset only — ships in seconds, no store review
 # native deps / app.config.ts / permissions changed → fresh build + submit (steps 1 + 4)
 ```
+
+---
+
+## Versioning (decision D25 in `decisions.md`)
+
+Plain numeric SemVer in `app.config.ts` — **no pre-release suffixes**:
+`1.0.0-beta.1` is not a valid iOS `CFBundleShortVersionString` (Apple
+accepts at most three period-separated integers) and would fail the
+App Store Connect upload.
+
+- **Beta era (now):** every `preview-store` build stays on the
+  `0.MINOR.PATCH` line — MINOR for a feature batch, PATCH for a
+  fix-only build. The 0.x line *is* the beta marker.
+- **`1.0.0`** is the first `production`-profile store submission.
+- **After 1.0:** "beta" becomes a distribution property, not a version
+  property — a `1.x` build hits TestFlight / Play internal first, and
+  the same artifact is promoted to public. The `preview` vs
+  `production` update channels keep the OTA streams apart.
+- **Build number** (`build 7` on the device today) is EAS's
+  auto-incremented counter (`appVersionSource: "remote"` +
+  `autoIncrement`) — monotonic per platform, never reset, never set by
+  hand, no meaning beyond "newer upload".
+- **When to bump:** any native change (SDK, native dep,
+  `app.config.ts`, permissions) MUST bump the version —
+  `runtimeVersion: { policy: 'appVersion' }` derives the OTA runtime
+  from it, so the bump is what stops old binaries from accepting
+  incompatible bundles (the 0.1.0 → 0.1.1 SDK-56 lesson). JS-only
+  releases ship via `eas update` **without** a bump; bumping for an
+  OTA-only release would target a runtime no installed binary has.
 
 ---
 
