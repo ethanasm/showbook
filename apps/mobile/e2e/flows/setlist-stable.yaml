@@ -44,14 +44,21 @@ tags:
 - tapOn:
     id: "show-tab-setlist"
 
-- assertVisible:
-    id: "show-tab-setlist-badge"
+# NB: we do NOT assert `show-tab-setlist-badge` here. That pill
+# (ShowTabBar.tsx renders `show-tab-${key}-badge` only when
+# `badge != null`) is data-dependent — it shows a confidence % pre-show
+# or a song count post-show, both of which need seeded setlist-corpus
+# data. The e2e backend is keyless (no setlist.fm), so the add-show
+# fixture has no corpus and the badge legitimately doesn't render.
+# The assertion below is the real proof the V2 setlist tab mounted and
+# it already tolerates the cold/empty state our fixture produces.
 
 # Pre-show stable: the confidence banner mounts as
 # `setlist-confidence-banner-stable`. Post-show: the actual-setlist
 # banner mounts as `setlist-actual-banner`. Either one proves the
 # Setlist tab is the new 4-tab variant rather than the legacy stack.
 # Cold-state empties are also acceptable when the backend hasn't
-# seeded a corpus for the fixture performer yet.
+# seeded a corpus for the fixture performer yet (our keyless e2e
+# backend on a past show renders `setlist-tab-past-empty`).
 - assertVisible:
     id: "setlist-confidence-banner-stable|setlist-actual-banner|setlist-tab-cold-no_corpus|setlist-tab-past-empty"

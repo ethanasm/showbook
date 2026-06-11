@@ -11,6 +11,23 @@ name: Mobile Deploy (preview)
 # changes detected against the parent commit also auto-promote a
 # workflow_run trigger from OTA to build.
 #
+# **Versioning is automated on the build path** (decision D25 in
+# docs/specs/decisions.md). Before `eas build` runs, the workflow bumps
+# `version` in apps/mobile/app.config.ts, commits it back to main with
+# [skip ci], and tags the commit `mobile-vX.Y.Z`. Minor vs patch is
+# decided by scanning the squash-merge subjects on main since the last
+# `mobile-v*` tag for conventional-commit prefixes: any `feat:` (or a
+# breaking-change `!` marker) → minor, otherwise patch. (Pre-1.0,
+# breaking also maps to minor — the 1.0.0 jump is manual, see D25.)
+# The OTA path NEVER bumps: `runtimeVersion: { policy: 'appVersion' }`
+# means a bump without a binary would target a runtime no installed
+# build has, so nobody would receive the update. A manual bump in the
+# triggering merge (the version line changed in the diff) is respected
+# — the workflow ships it as-is instead of double-bumping. The
+# workflow_dispatch `bump` input can override the scan (patch / minor /
+# none). The bump-back push uses GITHUB_TOKEN, whose pushes never
+# trigger workflows, so it cannot re-trigger CI or this deploy.
+#
 # **Builds auto-submit to the preview store track on BOTH platforms**
 # (via `eas submit`): Android to the Play Console internal testing
 # track using the service account JSON in the
@@ -79,9 +96,20 @@ on:
           - android
           - all
         default: android
+      bump:
+        description: "Version bump (only used in build mode): auto scans commits since the last mobile-v* tag; none ships the version already in app.config.ts"
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - none
+        default: auto
 
+# contents: write is needed by the `Bump app version` step to push the
+# version-bump commit + mobile-v* tag back to main on the build path.
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: mobile-deploy
@@ -111,14 +139,16 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-          # `Detect native changes` diffs HEAD against HEAD~1 to decide
-          # OTA vs. build. actions/checkout defaults to fetch-depth: 1,
-          # which is a single-commit shallow clone — HEAD~1 doesn't
-          # resolve, the guard falls through to CHANGED="", and every
-          # workflow_run trigger silently took the OTA path no matter
-          # what the merge actually touched (PR #457 / package.json was
-          # the case that surfaced this). Two commits is the minimum.
-          fetch-depth: 2
+          # Full history + tags. Two consumers:
+          #  - `Detect native changes` diffs HEAD against HEAD~1 to decide
+          #    OTA vs. build (with the old default fetch-depth: 1, HEAD~1
+          #    didn't resolve and every trigger silently took the OTA path
+          #    — PR #457 post-mortem).
+          #  - `Bump app version` finds the last `mobile-v*` tag and scans
+          #    the commit subjects since it for conventional-commit
+          #    prefixes, then pushes a bump commit back to main — both
+          #    need full history and tags.
+          fetch-depth: 0
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -199,6 +229,108 @@ jobs:
               echo "fetch-depth if this fires on a routine push."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      # Build path only (never OTA — see header comment). Decides the bump
+      # type, edits app.config.ts via scripts/bump-mobile-version.mjs,
+      # commits + tags `mobile-vX.Y.Z`, and pushes back to main so the
+      # repo stays the source of truth for the version AND the OTA
+      # runtime. The push happens BEFORE `eas build` so a binary can never
+      # ship with a version git doesn't know about; if the push can't
+      # land, the job fails (and the failure email fires) rather than
+      # building anyway.
+      - name: Bump app version
+        id: bump-version
+        if: >-
+          (github.event_name == 'workflow_dispatch' && inputs.mode == 'build')
+          || (github.event_name == 'workflow_run' && steps.detect-native.outputs.needs_build == 'true')
+        env:
+          BUMP_INPUT: ${{ inputs.bump || 'auto' }}
+        run: |
+          set -euo pipefail
+
+          # Safety: the bump-back targets main. If this run was dispatched
+          # from a non-main ref, ship whatever version is in the file
+          # instead of pushing a bump from foreign history onto main.
+          git fetch origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::warning::HEAD is not on main — skipping version bump, building with the version already in app.config.ts."
+            echo "version=$(node scripts/bump-mobile-version.mjs --print)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BUMP="$BUMP_INPUT"
+
+          # Respect a manual bump: if the triggering commit already changed
+          # the version line (e.g. the deliberate 1.0.0 jump), don't
+          # double-bump on top of it.
+          if git diff HEAD~1 HEAD -- apps/mobile/app.config.ts | grep -qE "^[+-][[:space:]]*version: '"; then
+            echo "Version line changed in the triggering commit — respecting the manual bump."
+            BUMP=none
+          fi
+
+          # Highest existing release tag, by version sort (not reachability
+          # — a queued run whose head_sha predates the previous run's bump
+          # commit must still see that run's tag).
+          LAST_TAG=$(git tag -l 'mobile-v*' --sort=-v:refname | head -1)
+
+          if [ "$BUMP" = "auto" ]; then
+            # Conventional-commit scan over the squash-merge subjects on
+            # main since the last release tag (every commit in that range
+            # rides this binary, including ones already OTA-shipped).
+            # feat: → minor; a breaking marker (type!: ) → major, which
+            # the bump script maps to minor while we're pre-1.0 (D25).
+            # Anything unprefixed → patch. First-ever run (no tag yet)
+            # scans just the triggering commit.
+            RANGE="${LAST_TAG:+${LAST_TAG}..HEAD}"
+            RANGE="${RANGE:-HEAD~1..HEAD}"
+            SUBJECTS=$(git log --format=%s "$RANGE" -- || true)
+            if echo "$SUBJECTS" | grep -qE '^[a-z]+(\([^)]*\))?!:'; then
+              BUMP=major
+            elif echo "$SUBJECTS" | grep -qiE '^feat(\([^)]*\))?:'; then
+              BUMP=minor
+            else
+              BUMP=patch
+            fi
+            echo "Scanned ${RANGE} → bump type: ${BUMP}"
+          fi
+
+          if [ "$BUMP" = "none" ]; then
+            VERSION=$(node scripts/bump-mobile-version.mjs --print)
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "### Version: ${VERSION} (no auto-bump)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          FLOOR="${LAST_TAG#mobile-v}"
+          NEW=$(node scripts/bump-mobile-version.mjs --type "$BUMP" ${LAST_TAG:+--floor "$FLOOR"})
+          # Tag collision means a racing run already used this version —
+          # keep patching forward until the slot is free.
+          while git rev-parse -q --verify "refs/tags/mobile-v$NEW" >/dev/null; do
+            NEW=$(node scripts/bump-mobile-version.mjs --type patch)
+          done
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B main
+          git add apps/mobile/app.config.ts
+          # [skip ci] is belt-and-braces: GITHUB_TOKEN pushes never trigger
+          # workflows, so this commit can't re-run CI or this deploy.
+          git commit -m "chore(release): mobile v${NEW} [skip ci]"
+          git tag "mobile-v${NEW}"
+          for i in 1 2 3; do
+            if git push origin main "mobile-v${NEW}"; then
+              break
+            fi
+            if [ "$i" = 3 ]; then
+              echo "Could not push the version-bump commit after 3 attempts." >&2
+              exit 1
+            fi
+            git fetch origin main
+            git rebase origin/main
+          done
+
+          echo "version=$NEW" >> "$GITHUB_OUTPUT"
+          echo "### Version: ${NEW} (${BUMP} bump, tagged mobile-v${NEW})" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Push OTA update
         if: >-
@@ -452,4 +584,5 @@ jobs:
             echo "- Mode: ${{ inputs.mode || 'update' }}"
             echo "- Status: ${{ job.status }}"
             echo "- Channel: preview"
+            echo "- Version: ${{ steps.bump-version.outputs.version || 'unchanged (OTA)' }}"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
+  deriveFollowSuggestions,
   isDatePast,
   setlistTotalSongs,
   type PerformerSetlist,
 } from "@showbook/shared";
+import { showShowAddedToast } from "@/components/add/ShowAddedToast";
 import { trpc } from "@/lib/trpc";
 import { useInvalidateSidebarCounts } from "@/lib/sidebar-counts";
 import type { ShowKind } from "@/components/design-system";
@@ -52,8 +54,21 @@ export function useAddShowForm() {
   const editId = searchParams.get("editId");
   const isEditMode = !!editId;
 
-  // Mode toggle
-  const [mode, setMode] = useState<Mode>("Form");
+  // Mode toggle. Chat is the default door — describing the show in one
+  // sentence is the lowest-friction path, and mobile is already
+  // chat-first. Anything that arrives with structured prefill (edit,
+  // a Ticketmaster deep link, the Map page's venue handoff, an explicit
+  // ?mode=form) opens the form instead so the prefilled fields are
+  // immediately visible.
+  const hasFormPrefill = Boolean(
+    editId ||
+      searchParams.get("tmEventId") ||
+      searchParams.get("venueName") ||
+      searchParams.get("timeframe"),
+  );
+  const [mode, setMode] = useState<Mode>(() =>
+    hasFormPrefill || searchParams.get("mode") === "form" ? "Form" : "Chat",
+  );
 
   // Form state
   const [timeframe, setTimeframe] = useState<Timeframe>("past");
@@ -191,11 +206,22 @@ export function useAddShowForm() {
       utils.shows.invalidate();
       invalidateSidebarCounts();
       if (data?.id) {
-        toast.success("Show added", {
-          duration: 5000,
-          action: {
-            label: "Undo",
-            onClick: async () => {
+        // Follow seeding: the user just told us which artist and venue
+        // they care about — offer the follow right in the save
+        // confirmation. Already-followed entities are filtered against
+        // whatever follow lists are in the query cache; when the cache
+        // is cold we still offer (both mutations are idempotent).
+        const suggestions = deriveFollowSuggestions(data, {
+          followedPerformerIds: utils.performers.followed
+            .getData()
+            ?.map((p) => p.id),
+          followedVenueIds: utils.venues.followed.getData()?.map((v) => v.id),
+        });
+        showShowAddedToast({
+          performer: suggestions.performer,
+          venue: suggestions.venue,
+          handlers: {
+            onUndo: async () => {
               try {
                 await undoDelete.mutateAsync({ showId: data.id });
                 utils.shows.invalidate();
@@ -205,6 +231,14 @@ export function useAddShowForm() {
               } catch {
                 toast.error("Couldn't undo — try again");
               }
+            },
+            onFollowPerformer: async (performerId) => {
+              await utils.client.performers.follow.mutate({ performerId });
+              void utils.performers.followed.invalidate();
+            },
+            onFollowVenue: async (venueId) => {
+              await utils.client.venues.follow.mutate({ venueId });
+              void utils.venues.followed.invalidate();
             },
           },
         });

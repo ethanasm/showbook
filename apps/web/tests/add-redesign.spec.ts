@@ -8,7 +8,7 @@ async function loginAsTestUser(page: Page) {
 test.describe('Add Show redesign', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsTestUser(page);
-    await page.goto('/add');
+    await page.goto('/add?mode=form');
     await page.waitForLoadState('networkidle');
   });
 

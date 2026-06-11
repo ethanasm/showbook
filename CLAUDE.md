@@ -19,6 +19,35 @@ the default template before committing. Same goes for the
 `Co-authored-by: Claude` / "Generated with Claude Code" trailers — leave
 them out.
 
+**PR titles are conventional commits.** PRs squash-merge, so the PR
+title becomes the commit subject on `main` — and those subjects are
+what the mobile versioning automation reads: whenever
+`mobile-deploy.yml` takes the build path (new native binary), it scans
+the subjects since the last `mobile-v*` release tag to decide the
+version bump (decision D25 in `docs/specs/decisions.md`; mechanics in
+the Versioning section of `docs/specs/mobile-deployment.md`). Title
+every PR as `type(scope)?: imperative summary`, under 70 chars:
+
+- `feat:` — new user-visible feature or capability. **The one that
+  matters most to get right:** any `feat:` in the scanned range bumps
+  the mobile app's MINOR version at the next native build. An
+  unprefixed feature ships as a patch bump (harmless but loses the
+  release-log signal); a `feat:` on a non-feature inflates the minor
+  version.
+- `fix:` — bug fix → patch bump.
+- `docs:` / `chore:` / `ci:` / `refactor:` / `perf:` / `test:` — pick
+  whichever fits; all bump patch.
+- Breaking change: append `!` (`feat!:`, `refactor(api)!:`) → MAJOR
+  bump, automatically mapped to MINOR while the app is pre-1.0 (D25 —
+  the 1.0.0 jump is a deliberate manual act, never automated).
+- Scope is optional (`feat(mobile): …`, `fix(web): …`).
+
+Branch commits are squashed away at merge, so they don't need the
+prefix — the PR title is the contract. Web-only and docs-only changes
+still follow the convention (consistent history, and the scan is
+range-wide so any subject can end up in it), but only `feat:` and `!`
+change what the next mobile binary is called.
+
 Opening a PR is the **default** at the end of every change here — when
 local verify is green and the work is committed, hand off to the
 `creating-prs` skill without asking for a separate "please open a PR"
@@ -132,10 +161,11 @@ features silently.
 - Email digest: Resend-backed `runDailyDigest` job at 08:00 ET — see
   `apps/web/CLAUDE.md` for the operator commands.
 
-## Running (dev vs prod)
+## Running (dev vs prod vs e2e)
 
-Two compose files, two env files. Both bind to `127.0.0.1` only — the
-Cloudflare Tunnel reaches web via loopback.
+Three compose files, three env files. All bind to `127.0.0.1` only —
+the Cloudflare Tunnel reaches prod web via loopback, and the e2e stack
+has no tunnel ingress at all.
 
 - **Dev** — `infra/docker-compose.yml` (project `showbook-dev`), reads `.env.dev`,
   source bind-mounted, Next.js in dev mode. Postgres on host port `5433`,
@@ -148,11 +178,21 @@ Cloudflare Tunnel reaches web via loopback.
   then `pnpm prod:db:migrate` once after first up. `.env.prod` must set
   `POSTGRES_PASSWORD` — the compose builds `DATABASE_URL` from it
   (don't set both).
-- Dev and prod stacks coexist on the same host: web ports 3001 vs 3002,
-  postgres 5433 vs 5434. The Cloudflare Tunnel ingress for the prod
-  hostname targets `http://localhost:3002`. Playwright's E2E dev server
-  defaults to `3003` (override with `PLAYWRIGHT_PORT`) so it doesn't
-  collide with either stack.
+- **E2E (mobile backend)** — `infra/docker-compose.e2e.yml` (project
+  `showbook-e2e`), reads `.env.e2e`, same sealed image as prod.
+  Postgres on host port `5435`, web on `3004`, db `showbook_e2e`, role
+  `showbook_e2e`. Loopback-only, isolated `AUTH_SECRET`, allowlist
+  pinned to the Maestro test user; the Android emulator on the prod
+  box reaches it via `http://10.0.2.2:3004`. Start with `pnpm e2e:up`
+  + `pnpm e2e:db:migrate`; `deploy.yml` refreshes it after every prod
+  deploy. Runbook: `docs/specs/operations.md` § "Mobile e2e backend".
+  (Distinct from Playwright's throwaway `showbook_e2e` database inside
+  the dev postgres container — this one is long-lived.)
+- The stacks coexist on the same host: web ports 3001 / 3002 / 3004,
+  postgres 5433 / 5434 / 5435. The Cloudflare Tunnel ingress for the
+  prod hostname targets `http://localhost:3002`. Playwright's E2E dev
+  server defaults to `3003` (override with `PLAYWRIGHT_PORT`) so it
+  doesn't collide with any stack.
 - `scripts/guard-not-prod-db.mjs` refuses any dev/test workspace
   command whose `DATABASE_URL` points at a `showbook_prod*` database —
   prod migrations must go through `pnpm prod:db:migrate`. See README.md

@@ -89,7 +89,8 @@ test.describe('decompose smoke', () => {
 
   test('add form (LivePreview right panel)', async ({ page }) => {
     await loginAndSeedAsWorker(page);
-    await page.goto('/add');
+    // Chat is the default Add mode now; this smoke targets the form panel.
+    await page.goto('/add?mode=form');
     await snap(page, 'add-form');
   });
 
