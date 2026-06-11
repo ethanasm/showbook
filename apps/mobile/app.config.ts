@@ -102,7 +102,7 @@ const config: ExpoConfig = {
   // falls back to its embedded JS — a stale-but-consistent state instead
   // of a half-broken cross-SDK overlay. New SDK 56 builds land on 0.1.1
   // and pick up OTAs normally.
-  version: '0.2.0',
+  version: '0.3.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
   scheme: ['showbook', ANDROID_PACKAGE],
