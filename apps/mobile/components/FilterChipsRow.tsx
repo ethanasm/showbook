@@ -21,9 +21,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
-import { Check, ChevronDown, Plus, Trash2 } from 'lucide-react-native';
+import { Check, ChevronDown, Plus, Search, Trash2, X } from 'lucide-react-native';
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { Sheet } from './Sheet';
@@ -75,6 +76,8 @@ export function FilterChipsRow({
   testIdPrefix,
   leadingAction,
   pickerTitle = 'All filters',
+  pickerSearchable = false,
+  pickerSearchPlaceholder,
   hideCounts = false,
   hideInlineSublabel = false,
 }: {
@@ -106,6 +109,13 @@ export function FilterChipsRow({
   leadingAction?: FilterChipsLeadingAction;
   /** Heading shown above the overflow dropdown picker. */
   pickerTitle?: string;
+  /** Render a pinned search field under the picker heading that filters
+   *  the rows by name / sublabel. Opt-in (Discover's venue / artist /
+   *  region pickers turn it on) so list-y surfaces like the Shows year
+   *  picker keep their bare title-then-rows layout. */
+  pickerSearchable?: boolean;
+  /** Placeholder for the pinned picker search field. */
+  pickerSearchPlaceholder?: string;
   /** Suppress the numeric count / badge on the *inline* chips (and the
    *  measuring pass). Used by Discover to keep the rail short so more
    *  followed-entity chips fit on one line. The `count` is still used
@@ -122,8 +132,30 @@ export function FilterChipsRow({
   const { tokens } = useTheme();
   const { colors } = tokens;
   const [sheetOpen, setSheetOpen] = React.useState(false);
+  const [pickerQuery, setPickerQuery] = React.useState('');
   const [availWidth, setAvailWidth] = React.useState<number | null>(null);
   const [widths, setWidths] = React.useState<Record<string, number>>({});
+
+  // Close the picker and clear any in-progress search so the next open
+  // starts fresh (and the "All" row reappears).
+  const closeSheet = React.useCallback(() => {
+    setSheetOpen(false);
+    setPickerQuery('');
+  }, []);
+
+  const trimmedQuery = pickerQuery.trim().toLowerCase();
+  const filteredGroups = React.useMemo(() => {
+    if (!pickerSearchable || trimmedQuery === '') return groups;
+    return groups.filter(
+      (g) =>
+        g.name.toLowerCase().includes(trimmedQuery) ||
+        (g.sublabel?.toLowerCase().includes(trimmedQuery) ?? false),
+    );
+  }, [pickerSearchable, trimmedQuery, groups]);
+
+  // Hide the "All" row while the user is actively narrowing the list — a
+  // search is for finding a specific entity, not clearing the filter.
+  const showAllRow = showAll && trimmedQuery === '';
 
   const hasLead = Boolean(leadingAction) && variant !== 'sub';
 
@@ -167,7 +199,7 @@ export function FilterChipsRow({
 
   const handlePick = React.useCallback(
     (id: string | null) => {
-      setSheetOpen(false);
+      closeSheet();
       // Tapping the already-active option clears back to "All" when an
       // "All" option exists; otherwise it's a required-selection no-op.
       if (id !== null && id === selected) {
@@ -176,7 +208,7 @@ export function FilterChipsRow({
         onSelect(id);
       }
     },
-    [onSelect, selected, showAll],
+    [closeSheet, onSelect, selected, showAll],
   );
 
   // The overflow dropdown's trash affordance removes directly and keeps
@@ -291,16 +323,56 @@ export function FilterChipsRow({
         ) : null}
       </View>
 
-      <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} snapPoints={['60%']}>
+      <Sheet open={sheetOpen} onClose={closeSheet} snapPoints={['60%']}>
         <View style={styles.sheet}>
           <Text style={[styles.sheetTitle, { color: colors.ink }]}>
             {pickerTitle}
           </Text>
+          {pickerSearchable ? (
+            <View
+              style={[
+                styles.pickerSearchRow,
+                { borderColor: colors.rule, backgroundColor: colors.bg },
+              ]}
+            >
+              <Search size={14} color={colors.muted} strokeWidth={2} />
+              <TextInput
+                value={pickerQuery}
+                onChangeText={setPickerQuery}
+                placeholder={pickerSearchPlaceholder ?? 'Search…'}
+                placeholderTextColor={colors.faint}
+                autoCorrect={false}
+                autoCapitalize="none"
+                testID={
+                  testIdPrefix ? `${testIdPrefix}-sheet-search` : undefined
+                }
+                style={[styles.pickerSearchInput, { color: colors.ink }]}
+                returnKeyType="search"
+              />
+              {pickerQuery.length > 0 ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search"
+                  onPress={() => setPickerQuery('')}
+                  hitSlop={8}
+                  testID={
+                    testIdPrefix
+                      ? `${testIdPrefix}-sheet-search-clear`
+                      : undefined
+                  }
+                  style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+                >
+                  <X size={14} color={colors.faint} strokeWidth={2} />
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
           <ScrollView
             contentContainerStyle={styles.sheetList}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
-            {showAll ? (
+            {showAllRow ? (
               <PickerRow
                 label={allLabel}
                 count={totalCount ?? 0}
@@ -310,7 +382,7 @@ export function FilterChipsRow({
                 testID={testIdPrefix ? `${testIdPrefix}-sheet-all` : undefined}
               />
             ) : null}
-            {groups.map((g) => (
+            {filteredGroups.map((g) => (
               <PickerRow
                 key={g.id}
                 label={g.name}
@@ -326,6 +398,16 @@ export function FilterChipsRow({
                 }
               />
             ))}
+            {pickerSearchable && filteredGroups.length === 0 ? (
+              <Text
+                style={[styles.pickerEmpty, { color: colors.muted }]}
+                testID={
+                  testIdPrefix ? `${testIdPrefix}-sheet-empty` : undefined
+                }
+              >
+                No matches.
+              </Text>
+            ) : null}
           </ScrollView>
         </View>
       </Sheet>
@@ -788,6 +870,30 @@ const styles = StyleSheet.create({
   },
   sheetList: {
     paddingBottom: 24,
+  },
+  pickerSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 8,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: RADII.lg,
+    borderWidth: 1,
+  },
+  pickerSearchInput: {
+    flex: 1,
+    fontFamily: 'Geist Sans',
+    fontSize: 14,
+    padding: 0,
+  },
+  pickerEmpty: {
+    fontFamily: 'Geist Sans',
+    fontSize: 13,
+    fontStyle: 'italic',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
   },
   pickerRow: {
     flexDirection: 'row',

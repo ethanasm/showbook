@@ -884,6 +884,8 @@ export default function DiscoverScreen(): React.JSX.Element {
           hideInlineSublabel
           testIdPrefix="discover-group"
           pickerTitle={groupPickerTitle(tab)}
+          pickerSearchable
+          pickerSearchPlaceholder={groupSearchPlaceholder(tab)}
           leadingAction={{
             label: addChipLabel(tab),
             onPress: () => setAddSheetTab(tab),
@@ -1243,6 +1245,12 @@ function groupPickerTitle(tab: DiscoverTab): string {
   if (tab === 'venues') return 'All venues';
   if (tab === 'artists') return 'All artists';
   return 'All regions';
+}
+
+function groupSearchPlaceholder(tab: DiscoverTab): string {
+  if (tab === 'venues') return 'Search venues…';
+  if (tab === 'artists') return 'Search artists…';
+  return 'Search regions…';
 }
 
 function addChipAccessibilityLabel(tab: DiscoverTab): string {
