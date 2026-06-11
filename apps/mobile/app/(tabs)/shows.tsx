@@ -533,6 +533,19 @@ function TimelineView({
   const { token } = useAuth();
   const sections = React.useMemo(() => buildTimelineSections(rows), [rows]);
 
+  // Flat, section-order index per row id so Maestro flows can target the
+  // first row deterministically as `show-card-row-0` (the SectionList's
+  // own renderItem index resets per section, which would yield duplicate
+  // ids across sections).
+  const rowIndexById = React.useMemo(() => {
+    const map = new Map<string, number>();
+    let i = 0;
+    for (const section of sections) {
+      for (const r of section.rows) map.set(r.id, i++);
+    }
+    return map;
+  }, [sections]);
+
   // Row density mirrors web: driven by the server-synced
   // `preferences.compactMode` so the choice follows the user across
   // devices (web's ShowsListView reads the same field). Until the
@@ -596,6 +609,7 @@ function TimelineView({
             onSelect={onSelect}
             onLongPress={() => onLongPressShow(item)}
             compact={compact}
+            testID={`show-card-row-${rowIndexById.get(item.id) ?? 0}`}
           />
         </View>
       )}
@@ -615,6 +629,7 @@ function RowCard({
   onSelect,
   onLongPress,
   compact,
+  testID,
 }: {
   row: ShowRow;
   isThreePane: boolean;
@@ -622,6 +637,7 @@ function RowCard({
   onSelect: (id: string) => void;
   onLongPress: () => void;
   compact?: boolean;
+  testID?: string;
 }): React.JSX.Element {
   const { token } = useAuth();
   const card = toShowCard(row, token);
@@ -632,6 +648,7 @@ function RowCard({
         compact={compact}
         onPress={() => onSelect(row.id)}
         onLongPress={onLongPress}
+        testID={testID}
       />
     );
   }
@@ -639,7 +656,12 @@ function RowCard({
   void selected;
   return (
     <Link href={`/show/${row.id}`} asChild>
-      <ShowCard show={card} compact={compact} onLongPress={onLongPress} />
+      <ShowCard
+        show={card}
+        compact={compact}
+        onLongPress={onLongPress}
+        testID={testID}
+      />
     </Link>
   );
 }

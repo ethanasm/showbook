@@ -41,7 +41,7 @@ been fully addressed).
   - `useFormState.ts`, `env.ts`
   - `feedback.ts`, `network.ts`, `theme.ts`, `responsive.ts`,
     `search.ts` (`useDebouncedValue` now lives in `@showbook/shared/hooks`)
-- `e2e/flows/` — Maestro flow YAML (sign-in / add-show / sign-out)
+- `e2e/flows/` — Maestro flow YAML
 
 ## Auth bridge
 
@@ -113,16 +113,52 @@ scope fails CI, and the report identifies which scope fell short.
 
 ## Maestro E2E flows
 
-Three flows live under `e2e/flows/` — sign-in, add-show, sign-out.
-CI sets `EXPO_PUBLIC_E2E_MODE=1` plus the test-session env vars
-directly in the workflow step env (matching the `e2e` profile in
-`eas.json` for parity with local EAS builds):
+The flows live under `e2e/flows/` (sign-in, add-show, sign-out, plus
+the Phase-10 show-detail / setlist / Spotify flows). The CI workflow
+is **self-provisioning** — it mints the session from the running
+backend and hardcodes the backend URL, so there are no
+session/URL repo secrets to keep in sync:
 
-- `EXPO_PUBLIC_E2E_MODE=1` flips `lib/auth.ts` into bypass mode.
-- `EXPO_PUBLIC_E2E_TEST_TOKEN` is the Showbook JWT for the test user,
-  minted ahead of time against the e2e backend.
-- `EXPO_PUBLIC_E2E_TEST_USER_JSON` is the JSON-serialised
-  `SessionUser` the JWT identifies.
+- `EXPO_PUBLIC_E2E_MODE=1` flips `lib/auth.ts` into bypass mode (and
+  enables the Android cleartext exception for the `10.0.2.2` backend
+  — see the `IS_E2E_BUILD` plugin in `app.config.ts`).
+- `EXPO_PUBLIC_E2E_TEST_TOKEN` / `EXPO_PUBLIC_E2E_TEST_USER_JSON` are
+  minted by the **"Mint e2e session from the running backend"** step:
+  it reads the `showbook-e2e-web` container's own `AUTH_SECRET` and
+  `encode`s the bearer *inside the container* (same `next-auth` the
+  decoder uses), and upserts the `maestro-e2e@showbook.test` user row
+  in `showbook_e2e`. Because encode and decode share one library +
+  secret, the token can't drift out of sync.
+- `EXPO_PUBLIC_API_URL` is hardcoded to `http://10.0.2.2:3004` in the
+  workflow — the emulator's alias for the runner host's loopback,
+  where the `showbook-e2e` compose stack listens. The backend is
+  **not prod**: it's `infra/docker-compose.e2e.yml` with its own
+  database, `AUTH_SECRET`, and allowlist. Full runbook in
+  `docs/specs/operations.md` § "Mobile e2e backend".
+- A post-build assertion greps the APK bundle for
+  `http://10.0.2.2:3004` and fails the build immediately if the URL
+  wasn't inlined — no more discovering it 20 minutes later in Maestro.
+
+The legacy `MAESTRO_E2E_TOKEN` / `MAESTRO_E2E_USER_JSON` /
+`EXPO_PUBLIC_API_URL` repo secrets are no longer read and can be
+deleted. `scripts/mint-e2e-token.mjs` (+ `pnpm mint:e2e-token`)
+remains for ad-hoc local minting / curl smoke tests against the
+stack on `localhost:5435`, but CI no longer depends on it.
+
+**If a run 401s anyway** ("Couldn't load shows — UNAUTHORIZED",
+`show-card-row-0` never appears; the sign-in step still "passes"
+because E2E mode loads the baked session without validating it), the
+mint step couldn't have produced a mismatched token — so look at the
+**backend**: is `showbook-e2e-web` up (`pnpm e2e:logs`), and is
+`maestro-e2e@showbook.test` on its `AUTH_ALLOWED_EMAILS` (an
+allowlist miss logs `auth.mobile_session_denied` in
+`docker logs showbook-e2e-web`)?
+
+The helper (`scripts/mint-e2e-token.mjs`) signs the token exactly like
+`apps/web/lib/mobile-token.ts` (`encodeMobileToken`: same secret +
+`authjs.session-token` salt) and defaults to a 365-day lifetime so the
+CI-only credential doesn't expire mid-PR. Paste both printed values
+into Settings → Secrets and variables → Actions.
 
 All three are inlined at build time, so `loadE2ETestSession` returns
 the bundled session as soon as the user taps "Continue with Google"
