@@ -1,49 +1,85 @@
 name: Mobile Deploy (preview)
 
-# Continuous mobile deployment. Every CI-green push to `main` runs
-# `eas update --branch preview`, which pushes a fresh JS bundle to
-# the preview channel. Installed preview builds pick it up on next
-# cold start.
+# Continuous mobile deployment, with an approval gate on store releases.
 #
-# For changes that need a new native binary (added Expo plugin, new
-# native dep, new permission string), use the workflow_dispatch
-# button with mode=build to kick off a full `eas build`. Native dep
-# changes detected against the parent commit also auto-promote a
-# workflow_run trigger from OTA to build.
+# Every CI-green push to `main` runs the `plan` job, which decides
+# between the two delivery paths:
 #
-# **Versioning is automated on the build path** (decision D25 in
-# docs/specs/decisions.md). Before `eas build` runs, the workflow bumps
-# `version` in apps/mobile/app.config.ts, commits it back to main with
-# [skip ci], and tags the commit `mobile-vX.Y.Z`. Minor vs patch is
-# decided by scanning the squash-merge subjects on main since the last
-# `mobile-v*` tag for conventional-commit prefixes: any `feat:` (or a
-# breaking-change `!` marker) → minor, otherwise patch. (Pre-1.0,
-# breaking also maps to minor — the 1.0.0 jump is manual, see D25.)
-# The OTA path NEVER bumps: `runtimeVersion: { policy: 'appVersion' }`
-# means a bump without a binary would target a runtime no installed
-# build has, so nobody would receive the update. A manual bump in the
-# triggering merge (the version line changed in the diff) is respected
-# — the workflow ships it as-is instead of double-bumping. The
-# workflow_dispatch `bump` input can override the scan (patch / minor /
-# none). The bump-back push has to get past main's required-PR rule,
-# and the built-in github-actions app can NOT be put on a ruleset
-# bypass list — so the push authenticates as a deploy key
-# (RELEASE_DEPLOY_KEY secret + "Deploy keys" checked in the ruleset's
-# bypass list; recommended) or as a bypass-listed actor's fine-grained
-# PAT (RELEASE_PUSH_TOKEN secret) — see the Versioning section of
-# docs/specs/mobile-deployment.md. Neither path can loop this deploy:
-# deploy-key/PAT pushes do trigger workflows, but [skip ci] in the bump
-# commit message suppresses CI, and this deploy only runs off CI
-# completion / manual dispatch.
+#  - **OTA path (ungated, continuous):** JS-only changes run
+#    `eas update --branch preview`, which pushes a fresh JS bundle to
+#    the preview channel. Installed preview builds pick it up on next
+#    cold start. This stays fully automatic — OTA is how bugfixes reach
+#    devices in minutes, so it must never wait on a human.
 #
-# **Builds auto-submit to the preview store track on BOTH platforms**
-# (via `eas submit`): Android to the Play Console internal testing
-# track using the service account JSON in the
+#  - **Release path (gated):** changes that need a new native binary
+#    (added Expo plugin, new native dep, new permission string —
+#    detected against the parent commit) route to the `release` job,
+#    which targets the `mobile-release` GitHub **environment**. When
+#    that environment has a required reviewer configured, the job
+#    PAUSES at the gate — GitHub sends a "review pending deployments"
+#    notification (web, email, and the GitHub mobile app) and nothing
+#    bumps, builds, or submits until someone clicks Approve. Reject (or
+#    let the 30-day approval window lapse) and the run dies without
+#    side effects: no version bump, no mobile-v* tag, no EAS build, no
+#    store upload. The changes simply ride the next approved release —
+#    the version scan is range-based (everything since the last
+#    mobile-v* tag), so nothing is ever lost by skipping a release.
+#    The workflow_dispatch build mode goes through the same gate
+#    (you can approve your own dispatch unless the environment enables
+#    "prevent self-review").
+#
+#    ONE-TIME SETUP (the gate is FAIL-OPEN until you do this): GitHub
+#    auto-creates the `mobile-release` environment with no protection
+#    rules on first run, which means releases ship immediately —
+#    identical to the old ungated behavior. To arm the gate:
+#    Settings → Environments → mobile-release → check
+#    "Required reviewers" → add yourself → Save protection rules.
+#    See docs/specs/mobile-deployment.md → "Release approval gate".
+#
+# **Versioning is automated on the release path** (decision D25 in
+# docs/specs/decisions.md). After approval, before `eas build` runs,
+# the workflow bumps `version` in apps/mobile/app.config.ts, commits it
+# back to main with [skip ci], and tags the commit `mobile-vX.Y.Z`.
+# Minor vs patch is decided by scanning the squash-merge subjects on
+# main since the last `mobile-v*` tag for conventional-commit prefixes:
+# any `feat:` (or a breaking-change `!` marker) → minor, otherwise
+# patch. (Pre-1.0, breaking also maps to minor — the 1.0.0 jump is
+# manual, see D25.) The OTA path NEVER bumps: `runtimeVersion:
+# { policy: 'appVersion' }` means a bump without a binary would target
+# a runtime no installed build has, so nobody would receive the update.
+# A manual bump in the triggering merge (the version line changed in
+# the diff) is respected — the workflow ships it as-is instead of
+# double-bumping. The workflow_dispatch `bump` input can override the
+# scan (patch / minor / none). The bump-back push has to get past
+# main's required-PR rule, and the built-in github-actions app can NOT
+# be put on a ruleset bypass list — so the push authenticates as a
+# deploy key (RELEASE_DEPLOY_KEY secret + "Deploy keys" checked in the
+# ruleset's bypass list; recommended) or as a bypass-listed actor's
+# fine-grained PAT (RELEASE_PUSH_TOKEN secret) — see the Versioning
+# section of docs/specs/mobile-deployment.md. Neither path can loop
+# this deploy: deploy-key/PAT pushes do trigger workflows, but
+# [skip ci] in the bump commit message suppresses CI, and this deploy
+# only runs off CI completion / manual dispatch.
+#
+# Because the bump happens AFTER approval, a rejected release leaves
+# the repo untouched — the gate sits in front of every side effect.
+#
+# **Approved builds auto-submit to the preview store track on BOTH
+# platforms** (via `eas submit`): Android to the Play Console internal
+# testing track using the service account JSON in the
 # `PLAY_SERVICE_ACCOUNT_JSON` secret, iOS to TestFlight internal
 # testing using the App Store Connect API key in the `ASC_API_KEY_*`
 # secrets. Testers pick up the new build through the Play Store /
 # TestFlight once the store finishes processing the upload — no
 # sideload, no Advanced Protection friction, no manual IPA handling.
+#
+# **Concurrency** is per-job, not per-workflow, on purpose: a release
+# waiting at the approval gate must never block OTA deploys from later
+# merges, so the `ota` and `release` jobs hold separate groups. Within
+# the release group, a run still waiting for approval when a newer
+# native merge lands may be superseded (GitHub keeps the newest pending
+# run in a group) — that's the right outcome, because the newest run's
+# range scan covers every commit the stale one would have shipped.
 #
 # Runs on a GitHub-hosted runner — EAS Build/Submit/Update all
 # execute in Expo's cloud, so there's nothing to host locally. The
@@ -77,10 +113,11 @@ name: Mobile Deploy (preview)
 #  - RESEND_API_KEY — Resend API key (the app already uses Resend).
 #  - EMAIL_FROM — verified Resend sender, e.g. "Showbook <digest@showbook.app>".
 #  - ADMIN_EMAILS — comma-separated recipient list for the alert.
-# When all three are set, the `Email error logs on failure` step emails
-# the eas-cli error summary plus a direct link to the EAS build page on
-# any deploy failure, so you don't have to hunt for the Expo link in the
-# Actions log and log into expo.dev to see what broke.
+# When all three are set, the failure step (shared script:
+# scripts/mobile-deploy-failure-email.sh) emails the eas-cli error
+# summary plus a direct link to the EAS build page on any deploy
+# failure, so you don't have to hunt for the Expo link in the Actions
+# log and log into expo.dev to see what broke.
 
 on:
   workflow_run:
@@ -90,7 +127,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "update (OTA JS) or build (new native binary; auto-submits to Play internal / TestFlight)"
+        description: "update (OTA JS) or build (new native binary; pauses at the mobile-release approval gate, then auto-submits to Play internal / TestFlight)"
         type: choice
         options:
           - update
@@ -114,18 +151,14 @@ on:
           - none
         default: auto
 
-# contents: write is needed by the `Bump app version` step to push the
-# version-bump commit + mobile-v* tag back to main on the build path.
+# Read-only by default; only the release job escalates to
+# contents: write (the version-bump push back to main).
 permissions:
-  contents: write
-
-concurrency:
-  group: mobile-deploy
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  deploy:
-    name: Push to preview channel
+  plan:
+    name: Decide OTA vs build
     # workflow_run: only deploy if CI passed AND was on main AND wasn't a
     #   fork PR.
     # workflow_dispatch: always allowed (manual trigger from Actions tab).
@@ -135,60 +168,19 @@ jobs:
            github.event.workflow_run.head_branch == 'main' &&
            github.event.workflow_run.event != 'pull_request') }}
     runs-on: ubuntu-latest
-    # 75 min covers a fresh Android build (~10-15 min on EAS) plus an
-    # iOS build (~15-25 min) plus the synchronous submit steps (~1-2
-    # min each), run sequentially. 45 min was the Android-submit-only
-    # budget back when iOS was a fire-and-forget --no-wait kickoff.
-    timeout-minutes: 75
-    env:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    timeout-minutes: 10
+    outputs:
+      needs_build: ${{ steps.detect-native.outputs.needs_build }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-          # main's ruleset requires PRs, which rejects GITHUB_TOKEN pushes
-          # — that's what failed the first bump run. The built-in
-          # github-actions app can NOT be put on a ruleset bypass list
-          # (GitHub limitation), so the bump-back push authenticates with
-          # one of these instead, in preference order:
-          #  1. RELEASE_DEPLOY_KEY — private half of a repo deploy key
-          #     with write access; "Deploy keys" is checked in the
-          #     ruleset's bypass list. Keys don't expire. When set,
-          #     checkout switches the remote to SSH and pushes
-          #     authenticate as the deploy key.
-          #  2. RELEASE_PUSH_TOKEN — fine-grained PAT (Contents:
-          #     read/write) from an actor on the bypass list (e.g. the
-          #     Repository admin role).
-          #  3. GITHUB_TOKEN fallback — can fetch, but its bump push WILL
-          #     be rejected while the required-PR rule has no usable
-          #     bypass for it; the bump step then fails with the remedy.
-          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
-          token: ${{ secrets.RELEASE_PUSH_TOKEN || github.token }}
-          # Full history + tags. Two consumers:
-          #  - `Detect native changes` diffs HEAD against HEAD~1 to decide
-          #    OTA vs. build (with the old default fetch-depth: 1, HEAD~1
-          #    didn't resolve and every trigger silently took the OTA path
-          #    — PR #457 post-mortem).
-          #  - `Bump app version` finds the last `mobile-v*` tag and scans
-          #    the commit subjects since it for conventional-commit
-          #    prefixes, then pushes a bump commit back to main — both
-          #    need full history and tags.
+          # Full history so HEAD~1 resolves for the native-change diff.
+          # With the old default fetch-depth: 1, HEAD~1 didn't resolve
+          # and every trigger silently took the OTA path — PR #457
+          # post-mortem.
           fetch-depth: 0
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 10.33.4
-
-      - name: Set up Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       # Native changes (anything that gets baked into the iOS/Android binary)
       # can't be shipped via `eas update` — OTA only swaps the JS bundle, so
@@ -229,7 +221,7 @@ jobs:
             if [ -n "$CHANGED" ]; then
               echo "needs_build=true" >> "$GITHUB_OUTPUT"
               {
-                echo "### Native-affecting paths changed — forcing build"
+                echo "### Native-affecting paths changed — routing to the gated release job"
                 echo ""
                 echo '```'
                 echo "$CHANGED"
@@ -242,8 +234,8 @@ jobs:
             # No parent commit available — checkout was shallower than
             # expected. Fail-safe to a build: skipping a needed binary
             # ships a broken update (PR #457 post-mortem), shipping an
-            # unnecessary one costs ~15 min of EAS time. Asymmetric
-            # cost argues for build.
+            # unnecessary one costs ~15 min of EAS time (and now also a
+            # one-click approval). Asymmetric cost argues for build.
             echo "needs_build=true" >> "$GITHUB_OUTPUT"
             {
               echo "### HEAD~1 unresolvable — defaulting to build"
@@ -256,19 +248,184 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      # Build path only (never OTA — see header comment). Decides the bump
-      # type, edits app.config.ts via scripts/bump-mobile-version.mjs,
-      # commits + tags `mobile-vX.Y.Z`, and pushes back to main so the
-      # repo stays the source of truth for the version AND the OTA
-      # runtime. The push happens BEFORE `eas build` so a binary can never
-      # ship with a version git doesn't know about; if the push can't
-      # land, the job fails (and the failure email fires) rather than
-      # building anyway.
+  ota:
+    name: Push OTA update
+    needs: plan
+    if: >-
+      (github.event_name == 'workflow_run' && needs.plan.outputs.needs_build != 'true')
+      || (github.event_name == 'workflow_dispatch' && inputs.mode == 'update')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Separate group from the release job so a release parked at the
+    # approval gate can never block JS-only deploys from later merges.
+    concurrency:
+      group: mobile-deploy-ota
+      cancel-in-progress: false
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.4
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Push OTA update
+        working-directory: apps/mobile
+        env:
+          # `eas update` does NOT read the eas.json build profile `env` block
+          # — that's a build-only feature. For OTA updates the env vars must
+          # be set in the shell so Metro inlines them into the JS bundle. We
+          # mirror the values from eas.json's preview profile here. These are
+          # public client IDs / URLs (the EXPO_PUBLIC_ prefix means they ship
+          # in the JS bundle anyway), so committing them is safe.
+          EXPO_PUBLIC_API_URL: https://showbook.ethanasm.me
+          EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS: 222563763412-v5hj97rgnhnl2uesff3kvefvn2n4na2a.apps.googleusercontent.com
+          EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID: 222563763412-noa32760ohv25v56b8kka0ba9rf49529.apps.googleusercontent.com
+          EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB: 222563763412-i4g7a2t7to8qce4oa9j0msmhk9bmejal.apps.googleusercontent.com
+        run: |
+          MSG=$(git -C "$GITHUB_WORKSPACE" log -1 --pretty=%s)
+          # Combined stdout+stderr is tee'd to a shared log so the
+          # `if: failure()` notifier can email the eas-cli error summary.
+          # The default shell runs with `-o pipefail`, so a failed
+          # eas-cli still fails the step despite the tee.
+          pnpm dlx eas-cli update \
+            --branch preview \
+            --message "$MSG" \
+            --non-interactive 2>&1 | tee -a "$GITHUB_WORKSPACE/eas-output.log"
+
+      - name: Email error logs on failure
+        if: failure()
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          # Mirror the names used in .env.prod so the values can be copied
+          # straight across: EMAIL_FROM is the verified Resend sender,
+          # ADMIN_EMAILS is the comma-separated recipient list.
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          ALERT_EMAILS: ${{ secrets.ADMIN_EMAILS }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          TRIGGER: ${{ github.event_name }}
+          MODE: update
+        run: bash scripts/mobile-deploy-failure-email.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Mobile deploy (OTA)"
+            echo ""
+            echo "- Trigger: ${{ github.event_name }}"
+            echo "- Mode: update"
+            echo "- Status: ${{ job.status }}"
+            echo "- Channel: preview"
+            echo "- Version: unchanged (OTA)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: Build + submit to stores (gated)
+    needs: plan
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.mode == 'build')
+      || (github.event_name == 'workflow_run' && needs.plan.outputs.needs_build == 'true')
+    runs-on: ubuntu-latest
+    # THE RELEASE GATE. With a required reviewer configured on this
+    # environment (Settings → Environments → mobile-release), the job
+    # waits here — before the version bump, the EAS builds, and the
+    # store submits — until someone approves the pending deployment.
+    # Approvals can come from the run page, the notification email, or
+    # the GitHub mobile app. Without protection rules the environment
+    # is pass-through (fail-open) and behaves exactly like the old
+    # ungated deploy. See docs/specs/mobile-deployment.md → "Release
+    # approval gate".
+    environment: mobile-release
+    # Separate group from the OTA job (see header). cancel-in-progress
+    # stays false so an approved, in-flight build isn't killed by the
+    # next merge; a not-yet-approved run superseded by a newer one is
+    # expendable either way (range-based version scan).
+    concurrency:
+      group: mobile-deploy-release
+      cancel-in-progress: false
+    # contents: write is needed by the `Bump app version` step to push
+    # the version-bump commit + mobile-v* tag back to main.
+    permissions:
+      contents: write
+    # 75 min covers a fresh Android build (~10-15 min on EAS) plus an
+    # iOS build (~15-25 min) plus the synchronous submit steps (~1-2
+    # min each), run sequentially. 45 min was the Android-submit-only
+    # budget back when iOS was a fire-and-forget --no-wait kickoff.
+    # (Time spent waiting at the approval gate does not count — the
+    # job timeout starts when the job starts, i.e. after approval.)
+    timeout-minutes: 75
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # main's ruleset requires PRs, which rejects GITHUB_TOKEN pushes
+          # — that's what failed the first bump run. The built-in
+          # github-actions app can NOT be put on a ruleset bypass list
+          # (GitHub limitation), so the bump-back push authenticates with
+          # one of these instead, in preference order:
+          #  1. RELEASE_DEPLOY_KEY — private half of a repo deploy key
+          #     with write access; "Deploy keys" is checked in the
+          #     ruleset's bypass list. Keys don't expire. When set,
+          #     checkout switches the remote to SSH and pushes
+          #     authenticate as the deploy key.
+          #  2. RELEASE_PUSH_TOKEN — fine-grained PAT (Contents:
+          #     read/write) from an actor on the bypass list (e.g. the
+          #     Repository admin role).
+          #  3. GITHUB_TOKEN fallback — can fetch, but its bump push WILL
+          #     be rejected while the required-PR rule has no usable
+          #     bypass for it; the bump step then fails with the remedy.
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
+          token: ${{ secrets.RELEASE_PUSH_TOKEN || github.token }}
+          # Full history + tags: `Bump app version` finds the last
+          # `mobile-v*` tag and scans the commit subjects since it for
+          # conventional-commit prefixes, then pushes a bump commit back
+          # to main — both need full history and tags.
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.4
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Runs only after the environment approval. Decides the bump type,
+      # edits app.config.ts via scripts/bump-mobile-version.mjs, commits
+      # + tags `mobile-vX.Y.Z`, and pushes back to main so the repo
+      # stays the source of truth for the version AND the OTA runtime.
+      # The push happens BEFORE `eas build` so a binary can never ship
+      # with a version git doesn't know about; if the push can't land,
+      # the job fails (and the failure email fires) rather than building
+      # anyway. A rejected approval never reaches this step, so skipped
+      # releases leave no bump commit and no tag behind.
       - name: Bump app version
         id: bump-version
-        if: >-
-          (github.event_name == 'workflow_dispatch' && inputs.mode == 'build')
-          || (github.event_name == 'workflow_run' && steps.detect-native.outputs.needs_build == 'true')
         env:
           BUMP_INPUT: ${{ inputs.bump || 'auto' }}
         run: |
@@ -302,7 +459,8 @@ jobs:
           if [ "$BUMP" = "auto" ]; then
             # Conventional-commit scan over the squash-merge subjects on
             # main since the last release tag (every commit in that range
-            # rides this binary, including ones already OTA-shipped).
+            # rides this binary, including ones already OTA-shipped, and
+            # ones whose release run was skipped at the approval gate).
             # feat: → minor; a breaking marker (type!: ) → major, which
             # the bump script maps to minor while we're pre-1.0 (D25).
             # Anything unprefixed → patch. First-ever run (no tag yet)
@@ -373,33 +531,6 @@ jobs:
           echo "version=$NEW" >> "$GITHUB_OUTPUT"
           echo "### Version: ${NEW} (${BUMP} bump, tagged mobile-v${NEW})" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Push OTA update
-        if: >-
-          (github.event_name == 'workflow_run' && steps.detect-native.outputs.needs_build != 'true')
-          || (github.event_name == 'workflow_dispatch' && inputs.mode == 'update')
-        working-directory: apps/mobile
-        env:
-          # `eas update` does NOT read the eas.json build profile `env` block
-          # — that's a build-only feature. For OTA updates the env vars must
-          # be set in the shell so Metro inlines them into the JS bundle. We
-          # mirror the values from eas.json's preview profile here. These are
-          # public client IDs / URLs (the EXPO_PUBLIC_ prefix means they ship
-          # in the JS bundle anyway), so committing them is safe.
-          EXPO_PUBLIC_API_URL: https://showbook.ethanasm.me
-          EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS: 222563763412-v5hj97rgnhnl2uesff3kvefvn2n4na2a.apps.googleusercontent.com
-          EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID: 222563763412-noa32760ohv25v56b8kka0ba9rf49529.apps.googleusercontent.com
-          EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB: 222563763412-i4g7a2t7to8qce4oa9j0msmhk9bmejal.apps.googleusercontent.com
-        run: |
-          MSG=$(git -C "$GITHUB_WORKSPACE" log -1 --pretty=%s)
-          # Combined stdout+stderr is tee'd to a shared log so the
-          # `if: failure()` notifier can email the eas-cli error summary.
-          # The default shell runs with `-o pipefail`, so a failed
-          # eas-cli still fails the step despite the tee.
-          pnpm dlx eas-cli update \
-            --branch preview \
-            --message "$MSG" \
-            --non-interactive 2>&1 | tee -a "$GITHUB_WORKSPACE/eas-output.log"
-
       # Android build + Play submit are split into two steps so we can fail
       # the submit independently of the build (e.g. missing service account
       # secret) and so the build's --wait keeps the artifact handle around
@@ -409,10 +540,11 @@ jobs:
       # `preview` so OTA updates still reach Play-installed copies.
       - name: Build Android AAB (preview-store profile)
         id: build-android
+        # workflow_run releases build both platforms; dispatch respects
+        # the platform input.
         if: >-
-          (github.event_name == 'workflow_dispatch' && inputs.mode == 'build'
-            && (inputs.platform == 'android' || inputs.platform == 'all'))
-          || (github.event_name == 'workflow_run' && steps.detect-native.outputs.needs_build == 'true')
+          github.event_name == 'workflow_run'
+          || inputs.platform == 'android' || inputs.platform == 'all'
         working-directory: apps/mobile
         run: |
           pnpm dlx eas-cli build \
@@ -472,9 +604,8 @@ jobs:
       - name: Build iOS IPA (preview-store profile)
         id: build-ios
         if: >-
-          (github.event_name == 'workflow_dispatch' && inputs.mode == 'build'
-            && (inputs.platform == 'ios' || inputs.platform == 'all'))
-          || (github.event_name == 'workflow_run' && steps.detect-native.outputs.needs_build == 'true')
+          github.event_name == 'workflow_run'
+          || inputs.platform == 'ios' || inputs.platform == 'all'
         working-directory: apps/mobile
         run: |
           pnpm dlx eas-cli build \
@@ -525,12 +656,6 @@ jobs:
           rm -f "$KEY"
           git checkout -- eas.json || true
 
-      # On any deploy failure, email the eas-cli error summary + a direct
-      # link to the EAS build page so the failure is actionable from the
-      # inbox without digging through the Actions log to find the Expo
-      # link and then logging into expo.dev. Best-effort: the notifier
-      # never masks the real failure (its own step always exits 0) and
-      # silently no-ops if the email secrets aren't configured.
       - name: Email error logs on failure
         if: failure()
         env:
@@ -543,87 +668,18 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
           TRIGGER: ${{ github.event_name }}
-          MODE: ${{ inputs.mode || 'update' }}
-        run: |
-          set +e  # never let the notifier's own errors mask the real failure
-          LOG="$GITHUB_WORKSPACE/eas-output.log"
-
-          if [ -z "${RESEND_API_KEY:-}" ] || [ -z "${EMAIL_FROM:-}" ] || [ -z "${ALERT_EMAILS:-}" ]; then
-            echo "::warning::Mobile-deploy failure email skipped — set RESEND_API_KEY, EMAIL_FROM and ADMIN_EMAILS secrets to enable it."
-            exit 0
-          fi
-
-          SHORT_SHA="${COMMIT_SHA:0:7}"
-          SUBJECT="🔴 Mobile deploy failed — ${SHORT_SHA} (${TRIGGER}/${MODE})"
-
-          # Direct EAS build-page link(s) pulled from the captured CLI
-          # output (eas-cli prints "Build details: https://expo.dev/.../builds/<id>").
-          BUILD_LINKS=""
-          if [ -f "$LOG" ]; then
-            BUILD_LINKS=$(grep -oiE 'https://expo\.dev/[^ ]*builds/[a-z0-9-]+' "$LOG" | sort -u | head -5)
-          fi
-
-          # eas-cli error summary: strip ANSI colour + carriage returns,
-          # HTML-escape, keep the tail (the failure reason is at the end).
-          if [ -f "$LOG" ]; then
-            LOG_TAIL=$(sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g' "$LOG" \
-              | tr -d '\r' \
-              | tail -c 14000 \
-              | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
-          else
-            LOG_TAIL="(no eas-cli output captured — the deploy failed before any EAS command ran; see the Actions run)"
-          fi
-
-          if [ -n "$BUILD_LINKS" ]; then
-            BUILD_LINKS_HTML="<p><strong>EAS build page(s):</strong></p><ul>"
-            while IFS= read -r url; do
-              [ -n "$url" ] && BUILD_LINKS_HTML="${BUILD_LINKS_HTML}<li><a href=\"${url}\">${url}</a></li>"
-            done <<< "$BUILD_LINKS"
-            BUILD_LINKS_HTML="${BUILD_LINKS_HTML}</ul>"
-          else
-            BUILD_LINKS_HTML="<p>No EAS build-page link found in the output (OTA update, or the failure happened before a build was queued).</p>"
-          fi
-
-          HTML="<h2>Mobile deploy failed</h2>
-          <p><strong>Commit:</strong> ${SHORT_SHA}<br>
-          <strong>Trigger:</strong> ${TRIGGER} / ${MODE}<br>
-          <strong>Actions run:</strong> <a href=\"${RUN_URL}\">${RUN_URL}</a></p>
-          ${BUILD_LINKS_HTML}
-          <p><strong>eas-cli output (tail):</strong></p>
-          <pre style=\"background:#f6f8fa;padding:12px;border-radius:6px;overflow:auto;font-size:12px;line-height:1.4\">${LOG_TAIL}</pre>"
-
-          # Split ADMIN_EMAILS on commas into a JSON array for Resend's `to`.
-          TO_JSON=$(printf '%s' "$ALERT_EMAILS" \
-            | jq -R 'split(",") | map(gsub("^\\s+|\\s+$";"")) | map(select(length>0))')
-
-          PAYLOAD=$(jq -n \
-            --arg from "$EMAIL_FROM" \
-            --argjson to "$TO_JSON" \
-            --arg subject "$SUBJECT" \
-            --arg html "$HTML" \
-            '{from:$from, to:$to, subject:$subject, html:$html}')
-
-          RESP=$(curl -sS -X POST https://api.resend.com/emails \
-            -H "Authorization: Bearer $RESEND_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "$PAYLOAD")
-          echo "Resend response: $RESP"
-          if printf '%s' "$RESP" | grep -q '"id"'; then
-            echo "Failure-notification email sent."
-          else
-            echo "::warning::Resend did not return a message id — the email may not have been delivered. See the response above."
-          fi
-          exit 0
+          MODE: build
+        run: bash scripts/mobile-deploy-failure-email.sh
 
       - name: Summary
         if: always()
         run: |
           {
-            echo "### Mobile deploy"
+            echo "### Mobile deploy (store release)"
             echo ""
             echo "- Trigger: ${{ github.event_name }}"
-            echo "- Mode: ${{ inputs.mode || 'update' }}"
+            echo "- Mode: build"
             echo "- Status: ${{ job.status }}"
             echo "- Channel: preview"
-            echo "- Version: ${{ steps.bump-version.outputs.version || 'unchanged (OTA)' }}"
+            echo "- Version: ${{ steps.bump-version.outputs.version || 'unknown' }}"
           } >> "$GITHUB_STEP_SUMMARY"

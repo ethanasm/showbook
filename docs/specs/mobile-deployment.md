@@ -5,7 +5,7 @@ and (2) ship it to the App Store and Google Play. This is opinionated to the
 state of `apps/mobile` today (Expo SDK 55, Expo Router, native Google OAuth
 via `expo-auth-session`, `expo-secure-store`, `expo-notifications`).
 
-> Status: written 2026-05-01, updated 2026-06-10. The app is now
+> Status: written 2026-05-01, updated 2026-06-11. The app is now
 > feature-complete (M1–M6) and an EAS project + `eas.json` exist
 > (`extra.eas.projectId` is wired). Real brand artwork (icon / adaptive
 > icon / splash) is committed under `apps/mobile/assets/`. **`preview`
@@ -68,8 +68,11 @@ up to 100 testers, no review.
 > CI does this automatically: `.github/workflows/mobile-deploy.yml`
 > runs the same `preview-store` build + submit pair on **both**
 > platforms whenever a CI-green push to `main` touches a
-> native-affecting path (or via the workflow_dispatch build mode).
-> Android submits with the `PLAY_SERVICE_ACCOUNT_JSON` secret, iOS
+> native-affecting path (or via the workflow_dispatch build mode) —
+> pausing first at the `mobile-release` environment approval gate, so
+> you decide with one click which builds actually reach the stores
+> (see "Release approval gate" below). Android submits with the
+> `PLAY_SERVICE_ACCOUNT_JSON` secret, iOS
 > with the `ASC_API_KEY_P8` / `ASC_API_KEY_ID` / `ASC_API_KEY_ISSUER_ID`
 > / `ASC_APP_ID` secrets — see the workflow header for setup. The
 > manual commands above remain the fallback / first-run path (the
@@ -112,6 +115,63 @@ eas update --branch production --message "..."   # JS/asset only — ships in se
 
 ---
 
+## Release approval gate (which builds actually ship)
+
+Store submissions are **triggered automatically but released
+deliberately** (decision D26 in `decisions.md`). The `release` job in
+`.github/workflows/mobile-deploy.yml` — the path that bumps the
+version, runs `eas build`, and submits to Play internal / TestFlight —
+targets the **`mobile-release` GitHub environment**. With a required
+reviewer configured on that environment, every build-path run pauses
+*before any side effect* (no version bump, no `mobile-v*` tag, no EAS
+build minutes, no store upload) until the pending deployment is
+approved.
+
+How a release actually happens, end to end:
+
+1. A PR touching a native-affecting path merges to `main`; CI goes
+   green; `mobile-deploy.yml`'s `plan` job routes the run to the
+   `release` job.
+2. GitHub marks the run **Waiting** and sends a "review pending
+   deployments" notification — actionable from the run page, the
+   notification email, or the GitHub mobile app.
+3. **Approve** → the job resumes unattended: version bump + tag push,
+   Android + iOS builds, store submits. **Reject** (or let the 30-day
+   review window lapse) → the run ends with zero side effects; the
+   changes simply ride the next approved release, because the version
+   scan and the binary contents are both range-based (everything on
+   `main` since the last `mobile-v*` tag).
+
+Notes and sharp edges:
+
+- **The OTA path is deliberately NOT gated.** JS-only merges keep
+  deploying continuously to the `preview` channel — that's how
+  bugfixes reach installed builds in minutes. Gate native releases,
+  not OTA. (The `ota` and `release` jobs hold separate concurrency
+  groups so a release parked at the gate can never block later OTA
+  deploys.)
+- **One-time setup (the gate is fail-open until you do this):**
+  GitHub auto-creates the `mobile-release` environment with no
+  protection rules the first time the job runs, which behaves exactly
+  like the old ungated deploy. Arm it: repo **Settings → Environments
+  → mobile-release → check "Required reviewers" → add yourself →
+  Save protection rules**. (You can also create the environment ahead
+  of the first run from the same page.)
+- The `workflow_dispatch` build mode passes through the same gate; by
+  default you can approve your own dispatch (enable the environment's
+  "prevent self-review" if that ever matters).
+- A run still **waiting** for approval when a newer native merge lands
+  may be superseded/cancelled by the newer run's concurrency slot —
+  intended: the newest run's binary carries every commit the stale one
+  would have. An already-approved, in-flight build is never cancelled
+  (`cancel-in-progress: false`).
+- Approval here means "upload to the **preview** tracks" (Play
+  internal testing / TestFlight internal testing) — it is not a public
+  store release. The eventual `production` pipeline should get its own
+  environment + gate when it's wired up.
+
+---
+
 ## Versioning (decision D25 in `decisions.md`)
 
 Plain numeric SemVer in `app.config.ts` — **no pre-release suffixes**:
@@ -143,11 +203,13 @@ App Store Connect upload.
 the build path (and only there — the OTA path never bumps, per the
 rule above):
 
-- Before `eas build`, the workflow runs
+- After the `mobile-release` approval gate clears and before
+  `eas build`, the workflow runs
   `scripts/bump-mobile-version.mjs`, commits the new version back to
   `main` (`chore(release): mobile vX.Y.Z [skip ci]`), tags it
   `mobile-vX.Y.Z`, pushes, then builds. The tag history doubles as the
-  release log.
+  release log — and because the bump sits behind the gate, a rejected
+  release leaves no commit and no tag.
 - **Minor vs patch** comes from a conventional-commit scan of the
   squash-merge subjects on `main` since the last `mobile-v*` tag
   (everything in that range rides the new binary, including changes
