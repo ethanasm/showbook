@@ -153,6 +153,15 @@ const config: ExpoConfig = {
           LSHandlerRank: 'Alternate',
         },
       ],
+      // Declaring CFBundleDocumentTypes without these triggers App
+      // Store Connect warning ITMS-90737 ("Missing Document
+      // Configuration") on every delivery. Both are honestly NO:
+      // Showbook has no UIDocumentBrowserViewController, and the
+      // wallet import reads the shared pkpass once from the
+      // share-sheet inbox copy (unzip → parse → discard) rather
+      // than editing documents in place.
+      UISupportsDocumentBrowser: false,
+      LSSupportsOpeningDocumentsInPlace: false,
       // iOS 9+ requires every URL scheme passed to `canOpenURL` to be
       // declared here, otherwise the call returns false even when the
       // target app is installed. `spotify` powers the native handoff
