@@ -40,7 +40,7 @@ import MapView, {
   PROVIDER_DEFAULT,
   type Region,
 } from 'react-native-maps';
-import { effectiveShowState, type Kind } from '@showbook/shared';
+import { effectiveShowState, isNonWatchableKind, type Kind } from '@showbook/shared';
 import { TopBar } from '../../components/TopBar';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
 import { KindFilterControl } from '../../components/KindFilterControl';
@@ -48,11 +48,14 @@ import { type KindFilterValue } from '../../components/KindFilterMenu';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { Sheet } from '../../components/Sheet';
+import { UpcomingAnnouncementActionSheet } from '../../components/UpcomingAnnouncementActionSheet';
+import { PickPerformanceDateSheet } from '../../components/PickPerformanceDateSheet';
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/lib/auth';
 import { useCachedQuery } from '@/lib/cache';
+import { WATCHED_IDS_CACHE_KEY, useToggleWatch } from '@/lib/discover-watch';
 import darkStyle from './map-style-dark.json';
 import lightStyle from './map-style-light.json';
 
@@ -80,6 +83,13 @@ type MapShow = {
   headlinerName: string | null;
   headlinerId: string | null;
   headlinerImageUrl: string | null;
+  // Announcement-only fields, present on rows from `discover.mapFeed`
+  // (the discoverable layer). The logbook's `shows.listForMap` rows
+  // don't carry them — keep them optional.
+  ticketUrl?: string | null;
+  runStartDate?: string | null;
+  runEndDate?: string | null;
+  performanceDates?: string[] | null;
 };
 
 interface VenueGroup {
@@ -340,6 +350,14 @@ function formatPrice(value: string | number | null): string | null {
   return `$${Math.round(n)}`;
 }
 
+// Date hint for the Add form (`YYYY-MM-DD`). Announcement rows carry their
+// `showDate` as a plain date string; coerce defensively in case a cached
+// payload revived it as a Date.
+function toDateHint(date: string | Date | null): string {
+  if (!date) return '';
+  return typeof date === 'string' ? date : date.toISOString().slice(0, 10);
+}
+
 function pinRadius(count: number): number {
   return Math.max(8, Math.min(22, 7 + count * 1.4));
 }
@@ -403,6 +421,15 @@ export default function MapScreen(): React.JSX.Element {
   // sheet keeps rendering its contents even if a pan/zoom re-buckets the
   // grid and changes a multi-venue cluster's synthetic `c:<key>` id.
   const [selectedCluster, setSelectedCluster] = React.useState<Cluster | null>(null);
+  // Discoverable-layer announcement actions. Rows on that layer are
+  // announcements, not saved shows — routing them to `/show/<id>` 404s
+  // ("Show not found"), so a tap opens the same action sheet Discover
+  // uses (save to watchlist / mark as ticketed / buy tickets) instead.
+  // The target is held separately from the open flags so the pick-a-date
+  // sheet keeps reading it through the action sheet's close animation.
+  const [announcementTarget, setAnnouncementTarget] = React.useState<MapShow | null>(null);
+  const [announcementSheetOpen, setAnnouncementSheetOpen] = React.useState(false);
+  const [pickDateOpen, setPickDateOpen] = React.useState(false);
   const [didFitOnce, setDidFitOnce] = React.useState(false);
   const [activeFocusId, setActiveFocusId] = React.useState<string | null>(null);
 
@@ -438,6 +465,50 @@ export default function MapScreen(): React.JSX.Element {
     setActiveFocusId(focus.id);
     mapRef.current?.animateToRegion(focus.region, 400);
   }, []);
+
+  // Watched-announcement set + toggle — same plumbing as Discover, so the
+  // action sheet reflects (and writes) the shared watchlist state.
+  const watchedQuery = useCachedQuery<string[]>({
+    queryKey: WATCHED_IDS_CACHE_KEY,
+    queryFn: () => utils.client.discover.watchedAnnouncementIds.query(),
+    enabled: Boolean(token),
+  });
+  const watchedSet = React.useMemo(
+    () => new Set(watchedQuery.data ?? []),
+    [watchedQuery.data],
+  );
+  const onToggleWatch = useToggleWatch();
+
+  const onAnnouncementPress = React.useCallback((show: MapShow) => {
+    setAnnouncementTarget(show);
+    setAnnouncementSheetOpen(true);
+  }, []);
+
+  const navigateToAddForm = React.useCallback(
+    (show: MapShow, dateHint: string) => {
+      router.push({
+        pathname: '/add/form',
+        params: {
+          kindHint: show.kind,
+          headliner: show.headlinerName ?? '',
+          venueHint: show.venue.name,
+          dateHint,
+        },
+      });
+    },
+    [router],
+  );
+
+  // Multi-night theatre / comedy / concert runs need the user to pick
+  // which night they have tickets for before the form opens; festivals
+  // are one experience over a date range and pre-fill the start date.
+  // Mirrors Discover's `isDatePickingRun`.
+  const targetIsDatePickingRun =
+    !!announcementTarget?.runStartDate &&
+    !!announcementTarget.runEndDate &&
+    announcementTarget.runStartDate !== announcementTarget.runEndDate &&
+    announcementTarget.kind !== 'festival';
+  const targetPerformanceDates = announcementTarget?.performanceDates ?? [];
 
   const loggedShows = React.useMemo(
     // Effective state keeps the Past/Upcoming layers in step with Home and
@@ -877,6 +948,7 @@ export default function MapScreen(): React.JSX.Element {
             cluster={selectedCluster}
             onClose={() => setSelectedCluster(null)}
             layer={layer}
+            onAnnouncementPress={onAnnouncementPress}
             onZoomIn={() => {
               const target = selectedCluster;
               setSelectedCluster(null);
@@ -885,6 +957,42 @@ export default function MapScreen(): React.JSX.Element {
           />
         )}
       </Sheet>
+
+      <UpcomingAnnouncementActionSheet
+        open={announcementSheetOpen}
+        onClose={() => setAnnouncementSheetOpen(false)}
+        canWatch={
+          announcementTarget ? !isNonWatchableKind(announcementTarget.kind) : false
+        }
+        isWatching={
+          announcementTarget ? watchedSet.has(announcementTarget.id) : false
+        }
+        ticketUrl={announcementTarget?.ticketUrl ?? null}
+        onToggleWatch={() => {
+          if (!announcementTarget) return;
+          void onToggleWatch(
+            announcementTarget.id,
+            watchedSet.has(announcementTarget.id),
+          );
+        }}
+        onMarkTicketed={() => {
+          if (!announcementTarget) return;
+          if (targetIsDatePickingRun && targetPerformanceDates.length > 1) {
+            setPickDateOpen(true);
+            return;
+          }
+          navigateToAddForm(announcementTarget, toDateHint(announcementTarget.date));
+        }}
+      />
+      {targetIsDatePickingRun && announcementTarget && (
+        <PickPerformanceDateSheet
+          open={pickDateOpen}
+          onClose={() => setPickDateOpen(false)}
+          title={announcementTarget.headlinerName ?? 'Pick a date'}
+          performanceDates={targetPerformanceDates}
+          onPick={(date) => navigateToAddForm(announcementTarget, date)}
+        />
+      )}
     </View>
   );
 }
@@ -897,11 +1005,13 @@ function ClusterSheetContents({
   cluster,
   onClose,
   layer,
+  onAnnouncementPress,
   onZoomIn,
 }: {
   cluster: Cluster;
   onClose: () => void;
   layer: MapMode;
+  onAnnouncementPress: (show: MapShow) => void;
   onZoomIn: () => void;
 }): React.JSX.Element {
   const { tokens } = useTheme();
@@ -1130,8 +1240,16 @@ function ClusterSheetContents({
         {sortedShows.map(({ show, venue }) => {
           const price = formatPrice(show.pricePaid);
           const date = formatDate(show.date ?? null);
+          // Discoverable rows are announcements, not saved shows — there
+          // is no `/show/<id>` to open (it 404s with "Show not found").
+          // They open the Discover action sheet instead.
+          const isAnnouncement = show.state === 'discoverable';
           const goToShow = () => {
             onClose();
+            if (isAnnouncement) {
+              onAnnouncementPress(show);
+              return;
+            }
             router.push(`/show/${show.id}`);
           };
           const goToArtist = show.headlinerId
@@ -1144,8 +1262,12 @@ function ClusterSheetContents({
             <Pressable
               key={show.id}
               onPress={goToShow}
-              accessibilityRole="link"
-              accessibilityLabel={`Open show on ${date || 'unknown date'}`}
+              accessibilityRole={isAnnouncement ? 'button' : 'link'}
+              accessibilityLabel={
+                isAnnouncement
+                  ? `${show.headlinerName ?? 'Announcement'} — open actions`
+                  : `Open show on ${date || 'unknown date'}`
+              }
               style={({ pressed }) => [
                 styles.visitRow,
                 { borderTopColor: colors.rule },

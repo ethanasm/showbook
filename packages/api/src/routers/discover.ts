@@ -497,6 +497,14 @@ export const discoverRouter = router({
         headlinerName: isProduction ? a.productionName : a.headliner,
         headlinerId: a.headlinerPerformerId,
         headlinerImageUrl: null as string | null,
+        // Announcement-action fields beyond the listForMap shape: the
+        // mobile map opens the Discover action sheet (watch / mark as
+        // ticketed / buy tickets) for these rows, which needs the ticket
+        // link and the multi-night-run window for the date picker.
+        ticketUrl: a.ticketUrl,
+        runStartDate: a.runStartDate,
+        runEndDate: a.runEndDate,
+        performanceDates: a.performanceDates,
       };
     });
   }),

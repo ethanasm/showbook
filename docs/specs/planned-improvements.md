@@ -46,6 +46,7 @@ playlists.
 - **Discover feed dedup math.** `nearbyFeed` per-region 250-row cap can drop announcements at the edge of overlapping regions.
 - **Test pyramid.** ~30 Playwright e2e specs vs. 7 unit tests. Adding unit coverage for `performer-matcher`, `venue-matcher`, and the digest math would let us refactor faster.
 - **Web Discover headliner thumbnails (cross-surface parity).** The mobile Discover rows now show a headliner avatar (joined `performers.imageUrl`, exposed as `headlinerImageUrl` on `discover.followedFeed` / `followedArtistsFeed` / `nearbyFeed`). The web `AnnouncementRow` grid doesn't render it yet — the field is already on the shared procedures, so this is a CSS-column-plus-`RemoteImage` follow-up to bring the web rows to parity.
+- **Web map discoverable-row actions (cross-surface parity).** The mobile map's Discoverable layer now opens the Discover action sheet (save to watchlist / mark as ticketed / buy tickets) when an announcement row is tapped in the cluster sheet. The web map inspector renders discoverable rows as inert text — `discover.mapFeed` already carries `ticketUrl` / `runStartDate` / `runEndDate` / `performanceDates`, so the web side needs the same watch-toggle + add-form affordances on those rows.
 
 ---
 
