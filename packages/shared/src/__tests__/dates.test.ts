@@ -1,8 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  applyEffectiveShowState,
   countdown,
   daysUntil,
+  effectiveShowState,
   formatDateLong,
   formatDateMedium,
   formatDateParts,
@@ -11,8 +13,11 @@ import {
   formatOnSaleDate,
   formatShowDate,
   formatYear,
+  hasShowStarted,
   isDatePast,
+  isShowEffectivelyPast,
   parseLocalDate,
+  showStartTimeMs,
   toSetlistFmDate,
 } from "../utils/dates";
 
@@ -260,4 +265,72 @@ test("toSetlistFmDate: dd-MM-yyyy", () => {
   // Use explicit local-midnight date to match implementation
   const d = new Date(2024, 5, 15);
   assert.equal(toSetlistFmDate(d), "15-06-2024");
+});
+
+// ── doors-anchored show timing ──────────────────────────────────────────
+// All anchors are local-zone, so fixed "now" values are built with the
+// local Date constructor to stay deterministic in any test TZ.
+
+const SHOW_DATE = "2026-06-11";
+const localMs = (h: number, m = 0) => new Date(2026, 5, 11, h, m).getTime();
+
+test("showStartTimeMs: anchors a calendar date at the 19:00 local doors hour", () => {
+  assert.equal(showStartTimeMs(SHOW_DATE), localMs(19));
+  assert.equal(showStartTimeMs(SHOW_DATE, 20), localMs(20));
+});
+
+test("showStartTimeMs: null/invalid input returns null", () => {
+  assert.equal(showStartTimeMs(null), null);
+  assert.equal(showStartTimeMs(undefined), null);
+  assert.equal(showStartTimeMs("not-a-date"), null);
+});
+
+test("hasShowStarted: false before doors, true from doors onward", () => {
+  assert.equal(hasShowStarted(SHOW_DATE, localMs(18, 59)), false);
+  assert.equal(hasShowStarted(SHOW_DATE, localMs(19)), true);
+  assert.equal(hasShowStarted(SHOW_DATE, localMs(23, 30)), true);
+  // Any past date counts as started.
+  assert.equal(hasShowStarted("2020-01-01", localMs(12)), true);
+  assert.equal(hasShowStarted(null, localMs(12)), false);
+});
+
+test("isShowEffectivelyPast: flips 3 h after doors (22:00 local)", () => {
+  assert.equal(isShowEffectivelyPast(SHOW_DATE, localMs(21, 59)), false);
+  assert.equal(isShowEffectivelyPast(SHOW_DATE, localMs(22)), true);
+  // Next morning is past too — no waiting for the nightly transition.
+  assert.equal(
+    isShowEffectivelyPast(SHOW_DATE, new Date(2026, 5, 12, 9).getTime()),
+    true,
+  );
+});
+
+test("effectiveShowState: ticketed flips to past 3 h after doors", () => {
+  assert.equal(effectiveShowState("ticketed", SHOW_DATE, localMs(20)), "ticketed");
+  assert.equal(effectiveShowState("ticketed", SHOW_DATE, localMs(22, 5)), "past");
+});
+
+test("effectiveShowState: watching and past are left alone", () => {
+  assert.equal(effectiveShowState("watching", SHOW_DATE, localMs(23)), "watching");
+  assert.equal(effectiveShowState("past", SHOW_DATE, localMs(12)), "past");
+});
+
+test("effectiveShowState: null date never flips", () => {
+  assert.equal(effectiveShowState("ticketed", null, localMs(23)), "ticketed");
+});
+
+test("applyEffectiveShowState: maps endDate-aware rows, preserves identity when unchanged", () => {
+  const live = { state: "ticketed", date: SHOW_DATE, endDate: null };
+  // Pre-flip: the exact same object comes back (memo-friendly).
+  assert.equal(applyEffectiveShowState(live, localMs(20)), live);
+  // Post-flip: a new row with state past.
+  const flipped = applyEffectiveShowState(live, localMs(22, 30));
+  assert.notEqual(flipped, live);
+  assert.equal(flipped.state, "past");
+  // Multi-night run: anchored on the last night, so night one stays live.
+  const run = { state: "ticketed", date: SHOW_DATE, endDate: "2026-06-13" };
+  assert.equal(applyEffectiveShowState(run, localMs(23)).state, "ticketed");
+  assert.equal(
+    applyEffectiveShowState(run, new Date(2026, 5, 13, 22, 1).getTime()).state,
+    "past",
+  );
 });

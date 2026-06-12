@@ -282,7 +282,7 @@ describe('media router', () => {
     );
   });
 
-  it('createUploadIntent rejects when the event has not happened yet', async () => {
+  it('createUploadIntent rejects when the show has not started yet', async () => {
     await assert.rejects(
       () => callerFor(USER).media.createUploadIntent({
         showId: SHOW_FUTURE,
@@ -295,7 +295,7 @@ describe('media router', () => {
       (err: unknown) =>
         err instanceof TRPCError &&
         err.code === 'BAD_REQUEST' &&
-        /past/i.test(err.message),
+        /once the show starts/i.test(err.message),
     );
   });
 

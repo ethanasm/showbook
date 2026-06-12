@@ -13,6 +13,7 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { trpc } from "@/lib/trpc";
+import { effectiveShowState } from "@showbook/shared";
 import { EmptyState, RemoteImage, type ShowKind } from "@/components/design-system";
 import { ArrowUpRight, MapPin, Plus, X } from "lucide-react";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
@@ -789,7 +790,12 @@ export default function MapView() {
     if (mode === "discoverable") {
       return (discoverableShows ?? []) as MapShowRow[];
     }
-    const logged = (loggedShows ?? []) as MapShowRow[];
+    // Effective state keeps the Past/Upcoming layers in step with Home and
+    // the shows lists: a ticketed show counts as past 3 h after doors.
+    const logged = ((loggedShows ?? []) as MapShowRow[]).map((s) => ({
+      ...s,
+      state: effectiveShowState(s.state, s.date),
+    }));
     if (mode === "all") return logged;
     return mode === "past"
       ? logged.filter((s) => s.state === "past")

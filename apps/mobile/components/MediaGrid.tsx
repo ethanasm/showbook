@@ -3,9 +3,9 @@
  * section (M4).
  *
  * The grid wraps its own loading + empty states so callers don't have to
- * branch. When there are zero ready assets but the user can upload (i.e.,
- * the show is in the past), an inline "Add photos" CTA replaces the empty
- * state.
+ * branch. When there are zero ready assets but the user can upload (the
+ * show has started or is past), an inline "Add photos" CTA replaces the
+ * empty state.
  *
  * Layout: three columns with a 6dp gutter, full-bleed within the parent's
  * horizontal padding. Tile size is computed from the available width.
@@ -33,7 +33,8 @@ export interface MediaGridItem {
 export interface MediaGridProps {
   items: MediaGridItem[];
   showId: string;
-  /** Whether the user can upload to this show (server requires past date). */
+  /** Whether the user can upload to this show (server allows uploads from
+   *  the moment the show starts). */
   canUpload?: boolean;
   loading?: boolean;
   /** Override navigation for the lightbox tap. Defaults to `/media/[id]`. */
@@ -134,13 +135,13 @@ export function MediaGrid({
       >
         <EmptyState
           icon={<ImageIcon size={32} color={colors.faint} strokeWidth={1.5} />}
-          title={canUpload ? 'No photos yet' : 'Photos arrive after the show'}
+          title={canUpload ? 'No photos yet' : 'Photos open at showtime'}
           subtitle={
             canUpload
               ? atCap && capDetail
                 ? `This show is at the per-show limit — ${capDetail}. Remove media to make room.`
                 : 'Add up to 12 photos or videos from your night out.'
-              : 'You can attach media once the show date passes.'
+              : 'You can add photos and videos once the show starts.'
           }
           cta={
             canUpload && !atCap

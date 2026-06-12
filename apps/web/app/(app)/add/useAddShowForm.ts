@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   deriveFollowSuggestions,
-  isDatePast,
+  hasShowStarted,
   setlistTotalSongs,
   type PerformerSetlist,
 } from "@showbook/shared";
@@ -34,7 +34,7 @@ import type {
 /**
  * Owns every piece of state the Add page renders — kind / timeframe /
  * headliner / venue / lineup / setlists / media staging — plus the
- * derived flags (`canSave`, `isPastEvent`, `provenanceStatuses`,
+ * derived flags (`canSave`, `canStageMedia`, `provenanceStatuses`,
  * `autoFilledCount`) and the form-side handlers (`handleFormSave`,
  * `handleSelectTmResult`, `handleSelectPlace`, et al.) that the page
  * wires into its inputs.
@@ -172,12 +172,13 @@ export function useAddShowForm() {
   const isPastConcert =
     kind === "concert" && !!date && new Date(date) < new Date();
 
-  // Media uploads are gated to events that have already happened. Use the
-  // run's last day so a multi-night festival isn't "past" until after the
-  // closing night.
-  const isPastEvent = useMemo(() => {
-    const lastDay = endDate || date;
-    return Boolean(lastDay && isDatePast(lastDay));
+  // Media staging opens once the show has started (doors-anchored — see
+  // hasShowStarted), so photos taken at the venue can be attached the same
+  // night. Uses the run's first day so a multi-night run opens with night
+  // one. Mirrors the server gate in media.createUploadIntent.
+  const canStageMedia = useMemo(() => {
+    const startDay = date || endDate;
+    return Boolean(startDay && hasShowStarted(startDay));
   }, [date, endDate]);
 
   const setlistQuery = trpc.enrichment.fetchSetlist.useQuery(
@@ -256,7 +257,7 @@ export function useAddShowForm() {
   const completeUpload = trpc.media.completeUpload.useMutation();
 
   // Staged media uploads (processed after show is created)
-  const media = useMediaStaging({ isPastEvent });
+  const media = useMediaStaging({ canStageMedia });
 
   // Fetch existing show for edit mode
   const editQuery = trpc.shows.detail.useQuery(
@@ -1053,7 +1054,7 @@ export function useAddShowForm() {
     createUploadIntent, completeUpload,
 
     // derived
-    isPastConcert, isPastEvent,
+    isPastConcert, canStageMedia,
     fetchingSetlistFor, setFetchingSetlistFor,
     hasValidVenue, hasIdentity, canSave,
     autoFilledCount, provenanceStatuses,

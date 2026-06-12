@@ -49,7 +49,8 @@ export interface ShowTabBadges {
  * sourced from the deterministic actual setlist, not the model).
  */
 export function isHypePlaylistVisible(opts: {
-  /** True when the show has already happened (state === 'past'). */
+  /** True when the show has already happened (state === 'past', or a
+   *  ticketed show 3 h past its doors anchor — see effectiveShowState). */
   isPast: boolean;
   /** The prediction's style, or `'stable'` when the query is empty. */
   setlistStyle: string;

@@ -57,7 +57,7 @@ export default function AddPage() {
     extractCast,
     parseChat,
     scanGmailForShow,
-    isPastConcert, isPastEvent,
+    isPastConcert, canStageMedia,
     fetchingSetlistFor, setFetchingSetlistFor,
     hasIdentity, canSave,
     autoFilledCount, provenanceStatuses,
@@ -1153,8 +1153,9 @@ export default function AddPage() {
         </div>
       </div>
 
-      {/* Photos & videos (staged for upload after save) — only for past events */}
-      {isPastEvent && (
+      {/* Photos & videos (staged for upload after save) — opens once the
+          show has started (doors-anchored), matching the server gate */}
+      {canStageMedia && (
         <div style={{ marginBottom: 26 }}>
           <FieldLabel optional>Photos & videos</FieldLabel>
           <MediaUploadSection

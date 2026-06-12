@@ -33,25 +33,26 @@ interface MediaStagingApi {
  * `runUploads` helper that handleFormSave loops over after a show is
  * created.
  *
- * `isPastEvent` drives a side effect that revokes preview URLs and
- * clears staged files when the user moves the date out of the past —
- * the staging UI hides in that case and the files would otherwise
- * sneak through on save.
+ * `canStageMedia` drives a side effect that revokes preview URLs and
+ * clears staged files when the user moves the date to one where the
+ * show hasn't started yet — the staging UI hides in that case and the
+ * files would otherwise sneak through on save.
  */
-export function useMediaStaging(args: { isPastEvent: boolean }): MediaStagingApi {
-  const { isPastEvent } = args;
+export function useMediaStaging(args: { canStageMedia: boolean }): MediaStagingApi {
+  const { canStageMedia } = args;
   const [stagedMedia, setStagedMedia] = useState<StagedMediaItem[]>([]);
   const [mediaUploadStatus, setMediaUploadStatus] = useState<string | null>(null);
   const [mediaUploadErrors, setMediaUploadErrors] = useState<string[]>([]);
 
-  // If the user moves the date out of the past, the staging UI hides — drop
-  // any already-picked files so they don't sneak through on save.
+  // If the user moves the date to one where the show hasn't started, the
+  // staging UI hides — drop any already-picked files so they don't sneak
+  // through on save.
   useEffect(() => {
-    if (isPastEvent || stagedMedia.length === 0) return;
+    if (canStageMedia || stagedMedia.length === 0) return;
     for (const item of stagedMedia) URL.revokeObjectURL(item.previewUrl);
     setStagedMedia([]);
     setMediaUploadErrors([]);
-  }, [isPastEvent, stagedMedia]);
+  }, [canStageMedia, stagedMedia]);
 
   const runUploads: MediaStagingApi["runUploads"] = async ({
     targetShowId,

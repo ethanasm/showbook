@@ -82,6 +82,7 @@ import {
   computeMonthBounds,
   stepCursor,
 } from '@/lib/calendarBounds';
+import { effectiveShowState } from '@showbook/shared';
 
 type Mode = 'timeline' | 'calendar' | 'stats';
 type CalendarMode = 'month' | 'year';
@@ -303,7 +304,9 @@ function ShowsListPane(): React.JSX.Element {
     return data.map((s) => ({
       id: s.id,
       kind: s.kind as Kind,
-      state: s.state as ShowState,
+      // Effective state: a ticketed show reads as past 3 h after its doors
+      // anchor, so tonight's show lands in the Past bucket the same evening.
+      state: effectiveShowState(s.state, s.endDate ?? s.date) as ShowState,
       date: s.date,
       endDate: s.endDate ?? null,
       seat: s.seat,

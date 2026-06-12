@@ -12,6 +12,8 @@ import { initFullTrackDriver } from "@/lib/spotify-playback";
 import {
   formatDateRangeLong,
   daysUntil,
+  effectiveShowState,
+  hasShowStarted,
   resolveShowSetlistsMap,
   type PerformerSetlistsMap,
 } from "@showbook/shared";
@@ -94,7 +96,12 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
   const router = useRouter();
   const utils = trpc.useUtils();
   const invalidateSidebarCounts = useInvalidateSidebarCounts();
-  const isPast = show.state === "past";
+  // Effective state: a ticketed show flips to "past" 3 h after its doors
+  // anchor (last night of a run) without waiting for the nightly DB
+  // transition. Uploads open even earlier — from doors on night one.
+  const isPast =
+    effectiveShowState(show.state, show.endDate ?? show.date) === "past";
+  const canUploadMedia = isPast || hasShowStarted(show.date ?? show.endDate);
   const isFestival = show.kind === "festival";
 
   // Drives the delete-confirmation popup. Replaces the old
@@ -482,7 +489,7 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
           scope="show"
           showId={show.id}
           lineup={mediaLineup}
-          canUpload={isPast}
+          canUpload={canUploadMedia}
         />
       }
     />
@@ -614,7 +621,8 @@ function ShowHeaderStrip({
   show: ShowDetailTabsViewProps["show"];
   showPrimingStat?: boolean;
 }) {
-  const isPast = show.state === "past";
+  const isPast =
+    effectiveShowState(show.state, show.endDate ?? show.date) === "past";
   const headlinerName = getHeadliner(show);
   const dateLabel = show.date
     ? formatDateRangeLong(show.date, show.endDate)

@@ -40,7 +40,7 @@ import MapView, {
   PROVIDER_DEFAULT,
   type Region,
 } from 'react-native-maps';
-import { isNonWatchableKind, type Kind } from '@showbook/shared';
+import { effectiveShowState, isNonWatchableKind, type Kind } from '@showbook/shared';
 import { TopBar } from '../../components/TopBar';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
 import { KindFilterControl } from '../../components/KindFilterControl';
@@ -511,7 +511,13 @@ export default function MapScreen(): React.JSX.Element {
   const targetPerformanceDates = announcementTarget?.performanceDates ?? [];
 
   const loggedShows = React.useMemo(
-    () => (showsQuery.data ?? []) as MapShow[],
+    // Effective state keeps the Past/Upcoming layers in step with Home and
+    // Shows: a ticketed show counts as past 3 h after its doors anchor.
+    () =>
+      ((showsQuery.data ?? []) as MapShow[]).map((s) => ({
+        ...s,
+        state: effectiveShowState(s.state, s.date),
+      })),
     [showsQuery.data],
   );
   const discoverableShows = React.useMemo(
