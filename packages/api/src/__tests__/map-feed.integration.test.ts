@@ -133,6 +133,7 @@ describe('discover.mapFeed', () => {
           showDate: dateInFuture(10),
           onSaleStatus: 'on_sale',
           source: 'ticketmaster',
+          ticketUrl: 'https://www.ticketmaster.com/event/test-venue-band',
         },
         {
           id: ANN_PERFORMER,
@@ -170,6 +171,13 @@ describe('discover.mapFeed', () => {
           headliner: 'Theatre Cast',
           productionName: 'Hamilton',
           showDate: dateInFuture(20),
+          runStartDate: dateInFuture(20),
+          runEndDate: dateInFuture(24),
+          performanceDates: [
+            dateInFuture(20),
+            dateInFuture(22),
+            dateInFuture(24),
+          ],
           onSaleStatus: 'on_sale',
           source: 'ticketmaster',
         },
@@ -239,6 +247,25 @@ describe('discover.mapFeed', () => {
     assert.equal(venueRow.headlinerName, 'Venue Band');
     assert.equal(venueRow.venue?.id, V_FOLLOWED);
     assert.ok(venueRow.venue?.latitude != null, 'venue latitude missing');
+  });
+
+  it('carries the announcement-action fields for the map action sheet', async () => {
+    const rows = await callerFor(USER_ID).discover.mapFeed();
+    const venueRow = rows.find((r) => r.id === ANN_VENUE);
+    assert.ok(venueRow, 'expected the followed-venue announcement');
+    assert.equal(
+      venueRow.ticketUrl,
+      'https://www.ticketmaster.com/event/test-venue-band',
+    );
+    const theatreRow = rows.find((r) => r.id === ANN_THEATRE);
+    assert.ok(theatreRow, 'expected the theatre announcement');
+    assert.equal(theatreRow.runStartDate, dateInFuture(20));
+    assert.equal(theatreRow.runEndDate, dateInFuture(24));
+    assert.deepEqual(theatreRow.performanceDates, [
+      dateInFuture(20),
+      dateInFuture(22),
+      dateInFuture(24),
+    ]);
   });
 
   it('uses the production name as the headliner for theatre announcements', async () => {
