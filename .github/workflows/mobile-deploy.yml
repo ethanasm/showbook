@@ -156,6 +156,18 @@ on:
 permissions:
   contents: read
 
+# Force every run step onto `bash --noprofile --norc -eo pipefail`.
+# Without an explicit `shell:`, GitHub's default on Linux is `bash -e {0}`
+# — NO pipefail — so the `eas-cli … | tee` pipelines below took tee's
+# exit code (always 0) and a failed EAS build/submit left its step green.
+# That's how the v0.3.0 release shipped nothing: both store builds failed
+# remotely, every step still passed, the submit steps re-submitted the
+# previous 0.2.0 binaries (both stores rejected them — also silently),
+# and the failure email never fired because the job "succeeded".
+defaults:
+  run:
+    shell: bash
+
 jobs:
   plan:
     name: Decide OTA vs build
@@ -300,8 +312,9 @@ jobs:
           MSG=$(git -C "$GITHUB_WORKSPACE" log -1 --pretty=%s)
           # Combined stdout+stderr is tee'd to a shared log so the
           # `if: failure()` notifier can email the eas-cli error summary.
-          # The default shell runs with `-o pipefail`, so a failed
-          # eas-cli still fails the step despite the tee.
+          # pipefail comes from the workflow-level `defaults.run.shell:
+          # bash` (the implicit default shell has NO pipefail), so a
+          # failed eas-cli still fails the step despite the tee.
           pnpm dlx eas-cli update \
             --branch preview \
             --message "$MSG" \
@@ -446,7 +459,11 @@ jobs:
           # Respect a manual bump: if the triggering commit already changed
           # the version line (e.g. the deliberate 1.0.0 jump), don't
           # double-bump on top of it.
-          if git diff HEAD~1 HEAD -- apps/mobile/app.config.ts | grep -qE "^[+-][[:space:]]*version: '"; then
+          # (Here and below: grep without -q / sed instead of head, so the
+          # reader drains its pipe. Under pipefail a reader that exits
+          # early can SIGPIPE the producer and turn a matching condition
+          # false — or fail the LAST_TAG assignment outright.)
+          if git diff HEAD~1 HEAD -- apps/mobile/app.config.ts | grep -E "^[+-][[:space:]]*version: '" >/dev/null; then
             echo "Version line changed in the triggering commit — respecting the manual bump."
             BUMP=none
           fi
@@ -454,7 +471,7 @@ jobs:
           # Highest existing release tag, by version sort (not reachability
           # — a queued run whose head_sha predates the previous run's bump
           # commit must still see that run's tag).
-          LAST_TAG=$(git tag -l 'mobile-v*' --sort=-v:refname | head -1)
+          LAST_TAG=$(git tag -l 'mobile-v*' --sort=-v:refname | sed -n 1p)
 
           if [ "$BUMP" = "auto" ]; then
             # Conventional-commit scan over the squash-merge subjects on
@@ -468,9 +485,9 @@ jobs:
             RANGE="${LAST_TAG:+${LAST_TAG}..HEAD}"
             RANGE="${RANGE:-HEAD~1..HEAD}"
             SUBJECTS=$(git log --format=%s "$RANGE" -- || true)
-            if echo "$SUBJECTS" | grep -qE '^[a-z]+(\([^)]*\))?!:'; then
+            if echo "$SUBJECTS" | grep -E '^[a-z]+(\([^)]*\))?!:' >/dev/null; then
               BUMP=major
-            elif echo "$SUBJECTS" | grep -qiE '^feat(\([^)]*\))?:'; then
+            elif echo "$SUBJECTS" | grep -iE '^feat(\([^)]*\))?:' >/dev/null; then
               BUMP=minor
             else
               BUMP=patch
