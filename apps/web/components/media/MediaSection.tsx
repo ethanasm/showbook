@@ -257,7 +257,8 @@ export function MediaSection({
   performerId?: string;
   lineup?: MediaPerformer[];
   // Only meaningful for scope === "show". When false, the upload UI is
-  // hidden — the server also rejects uploads for non-past events.
+  // hidden — the server also rejects uploads for shows that haven't
+  // started yet (doors-anchored; see hasShowStarted).
   canUpload?: boolean;
 }) {
   const utils = trpc.useUtils();
@@ -604,7 +605,9 @@ export function MediaSection({
               <div className="media-empty__title" style={S.emptyTitle}>No media yet</div>
               <div className="media-empty__body" style={S.emptyBody}>
                 {scope === "show"
-                  ? "Add a few photos or a short video from the night."
+                  ? canUpload
+                    ? "Add a few photos or a short video from the night."
+                    : "You can add photos and videos once the show starts."
                   : "Media uploaded to matching shows will collect here automatically."}
               </div>
             </div>

@@ -78,10 +78,12 @@ import {
   buildActualSongsFromSetlist,
   buildFestivalLineupEntries,
   countFestivalActualSongs,
+  effectiveShowState,
   formatDateRangeShort,
   formatVenueLocation,
   getHeadliner,
   hasProductionLabel,
+  hasShowStarted,
   isVenuePlaceholder,
 } from '@showbook/shared';
 
@@ -165,7 +167,13 @@ export function ShowDetailTabsView({
   const utils = trpc.useUtils();
   const queryClient = useQueryClient();
   const { showToast } = useFeedback();
-  const isPast = show.state === 'past';
+  // Effective state: a ticketed show flips to "past" 3 h after its doors
+  // anchor (last night of a run), without waiting for the nightly DB
+  // transition. Uploads open even earlier — from doors on night one — so
+  // photos can land while the show is still going.
+  const isPast =
+    effectiveShowState(show.state, show.endDate ?? show.date) === 'past';
+  const canUploadMedia = isPast || hasShowStarted(show.date ?? show.endDate);
   const isFestival = show.kind === 'festival';
   const showTicketAction =
     Boolean(show.ticketUrl) &&
@@ -565,7 +573,7 @@ export function ShowDetailTabsView({
         <MediaGrid
           items={mediaItems}
           showId={show.id}
-          canUpload={isPast}
+          canUpload={canUploadMedia}
           loading={mediaQuery.isLoading}
         />
       }

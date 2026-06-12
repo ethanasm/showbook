@@ -35,6 +35,75 @@ export function isDatePast(date: string | Date): boolean {
   return d < today;
 }
 
+// ---------------------------------------------------------------------------
+// Doors-anchored show timing. Show rows only carry a calendar date, so we
+// anchor "showtime" at an assumed local doors hour — the same 19:00 the
+// useLiveCountdown hook and the "doors 7:00 pm" hero copy use. A show is
+// "started" from doors onward, and treated as past SHOW_PAST_GRACE_HOURS
+// after doors (so tonight's show leaves the live hero and joins the logbook
+// the same evening instead of waiting for the nightly DB transition).
+// ---------------------------------------------------------------------------
+
+export const DEFAULT_DOORS_HOUR = 19;
+export const SHOW_PAST_GRACE_HOURS = 3;
+
+// Local-time ms timestamp of the assumed doors anchor for a show date.
+// Calendar dates deliberately resolve in the local zone (see parseLocalDate).
+export function showStartTimeMs(
+  date: string | Date | null | undefined,
+  doorsHour: number = DEFAULT_DOORS_HOUR,
+): number | null {
+  if (!date) return null;
+  const d = parseLocalDate(date);
+  if (isNaN(d.getTime())) return null;
+  const anchored = new Date(d);
+  anchored.setHours(doorsHour, 0, 0, 0);
+  return anchored.getTime();
+}
+
+// True from the doors anchor onward (includes every past date). This is the
+// gate for "you were there" actions like attaching photos mid-show.
+export function hasShowStarted(
+  date: string | Date | null | undefined,
+  nowMs: number = Date.now(),
+): boolean {
+  const start = showStartTimeMs(date);
+  return start != null && nowMs >= start;
+}
+
+// True once the show is SHOW_PAST_GRACE_HOURS past its doors anchor — the
+// point where the UI flips it from "started" to "past".
+export function isShowEffectivelyPast(
+  date: string | Date | null | undefined,
+  nowMs: number = Date.now(),
+): boolean {
+  const start = showStartTimeMs(date);
+  return start != null && nowMs >= start + SHOW_PAST_GRACE_HOURS * 60 * 60 * 1000;
+}
+
+// Display-level state: a ticketed show whose (last) night is effectively
+// past reads as 'past' even though the nightly DB transition hasn't run
+// yet. Watching shows are left alone — an unconfirmed show isn't logged
+// as attended; the nightly job deletes expired ones instead.
+export function effectiveShowState<S extends string>(
+  state: S,
+  lastDay: string | Date | null | undefined,
+  nowMs: number = Date.now(),
+): S | 'past' {
+  if (state !== 'ticketed') return state;
+  return isShowEffectivelyPast(lastDay, nowMs) ? 'past' : state;
+}
+
+// Row-mapping convenience for list screens: returns the same row unless the
+// effective state differs (so referential equality is preserved for memos).
+export function applyEffectiveShowState<
+  T extends { state: string; date: string | null; endDate?: string | null },
+>(row: T, nowMs: number = Date.now()): T {
+  const eff = effectiveShowState(row.state, row.endDate ?? row.date, nowMs);
+  if (eff === row.state) return row;
+  return { ...row, state: eff };
+}
+
 // Convert Date to setlist.fm format dd-MM-yyyy. ISO date strings (YYYY-MM-DD)
 // are zone-less calendar dates and must not go through `new Date`, which parses
 // them as UTC midnight and shifts the day in zones west of UTC.

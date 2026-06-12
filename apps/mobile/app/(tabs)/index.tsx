@@ -49,7 +49,11 @@ import { ShowActionSheet } from '../../components/ShowActionSheet';
 import { MarkTicketedSheet } from '../../components/MarkTicketedSheet';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme, type Kind, type ShowState } from '@/lib/theme';
-import { hasProductionLabel, isNonWatchableKind } from '@showbook/shared';
+import {
+  applyEffectiveShowState,
+  hasProductionLabel,
+  isNonWatchableKind,
+} from '@showbook/shared';
 import { useAuth } from '@/lib/auth';
 import { trpc } from '@/lib/trpc';
 import { useCachedQuery } from '@/lib/cache';
@@ -270,7 +274,10 @@ export default function HomeScreen(): React.JSX.Element {
   );
 
   const sections = React.useMemo(() => {
-    const rows = showsQuery.data ?? [];
+    // Effective state first: a ticketed show flips to past 3 h after its
+    // doors anchor, so tonight's hero hands off to Recently Attended the
+    // same evening instead of waiting for the nightly DB transition.
+    const rows = (showsQuery.data ?? []).map((r) => applyEffectiveShowState(r));
     const today = todayIso();
     const isFiltered = kindFilter !== 'all';
     // Scope every section to the active kind. `total` stays on the full
@@ -332,7 +339,9 @@ export default function HomeScreen(): React.JSX.Element {
   }, [showsQuery.data, kindFilter]);
 
   const headerCounts = React.useMemo(() => {
-    const rows = showsQuery.data ?? [];
+    // Same effective-state mapping as `sections` so "N on deck" drops
+    // tonight's show at the moment it moves to Recently Attended.
+    const rows = (showsQuery.data ?? []).map((r) => applyEffectiveShowState(r));
     return {
       upcoming: countOnDeck(rows, todayIso()),
       thisYear: countThisYear(rows, new Date().getFullYear()),

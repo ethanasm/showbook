@@ -19,7 +19,11 @@ import {
   Eye,
   Square,
 } from "lucide-react";
-import { formatDateParts as toDateParts, parseLocalDate } from "@showbook/shared";
+import {
+  applyEffectiveShowState,
+  formatDateParts as toDateParts,
+  parseLocalDate,
+} from "@showbook/shared";
 import { countdownText } from "@/lib/countdown";
 import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import {
@@ -79,7 +83,12 @@ export default function HomeView() {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
-    const upcomingShows = shows
+    // Effective state first: a ticketed show flips to past 3 h after its
+    // doors anchor, so tonight's show moves from Next up to Recently
+    // attended the same evening instead of after the nightly transition.
+    const effShows = shows.map((s) => applyEffectiveShowState(s));
+
+    const upcomingShows = effShows
       .filter(
         (s) =>
           (s.state === "ticketed" || s.state === "watching") &&
@@ -92,7 +101,7 @@ export default function HomeView() {
 
     // Watching shows from a multi-night run that haven't had a date picked
     // yet — surface them in their own rail so the user can pick a date.
-    const dateTbdShows = shows
+    const dateTbdShows = effShows
       .filter((s) => s.state === "watching" && s.date === null)
       .sort((a, b) => {
         const aHl = a.showPerformers?.[0]?.performer?.name ?? a.productionName ?? "";
@@ -100,7 +109,7 @@ export default function HomeView() {
         return aHl.localeCompare(bHl);
       });
 
-    const pastShows = shows
+    const pastShows = effShows
       .filter((s) => s.state === "past" && s.date !== null)
       .sort(
         (a, b) => new Date(b.date!).getTime() - new Date(a.date!).getTime()

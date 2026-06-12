@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
+import { DEFAULT_DOORS_HOUR, showStartTimeMs } from '../utils/dates';
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 const TWO_DAYS_MS = 2 * DAY_MS;
-// Default assumed doors time when the show row only carries a calendar
-// date (today everything is calendar-only — see specs note about
-// adding showTime). The mobile + web hero copy already hardcodes
-// "doors 7:00 pm", so keeping the anchor consistent here avoids a
-// jarring drift between the surrounding copy and the countdown.
-const DEFAULT_DOORS_HOUR = 19;
+// The doors anchor lives in utils/dates (DEFAULT_DOORS_HOUR) so the
+// countdown, the upload gate, and the started→past flip all agree on
+// when a calendar-only show date "starts". The mobile + web hero copy
+// hardcodes "doors 7:00 pm" to match.
 
 /**
  * Returns a live-ticking countdown label for a calendar-day show date
@@ -72,12 +71,10 @@ export function useLiveCountdown(
 }
 
 function resolveTargetMs(dateYmd: string, doorsHour: number): number | null {
-  // Local-zone anchor. dateYmd is a calendar date (no zone info), so
-  // we deliberately build a local Date — UTC parsing would shift the
-  // doors anchor by the user's offset.
-  const [y, m, d] = dateYmd.split('-').map(Number);
-  if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d, doorsHour, 0, 0, 0).getTime();
+  // Local-zone anchor — delegated to the shared doors-anchor helper so
+  // this hook can never drift from the upload gate / effective-state
+  // logic in utils/dates.
+  return showStartTimeMs(dateYmd, doorsHour);
 }
 
 /**

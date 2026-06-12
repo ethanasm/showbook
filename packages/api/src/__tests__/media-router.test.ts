@@ -116,6 +116,61 @@ describe('mediaRouter (unit)', () => {
       );
     });
 
+    // The gate is doors-anchored (19:00 local), not calendar-day: tonight's
+    // show rejects before doors and accepts during the show. Pin the clock
+    // with mocked Date so the boundary is deterministic in any TZ.
+    it('rejects tonight’s show before doors', async (t) => {
+      t.mock.timers.enable({
+        apis: ['Date'],
+        now: new Date(2026, 5, 11, 10, 0).getTime(),
+      });
+      const db = makeFakeDb({
+        selectResults: [[{ id: SHOW_ID, date: '2026-06-11', endDate: null }]],
+      });
+      await assert.rejects(
+        () =>
+          caller(db).createUploadIntent({
+            showId: SHOW_ID,
+            mediaType: 'photo',
+            mimeType: 'image/jpeg',
+            sourceBytes: 1000,
+            storedBytes: 1000,
+            variants: [{ name: 'orig', mimeType: 'image/jpeg', bytes: 1000 }],
+          }),
+        (err: unknown) =>
+          err instanceof TRPCError &&
+          err.code === 'BAD_REQUEST' &&
+          /once the show starts/.test(err.message),
+      );
+    });
+
+    it('passes the date gate once tonight’s show has started', async (t) => {
+      t.mock.timers.enable({
+        apis: ['Date'],
+        now: new Date(2026, 5, 11, 20, 0).getTime(),
+      });
+      const db = makeFakeDb({
+        selectResults: [[{ id: SHOW_ID, date: '2026-06-11', endDate: null }]],
+      });
+      // The unsupported mime rejection proves we got PAST the date gate —
+      // the gate's own message would say "once the show starts".
+      await assert.rejects(
+        () =>
+          caller(db).createUploadIntent({
+            showId: SHOW_ID,
+            mediaType: 'photo',
+            mimeType: 'image/gif',
+            sourceBytes: 1000,
+            storedBytes: 1000,
+            variants: [{ name: 'orig', mimeType: 'image/gif', bytes: 1000 }],
+          }),
+        (err: unknown) =>
+          err instanceof TRPCError &&
+          err.code === 'BAD_REQUEST' &&
+          /Unsupported image type/.test(err.message),
+      );
+    });
+
     it('rejects unsupported photo mime type', async () => {
       const db = makeFakeDb({
         selectResults: [

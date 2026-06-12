@@ -21,7 +21,7 @@ import {
   headMediaObject,
 } from '../media-storage';
 import { child } from '@showbook/observability';
-import { isDatePast } from '@showbook/shared';
+import { hasShowStarted } from '@showbook/shared';
 
 const log = child({ component: 'api.media' });
 
@@ -240,14 +240,15 @@ export const mediaRouter = router({
 
       const show = await getShowOwnedByUser(ctx.db, input.showId, userId);
 
-      // Media may only be attached to events the user has actually attended.
-      // Use the run's last day (endDate ?? date) so a multi-night run isn't
-      // "past" until after the final night.
-      const lastDay = show.endDate ?? show.date;
-      if (!lastDay || !isDatePast(lastDay)) {
+      // Media may be attached from the moment the show starts (the assumed
+      // 7pm doors anchor — hasShowStarted), so photos taken at the venue can
+      // be uploaded during the night instead of waiting until the next day.
+      // Use the run's first day so a multi-night run opens with night one.
+      const startDay = show.date ?? show.endDate;
+      if (!startDay || !hasShowStarted(startDay)) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: 'Media can only be added to events that are in the past',
+          message: 'Photos and videos can be added once the show starts',
         });
       }
 

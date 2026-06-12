@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ShowKind } from "@/components/design-system";
+import { applyEffectiveShowState } from "@showbook/shared";
 import { trpc } from "@/lib/trpc";
 import {
   compareShows,
@@ -100,7 +101,13 @@ export function useShowsFilter({ mode, pageSize }: UseShowsFilterArgs) {
   );
   const { data: allShowsUnfilteredRaw } = trpc.shows.list.useQuery({}, { staleTime: 60_000 });
 
-  const shows = useMemo(() => (allShows ?? []) as ShowData[], [allShows]);
+  // Effective state: a ticketed show reads as 'past' 3 h after its doors
+  // anchor, so tonight's show moves from /upcoming to /logbook the same
+  // evening instead of waiting for the nightly DB transition.
+  const shows = useMemo(
+    () => ((allShows ?? []) as ShowData[]).map((s) => applyEffectiveShowState(s)),
+    [allShows],
+  );
   const allShowsUnfiltered = useMemo(
     () => (allShowsUnfilteredRaw ?? []) as ShowData[],
     [allShowsUnfilteredRaw],
