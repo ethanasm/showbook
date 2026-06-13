@@ -23,7 +23,7 @@ export async function register() {
     // `restart: unless-stopped`) than serve a half-configured app. Dev /
     // test / e2e run with stub or partial envs, so there we only warn.
     const { errors } = validateEnv(process.env);
-    const outcome = envValidationOutcome(errors, process.env.NODE_ENV);
+    const outcome = envValidationOutcome(errors, process.env);
     if (outcome === 'fatal') {
       logger.error(
         { event: 'env.validate.failed', problems: errors },

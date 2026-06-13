@@ -73,19 +73,32 @@ describe('validateEnv', () => {
 });
 
 describe('envValidationOutcome', () => {
-  it('is ok when there are no errors, regardless of NODE_ENV', () => {
-    assert.equal(envValidationOutcome([], 'production'), 'ok');
-    assert.equal(envValidationOutcome([], 'development'), 'ok');
-    assert.equal(envValidationOutcome([], undefined), 'ok');
+  it('is ok when there are no errors, regardless of environment', () => {
+    assert.equal(envValidationOutcome([], { NODE_ENV: 'production' }), 'ok');
+    assert.equal(envValidationOutcome([], { NODE_ENV: 'development' }), 'ok');
+    assert.equal(envValidationOutcome([], {}), 'ok');
   });
 
-  it('is fatal in production when there are errors', () => {
-    assert.equal(envValidationOutcome(['AUTH_SECRET is required but not set'], 'production'), 'fatal');
+  it('is fatal in real production when there are errors', () => {
+    assert.equal(
+      envValidationOutcome(['AUTH_SECRET is required but not set'], { NODE_ENV: 'production' }),
+      'fatal',
+    );
+  });
+
+  it('is only a warning in a prod-like test deployment (ENABLE_TEST_ROUTES=1)', () => {
+    // The Playwright / Maestro server runs `next start` (NODE_ENV=production)
+    // with test routes enabled and without Google OAuth / TOKEN_KEY — it must
+    // not be crashed by the guard.
+    assert.equal(
+      envValidationOutcome(['x'], { NODE_ENV: 'production', ENABLE_TEST_ROUTES: '1' }),
+      'warn',
+    );
   });
 
   it('is only a warning outside production', () => {
-    assert.equal(envValidationOutcome(['x'], 'development'), 'warn');
-    assert.equal(envValidationOutcome(['x'], 'test'), 'warn');
-    assert.equal(envValidationOutcome(['x'], undefined), 'warn');
+    assert.equal(envValidationOutcome(['x'], { NODE_ENV: 'development' }), 'warn');
+    assert.equal(envValidationOutcome(['x'], { NODE_ENV: 'test' }), 'warn');
+    assert.equal(envValidationOutcome(['x'], {}), 'warn');
   });
 });

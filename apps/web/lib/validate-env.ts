@@ -72,15 +72,24 @@ export type EnvValidationOutcome = 'ok' | 'warn' | 'fatal';
 
 /**
  * Decide how boot should react to validation problems. Kept separate from
- * `process.exit` so the policy is unit-testable. Only production treats a
- * bad environment as fatal — dev / test / e2e run with stub or partial
- * envs (the session-start hook writes a placeholder .env.local) and must
- * not be crashed by this guard.
+ * `process.exit` so the policy is unit-testable. Only a *real* production
+ * deployment treats a bad environment as fatal.
+ *
+ * Dev / test run with stub or partial envs (the session-start hook writes a
+ * placeholder .env.local) and only warn. Crucially, the Playwright / Maestro
+ * "prod-like" servers run `next start` (so NODE_ENV=production) but with
+ * `ENABLE_TEST_ROUTES=1` and *without* Google OAuth / TOKEN_KEY — they sign
+ * in via `/api/test/login` and never touch Spotify, so a missing OAuth or
+ * TOKEN_KEY var there is expected, not fatal. Real prod never sets
+ * ENABLE_TEST_ROUTES (the `/api/test/*` guard also requires the e2e DB name),
+ * so it's a safe signal that this is a test deployment.
  */
 export function envValidationOutcome(
   errors: string[],
-  nodeEnv: string | undefined,
+  env: { NODE_ENV?: string; ENABLE_TEST_ROUTES?: string },
 ): EnvValidationOutcome {
   if (errors.length === 0) return 'ok';
-  return nodeEnv === 'production' ? 'fatal' : 'warn';
+  const isRealProd =
+    env.NODE_ENV === 'production' && env.ENABLE_TEST_ROUTES !== '1';
+  return isRealProd ? 'fatal' : 'warn';
 }
