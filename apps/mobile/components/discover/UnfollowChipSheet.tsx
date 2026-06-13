@@ -1,10 +1,12 @@
 /**
  * Action sheet shown when a Discover filter chip is long-pressed. Offers
- * a single destructive "Unfollow / Remove" action scoped to whichever
- * tab the chip belongs to (venue / artist / region), mirroring the web
- * rail's right-click "Unfollow" affordance (`VenueRail` /
+ * a destructive "Unfollow / Remove" action scoped to whichever tab the
+ * chip belongs to (venue / artist / region), mirroring the web rail's
+ * right-click "Unfollow" affordance (`VenueRail` /
  * `discover-venue-group__header` context menu in
- * `apps/web/app/(app)/discover/View.client.tsx`).
+ * `apps/web/app/(app)/discover/View.client.tsx`). Venue chips (the
+ * Venues tab and the Regions tab's venue sub-rail) additionally get a
+ * "Rename venue" action that opens `RenameVenueSheet`.
  *
  * Callback-driven like `UpcomingAnnouncementActionSheet`: the parent
  * owns the optimistic mutation + cache invalidation; this component only
@@ -13,7 +15,7 @@
 
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { MapPin, Trash2, Users } from 'lucide-react-native';
+import { MapPin, Pencil, Trash2, Users } from 'lucide-react-native';
 
 import { Sheet } from '../Sheet';
 import { useTheme } from '@/lib/theme';
@@ -44,6 +46,9 @@ export function UnfollowChipSheet({
   tab,
   name,
   onConfirm,
+  canRename = false,
+  onRename,
+  showUnfollow = true,
 }: {
   open: boolean;
   onClose: () => void;
@@ -51,6 +56,14 @@ export function UnfollowChipSheet({
   /** Display name of the chip target, shown in the sheet header. */
   name: string | null;
   onConfirm: () => void;
+  /** Venue chips can be renamed (per-user alias via `venues.rename`). */
+  canRename?: boolean;
+  /** Invoked when the "Rename venue" row is tapped. The sheet dismisses
+   *  itself first so the rename sheet animates in cleanly. */
+  onRename?: () => void;
+  /** Region-scoped venue sub-rail chips aren't followed, so they get no
+   *  destructive action — only rename. Defaults to true. */
+  showUnfollow?: boolean;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -62,30 +75,60 @@ export function UnfollowChipSheet({
     onConfirm();
   };
 
+  const handleRename = (): void => {
+    void hapticSelection();
+    onClose();
+    onRename?.();
+  };
+
+  // Size the sheet to its row count: one row (~26%), two rows (~32%).
+  const rowCount = (canRename ? 1 : 0) + (showUnfollow ? 1 : 0);
+  const snap = rowCount >= 2 ? '32%' : '26%';
+
   return (
-    <Sheet open={open} onClose={onClose} snapPoints={['26%']}>
+    <Sheet open={open} onClose={onClose} snapPoints={[snap]}>
       <View style={styles.body}>
         {name ? (
           <Text style={[styles.title, { color: colors.muted }]} numberOfLines={1}>
             {name}
           </Text>
         ) : null}
-        <Pressable
-          onPress={handleConfirm}
-          style={({ pressed }) => [
-            styles.row,
-            { borderBottomColor: colors.rule },
-            pressed && { backgroundColor: colors.surface },
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel={copy.action}
-          testID="discover-chip-unfollow"
-        >
-          <View style={styles.iconSlot}>{copy.icon(colors.danger)}</View>
-          <Text style={[styles.label, { color: colors.danger }]}>
-            {copy.action}
-          </Text>
-        </Pressable>
+        {canRename ? (
+          <Pressable
+            onPress={handleRename}
+            style={({ pressed }) => [
+              styles.row,
+              { borderBottomColor: colors.rule },
+              pressed && { backgroundColor: colors.surface },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Rename venue"
+            testID="discover-chip-rename"
+          >
+            <View style={styles.iconSlot}>
+              <Pencil size={20} color={colors.ink} strokeWidth={2} />
+            </View>
+            <Text style={[styles.label, { color: colors.ink }]}>Rename venue</Text>
+          </Pressable>
+        ) : null}
+        {showUnfollow ? (
+          <Pressable
+            onPress={handleConfirm}
+            style={({ pressed }) => [
+              styles.row,
+              { borderBottomColor: colors.rule },
+              pressed && { backgroundColor: colors.surface },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={copy.action}
+            testID="discover-chip-unfollow"
+          >
+            <View style={styles.iconSlot}>{copy.icon(colors.danger)}</View>
+            <Text style={[styles.label, { color: colors.danger }]}>
+              {copy.action}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
     </Sheet>
   );
