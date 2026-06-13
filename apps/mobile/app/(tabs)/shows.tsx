@@ -347,8 +347,10 @@ function ShowsListPane(): React.JSX.Element {
 
   // Pinned search bar: free-text filter across headliner / cast / support
   // names, venue name + city, and show / festival name (`productionName`).
+  // Search is a Timeline-only affordance — Calendar and Stats read the
+  // unfiltered (kind-filtered) rows.
   const rows: ShowRow[] = React.useMemo(() => {
-    if (searchQuery.trim() === '') return kindRows;
+    if (mode !== 'timeline' || searchQuery.trim() === '') return kindRows;
     return kindRows.filter((r) =>
       matchesSearchQuery(searchQuery, [
         r.productionName,
@@ -357,7 +359,7 @@ function ShowsListPane(): React.JSX.Element {
         ...r.performers.map((p) => p.name),
       ]),
     );
-  }, [kindRows, searchQuery]);
+  }, [kindRows, searchQuery, mode]);
 
   React.useEffect(() => {
     if (stateBucket === 'upcoming' && mode === 'stats') {
@@ -437,7 +439,7 @@ function ShowsListPane(): React.JSX.Element {
         />
       </View>
 
-      {allRows.length > 0 ? (
+      {allRows.length > 0 && mode === 'timeline' ? (
         <SearchBar
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -459,7 +461,7 @@ function ShowsListPane(): React.JSX.Element {
             cta={{ label: 'Try again', onPress: () => void showsQuery.refetch() }}
           />
         </ScrollView>
-      ) : rows.length === 0 && searchQuery.trim() !== '' ? (
+      ) : rows.length === 0 && searchQuery.trim() !== '' && mode === 'timeline' ? (
         // A search is active and nothing matched — a search-specific empty
         // state with a one-tap clear rather than the onboarding hero.
         <ScrollView
