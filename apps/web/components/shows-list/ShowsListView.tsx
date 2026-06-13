@@ -831,13 +831,15 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
       ...(isMobile ? {} : { height: "100%", minHeight: 0 }),
     }}>
       {renderHeader()}
-      <ListSearchBar
-        value={searchQuery}
-        onChange={setSearchQuery}
-        placeholder="Search shows, artists, venues…"
-        isMobile={isMobile}
-        testId="shows-search-input"
-      />
+      {viewMode === "list" && (
+        <ListSearchBar
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Search shows, artists, venues…"
+          isMobile={isMobile}
+          testId="shows-search-input"
+        />
+      )}
       <FilterBar
         isMobile={isMobile}
         isLogbook={isLogbook}
