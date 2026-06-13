@@ -15,6 +15,30 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     const { logger, flushObservability } = await import('@showbook/observability');
     const { startBoss, stopBoss, registerAllJobs } = await import('@showbook/jobs');
+    const { validateEnv, envValidationOutcome } = await import('./lib/validate-env');
+
+    // Fail fast on a misconfigured prod environment. Before this guard a
+    // missing/typo'd `.env.prod` var only surfaced lazily at first use; in
+    // prod we'd rather crash the boot (visible crash-loop under
+    // `restart: unless-stopped`) than serve a half-configured app. Dev /
+    // test / e2e run with stub or partial envs, so there we only warn.
+    const { errors } = validateEnv(process.env);
+    const outcome = envValidationOutcome(errors, process.env);
+    if (outcome === 'fatal') {
+      logger.error(
+        { event: 'env.validate.failed', problems: errors },
+        'Required environment variables are missing or malformed — refusing to boot',
+      );
+      await flushObservability();
+      process.exit(1);
+    } else if (outcome === 'warn') {
+      logger.warn(
+        { event: 'env.validate.failed', problems: errors },
+        'Environment validation found problems (non-fatal outside production)',
+      );
+    } else {
+      logger.info({ event: 'env.validate.ok' }, 'Environment validation passed');
+    }
 
     registerCallCount += 1;
     logger.info(
