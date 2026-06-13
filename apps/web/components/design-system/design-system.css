@@ -126,9 +126,9 @@ button:active:not(:disabled) {
 }
 
 .ticket-status-badge--sold_out {
-  background: color-mix(in srgb, #e63946 14%, transparent);
-  color: #e63946;
-  border: 1px solid color-mix(in srgb, #e63946 45%, transparent);
+  background: color-mix(in srgb, var(--kind-theatre) 14%, transparent);
+  color: var(--kind-theatre);
+  border: 1px solid color-mix(in srgb, var(--kind-theatre) 45%, transparent);
 }
 
 .ticket-status-badge--cancelled {
@@ -256,7 +256,7 @@ button:active:not(:disabled) {
 
 .remote-image--card {
   width: 96px;
-  border-radius: 12px;
+  border-radius: 0;
   flex: 0 0 96px;
 }
 
@@ -328,13 +328,12 @@ button:active:not(:disabled) {
   position: relative;
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: 12px;
+  border-radius: 0;
   padding: 16px 20px;
   display: grid;
   grid-template-columns: 3px 64px 1fr auto;
   column-gap: 16px;
   align-items: center;
-  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.6);
 }
 
 /* Each card drifts on its own 12-14s cycle, offset so they never
@@ -528,14 +527,14 @@ button:active:not(:disabled) {
   max-height: 360px;
   overflow: hidden;
   border: 1px solid var(--rule);
-  border-radius: 12px 12px 0 0;
+  border-radius: 0;
   background: var(--surface);
 }
 
 .venue-photo-band .remote-image {
   height: 100%;
   border: none;
-  border-radius: 12px 12px 0 0;
+  border-radius: 0;
 }
 
 /* Venue subjects (buildings, interiors) are usually mid-frame; override
@@ -591,7 +590,7 @@ button:active:not(:disabled) {
   min-height: 48px;
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: 12px;
+  border-radius: 0;
   margin-bottom: 8px;
 }
 
@@ -1455,7 +1454,7 @@ a.show-row__support-link:hover {
   padding: 28px 32px;
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: 12px;
+  border-radius: 0;
 }
 
 .hero-card__grid {
