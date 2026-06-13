@@ -109,13 +109,87 @@ jobs:
         # auto-expires when the job finishes.
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
+      - name: Capture current image for rollback
+        working-directory: ${{ env.PROD_DIR }}
+        # Tag the currently-running web image as `:rollback` BEFORE prod:up
+        # pulls the new `:latest` over it. Capturing the image *id* (not the
+        # `:latest` tag, which is about to move) is what makes the rollback
+        # below land on the previous build regardless of how it was tagged.
+        run: |
+          set -euo pipefail
+          if docker inspect showbook-prod-web >/dev/null 2>&1; then
+            CURRENT_IMAGE_ID=$(docker inspect --format '{{.Image}}' showbook-prod-web)
+            docker tag "$CURRENT_IMAGE_ID" ghcr.io/ethanasm/showbook-web:rollback
+            echo "HAVE_ROLLBACK=1" >> "$GITHUB_ENV"
+            echo "Tagged $CURRENT_IMAGE_ID as :rollback (previous running image)"
+          else
+            echo "HAVE_ROLLBACK=0" >> "$GITHUB_ENV"
+            echo "No running showbook-prod-web container — first deploy, no rollback target"
+          fi
+
       - name: Pull + start prod containers
         working-directory: ${{ env.PROD_DIR }}
         run: pnpm prod:up
 
+      - name: Pre-migration DB backup
+        working-directory: ${{ env.PROD_DIR }}
+        # Snapshot the prod DB before migrations run so a destructive
+        # migration has a recovery point. Writes
+        # $PROD_DIR/backups/pre-migrate-$DEPLOY_SHA.dump (distinct from the
+        # nightly host-cron backup in scripts/backup-postgres.mjs). A backup
+        # we can't take is exactly when we least want to migrate, so a
+        # failure here is fatal and blocks the migration. A fresh/empty DB on
+        # first deploy still dumps cleanly, so there's no first-deploy carve-out.
+        run: pnpm prod:db:backup
+
       - name: Apply DB migrations
         working-directory: ${{ env.PROD_DIR }}
         run: pnpm prod:db:migrate
+
+      - name: Post-deploy health gate
+        working-directory: ${{ env.PROD_DIR }}
+        # Block the deploy "done" until the new container reports ready
+        # (DB reachable + pg-boss started). /api/health/ready returns 503
+        # until both pass; the curl retries cover the boot/migration window.
+        # On failure the rollback step below fires.
+        run: pnpm prod:health:ready
+
+      - name: Roll back web image on failure
+        if: failure()
+        working-directory: ${{ env.PROD_DIR }}
+        # Fires when any step above failed — in practice the health gate.
+        # Re-point the web container at the previous image (no pull: the
+        # :rollback tag is local) and re-check. Forward migrations stay
+        # applied; a DB restore is deliberately left manual (auto-restoring
+        # would lose writes between the snapshot and the failure).
+        run: |
+          set -uo pipefail
+          {
+            echo "### ⚠️ Deploy failed — post-deploy health gate did not pass"
+            echo ""
+            echo "- SHA attempted: \`$DEPLOY_SHA\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "${HAVE_ROLLBACK:-0}" = "1" ]; then
+            echo "Rolling web back to the previously-running image (:rollback)…"
+            WEB_IMAGE_TAG=rollback docker compose --env-file .env.prod -f infra/docker-compose.prod.yml up -d web
+            if pnpm prod:health:ready; then
+              echo "- Rollback: ✅ previous image healthy again" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- Rollback: ❌ previous image ALSO unhealthy — manual intervention required" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo "- Rollback: skipped (no previous image — first deploy)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          {
+            echo ""
+            echo "**Forward DB migrations remain applied.** If the migration was the cause, restore the pre-migration snapshot manually on the prod host:"
+            echo '```bash'
+            echo "docker compose --env-file .env.prod -f infra/docker-compose.prod.yml cp \"backups/pre-migrate-$DEPLOY_SHA.dump\" db:/tmp/restore.dump"
+            echo "docker compose --env-file .env.prod -f infra/docker-compose.prod.yml exec -T db \\"
+            echo "  pg_restore --clean --if-exists --no-owner --no-acl -U showbook_prod -d showbook_prod /tmp/restore.dump"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
       # The mobile-e2e backend (infra/docker-compose.e2e.yml) runs the
       # same :latest image as prod. Refresh it here — while this job's

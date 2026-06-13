@@ -145,6 +145,54 @@ After that, every push to `main` that turns CI green will redeploy. To
 deploy a specific SHA on demand, use *Actions → Web Deploy (prod) → Run
 workflow* and pass the SHA.
 
+### Deploy safety net (backup → migrate → health gate → rollback)
+
+The deploy is bracketed by guardrails so a bad image or migration can't
+silently take the site down (the Cloudflare Tunnel just points at a dead
+`:3002`):
+
+1. **Capture rollback image** — before `prod:up` pulls the new `:latest`,
+   the currently-running web image id is re-tagged locally as
+   `ghcr.io/ethanasm/showbook-web:rollback`.
+2. **Pre-migration backup** (`pnpm prod:db:backup`) — a `pg_dump --format=custom`
+   taken *inside* the db container to
+   `$PROD_DIR/backups/pre-migrate-<sha>.dump`, before migrations run. This
+   is a deploy-local recovery point, distinct from the nightly host-cron
+   backup (`scripts/backup-postgres.mjs`, see
+   [`operations/backups.md`](operations/backups.md)). A failed backup is
+   fatal and blocks the migration.
+3. **Migrate** (`pnpm prod:db:migrate`), then **health gate**
+   (`pnpm prod:health:ready`) — `curl` of `/api/health/ready` (which returns
+   503 until Postgres is reachable *and* pg-boss is `started`), retried
+   across the boot window.
+4. **Auto-rollback on failure** — if the gate fails, the deploy re-points
+   the web container at the `:rollback` image (no pull — the tag is local),
+   re-checks health, and fails the workflow. **Forward DB migrations stay
+   applied**; a DB restore is deliberately *not* automated (it would lose
+   any writes between the snapshot and the failure).
+
+If the migration itself was the culprit, restore the pre-migration
+snapshot manually on the prod host (the deploy job summary prints these
+exact commands):
+
+```bash
+docker compose --env-file .env.prod -f infra/docker-compose.prod.yml \
+  cp "backups/pre-migrate-<sha>.dump" db:/tmp/restore.dump
+docker compose --env-file .env.prod -f infra/docker-compose.prod.yml exec -T db \
+  pg_restore --clean --if-exists --no-owner --no-acl -U showbook_prod -d showbook_prod /tmp/restore.dump
+```
+
+### Boot-time environment validation
+
+On boot, `apps/web/instrumentation.ts` validates the prod-critical env
+(`AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `DATABASE_URL`,
+`NEXTAUTH_URL`, `TOKEN_KEY` — logic in `apps/web/lib/validate-env.ts`). In
+production a missing/malformed var logs `env.validate.failed` and exits
+non-zero **before** serving traffic, so a typo'd `.env.prod` surfaces as a
+loud crash-loop instead of confusing lazy runtime failures. (`POSTGRES_PASSWORD`
+isn't checked here — `docker-compose.prod.yml` already enforces it via
+`${POSTGRES_PASSWORD:?...}`.) Outside production the check only warns.
+
 ## Scheduled jobs (pg-boss crons)
 
 All cron jobs run from `packages/jobs/src/registry.ts` inside the

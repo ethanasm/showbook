@@ -75,3 +75,8 @@ apps/web/certificates/
 
 # One-off scratch outputs (venue-photo comparison, etc.)
 tmp/
+
+# Pre-migration DB snapshots from `pnpm prod:db:backup` (deploy.yml). Kept as
+# preserved operator state so the deploy's `git clean -fd` does not wipe a
+# rollback recovery point.
+backups/

@@ -38,6 +38,8 @@
     "prod:down": "docker compose --env-file .env.prod -f infra/docker-compose.prod.yml down",
     "prod:logs": "docker compose --env-file .env.prod -f infra/docker-compose.prod.yml logs -f web",
     "prod:db:migrate": "docker compose --env-file .env.prod -f infra/docker-compose.prod.yml exec web pnpm --filter @showbook/db drizzle-kit migrate",
+    "prod:db:backup": "mkdir -p backups && docker compose --env-file .env.prod -f infra/docker-compose.prod.yml exec -T db pg_dump --format=custom --no-owner --no-acl -U showbook_prod showbook_prod > \"backups/pre-migrate-${DEPLOY_SHA:-$(date -u +%Y%m%dT%H%M%SZ)}.dump\"",
+    "prod:health:ready": "curl -fsS --retry 12 --retry-delay 5 --retry-all-errors http://127.0.0.1:3002/api/health/ready",
     "e2e:up": "docker compose --env-file .env.e2e -f infra/docker-compose.e2e.yml up -d",
     "e2e:up:build": "docker compose --env-file .env.e2e -f infra/docker-compose.e2e.yml up -d --build",
     "e2e:down": "docker compose --env-file .env.e2e -f infra/docker-compose.e2e.yml down",
