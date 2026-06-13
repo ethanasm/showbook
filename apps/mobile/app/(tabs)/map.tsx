@@ -828,59 +828,17 @@ export default function MapScreen(): React.JSX.Element {
               showsPointsOfInterests={false}
               toolbarEnabled={false}
             >
-              {visibleClusters.map((cluster) => {
-                const color = tokens.kindColor(cluster.dominantKind);
-                const r = pinRadius(cluster.count);
-                const selected = cluster.id === selectedCluster?.id;
-                return (
-                  <Marker
-                    key={cluster.id}
-                    coordinate={{ latitude: cluster.lat, longitude: cluster.lng }}
-                    onPress={() => onMarkerPress(cluster)}
-                    anchor={{ x: 0.5, y: 0.5 }}
-                    tracksViewChanges={false}
-                  >
-                    <View
-                      style={[
-                        styles.pinOuter,
-                        {
-                          width: r * 2 + 8,
-                          height: r * 2 + 8,
-                          borderRadius: r + 4,
-                          backgroundColor: selected
-                            ? color
-                            : `${color}33`,
-                        },
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.pinInner,
-                          {
-                            width: r * 2,
-                            height: r * 2,
-                            borderRadius: r,
-                            backgroundColor: color,
-                            borderColor: selected ? colors.ink : 'transparent',
-                            borderWidth: selected ? 1.5 : 0,
-                          },
-                        ]}
-                      >
-                        {cluster.count >= 2 && (
-                          <Text
-                            style={[
-                              styles.pinCount,
-                              { color: colors.bg, fontSize: r > 14 ? 11 : 10 },
-                            ]}
-                          >
-                            {cluster.count}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  </Marker>
-                );
-              })}
+              {visibleClusters.map((cluster) => (
+                <ClusterMarker
+                  key={cluster.id}
+                  cluster={cluster}
+                  color={tokens.kindColor(cluster.dominantKind)}
+                  selected={cluster.id === selectedCluster?.id}
+                  selectedBorderColor={colors.ink}
+                  countColor={colors.bg}
+                  onPress={onMarkerPress}
+                />
+              ))}
             </MapView>
 
             {focusRegions.length > 0 && (
@@ -994,6 +952,109 @@ export default function MapScreen(): React.JSX.Element {
         />
       )}
     </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Cluster marker
+// ---------------------------------------------------------------------------
+
+// How long an Android marker keeps tracking view changes after its content
+// changes before freezing back into a static bitmap. Long enough to span
+// the first few layout/paint frames (including a custom-font resolve);
+// short enough that pan/zoom perf isn't dragged down by 60 live markers.
+const ANDROID_MARKER_TRACK_MS = 500;
+
+/**
+ * One cluster pin. The view tree is identical on both platforms — a solid
+ * kind-colored circle with the show count, inside a translucent halo —
+ * but `tracksViewChanges` needs platform-specific handling:
+ *
+ * On Android, Google Maps rasterises a custom marker view into a bitmap
+ * the moment `tracksViewChanges` is false. With it hardcoded false the
+ * snapshot fires on mount, often before the inner circle and count text
+ * have painted, so the map showed only the faint outer halo — washed-out
+ * empty circles instead of the hard solid-color + count pins Apple Maps
+ * renders (iOS markers are live views, so iOS never had the problem).
+ * The fix: track view changes briefly on mount and again whenever the
+ * rendered content changes (count, color, selection), then freeze back
+ * to a bitmap so pan/zoom stays cheap.
+ *
+ * On iOS tracking stays permanently off — live marker views churning is
+ * exactly what destabilised Apple Maps on the Discoverable layer.
+ */
+function ClusterMarker({
+  cluster,
+  color,
+  selected,
+  selectedBorderColor,
+  countColor,
+  onPress,
+}: {
+  cluster: Cluster;
+  color: string;
+  selected: boolean;
+  selectedBorderColor: string;
+  countColor: string;
+  onPress: (cluster: Cluster) => void;
+}): React.JSX.Element {
+  const r = pinRadius(cluster.count);
+  const [tracksViewChanges, setTracksViewChanges] = React.useState(
+    Platform.OS === 'android',
+  );
+  React.useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    setTracksViewChanges(true);
+    const timer = setTimeout(
+      () => setTracksViewChanges(false),
+      ANDROID_MARKER_TRACK_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [cluster.count, color, selected]);
+  return (
+    <Marker
+      coordinate={{ latitude: cluster.lat, longitude: cluster.lng }}
+      onPress={() => onPress(cluster)}
+      anchor={{ x: 0.5, y: 0.5 }}
+      tracksViewChanges={tracksViewChanges}
+    >
+      <View
+        style={[
+          styles.pinOuter,
+          {
+            width: r * 2 + 8,
+            height: r * 2 + 8,
+            borderRadius: r + 4,
+            backgroundColor: selected ? color : `${color}33`,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.pinInner,
+            {
+              width: r * 2,
+              height: r * 2,
+              borderRadius: r,
+              backgroundColor: color,
+              borderColor: selected ? selectedBorderColor : 'transparent',
+              borderWidth: selected ? 1.5 : 0,
+            },
+          ]}
+        >
+          {cluster.count >= 2 && (
+            <Text
+              style={[
+                styles.pinCount,
+                { color: countColor, fontSize: r > 14 ? 11 : 10 },
+              ]}
+            >
+              {cluster.count}
+            </Text>
+          )}
+        </View>
+      </View>
+    </Marker>
   );
 }
 
