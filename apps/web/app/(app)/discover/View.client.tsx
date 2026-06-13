@@ -4,8 +4,9 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
-import { entityLimit, canAddEntity } from "@showbook/shared";
+import { entityLimit, canAddEntity, matchesSearchQuery } from "@showbook/shared";
 import { SortHeader } from "@/components/SortHeader";
+import { ListSearchBar } from "@/components/ListSearchBar";
 import { EmptyState } from "@/components/design-system";
 import { Music } from "lucide-react";
 import {
@@ -753,6 +754,7 @@ export default function DiscoverView() {
     });
   }, [watchedAnnouncementIds.data]);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [headerSpotifyModalOpen, setHeaderSpotifyModalOpen] = useState(false);
   const [pendingIngest, setPendingIngest] = useState<{
     venueIds: Set<string>;
@@ -891,13 +893,45 @@ export default function DiscoverView() {
     });
   }
 
-  const followedItems = followedFeed.data?.items as
+  const followedItemsRaw = followedFeed.data?.items as
     | Announcement[]
     | undefined;
-  const nearbyItems = nearbyFeed.data?.items as Announcement[] | undefined;
-  const artistItems = followedArtistsFeed.data?.items as
+  const nearbyItemsRaw = nearbyFeed.data?.items as Announcement[] | undefined;
+  const artistItemsRaw = followedArtistsFeed.data?.items as
     | Announcement[]
     | undefined;
+
+  // Pinned search bar: free-text filter across headliner / support /
+  // show name / festival name / venue. Festival names live in
+  // `productionName`. Applied client-side to the already-loaded feed.
+  const filterBySearch = useCallback(
+    (list: Announcement[] | undefined): Announcement[] | undefined => {
+      if (!list || searchQuery.trim() === "") return list;
+      return list.filter((a) =>
+        matchesSearchQuery(searchQuery, [
+          a.headliner,
+          a.productionName,
+          a.venue.name,
+          a.venue.city,
+          ...(a.support ?? []),
+        ]),
+      );
+    },
+    [searchQuery],
+  );
+
+  const followedItems = useMemo(
+    () => filterBySearch(followedItemsRaw),
+    [filterBySearch, followedItemsRaw],
+  );
+  const nearbyItems = useMemo(
+    () => filterBySearch(nearbyItemsRaw),
+    [filterBySearch, nearbyItemsRaw],
+  );
+  const artistItems = useMemo(
+    () => filterBySearch(artistItemsRaw),
+    [filterBySearch, artistItemsRaw],
+  );
   const currentItems =
     activeTab === "Followed"
       ? followedItems
@@ -1037,12 +1071,25 @@ export default function DiscoverView() {
         <div className="discover-tabs-bar__spacer" />
       </div>
 
+      {/* Pinned search bar — filters the active feed by headliner /
+          support / show name / festival name / venue. */}
+      <ListSearchBar
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder="Search announcements…"
+        testId="discover-search-input"
+      />
+
       {/* Feed sections */}
       {activeTab === "Followed" && (
         <FeedSection
           items={followedItems}
           isLoading={followedFeed.isLoading}
-          emptyMessage="No announcements from followed venues"
+          emptyMessage={
+            searchQuery.trim() !== ""
+              ? `No announcements match “${searchQuery.trim()}”`
+              : "No announcements from followed venues"
+          }
           watchedIds={watchedIds}
           onToggleWatch={handleToggleWatch}
           activeTab={activeTab}
@@ -1061,7 +1108,11 @@ export default function DiscoverView() {
           <FeedSection
             items={artistItems}
             isLoading={followedArtistsFeed.isLoading}
-            emptyMessage="No upcoming shows from artists you follow yet. Follow an artist on their detail page to see their upcoming tour dates here."
+            emptyMessage={
+              searchQuery.trim() !== ""
+                ? `No announcements match “${searchQuery.trim()}”`
+                : "No upcoming shows from artists you follow yet. Follow an artist on their detail page to see their upcoming tour dates here."
+            }
             watchedIds={watchedIds}
             onToggleWatch={handleToggleWatch}
             activeTab={activeTab}
@@ -1079,7 +1130,13 @@ export default function DiscoverView() {
         <FeedSection
           items={nearbyItems}
           isLoading={nearbyFeed.isLoading}
-          emptyMessage={nearbyFeed.data?.hasRegions ? "No announcements in followed regions right now" : "Follow a region in Preferences to see regional shows"}
+          emptyMessage={
+            searchQuery.trim() !== ""
+              ? `No announcements match “${searchQuery.trim()}”`
+              : nearbyFeed.data?.hasRegions
+                ? "No announcements in followed regions right now"
+                : "Follow a region in Preferences to see regional shows"
+          }
           watchedIds={watchedIds}
           onToggleWatch={handleToggleWatch}
           activeTab={activeTab}

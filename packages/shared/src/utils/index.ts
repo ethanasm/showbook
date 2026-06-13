@@ -50,3 +50,4 @@ export {
   type RegionBbox,
   type BboxBounds,
 } from './regions';
+export { matchesSearchQuery, searchQueryTokens } from './search-filter';

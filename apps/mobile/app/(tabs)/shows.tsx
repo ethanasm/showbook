@@ -82,7 +82,8 @@ import {
   computeMonthBounds,
   stepCursor,
 } from '@/lib/calendarBounds';
-import { effectiveShowState } from '@showbook/shared';
+import { effectiveShowState, matchesSearchQuery } from '@showbook/shared';
+import { SearchBar } from '../../components/SearchBar';
 
 type Mode = 'timeline' | 'calendar' | 'stats';
 type CalendarMode = 'month' | 'year';
@@ -289,6 +290,7 @@ function ShowsListPane(): React.JSX.Element {
   // Header kind filter, applied on top of the Upcoming/Past bucket. Feeds
   // every mode (timeline / calendar / stats) since they all derive from `rows`.
   const [kindFilter, setKindFilter] = React.useState<KindFilterValue>('all');
+  const [searchQuery, setSearchQuery] = React.useState('');
 
   const showsQuery = useCachedQuery<ShowsListItem[]>({
     queryKey: ['mobile', 'shows.list'],
@@ -338,10 +340,24 @@ function ShowsListPane(): React.JSX.Element {
   // Layer the header kind filter on top of the bucket. `bucketRows` (kind
   // unfiltered) is kept so the empty state can tell "no shows in this
   // bucket at all" apart from "no shows of this kind".
-  const rows: ShowRow[] = React.useMemo(() => {
+  const kindRows: ShowRow[] = React.useMemo(() => {
     if (kindFilter === 'all') return bucketRows;
     return bucketRows.filter((r) => r.kind === kindFilter);
   }, [bucketRows, kindFilter]);
+
+  // Pinned search bar: free-text filter across headliner / cast / support
+  // names, venue name + city, and show / festival name (`productionName`).
+  const rows: ShowRow[] = React.useMemo(() => {
+    if (searchQuery.trim() === '') return kindRows;
+    return kindRows.filter((r) =>
+      matchesSearchQuery(searchQuery, [
+        r.productionName,
+        r.venue.name,
+        r.venue.city,
+        ...r.performers.map((p) => p.name),
+      ]),
+    );
+  }, [kindRows, searchQuery]);
 
   React.useEffect(() => {
     if (stateBucket === 'upcoming' && mode === 'stats') {
@@ -421,6 +437,15 @@ function ShowsListPane(): React.JSX.Element {
         />
       </View>
 
+      {allRows.length > 0 ? (
+        <SearchBar
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search shows, artists, venues…"
+          testID="shows-search-input"
+        />
+      ) : null}
+
       {showsQuery.isLoading ? (
         <ShowCardListSkeleton count={6} />
       ) : showsQuery.isError ? (
@@ -432,6 +457,21 @@ function ShowsListPane(): React.JSX.Element {
             title="Couldn't load shows"
             subtitle={showsQuery.error.message}
             cta={{ label: 'Try again', onPress: () => void showsQuery.refetch() }}
+          />
+        </ScrollView>
+      ) : rows.length === 0 && searchQuery.trim() !== '' ? (
+        // A search is active and nothing matched — a search-specific empty
+        // state with a one-tap clear rather than the onboarding hero.
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+          refreshControl={refreshControl}
+        >
+          <EmptyState
+            title="No matches"
+            subtitle={`Nothing in ${
+              stateBucket === 'upcoming' ? 'your upcoming shows' : 'your logbook'
+            } matches "${searchQuery.trim()}".`}
+            cta={{ label: 'Clear search', onPress: () => setSearchQuery('') }}
           />
         </ScrollView>
       ) : rows.length === 0 && kindFilter !== 'all' ? (

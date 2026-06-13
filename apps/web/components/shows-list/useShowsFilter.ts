@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ShowKind } from "@/components/design-system";
-import { applyEffectiveShowState } from "@showbook/shared";
+import { applyEffectiveShowState, matchesSearchQuery } from "@showbook/shared";
 import { trpc } from "@/lib/trpc";
 import {
   compareShows,
@@ -21,6 +21,22 @@ import {
 interface UseShowsFilterArgs {
   mode: ShowsListMode;
   pageSize: number;
+}
+
+/**
+ * Fields the pinned search bar matches a show against: production /
+ * show name, tour name, venue name + city, and every performer's name
+ * and (theatre) character name — so headliner, support, and cast are
+ * all searchable. Festival names live in `productionName`.
+ */
+function showSearchFields(s: ShowData): (string | null)[] {
+  return [
+    s.productionName,
+    s.tourName,
+    s.venue.name,
+    s.venue.city,
+    ...s.showPerformers.flatMap((sp) => [sp.performer.name, sp.characterName]),
+  ];
 }
 
 /**
@@ -52,6 +68,8 @@ export function useShowsFilter({ mode, pageSize }: UseShowsFilterArgs) {
   });
   // Sub-filter on /upcoming: All · Tickets · Watching. /logbook ignores it.
   const [upcomingFilter, setUpcomingFilter] = useState<"all" | "ticketed" | "watching">("all");
+  // Free-text search across headliner / cast / support / venue / show name.
+  const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(0);
 
   // Calendar state
@@ -72,14 +90,18 @@ export function useShowsFilter({ mode, pageSize }: UseShowsFilterArgs) {
   }, []);
 
   // Reset page when filters change
-  const prevFiltersRef = useRef({ selectedYear, selectedKind: selectedKind ?? "" });
+  const prevFiltersRef = useRef({ selectedYear, selectedKind: selectedKind ?? "", searchQuery });
   useEffect(() => {
     const prev = prevFiltersRef.current;
-    if (prev.selectedYear !== selectedYear || prev.selectedKind !== (selectedKind ?? "")) {
+    if (
+      prev.selectedYear !== selectedYear ||
+      prev.selectedKind !== (selectedKind ?? "") ||
+      prev.searchQuery !== searchQuery
+    ) {
       setCurrentPage(0);
-      prevFiltersRef.current = { selectedYear, selectedKind: selectedKind ?? "" };
+      prevFiltersRef.current = { selectedYear, selectedKind: selectedKind ?? "", searchQuery };
     }
-  }, [selectedYear, selectedKind]);
+  }, [selectedYear, selectedKind, searchQuery]);
 
   // Year filter for the server-side `shows.list` query — undefined on
   // "All time" / "older" so the server returns everything and the
@@ -143,10 +165,14 @@ export function useShowsFilter({ mode, pageSize }: UseShowsFilterArgs) {
       result = result.filter((s) => s.kind === selectedKind);
     }
 
+    if (searchQuery.trim() !== "") {
+      result = result.filter((s) => matchesSearchQuery(searchQuery, showSearchFields(s)));
+    }
+
     result = [...result].sort((a, b) => compareShows(a, b, sort));
 
     return result;
-  }, [shows, selectedKind, sort, selectedYear, isUpcoming, isLogbook, upcomingFilter]);
+  }, [shows, selectedKind, sort, selectedYear, isUpcoming, isLogbook, upcomingFilter, searchQuery]);
 
   // Date-TBD watching shows (no date set yet) deserve their own rail at
   // the top of /upcoming so users can pick a night. The main filteredShows
@@ -188,6 +214,7 @@ export function useShowsFilter({ mode, pageSize }: UseShowsFilterArgs) {
     selectedYear, setSelectedYear,
     selectedKind, setSelectedKind,
     upcomingFilter, setUpcomingFilter,
+    searchQuery, setSearchQuery,
     sort, toggleSort,
     currentPage, setCurrentPage,
     // calendar
