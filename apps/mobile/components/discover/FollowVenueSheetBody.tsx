@@ -40,10 +40,10 @@ export function FollowVenueSheetBody({
   onClose,
   atCap = false,
 }: {
-  /** Called after a successful follow lands so the parent can dismiss
-   *  the sheet. The sheet stays mounted on cancel to preserve in-flight
-   *  state. */
-  onFollowed: () => void;
+  /** Called with the followed venue's id after a successful follow lands
+   *  so the parent can dismiss the sheet and select the new chip. The
+   *  sheet stays mounted on cancel to preserve in-flight state. */
+  onFollowed: (venueId: string) => void;
   onClose: () => void;
   /** When true the user is at the followed-venue cap: the search UI is
    *  replaced by a persistent cap message, mirroring the region sheet. */
@@ -105,7 +105,7 @@ export function FollowVenueSheetBody({
           },
         });
         showToast({ kind: 'success', text: `Following ${displayName}` });
-        onFollowed();
+        onFollowed(venueId);
       } catch (err) {
         showToast({
           kind: 'info',

@@ -280,15 +280,26 @@ function FeedSection({
     setShowFollowModal(true);
   }
 
-  function handleVenueFollowed() {
+  function handleVenueFollowed(venueId: string) {
     setShowFollowModal(false);
+    // Auto-select the just-followed venue so the rail highlights it and
+    // the feed scopes to it right away (count 0 until its ingest lands).
+    setSelectedGroupId(venueId);
     onVenueFollowed();
   }
+
+  const handleArtistFollowed = useCallback((performerId: string) => {
+    setSelectedGroupId(performerId);
+  }, []);
 
   function handleRegionAdded(regionId: string) {
     utils.preferences.get.invalidate();
     utils.discover.nearbyFeed.invalidate();
     setShowRegionModal(false);
+    // Rail selection on Near You is venue-scoped, so a region can't be
+    // "selected" directly — clear any venue filter instead so the new
+    // region's section (with its ingest indicator) is guaranteed visible.
+    setSelectedGroupId(null);
     onRegionAdded?.(regionId);
   }
 
@@ -339,6 +350,7 @@ function FeedSection({
       showArtistSearch={isArtists}
       addArtistDisabled={artistLimitReached}
       addArtistHint={artistLimitReached ? `Maximum ${entityLimit("artists")} artists` : `${artistFollowCount} / ${entityLimit("artists")} artists`}
+      onArtistFollowed={handleArtistFollowed}
       pendingItemIds={pendingGroupIds}
       pendingRegionIds={isNearby ? pendingIngestRegionIds : undefined}
     />
@@ -402,7 +414,7 @@ function FeedSection({
       </button>
     ) : isArtists ? (
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
-        <FollowArtistSearch variant="cta" />
+        <FollowArtistSearch variant="cta" onFollowed={handleArtistFollowed} />
         <button
           type="button"
           onClick={() => setSpotifyModalOpen(true)}

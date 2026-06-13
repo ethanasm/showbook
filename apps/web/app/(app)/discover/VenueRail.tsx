@@ -38,6 +38,7 @@ export function VenueRail({
   showArtistSearch,
   addArtistDisabled,
   addArtistHint,
+  onArtistFollowed,
   pendingItemIds,
   pendingRegionIds,
 }: {
@@ -70,6 +71,7 @@ export function VenueRail({
   showArtistSearch?: boolean;
   addArtistDisabled?: boolean;
   addArtistHint?: string;
+  onArtistFollowed?: (performerId: string) => void;
   pendingItemIds?: Set<string>;
   pendingRegionIds?: Set<string>;
 }) {
@@ -129,6 +131,7 @@ export function VenueRail({
             variant="rail"
             atCap={addArtistDisabled}
             capHint={addArtistHint}
+            onFollowed={onArtistFollowed}
           />
         </div>
       )}

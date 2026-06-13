@@ -12,6 +12,7 @@ import {
   announcements,
   showAnnouncementLinks,
   userVenueFollows,
+  userPerformerFollows,
   userRegions,
   userPreferences,
 } from '@showbook/db';
@@ -166,6 +167,9 @@ export async function GET(request: Request) {
       await db.delete(showAnnouncementLinks).where(eq(showAnnouncementLinks.showId, s.id));
     }
     await db.delete(userVenueFollows).where(eq(userVenueFollows.userId, user.id));
+    // Artist follows leak across tests otherwise (the seed never inserts
+    // any, so every test should start with an empty artists follow graph).
+    await db.delete(userPerformerFollows).where(eq(userPerformerFollows.userId, user.id));
     await db.delete(userRegions).where(eq(userRegions.userId, user.id));
     // Announcements are shared across worker users; only the unworked
     // call (globalSetup or dev) is allowed to wipe them.
