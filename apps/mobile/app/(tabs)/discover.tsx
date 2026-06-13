@@ -192,7 +192,24 @@ export default function DiscoverScreen(): React.JSX.Element {
   const utils = trpc.useUtils();
   const queryClient = useQueryClient();
   const { showToast } = useFeedback();
+  // Tab state is split in two so a tab tap responds instantly. `tab` drives
+  // everything heavy (the active query, chip rail, and the 50-row feed
+  // render) and is updated inside a React transition; `displayTab` drives
+  // only the SegmentedControl pill and updates at urgent priority. Without
+  // the split, tapping a tab queued the pill flip behind the synchronous
+  // render of the next tab's full feed — on a dense Regions feed that froze
+  // the whole screen (pill included) for a couple of seconds. Now the pill
+  // flips immediately and the feed body shows the loading spinner
+  // (`isTabSwitching` below) until the transition render lands.
   const [tab, setTab] = React.useState<DiscoverTab>('venues');
+  const [displayTab, setDisplayTab] = React.useState<DiscoverTab>('venues');
+  const [isTabSwitching, startTabTransition] = React.useTransition();
+  const handleTabChange = React.useCallback((next: DiscoverTab) => {
+    setDisplayTab(next);
+    startTabTransition(() => {
+      setTab(next);
+    });
+  }, []);
   const [selectedGroupId, setSelectedGroupId] = React.useState<string | null>(null);
   // Controls the inline add-typeahead sheet that mirrors web's
   // VenueSearchModal / FollowArtistSearch / RegionSearchModal. Stored
@@ -576,7 +593,10 @@ export default function DiscoverScreen(): React.JSX.Element {
             .length ?? 0) > 0;
 
   const showOfflineEmpty = !network.online && !activeQuery.data;
-  const isLoading = activeQuery.isLoading;
+  // `isTabSwitching` joins the loading gate so the urgent render right
+  // after a tab tap swaps the old tab's feed for the centered spinner —
+  // the heavy new-tab render then happens at transition priority behind it.
+  const isLoading = activeQuery.isLoading || isTabSwitching;
   const isErrored = !isLoading && activeQuery.isError && !activeQuery.data;
   // Reserve the full-bleed onboarding hero for true first-run: no
   // announcements AND nothing followed on this tab AND no ingest job
@@ -859,8 +879,8 @@ export default function DiscoverScreen(): React.JSX.Element {
     >
       <View style={styles.segmentWrap}>
         <SegmentedControl<DiscoverTab>
-          value={tab}
-          onChange={setTab}
+          value={displayTab}
+          onChange={handleTabChange}
           options={[
             { value: 'venues', label: 'Venues' },
             { value: 'artists', label: 'Artists' },
