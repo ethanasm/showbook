@@ -19,10 +19,6 @@ export default function TermsPage() {
     <article className="legal-doc">
       <p className="legal-doc__updated">Last updated: 2026-05-18</p>
       <h1>Terms of service</h1>
-      <div className="legal-doc__draft" role="note">
-        DRAFT — please review with counsel before opening sign-ups
-        outside the current allowlist.
-      </div>
       <p>
         By using Showbook you agree to these terms. They&apos;re short.
       </p>

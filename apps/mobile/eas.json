@@ -50,7 +50,15 @@
     }
   },
   "submit": {
-    "production": {},
+    "production": {
+      "android": {
+        "track": "production",
+        "serviceAccountKeyPath": "./play-service-account.json"
+      },
+      "ios": {
+        "ascApiKeyPath": "./asc-api-key.p8"
+      }
+    },
     "preview-store": {
       "android": {
         "track": "internal",

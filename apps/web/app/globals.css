@@ -211,15 +211,6 @@ a {
   color: var(--muted);
   text-transform: uppercase;
 }
-.legal-doc__draft {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
-  color: var(--ink);
-  padding: 12px 14px;
-  border-radius: 8px;
-  font-size: 12.5px;
-  line-height: 1.5;
-}
 .legal-doc a {
   color: var(--accent);
   text-decoration: underline;

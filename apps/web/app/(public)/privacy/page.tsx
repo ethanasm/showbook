@@ -21,10 +21,6 @@ export default function PrivacyPage() {
     <article className="legal-doc">
       <p className="legal-doc__updated">Last updated: 2026-05-18</p>
       <h1>Privacy policy</h1>
-      <div className="legal-doc__draft" role="note">
-        DRAFT — please review with counsel before opening sign-ups
-        outside the current allowlist.
-      </div>
       <p>
         Showbook is a personal tracker for live shows. It only collects
         what it needs to keep your logbook working, never sells your
