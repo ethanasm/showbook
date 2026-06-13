@@ -186,6 +186,12 @@ export {
   type ScrapeConfig,
 } from './scrape-config';
 export {
+  assertPublicHttpUrl,
+  assertPublicHttpUrlSync,
+  isPrivateOrReservedIp,
+  BlockedUrlError,
+} from './url-guard';
+export {
   storeLocalObject,
   getMediaUploadUrl,
   getMediaReadUrl,

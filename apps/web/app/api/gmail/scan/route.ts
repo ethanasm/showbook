@@ -17,6 +17,7 @@ import { db, shows } from '@showbook/db';
 import { sql } from 'drizzle-orm';
 import { child } from '@showbook/observability';
 import { decodeMobileToken } from '@/lib/mobile-token';
+import { isEmailAllowed, readAllowlistFromEnv } from '@/lib/auth-allowlist';
 
 const log = child({ component: 'web.gmail.scan' });
 
@@ -25,6 +26,11 @@ const log = child({ component: 'web.gmail.scan' });
  * back to `Authorization: Bearer <jwt>` (mobile flow). Mobile-bearer
  * support keeps the scan endpoint reachable from the mobile app, which
  * minted its session via `/api/auth/mobile-token` and has no cookie jar.
+ *
+ * The bearer path re-checks the AUTH_ALLOWED_* allowlist (same rule as the
+ * tRPC `resolveTrpcSession` and the cookie path's jwt callback) so a user
+ * removed from the allowlist loses access on their next request rather than
+ * retaining it until their 30-day mobile JWT expires.
  */
 async function resolveSession(req: Request): Promise<{ userId: string } | null> {
   const cookieSession = await auth();
@@ -36,6 +42,7 @@ async function resolveSession(req: Request): Promise<{ userId: string } | null> 
   if (!secret) return null;
   const decoded = await decodeMobileToken({ token: header.slice(7), secret });
   if (!decoded?.id) return null;
+  if (!isEmailAllowed(decoded.email, readAllowlistFromEnv())) return null;
   return { userId: decoded.id };
 }
 
@@ -254,18 +261,17 @@ export async function POST(request: Request) {
   // OS-level handler, which can normalize encoding subtly.
   const accessToken = accessTokenRaw.trim();
 
-  // Diagnostic: log a non-PII fingerprint of the access token the scan
-  // received, so it can be cross-referenced against
-  // `gmail.callback.success.tokenInfo` to detect mid-flight corruption.
-  // Same field-name convention as the callback log.
+  // Diagnostic: log only the access token's length, never any of its bytes.
+  // `tokenInfo.head` / `tokenInfo.tail` are not covered by pino's `*.token`
+  // redaction, so logging slices of a live Gmail bearer would ship secret
+  // material to Axiom. The callback log was reduced to `length` only for the
+  // same reason; keep them consistent.
   log.info(
     {
       event: 'gmail.scan.start',
       userId,
       tokenInfo: {
         length: accessToken.length,
-        head: accessToken.slice(0, 8),
-        tail: accessToken.slice(-4),
       },
     },
     'Gmail scan started',

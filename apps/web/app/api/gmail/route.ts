@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { encode } from 'next-auth/jwt';
 import { auth } from '@/auth';
 import { decodeMobileToken } from '@/lib/mobile-token';
+import { isEmailAllowed, readAllowlistFromEnv } from '@/lib/auth-allowlist';
 import {
   mobileRedirectResponse,
   OAUTH_MODE_COOKIE,
@@ -42,7 +43,10 @@ export async function GET(req: NextRequest) {
     const authSecret = process.env.AUTH_SECRET;
     if (mobileToken && authSecret) {
       const decoded = await decodeMobileToken({ token: mobileToken, secret: authSecret });
-      if (decoded?.id) {
+      // Re-check the allowlist on the bearer (same rule as resolveTrpcSession /
+      // the cookie jwt callback) so a deauthorized user can't keep starting
+      // the Gmail OAuth flow on a stale 30-day mobile token.
+      if (decoded?.id && isEmailAllowed(decoded.email, readAllowlistFromEnv())) {
         userId = decoded.id;
         mintedSessionEmail = decoded.email;
         resolvedEmail = decoded.email;
