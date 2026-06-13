@@ -24,6 +24,7 @@ import { RADII } from '@/lib/theme-utils';
 import { trpc } from '@/lib/trpc';
 import { useFeedback } from '@/lib/feedback';
 import { toUserMessage } from '@/lib/errors';
+import { InputMaxLength } from '@showbook/shared';
 
 export interface EditVenueLocationSheetProps {
   open: boolean;
@@ -34,7 +35,6 @@ export interface EditVenueLocationSheetProps {
   country: string;
 }
 
-const MAX_LEN = 200;
 
 export function EditVenueLocationSheet({
   open,
@@ -117,7 +117,7 @@ export function EditVenueLocationSheet({
             value={cityDraft}
             onChangeText={setCityDraft}
             autoFocus
-            maxLength={MAX_LEN}
+            maxLength={InputMaxLength.venueCity}
             placeholder="City"
             placeholderTextColor={colors.faint}
             testID="edit-location-city"
@@ -132,7 +132,7 @@ export function EditVenueLocationSheet({
           <TextInput
             value={regionDraft}
             onChangeText={setRegionDraft}
-            maxLength={MAX_LEN}
+            maxLength={InputMaxLength.venueRegion}
             placeholder="State or region (optional)"
             placeholderTextColor={colors.faint}
             testID="edit-location-region"
@@ -145,7 +145,7 @@ export function EditVenueLocationSheet({
           <TextInput
             value={countryDraft}
             onChangeText={setCountryDraft}
-            maxLength={MAX_LEN}
+            maxLength={InputMaxLength.venueCountry}
             placeholder="Country"
             placeholderTextColor={colors.faint}
             returnKeyType="done"

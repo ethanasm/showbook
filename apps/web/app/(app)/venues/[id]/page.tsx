@@ -36,6 +36,7 @@ import {
   formatOnSaleDate,
   formatVenueLocation,
   isVenuePlaceholder,
+  InputMaxLength,
 } from "@showbook/shared";
 
 type Performer = {
@@ -347,6 +348,7 @@ export default function VenueDetailPage() {
               displayValue={gradientLastWord(venue.name)}
               onSave={(name) => renameMutation.mutate({ venueId: venue.id, name })}
               compact={isMobile}
+              maxLength={InputMaxLength.venueName}
             />
             {locationLine && (
               <div

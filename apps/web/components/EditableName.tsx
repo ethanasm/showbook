@@ -8,11 +8,15 @@ export function EditableName({
   onSave,
   displayValue,
   compact,
+  maxLength,
 }: {
   value: string;
   onSave: (name: string) => void;
   displayValue?: ReactNode;
   compact?: boolean;
+  /** Caps the edited name so the client matches the server-side length
+   * limit (venue / performer name). */
+  maxLength?: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -57,6 +61,7 @@ export function EditableName({
         ref={inputRef}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
+        maxLength={maxLength}
         onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === "Enter") commit();

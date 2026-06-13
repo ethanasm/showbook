@@ -53,6 +53,9 @@ export interface ArtistTypeaheadProps {
   placeholder?: string;
   debounceMs?: number;
   autoFocus?: boolean;
+  /** Caps the typed name so the client can't outrun the server's
+   * performer-name length limit. */
+  maxLength?: number;
   testID?: string;
 }
 
@@ -68,6 +71,7 @@ export function ArtistTypeahead({
   placeholder = 'Search artists',
   debounceMs = DEFAULT_DEBOUNCE,
   autoFocus = false,
+  maxLength,
   testID,
 }: ArtistTypeaheadProps): React.JSX.Element {
   const { tokens } = useTheme();
@@ -97,6 +101,7 @@ export function ArtistTypeahead({
           autoCapitalize="words"
           autoCorrect={false}
           autoFocus={autoFocus}
+          maxLength={maxLength}
           style={[styles.input, { color: colors.ink }]}
           testID={testID ? `${testID}-input` : undefined}
         />

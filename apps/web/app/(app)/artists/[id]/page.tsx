@@ -26,6 +26,7 @@ import {
   formatDateMedium as formatDateLong,
   formatDateParts,
   formatOnSaleDate,
+  InputMaxLength,
 } from "@showbook/shared";
 import {
   getHeadliner,
@@ -327,6 +328,7 @@ export default function ArtistDetailPage() {
                 renameMutation.mutate({ performerId: performer.id, name })
               }
               compact={isMobile}
+              maxLength={InputMaxLength.performerName}
             />
           </div>
         </div>

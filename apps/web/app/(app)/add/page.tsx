@@ -1,6 +1,6 @@
 "use client";
 
-import { setlistTotalSongs } from "@showbook/shared";
+import { setlistTotalSongs, InputMaxLength } from "@showbook/shared";
 import { type ShowKind } from "@/components/design-system";
 import { LivePreview } from "./LivePreview";
 import { PerformerSetlistBlock } from "@/components/PerformerSetlistBlock";
@@ -414,6 +414,7 @@ export default function AddPage() {
               placeholder={kind === "festival" ? "e.g. Governors Ball, Coachella" : "e.g. Wicked, Hamilton"}
               value={productionName}
               onChange={(e) => setProductionName(e.target.value)}
+              maxLength={InputMaxLength.productionName}
               style={{
                 flex: 1,
                 background: "transparent",
@@ -522,6 +523,7 @@ export default function AddPage() {
               placeholder="Search for an artist or show..."
               value={headlinerName}
               onChange={(e) => handleHeadlinerInput(e.target.value)}
+              maxLength={InputMaxLength.performerName}
               autoFocus
               style={{
                 background: "transparent",
@@ -690,6 +692,7 @@ export default function AddPage() {
                     placeholder="character / role (optional)"
                     value={p.characterName ?? ""}
                     onChange={(e) => handleUpdatePerformerCharacterName(i, e.target.value)}
+                    maxLength={InputMaxLength.characterName}
                     style={{
                       marginTop: 4,
                       background: "transparent",
@@ -775,6 +778,7 @@ export default function AddPage() {
               placeholder={kind === "theatre" ? "search cast..." : "search artists..."}
               value={performerSearchInput}
               onChange={(e) => handlePerformerSearchInput(e.target.value)}
+              maxLength={InputMaxLength.performerName}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
@@ -1107,6 +1111,7 @@ export default function AddPage() {
               placeholder="e.g. Romance World Tour"
               value={tourName}
               onChange={(e) => setTourName(e.target.value)}
+              maxLength={InputMaxLength.tourName}
               style={{
                 flex: 1,
                 background: "transparent",
@@ -1135,6 +1140,7 @@ export default function AddPage() {
             placeholder="Anything to remember about this show — observations, rating, setlist surprises…"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
+            maxLength={InputMaxLength.notes}
             rows={4}
             style={{
               width: "100%",
@@ -1183,6 +1189,7 @@ export default function AddPage() {
               placeholder="Opening act name"
               value={openerName}
               onChange={(e) => setOpenerName(e.target.value)}
+              maxLength={InputMaxLength.performerName}
               style={{
                 width: "100%",
                 background: "transparent",
@@ -1383,6 +1390,7 @@ export default function AddPage() {
                     placeholder="e.g. ORCH L · 14"
                     value={seat}
                     onChange={(e) => setSeat(e.target.value)}
+                    maxLength={InputMaxLength.seat}
                     style={{
                       flex: 1,
                       background: "transparent",

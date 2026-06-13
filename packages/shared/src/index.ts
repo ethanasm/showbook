@@ -5,6 +5,7 @@ export * from './types';
 export * from './utils';
 export * from './feature-flags';
 export * from './entity-limits';
+export * from './input-limits';
 export * from './show-accessors';
 export * from './setlist-helpers';
 // Hooks live under `@showbook/shared/hooks` rather than the main barrel
