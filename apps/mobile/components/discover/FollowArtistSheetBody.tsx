@@ -37,7 +37,9 @@ export function FollowArtistSheetBody({
   onClose,
   atCap = false,
 }: {
-  onFollowed: () => void;
+  /** Called with the resolved performer id after a successful follow so
+   *  the parent can dismiss the sheet and select the new chip. */
+  onFollowed: (performerId: string) => void;
   onClose: () => void;
   /** When true the user is at the followed-artist cap: the search UI is
    *  replaced by a persistent cap message, mirroring the region sheet. */
@@ -60,13 +62,13 @@ export function FollowArtistSheetBody({
   );
 
   const followAttraction = trpc.performers.followAttraction.useMutation({
-    onSuccess: (_, vars) => {
+    onSuccess: (data, vars) => {
       void utils.performers.list.invalidate();
       // Discover reads under `['mobile', …]` keys — fan out so the new
       // artist chip appears and its scoped ingest poll arms immediately.
       invalidateDiscoverFeeds(queryClient);
       showToast({ kind: 'success', text: `Following ${vars.name}` });
-      onFollowed();
+      onFollowed(data.performerId);
     },
     onError: (err) => {
       showToast({

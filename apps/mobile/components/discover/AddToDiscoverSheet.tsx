@@ -28,10 +28,15 @@ export function AddToDiscoverSheet({
   tab,
   open,
   onClose,
+  onAdded,
 }: {
   tab: AddDiscoverTab;
   open: boolean;
   onClose: () => void;
+  /** Called with the new entity's id (venue / performer / region) after a
+   *  successful add, before the sheet closes — lets the Discover screen
+   *  select the freshly-added chip. */
+  onAdded?: (id: string) => void;
 }): React.JSX.Element {
   const utils = trpc.useUtils();
   const queryClient = useQueryClient();
@@ -65,7 +70,7 @@ export function AddToDiscoverSheet({
       radiusMiles: number;
     }) => {
       try {
-        await runOptimisticMutation({
+        const { result } = await runOptimisticMutation({
           mutation: 'preferences.addRegion',
           input,
           outbox: getCacheOutbox(),
@@ -82,6 +87,7 @@ export function AddToDiscoverSheet({
           },
         });
         showToast({ kind: 'success', text: `Added ${input.cityName}` });
+        onAdded?.(result.id);
         onClose();
       } catch (err) {
         showToast({
@@ -91,15 +97,29 @@ export function AddToDiscoverSheet({
         throw err;
       }
     },
-    [utils, queryClient, showToast, onClose],
+    [utils, queryClient, showToast, onClose, onAdded],
   );
 
   return (
     <Sheet open={open} onClose={onClose} snapPoints={['72%']}>
       {tab === 'venues' ? (
-        <FollowVenueSheetBody onFollowed={onClose} onClose={onClose} atCap={venuesAtCap} />
+        <FollowVenueSheetBody
+          onFollowed={(venueId) => {
+            onAdded?.(venueId);
+            onClose();
+          }}
+          onClose={onClose}
+          atCap={venuesAtCap}
+        />
       ) : tab === 'artists' ? (
-        <FollowArtistSheetBody onFollowed={onClose} onClose={onClose} atCap={artistsAtCap} />
+        <FollowArtistSheetBody
+          onFollowed={(performerId) => {
+            onAdded?.(performerId);
+            onClose();
+          }}
+          onClose={onClose}
+          atCap={artistsAtCap}
+        />
       ) : (
         <AddRegionSheetBody
           onCancel={onClose}

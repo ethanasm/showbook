@@ -11,7 +11,7 @@ interface FollowArtistSearchProps {
   /** Render the collapsed trigger as a small inline link (rail) or a
    *  larger button (empty state). */
   variant?: "rail" | "cta";
-  onFollowed?: () => void;
+  onFollowed?: (performerId: string) => void;
   /** When true the user is at the followed-artist cap: the trigger is
    *  disabled and `capHint` is shown, mirroring the region rail. */
   atCap?: boolean;
@@ -37,14 +37,14 @@ export function FollowArtistSearch({
   );
 
   const followAttraction = trpc.performers.followAttraction.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       utils.discover.followedArtistsFeed.invalidate();
       utils.performers.followed.invalidate();
       utils.performers.list.invalidate();
       utils.discover.ingestStatus.invalidate();
       setOpen(false);
       setQuery("");
-      onFollowed?.();
+      onFollowed?.(data.performerId);
     },
   });
 

@@ -997,6 +997,15 @@ export default function DiscoverScreen(): React.JSX.Element {
       tab={addSheetTab ?? tab}
       open={addSheetTab !== null}
       onClose={() => setAddSheetTab(null)}
+      onAdded={(id) => {
+        // The just-added entity becomes the selected chip so the feed
+        // scopes to it immediately (its ingest-pending state up front).
+        // Guarded on the sheet's tab still being the active one so a
+        // selection can't land on the wrong tab's chip row.
+        if (addSheetTab === null || addSheetTab === tab) {
+          setSelectedGroupId(id);
+        }
+      }}
     />
     <UnfollowChipSheet
       open={unfollowChip !== null}

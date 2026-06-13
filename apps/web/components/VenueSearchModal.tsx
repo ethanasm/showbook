@@ -7,7 +7,7 @@ import { usePlaceSearch } from "@/lib/usePlaceSearch";
 
 interface VenueSearchModalProps {
   onClose: () => void;
-  onFollowed: () => void;
+  onFollowed: (venueId: string) => void;
 }
 
 export function VenueSearchModal({
@@ -26,8 +26,8 @@ export function VenueSearchModal({
 
   const followMutation = trpc.venues.follow.useMutation({
     meta: { successToast: "Following venue" },
-    onSuccess: () => {
-      onFollowed();
+    onSuccess: (_data, variables) => {
+      onFollowed(variables.venueId);
       onClose();
     },
   });
