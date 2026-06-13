@@ -25,6 +25,7 @@ import { useCompactMode } from "@/lib/useCompactMode";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { useShowContextMenu } from "@/lib/useShowContextMenu";
 import { PaginationFooter } from "@/components/PaginationFooter";
+import { ListSearchBar } from "@/components/ListSearchBar";
 import {
   getHeadliner,
   getHeadlinerId,
@@ -98,6 +99,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     selectedYear, setSelectedYear,
     selectedKind, setSelectedKind,
     upcomingFilter, setUpcomingFilter,
+    searchQuery, setSearchQuery,
     sort, toggleSort,
     currentPage, setCurrentPage,
     calView, setCalView,
@@ -492,6 +494,41 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
   // ---------------------------------------------------------------------------
 
   function renderList() {
+    if (filteredShows.length === 0 && searchQuery.trim() !== "") {
+      // A search is active and nothing matched — a search-specific empty
+      // state with a one-tap clear, not the onboarding hero (which would
+      // wrongly imply an empty logbook).
+      return (
+        <div style={{ padding: isMobile ? "20px 16px" : "28px var(--page-pad-x)" }}>
+          <EmptyState
+            kind="shows"
+            title="No matches"
+            body={`Nothing in ${labels.title.toLowerCase()} matches “${searchQuery.trim()}”.`}
+            action={
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                style={{
+                  padding: "10px 18px",
+                  background: "transparent",
+                  color: "var(--ink)",
+                  border: "1px solid var(--rule-strong)",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontSize: 11,
+                  letterSpacing: ".06em",
+                  textTransform: "uppercase",
+                  fontWeight: 500,
+                }}
+              >
+                Clear search
+              </button>
+            }
+          />
+        </div>
+      );
+    }
     if (filteredShows.length === 0) {
       // Empty-state asymmetry per the IA cleanup plan:
       //   /upcoming → Discover-leaning ("Nothing on the horizon")
@@ -794,6 +831,13 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
       ...(isMobile ? {} : { height: "100%", minHeight: 0 }),
     }}>
       {renderHeader()}
+      <ListSearchBar
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder="Search shows, artists, venues…"
+        isMobile={isMobile}
+        testId="shows-search-input"
+      />
       <FilterBar
         isMobile={isMobile}
         isLogbook={isLogbook}

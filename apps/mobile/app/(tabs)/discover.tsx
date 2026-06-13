@@ -54,9 +54,10 @@ import {
   Users,
 } from 'lucide-react-native';
 import { useFeedback } from '@/lib/feedback';
-import { formatDateParts, isNonWatchableKind } from '@showbook/shared';
+import { formatDateParts, isNonWatchableKind, matchesSearchQuery } from '@showbook/shared';
 import { ScreenWrapper } from '../../components/ScreenWrapper';
 import { SegmentedControl } from '../../components/SegmentedControl';
+import { SearchBar } from '../../components/SearchBar';
 import { EmptyState } from '../../components/EmptyState';
 import { EmptyStateHero } from '../../components/design-system';
 import { OfflineEmptyState } from '../../components/OfflineEmptyState';
@@ -246,6 +247,8 @@ export default function DiscoverScreen(): React.JSX.Element {
   // watchable kinds narrow the list. Driven by the dropdown opened from the
   // filter button next to search.
   const [kindFilter, setKindFilter] = React.useState<KindFilterValue>('all');
+  // Pinned search bar query — filters the active feed in place.
+  const [searchQuery, setSearchQuery] = React.useState('');
 
   // Render budget for the current feed. Reset whenever the tab or any
   // chip filter changes so a freshly-selected scope always starts at
@@ -580,6 +583,18 @@ export default function DiscoverScreen(): React.JSX.Element {
     if (kindFilter !== 'all') {
       result = result.filter((item) => item.kind === kindFilter);
     }
+    if (searchQuery.trim() !== '') {
+      // Free-text filter across headliner / support / show name /
+      // festival name (`productionName`) / venue.
+      result = result.filter((item) =>
+        matchesSearchQuery(searchQuery, [
+          item.headliner,
+          item.productionName,
+          item.venue.name,
+          ...(item.support ?? []),
+        ]),
+      );
+    }
     return result;
   }, [
     items,
@@ -588,6 +603,7 @@ export default function DiscoverScreen(): React.JSX.Element {
     tab,
     followedArtistIdSet,
     kindFilter,
+    searchQuery,
   ]);
 
   // Does the user follow anything on this tab yet? Seeds the decision to
@@ -657,9 +673,11 @@ export default function DiscoverScreen(): React.JSX.Element {
       scrollBody = (
         <View style={styles.inlineEmpty}>
           <Text style={[styles.inlineEmptyText, { color: colors.muted }]}>
-            {ingestPolling.isPolling
-              ? 'Hang tight — pulling in shows for what you just followed.'
-              : 'No upcoming announcements yet. New ones land here automatically.'}
+            {searchQuery.trim() !== ''
+              ? `No announcements match "${searchQuery.trim()}".`
+              : ingestPolling.isPolling
+                ? 'Hang tight — pulling in shows for what you just followed.'
+                : 'No upcoming announcements yet. New ones land here automatically.'}
           </Text>
         </View>
       );
@@ -921,6 +939,15 @@ export default function DiscoverScreen(): React.JSX.Element {
           ]}
         />
       </View>
+
+      {showContent && items.length > 0 ? (
+        <SearchBar
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search announcements…"
+          testID="discover-search-input"
+        />
+      ) : null}
 
       {!showOfflineEmpty && !isLoading && !isEmpty && groupList.length > 0 && (
         <FilterChipsRow
