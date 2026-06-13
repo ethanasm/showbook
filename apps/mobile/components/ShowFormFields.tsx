@@ -22,6 +22,7 @@ import { Collapsible } from './Collapsible';
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { normalizeDashes } from '@/lib/dateInput';
+import { InputMaxLength } from '@showbook/shared';
 import type {
   PerformerRow,
   ShowFormKind,
@@ -119,6 +120,16 @@ export function ShowFormFields({
   const isFestival = values.kind === 'festival';
   const isTheatre = values.kind === 'theatre';
 
+  // The title field is polymorphic: concert/comedy persist it as the
+  // headliner name (performerName cap), theatre/festival as the
+  // production / festival name (productionName cap). Cap the input to
+  // whichever the current kind maps to so the client never lets through
+  // a value the server-side zod schema will reject.
+  const titleMaxLength =
+    isTheatre || isFestival
+      ? InputMaxLength.productionName
+      : InputMaxLength.performerName;
+
   return (
     <View style={styles.wrap}>
       <FormField label="Kind">
@@ -138,6 +149,7 @@ export function ShowFormFields({
         }}
         placeholder={TITLE_PLACEHOLDER[values.kind]}
         autoCapitalize="words"
+        maxLength={titleMaxLength}
         error={errors?.title}
         testID="title-input"
       />
@@ -241,6 +253,7 @@ export function ShowFormFields({
           value={values.tourName}
           onChangeText={(v) => set('tourName', v)}
           placeholder="World tour, residency, …"
+          maxLength={InputMaxLength.tourName}
         />
       ) : null}
 
@@ -294,6 +307,7 @@ export function ShowFormFields({
             value={values.seat}
             onChangeText={(v) => set('seat', v)}
             placeholder="Section, row, seat"
+            maxLength={InputMaxLength.seat}
           />
         ) : null}
         <FormRow>
@@ -327,6 +341,7 @@ export function ShowFormFields({
         placeholder="Anything you want to remember"
         multiline
         numberOfLines={4}
+        maxLength={InputMaxLength.notes}
       />
     </View>
   );

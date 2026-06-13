@@ -15,7 +15,7 @@ import {
   showAnnouncementLinks,
   type Database,
 } from '@showbook/db';
-import { showMatchesAnnouncement } from '@showbook/shared';
+import { showMatchesAnnouncement, InputMaxLength } from '@showbook/shared';
 import { getPlaceDetails } from '../google-places';
 import { matchOrCreateVenue } from '../venue-matcher';
 import { geocodeVenue } from '../geocode';
@@ -278,7 +278,12 @@ export const venuesRouter = router({
    * patch so optimistic caches that write `{ ...prev, name }` keep working.
    */
   rename: protectedProcedure
-    .input(z.object({ venueId: z.string().uuid(), name: z.string().min(1).max(300) }))
+    .input(
+      z.object({
+        venueId: z.string().uuid(),
+        name: z.string().min(1).max(InputMaxLength.venueName),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       await assertVenueAccess(ctx.db, userId, input.venueId);

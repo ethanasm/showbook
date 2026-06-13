@@ -10,6 +10,7 @@ import {
   type RegionBbox as SharedRegionBbox,
   entityLimit,
   entityLimitExceededError,
+  InputMaxLength,
 } from '@showbook/shared';
 
 // ---------------------------------------------------------------------------
@@ -132,7 +133,7 @@ const updatePreferencesSchema = z.object({
 });
 
 const addRegionSchema = z.object({
-  cityName: z.string().min(1),
+  cityName: z.string().min(1).max(InputMaxLength.regionCity),
   latitude: z.number(),
   longitude: z.number(),
   radiusMiles: z.number().int().positive(),

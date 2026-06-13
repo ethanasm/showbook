@@ -39,6 +39,7 @@ import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { trpc } from '@/lib/trpc';
 import { useDebouncedValue } from '@showbook/shared/hooks';
+import { InputMaxLength } from '@showbook/shared';
 import { hapticSelection } from '@/lib/haptics';
 import { ArtistTypeahead, type ArtistSuggestion } from './ArtistTypeahead';
 import { FormField } from './FormField';
@@ -291,6 +292,7 @@ export function LineupEditor({
                         : 'Artist or comedian'
                   }
                   autoFocus={isEditing && row.name.trim().length === 0}
+                  maxLength={InputMaxLength.performerName}
                   testID={testID ? `${testID}-input-${row.id}` : undefined}
                 />
               )}
@@ -353,6 +355,7 @@ export function LineupEditor({
                 onChangeText={(v) => updateRow(row.id, { characterName: v })}
                 placeholder="Character / role (optional)"
                 placeholderTextColor={colors.faint}
+                maxLength={InputMaxLength.characterName}
                 style={[
                   styles.characterInput,
                   {

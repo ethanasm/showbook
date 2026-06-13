@@ -30,7 +30,7 @@ import {
   RADIUS_OPTIONS,
   parseRegionInput,
 } from '@/lib/regions';
-import { entityLimitReachedHint } from '@showbook/shared';
+import { entityLimitReachedHint, InputMaxLength } from '@showbook/shared';
 
 export interface AddRegionInput {
   cityName: string;
@@ -159,6 +159,7 @@ export function AddRegionSheetBody({
         autoCorrect={false}
         autoCapitalize="words"
         editable={!submitting}
+        maxLength={InputMaxLength.regionCity}
         testID="regions-add-city-input"
         style={[
           styles.formInput,

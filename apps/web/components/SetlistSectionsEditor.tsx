@@ -26,7 +26,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Plus, Trash2 } from "lucide-react";
-import type { PerformerSetlist } from "@showbook/shared";
+import { type PerformerSetlist, InputMaxLength } from "@showbook/shared";
 
 // ── Internal model ──────────────────────────────────────────────────────────
 //
@@ -309,6 +309,7 @@ function SortableRow({
           value={row.title}
           onChange={(e) => onTitleChange(row.id, e.target.value)}
           placeholder="Song title"
+          maxLength={InputMaxLength.setlistSongTitle}
           data-testid={`setlist-row-title-${row.id}`}
           style={{
             background: "transparent",
@@ -327,6 +328,7 @@ function SortableRow({
           value={row.note ?? ""}
           onChange={(e) => onNoteChange(row.id, e.target.value)}
           placeholder="add a note (optional)"
+          maxLength={InputMaxLength.setlistSongNote}
           data-testid={`setlist-row-note-${row.id}`}
           style={{
             background: "transparent",

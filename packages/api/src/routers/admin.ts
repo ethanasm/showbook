@@ -10,7 +10,7 @@ import {
 } from '@showbook/db';
 import { findTmVenueId } from '../venue-matcher';
 import { geocodeVenue } from '../geocode';
-import { isVenuePlaceholder } from '@showbook/shared';
+import { isVenuePlaceholder, InputMaxLength } from '@showbook/shared';
 import { enforceRateLimit } from '../rate-limit';
 import { isAdminEmail } from '../admin';
 import {
@@ -72,7 +72,7 @@ export const adminRouter = router({
     .input(
       z.object({
         venueId: z.string().uuid(),
-        name: z.string().min(1).max(300),
+        name: z.string().min(1).max(InputMaxLength.venueName),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -113,9 +113,9 @@ export const adminRouter = router({
     .input(
       z.object({
         venueId: z.string().uuid(),
-        city: z.string().trim().min(1).max(200),
-        stateRegion: z.string().trim().max(200).nullish(),
-        country: z.string().trim().min(1).max(120),
+        city: z.string().trim().min(1).max(InputMaxLength.venueCity),
+        stateRegion: z.string().trim().max(InputMaxLength.venueRegion).nullish(),
+        country: z.string().trim().min(1).max(InputMaxLength.venueCountry),
       }),
     )
     .mutation(async ({ ctx, input }) => {

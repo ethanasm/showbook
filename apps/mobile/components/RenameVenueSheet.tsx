@@ -24,6 +24,7 @@ import { useFeedback } from '@/lib/feedback';
 import { toUserMessage } from '@/lib/errors';
 import { runOptimisticMutation } from '@/lib/mutations';
 import { getCacheOutbox } from '@/lib/cache';
+import { InputMaxLength } from '@showbook/shared';
 
 export interface RenameVenueSheetProps {
   open: boolean;
@@ -38,7 +39,7 @@ export interface RenameVenueSheetProps {
   isAdmin?: boolean;
 }
 
-const MAX_LEN = 300;
+const MAX_LEN = InputMaxLength.venueName;
 
 export function RenameVenueSheet({
   open,
