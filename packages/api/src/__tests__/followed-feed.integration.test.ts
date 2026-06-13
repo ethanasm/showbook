@@ -12,7 +12,7 @@
 
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { db, announcements, userVenueFollows } from '@showbook/db';
+import { db, announcements, userVenueFollows, userVenueNames } from '@showbook/db';
 import {
   callerFor,
   cleanupByPrefix,
@@ -81,5 +81,28 @@ describe('discover.followedFeed', () => {
     const ids = result.items.map((i) => i.id).filter((id) => id.startsWith(PREFIX));
     assert.ok(ids.includes(ANN_FUTURE), 'future announcement missing');
     assert.ok(!ids.includes(ANN_PAST), 'past-dated announcement leaked into Discover');
+  });
+
+  it('resolves the user venue-name alias onto feed rows', async () => {
+    // Without an alias the canonical name flows through unchanged.
+    const before = await callerFor(USER_ID).discover.followedFeed({});
+    const beforeRow = before.items.find((i) => i.id === ANN_FUTURE);
+    assert.equal(beforeRow?.venue.name, 'Test Hall');
+
+    await db
+      .insert(userVenueNames)
+      .values({ userId: USER_ID, venueId: VENUE, customName: 'My Local Hall' })
+      .onConflictDoUpdate({
+        target: [userVenueNames.userId, userVenueNames.venueId],
+        set: { customName: 'My Local Hall' },
+      });
+
+    const after = await callerFor(USER_ID).discover.followedFeed({});
+    const afterRow = after.items.find((i) => i.id === ANN_FUTURE);
+    assert.equal(
+      afterRow?.venue.name,
+      'My Local Hall',
+      'followedFeed should surface the per-user venue alias',
+    );
   });
 });

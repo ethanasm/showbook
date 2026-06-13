@@ -67,6 +67,7 @@ import { UpcomingAnnouncementActionSheet } from '../../components/UpcomingAnnoun
 import { FilterChipsRow, type FilterGroup } from '../../components/FilterChipsRow';
 import { AddToDiscoverSheet } from '../../components/discover/AddToDiscoverSheet';
 import { UnfollowChipSheet } from '../../components/discover/UnfollowChipSheet';
+import { RenameVenueSheet } from '../../components/RenameVenueSheet';
 import { useTheme, type Kind } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { useAuth } from '@/lib/auth';
@@ -222,6 +223,16 @@ export default function DiscoverScreen(): React.JSX.Element {
   const [unfollowChip, setUnfollowChip] = React.useState<{
     tab: DiscoverTab;
     id: string;
+    name: string;
+    // Venue chips (Venues tab + Regions venue sub-rail) can be renamed.
+    canRename: boolean;
+    // Region-scoped venue sub-rail chips aren't followed → no unfollow.
+    canUnfollow: boolean;
+  } | null>(null);
+  // Long-press → rename target. A venueId + its current (possibly aliased)
+  // display name, fed into the shared `RenameVenueSheet`.
+  const [renameVenue, setRenameVenue] = React.useState<{
+    venueId: string;
     name: string;
   } | null>(null);
   // Secondary venue filter for the Regions tab — mirrors the web rail's
@@ -710,13 +721,35 @@ export default function DiscoverScreen(): React.JSX.Element {
     }
   }
 
-  // Long-press a chip → open the unfollow sheet for that group. The "All"
+  // Long-press a chip → open the action sheet for that group. The "All"
   // chip and the leading "+" action don't get this affordance (handled in
   // FilterChipsRow, which only wires onLongPress to per-group chips).
+  // Venue chips additionally offer "Rename venue".
   const handleChipLongPress = (id: string): void => {
     const group = groupList.find((g) => g.id === id);
     void hapticSelection();
-    setUnfollowChip({ tab, id, name: group?.name ?? '' });
+    setUnfollowChip({
+      tab,
+      id,
+      name: group?.name ?? '',
+      canRename: tab === 'venues',
+      canUnfollow: true,
+    });
+  };
+
+  // Long-press a Regions-tab venue sub-rail chip → rename only. These
+  // venues aren't followed (they're surfaced by the region feed), so the
+  // sheet skips the destructive action and just offers "Rename venue".
+  const handleRegionVenueLongPress = (id: string): void => {
+    const group = regionVenueList.find((g) => g.id === id);
+    void hapticSelection();
+    setUnfollowChip({
+      tab: 'regions',
+      id,
+      name: group?.name ?? '',
+      canRename: true,
+      canUnfollow: false,
+    });
   };
 
   // Unfollow / remove a single Discover entity, scoped to the tab it
@@ -930,6 +963,7 @@ export default function DiscoverScreen(): React.JSX.Element {
             groups={regionVenueList}
             selected={selectedRegionVenueId}
             onSelect={setSelectedRegionVenueId}
+            onLongPress={handleRegionVenueLongPress}
             totalCount={regionVenueList.reduce((n, g) => n + g.count, 0)}
             allLabel="All venues"
             variant="sub"
@@ -1032,11 +1066,25 @@ export default function DiscoverScreen(): React.JSX.Element {
       onClose={() => setUnfollowChip(null)}
       tab={unfollowChip?.tab ?? tab}
       name={unfollowChip?.name ?? null}
+      canRename={unfollowChip?.canRename ?? false}
+      showUnfollow={unfollowChip?.canUnfollow ?? true}
+      onRename={() => {
+        if (unfollowChip) {
+          setRenameVenue({ venueId: unfollowChip.id, name: unfollowChip.name });
+        }
+      }}
       onConfirm={() => {
         if (unfollowChip) {
           void performUnfollow(unfollowChip.tab, unfollowChip.id, unfollowChip.name);
         }
       }}
+    />
+    <RenameVenueSheet
+      open={renameVenue !== null}
+      onClose={() => setRenameVenue(null)}
+      venueId={renameVenue?.venueId ?? ''}
+      currentName={renameVenue?.name ?? ''}
+      extraReconcile={() => invalidateDiscoverFeeds(queryClient)}
     />
     </>
   );

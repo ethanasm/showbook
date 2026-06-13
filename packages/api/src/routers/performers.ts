@@ -15,6 +15,7 @@ import {
 import { matchOrCreatePerformer } from '../performer-matcher';
 import { enforceRateLimit } from '../rate-limit';
 import { assertUnderFollowCap } from '../follow-caps';
+import { InputMaxLength } from '@showbook/shared';
 import { child } from '@showbook/observability';
 
 const log = child({ component: 'api.performers' });
@@ -583,7 +584,12 @@ export const performersRouter = router({
     }),
 
   rename: protectedProcedure
-    .input(z.object({ performerId: z.string().uuid(), name: z.string().min(1).max(300) }))
+    .input(
+      z.object({
+        performerId: z.string().uuid(),
+        name: z.string().min(1).max(InputMaxLength.performerName),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 

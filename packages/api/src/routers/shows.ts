@@ -35,6 +35,7 @@ import {
   type PerformerSetlist,
   type PerformerSetlistsMap,
   isSetlistEmpty,
+  InputMaxLength,
 } from '@showbook/shared';
 
 const log = child({ component: 'api.shows' });
@@ -51,10 +52,10 @@ const log = child({ component: 'api.shows' });
 // which the proxy route would then fetch — see the SSRF fix in
 // `apps/web/app/api/venue-photo/[venueId]/route.ts`.
 const venueInputSchema = z.object({
-  name: z.string().min(1),
-  city: z.string().min(1),
-  stateRegion: z.string().optional(),
-  country: z.string().optional(),
+  name: z.string().min(1).max(InputMaxLength.venueName),
+  city: z.string().min(1).max(InputMaxLength.venueCity),
+  stateRegion: z.string().max(InputMaxLength.venueRegion).optional(),
+  country: z.string().max(InputMaxLength.venueCountry).optional(),
   tmVenueId: z.string().optional(),
   lat: z.number().optional(),
   lng: z.number().optional(),
@@ -65,8 +66,8 @@ const venueInputSchema = z.object({
 // caps prevent absurd payloads. Total-song cap is enforced in code below
 // because Zod can't conveniently sum across nested arrays.
 const SETLIST_MAX_SONGS = 200;
-const SETLIST_MAX_TITLE_LEN = 300;
-const SETLIST_MAX_NOTE_LEN = 200;
+const SETLIST_MAX_TITLE_LEN = InputMaxLength.setlistSongTitle;
+const SETLIST_MAX_NOTE_LEN = InputMaxLength.setlistSongNote;
 
 const setlistSongSchema = z.object({
   title: z.string().min(1).max(SETLIST_MAX_TITLE_LEN),
@@ -115,9 +116,9 @@ const performerSetlistSchema = z
 // bypassed. Constrain to a real URL here for defense in depth; the
 // proxy enforces the host allowlist.
 const performerInputSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).max(InputMaxLength.performerName),
   role: z.enum(['headliner', 'support', 'cast']),
-  characterName: z.string().optional(),
+  characterName: z.string().max(InputMaxLength.characterName).optional(),
   sortOrder: z.number().int(),
   tmAttractionId: z.string().optional(),
   musicbrainzId: z.string().optional(),
@@ -130,7 +131,7 @@ const performerInputSchema = z.object({
 });
 
 const headlinerInputSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).max(InputMaxLength.performerName),
   tmAttractionId: z.string().optional(),
   musicbrainzId: z.string().optional(),
   wikidataQid: z.string().optional(),
@@ -514,12 +515,12 @@ export const showsRouter = router({
         venue: venueInputSchema,
         date: z.string(), // ISO date string YYYY-MM-DD
         endDate: z.string().optional(),
-        seat: z.string().optional(),
+        seat: z.string().max(InputMaxLength.seat).optional(),
         pricePaid: z.string().optional(), // decimal as string
         ticketCount: z.number().int().min(1).default(1),
-        tourName: z.string().optional(),
-        productionName: z.string().optional(),
-        notes: z.string().max(5000).optional(),
+        tourName: z.string().max(InputMaxLength.tourName).optional(),
+        productionName: z.string().max(InputMaxLength.productionName).optional(),
+        notes: z.string().max(InputMaxLength.notes).optional(),
         coverImageUrl: z.string().url().optional(),
         performers: z.array(performerInputSchema).optional(),
         sourceRefs: z.any().optional(),
@@ -971,7 +972,7 @@ export const showsRouter = router({
       z.object({
         showId: z.string().uuid(),
         newState: z.enum(['past', 'ticketed', 'watching']),
-        seat: z.string().optional(),
+        seat: z.string().max(InputMaxLength.seat).optional(),
         pricePaid: z.string().optional(),
         ticketCount: z.number().int().min(1).optional(),
       })
@@ -1025,12 +1026,12 @@ export const showsRouter = router({
         venue: venueInputSchema,
         date: z.string(),
         endDate: z.string().optional(),
-        seat: z.string().optional(),
+        seat: z.string().max(InputMaxLength.seat).optional(),
         pricePaid: z.string().optional(),
         ticketCount: z.number().int().min(1).default(1),
-        tourName: z.string().optional(),
-        productionName: z.string().optional(),
-        notes: z.string().max(5000).nullable().optional(),
+        tourName: z.string().max(InputMaxLength.tourName).optional(),
+        productionName: z.string().max(InputMaxLength.productionName).optional(),
+        notes: z.string().max(InputMaxLength.notes).nullable().optional(),
         performers: z.array(performerInputSchema).optional(),
         sourceRefs: z.any().optional(),
       })
@@ -1220,9 +1221,9 @@ export const showsRouter = router({
     .input(
       z.object({
         showId: z.string().uuid(),
-        name: z.string().min(1),
+        name: z.string().min(1).max(InputMaxLength.performerName),
         role: z.enum(['headliner', 'support', 'cast']),
-        characterName: z.string().optional(),
+        characterName: z.string().max(InputMaxLength.characterName).optional(),
         tmAttractionId: z.string().optional(),
         musicbrainzId: z.string().optional(),
         wikidataQid: z.string().optional(),

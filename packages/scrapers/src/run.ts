@@ -6,7 +6,12 @@ import {
   venueScrapeRuns,
 } from '@showbook/db';
 import { and, eq, isNotNull, sql } from 'drizzle-orm';
-import { matchOrCreatePerformer, parseScrapeConfig } from '@showbook/api';
+import {
+  assertPublicHttpUrl,
+  BlockedUrlError,
+  matchOrCreatePerformer,
+  parseScrapeConfig,
+} from '@showbook/api';
 import { loadAndExtract } from './extract';
 import { extractEventsFromPage, type ExtractedEvent } from './llm';
 import { isAllowedByRobots } from './runtime';
@@ -53,6 +58,34 @@ export async function runScrapers(): Promise<{
     venueLog.info({ event: 'scrape.venue.start' }, 'Scrape started');
 
     try {
+      // SSRF guard: refuse to fetch a config URL that is non-http(s) or that
+      // resolves to a loopback / private / link-local / reserved address.
+      // This is the real fetch boundary — `saveScrapeConfig` already rejects
+      // such URLs synchronously, but the config is persisted and this re-check
+      // (with DNS resolution) defends against rows written before the guard
+      // existed and against a host that now points at private space.
+      try {
+        await assertPublicHttpUrl(cfg.url);
+      } catch (err) {
+        if (err instanceof BlockedUrlError) {
+          venueLog.warn(
+            { event: 'scrape.venue.url_blocked', reason: err.reason },
+            'Scrape URL blocked by SSRF guard',
+          );
+          await db
+            .update(venueScrapeRuns)
+            .set({
+              status: 'error',
+              completedAt: new Date(),
+              errorMessage: `URL blocked by SSRF guard: ${err.reason}`,
+            })
+            .where(eq(venueScrapeRuns.id, run!.id));
+          failed++;
+          continue;
+        }
+        throw err;
+      }
+
       if (!(await isAllowedByRobots(cfg.url))) {
         venueLog.warn({ event: 'scrape.venue.robots_disallowed' }, 'Disallowed by robots.txt');
         await db

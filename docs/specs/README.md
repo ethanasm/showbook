@@ -39,6 +39,7 @@ Implementation tasks structured for parallel execution by Claude Code agent team
 | [`mobile-roadmap.md`](mobile-roadmap.md) | Milestones (M1–M6), stack decisions, status tracker |
 | [`mobile-m2-m6-plan.md`](mobile-m2-m6-plan.md) | M2–M6 parallel-execution plan with dependency arrows |
 | [`mobile-deployment.md`](mobile-deployment.md) | Run on a device, EAS build/submit, beta (TestFlight + Play internal), first-submission checklist |
+| [`app-store-listing.md`](app-store-listing.md) | Store listing copy (App Store Connect + Play Console) with per-field character limits |
 | [`mobile-testing-strategy.md`](mobile-testing-strategy.md) | Tiered mobile test strategy; the `lib/**`-scoped 80% gate; Maestro waves |
 
 ### Operations

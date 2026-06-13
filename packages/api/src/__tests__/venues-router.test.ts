@@ -382,6 +382,28 @@ describe('venuesRouter (unit)', () => {
         }),
       );
     });
+
+    it('rejects SSRF / non-public URLs (file://, localhost, private IP, metadata)', async () => {
+      // Follow exists, so authorization passes — the SSRF guard in the input
+      // schema is what must reject these, not the access gate.
+      for (const url of [
+        'file:///etc/passwd',
+        'http://localhost:3002/api/admin/sql',
+        'http://127.0.0.1/',
+        'http://169.254.169.254/latest/meta-data/',
+        'http://192.168.1.1/',
+      ]) {
+        const db = makeFakeDb({ selectResults: [[{ venueId: VENUE_ID }]] });
+        await assert.rejects(
+          () =>
+            caller(db).saveScrapeConfig({
+              venueId: VENUE_ID,
+              config: { url, frequencyDays: 7 },
+            }),
+          `${url} should be rejected`,
+        );
+      }
+    });
   });
 
   describe('unfollow', () => {

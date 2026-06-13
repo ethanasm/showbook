@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { usePlaceSearch } from "@/lib/usePlaceSearch";
+import { InputMaxLength } from "@showbook/shared";
 
 interface AddRegionFormProps {
   onAdd: () => void;
@@ -111,6 +112,7 @@ export function AddRegionForm({ onAdd }: AddRegionFormProps) {
             value={cityQuery}
             onChange={(e) => handleCityInput(e.target.value)}
             placeholder="e.g. Nashville"
+            maxLength={InputMaxLength.regionCity}
             style={formStyles.input}
           />
           {!manualMode &&

@@ -24,6 +24,7 @@ import { useFeedback } from '@/lib/feedback';
 import { toUserMessage } from '@/lib/errors';
 import { runOptimisticMutation } from '@/lib/mutations';
 import { getCacheOutbox } from '@/lib/cache';
+import { InputMaxLength } from '@showbook/shared';
 
 export interface RenameVenueSheetProps {
   open: boolean;
@@ -36,9 +37,14 @@ export interface RenameVenueSheetProps {
   /** When true, also offer an admin-only "rename for everyone" action that
    *  edits the shared canonical name (`admin.renameVenue`). */
   isAdmin?: boolean;
+  /** Extra cache invalidation to run after a successful rename / reset, for
+   *  callers whose surface reads the venue name from a cache slot outside
+   *  the venue detail / followed / list keys this sheet already reconciles
+   *  (e.g. the Discover feeds, keyed under `['mobile', 'discover', …]`). */
+  extraReconcile?: () => void;
 }
 
-const MAX_LEN = 300;
+const MAX_LEN = InputMaxLength.venueName;
 
 export function RenameVenueSheet({
   open,
@@ -47,6 +53,7 @@ export function RenameVenueSheet({
   currentName,
   canonicalName,
   isAdmin = false,
+  extraReconcile,
 }: RenameVenueSheetProps): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -108,6 +115,7 @@ export function RenameVenueSheet({
     void utils.venues.detail.invalidate({ venueId });
     void utils.venues.followed.invalidate();
     void utils.venues.list.invalidate();
+    extraReconcile?.();
   };
 
   // Admin-only: edit the shared canonical name. Not routed through the

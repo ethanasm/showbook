@@ -17,6 +17,7 @@ import {
 } from '@showbook/db';
 import { isNonWatchableKind, KIND_LABELS, regionBbox } from '@showbook/shared';
 import { matchOrCreatePerformer } from '../performer-matcher';
+import { applyNestedVenueNameOverrides } from '../venue-names';
 import {
   enqueueIngestVenue,
   enqueueIngestPerformer,
@@ -120,13 +121,17 @@ export const discoverRouter = router({
         nextCursor = encodeCursor(extra.announcement.showDate, extra.announcement.id);
       }
 
+      const items = rows.map((r) => ({
+        ...r.announcement,
+        ticketUrl: r.announcement.ticketUrl,
+        headlinerImageUrl: r.headlinerImageUrl ?? null,
+        venue: r.venue,
+      }));
+
       return {
-        items: rows.map((r) => ({
-          ...r.announcement,
-          ticketUrl: r.announcement.ticketUrl,
-          headlinerImageUrl: r.headlinerImageUrl ?? null,
-          venue: r.venue,
-        })),
+        // Resolve the user's per-venue name aliases so a renamed venue
+        // reads consistently across the feed rows and the Discover pills.
+        items: await applyNestedVenueNameOverrides(db, userId, items, (it) => it.venue),
         nextCursor,
       };
     }),
@@ -193,13 +198,15 @@ export const discoverRouter = router({
         nextCursor = encodeCursor(extra.announcement.showDate, extra.announcement.id);
       }
 
+      const items = rows.map((r) => ({
+        ...r.announcement,
+        ticketUrl: r.announcement.ticketUrl,
+        headlinerImageUrl: r.headlinerImageUrl ?? null,
+        venue: r.venue,
+      }));
+
       return {
-        items: rows.map((r) => ({
-          ...r.announcement,
-          ticketUrl: r.announcement.ticketUrl,
-          headlinerImageUrl: r.headlinerImageUrl ?? null,
-          venue: r.venue,
-        })),
+        items: await applyNestedVenueNameOverrides(db, userId, items, (it) => it.venue),
         nextCursor,
       };
     }),
@@ -394,7 +401,11 @@ export const discoverRouter = router({
         if (last) nextCursors[regionId] = encodeCursor(last.showDate, last.id);
       }
 
-      return { items, nextCursors, hasRegions: true };
+      return {
+        items: await applyNestedVenueNameOverrides(db, userId, items, (it) => it.venue),
+        nextCursors,
+        hasRegions: true,
+      };
     }),
 
   /**

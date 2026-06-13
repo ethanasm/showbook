@@ -14,6 +14,17 @@
   `runOptimisticMutation` snapshot-undefined gating, and renaming
   the Map "Search this area" button (or wiring a real bbox filter).
 
+### Web parity follow-ups
+- **Rename a venue from the Discover venue rail (web).** Mobile's
+  Discover screen now offers "Rename venue" on a long-press of a venue
+  pill (Venues tab + Regions venue sub-rail), reusing `RenameVenueSheet`
+  + `venues.rename`. The web rail's right-click context menu
+  (`apps/web/app/(app)/discover/VenueRail.tsx`) still only offers
+  "Unfollow"; add a "Rename" item that opens the existing web venue
+  rename UI (`EditableName`) for parity. The shared server change
+  (discover feeds now resolve per-user venue aliases) already benefits
+  web, so this is UI-only.
+
 ### Setlist intelligence (post-launch follow-ups)
 
 Two deferred items from the Phase 0 plan review
