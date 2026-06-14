@@ -15,15 +15,25 @@ const log = child({ component: 'api.job-queue' });
 // Cache pg-boss on globalThis so Next.js HMR doesn't leak connection pools.
 // pg-boss opens its own pool of ~5 connections per instance; without
 // caching, a few module reloads exhaust Postgres's default 100-conn limit.
+//
+// IMPORTANT: this send-only client is a *separate* pg-boss instance from the
+// worker/scheduler boss in `@showbook/jobs` (`packages/jobs/src/boss.ts`),
+// and the two MUST NOT share a globalThis key. Both modules run in the same
+// Next.js process and share one `globalThis`; #609 keyed the worker holder on
+// `__showbookBoss` with shape `{ boss, started }`, which collided with the
+// bare-`PgBoss` shape this client used under the same name — so the first
+// enqueue after boot read the worker's holder object and threw
+// `r.send is not a function` (the 2026-06-14 05:17 UTC corpus-fill burst).
+// Keep these keys distinct from the worker's.
 const globalForBoss = globalThis as unknown as {
-  __showbookBoss?: PgBoss;
-  __showbookBossStarting?: Promise<PgBoss>;
+  __showbookSender?: PgBoss;
+  __showbookSenderStarting?: Promise<PgBoss>;
 };
 
 async function getSender(): Promise<PgBoss> {
-  if (globalForBoss.__showbookBoss) return globalForBoss.__showbookBoss;
-  if (globalForBoss.__showbookBossStarting) return globalForBoss.__showbookBossStarting;
-  globalForBoss.__showbookBossStarting = (async () => {
+  if (globalForBoss.__showbookSender) return globalForBoss.__showbookSender;
+  if (globalForBoss.__showbookSenderStarting) return globalForBoss.__showbookSenderStarting;
+  globalForBoss.__showbookSenderStarting = (async () => {
     const instance = new PgBoss({
       connectionString: process.env.DATABASE_URL!,
       max: 2, // send-only client; we don't need a big pool
@@ -44,10 +54,10 @@ async function getSender(): Promise<PgBoss> {
       supervise: false,
     });
     await instance.start();
-    globalForBoss.__showbookBoss = instance;
+    globalForBoss.__showbookSender = instance;
     return instance;
   })();
-  return globalForBoss.__showbookBossStarting;
+  return globalForBoss.__showbookSenderStarting;
 }
 
 export const JOB_NAMES = {

@@ -23,8 +23,8 @@ type FakeBoss = {
 };
 
 type Globals = {
-  __showbookBoss?: FakeBoss;
-  __showbookBossStarting?: Promise<FakeBoss>;
+  __showbookSender?: FakeBoss;
+  __showbookSenderStarting?: Promise<FakeBoss>;
 };
 
 const globals = globalThis as unknown as Globals;
@@ -38,7 +38,7 @@ function installFakeBoss() {
   lastSent = null;
   nextSendResult = 'job-id-1';
   shouldThrow = null;
-  globals.__showbookBoss = {
+  globals.__showbookSender = {
     async send(queue: string, payload: unknown) {
       if (shouldThrow) throw shouldThrow;
       lastSent = { queue, payload };
@@ -46,16 +46,16 @@ function installFakeBoss() {
     },
     async start() {},
   };
-  delete globals.__showbookBossStarting;
+  delete globals.__showbookSenderStarting;
 }
 
 function clearFakeBoss() {
-  delete globals.__showbookBoss;
-  delete globals.__showbookBossStarting;
+  delete globals.__showbookSender;
+  delete globals.__showbookSenderStarting;
 }
 
 // Import after the fake is installable. We import dynamically inside the
-// tests so the module picks up our pre-populated globalThis.__showbookBoss.
+// tests so the module picks up our pre-populated globalThis.__showbookSender.
 // (Static imports here would also work because getSender is called per
 // invocation and reads globalThis at that point, but doing it in the test
 // keeps the dependency on the module ordering explicit.)
@@ -314,12 +314,12 @@ test('getSender: reuses the in-flight starting promise when called twice', async
   // Force the starting branch by clearing both the cached instance and any
   // prior starting promise, then setting a starting promise that resolves
   // to a fake. Both enqueue calls should resolve through the same promise.
-  delete globals.__showbookBoss;
+  delete globals.__showbookSender;
   let resolveStart: (b: FakeBoss) => void = () => {};
   const started = new Promise<FakeBoss>((res) => {
     resolveStart = res;
   });
-  globals.__showbookBossStarting = started;
+  globals.__showbookSenderStarting = started;
 
   const calls: Array<{ queue: string; payload: unknown }> = [];
   const fake: FakeBoss = {

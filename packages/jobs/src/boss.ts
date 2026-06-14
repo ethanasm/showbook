@@ -15,11 +15,22 @@ const log = child({ component: 'jobs.boss' });
 // though pg-boss is actually running. A `globalThis`-keyed holder collapses
 // those copies onto one shared object in every environment (not just dev —
 // the cross-bundle sharing is precisely what prod needs here).
+//
+// NOTE: this is the worker/scheduler boss. The API's send-only enqueue client
+// (`packages/api/src/job-queue.ts`) is a *different* pg-boss instance and keys
+// its own globalThis holder on `__showbookSender`. Keep these names distinct:
+// they share one `globalThis` in the prod Next.js process, and an earlier
+// collision on `__showbookBoss` (this holder's `{ boss, started }` shape vs the
+// client's bare `PgBoss`) made the first enqueue after boot throw
+// `r.send is not a function`.
 const globalForBoss = globalThis as unknown as {
-  __showbookBoss?: { boss: PgBoss | null; started: boolean };
+  __showbookBossLifecycle?: { boss: PgBoss | null; started: boolean };
 };
 
-const state = (globalForBoss.__showbookBoss ??= { boss: null, started: false });
+const state = (globalForBoss.__showbookBossLifecycle ??= {
+  boss: null,
+  started: false,
+});
 
 export function getBoss(): PgBoss {
   if (!state.boss) {
