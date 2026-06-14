@@ -17,9 +17,9 @@ import { TRPCError } from '@trpc/server';
 
 // Stub pg-boss so follow mutations don't keep the process alive.
 const __globals = globalThis as unknown as {
-  __showbookBoss?: { send: () => Promise<string | null>; start: () => Promise<void> };
+  __showbookSender?: { send: () => Promise<string | null>; start: () => Promise<void> };
 };
-__globals.__showbookBoss = {
+__globals.__showbookSender = {
   send: async () => 'fake-job-id',
   start: async () => {},
 };
