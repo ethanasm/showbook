@@ -3,37 +3,36 @@ import assert from 'node:assert/strict';
 
 import { getBossState, stopBoss } from '../boss';
 
-const STATE_KEY = Symbol.for('showbook.jobs.boss');
-
-type BossState = { boss: unknown; started: boolean };
-
-function globalState(): BossState | undefined {
-  return (globalThis as Record<symbol, BossState | undefined>)[STATE_KEY];
+// boss.ts backs its singleton + lifecycle flag with a `globalThis`-keyed
+// holder (`__showbookBoss`) so every transpiled copy of the module — the
+// `instrumentation.ts` bundle that calls `startBoss()` and the
+// route-handler bundle that calls `getBossState()` from /api/health/ready —
+// shares one object. These tests are the regression guard for that: they
+// mutate the shared holder directly (standing in for the "other" bundle's
+// copy writing to the same global) and assert `getBossState()` observes it.
+// If the state ever regresses to a plain module-local `let`, mutating the
+// holder would no longer move `getBossState()` and these fail.
+function holder(): { boss: unknown; started: boolean } {
+  const h = (globalThis as Record<string, unknown>).__showbookBoss as
+    | { boss: unknown; started: boolean }
+    | undefined;
+  assert.ok(h, 'boss.ts should create the global holder on import');
+  return h;
 }
 
-test('getBossState reports stopped before any start', () => {
-  // Ensure a clean global anchor for this assertion.
-  delete (globalThis as Record<symbol, unknown>)[STATE_KEY];
+test('getBossState reflects the shared globalThis-anchored started flag', () => {
+  const h = holder();
+  h.started = false;
   assert.equal(getBossState(), 'stopped');
-});
-
-test('getBossState reflects the globalThis-anchored started flag', () => {
-  // Simulate the instrumentation module copy flipping `started` on the
-  // shared global anchor; the route-handler copy (this import) must
-  // observe it. This is the regression guard for the deploy health gate:
-  // before the global anchor, a duplicated module copy kept its own
-  // perpetually-false `started` and `/api/health/ready` 503'd forever.
-  delete (globalThis as Record<symbol, unknown>)[STATE_KEY];
-  // First read lazily creates the anchor.
-  assert.equal(getBossState(), 'stopped');
-  const state = globalState();
-  assert.ok(state, 'global anchor should exist after first read');
-  state.started = true;
+  h.started = true;
   assert.equal(getBossState(), 'started');
+  h.started = false;
 });
 
 test('stopBoss is a no-op when nothing was started', async () => {
-  delete (globalThis as Record<symbol, unknown>)[STATE_KEY];
+  const h = holder();
+  h.boss = null;
+  h.started = false;
   await assert.doesNotReject(stopBoss());
   assert.equal(getBossState(), 'stopped');
 });
