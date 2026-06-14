@@ -23,9 +23,11 @@
   --kind-sports: #E8772E;
 
   /* Display family — used for screen titles, headliner/show titles,
-     venue/artist hero, empty-state and modal headings. Same family as
-     body (Geist Sans); the title treatment lives in `.display-title`. */
-  --font-display: var(--font-geist-sans), sans-serif;
+     venue/artist hero, empty-state and modal headings. Fraunces, the
+     editorial serif from the design handoff (mirrors mobile's
+     `heroTitle`/`headliner` Fraunces treatment); the size/weight
+     treatment lives in `.display-title`. */
+  --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
 
   /* Page-level horizontal padding. Used by inline styles via
      `padding: "Yp var(--page-pad-x)"` so screens can be retuned for

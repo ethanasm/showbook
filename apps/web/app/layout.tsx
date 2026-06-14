@@ -1,26 +1,36 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
-import { Space_Grotesk, IBM_Plex_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Fraunces } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
 import { Toaster } from "sonner";
 import { TRPCProvider } from "@/lib/trpc";
 import { NavigationProgress } from "@/components/NavigationProgress";
 import "./globals.css";
 
-// Font swap (2026-05-16 redesign). The CSS variables keep their original
-// names (`--font-geist-sans` / `--font-geist-mono`) so every inline-style
-// reference across the app keeps working with value-only changes — see
-// `docs/specs/setlist-intelligence/show-page-redesign-2026-05-16.md`.
-const sansFont = Space_Grotesk({
+// Type system — matches the design handoff (`docs/design/.../README.md`):
+// Geist for all UI/body/numbers, Geist Mono for labels/metadata, and
+// Fraunces as the editorial display face for headliners/show titles/hero
+// (mirrors `apps/mobile/lib/fonts.ts`, which loads the same three families).
+// The sans/mono CSS variables keep their `--font-geist-*` names so every
+// inline-style reference across the app keeps working unchanged — and now
+// the names finally match the fonts they point at.
+const sansFont = Geist({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-geist-sans",
   display: "swap",
 });
-const monoFont = IBM_Plex_Mono({
+const monoFont = Geist_Mono({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
   variable: "--font-geist-mono",
+  display: "swap",
+});
+const displayFont = Fraunces({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  style: ["normal", "italic"],
+  variable: "--font-fraunces",
   display: "swap",
 });
 
@@ -74,7 +84,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${sansFont.variable} ${monoFont.variable}`}>
+    <html
+      lang="en"
+      className={`${sansFont.variable} ${monoFont.variable} ${displayFont.variable}`}
+    >
       <body style={{ fontFamily: "var(--font-geist-sans), sans-serif" }}>
         <Suspense fallback={null}>
           <NavigationProgress />
