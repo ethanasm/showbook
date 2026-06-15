@@ -61,11 +61,19 @@ export function FollowVenueSheetBody({
   const debounced = useDebouncedValue(query, 250);
   const [pending, setPending] = React.useState(false);
 
+  // Depend on the stable `runSearch` callback, NOT the whole
+  // `venueSearch` object. `venueSearch` is a useMemo keyed on
+  // `suggestions` + `loading`, so its identity changes every time a
+  // search toggles loading / sets results — depending on it here made
+  // the effect re-fire after each search, looping runSearch forever
+  // (the "Searching… ↔ No venues found" flicker even after the user
+  // stopped typing). `runSearch` is memoized on the tRPC client alone.
+  const { runSearch } = venueSearch;
   React.useEffect(() => {
     const trimmed = debounced.trim();
     if (trimmed.length < 2) return;
-    venueSearch.runSearch(trimmed);
-  }, [debounced, venueSearch]);
+    runSearch(trimmed);
+  }, [debounced, runSearch]);
 
   const localSuggestions = venueSearch.suggestions.filter((s) => !s.placeId);
   const placesSuggestions = venueSearch.suggestions.filter((s) => Boolean(s.placeId));
