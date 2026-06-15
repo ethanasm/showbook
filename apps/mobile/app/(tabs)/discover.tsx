@@ -50,7 +50,6 @@ import {
   Calendar,
   ChevronRight,
   MapPin,
-  Search,
   Users,
 } from 'lucide-react-native';
 import { useFeedback } from '@/lib/feedback';
@@ -86,6 +85,7 @@ import {
 } from '@/lib/discover-watch';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
+import { SearchTopBarAction } from '../../components/SearchTopBarAction';
 import { PickPerformanceDateSheet } from '../../components/PickPerformanceDateSheet';
 import { KindFilterControl } from '../../components/KindFilterControl';
 import { type KindFilterValue } from '../../components/KindFilterMenu';
@@ -188,7 +188,6 @@ function getGroupKeys(
 export default function DiscoverScreen(): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
-  const router = useRouter();
   const { token } = useAuth();
   const network = useNetwork();
   const utils = trpc.useUtils();
@@ -432,15 +431,7 @@ export default function DiscoverScreen(): React.JSX.Element {
         onChange={setKindFilter}
         testIDPrefix="discover"
       />
-      <Pressable
-        onPress={() => router.push('/search')}
-        hitSlop={12}
-        accessibilityRole="button"
-        accessibilityLabel="Search"
-        testID="discover-search-button"
-      >
-        <Search size={20} color={colors.ink} strokeWidth={2} />
-      </Pressable>
+      <SearchTopBarAction testID="discover-search-button" />
       <MeTopBarAction />
     </View>
   );

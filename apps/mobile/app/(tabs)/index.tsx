@@ -34,6 +34,7 @@ import { Link, useRouter } from 'expo-router';
 import { Calendar, ChevronRight } from 'lucide-react-native';
 import { HomeHeader } from '../../components/HomeHeader';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
+import { SearchTopBarAction } from '../../components/SearchTopBarAction';
 import { KindFilterControl } from '../../components/KindFilterControl';
 import { kindFilterNoun, type KindFilterValue } from '../../components/KindFilterMenu';
 import { EmptyState } from '../../components/EmptyState';
@@ -385,6 +386,7 @@ export default function HomeScreen(): React.JSX.Element {
               testIDPrefix="home"
               topOffset={50}
             />
+            <SearchTopBarAction />
             <MeTopBarAction />
           </View>
         }

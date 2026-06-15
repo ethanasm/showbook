@@ -43,6 +43,7 @@ import MapView, {
 import { effectiveShowState, isNonWatchableKind, type Kind } from '@showbook/shared';
 import { TopBar } from '../../components/TopBar';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
+import { SearchTopBarAction } from '../../components/SearchTopBarAction';
 import { KindFilterControl } from '../../components/KindFilterControl';
 import { type KindFilterValue } from '../../components/KindFilterMenu';
 import { EmptyState } from '../../components/EmptyState';
@@ -703,6 +704,7 @@ export default function MapScreen(): React.JSX.Element {
         rightAction={
           <View style={styles.headerActions}>
             <KindFilterControl value={kindFilter} onChange={setKindFilter} testIDPrefix="map" />
+            <SearchTopBarAction />
             <MeTopBarAction />
           </View>
         }
