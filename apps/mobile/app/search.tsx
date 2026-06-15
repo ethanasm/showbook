@@ -34,7 +34,12 @@ import {
   Users,
   MapPin,
   CalendarPlus,
+  UserPlus,
+  Plus,
+  Check,
+  ChevronRight,
 } from 'lucide-react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { ScreenWrapper } from '../components/ScreenWrapper';
 import { EmptyState } from '../components/EmptyState';
 import { OfflineEmptyState } from '../components/OfflineEmptyState';
@@ -43,13 +48,19 @@ import { useTheme, type Kind } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { useAuth } from '@/lib/auth';
 import { useNetwork } from '@/lib/network';
+import { useFeedback } from '@/lib/feedback';
 import { trpc } from '@/lib/trpc';
+import { invalidateDiscoverFeeds } from '@/lib/cache';
 import { useDebouncedValue } from '@showbook/shared/hooks';
 import {
+  dedupeDiscoverArtists,
+  dedupeDiscoverVenues,
   extractHighlight,
   futureShowToFormParams,
   groupResults,
   isEmptyQuery,
+  type DiscoverArtist,
+  type DiscoverVenue,
   type FutureShow,
   type GroupedSearchResults,
   type RawGlobalResults,
@@ -103,6 +114,81 @@ export default function SearchScreen(): React.JSX.Element {
     },
   );
   const futureShows = futureShowsQuery.data ?? [];
+
+  // ── Discoverable (not-yet-followed) results ──────────────────────────
+  // The same catalog queries the Discover follow sheets use:
+  //   - `discover.searchArtists` (Ticketmaster attractions)
+  //   - `venues.search` (venue catalog)
+  // Gated to ≥2 chars (like Future shows) and online-only — neither has a
+  // cached fallback. Deduped against the user's own results and capped so
+  // the discoverable rows stay a short, decorated tail under the log
+  // sections rather than crowding them.
+  const discoverEnabled =
+    Boolean(token) && !empty && network.online && trimmed.length >= 2;
+
+  const discoverArtistsQuery = trpc.discover.searchArtists.useQuery(
+    { keyword: trimmed },
+    { enabled: discoverEnabled, staleTime: 60_000 },
+  );
+  const discoverVenuesQuery = trpc.venues.search.useQuery(
+    { query: trimmed },
+    { enabled: discoverEnabled, staleTime: 60_000 },
+  );
+
+  const discoverArtists = React.useMemo(
+    () => dedupeDiscoverArtists(discoverArtistsQuery.data, grouped.artists.items),
+    [discoverArtistsQuery.data, grouped.artists.items],
+  );
+  const discoverVenues = React.useMemo(
+    () => dedupeDiscoverVenues(discoverVenuesQuery.data, grouped.venues.items),
+    [discoverVenuesQuery.data, grouped.venues.items],
+  );
+
+  // Inline artist follow — mirrors the Discover follow-artist sheet
+  // (`performers.followAttraction`). Online-only, no outbox: search is
+  // already gated behind a live connection.
+  const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
+  const { showToast } = useFeedback();
+  const [followedArtistIds, setFollowedArtistIds] = React.useState<Set<string>>(
+    () => new Set(),
+  );
+
+  const followAttraction = trpc.performers.followAttraction.useMutation({
+    onSuccess: (_data, vars) => {
+      void utils.performers.list.invalidate();
+      invalidateDiscoverFeeds(queryClient);
+      setFollowedArtistIds((prev) => {
+        const next = new Set(prev);
+        next.add(vars.tmAttractionId);
+        return next;
+      });
+      showToast({ kind: 'success', text: `Following ${vars.name}` });
+    },
+    onError: (err) => {
+      showToast({
+        kind: 'error',
+        text: err instanceof Error ? err.message : 'Could not follow artist',
+      });
+    },
+  });
+
+  const onFollowArtist = React.useCallback(
+    (artist: DiscoverArtist) => {
+      if (followAttraction.isPending) return;
+      followAttraction.mutate({
+        tmAttractionId: artist.id,
+        name: artist.name,
+        imageUrl: artist.imageUrl ?? undefined,
+        musicbrainzId: artist.mbid ?? undefined,
+      });
+    },
+    [followAttraction],
+  );
+
+  const pendingFollowId = followAttraction.isPending
+    ? followAttraction.variables?.tmAttractionId
+    : undefined;
 
   const back = (
     <Pressable
@@ -162,8 +248,8 @@ export default function SearchScreen(): React.JSX.Element {
         ) : empty ? (
           <EmptyState
             icon={<SearchIcon size={40} color={colors.faint} strokeWidth={1.5} />}
-            title="Search your log"
-            subtitle="Find shows, artists, and venues across everything you've added."
+            title="Search everything"
+            subtitle="Find shows, artists, and venues in your log — plus new ones to follow."
           />
         ) : searchQuery.isLoading ? (
           <View style={styles.center}>
@@ -184,11 +270,15 @@ export default function SearchScreen(): React.JSX.Element {
           />
         ) : grouped.total === 0 &&
           futureShows.length === 0 &&
-          !futureShowsQuery.isLoading ? (
+          discoverArtists.length === 0 &&
+          discoverVenues.length === 0 &&
+          !futureShowsQuery.isLoading &&
+          !discoverArtistsQuery.isLoading &&
+          !discoverVenuesQuery.isLoading ? (
           <EmptyState
             icon={<SearchIcon size={40} color={colors.faint} strokeWidth={1.5} />}
             title="No matches"
-            subtitle={`Nothing in your log matches "${trimmed}". Try a different spelling or fewer words.`}
+            subtitle={`Nothing matches "${trimmed}". Try a different spelling or fewer words.`}
           />
         ) : (
           <>
@@ -233,6 +323,35 @@ export default function SearchScreen(): React.JSX.Element {
               >
                 {futureShows.map((s) => (
                   <FutureShowResultRow key={s.tmEventId} show={s} query={trimmed} />
+                ))}
+              </Group>
+            ) : null}
+            {discoverArtists.length > 0 ? (
+              <Group
+                title="Artists to follow"
+                count={discoverArtists.length}
+                icon={<UserPlus size={13} color={colors.ink} strokeWidth={2} />}
+              >
+                {discoverArtists.map((a) => (
+                  <DiscoverArtistResultRow
+                    key={a.id}
+                    artist={a}
+                    query={trimmed}
+                    followed={followedArtistIds.has(a.id)}
+                    pending={pendingFollowId === a.id}
+                    onFollow={() => onFollowArtist(a)}
+                  />
+                ))}
+              </Group>
+            ) : null}
+            {discoverVenues.length > 0 ? (
+              <Group
+                title="Venues to follow"
+                count={discoverVenues.length}
+                icon={<MapPin size={13} color={colors.ink} strokeWidth={2} />}
+              >
+                {discoverVenues.map((v) => (
+                  <DiscoverVenueResultRow key={v.id} venue={v} query={trimmed} />
                 ))}
               </Group>
             ) : null}
@@ -431,6 +550,155 @@ function FutureShowResultRow({
   );
 }
 
+/**
+ * A not-yet-followed artist (Ticketmaster attraction). Decorated with a
+ * dashed outline + an accent "Follow" pill so it reads as an add action
+ * rather than a log entry. Tapping the row (or the pill) follows inline.
+ */
+function DiscoverArtistResultRow({
+  artist,
+  query,
+  followed,
+  pending,
+  onFollow,
+}: {
+  artist: DiscoverArtist;
+  query: string;
+  followed: boolean;
+  pending: boolean;
+  onFollow: () => void;
+}): React.JSX.Element {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+  const initial = artist.name.trim()[0]?.toUpperCase() ?? '?';
+
+  return (
+    <Pressable
+      onPress={followed || pending ? undefined : onFollow}
+      disabled={followed || pending}
+      accessibilityRole="button"
+      accessibilityLabel={followed ? `Following ${artist.name}` : `Follow ${artist.name}`}
+      testID={`search-discover-artist-${artist.id}`}
+      style={({ pressed }) => [
+        styles.row,
+        styles.rowFlex,
+        styles.discoverRow,
+        { borderColor: colors.rule },
+        pressed && styles.pressed,
+      ]}
+    >
+      <View
+        style={[
+          styles.avatar,
+          { backgroundColor: colors.surfaceRaised, borderColor: colors.rule },
+        ]}
+      >
+        {artist.imageUrl ? (
+          <Image source={{ uri: artist.imageUrl }} style={styles.avatarImage} />
+        ) : (
+          <Text style={[styles.avatarInitial, { color: colors.muted }]}>{initial}</Text>
+        )}
+      </View>
+      <View style={styles.rowContent}>
+        <HighlightedText
+          text={artist.name}
+          query={query}
+          style={[styles.rowTitle, { color: colors.ink }]}
+        />
+        <Text style={[styles.rowSubtitle, { color: colors.muted }]}>
+          {followed ? 'Following' : 'Not in your log'}
+        </Text>
+      </View>
+      <FollowPill followed={followed} pending={pending} />
+    </Pressable>
+  );
+}
+
+/**
+ * A not-yet-followed venue from the catalog. Decorated like the
+ * discoverable artists; links into the venue detail screen (where the
+ * follow control lives) rather than following inline.
+ */
+function DiscoverVenueResultRow({
+  venue,
+  query,
+}: {
+  venue: DiscoverVenue;
+  query: string;
+}): React.JSX.Element {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+  return (
+    <Link href={`/venues/${venue.id}`} asChild>
+      <Pressable
+        style={({ pressed }) => [
+          styles.row,
+          styles.rowFlex,
+          styles.discoverRow,
+          { borderColor: colors.rule },
+          pressed && styles.pressed,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={`View ${venue.name}`}
+        testID={`search-discover-venue-${venue.id}`}
+      >
+        <View
+          style={[
+            styles.venueIcon,
+            { backgroundColor: colors.surfaceRaised, borderColor: colors.rule },
+          ]}
+        >
+          <MapPin size={18} color={colors.muted} strokeWidth={2} />
+        </View>
+        <View style={styles.rowContent}>
+          <HighlightedText
+            text={venue.name}
+            query={query}
+            style={[styles.rowTitle, { color: colors.ink }]}
+          />
+          <Text style={[styles.rowSubtitle, { color: colors.muted }]} numberOfLines={1}>
+            {venue.city ?? 'Location unknown'} · Not in your log
+          </Text>
+        </View>
+        <ChevronRight size={18} color={colors.faint} strokeWidth={2} />
+      </Pressable>
+    </Link>
+  );
+}
+
+/** Accent follow affordance shared by the discoverable rows. */
+function FollowPill({
+  followed,
+  pending,
+}: {
+  followed: boolean;
+  pending: boolean;
+}): React.JSX.Element {
+  const { tokens } = useTheme();
+  const { colors } = tokens;
+  if (pending) {
+    return (
+      <View style={[styles.followPill, { borderColor: colors.rule }]}>
+        <ActivityIndicator size="small" color={colors.muted} />
+      </View>
+    );
+  }
+  if (followed) {
+    return (
+      <View style={[styles.followPill, { borderColor: colors.rule }]}>
+        <Check size={12} color={colors.muted} strokeWidth={2.5} />
+        <Text style={[styles.followPillLabel, { color: colors.muted }]}>Following</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={[styles.followPill, { borderColor: colors.accent }]}>
+      <Plus size={12} color={colors.accent} strokeWidth={2.5} />
+      <Text style={[styles.followPillLabel, { color: colors.accent }]}>Follow</Text>
+    </View>
+  );
+}
+
 function HighlightedText({
   text,
   query,
@@ -519,6 +787,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  discoverRow: {
+    // Dashed outline + no fill so a not-yet-followed result reads as an
+    // "add" affordance, visually distinct from the solid log-result rows.
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
+  followPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    minHeight: 28,
+    borderRadius: RADII.pill,
+    borderWidth: 1,
+  },
+  followPillLabel: {
+    fontFamily: 'Geist Sans 600',
+    fontSize: 11,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   rowBadgeRow: {
     flexDirection: 'row',

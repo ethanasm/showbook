@@ -97,6 +97,96 @@ export function futureShowToFormParams(show: FutureShow): Record<string, string>
   return params;
 }
 
+/**
+ * A not-yet-followed artist surfaced from Ticketmaster — the "Artists to
+ * follow" section. Mirrors the `discover.searchArtists` tRPC payload (the
+ * same query the Discover follow-artist sheet uses). `id` is the
+ * Ticketmaster attraction id, so following resolves it into a local
+ * performer via `performers.followAttraction`.
+ */
+export interface DiscoverArtist {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+  mbid: string | null;
+}
+
+/**
+ * A not-yet-followed venue surfaced from the catalog — the "Venues to
+ * follow" section. Mirrors the fields the `venues.search` tRPC payload
+ * exposes that this screen displays (the same query the Discover
+ * follow-venue sheet uses). `id` is a local venue id, so the row links
+ * straight into the venue detail screen.
+ */
+export interface DiscoverVenue {
+  id: string;
+  name: string;
+  city: string | null;
+}
+
+/** Lowercased, whitespace-collapsed key for artist-name de-duplication. */
+function nameKey(name: string): string {
+  return name.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/**
+ * Reduce the raw `discover.searchArtists` payload to the artists worth
+ * showing in the "Artists to follow" section:
+ *   - drop any whose name already appears in the user's own (logged)
+ *     artist results — those are surfaced in the "Artists" section and
+ *     re-listing them as "to follow" reads as clutter;
+ *   - drop intra-list duplicate names (Ticketmaster can return the same
+ *     act under multiple attraction ids);
+ *   - cap at `limit` so the discoverable rows stay a short tail under the
+ *     log results rather than dominating the panel.
+ *
+ * Server order is preserved (Ticketmaster relevance ranking).
+ */
+export function dedupeDiscoverArtists(
+  discover: DiscoverArtist[] | null | undefined,
+  owned: SearchPerformer[] | null | undefined,
+  limit = 6,
+): DiscoverArtist[] {
+  const seen = new Set<string>((owned ?? []).map((p) => nameKey(p.name)));
+  const out: DiscoverArtist[] = [];
+  for (const a of discover ?? []) {
+    const key = nameKey(a.name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(a);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/**
+ * Reduce the raw `venues.search` payload to the venues worth showing in
+ * the "Venues to follow" section:
+ *   - drop any whose id already appears in the user's own venue results
+ *     (venues they have shows at or already follow — `search.global`
+ *     covers both), so a followed/visited venue never re-lists as "to
+ *     follow";
+ *   - drop intra-list duplicate ids defensively;
+ *   - cap at `limit`.
+ *
+ * Server order is preserved.
+ */
+export function dedupeDiscoverVenues(
+  discover: DiscoverVenue[] | null | undefined,
+  owned: SearchVenue[] | null | undefined,
+  limit = 6,
+): DiscoverVenue[] {
+  const seen = new Set<string>((owned ?? []).map((v) => v.id));
+  const out: DiscoverVenue[] = [];
+  for (const v of discover ?? []) {
+    if (seen.has(v.id)) continue;
+    seen.add(v.id);
+    out.push(v);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 export type SearchEntityType = 'shows' | 'artists' | 'venues';
 
 export interface SearchGroup<T> {

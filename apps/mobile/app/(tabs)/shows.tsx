@@ -49,6 +49,7 @@ import { RADII } from '@/lib/theme-utils';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { TopBar } from '../../components/TopBar';
 import { MeTopBarAction } from '../../components/MeTopBarAction';
+import { SearchTopBarAction } from '../../components/SearchTopBarAction';
 import { KindFilterControl } from '../../components/KindFilterControl';
 import { kindFilterNoun, type KindFilterValue } from '../../components/KindFilterMenu';
 import { SegmentedControl } from '../../components/SegmentedControl';
@@ -404,6 +405,7 @@ function ShowsListPane(): React.JSX.Element {
               onChange={setKindFilter}
               testIDPrefix="shows"
             />
+            <SearchTopBarAction />
             <MeTopBarAction />
           </View>
         }

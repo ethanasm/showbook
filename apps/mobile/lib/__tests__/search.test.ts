@@ -11,12 +11,18 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  dedupeDiscoverArtists,
+  dedupeDiscoverVenues,
   extractHighlight,
   futureShowToFormParams,
   groupResults,
   isEmptyQuery,
+  type DiscoverArtist,
+  type DiscoverVenue,
   type FutureShow,
   type RawGlobalResults,
+  type SearchPerformer,
+  type SearchVenue,
 } from '../search';
 
 describe('isEmptyQuery', () => {
@@ -104,6 +110,92 @@ describe('groupResults', () => {
     assert.equal(grouped.shows.type, 'shows');
     assert.equal(grouped.artists.type, 'artists');
     assert.equal(grouped.venues.type, 'venues');
+  });
+});
+
+describe('dedupeDiscoverArtists', () => {
+  const a = (id: string, name: string): DiscoverArtist => ({
+    id,
+    name,
+    imageUrl: null,
+    mbid: null,
+  });
+  const owned = (name: string): SearchPerformer => ({
+    id: `owned-${name}`,
+    name,
+    imageUrl: null,
+    showCount: 1,
+  });
+
+  it('returns [] for null / undefined input', () => {
+    assert.deepEqual(dedupeDiscoverArtists(null, null), []);
+    assert.deepEqual(dedupeDiscoverArtists(undefined, undefined), []);
+  });
+
+  it('drops artists already present in the owned (logged) results, case/space-insensitively', () => {
+    const out = dedupeDiscoverArtists(
+      [a('t1', 'Bleachers'), a('t2', '  the   national '), a('t3', 'Phoenix')],
+      [owned('bleachers'), owned('The National')],
+    );
+    assert.deepEqual(
+      out.map((x) => x.id),
+      ['t3'],
+    );
+  });
+
+  it('drops intra-list duplicate names, keeping the first (server order)', () => {
+    const out = dedupeDiscoverArtists(
+      [a('t1', 'Phoenix'), a('t2', 'phoenix'), a('t3', 'Muna')],
+      [],
+    );
+    assert.deepEqual(
+      out.map((x) => x.id),
+      ['t1', 't3'],
+    );
+  });
+
+  it('caps at the limit', () => {
+    const many = Array.from({ length: 10 }, (_, i) => a(`t${i}`, `Act ${i}`));
+    assert.equal(dedupeDiscoverArtists(many, [], 6).length, 6);
+    assert.equal(dedupeDiscoverArtists(many, [], 2).length, 2);
+  });
+});
+
+describe('dedupeDiscoverVenues', () => {
+  const v = (id: string, name: string): DiscoverVenue => ({ id, name, city: null });
+  const owned = (id: string): SearchVenue => ({
+    id,
+    name: `Owned ${id}`,
+    city: null,
+    showCount: 1,
+  });
+
+  it('returns [] for null / undefined input', () => {
+    assert.deepEqual(dedupeDiscoverVenues(null, null), []);
+    assert.deepEqual(dedupeDiscoverVenues(undefined, undefined), []);
+  });
+
+  it('drops venues whose id is already in the owned results', () => {
+    const out = dedupeDiscoverVenues(
+      [v('v1', 'A'), v('v2', 'B'), v('v3', 'C')],
+      [owned('v2')],
+    );
+    assert.deepEqual(
+      out.map((x) => x.id),
+      ['v1', 'v3'],
+    );
+  });
+
+  it('drops intra-list duplicate ids and caps at the limit', () => {
+    const out = dedupeDiscoverVenues(
+      [v('v1', 'A'), v('v1', 'A dup'), v('v2', 'B'), v('v3', 'C'), v('v4', 'D')],
+      [],
+      2,
+    );
+    assert.deepEqual(
+      out.map((x) => x.id),
+      ['v1', 'v2'],
+    );
   });
 });
 
