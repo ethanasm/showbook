@@ -242,7 +242,7 @@ Event-driven (triggered on write, not scheduled):
 ## LLM: Groq
 
 **Text prompts (chat-mode Add, email/PDF extraction, scrapers, digest + health preambles):** `openai/gpt-oss-120b` with `reasoning_effort: 'low'`. Cheaper input/output than `llama-3.3-70b-versatile` ($0.15 / $0.60 vs $0.59 / $0.79 per Mtok) and produces noticeably more specific outputs on the digest/health prompts. `reasoning_effort: 'low'` is required — the default ('medium') burns 4–10× more completion tokens for our JSON-shaped prompts without quality gains.
-**Playbill cast extraction:** `meta-llama/llama-4-scout-17b-16e-instruct` (Llama 4 Scout) reads photos, extracts cast. Native multimodal — better quality than the older preview models. User confirms before saving.
+**Playbill cast extraction:** `meta-llama/llama-4-maverick-17b-128e-instruct` (Llama 4 Maverick) reads photos, extracts cast. Native multimodal — better quality than the older preview models. User confirms before saving. (Migrated off Llama 4 Scout, which Groq decommissioned 2026-07-17; Groq's suggested text-only replacements can't read images, so we moved to Scout's multimodal sibling.)
 
 ```typescript
 import Groq from 'groq-sdk';
