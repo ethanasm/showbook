@@ -1,9 +1,12 @@
 /**
- * SearchBar — pinned, controlled text-search input.
+ * SearchBar — pinned, controlled local-filter input.
  *
- * Used at the top of the Shows and Discover tabs (below the segmented
- * controls, above the scrolling feed) to filter the list in place by
- * headliner / cast / venue / show name / festival name. Purely
+ * The single shared in-place filter affordance, used by the Shows and
+ * Discover tabs (below the segmented controls, above the scrolling
+ * feed) and the Venues / Artists list screens (pinned above the list).
+ * It filters the rows already on screen by headliner / cast / venue /
+ * show name / festival name — a *local filter*, not the global
+ * omnisearch (`app/search.tsx` + `SearchTopBarAction`). Purely
  * presentational: the owning screen holds the query state and applies
  * `matchesSearchQuery` from `@showbook/shared`.
  *
@@ -23,11 +26,14 @@ export function SearchBar({
   onChangeText,
   placeholder,
   testID,
+  accessibilityLabel,
 }: {
   value: string;
   onChangeText: (next: string) => void;
   placeholder: string;
   testID?: string;
+  /** Defaults to `placeholder` when omitted. */
+  accessibilityLabel?: string;
 }): React.JSX.Element {
   const { tokens } = useTheme();
   const { colors } = tokens;
@@ -49,7 +55,7 @@ export function SearchBar({
         autoCapitalize="none"
         returnKeyType="search"
         style={[styles.input, { color: colors.ink }]}
-        accessibilityLabel={placeholder}
+        accessibilityLabel={accessibilityLabel ?? placeholder}
         testID={testID}
       />
       {value.length > 0 ? (

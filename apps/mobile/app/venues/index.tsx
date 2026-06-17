@@ -21,7 +21,7 @@ import { ScreenWrapper } from '../../components/ScreenWrapper';
 import { EmptyStateHero } from '../../components/design-system';
 import { EmptyState } from '../../components/EmptyState';
 import { VenueCard, type VenueCardVenue } from '../../components/VenueCard';
-import { ListSearchBar } from '../../components/ListSearchBar';
+import { SearchBar } from '../../components/SearchBar';
 import { RowSkeleton } from '../../components/skeletons';
 import { useThemedRefreshControl } from '../../components/PullToRefresh';
 import { useTheme } from '@/lib/theme';
@@ -151,7 +151,7 @@ export default function VenuesListScreen(): React.JSX.Element {
         </View>
       ) : (
         <>
-          <ListSearchBar
+          <SearchBar
             value={query}
             onChangeText={setQuery}
             placeholder="Filter venues…"
