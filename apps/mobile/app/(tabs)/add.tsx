@@ -47,6 +47,7 @@ import {
 } from '@showbook/shared';
 
 import { TopBar } from '../../components/TopBar';
+import { SearchTopBarAction } from '../../components/SearchTopBarAction';
 import { useTheme } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
 import { trpc } from '@/lib/trpc';
@@ -462,14 +463,17 @@ export default function AddChatScreen(): React.JSX.Element {
         eyebrow="LOG · IMPORT · WATCH"
         large
         rightAction={
-          <Pressable
-            onPress={() => router.push('/add/form')}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Open form"
-          >
-            <PenLine size={20} color={colors.muted} strokeWidth={2} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <SearchTopBarAction />
+            <Pressable
+              onPress={() => router.push('/add/form')}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Open form"
+            >
+              <PenLine size={20} color={colors.muted} strokeWidth={2} />
+            </Pressable>
+          </View>
         }
       />
 
@@ -832,6 +836,11 @@ export default function AddChatScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
   scrollPad: {
     paddingHorizontal: 20,
     paddingTop: 24,

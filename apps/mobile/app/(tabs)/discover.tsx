@@ -576,12 +576,15 @@ export default function DiscoverScreen(): React.JSX.Element {
     }
     if (searchQuery.trim() !== '') {
       // Free-text filter across headliner / support / show name /
-      // festival name (`productionName`) / venue.
+      // festival name (`productionName`) / venue name + city. Mirrors
+      // the Shows tab's pinned filter so search behaves identically on
+      // both surfaces.
       result = result.filter((item) =>
         matchesSearchQuery(searchQuery, [
           item.headliner,
           item.productionName,
           item.venue.name,
+          item.venue.city,
           ...(item.support ?? []),
         ]),
       );
@@ -935,7 +938,7 @@ export default function DiscoverScreen(): React.JSX.Element {
         <SearchBar
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Search announcements…"
+          placeholder="Search shows, artists, venues…"
           testID="discover-search-input"
         />
       ) : null}
