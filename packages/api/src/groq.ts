@@ -158,13 +158,14 @@ export async function pingGroq(): Promise<{ models: number }> {
 // completion tokens for our JSON-shaped prompts without quality gains.
 const MODEL_TEXT = 'openai/gpt-oss-120b';
 const TEXT_REASONING_EFFORT = 'low' as const;
-// Vision model: Llama 4 Maverick on Groq. Migrated off Llama 4 Scout
-// (`meta-llama/llama-4-scout-17b-16e-instruct`), which Groq is decommissioning on
-// 2026-07-17. Groq's suggested replacements (gpt-oss-120b / Qwen3 32B) are
-// text-only, so the image paths (playbill cast + festival poster) need a
-// vision-capable model; Maverick is Scout's natively-multimodal sibling and is
-// not affected by the deprecation.
-const MODEL_VISION = 'meta-llama/llama-4-maverick-17b-128e-instruct';
+// Vision model: Llama 4 Scout. Backs the two image paths (playbill cast +
+// festival poster). Scout is deprecated on Groq (decommission 2026-07-17) but
+// still serving until then. NOTE: do NOT swap this to Llama 4 Maverick — Groq
+// already deprecated and removed Maverick (2026-02), so calls 404 and
+// `safeExtractFestivalLineup` silently collapses them to an empty lineup. The
+// durable replacement before 2026-07-17 is the still-supported multimodal
+// `qwen/qwen3.6-27b`, which needs an extraction-quality pass before it lands.
+const MODEL_VISION = 'meta-llama/llama-4-scout-17b-16e-instruct';
 
 function pickContent(result: { choices: Array<{ message: { content: string | null } }> }): string | null {
   return result.choices[0]?.message?.content ?? null;

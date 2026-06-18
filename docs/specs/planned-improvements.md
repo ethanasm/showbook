@@ -119,7 +119,7 @@ playlists.
 
 ### Add a Show Page
 1. ~~We need to redesign this. Use UI/UX best practices. Import from seems logical to be at the top. The date should be near timeframe - the timeframe slector should update automatically between past and watching depending if the date is in the past or future.~~
-2. ~~Playbill photos - what is this for?~~ *(Answered: theatre-only OCR cast extraction. Image goes to Groq's `meta-llama/llama-4-maverick-17b-128e-instruct` vision model, comes back as `{actor, role}` pairs, and auto-populates `show_performers` rows with `role: 'cast'` + `characterName`. Image itself is not stored. Verified by `apps/web/tests/playbill-cast-extract.spec.ts`. The schema's existing unused `shows.photos text[]` column is ready for general photos when that lands.)*
+2. ~~Playbill photos - what is this for?~~ *(Answered: theatre-only OCR cast extraction. Image goes to Groq's `meta-llama/llama-4-scout-17b-16e-instruct` vision model, comes back as `{actor, role}` pairs, and auto-populates `show_performers` rows with `role: 'cast'` + `characterName`. Image itself is not stored. Verified by `apps/web/tests/playbill-cast-extract.spec.ts`. The schema's existing unused `shows.photos text[]` column is ready for general photos when that lands.)*
 3. ~~Remove other headliners field - lineup will handle all performers.~~
 
 ### Discover Page

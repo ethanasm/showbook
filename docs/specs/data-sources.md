@@ -465,12 +465,12 @@ Response:
 
 Parse `choices[0].message.content` as JSON → feed into enrichment pipeline.
 
-**Playbill cast extraction — vision** (model: `meta-llama/llama-4-maverick-17b-128e-instruct`)
+**Playbill cast extraction — vision** (model: `meta-llama/llama-4-scout-17b-16e-instruct`)
 
 Request:
 ```json
 {
-  "model": "meta-llama/llama-4-maverick-17b-128e-instruct",
+  "model": "meta-llama/llama-4-scout-17b-16e-instruct",
   "messages": [
     {
       "role": "user",
