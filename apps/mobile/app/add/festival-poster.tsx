@@ -100,9 +100,12 @@ export default function FestivalPosterScreen(): React.JSX.Element {
 
   const flow = useFestivalLineup({ onSubmit: handleSubmit });
 
-  // Sheet-driven entry: the Add tab's FestivalPosterHowToSheet runs the
-  // picker before navigating here and stashes the result. Consume it on
-  // mount so we land directly in the extracting phase.
+  // Sheet-driven entry (the in-form "Extract lineup" sheets on
+  // /add/form and /show/[id]/edit) runs the picker before navigating
+  // here and stashes the result — consume it on mount so we land
+  // directly in the extracting phase. The Add tab navigates here with
+  // nothing stashed, so it falls through to the idle splash and the
+  // user picks on this screen.
   React.useEffect(() => {
     const pending = consumePendingFestivalPoster();
     if (!pending) return;

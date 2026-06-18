@@ -199,6 +199,11 @@ export function FestivalLineupPicker({ flow }: FestivalLineupPickerProps): React
           }
           onDragEnd={({ data }) => flow.reorder(data)}
           activationDistance={8}
+          // `containerStyle` lands on the library's outer wrapper view,
+          // which has no default flex — without it the wrapper collapses
+          // to zero height inside this flex column and the list renders
+          // blank (the `style` prop only reaches the inner FlatList).
+          containerStyle={styles.list}
           style={styles.list}
           contentContainerStyle={styles.listContent}
           keyboardShouldPersistTaps="handled"
