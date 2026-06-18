@@ -242,7 +242,7 @@ Event-driven (triggered on write, not scheduled):
 ## LLM: Groq
 
 **Text prompts (chat-mode Add, email/PDF extraction, scrapers, digest + health preambles):** `openai/gpt-oss-120b` with `reasoning_effort: 'low'`. Cheaper input/output than `llama-3.3-70b-versatile` ($0.15 / $0.60 vs $0.59 / $0.79 per Mtok) and produces noticeably more specific outputs on the digest/health prompts. `reasoning_effort: 'low'` is required — the default ('medium') burns 4–10× more completion tokens for our JSON-shaped prompts without quality gains.
-**Playbill cast extraction:** `meta-llama/llama-4-maverick-17b-128e-instruct` (Llama 4 Maverick) reads photos, extracts cast. Native multimodal — better quality than the older preview models. User confirms before saving. (Migrated off Llama 4 Scout, which Groq decommissioned 2026-07-17; Groq's suggested text-only replacements can't read images, so we moved to Scout's multimodal sibling.)
+**Playbill cast extraction (and festival-poster lineup):** `qwen/qwen3.6-27b` (vision-capable Qwen3.6 27B) reads photos, extracts cast / lineup. Native multimodal, accepts the OpenAI-style image_url data-URL shape + `response_format: json_object`. User confirms before saving. (Migrated off Llama 4 Scout, which Groq deprecated 2026-06-17 / decommissions 2026-07-17. An interim hop to Llama 4 Maverick failed — Groq had already removed it from the catalog, so every vision call 404'd and, because both image callers swallow Groq errors into an empty result, the breakage surfaced only as a user report. Groq's emailed text replacements (`gpt-oss-120b` / the text-only `qwen/qwen3-32b`) can't read images; `qwen/qwen3.6-27b` is the distinct vision Qwen and the durable replacement.)
 
 ```typescript
 import Groq from 'groq-sdk';
