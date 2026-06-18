@@ -1,6 +1,6 @@
 import Groq from 'groq-sdk';
 import { z } from 'zod';
-import { traceLLM, groqUsage } from '@showbook/observability';
+import { traceLLM, groqUsage, child } from '@showbook/observability';
 import {
   LlmCallError,
   LlmEmptyResponseError,
@@ -124,6 +124,8 @@ export interface ExtractedTicketInfo {
 // Client
 // ---------------------------------------------------------------------------
 
+const log = child({ component: 'groq.vision' });
+
 let _groq: Groq | null = null;
 function groq(): Groq {
   if (_groq) return _groq;
@@ -158,14 +160,20 @@ export async function pingGroq(): Promise<{ models: number }> {
 // completion tokens for our JSON-shaped prompts without quality gains.
 const MODEL_TEXT = 'openai/gpt-oss-120b';
 const TEXT_REASONING_EFFORT = 'low' as const;
-// Vision model: Llama 4 Scout. Backs the two image paths (playbill cast +
-// festival poster). Scout is deprecated on Groq (decommission 2026-07-17) but
-// still serving until then. NOTE: do NOT swap this to Llama 4 Maverick — Groq
-// already deprecated and removed Maverick (2026-02), so calls 404 and
-// `safeExtractFestivalLineup` silently collapses them to an empty lineup. The
-// durable replacement before 2026-07-17 is the still-supported multimodal
-// `qwen/qwen3.6-27b`, which needs an extraction-quality pass before it lands.
-const MODEL_VISION = 'meta-llama/llama-4-scout-17b-16e-instruct';
+// Vision model: Qwen3.6 27B on Groq — used by the two image paths (playbill
+// cast extraction + festival-poster lineup). Migrated off Llama 4 Scout
+// (`meta-llama/llama-4-scout-17b-16e-instruct`), which Groq deprecated 2026-06-17
+// and decommissions 2026-07-17. The first migration target, Llama 4 Maverick,
+// was already removed from Groq's catalog — every vision call 404'd and, because
+// both image callers swallow Groq errors into an empty result, the breakage
+// surfaced only as a user report ("no artists found"), not an exception. Groq's
+// emailed text replacements (gpt-oss-120b / "Qwen3 32B" = `qwen/qwen3-32b`) are
+// text-only; `qwen/qwen3.6-27b` is the distinct vision-capable Qwen and is the
+// durable multimodal model still supported. It accepts the same OpenAI-style
+// image_url data-URL message shape and `response_format: json_object` (verified
+// against real posters + a playbill before this migration landed).
+const MODEL_VISION = 'qwen/qwen3.6-27b';
+
 
 function pickContent(result: { choices: Array<{ message: { content: string | null } }> }): string | null {
   return result.choices[0]?.message?.content ?? null;
@@ -447,7 +455,17 @@ export async function extractCast(
     // Soft-fail only on schema-validation drift (e.g. a playbill page
     // with no recognizable cast block). Empty response / JSON parse
     // failure still propagates so the caller can show a real error.
-    if (err instanceof LlmValidationError) return [];
+    if (err instanceof LlmValidationError) {
+      // Log the swallowed failure — returning [] is indistinguishable
+      // from "no cast on this page" to the caller, so without this a
+      // model regression (the Maverick 404 that prompted this migration)
+      // looks like an empty playbill rather than a broken model.
+      log.warn(
+        { event: 'playbill.cast.extract.llm_failed', model: MODEL_VISION, err },
+        'extractCast soft-failed; returning empty cast',
+      );
+      return [];
+    }
     throw err;
   }
 }
@@ -785,6 +803,8 @@ function toFestivalLineup(
  * pick artists by hand.
  */
 function safeExtractFestivalLineup(
+  source: 'image' | 'pdf',
+  model: string,
   run: () => Promise<z.infer<typeof festivalLineupSchema>>,
 ): Promise<FestivalLineup> {
   return run().then(toFestivalLineup).catch((err) => {
@@ -794,6 +814,15 @@ function safeExtractFestivalLineup(
       err instanceof LlmParseError ||
       err instanceof LlmValidationError
     ) {
+      // Log the swallowed failure before collapsing to an empty lineup.
+      // The empty result is indistinguishable from "poster had no
+      // artists" to the caller, so a model regression (the Maverick 404
+      // that prompted this migration) surfaced only as a user report.
+      // A warn here makes the next dead-model case greppable in Axiom.
+      log.warn(
+        { event: 'festival.lineup.extract.llm_failed', source, model, err },
+        'festival lineup extraction soft-failed; returning empty lineup',
+      );
       return EMPTY_FESTIVAL_LINEUP;
     }
     throw err;
@@ -818,7 +847,7 @@ export async function extractFestivalLineupFromImage(
     },
   ];
 
-  return safeExtractFestivalLineup(() =>
+  return safeExtractFestivalLineup('image', MODEL_VISION, () =>
     withLlmRetry({
       name: 'groq.extractFestivalLineup',
       model: MODEL_VISION,
@@ -852,7 +881,7 @@ export async function extractFestivalLineupFromPdfText(
     { role: 'user' as const, content: pdfText.slice(0, 12000) },
   ];
 
-  return safeExtractFestivalLineup(() =>
+  return safeExtractFestivalLineup('pdf', MODEL_TEXT, () =>
     withLlmRetry({
       name: 'groq.extractFestivalLineup',
       model: MODEL_TEXT,
