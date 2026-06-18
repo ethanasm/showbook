@@ -56,7 +56,6 @@ import { toUserMessage } from '@/lib/errors';
 import { runOptimisticMutation } from '@/lib/mutations';
 import { getCacheOutbox } from '@/lib/cache';
 import { WalletShareHowToSheet } from '../../components/WalletShareHowToSheet';
-import { FestivalPosterHowToSheet } from '../../components/FestivalPosterHowToSheet';
 import {
   appendRecent,
   isConversationKind,
@@ -90,7 +89,6 @@ export default function AddChatScreen(): React.JSX.Element {
 
   const [text, setText] = React.useState('');
   const [walletSheetOpen, setWalletSheetOpen] = React.useState(false);
-  const [festivalSheetOpen, setFestivalSheetOpen] = React.useState(false);
   const parse = trpc.enrichment.parseChat.useMutation();
 
   // ---------------------------------------------------------------------------
@@ -719,12 +717,11 @@ export default function AddChatScreen(): React.JSX.Element {
             <ArrowRight size={16} color={colors.faint} strokeWidth={2} />
           </Pressable>
 
-          {/* Festival poster door — opens a how-to sheet that runs the
-              picker inline (mirrors the Apple Wallet door). On a successful
-              pick the sheet stashes the image via posterHandoff and pushes
-              to /add/festival-poster, which jumps straight to extracting. */}
+          {/* Festival poster door — navigates straight to the poster
+              screen, which runs the picker inline and jumps to extracting
+              on a successful pick. No intermediate how-to sheet. */}
           <Pressable
-            onPress={() => setFestivalSheetOpen(true)}
+            onPress={() => router.push('/add/festival-poster')}
             accessibilityRole="button"
             accessibilityLabel="Upload a festival poster"
             testID="add-festival-poster"
@@ -826,10 +823,6 @@ export default function AddChatScreen(): React.JSX.Element {
       <WalletShareHowToSheet
         open={walletSheetOpen}
         onClose={() => setWalletSheetOpen(false)}
-      />
-      <FestivalPosterHowToSheet
-        open={festivalSheetOpen}
-        onClose={() => setFestivalSheetOpen(false)}
       />
     </View>
   );
