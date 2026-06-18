@@ -174,6 +174,7 @@ const TEXT_REASONING_EFFORT = 'low' as const;
 // against real posters + a playbill before this migration landed).
 const MODEL_VISION = 'qwen/qwen3.6-27b';
 
+
 function pickContent(result: { choices: Array<{ message: { content: string | null } }> }): string | null {
   return result.choices[0]?.message?.content ?? null;
 }
