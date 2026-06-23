@@ -570,3 +570,24 @@ test('priority sort: venue / artist rows surface above region rows', () => {
     ['venue', 'artist', 'region'],
   );
 });
+
+test('carries the announcement id through to the bucketed output', () => {
+  // The digest job persists the bucketed set into `user_digest_entries`
+  // keyed by announcement id, so the id must survive bucketing + dedupe.
+  const result = bucketAnnouncementsForUser(
+    [
+      makeAnnouncement({
+        id: 'announce-123',
+        venueId: 'venue-1',
+        headliner: 'Keep My Id',
+        showDate: '2026-08-01',
+      }),
+    ],
+    new Set(['venue-1']),
+    new Set(),
+    TODAY,
+    SEVEN_OUT,
+  );
+  assert.equal(result.length, 1);
+  assert.equal(result[0]!.announcementId, 'announce-123');
+});

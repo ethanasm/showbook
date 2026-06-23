@@ -47,11 +47,39 @@ function chainUpdate() {
   return proxy;
 }
 
+// A chainable no-op used for the snapshot-persist writes (delete / insert /
+// the in-transaction lastDigestComputedAt update). Deliberately does NOT
+// touch SCRIPT.updateCalls so the existing assertions about the
+// lastDigestSentAt update (which goes through `db.update`) stay meaningful.
+function chainNoop() {
+  const handler: ProxyHandler<object> = {
+    get(_t, prop) {
+      if (prop === 'then') {
+        return (resolve: (v: unknown) => unknown) => Promise.resolve(undefined).then(resolve);
+      }
+      return () => proxy;
+    },
+  };
+  const proxy: object = new Proxy({}, handler);
+  return proxy;
+}
+
+// Transaction proxy: runs the callback with a tx whose writes are no-ops.
+const txProxy = {
+  delete: () => chainNoop(),
+  insert: () => chainNoop(),
+  update: () => chainNoop(),
+};
+
 mock.module('@showbook/db', {
   namedExports: {
     db: {
       select: () => chainSelect(),
       update: () => chainUpdate(),
+      delete: () => chainNoop(),
+      insert: () => chainNoop(),
+      transaction: async (fn: (tx: typeof txProxy) => Promise<unknown>) =>
+        fn(txProxy),
     },
     users: {},
     userPreferences: {},
@@ -63,6 +91,7 @@ mock.module('@showbook/db', {
     userVenueFollows: {},
     userPerformerFollows: {},
     venues: {},
+    userDigestEntries: {},
   },
 });
 
@@ -139,7 +168,8 @@ describe('runDailyDigest', () => {
   it('skips users with no email', async () => {
     reset([
       [], // allRecentAnnouncements
-      [{ userId: 'u1', email: null, displayName: null, lastDigestSentAt: null }], // eligibleUsers
+      [{ userId: 'u1', email: null, displayName: null, emailNotifications: true, lastDigestSentAt: null, lastDigestComputedAt: null }], // allUsers
+      // per-user follow/region reads (snapshot path), all empty
     ]);
     const result = await runDailyDigest();
     assert.equal(result.sent, 0);
@@ -149,12 +179,12 @@ describe('runDailyDigest', () => {
   it('skips users with no shows and no announcements', async () => {
     reset([
       [], // allRecentAnnouncements
-      [{ userId: 'u1', email: 'u1@example.com', displayName: 'U', lastDigestSentAt: null }],
-      [], // todayRows
-      [], // upcomingRows
+      [{ userId: 'u1', email: 'u1@example.com', displayName: 'U', emailNotifications: true, lastDigestSentAt: null, lastDigestComputedAt: null }],
       [], // venueRows
       [], // performerRows
       [], // activeRegionRows
+      [], // todayRows
+      [], // upcomingRows
     ]);
     const result = await runDailyDigest();
     assert.equal(result.skipped, 1);
@@ -171,7 +201,10 @@ describe('runDailyDigest', () => {
 
     reset([
       [], // allRecentAnnouncements
-      [{ userId: 'u1', email: 'u1@example.com', displayName: 'U', lastDigestSentAt: null }],
+      [{ userId: 'u1', email: 'u1@example.com', displayName: 'U', emailNotifications: true, lastDigestSentAt: null, lastDigestComputedAt: null }],
+      [], // venueRows
+      [], // performerRows
+      [], // activeRegionRows
       [], // todayRows (none today) — getHeadlinersForShows returns early
       [
         { id: 's1', date: tomorrowStr, venueName: 'Greek' },
@@ -179,13 +212,12 @@ describe('runDailyDigest', () => {
       // getHeadlinersForShows: showRows then performerRows
       [{ id: 's1', kind: 'concert', productionName: null }], // showRows
       [{ showId: 's1', name: 'Phoebe' }], // performerRows
-      [], // venueRows
-      [], // performerRows
-      [], // activeRegionRows
     ]);
 
     const result = await runDailyDigest({ resend: fakeResend });
     assert.equal(result.sent, 1);
+    // Only the lastDigestSentAt update goes through db.update; the snapshot's
+    // lastDigestComputedAt update runs inside the (no-op) transaction.
     assert.equal(SCRIPT.updateCalls, 1);
     assert.equal(resendMock.calls.length, 1);
     // Locks in the Week-3+4 idempotency fix: the per-user key must
@@ -208,7 +240,10 @@ describe('runDailyDigest', () => {
 
     reset([
       [], // allRecentAnnouncements
-      [{ userId: 'u1', email: 'u1@example.com', displayName: 'U', lastDigestSentAt: null }],
+      [{ userId: 'u1', email: 'u1@example.com', displayName: 'U', emailNotifications: true, lastDigestSentAt: null, lastDigestComputedAt: null }],
+      [], // venueRows
+      [], // performerRows
+      [], // activeRegionRows
       [
         { id: 's1', venueName: 'Greek', seat: 'GA' },
       ], // todayRows
@@ -216,9 +251,6 @@ describe('runDailyDigest', () => {
       [{ id: 's1', kind: 'concert', productionName: null }],
       [{ showId: 's1', name: 'Phoebe' }],
       [], // upcomingRows
-      [], // venueRows
-      [], // performerRows
-      [], // activeRegionRows
     ]);
 
     const result = await runDailyDigest();
@@ -237,13 +269,14 @@ describe('runDailyDigest', () => {
 
     reset([
       [], // allRecentAnnouncements
-      [{ userId: 'u1', email: 'u1@example.com', displayName: 'U', lastDigestSentAt: null }],
+      [{ userId: 'u1', email: 'u1@example.com', displayName: 'U', emailNotifications: true, lastDigestSentAt: null, lastDigestComputedAt: null }],
+      [], // venueRows
+      [], // performerRows
+      [], // activeRegionRows
       [], // todayRows
       [{ id: 's1', date: tomorrowStr, venueName: 'V' }], // upcomingRows
       [{ id: 's1', kind: 'theatre', productionName: 'Hamilton' }], // showRows: theatre w/ production
       // No performerRows query because nonTheatreIds is empty
-      [], // venueRows
-      [], // performerRows
     ]);
 
     const result = await runDailyDigest({ resend: fakeResend });
@@ -263,19 +296,22 @@ describe('runDailyDigest', () => {
 
     reset([
       [], // allRecentAnnouncements
-      [{ userId: 'u1', email: 'u1@example.com', displayName: 'U', lastDigestSentAt: null }],
+      [{ userId: 'u1', email: 'u1@example.com', displayName: 'U', emailNotifications: true, lastDigestSentAt: null, lastDigestComputedAt: null }],
+      [], // venueRows
+      [], // performerRows
+      [], // activeRegionRows
       [], // todayRows
       [{ id: 's1', date: tomorrowStr, venueName: 'Greek' }], // upcomingRows
       [{ id: 's1', kind: 'concert', productionName: null }], // showRows
       [{ showId: 's1', name: 'Phoebe' }], // performerRows
-      [], // venueRows
-      [], // performerRows
     ]);
 
     const result = await runDailyDigest({ resend: fakeResend });
     assert.equal(result.sent, 0);
     assert.equal(result.skipped, 1);
     assert.equal(resendMock.calls.length, 1);
+    // Resend rejected the send → lastDigestSentAt is NOT stamped (the only
+    // db.update path); the snapshot's computed-at update is a no-op here.
     assert.equal(SCRIPT.updateCalls, 0);
   });
 
@@ -289,11 +325,11 @@ describe('runDailyDigest', () => {
     reset([
       [], // allRecentAnnouncements
       [
-        { userId: 'u1', email: 'u1@example.com', displayName: 'U', lastDigestSentAt: null },
-        { userId: 'u2', email: 'u2@example.com', displayName: 'U2', lastDigestSentAt: null },
+        { userId: 'u1', email: 'u1@example.com', displayName: 'U', emailNotifications: true, lastDigestSentAt: null, lastDigestComputedAt: null },
+        { userId: 'u2', email: 'u2@example.com', displayName: 'U2', emailNotifications: true, lastDigestSentAt: null, lastDigestComputedAt: null },
       ],
-      [], [], [], [], // u1
-      [], [], [], [], // u2
+      [], [], [], [], [], // u1: venue/perf/region/today/upcoming
+      [], [], [], [], [], // u2
     ]);
     const result = await runDailyDigest();
     assert.equal(result.skipped, 2);

@@ -44,6 +44,9 @@ export type Announcement = {
     city: string;
   };
   reason?: string;
+  // Set on rows from the "New for you" (digest) feed: the show's on-sale date
+  // falls within the next week. Drives the on-sale badge on the digest tab.
+  onSaleSoon?: boolean;
   regionId?: string | null;
   regionCityName?: string | null;
   regionRadiusMiles?: number | null;

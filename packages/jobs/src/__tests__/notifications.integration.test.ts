@@ -24,6 +24,7 @@ import {
   announcements,
   userVenueFollows,
   userPerformerFollows,
+  userDigestEntries,
   sql,
 } from '@showbook/db';
 import { like, eq } from 'drizzle-orm';
@@ -72,6 +73,7 @@ async function cleanup(): Promise<void> {
   // (now-orphaned) venue.
   await db.execute(sql`DELETE FROM show_announcement_links WHERE show_id::text LIKE ${p} OR announcement_id::text LIKE ${p}`);
   await db.execute(sql`DELETE FROM show_performers WHERE show_id::text LIKE ${p}`);
+  await db.delete(userDigestEntries).where(like(userDigestEntries.userId, p));
   await db.delete(userVenueFollows).where(like(userVenueFollows.userId, p));
   await db.delete(userPerformerFollows).where(like(userPerformerFollows.userId, p));
   await db.delete(userRegions).where(like(userRegions.userId, p));
@@ -303,6 +305,27 @@ async function seed(): Promise<void> {
     .where(eq(userPreferences.userId, USER_WITH_ANNOUNCEMENT));
 }
 
+/**
+ * Reset the per-user digest cutoff/idempotency state so each test runs the
+ * digest from a clean window. The job now advances `lastDigestComputedAt`
+ * for every user once it persists their snapshot, so without this a second
+ * same-day `runDailyDigest()` call would see nothing new (correct in prod,
+ * but the suite exercises multiple runs per day). Restores the seed baseline:
+ * the announcement user keeps a 24h-old `lastDigestSentAt` so its old
+ * announcement is excluded; everyone else starts null.
+ */
+async function resetDigestState(): Promise<void> {
+  await db.delete(userDigestEntries).where(like(userDigestEntries.userId, `${PREFIX}%`));
+  await db
+    .update(userPreferences)
+    .set({ lastDigestComputedAt: null, lastDigestSentAt: null })
+    .where(like(userPreferences.userId, `${PREFIX}%`));
+  await db
+    .update(userPreferences)
+    .set({ lastDigestSentAt: new Date(Date.now() - 24 * 60 * 60 * 1000) })
+    .where(eq(userPreferences.userId, USER_WITH_ANNOUNCEMENT));
+}
+
 describe('runDailyDigest', () => {
   before(async () => {
     // signUnsubscribeToken (per-user inside the digest loop) requires
@@ -318,9 +341,12 @@ describe('runDailyDigest', () => {
     await cleanup();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Ensure no real Resend key is leaked into the test process by default.
     delete process.env.RESEND_API_KEY;
+    // Each test starts from a clean digest cutoff so a prior test's run
+    // doesn't advance `lastDigestComputedAt` past the new-announcement window.
+    await resetDigestState();
   });
 
   afterEach(() => {
@@ -332,13 +358,10 @@ describe('runDailyDigest', () => {
     const { sent, skipped } = await runDailyDigest();
     // No emails sent because Resend key is absent.
     assert.equal(sent, 0);
-    // Six users are eligible+have-email (USER_NO_EMAIL goes through the
-    // try block then short-circuits because email is null too — the loop
-    // increments `skipped` either way). Three of the eligible users have
-    // content (today / upcoming / announcement) — those are the only
-    // ones the digest would have sent in dry-run, so they're counted as
-    // skipped via the dry_run branch. The remaining ones are skipped via
-    // the "nothing to send" branch. Either way, skipped >= 3.
+    // Every user is now processed for the snapshot, but none send email:
+    // the email-disabled / no-email users skip at the email gate, the
+    // content users skip via the dry_run branch (no Resend key), and the
+    // no-content users skip via "nothing to send". Either way, skipped ≥ 3.
     assert.ok(skipped >= 3, `expected skipped ≥ 3 but got ${skipped}`);
   });
 
@@ -391,9 +414,9 @@ describe('runDailyDigest', () => {
   });
 
   it('idempotency: a second run on the same ET day skips users already sent', async () => {
-    // The previous test ("Resend success path") populated lastDigestSentAt
-    // for every eligible user with content. A pg-boss retry — modelled here
-    // by simply running the digest a second time — must not double-send.
+    // A pg-boss retry — modelled here by running the digest twice in one ET
+    // day — must not double-send. The first run sends + marks lastDigestSentAt;
+    // the second must make zero Resend calls.
     process.env.RESEND_API_KEY = 're_test_key_idem';
 
     const originalFetch = globalThis.fetch;
@@ -402,7 +425,7 @@ describe('runDailyDigest', () => {
       const url = typeof input === 'string' ? input : input.toString();
       if (url.includes('resend')) {
         resendCalls++;
-        return new Response(JSON.stringify({ id: 'should-not-be-called' }), {
+        return new Response(JSON.stringify({ id: 'sent-email-id' }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -411,13 +434,18 @@ describe('runDailyDigest', () => {
     }) as typeof fetch;
 
     try {
-      const { sent } = await runDailyDigest();
+      const first = await runDailyDigest();
+      assert.ok(first.sent >= 3, `first run should send (got ${first.sent})`);
+      const firstCalls = resendCalls;
+      assert.ok(firstCalls >= 3, 'first run should hit Resend');
+
+      const second = await runDailyDigest();
       assert.equal(
-        resendCalls,
+        resendCalls - firstCalls,
         0,
-        'no Resend calls expected on a same-day re-run',
+        'no new Resend calls expected on a same-day re-run',
       );
-      assert.equal(sent, 0, 'no users marked sent on retry');
+      assert.equal(second.sent, 0, 'no users marked sent on retry');
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -448,13 +476,182 @@ describe('runDailyDigest', () => {
     }
   });
 
-  it('user with email_notifications=false is excluded from the eligible-users query', async () => {
-    // Sanity: the disabled user should never receive an update to lastDigestSentAt
-    // even on the success path. Verify here.
-    const [pref] = await db
-      .select({ ts: userPreferences.lastDigestSentAt })
-      .from(userPreferences)
-      .where(eq(userPreferences.userId, USER_DISABLED));
-    assert.equal(pref?.ts, null);
+  it('email_notifications=false: snapshot is still persisted but no email is sent', async () => {
+    // Headline decoupling: the email preference gates ONLY the email. The
+    // disabled user follows VENUE_B (seeded below as a fresh follow) so they
+    // have new announcements; after a run they get a `user_digest_entries`
+    // snapshot and `lastDigestComputedAt`, but never `lastDigestSentAt`.
+    await db
+      .insert(userVenueFollows)
+      .values({ userId: USER_DISABLED, venueId: VENUE_B })
+      .onConflictDoNothing();
+
+    process.env.RESEND_API_KEY = 're_test_key_disabled';
+    const originalFetch = globalThis.fetch;
+    let resendCalls = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('resend')) {
+        resendCalls++;
+        return new Response(JSON.stringify({ id: 'x' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return originalFetch(input as RequestInfo | URL);
+    }) as typeof fetch;
+
+    try {
+      await runDailyDigest();
+
+      const entries = await db
+        .select({ id: userDigestEntries.announcementId })
+        .from(userDigestEntries)
+        .where(eq(userDigestEntries.userId, USER_DISABLED));
+      assert.ok(
+        entries.length >= 1,
+        'disabled user should still get a snapshot',
+      );
+
+      const [pref] = await db
+        .select({
+          sent: userPreferences.lastDigestSentAt,
+          computed: userPreferences.lastDigestComputedAt,
+        })
+        .from(userPreferences)
+        .where(eq(userPreferences.userId, USER_DISABLED));
+      assert.equal(pref?.sent, null, 'disabled user never gets an email');
+      assert.ok(
+        pref?.computed,
+        'disabled user should have lastDigestComputedAt advanced',
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      await db
+        .delete(userVenueFollows)
+        .where(eq(userVenueFollows.userId, USER_DISABLED));
+    }
+  });
+
+  it('snapshot persists entries with reason + ascending position for followers', async () => {
+    await runDailyDigest(); // dry-run is fine; snapshot is email-independent
+
+    const rows = await db
+      .select({
+        announcementId: userDigestEntries.announcementId,
+        reason: userDigestEntries.reason,
+        position: userDigestEntries.position,
+      })
+      .from(userDigestEntries)
+      .where(eq(userDigestEntries.userId, USER_WITH_ANNOUNCEMENT))
+      .orderBy(userDigestEntries.position);
+
+    assert.ok(rows.length >= 1, 'announcement user should get a snapshot');
+    // Positions are a 0-based dense sequence.
+    rows.forEach((r, i) => assert.equal(r.position, i));
+    // The followed-venue announcement is present with reason 'venue'.
+    assert.ok(
+      rows.some((r) => r.announcementId === ANN_NEW_VENUE && r.reason === 'venue'),
+    );
+  });
+
+  it('snapshot is replaced (not appended) on a fresh run', async () => {
+    await runDailyDigest();
+    const firstIds = (
+      await db
+        .select({ id: userDigestEntries.announcementId })
+        .from(userDigestEntries)
+        .where(eq(userDigestEntries.userId, USER_WITH_ANNOUNCEMENT))
+    )
+      .map((r) => r.id)
+      .sort();
+
+    // resetDigestState (beforeEach analogue) — clear the guard so the next
+    // run recomputes, then run again. The set should be identical, not doubled.
+    await resetDigestState();
+    await runDailyDigest();
+    const secondIds = (
+      await db
+        .select({ id: userDigestEntries.announcementId })
+        .from(userDigestEntries)
+        .where(eq(userDigestEntries.userId, USER_WITH_ANNOUNCEMENT))
+    )
+      .map((r) => r.id)
+      .sort();
+
+    assert.deepEqual(secondIds, firstIds, 'replace, not append');
+  });
+
+  it('snapshot is cleared when a follower has no new announcements', async () => {
+    // First run builds a snapshot for the announcement user.
+    await runDailyDigest();
+    const before = await db
+      .select({ id: userDigestEntries.announcementId })
+      .from(userDigestEntries)
+      .where(eq(userDigestEntries.userId, USER_WITH_ANNOUNCEMENT));
+    assert.ok(before.length >= 1);
+
+    // Advance the cutoff to "now" (nothing discovered after this) and clear
+    // the compute guard, then re-run: the snapshot must be emptied.
+    await db.delete(userDigestEntries).where(like(userDigestEntries.userId, `${PREFIX}%`));
+    await db
+      .update(userPreferences)
+      .set({ lastDigestComputedAt: null, lastDigestSentAt: new Date() })
+      .where(eq(userPreferences.userId, USER_WITH_ANNOUNCEMENT));
+    await runDailyDigest();
+
+    const after = await db
+      .select({ id: userDigestEntries.announcementId })
+      .from(userDigestEntries)
+      .where(eq(userDigestEntries.userId, USER_WITH_ANNOUNCEMENT));
+    assert.equal(after.length, 0, 'snapshot cleared when nothing is new');
+  });
+
+  it('retry after snapshot persisted (but email unsent) still ships a non-empty digest', async () => {
+    // Models a hard-kill retry: the user's snapshot was already built this run
+    // (lastDigestComputedAt = today, so the snapshot-persist step is a guarded
+    // no-op) but the email never sent (lastDigestSentAt still in the past). The
+    // email window must anchor on lastDigestSentAt, not the advanced
+    // lastDigestComputedAt — otherwise the retry recomputes an empty window and
+    // USER_WITH_ANNOUNCEMENT (who has new announcements but no today/upcoming
+    // shows) gets skipped instead of emailed.
+    await db
+      .update(userPreferences)
+      .set({
+        lastDigestComputedAt: new Date(),
+        lastDigestSentAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      })
+      .where(eq(userPreferences.userId, USER_WITH_ANNOUNCEMENT));
+
+    process.env.RESEND_API_KEY = 're_test_retry';
+    const originalFetch = globalThis.fetch;
+    const sentHtml: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('resend')) {
+        const body = typeof init?.body === 'string' ? init.body : '';
+        sentHtml.push(body);
+        return new Response(JSON.stringify({ id: 'sent' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return originalFetch(input as RequestInfo | URL);
+    }) as typeof fetch;
+
+    try {
+      const { sent } = await runDailyDigest();
+      assert.ok(sent >= 1, 'a digest should still send on the retry');
+      // The announcement user's email must contain their new announcements,
+      // proving the email window did not collapse to empty.
+      assert.ok(
+        sentHtml.some((html) =>
+          /Fresh Venue Announcement|Fresh Artist Announcement/.test(html),
+        ),
+        'retry email should still include the new announcements',
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

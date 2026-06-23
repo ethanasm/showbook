@@ -4,6 +4,7 @@ import { workerEmail, workerName } from '../_worker';
 import {
   db,
   eq,
+  inArray,
   users,
   venues,
   performers,
@@ -15,6 +16,7 @@ import {
   userPerformerFollows,
   userRegions,
   userPreferences,
+  userDigestEntries,
 } from '@showbook/db';
 import {
   type PerformerSetlistsMap,
@@ -186,6 +188,7 @@ export async function GET(request: Request) {
       await db.delete(showPerformers).where(eq(showPerformers.showId, s.id));
       await db.delete(showAnnouncementLinks).where(eq(showAnnouncementLinks.showId, s.id));
     }
+    await db.delete(userDigestEntries).where(eq(userDigestEntries.userId, user.id));
     await db.delete(userVenueFollows).where(eq(userVenueFollows.userId, user.id));
     // Artist follows leak across tests otherwise (the seed never inserts
     // any, so every test should start with an empty artists follow graph).
@@ -398,6 +401,47 @@ export async function GET(request: Request) {
         ...(irvingPlazaId ? [{ venueId: irvingPlazaId, kind: 'concert' as const, headliner: 'Mitski', showDate: '2026-09-12', runStartDate: '2026-09-12', runEndDate: '2026-09-12', performanceDates: ['2026-09-12'], onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
         ...(comedyCellarId ? [{ venueId: comedyCellarId, kind: 'comedy' as const, headliner: 'Sam Morril', showDate: '2026-08-05', runStartDate: '2026-08-05', runEndDate: '2026-08-05', performanceDates: ['2026-08-05'], onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
       ]);
+    }
+
+    // Seed the "New for you" (digest) tab snapshot for this user. In prod
+    // the daily digest job writes these rows; here we materialize a small
+    // snapshot directly from existing announcements at the user's followed
+    // venues so Playwright can exercise the tab without running the job.
+    // Runs for worker seeds too (they reuse the global seed's shared
+    // announcements) — keyed by (user_id, announcement_id) so it's
+    // idempotent across concurrent worker calls.
+    if (!noFollows) {
+      const followedVenueIds = followVenues
+        .map((name) => venueMap.get(name))
+        .filter((v): v is string => Boolean(v));
+      if (followedVenueIds.length > 0) {
+        const digestAnnouncements = await db
+          .select({ id: announcements.id })
+          .from(announcements)
+          .where(inArray(announcements.venueId, followedVenueIds))
+          .orderBy(announcements.showDate)
+          .limit(6);
+        // Spread the rows across all three reason buckets so the tab renders
+        // every section header ("At venues you follow" / "By artists you
+        // follow" / "Near you"). Reason is just stored data the feed groups
+        // on; the announcements themselves are all at followed venues, which
+        // are guaranteed to exist for both worker and global seeds.
+        const REASONS = ['venue', 'venue', 'venue', 'artist', 'region', 'region'] as const;
+        if (digestAnnouncements.length > 0) {
+          await db
+            .insert(userDigestEntries)
+            .values(
+              digestAnnouncements.map((a, index) => ({
+                userId: user.id,
+                announcementId: a.id,
+                reason: REASONS[index] ?? 'venue',
+                onSaleSoon: index === 0,
+                position: index,
+              })),
+            )
+            .onConflictDoNothing();
+        }
+      }
     }
 
     // Rebuild the song-index for this user's just-inserted shows so

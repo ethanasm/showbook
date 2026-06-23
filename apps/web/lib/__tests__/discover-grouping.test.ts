@@ -10,7 +10,10 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeAnnouncementGroupKeys } from '@/app/(app)/discover/grouping';
+import {
+  computeAnnouncementGroupKeys,
+  groupDigestByReason,
+} from '@/app/(app)/discover/grouping';
 
 const SAM_SHORT = '87630352-b290-46d7-b6b9-9eb2563b440b';
 const TWO_FEET = 'd89c5d1d-c57f-495e-a1a9-15da38ccbd3e';
@@ -85,4 +88,40 @@ test('venue tab: groups by venue id regardless of performers', () => {
 test('region tab: groups by venue id (region buckets are layered later)', () => {
   const keys = computeAnnouncementGroupKeys(twoFeetWithSamSupport, 'region');
   assert.deepEqual(keys, [VENUE]);
+});
+
+// ── "New for you" (digest) tab grouping ──────────────────────────────────
+
+test('digest: orders sections venue → artist → region, omits empties', () => {
+  const sections = groupDigestByReason([
+    { id: 'r1', reason: 'region' },
+    { id: 'v1', reason: 'venue' },
+    { id: 'a1', reason: 'artist' },
+  ]);
+  assert.deepEqual(
+    sections.map((s) => s.reason),
+    ['venue', 'artist', 'region'],
+  );
+});
+
+test('digest: preserves input (position) order within a section', () => {
+  const [venue] = groupDigestByReason([
+    { id: 'v1', reason: 'venue' },
+    { id: 'v2', reason: 'venue' },
+  ]);
+  assert.deepEqual(venue!.items.map((i) => i.id), ['v1', 'v2']);
+});
+
+test('digest: drops rows with missing or unrecognized reason', () => {
+  const sections = groupDigestByReason([
+    { id: 'ok', reason: 'venue' },
+    { id: 'none' },
+    { id: 'weird', reason: 'mystery' },
+  ]);
+  assert.equal(sections.length, 1);
+  assert.deepEqual(sections[0]!.items.map((i) => i.id), ['ok']);
+});
+
+test('digest: empty input yields no sections', () => {
+  assert.deepEqual(groupDigestByReason([]), []);
 });

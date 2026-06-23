@@ -23,3 +23,4 @@ export * from './user-spotify-skipped-artists';
 export * from './show-spotify-playlists';
 export * from './albums';
 export * from './special-event-rules';
+export * from './user-digest-entries';

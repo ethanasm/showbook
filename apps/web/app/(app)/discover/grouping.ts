@@ -40,3 +40,42 @@ export function computeAnnouncementGroupKeys(
   }
   return [...ids];
 }
+
+// ---------------------------------------------------------------------------
+// "New for you" (digest) tab — group by the snapshot reason.
+// ---------------------------------------------------------------------------
+
+export type DigestReason = 'venue' | 'artist' | 'region';
+
+// Section order mirrors the email's section order and the snapshot's bucket
+// priority (venue > artist > region).
+export const DIGEST_REASON_ORDER: DigestReason[] = ['venue', 'artist', 'region'];
+
+export const DIGEST_REASON_HEADERS: Record<DigestReason, string> = {
+  venue: 'At venues you follow',
+  artist: 'By artists you follow',
+  region: 'Near you',
+};
+
+/**
+ * Bucket digest-feed rows into reason sections, preserving the server's
+ * `position` ordering within each section (the input is assumed to already be
+ * in `position` order). Empty sections are omitted. Rows with an unrecognized
+ * reason are dropped (they have no section to live in).
+ */
+export function groupDigestByReason<T extends { reason?: string }>(
+  items: readonly T[],
+): { reason: DigestReason; items: T[] }[] {
+  const buckets = new Map<DigestReason, T[]>();
+  for (const item of items) {
+    const reason = item.reason as DigestReason | undefined;
+    if (!reason || !DIGEST_REASON_HEADERS[reason]) continue;
+    const bucket = buckets.get(reason);
+    if (bucket) bucket.push(item);
+    else buckets.set(reason, [item]);
+  }
+  return DIGEST_REASON_ORDER.filter((r) => buckets.has(r)).map((reason) => ({
+    reason,
+    items: buckets.get(reason)!,
+  }));
+}

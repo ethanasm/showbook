@@ -428,6 +428,13 @@
       "when": 1795968840000,
       "tag": "0060_user_venue_names",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1795968900000,
+      "tag": "0061_user_digest_entries",
+      "breakpoints": true
     }
   ]
 }

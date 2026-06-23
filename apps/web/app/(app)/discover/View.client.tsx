@@ -30,6 +30,7 @@ import {
 } from "./types";
 import { IngestStatusPoller } from "./IngestStatusPoller";
 import { AnnouncementRow } from "./AnnouncementRow";
+import { DigestSection } from "./DigestSection";
 import { VenueChips } from "./VenueChips";
 import { VenueRail } from "./VenueRail";
 import "./discover.css";
@@ -712,6 +713,7 @@ const emptyCtaStyle: React.CSSProperties = {
 };
 
 const TABS = [
+  { key: "Digest", label: "New for you" },
   { key: "Followed", label: "Followed venues" },
   { key: "Artists", label: "Followed artists" },
   { key: "Near You", label: "Followed regions" },
@@ -721,6 +723,7 @@ function tabFromParam(param: string | null): string {
   if (param === "artists") return "Artists";
   if (param === "venues") return "Followed";
   if (param === "regions" || param === "near-you") return "Near You";
+  if (param === "digest" || param === "new") return "Digest";
   return "Followed";
 }
 
@@ -785,6 +788,11 @@ export default function DiscoverView() {
     {},
     { staleTime: 60_000 }
   );
+
+  // "New for you" tab — the persisted daily-digest snapshot.
+  const digestFeed = trpc.discover.digestFeed.useQuery(undefined, {
+    staleTime: 60_000,
+  });
 
   const handleIngestUpdate = useCallback(
     (pending: PendingIngestSnapshot) => {
@@ -900,6 +908,7 @@ export default function DiscoverView() {
   const artistItemsRaw = followedArtistsFeed.data?.items as
     | Announcement[]
     | undefined;
+  const digestItemsRaw = digestFeed.data?.items as Announcement[] | undefined;
 
   // Pinned search bar: free-text filter across headliner / support /
   // show name / festival name / venue. Festival names live in
@@ -932,12 +941,18 @@ export default function DiscoverView() {
     () => filterBySearch(artistItemsRaw),
     [filterBySearch, artistItemsRaw],
   );
+  const digestItems = useMemo(
+    () => filterBySearch(digestItemsRaw),
+    [filterBySearch, digestItemsRaw],
+  );
   const currentItems =
-    activeTab === "Followed"
-      ? followedItems
-      : activeTab === "Artists"
-        ? artistItems
-        : nearbyItems;
+    activeTab === "Digest"
+      ? digestItems
+      : activeTab === "Followed"
+        ? followedItems
+        : activeTab === "Artists"
+          ? artistItems
+          : nearbyItems;
   const currentCount = currentItems?.length ?? 0;
 
   // Counts for tabs — show number of followed venues/artists, not announcements
@@ -947,7 +962,11 @@ export default function DiscoverView() {
   const followedVenueCount = followedVenuesList.data?.length ?? 0;
   const nearbyCount = activeRegions.length;
   const artistsCount = followedArtistsList.data?.length ?? 0;
+  // The digest tab counts announcements in the snapshot (not followed
+  // targets) — there's no "followed N" concept for it.
+  const digestCount = digestItemsRaw?.length ?? 0;
   const tabCounts: Record<string, number> = {
+    Digest: digestCount,
     Followed: followedVenueCount,
     Artists: artistsCount,
     "Near You": nearbyCount,
@@ -975,7 +994,10 @@ export default function DiscoverView() {
       <header className="discover-header">
         <div>
           <div className="discover-header__subtitle">
-            {currentCount} announcements &middot; weekly Monday digest
+            {currentCount} announcements &middot;{" "}
+            {activeTab === "Digest"
+              ? "your daily digest · refreshes 08:00 ET"
+              : "weekly Monday digest"}
           </div>
           <h1 className="discover-header__title">Discover</h1>
         </div>
@@ -1081,6 +1103,20 @@ export default function DiscoverView() {
       />
 
       {/* Feed sections */}
+      {activeTab === "Digest" && (
+        <DigestSection
+          items={digestItems}
+          isLoading={digestFeed.isLoading}
+          watchedIds={watchedIds}
+          onToggleWatch={handleToggleWatch}
+          emptyMessage={
+            searchQuery.trim() !== ""
+              ? `No announcements match “${searchQuery.trim()}”`
+              : undefined
+          }
+        />
+      )}
+
       {activeTab === "Followed" && (
         <FeedSection
           items={followedItems}

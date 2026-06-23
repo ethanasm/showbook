@@ -65,7 +65,10 @@ import { RemoteImage } from '../../components/design-system/RemoteImage';
 import { TicketmasterMark } from '../../components/BrandIcons';
 import { UpcomingAnnouncementActionSheet } from '../../components/UpcomingAnnouncementActionSheet';
 import { FilterChipsRow, type FilterGroup } from '../../components/FilterChipsRow';
-import { AddToDiscoverSheet } from '../../components/discover/AddToDiscoverSheet';
+import {
+  AddToDiscoverSheet,
+  type AddDiscoverTab,
+} from '../../components/discover/AddToDiscoverSheet';
 import { UnfollowChipSheet } from '../../components/discover/UnfollowChipSheet';
 import { RenameVenueSheet } from '../../components/RenameVenueSheet';
 import { useTheme, type Kind } from '@/lib/theme';
@@ -78,6 +81,10 @@ import { trpc, type RouterOutput } from '@/lib/trpc';
 import { useCachedQuery, getCacheOutbox, invalidateDiscoverFeeds } from '@/lib/cache';
 import { runOptimisticMutation } from '@/lib/mutations';
 import { useIngestPolling } from '@/lib/discover/useIngestPolling';
+import {
+  DIGEST_REASON_HEADERS,
+  groupDigestByReason,
+} from '@/lib/discover/digest-grouping';
 import {
   WATCHED_IDS_CACHE_KEY,
   useToggleWatch,
@@ -97,10 +104,12 @@ type FollowedVenues = RouterOutput<UtilsClient['venues']['followed']['query']>;
 type FollowedPerformers = RouterOutput<UtilsClient['performers']['followed']['query']>;
 type PreferencesPayload = RouterOutput<UtilsClient['preferences']['get']['query']>;
 type WatchedIds = RouterOutput<UtilsClient['discover']['watchedAnnouncementIds']['query']>;
+type DigestFeed = RouterOutput<UtilsClient['discover']['digestFeed']['query']>;
 type AnnouncementItem = FollowedFeed['items'][number];
 type NearbyAnnouncementItem = NearbyFeed['items'][number];
+type DigestAnnouncementItem = DigestFeed['items'][number];
 
-type DiscoverTab = 'venues' | 'artists' | 'regions';
+type DiscoverTab = 'venues' | 'artists' | 'regions' | 'digest';
 
 // Cap rendered rows per feed. The chip row and "N upcoming" summary still
 // reflect the full filtered set; only the AnnouncementRow tree is sliced.
@@ -161,11 +170,23 @@ const ON_SALE_LABEL: Record<AnnouncementItem['onSaleStatus'], string> = {
  * headliner plus any followed support acts); venue / region tabs have one
  * group key per item.
  */
+// The add / unfollow sheets only exist for the follow-backed tabs. The
+// "New for you" tab never opens them, but the JSX fallbacks (`addSheetTab ??
+// tab`) can be typed as `digest`, so coerce to a harmless follow tab.
+function asAddTab(tab: DiscoverTab): AddDiscoverTab {
+  return tab === 'digest' ? 'venues' : tab;
+}
+
 function getGroupKeys(
   item: AnnouncementItem | NearbyAnnouncementItem,
   tab: DiscoverTab,
   followedArtistIds: Set<string> | null,
 ): string[] {
+  // The "New for you" tab has no follow chips — it groups by reason, not by a
+  // followed entity — so it never participates in the chip/group machinery.
+  if (tab === 'digest') {
+    return [];
+  }
   if (tab === 'venues') {
     return item.venue.id ? [item.venue.id] : [];
   }
@@ -332,6 +353,16 @@ export default function DiscoverScreen(): React.JSX.Element {
     refetchInterval: ingestPolling.intervals.nearby,
   });
 
+  // "New for you" tab — the persisted daily-digest snapshot. Read-only and
+  // un-paginated (already capped at 50 by the digest job); no ingest poll
+  // interval since the snapshot only refreshes when the job runs.
+  const digestQuery = useCachedQuery<DigestFeed>({
+    queryKey: ['mobile', 'discover', 'digestFeed'],
+    queryFn: () => utils.client.discover.digestFeed.query(),
+    enabled: Boolean(token),
+    refetchOnMount: 'always',
+  });
+
   // Followed-list queries seed chips with count=0 so a freshly-followed
   // venue / artist / region shows up before its first ingest lands.
   const followedVenuesList = useCachedQuery<FollowedVenues>({
@@ -386,7 +417,9 @@ export default function DiscoverScreen(): React.JSX.Element {
       ? followedVenuesQuery
       : tab === 'artists'
         ? followedArtistsQuery
-        : nearbyQuery;
+        : tab === 'digest'
+          ? digestQuery
+          : nearbyQuery;
 
   // Auto-refresh on focus. Tab screens mount once and stay mounted, so
   // `refetchOnMount: 'always'` only fires on the very first visit — and even
@@ -610,8 +643,12 @@ export default function DiscoverScreen(): React.JSX.Element {
       ? (followedVenuesList.data?.length ?? 0) > 0
       : tab === 'artists'
         ? (followedArtistsList.data?.length ?? 0) > 0
-        : (preferencesQuery.data?.regions?.filter((r) => r.active !== false)
-            .length ?? 0) > 0;
+        : tab === 'digest'
+          ? // No "followed entity" concept — an empty snapshot should fall
+            // through to the EmptyForTab "check back" hero, not the chip rail.
+            false
+          : (preferencesQuery.data?.regions?.filter((r) => r.active !== false)
+              .length ?? 0) > 0;
 
   const showOfflineEmpty = !network.online && !activeQuery.data;
   // `isTabSwitching` joins the loading gate so the urgent render right
@@ -704,6 +741,35 @@ export default function DiscoverScreen(): React.JSX.Element {
       });
       scrollBody = built.nodes;
       stickyHeaderIndices = built.stickyIndices;
+    } else if (tab === 'digest') {
+      // "New for you": group the snapshot rows by reason into labeled
+      // sections (At venues you follow / By artists you follow / Near you),
+      // preserving the server's position order within each. No chips, no
+      // pagination — the snapshot is already capped.
+      scrollBody = (
+        <View style={[styles.list, compact && styles.listCompact]}>
+          {groupDigestByReason(
+            filteredItems as DigestAnnouncementItem[],
+          ).map((section) => (
+            <View key={section.reason}>
+              <Text
+                style={[styles.digestSectionHeader, { color: colors.muted }]}
+              >
+                {DIGEST_REASON_HEADERS[section.reason]}
+              </Text>
+              {section.items.map((item) => (
+                <AnnouncementRow
+                  key={item.id}
+                  item={item}
+                  isWatching={watchedSet.has(item.id)}
+                  onToggleWatch={onToggleWatch}
+                  compact={compact}
+                />
+              ))}
+            </View>
+          ))}
+        </View>
+      );
     } else {
       scrollBody = (
         <>
@@ -927,6 +993,7 @@ export default function DiscoverScreen(): React.JSX.Element {
           value={displayTab}
           onChange={handleTabChange}
           options={[
+            { value: 'digest', label: 'New for you' },
             { value: 'venues', label: 'Venues' },
             { value: 'artists', label: 'Artists' },
             { value: 'regions', label: 'Regions' },
@@ -1069,7 +1136,7 @@ export default function DiscoverScreen(): React.JSX.Element {
       </ScrollView>
     </ScreenWrapper>
     <AddToDiscoverSheet
-      tab={addSheetTab ?? tab}
+      tab={asAddTab(addSheetTab ?? tab)}
       open={addSheetTab !== null}
       onClose={() => setAddSheetTab(null)}
       onAdded={(id) => {
@@ -1085,7 +1152,7 @@ export default function DiscoverScreen(): React.JSX.Element {
     <UnfollowChipSheet
       open={unfollowChip !== null}
       onClose={() => setUnfollowChip(null)}
-      tab={unfollowChip?.tab ?? tab}
+      tab={asAddTab(unfollowChip?.tab ?? tab)}
       name={unfollowChip?.name ?? null}
       canRename={unfollowChip?.canRename ?? false}
       showUnfollow={unfollowChip?.canUnfollow ?? true}
@@ -1292,6 +1359,18 @@ function EmptyForTab({
   hasRegions: boolean | null;
   onOpenAdd: (tab: DiscoverTab) => void;
 }): React.JSX.Element {
+  if (tab === 'digest') {
+    return (
+      <View style={styles.emptyHeroWrap}>
+        <EmptyStateHero
+          kind="discover"
+          title="Nothing new for you yet"
+          body="Your personalized feed refreshes each morning. Check back after the 08:00 ET digest — new shows at the venues, artists, and regions you follow will show up here."
+          action={{ label: 'Follow venues', onPress: () => onOpenAdd('venues') }}
+        />
+      </View>
+    );
+  }
   if (tab === 'venues') {
     return (
       <View style={styles.emptyHeroWrap}>
@@ -1421,7 +1500,9 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
   onToggleWatch,
   compact = false,
 }: {
-  item: AnnouncementItem;
+  // `onSaleSoon` is only present on digest-feed ("New for you") rows; the
+  // other tabs pass plain announcement items where it's absent.
+  item: AnnouncementItem & { onSaleSoon?: boolean };
   isWatching: boolean;
   onToggleWatch: WatchToggle;
   compact?: boolean;
@@ -1733,6 +1814,12 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
             {onSale}
           </Text>
         )}
+
+        {item.onSaleSoon && (
+          <Text style={[styles.onSaleSoon, { color: accent }]} numberOfLines={1}>
+            On sale soon
+          </Text>
+        )}
           </>
         )}
       </View>
@@ -1851,6 +1938,14 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: 16,
     gap: 10,
+  },
+  digestSectionHeader: {
+    fontFamily: 'Geist Mono',
+    fontSize: 11,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginTop: 14,
+    marginBottom: 8,
   },
   inlineEmpty: {
     paddingHorizontal: 20,
@@ -2074,5 +2169,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist Sans 500',
     fontSize: 11.5,
     letterSpacing: 0.3,
+  },
+  onSaleSoon: {
+    fontFamily: 'Geist Mono',
+    fontSize: 9.5,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginTop: 2,
   },
 });

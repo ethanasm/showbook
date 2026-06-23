@@ -83,6 +83,37 @@ sequentially if the change is responsive-sensitive.
 PNGs land in `apps/web/test-results/screenshots/`. Delete
 `apps/web/tests/.pr-screenshots.json` after the run.
 
+**Capture the rendered state, not a loading skeleton (the #1 failure).**
+The shared `pr-screenshots.spec.ts` waits only for `domcontentloaded`, which
+fires *before* client-side tRPC `useQuery` calls resolve. For any route whose
+content is fetched after mount (Discover feeds, the digest "New for you" tab,
+anything with skeletons/spinners), that default capture freezes the **loading
+skeleton** — useless review material. For those routes, stage a one-off spec
+that logs in, navigates, and **blocks on the rendered content** before the
+shot:
+
+```js
+await page.waitForLoadState('networkidle');
+await expect(page.locator('.discover-row').first()).toBeVisible({ timeout: 30_000 });
+await page.waitForTimeout(800); // let layout settle
+await takeScreenshot(page, 'pr-after-<route>');
+```
+
+**Seed the data the surface needs.** A render-wait still captures an *empty
+state* if the fixture user has no rows. Make sure `/api/test/seed` (or the
+worker seed) actually populates what the screen shows — and that it exercises
+every section/variant the change introduces (e.g. the digest tab must have
+venue **and** artist **and** region rows so all three reason headers render,
+not just one). If you can't seed a section, say so in the PR body instead of
+shipping a partial capture.
+
+**Save each capture the instant it's taken.** Playwright wipes
+`test-results/` at the start of every run, so the moment you capture the
+"after", copy it to a separate staging dir (e.g. a scratch folder) before you
+run the "before" pass — otherwise the before-run silently deletes your after,
+and a later "recover from disk" step grabs whatever stale/wrong PNG is lying
+around (this is exactly how a skeleton shot once shipped as the "after").
+
 **Before/after is preferred whenever the change is visual** (spacing,
 sizing, color, copy, layout). One screenshot of the new state forces
 reviewers to imagine the old one — show both side-by-side. Capture
@@ -148,9 +179,21 @@ heading (everything up to the next `##`) when replacing it.
 
 ### 5. Pixel-diff the captures and pick a layout the reader can see
 
-Screenshots are a **quality gate**, not just decoration. After capture
-and before posting, you must verify the change is actually perceptible
-in the form a reviewer will see it. Two failures kill this gate:
+**First, actually look at every PNG you're about to post.** Open each
+capture (Read the file) and confirm it shows the *preferred, fully-rendered*
+state the change is about — the right tab/screen active, the expected
+sections and rows present, real data (not a skeleton, spinner, empty state,
+error, or blank page). A green Playwright run only proves the spec passed; it
+does **not** prove the frame is the one you want. If the image shows a
+skeleton, an empty section, the wrong tab, or a blank page, it is **not**
+shippable — fix the wait/seed/selector and re-capture before doing anything
+else. Posting a capture you didn't visually verify is the most common way
+this skill ships misleading review material.
+
+Then run the pixel-diff below. Screenshots are a **quality gate**, not just
+decoration. After capture and before posting, you must verify the change is
+actually perceptible in the form a reviewer will see it. Two failures kill
+this gate:
 
 - **Sub-pixel deltas.** A 4 px CSS padding change on a 390 px-wide
   full-page mobile screenshot is ~1% of width. GitHub will then
@@ -247,15 +290,38 @@ This is the part reviewers actually see — do it for every mobile
 diff, even when the native workflow is also triggered.
 
 1. Build the bundle at HEAD: `pnpm mobile:web:build` (writes
-   `apps/mobile/dist-web/`).
+   `apps/mobile/dist-web/`). **Then confirm the harness actually
+   renders before trusting any capture: run `pnpm exec playwright
+   test web-tests/smoke.spec.ts`.** The Expo-web build is brittle —
+   after a `main` merge or dep bump it can fail to resolve hoisted
+   transitive deps (e.g. `Cannot find module '@babel/types'` /
+   `@babel/generator` from `babel-preset-expo`), and a half-built /
+   stale `dist-web` makes the static server return 500s so *every*
+   capture comes out blank ("read error", a ~10 KB white PNG, or
+   `getByRole(...)` finding 0 tabs). If smoke fails, rebuild; if the
+   build itself fails on a missing `@babel/*` module, add the missing
+   packages as root dev-deps to unblock the local build
+   (`pnpm add -w -D @babel/types@<v> @babel/generator@<v>
+   @babel/traverse@<v> @babel/parser@<v> @babel/template@<v>`),
+   capture, then **revert `package.json` + `pnpm-lock.yaml`** so the
+   workaround never lands in the PR.
 2. Stage a temporary spec under `apps/mobile/web-tests/` (don't
    commit it; delete after). Copy the patterns from the existing
    specs there: seed the session via `page.addInitScript` writing the
    `secureStore::showbook.auth.*` localStorage keys, mock
    `**/api/trpc/**` with `page.route` fixtures shaped like the
-   procedures the screen calls, navigate to the route
-   (`/(tabs)/<tab>` or a stack route), wait on a stable on-screen
-   assertion, then screenshot. Capture **both** a full-screen shot
+   procedures the screen calls (envelope: `{ result: { data: { json:
+   <payload> } } }`, and handle `batch=1` by splitting the comma-joined
+   procedure list), navigate to the route (`/discover`, `/(tabs)/<tab>`,
+   or a stack route), switch to the relevant tab via
+   `getByRole('button', { name })` (react-native-web renders
+   `SegmentedControl` options as buttons, not plain text), **wait for
+   the rendered rows** (e.g. `getByText('<a seeded headliner>')` or a
+   row testID — `useCachedQuery` screens read an empty SQLite shim on
+   web then fall back to the mocked network, so the list appears a beat
+   after `networkidle`), then screenshot. Mock every section the change
+   shows (e.g. digest rows with `reason: 'venue' | 'artist' | 'region'`
+   so all section headers render). Capture **both** a full-screen shot
    (context) and an element/clip crop of the changed region (the
    thing the pixel-diff gate judges). The harness viewport is 390×844
    @2x, so full-screen PNGs are 780px wide — readable at GitHub's
@@ -298,6 +364,17 @@ the workflow finish and the body update arrive as webhook events.
 
 ## Anti-patterns
 
+- **Posting a capture you never opened.** A passing Playwright run is
+  not a verified screenshot. Always Read the PNG and confirm it shows
+  the rendered, preferred state before uploading — skeletons, empty
+  sections, the wrong tab, and blank pages all "pass" the spec.
+- **Shipping a loading skeleton as the "after".** The default web spec
+  captures at `domcontentloaded`, before client tRPC queries resolve.
+  Wait for the rendered content (a content selector + `networkidle`),
+  and seed the data so the surface isn't empty.
+- **Letting a "before" run delete your "after".** Playwright wipes
+  `test-results/` each run; copy the after PNG to a staging dir the
+  instant it's captured, or you'll recover a stale/wrong file later.
 - **Covering a mobile diff with only the `mobile-visual` label.** The
   native workflow's screenshots land in a CI artifact, not the PR
   body — a reviewer opening the PR sees nothing. A diff that touches
