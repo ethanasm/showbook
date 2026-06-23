@@ -97,7 +97,7 @@ jobs:
       # budget and Gradle got OOM-killed ~16 min into the build.
       GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=1 -Dorg.gradle.parallel=false -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m"'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Diagnose the runner up-front. The previous workflow used to hit
       # the 45-min timeout because nobody knew where the time was going
