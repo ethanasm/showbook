@@ -129,13 +129,23 @@ Note: `DATABASE_URL` is set in `infra/docker-compose.yml` under `environment`, n
 | Port | Service | Project |
 |------|---------|---------|
 | 3000 | web | vacation-price-tracker |
-| **3001** | web | **showbook** |
+| **3001** | web (dev) | **showbook** |
+| **3002** | web (prod) | **showbook** |
+| **3003** | web (Playwright e2e dev server, default) | **showbook** |
+| **3004** | web (mobile e2e backend) | **showbook** |
 | 5432 | postgres | vacation-price-tracker |
-| **5433** | postgres | **showbook** |
+| **5433** | postgres (dev) | **showbook** |
+| **5434** | postgres (prod) | **showbook** |
+| **5435** | postgres (mobile e2e backend) | **showbook** |
 | 6379 | redis | vacation-price-tracker |
 | 7233 | temporal | vacation-price-tracker |
 | 8000 | api | vacation-price-tracker |
 | 8080 | temporal-ui | vacation-price-tracker |
+
+showbook runs three compose stacks (dev / prod / e2e) plus Playwright's
+throwaway e2e dev server — see CLAUDE.md § "Running (dev vs prod vs e2e)"
+for the full breakdown (env files, db names, roles). The Playwright port
+is overridable via `PLAYWRIGHT_PORT`.
 
 ### Workflow
 
