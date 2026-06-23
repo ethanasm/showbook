@@ -596,7 +596,7 @@ export function DailyDigest({
           ) : null}
 
           <Section style={styles.ctaWrap}>
-            <Link href={`${appUrl}/discover`} style={styles.cta}>
+            <Link href={`${appUrl}/discover?tab=digest`} style={styles.cta}>
               Open Showbook
             </Link>
           </Section>

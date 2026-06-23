@@ -16,7 +16,8 @@
  *     discover.nearbyFeed (added 2026-05-19 so the daily-digest
  *     deep-link into /discover renders meaningfully on a cold
  *     offline start instead of dropping straight to
- *     OfflineEmptyState), discover.mapFeed (the map's
+ *     OfflineEmptyState), discover.digestFeed (the "New for you"
+ *     snapshot tab), discover.mapFeed (the map's
  *     "Discoverable" layer).
  *   Phase 2 — per-show fan-out (concurrency-capped):
  *     shows.detail, media.listForShow, setlistIntel.predictedSetlist for
@@ -99,6 +100,7 @@ export interface WarmupClientSurface {
     followedFeed: AnyInputQuery;
     followedArtistsFeed: AnyInputQuery;
     nearbyFeed: AnyInputQuery;
+    digestFeed: AnyInputQuery;
     mapFeed: AnyInputQuery;
     watchedAnnouncementIds: AnyInputQuery;
   };
@@ -445,6 +447,15 @@ export async function warmCacheForOfflineUse(
   await step('discover.nearbyFeed', async () => {
     const data = await c.discover.nearbyFeed.query({ perRegionLimit: 8 });
     seedDiscoverFeed(qc, ['mobile', 'discover', 'nearbyFeed'], data);
+    return data;
+  });
+
+  // The "New for you" snapshot is already small (≤50 rows), so seed it whole
+  // — a daily-digest deep-link into /discover?tab=digest then renders on a
+  // cold offline open instead of dropping to the empty state.
+  await step('discover.digestFeed', async () => {
+    const data = await c.discover.digestFeed.query();
+    seedDiscoverFeed(qc, ['mobile', 'discover', 'digestFeed'], data);
     return data;
   });
 

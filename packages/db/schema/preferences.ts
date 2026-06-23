@@ -24,6 +24,15 @@ export const userPreferences = pgTable('user_preferences', {
   emailNotifications: boolean('email_notifications').default(true),
   pushNotifications: boolean('push_notifications').default(true),
   lastDigestSentAt: timestamp('last_digest_sent_at', { withTimezone: true }),
+  // Snapshot idempotency guard for the Discover "New for you" tab, distinct
+  // from `lastDigestSentAt` (email only). The digest job advances this for
+  // EVERY user (regardless of `emailNotifications`) once it has computed and
+  // persisted their `user_digest_entries` snapshot for the day, so a pg-boss
+  // retry mid-run won't re-delete/re-clear a snapshot that was already built.
+  // It also drives the per-user cutoff (coalesce computed -> sent -> 7d back).
+  lastDigestComputedAt: timestamp('last_digest_computed_at', {
+    withTimezone: true,
+  }),
   setlistSpoilers: setlistSpoilersPrefEnum('setlist_spoilers').default(
     'style_default',
   ),

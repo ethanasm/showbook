@@ -14,6 +14,7 @@ import {
   userRegions,
   venues,
   performers,
+  userDigestEntries,
 } from '@showbook/db';
 import { isNonWatchableKind, KIND_LABELS, regionBbox } from '@showbook/shared';
 import { matchOrCreatePerformer } from '../performer-matcher';
@@ -135,6 +136,75 @@ export const discoverRouter = router({
         nextCursor,
       };
     }),
+
+  /**
+   * The Discover "New for you" tab — the user's daily-digest snapshot.
+   *
+   * Reads the per-user `user_digest_entries` rows (written by the daily digest
+   * job, replace-on-write) joined to the live announcement / venue / performer
+   * rows, ordered by the stored bucket `position` (venue > artist > region,
+   * then date). The inner join on announcements means a pruned announcement
+   * silently drops out. Shape is a superset of `followedFeed` items (so the UI
+   * reuses the same `AnnouncementRow`) plus `reason` + `onSaleSoon` for the
+   * section headers / on-sale badge. No pagination — the snapshot is already
+   * capped at 50 rows by the job.
+   */
+  digestFeed: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+
+    const rows = await db
+      .select({
+        announcement: announcements,
+        venue: venues,
+        headlinerImageUrl: performers.imageUrl,
+        reason: userDigestEntries.reason,
+        onSaleSoon: userDigestEntries.onSaleSoon,
+      })
+      .from(userDigestEntries)
+      .innerJoin(
+        announcements,
+        eq(userDigestEntries.announcementId, announcements.id),
+      )
+      .innerJoin(venues, eq(announcements.venueId, venues.id))
+      .leftJoin(
+        performers,
+        eq(announcements.headlinerPerformerId, performers.id),
+      )
+      .where(
+        and(
+          eq(userDigestEntries.userId, userId),
+          // Keep active multi-night runs whose first night has passed but
+          // whose run is still ongoing; otherwise hide shows that turned past
+          // between digest runs.
+          or(
+            sql`${announcements.showDate} >= CURRENT_DATE`,
+            sql`${announcements.runEndDate} >= CURRENT_DATE`,
+          ),
+        ),
+      )
+      .orderBy(asc(userDigestEntries.position));
+
+    const items = rows.map((r) => ({
+      ...r.announcement,
+      ticketUrl: r.announcement.ticketUrl,
+      headlinerImageUrl: r.headlinerImageUrl ?? null,
+      venue: r.venue,
+      reason: r.reason,
+      onSaleSoon: r.onSaleSoon,
+    }));
+
+    return {
+      items: await applyNestedVenueNameOverrides(
+        db,
+        userId,
+        items,
+        (it) => it.venue,
+      ),
+      // Structural parity with the cursor-paginated feeds so the mobile
+      // `FollowedFeed`-derived types accept this shape.
+      nextCursor: undefined as string | undefined,
+    };
+  }),
 
   /**
    * Feed of announcements headlined by performers the user follows.

@@ -12,8 +12,9 @@ import {
   userVenueFollows,
   userPerformerFollows,
   venues,
+  userDigestEntries,
 } from '@showbook/db';
-import { and, eq, gte, lte, isNotNull, inArray, asc } from 'drizzle-orm';
+import { and, eq, gte, lte, inArray, asc } from 'drizzle-orm';
 import { renderDailyDigest } from '@showbook/emails';
 import {
   generateDigestPreamble,
@@ -228,6 +229,12 @@ export interface AnnouncementInput {
 }
 
 export interface BucketedAnnouncement {
+  /**
+   * Announcement UUID. Carried through so `runDailyDigest` can persist the
+   * bucketed set into `user_digest_entries` (the Discover "New for you" tab
+   * snapshot); the email renderer ignores it.
+   */
+  announcementId: string;
   headliner: string;
   venueName: string;
   whenLabel: string;
@@ -318,6 +325,7 @@ export function bucketAnnouncementsForUser(
       a.onSaleDate <= new Date(sevenDaysOutStr + 'T23:59:59');
 
     matched.push({
+      announcementId: a.id,
       headliner: a.headliner,
       venueName: a.venueName,
       whenLabel: whenLabel(a),
@@ -391,55 +399,203 @@ export async function runDailyDigest(
     .innerJoin(venues, eq(announcements.venueId, venues.id))
     .orderBy(asc(announcements.showDate));
 
-  const eligibleUsers = await db
+  // All users with a preferences row — NOT just email-notification opt-ins.
+  // The per-user "New for you" snapshot is built for everyone (the
+  // `emailNotifications` preference now gates only the email send below), so
+  // the Discover tab stays populated regardless of email settings.
+  const allUsers = await db
     .select({
       userId: userPreferences.userId,
       email: users.email,
       displayName: users.name,
+      emailNotifications: userPreferences.emailNotifications,
       lastDigestSentAt: userPreferences.lastDigestSentAt,
+      lastDigestComputedAt: userPreferences.lastDigestComputedAt,
       // Phase 11 §15o — spoiler-blur preference applied to the
       // PredictedSetlistTile in the "Tonight" section.
       setlistSpoilers: userPreferences.setlistSpoilers,
     })
     .from(userPreferences)
-    .innerJoin(users, eq(userPreferences.userId, users.id))
-    .where(
-      and(
-        eq(userPreferences.emailNotifications, true),
-        isNotNull(users.email),
-      ),
-    );
+    .innerJoin(users, eq(userPreferences.userId, users.id));
 
-  for (const user of eligibleUsers) {
-    if (!user.email) {
-      skipped++;
-      continue;
-    }
-
-    // Idempotency guard: pg-boss retries (retryLimit=3) a failed run, and
-    // the eligibleUsers query has no per-day filter — so without this check
-    // every user already processed before the failure would receive a
-    // duplicate email on retry. Compare lastDigestSentAt's ET calendar
-    // date against todayStr; if they match, today's send already happened.
-    if (
-      user.lastDigestSentAt &&
-      etDateString(user.lastDigestSentAt) === todayStr
-    ) {
-      log.info(
-        {
-          event: 'notifications.digest.already_sent_today',
-          userId: user.userId,
-        },
-        'Skipping user: already received today\'s digest',
-      );
-      skipped++;
-      continue;
-    }
-
+  for (const user of allUsers) {
     try {
+      // Snapshot idempotency: a pg-boss retry must not re-clear a snapshot
+      // that was already built today (the cutoff would have advanced, so the
+      // recompute would find nothing and DELETE a good snapshot). Guard on
+      // `lastDigestComputedAt`, which advances for every user once their
+      // snapshot persists below.
+      const computedToday =
+        user.lastDigestComputedAt != null &&
+        etDateString(user.lastDigestComputedAt) === todayStr;
+
+      // "New since the last snapshot." Falls back to the email marker
+      // (continuity on first deploy / for existing users) then a fixed window
+      // for brand-new users. Read BEFORE the snapshot persist advances
+      // `lastDigestComputedAt`, so the window is correct within this run.
       const cutoff =
+        user.lastDigestComputedAt ??
         user.lastDigestSentAt ??
         new Date(Date.now() - FALLBACK_CUTOFF_DAYS * 24 * 60 * 60 * 1000);
+
+      // ── New announcements bucketed for this user ──────────────────────
+      // Drives BOTH the persisted "New for you" snapshot and the email body.
+      const venueRows = await db
+        .select({ venueId: userVenueFollows.venueId })
+        .from(userVenueFollows)
+        .where(eq(userVenueFollows.userId, user.userId));
+      const performerRows = await db
+        .select({ performerId: userPerformerFollows.performerId })
+        .from(userPerformerFollows)
+        .where(eq(userPerformerFollows.userId, user.userId));
+
+      // Active regions narrow the artist-follow and on-sale buckets to the
+      // user's geographic interests, mirroring the Discover near-you feed.
+      // Zero active regions = filter is a no-op so existing users without
+      // regions keep getting today's global digest.
+      const activeRegionRows = await db
+        .select({
+          latitude: userRegions.latitude,
+          longitude: userRegions.longitude,
+          radiusMiles: userRegions.radiusMiles,
+        })
+        .from(userRegions)
+        .where(
+          and(
+            eq(userRegions.userId, user.userId),
+            eq(userRegions.active, true),
+          ),
+        );
+
+      const followedVenueIds = new Set(venueRows.map((r) => r.venueId));
+      const followedPerformerIds = new Set(
+        performerRows.map((r) => r.performerId),
+      );
+
+      const newSinceCutoffRaw = allRecentAnnouncements.filter(
+        (a) => a.discoveredAt !== null && a.discoveredAt >= cutoff,
+      );
+      // `allRecentAnnouncements` is shared across all users, so resolve the
+      // per-user venue-name overrides into a fresh array here — never mutate
+      // the shared rows.
+      const announcementVenueOverrides = await loadVenueNameOverrides(
+        db,
+        user.userId,
+        newSinceCutoffRaw.map((a) => a.venueId),
+      );
+      const newSinceCutoff =
+        announcementVenueOverrides.size === 0
+          ? newSinceCutoffRaw
+          : newSinceCutoffRaw.map((a) => {
+              const custom = announcementVenueOverrides.get(a.venueId);
+              return custom ? { ...a, venueName: custom } : a;
+            });
+
+      const filterCounts: BucketCounts = {
+        droppedArtistMatches: 0,
+        droppedOnSale: 0,
+      };
+      // Bucket if the user has at least one signal we can match against:
+      // a followed venue, a followed performer, or an active region. The
+      // region path is what lets users who've drawn a region but haven't
+      // followed anything yet still receive a "what's happening near
+      // you" digest — without it the empty-content skip below would
+      // silently drop them every day.
+      const hasFollowSignal =
+        followedVenueIds.size > 0 ||
+        followedPerformerIds.size > 0 ||
+        activeRegionRows.length > 0;
+      const newAnnouncements = hasFollowSignal
+        ? bucketAnnouncementsForUser(
+            newSinceCutoff,
+            followedVenueIds,
+            followedPerformerIds,
+            todayStr,
+            nextWeekStr,
+            activeRegionRows,
+            filterCounts,
+          ).slice(0, ANNOUNCEMENT_CAP)
+        : [];
+
+      if (
+        activeRegionRows.length > 0 &&
+        filterCounts.droppedArtistMatches > 0
+      ) {
+        log.info(
+          {
+            event: 'notifications.digest.region_filtered',
+            userId: user.userId,
+            droppedArtistMatches: filterCounts.droppedArtistMatches,
+            activeRegionCount: activeRegionRows.length,
+          },
+          'Region filter dropped artist-only announcements outside active regions',
+        );
+      }
+
+      // ── Persist the "New for you" snapshot (replace-on-write) ─────────
+      // Runs for EVERY user regardless of email setting. Guarded so a retry
+      // mid-run is a no-op. Empty result still DELETEs (clears a stale
+      // snapshot). Delete + insert + timestamp update are one transaction so
+      // a rollback can't leave the guard set with no rows.
+      if (!computedToday) {
+        await db.transaction(async (tx) => {
+          await tx
+            .delete(userDigestEntries)
+            .where(eq(userDigestEntries.userId, user.userId));
+          if (newAnnouncements.length > 0) {
+            await tx.insert(userDigestEntries).values(
+              newAnnouncements.map((a, index) => ({
+                userId: user.userId,
+                announcementId: a.announcementId,
+                reason: a.reason,
+                onSaleSoon: a.onSaleSoon,
+                position: index,
+              })),
+            );
+          }
+          await tx
+            .update(userPreferences)
+            .set({ lastDigestComputedAt: new Date() })
+            .where(eq(userPreferences.userId, user.userId));
+        });
+        log.info(
+          {
+            event:
+              newAnnouncements.length > 0
+                ? 'notifications.digest.snapshot_persisted'
+                : 'notifications.digest.snapshot_cleared',
+            userId: user.userId,
+            entryCount: newAnnouncements.length,
+          },
+          'Persisted New-for-you snapshot',
+        );
+      }
+
+      // ── Email path ───────────────────────────────────────────────────
+      // Gated by the email preference + per-day idempotency. The snapshot
+      // above is already persisted, so an early skip here only forgoes email.
+      const alreadySentToday =
+        user.lastDigestSentAt != null &&
+        etDateString(user.lastDigestSentAt) === todayStr;
+      // Narrows `user.email` to string for the send below.
+      if (user.emailNotifications !== true || user.email == null) {
+        skipped++;
+        continue;
+      }
+      if (alreadySentToday) {
+        // pg-boss retries (retryLimit) a failed run; without this the
+        // already-emailed users would get a duplicate. Resend's
+        // idempotencyKey also dedupes at the ESP as a backstop.
+        log.info(
+          {
+            event: 'notifications.digest.already_sent_today',
+            userId: user.userId,
+          },
+          'Skipping email: already received today\'s digest',
+        );
+        skipped++;
+        continue;
+      }
 
       // Today's ticketed shows
       const todayRows = await db
@@ -542,99 +698,8 @@ export async function runDailyDigest(
         };
       });
 
-      // New announcements since last digest, matching follows
-      const venueRows = await db
-        .select({ venueId: userVenueFollows.venueId })
-        .from(userVenueFollows)
-        .where(eq(userVenueFollows.userId, user.userId));
-      const performerRows = await db
-        .select({ performerId: userPerformerFollows.performerId })
-        .from(userPerformerFollows)
-        .where(eq(userPerformerFollows.userId, user.userId));
-
-      // Active regions narrow the artist-follow and on-sale buckets to the
-      // user's geographic interests, mirroring the Discover near-you feed.
-      // Zero active regions = filter is a no-op so existing users without
-      // regions keep getting today's global digest.
-      const activeRegionRows = await db
-        .select({
-          latitude: userRegions.latitude,
-          longitude: userRegions.longitude,
-          radiusMiles: userRegions.radiusMiles,
-        })
-        .from(userRegions)
-        .where(
-          and(
-            eq(userRegions.userId, user.userId),
-            eq(userRegions.active, true),
-          ),
-        );
-
-      const followedVenueIds = new Set(venueRows.map((r) => r.venueId));
-      const followedPerformerIds = new Set(
-        performerRows.map((r) => r.performerId),
-      );
-
-      const newSinceCutoffRaw = allRecentAnnouncements.filter(
-        (a) => a.discoveredAt !== null && a.discoveredAt >= cutoff,
-      );
-      // `allRecentAnnouncements` is shared across all users, so resolve the
-      // per-user venue-name overrides into a fresh array here — never mutate
-      // the shared rows.
-      const announcementVenueOverrides = await loadVenueNameOverrides(
-        db,
-        user.userId,
-        newSinceCutoffRaw.map((a) => a.venueId),
-      );
-      const newSinceCutoff =
-        announcementVenueOverrides.size === 0
-          ? newSinceCutoffRaw
-          : newSinceCutoffRaw.map((a) => {
-              const custom = announcementVenueOverrides.get(a.venueId);
-              return custom ? { ...a, venueName: custom } : a;
-            });
-
-      const filterCounts: BucketCounts = {
-        droppedArtistMatches: 0,
-        droppedOnSale: 0,
-      };
-      // Bucket if the user has at least one signal we can match against:
-      // a followed venue, a followed performer, or an active region. The
-      // region path is what lets users who've drawn a region but haven't
-      // followed anything yet still receive a "what's happening near
-      // you" digest — without it the empty-content skip below would
-      // silently drop them every day.
-      const hasFollowSignal =
-        followedVenueIds.size > 0 ||
-        followedPerformerIds.size > 0 ||
-        activeRegionRows.length > 0;
-      const newAnnouncements = hasFollowSignal
-        ? bucketAnnouncementsForUser(
-            newSinceCutoff,
-            followedVenueIds,
-            followedPerformerIds,
-            todayStr,
-            nextWeekStr,
-            activeRegionRows,
-            filterCounts,
-          ).slice(0, ANNOUNCEMENT_CAP)
-        : [];
-
-      if (
-        activeRegionRows.length > 0 &&
-        filterCounts.droppedArtistMatches > 0
-      ) {
-        log.info(
-          {
-            event: 'notifications.digest.region_filtered',
-            userId: user.userId,
-            droppedArtistMatches: filterCounts.droppedArtistMatches,
-            activeRegionCount: activeRegionRows.length,
-          },
-          'Region filter dropped artist-only announcements outside active regions',
-        );
-      }
-
+      // Email needs at least one section to be worth sending. The snapshot
+      // (above) is already persisted, so this only gates the email.
       if (
         todayShows.length === 0 &&
         upcomingShows.length === 0 &&

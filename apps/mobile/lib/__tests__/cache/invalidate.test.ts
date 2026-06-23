@@ -93,6 +93,7 @@ describe('invalidateDiscoverFeeds', () => {
       ['mobile', 'discover', 'followedFeed'],
       ['mobile', 'discover', 'followedArtistsFeed'],
       ['mobile', 'discover', 'nearbyFeed'],
+      ['mobile', 'discover', 'digestFeed'],
       ['mobile', 'venues', 'followed'],
       ['mobile', 'artists', 'followed'],
       ['mobile', 'preferences', 'get'],
