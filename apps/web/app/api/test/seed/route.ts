@@ -4,6 +4,7 @@ import { workerEmail, workerName } from '../_worker';
 import {
   db,
   eq,
+  inArray,
   users,
   venues,
   performers,
@@ -376,7 +377,7 @@ export async function GET(request: Request) {
       const irvingPlazaId = venueMap.get('Irving Plaza');
       const comedyCellarId = venueMap.get('The Comedy Cellar');
 
-      const insertedAnnouncements = await db.insert(announcements).values([
+      await db.insert(announcements).values([
         { venueId: msgId, kind: 'concert', headliner: 'Bon Iver', support: ['Big Thief'], showDate: '2026-08-15', runStartDate: '2026-08-15', runEndDate: '2026-08-15', performanceDates: ['2026-08-15'], onSaleStatus: 'on_sale', source: 'ticketmaster' },
         { venueId: msgId, kind: 'comedy', headliner: 'Trevor Noah', showDate: '2026-09-01', runStartDate: '2026-09-01', runEndDate: '2026-09-01', performanceDates: ['2026-09-01'], onSaleStatus: 'announced', source: 'ticketmaster' },
         { venueId: bsId, kind: 'concert', headliner: 'Alvvays', support: ['Men I Trust'], showDate: '2026-07-22', runStartDate: '2026-07-22', runEndDate: '2026-07-22', performanceDates: ['2026-07-22'], onSaleStatus: 'on_sale', source: 'ticketmaster' },
@@ -399,25 +400,41 @@ export async function GET(request: Request) {
         // Nearby (non-followed) venues so the Near You tab has data.
         ...(irvingPlazaId ? [{ venueId: irvingPlazaId, kind: 'concert' as const, headliner: 'Mitski', showDate: '2026-09-12', runStartDate: '2026-09-12', runEndDate: '2026-09-12', performanceDates: ['2026-09-12'], onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
         ...(comedyCellarId ? [{ venueId: comedyCellarId, kind: 'comedy' as const, headliner: 'Sam Morril', showDate: '2026-08-05', runStartDate: '2026-08-05', runEndDate: '2026-08-05', performanceDates: ['2026-08-05'], onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
-      ]).returning({ id: announcements.id, venueId: announcements.venueId });
+      ]);
+    }
 
-      // Seed the "New for you" (digest) tab snapshot for this user from the
-      // followed-venue announcements above. In prod the daily digest job
-      // writes these rows; here we materialize a small snapshot directly so
-      // Playwright can exercise the tab without running the job.
-      const followedVenueIds = new Set([msgId, bsId, btId]);
-      const digestRows = insertedAnnouncements
-        .filter((a) => followedVenueIds.has(a.venueId))
-        .slice(0, 5)
-        .map((a, index) => ({
-          userId: user.id,
-          announcementId: a.id,
-          reason: 'venue' as const,
-          onSaleSoon: index === 0,
-          position: index,
-        }));
-      if (digestRows.length > 0) {
-        await db.insert(userDigestEntries).values(digestRows).onConflictDoNothing();
+    // Seed the "New for you" (digest) tab snapshot for this user. In prod
+    // the daily digest job writes these rows; here we materialize a small
+    // snapshot directly from existing announcements at the user's followed
+    // venues so Playwright can exercise the tab without running the job.
+    // Runs for worker seeds too (they reuse the global seed's shared
+    // announcements) — keyed by (user_id, announcement_id) so it's
+    // idempotent across concurrent worker calls.
+    if (!noFollows) {
+      const followedVenueIds = followVenues
+        .map((name) => venueMap.get(name))
+        .filter((v): v is string => Boolean(v));
+      if (followedVenueIds.length > 0) {
+        const digestAnnouncements = await db
+          .select({ id: announcements.id })
+          .from(announcements)
+          .where(inArray(announcements.venueId, followedVenueIds))
+          .orderBy(announcements.showDate)
+          .limit(5);
+        if (digestAnnouncements.length > 0) {
+          await db
+            .insert(userDigestEntries)
+            .values(
+              digestAnnouncements.map((a, index) => ({
+                userId: user.id,
+                announcementId: a.id,
+                reason: 'venue' as const,
+                onSaleSoon: index === 0,
+                position: index,
+              })),
+            )
+            .onConflictDoNothing();
+        }
       }
     }
 

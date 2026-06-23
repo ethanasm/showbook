@@ -130,9 +130,22 @@ describe('discover.digestFeed', () => {
     assert.ok(ids.includes(ANN_RUN), 'ongoing run should remain visible');
   });
 
-  it('drops an entry whose announcement no longer exists', async () => {
-    // Add a snapshot entry pointing at a non-existent announcement, then
-    // assert the inner join drops it (no crash, just absent).
+  it('drops an entry once its announcement is pruned (FK cascade)', async () => {
+    // Insert a real announcement + snapshot entry, confirm it shows, then
+    // delete the announcement — the ON DELETE cascade removes the entry, so
+    // a pruned announcement can never orphan a row and never surfaces.
+    await db
+      .insert(announcements)
+      .values({
+        id: ANN_PRUNED,
+        venueId: VENUE,
+        kind: 'concert',
+        headliner: 'Soon Pruned',
+        showDate: dateInFuture(40),
+        onSaleStatus: 'on_sale',
+        source: 'ticketmaster',
+      })
+      .onConflictDoNothing();
     await db
       .insert(userDigestEntries)
       .values({
@@ -144,9 +157,19 @@ describe('discover.digestFeed', () => {
       })
       .onConflictDoNothing();
 
-    const result = await callerFor(USER_ID).discover.digestFeed();
-    const ids = result.items.map((i) => i.id);
-    assert.ok(!ids.includes(ANN_PRUNED), 'pruned announcement should not surface');
+    const before = await callerFor(USER_ID).discover.digestFeed();
+    assert.ok(
+      before.items.some((i) => i.id === ANN_PRUNED),
+      'entry should be visible before its announcement is pruned',
+    );
+
+    await db.delete(announcements).where(eq(announcements.id, ANN_PRUNED));
+
+    const after = await callerFor(USER_ID).discover.digestFeed();
+    assert.ok(
+      !after.items.some((i) => i.id === ANN_PRUNED),
+      'pruned announcement should not surface',
+    );
   });
 
   it('resolves the per-user venue-name alias onto rows', async () => {
