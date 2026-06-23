@@ -185,7 +185,7 @@ jobs:
       needs_build: ${{ steps.detect-native.outputs.needs_build }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           # Full history so HEAD~1 resolves for the native-change diff.
@@ -277,7 +277,7 @@ jobs:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
@@ -387,7 +387,7 @@ jobs:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           # main's ruleset requires PRs, which rejects GITHUB_TOKEN pushes
