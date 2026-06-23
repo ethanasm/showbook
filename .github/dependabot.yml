@@ -72,6 +72,23 @@ updates:
       # packages ship ESLint-10-compatible releases.
       - dependency-name: "eslint"
         update-types: ["version-update:semver-major"]
+      # Babel 8 is dead-on-arrival for the Expo SDK 56 / React Native 0.85
+      # toolchain: babel-preset-expo, @babel/preset-typescript, and the
+      # react-native-worklets babel plugin all `assertVersion("^7.0.0-0")`,
+      # so a @babel/core 8.x throws `Requires Babel "^7.0.0-0", but was
+      # loaded with "8.x"` the moment Metro transforms a file. CI's web/unit
+      # jobs don't bundle the native app, so #621's 7.29.7 -> 8.0.1 bump
+      # shipped green to `main` and only blew up the push-to-main Mobile E2E
+      # Metro release bundle (`createBundleReleaseJsAndAssets`). Worse, the
+      # optional `@babel/core` peer on `next` / `react-native` floats every
+      # workspace up to the highest resolvable version, so a single 8.x in the
+      # tree drags the whole monorepo onto Babel 8 — which is why @babel/core
+      # is now hard-pinned to 7.29.7 in the root package.json `pnpm.overrides`.
+      # Dependabot can't edit overrides, so (like the react-native pins above)
+      # any bump it raises contradicts the exact override and dies at
+      # `pnpm install --frozen-lockfile`. It moves only when the Expo SDK
+      # adopts Babel 8 (manual override + this ignore bump together).
+      - dependency-name: "@babel/core"
       # `react-native` itself is the SDK host ABI. It is hard-pinned in the
       # root package.json `pnpm.overrides` (to 0.85.3 by #593) AND every
       # native module below compiles against its exact minor. A standalone
