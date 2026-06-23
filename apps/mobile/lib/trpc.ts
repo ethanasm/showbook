@@ -19,6 +19,7 @@ import type { AppRouter } from '@showbook/api';
 import { API_URL } from './env';
 import { hapticSuccess, hapticWarning } from './haptics';
 import { reportClientEvent, describeError } from './telemetry';
+import { isTransientTrpcError, shouldRetryQuery, trpcRetryDelay } from './trpc-retry';
 
 export const trpc = createTRPCReact<AppRouter>();
 
@@ -70,7 +71,12 @@ export function createQueryClient(): QueryClient {
       queries: {
         staleTime: 30_000,
         refetchOnWindowFocus: false,
-        retry: 1,
+        // Retry transient transport/edge blips (connection lost, HTML error
+        // page, 5xx/429) a few times with capped backoff so a sub-few-second
+        // hiccup recovers on its own instead of surfacing to the user. Real
+        // 4xx rejections aren't retried — see `lib/trpc-retry.ts`.
+        retry: shouldRetryQuery,
+        retryDelay: trpcRetryDelay,
       },
     },
   });
@@ -98,10 +104,15 @@ function errorReporterLink(): TRPCLink<AppRouter> {
             if (op.path !== 'telemetry.logEvent') {
               try {
                 const data = (err as { data?: { httpStatus?: number; code?: string } })?.data;
+                // A transient transport/edge blip (which queries now retry —
+                // see `lib/trpc-retry.ts`) is logged at `warn`, mirroring the
+                // server's `*.request.retry` convention, so it doesn't trip
+                // the `error_volume` health gauge. `error` is reserved for
+                // genuine, non-recoverable failures (real 4xx / app errors).
                 reportClientEvent({
                   event: 'trpc.error',
                   message: describeError(err),
-                  level: 'error',
+                  level: isTransientTrpcError(err) ? 'warn' : 'error',
                   context: {
                     path: op.path,
                     type: op.type,
