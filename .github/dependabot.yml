@@ -72,6 +72,23 @@ updates:
       # packages ship ESLint-10-compatible releases.
       - dependency-name: "eslint"
         update-types: ["version-update:semver-major"]
+      # `react-native` itself is the SDK host ABI. It is hard-pinned in the
+      # root package.json `pnpm.overrides` (to 0.85.3 by #593) AND every
+      # native module below compiles against its exact minor. A standalone
+      # bump is the worst class of break: #589's expo-sdk group dragged
+      # `react-native` to 0.86.0, which (a) deletes the
+      # `react-native/Libraries/Renderer/shims/ReactNative` shim that
+      # gesture-handler 2.31.x imports — Metro `export:embed` fails to resolve
+      # it on Android — and (b) trips reanimated 4.3.1's
+      # `assert_minimal_react_native_version` in `pod install` on iOS. CI is
+      # green (no native build) so it shipped straight to a failed store build
+      # (#593 post-mortem). Now that the override exists, a re-proposed bump
+      # instead dies at `pnpm install --frozen-lockfile` with
+      # `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` (the override contradicts the
+      # lockfile) — exactly why #623's expo-sdk group is red. The override and
+      # this ignore must move together; both change only via a manual
+      # `expo install --fix` SDK upgrade (see #465).
+      - dependency-name: "react-native"
       # These native modules are version-locked by the Expo SDK
       # (bundledNativeModules.json) AND hard-pinned in the root package.json
       # `pnpm.overrides`. Dependabot can't edit overrides, so every bump it
