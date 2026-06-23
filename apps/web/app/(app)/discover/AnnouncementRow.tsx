@@ -166,6 +166,14 @@ export function AnnouncementRow({
         >
           {formatOnSaleDate(announcement.onSaleDate)}
         </div>
+        {announcement.onSaleSoon && (
+          <span
+            className="discover-row__onsale-soon"
+            title="Tickets go on sale within the next week"
+          >
+            on sale soon
+          </span>
+        )}
       </div>
 
       {/* Status */}

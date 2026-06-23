@@ -1500,7 +1500,9 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
   onToggleWatch,
   compact = false,
 }: {
-  item: AnnouncementItem;
+  // `onSaleSoon` is only present on digest-feed ("New for you") rows; the
+  // other tabs pass plain announcement items where it's absent.
+  item: AnnouncementItem & { onSaleSoon?: boolean };
   isWatching: boolean;
   onToggleWatch: WatchToggle;
   compact?: boolean;
@@ -1810,6 +1812,12 @@ const AnnouncementRow = React.memo(function AnnouncementRow({
           >
             {item.onSaleStatus === 'on_sale' ? 'On sale since ' : 'On sale '}
             {onSale}
+          </Text>
+        )}
+
+        {item.onSaleSoon && (
+          <Text style={[styles.onSaleSoon, { color: accent }]} numberOfLines={1}>
+            On sale soon
           </Text>
         )}
           </>
@@ -2161,5 +2169,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist Sans 500',
     fontSize: 11.5,
     letterSpacing: 0.3,
+  },
+  onSaleSoon: {
+    fontFamily: 'Geist Mono',
+    fontSize: 9.5,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginTop: 2,
   },
 });

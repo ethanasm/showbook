@@ -630,6 +630,19 @@ a.discover-row__headliner-link:hover {
   font-weight: 500;
 }
 
+/* "on sale soon" — digest tab only; the snapshot's onSaleSoon flag means the
+   on-sale date falls within the next week. */
+.discover-row__onsale-soon {
+  display: inline-block;
+  margin-top: 3px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 500;
+}
+
 /* Status badge */
 .discover-row__status-badge {
   display: inline-block;

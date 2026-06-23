@@ -429,13 +429,21 @@ export async function runDailyDigest(
         user.lastDigestComputedAt != null &&
         etDateString(user.lastDigestComputedAt) === todayStr;
 
-      // "New since the last snapshot." Falls back to the email marker
-      // (continuity on first deploy / for existing users) then a fixed window
-      // for brand-new users. Read BEFORE the snapshot persist advances
-      // `lastDigestComputedAt`, so the window is correct within this run.
+      // "New since the user last received their digest." Prefer
+      // `lastDigestSentAt` over `lastDigestComputedAt` so the window survives a
+      // hard-kill retry: the snapshot step below advances `lastDigestComputedAt`
+      // (and is guarded by `computedToday`), but the email body is rebuilt from
+      // `newAnnouncements` recomputed off THIS cutoff. If we anchored on
+      // `lastDigestComputedAt`, a process kill after a user's snapshot persisted
+      // but before their email sent would make the retry see an empty window
+      // and ship a digest with no "new for you" section. Anchoring on
+      // `lastDigestSentAt` (which only advances after a successful send) keeps
+      // the retry's email == the persisted snapshot. Email-off users have no
+      // `lastDigestSentAt`, so they fall back to `lastDigestComputedAt` (their
+      // per-everyone anchor); brand-new users fall back to a fixed window.
       const cutoff =
-        user.lastDigestComputedAt ??
         user.lastDigestSentAt ??
+        user.lastDigestComputedAt ??
         new Date(Date.now() - FALLBACK_CUTOFF_DAYS * 24 * 60 * 60 * 1000);
 
       // ── New announcements bucketed for this user ──────────────────────

@@ -606,4 +606,52 @@ describe('runDailyDigest', () => {
       .where(eq(userDigestEntries.userId, USER_WITH_ANNOUNCEMENT));
     assert.equal(after.length, 0, 'snapshot cleared when nothing is new');
   });
+
+  it('retry after snapshot persisted (but email unsent) still ships a non-empty digest', async () => {
+    // Models a hard-kill retry: the user's snapshot was already built this run
+    // (lastDigestComputedAt = today, so the snapshot-persist step is a guarded
+    // no-op) but the email never sent (lastDigestSentAt still in the past). The
+    // email window must anchor on lastDigestSentAt, not the advanced
+    // lastDigestComputedAt — otherwise the retry recomputes an empty window and
+    // USER_WITH_ANNOUNCEMENT (who has new announcements but no today/upcoming
+    // shows) gets skipped instead of emailed.
+    await db
+      .update(userPreferences)
+      .set({
+        lastDigestComputedAt: new Date(),
+        lastDigestSentAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      })
+      .where(eq(userPreferences.userId, USER_WITH_ANNOUNCEMENT));
+
+    process.env.RESEND_API_KEY = 're_test_retry';
+    const originalFetch = globalThis.fetch;
+    const sentHtml: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('resend')) {
+        const body = typeof init?.body === 'string' ? init.body : '';
+        sentHtml.push(body);
+        return new Response(JSON.stringify({ id: 'sent' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return originalFetch(input as RequestInfo | URL);
+    }) as typeof fetch;
+
+    try {
+      const { sent } = await runDailyDigest();
+      assert.ok(sent >= 1, 'a digest should still send on the retry');
+      // The announcement user's email must contain their new announcements,
+      // proving the email window did not collapse to empty.
+      assert.ok(
+        sentHtml.some((html) =>
+          /Fresh Venue Announcement|Fresh Artist Announcement/.test(html),
+        ),
+        'retry email should still include the new announcements',
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
