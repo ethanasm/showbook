@@ -420,7 +420,13 @@ export async function GET(request: Request) {
           .from(announcements)
           .where(inArray(announcements.venueId, followedVenueIds))
           .orderBy(announcements.showDate)
-          .limit(5);
+          .limit(6);
+        // Spread the rows across all three reason buckets so the tab renders
+        // every section header ("At venues you follow" / "By artists you
+        // follow" / "Near you"). Reason is just stored data the feed groups
+        // on; the announcements themselves are all at followed venues, which
+        // are guaranteed to exist for both worker and global seeds.
+        const REASONS = ['venue', 'venue', 'venue', 'artist', 'region', 'region'] as const;
         if (digestAnnouncements.length > 0) {
           await db
             .insert(userDigestEntries)
@@ -428,7 +434,7 @@ export async function GET(request: Request) {
               digestAnnouncements.map((a, index) => ({
                 userId: user.id,
                 announcementId: a.id,
-                reason: 'venue' as const,
+                reason: REASONS[index] ?? 'venue',
                 onSaleSoon: index === 0,
                 position: index,
               })),
