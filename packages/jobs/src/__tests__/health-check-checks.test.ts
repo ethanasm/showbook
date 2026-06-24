@@ -134,8 +134,8 @@ describe('checkErrorVolume', () => {
 });
 
 describe('checkMissedSchedules', () => {
-  // Tuesday morning ET — every daily job + the Monday discover ingest
-  // should have a recent firing in pg-boss.
+  // Tuesday morning ET — every daily job (discover ingest is now daily
+  // too) should have a recent firing in pg-boss.
   const tuesdayMorning = new Date('2026-05-05T11:00:00Z'); // 7am ET
   const TUESDAY_QUEUES = [
     'shows/nightly',
@@ -180,33 +180,32 @@ describe('checkMissedSchedules', () => {
     assert.match(r.summary, /shows-nightly/);
   });
 
-  it('skips discover-ingest expectation outside Tuesday', async () => {
+  it('expects discover-ingest every day (now a daily cron)', async () => {
+    // Discover ingest moved from weekly (Mondays) to daily `0 5 * * *`,
+    // so it is expected in the window on any day, including a Wednesday.
     const wednesdayMorning = new Date('2026-05-06T11:00:00Z');
-    const dailyOnly = TUESDAY_QUEUES.filter((q) => q !== 'discover/ingest');
-    EXECUTE.results = [rowsFor(dailyOnly, new Date(wednesdayMorning.getTime() - 60 * 60 * 1000))];
+    EXECUTE.results = [rowsFor(TUESDAY_QUEUES, new Date(wednesdayMorning.getTime() - 60 * 60 * 1000))];
     const r = await checks.checkMissedSchedules(wednesdayMorning);
     assert.equal(r.status, 'ok');
-    // Discover-ingest must not appear in `expected` on a Wednesday — a
-    // missing run would otherwise surface in the detail payload.
     const expectedLabels = (r.detail?.expected as string[] | undefined) ?? [];
-    assert.ok(!expectedLabels.includes('discover-ingest'));
-    assert.equal(expectedLabels.length, 5);
+    assert.ok(expectedLabels.includes('discover-ingest'));
+    assert.equal(expectedLabels.length, 6);
   });
 
-  it('passes when discover-ingest ran in the last 8d even if last 24h is empty', async () => {
-    // Simulate "last Monday's run; this Monday missed" — discover/ingest
-    // is 7 days old, daily queues are fresh. Within the 8d window for
-    // discover-ingest so we should not flag.
+  it('flags discover-ingest when its last run is older than 24h (daily window)', async () => {
+    // A 7-day-old discover run used to pass under the old 8d weekly
+    // grace window; as a daily cron a 30h-old run must flag.
     const recent = new Date(tuesdayMorning.getTime() - 60 * 60 * 1000);
-    const sevenDaysAgo = new Date(tuesdayMorning.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const stale = new Date(tuesdayMorning.getTime() - 30 * 60 * 60 * 1000);
     EXECUTE.results = [
       TUESDAY_QUEUES.map((name) => ({
         name,
-        latest: name === 'discover/ingest' ? sevenDaysAgo : recent,
+        latest: name === 'discover/ingest' ? stale : recent,
       })),
     ];
     const r = await checks.checkMissedSchedules(tuesdayMorning);
-    assert.equal(r.status, 'ok');
+    assert.equal(r.status, 'fail');
+    assert.match(r.summary, /discover-ingest/);
   });
 
   it('reports warn when the DB query throws', async () => {

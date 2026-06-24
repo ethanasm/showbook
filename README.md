@@ -159,6 +159,45 @@ pnpm dev:db:studio      # Open Drizzle Studio
 - [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) — redeploys the prod box on a green `main` via a self-hosted runner. Setup in [`operations.md`](docs/specs/operations.md).
 - [`.github/workflows/mobile-e2e.yml`](.github/workflows/mobile-e2e.yml) — Android Maestro smoke layer on `apps/mobile/**` changes (label-gated on PRs, scheduled on `main`).
 
+## Scheduled jobs (cron)
+
+All background work runs as pg-boss cron jobs inside the Next.js process,
+registered in [`packages/jobs/src/registry.ts`](packages/jobs/src/registry.ts).
+**All times are America/New_York (ET)** — the `SCHEDULE_TZ` the scheduler uses.
+The morning health check at 07:00 ET reports any cron that didn't fire (see
+`SCHEDULED_EXPECTATIONS` in `packages/jobs/src/health-check/checks.ts`).
+
+| Job (queue) | Time (ET) | Cadence | What it does |
+|-------------|-----------|---------|--------------|
+| `prune/nightly` | 02:00 | Daily | Combined prune sweep, in order: past-dated announcements → orphaned catalog rows (venues/performers/announcements) → orphaned `media_assets` + their R2 blobs. |
+| `enrichment/album-metadata-fill` | 02:30 | Daily | Fills Spotify album/track metadata per performer (stalest-first), budget-bounded. |
+| `shows/nightly` | 03:00 | Daily | Show state transitions (watching → ticketed → past) and follow-on queueing. |
+| `eval/run-daily-backtest` | 03:15 | Daily | Prediction-eval back-test against stored `tour_setlists` (shadow mode). |
+| `enrichment/setlist-style-refresh` | 03:30 | Daily | Reclassifies each performer's setlist style from their corpus. |
+| `enrichment/setlist-retry` | 04:00 | Daily | Retries failed/incomplete setlist enrichments. |
+| `backfill/performer-mbids` | 04:30 | Daily | Resolves missing MusicBrainz IDs (before corpus-fill, which consumes them). |
+| `enrichment/setlist-corpus-fill-refresh` | 04:45 | Daily | Refreshes setlist corpus for top-followed + upcoming-show performers; rebuilds song index. |
+| `discover/ingest` | 05:00 | Daily | Ticketmaster ingest (phases 1–4) + scrapers. Feeds the Discover tab and the digest's "new announcements". (Was weekly; now daily.) |
+| `backfill/performer-images` | 05:30 | Daily | Backfills performer photos. |
+| `backfill/venue-photos` | 05:45 | Daily | Backfills venue photos (Google Places). |
+| `backfill/performer-ids` | 06:00 | Daily | Combined performer external-ID sweep, in order: Ticketmaster → Spotify → Wikidata catalog IDs. |
+| `backfill/show-cover-images` | 06:15 | Daily | Backfills show cover images. |
+| `backfill/show-ticket-urls` | 06:45 | Daily | Fills `ticket_url` for future shows imported without a TM link. |
+| `health/morning-check` | 07:00 | Daily | Runs all health checks and emails the operator (one hour before the digest). |
+| `notifications/daily-digest` | 08:00 | Daily | Builds and sends each user's daily email digest. |
+| `spotify/recently-played` | 09:00 | Daily | Recently-played priming-stat sweep (~6h post-show). |
+| `enrichment/setlist-tour-watch` | every 3h | Sub-daily | Refreshes setlists for performers on active multi-night runs (per-performer dedup → once/day each). |
+| `spotify/purge-revoked-tokens` | Sun 02:00 | Weekly | Purges revoked Spotify tokens older than 30 days. |
+| `spotify/year-end-soundtrack` | Dec 31 03:00 | Yearly | Builds each user's year-end Spotify soundtrack playlist. |
+
+The individual `prune/orphan-catalog`, `prune/past-announcements`,
+`prune/orphan-media`, and `backfill/performer-{ticketmaster,spotify,wikidata}-ids`
+queues stay registered but **unscheduled** — they're fanned out by the combined
+`prune/nightly` / `backfill/performer-ids` sweeps above, and remain individually
+triggerable from the `/admin` page. User-triggered ingests
+(`discover/ingest-{venue,performer,region}`, `enrichment/setlist-corpus-fill`,
+`enrichment/song-index-rebuild`) have no schedule.
+
 ## Email Notifications
 
 The daily digest is a Resend-backed email sent at 08:00 ET to users with email

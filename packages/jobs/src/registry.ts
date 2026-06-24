@@ -70,6 +70,12 @@ export const JOBS = {
   ALBUM_METADATA_FILL: 'enrichment/album-metadata-fill',
   SETLIST_TOUR_WATCH: 'enrichment/setlist-tour-watch',
   SPOTIFY_PURGE_REVOKED_TOKENS: 'spotify/purge-revoked-tokens',
+  // Combined nightly sweeps. These own the cron schedule; the individual
+  // queues they fan out to (prune/*, backfill/performer-{ticketmaster,
+  // spotify,wikidata}-ids) stay registered but unscheduled so the admin
+  // on-demand triggers still work.
+  PRUNE_NIGHTLY: 'prune/nightly',
+  BACKFILL_PERFORMER_IDS: 'backfill/performer-ids',
 } as const;
 
 // pg-boss v10 ignores constructor-level retry/expiration options when
@@ -232,13 +238,113 @@ type JobEntry = {
 };
 
 const JOBS_TABLE: JobEntry[] = [
-  // Drop past-dated announcements before the orphan sweep so the
-  // orphan-prune sees a freshly-pruned set (a past announcement whose
-  // performer is followed would otherwise be "preserved" forever).
+  // Combined nightly prune at 02:00 ET. Runs the three prune phases in a
+  // guaranteed order — past-dated announcements first (so the orphan
+  // sweep sees a freshly-pruned set; a past announcement whose performer
+  // is followed would otherwise be "preserved" forever), then orphaned
+  // catalog rows (backstop for the 0002 / 0014 / 0023 / 0025 cleanup
+  // triggers), then the media blobs freed when a catalog show-delete
+  // cascades into pending media_assets. This used to be three separate
+  // crons at 02:00 / 02:30 / 02:45 whose ordering relied on wall-clock
+  // spacing; folding them into one job makes the ordering a code
+  // guarantee. Each phase is isolated so one failure doesn't abort the
+  // rest. The individual prune/* queues below stay registered (no
+  // schedule) so prune/orphan-catalog keeps its admin on-demand trigger.
+  {
+    name: JOBS.PRUNE_NIGHTLY,
+    queueOptions: LONG_BATCH_CRON,
+    schedule: '0 2 * * *',
+    handler: defineJobHandler({
+      name: JOBS.PRUNE_NIGHTLY,
+      run: async () => {
+        let past: Awaited<ReturnType<typeof runPrunePastAnnouncements>> | null =
+          null;
+        let catalog: Awaited<ReturnType<typeof runPruneOrphanCatalog>> | null =
+          null;
+        let media: Awaited<ReturnType<typeof runPruneOrphanMedia>> | null = null;
+        // Isolated phases, but failures are re-thrown at the end so the
+        // job still lands in pg-boss `failed` state (preserving the
+        // `failed_jobs` health signal + retry). All prune phases are
+        // idempotent, so a retried full sweep is safe.
+        const phaseErrors: Error[] = [];
+        try {
+          past = await runPrunePastAnnouncements();
+          log.info(
+            {
+              event: 'prune.past_announcements.summary',
+              announcements: past.announcements,
+            },
+            'Past announcements prune complete',
+          );
+        } catch (err) {
+          log.error(
+            { err, event: 'prune.past_announcements.failed' },
+            'Past announcements prune failed',
+          );
+          phaseErrors.push(err instanceof Error ? err : new Error(String(err)));
+        }
+        try {
+          catalog = await runPruneOrphanCatalog();
+          log.info(
+            {
+              event: 'prune.summary',
+              announcements: catalog.announcements,
+              venues: catalog.venues,
+              performers: catalog.performers,
+            },
+            'Orphan catalog prune complete',
+          );
+        } catch (err) {
+          log.error(
+            { err, event: 'prune.orphan_catalog.failed' },
+            'Orphan catalog prune failed',
+          );
+          phaseErrors.push(err instanceof Error ? err : new Error(String(err)));
+        }
+        try {
+          media = await runPruneOrphanMedia();
+          log.info(
+            {
+              event: 'prune.orphan_media.summary',
+              scanned: media.scanned,
+              rowsDeleted: media.rowsDeleted,
+              objectsDeleted: media.objectsDeleted,
+              objectDeleteFailures: media.objectDeleteFailures,
+            },
+            'Orphan media prune complete',
+          );
+        } catch (err) {
+          log.error(
+            { err, event: 'prune.orphan_media.failed' },
+            'Orphan media prune failed',
+          );
+          phaseErrors.push(err instanceof Error ? err : new Error(String(err)));
+        }
+        if (phaseErrors.length > 0) {
+          throw new Error(
+            `prune/nightly: ${phaseErrors.length} phase(s) failed`,
+            { cause: phaseErrors[0] },
+          );
+        }
+        return { past, catalog, media };
+      },
+      summary: (r) => ({
+        event: 'prune.nightly.summary',
+        msg: 'Nightly prune complete',
+        pastAnnouncements: r.past?.announcements ?? null,
+        orphanAnnouncements: r.catalog?.announcements ?? null,
+        orphanVenues: r.catalog?.venues ?? null,
+        orphanPerformers: r.catalog?.performers ?? null,
+        mediaRowsDeleted: r.media?.rowsDeleted ?? null,
+      }),
+    }),
+  },
+  // Unscheduled — fanned out by prune/nightly above. Kept registered so
+  // prune/orphan-catalog stays available as an admin on-demand trigger
+  // (enqueuePruneOrphanCatalog).
   {
     name: JOBS.PRUNE_PAST_ANNOUNCEMENTS,
     queueOptions: LONG_BATCH_CRON,
-    schedule: '0 2 * * *',
     handler: defineJobHandler({
       name: JOBS.PRUNE_PAST_ANNOUNCEMENTS,
       run: () => runPrunePastAnnouncements(),
@@ -249,13 +355,9 @@ const JOBS_TABLE: JobEntry[] = [
       }),
     }),
   },
-  // Backstop sweep for the orphan-cleanup triggers (0002 / 0014 / 0023 /
-  // 0025). Runs before shows-nightly so the nightly transition operates
-  // on the freshly pruned catalog.
   {
     name: JOBS.PRUNE_ORPHAN_CATALOG,
     queueOptions: LONG_BATCH_CRON,
-    schedule: '30 2 * * *',
     handler: defineJobHandler({
       name: JOBS.PRUNE_ORPHAN_CATALOG,
       run: () => runPruneOrphanCatalog(),
@@ -268,16 +370,9 @@ const JOBS_TABLE: JobEntry[] = [
       }),
     }),
   },
-  // Sweep terminal-but-stuck media_assets rows (status='failed' or
-  // status='pending' >24h) and their R2 blobs. Slotted at 02:45 ET so
-  // the orphan-catalog sweep at 02:30 ET has already settled — that
-  // sweep doesn't touch media_assets directly, but a show-delete it
-  // performs cascades into pending media rows whose blobs we then
-  // collect here.
   {
     name: JOBS.PRUNE_ORPHAN_MEDIA,
     queueOptions: LONG_BATCH_CRON,
-    schedule: '45 2 * * *',
     handler: defineJobHandler({
       name: JOBS.PRUNE_ORPHAN_MEDIA,
       run: () => runPruneOrphanMedia(),
@@ -293,7 +388,9 @@ const JOBS_TABLE: JobEntry[] = [
   },
   // Phase 11 §15m — album-metadata-fill at 02:30 ET nightly, before the
   // 04:45 ET corpus-fill refresh so album-drop synthetic rows reference
-  // fresh `albums.fetched_at` signatures.
+  // fresh `albums.fetched_at` signatures. (Previously shared the 02:30
+  // slot with prune/orphan-catalog; that prune now runs inside
+  // prune/nightly at 02:00, so 02:30 is uncontended.)
   {
     name: JOBS.ALBUM_METADATA_FILL,
     queueOptions: LONG_BATCH_CRON,
@@ -311,14 +408,16 @@ const JOBS_TABLE: JobEntry[] = [
       }),
     }),
   },
-  // Prediction-eval back-test at 03:00 ET. Runs against `tour_setlists`
+  // Prediction-eval back-test at 03:15 ET. Runs against `tour_setlists`
   // already on disk (no external API calls); the corpus-fill refresh at
   // 04:45 ET later that morning brings fresh setlists in for *tomorrow's*
   // back-test. Phase 4 ships this in shadow mode — no release gate yet.
+  // Moved off the 03:00 slot it shared with shows/nightly (both
+  // DB-heavy) so they no longer run concurrently.
   {
     name: JOBS.EVAL_RUN_DAILY_BACKTEST,
     queueOptions: LONG_BATCH_CRON,
-    schedule: '0 3 * * *',
+    schedule: '15 3 * * *',
     handler: defineJobHandler({
       name: JOBS.EVAL_RUN_DAILY_BACKTEST,
       run: () => runDailyBacktest({}),
@@ -501,14 +600,129 @@ const JOBS_TABLE: JobEntry[] = [
       }),
     }),
   },
-  // Performer TM-id backfill at 06:00 ET — slotted between venue-photos
-  // (05:45) and show-cover-images (06:15). Catches performers that
-  // already have images (so the 05:30 image backfill skipped them) but
-  // are still missing a TM attraction id.
+  // Combined performer external-ID backfill at 06:00 ET. Resolves the
+  // three catalog IDs in one sweep, in dependency order — Ticketmaster
+  // first (it can also fill an MBID), then Spotify (relies on any
+  // TM-derived MBID), then Wikidata (theatre cast / non-TM performers).
+  // This used to be three separate crons at 06:00 / 06:30 / 07:15; the
+  // Wikidata leg in particular ran *after* the 07:00 health check, so its
+  // result was always a day stale in the morning health email. Folded
+  // into one 06:00 slot, it lands before the health check. Each leg is
+  // isolated so one failure doesn't abort the rest. The individual
+  // backfill/performer-*-ids queues below stay registered (no schedule)
+  // so the /admin on-demand triggers still work.
+  {
+    name: JOBS.BACKFILL_PERFORMER_IDS,
+    queueOptions: LONG_BATCH_CRON,
+    schedule: '0 6 * * *',
+    handler: defineJobHandler({
+      name: JOBS.BACKFILL_PERFORMER_IDS,
+      run: async () => {
+        let tm:
+          | Awaited<ReturnType<typeof runBackfillPerformerTicketmasterIds>>
+          | null = null;
+        let spotify:
+          | Awaited<ReturnType<typeof runBackfillPerformerSpotifyIds>>
+          | null = null;
+        let wikidata:
+          | Awaited<ReturnType<typeof runBackfillPerformerWikidataIds>>
+          | null = null;
+        // Each leg is isolated so a run-wide throw in one (e.g. a Spotify
+        // auth_rejected) doesn't rob the others of their daily run. But we
+        // collect the failures and re-throw at the end so the job still
+        // lands in pg-boss `failed` state — that preserves the
+        // `job.failed` signal the `failed_jobs` health check keys on, and
+        // the retry the standalone jobs used to get. The legs are
+        // idempotent (they only fill NULL columns), so re-running the
+        // whole sweep on retry is a safe no-op for already-resolved rows.
+        const legErrors: Error[] = [];
+        try {
+          tm = await runBackfillPerformerTicketmasterIds();
+          log.info(
+            {
+              event: 'backfill.performer_ticketmaster_ids.summary',
+              total: tm.total,
+              updated: tm.updated,
+              missing: tm.missing,
+              skipped: tm.skipped,
+              failed: tm.failed,
+            },
+            'Performer Ticketmaster ID backfill complete',
+          );
+        } catch (err) {
+          log.error(
+            { err, event: 'performer.ticketmaster_id.fatal' },
+            'Performer Ticketmaster ID backfill failed',
+          );
+          legErrors.push(err instanceof Error ? err : new Error(String(err)));
+        }
+        try {
+          spotify = await runBackfillPerformerSpotifyIds();
+          log.info(
+            {
+              event: 'backfill.performer_spotify_ids.summary',
+              total: spotify.total,
+              updated: spotify.updated,
+              missing: spotify.missing,
+              skipped: spotify.skipped,
+              failed: spotify.failed,
+            },
+            'Performer Spotify ID backfill complete',
+          );
+        } catch (err) {
+          log.error(
+            { err, event: 'performer.spotify_id.fatal' },
+            'Performer Spotify ID backfill failed',
+          );
+          legErrors.push(err instanceof Error ? err : new Error(String(err)));
+        }
+        try {
+          wikidata = await runBackfillPerformerWikidataIds();
+          log.info(
+            {
+              event: 'backfill.performer_wikidata_qids.summary',
+              total: wikidata.total,
+              updated: wikidata.updated,
+              missing: wikidata.missing,
+              skipped: wikidata.skipped,
+              failed: wikidata.failed,
+            },
+            'Performer Wikidata QID backfill complete',
+          );
+        } catch (err) {
+          log.error(
+            { err, event: 'performer.wikidata_qid.fatal' },
+            'Performer Wikidata QID backfill failed',
+          );
+          legErrors.push(err instanceof Error ? err : new Error(String(err)));
+        }
+        if (legErrors.length > 0) {
+          throw new Error(
+            `backfill/performer-ids: ${legErrors.length} leg(s) failed`,
+            { cause: legErrors[0] },
+          );
+        }
+        return { tm, spotify, wikidata };
+      },
+      summary: (r) => ({
+        event: 'backfill.performer_ids.summary',
+        msg: 'Performer ID backfill (combined) complete',
+        tmUpdated: r.tm?.updated ?? null,
+        spotifyUpdated: r.spotify?.updated ?? null,
+        wikidataUpdated: r.wikidata?.updated ?? null,
+        failed:
+          (r.tm?.failed ?? 0) +
+          (r.spotify?.failed ?? 0) +
+          (r.wikidata?.failed ?? 0),
+      }),
+    }),
+  },
+  // Unscheduled — fanned out by backfill/performer-ids above. Kept
+  // registered so the /admin on-demand triggers (enqueueBackfillPerformer
+  // {TicketmasterIds,SpotifyIds,WikidataIds}) still resolve to a worker.
   {
     name: JOBS.BACKFILL_PERFORMER_TICKETMASTER_IDS,
     queueOptions: LONG_BATCH_CRON,
-    schedule: '0 6 * * *',
     handler: defineJobHandler({
       name: JOBS.BACKFILL_PERFORMER_TICKETMASTER_IDS,
       run: () => runBackfillPerformerTicketmasterIds(),
@@ -523,14 +737,9 @@ const JOBS_TABLE: JobEntry[] = [
       }),
     }),
   },
-  // Catches up Spotify catalog ids for any performer whose inline
-  // fire-and-forget resolver (in matchOrCreatePerformer) failed or never
-  // ran. Scheduled at 06:30 ET — after the TM-id backfill so any
-  // TM-derived MBIDs are in place, before the morning digest at 08:00 ET.
   {
     name: JOBS.BACKFILL_PERFORMER_SPOTIFY_IDS,
     queueOptions: LONG_BATCH_CRON,
-    schedule: '30 6 * * *',
     handler: defineJobHandler({
       name: JOBS.BACKFILL_PERFORMER_SPOTIFY_IDS,
       run: () => runBackfillPerformerSpotifyIds(),
@@ -545,13 +754,9 @@ const JOBS_TABLE: JobEntry[] = [
       }),
     }),
   },
-  // Wikidata QID backfill for theatre cast / non-TM performers. Catch-up
-  // for the inline `resolvePerformerWikidataId` hook. Scheduled at 07:15 ET
-  // — just after the morning health check (07:00) and before the digest.
   {
     name: JOBS.BACKFILL_PERFORMER_WIKIDATA_IDS,
     queueOptions: LONG_BATCH_CRON,
-    schedule: '15 7 * * *',
     handler: defineJobHandler({
       name: JOBS.BACKFILL_PERFORMER_WIKIDATA_IDS,
       run: () => runBackfillPerformerWikidataIds(),
@@ -584,10 +789,8 @@ const JOBS_TABLE: JobEntry[] = [
     }),
   },
   // Slotted at 06:45 ET so it lands after backfill-show-cover-images
-  // (06:15) but before the discover-ingest weekly cron (Mon 06:00 → so
-  // most days the slot is empty). Fills `ticket_url` for future shows
-  // that landed via Gmail / Eventbrite / setlist.fm imports and missed
-  // the inline TM enrichment.
+  // (06:15). Fills `ticket_url` for future shows that landed via Gmail /
+  // Eventbrite / setlist.fm imports and missed the inline TM enrichment.
   {
     name: JOBS.BACKFILL_SHOW_TICKET_URLS,
     queueOptions: LONG_BATCH_CRON,
@@ -605,10 +808,18 @@ const JOBS_TABLE: JobEntry[] = [
       }),
     }),
   },
+  // Discover ingest at 05:00 ET *daily* (was weekly, Mondays only). The
+  // weekly cadence meant the Discover tab and the daily digest's
+  // "new announcements" section only refreshed once a week — six days
+  // out of seven the digest had nothing new and skipped the email
+  // entirely. Daily keeps both fresh. Slotted at 05:00 so freshly
+  // discovered performers/venues are picked up by that same morning's
+  // backfills (performer-ids 06:00, images 05:30) and land before the
+  // 07:00 health check and 08:00 digest.
   {
     name: JOBS.DISCOVER_INGEST,
     queueOptions: LONG_BATCH_CRON,
-    schedule: '0 6 * * 1',
+    schedule: '0 5 * * *',
     handler: defineJobHandler({
       name: JOBS.DISCOVER_INGEST,
       run: async () => {
@@ -921,6 +1132,15 @@ export async function registerAllJobs(boss: PgBoss): Promise<void> {
   for (const entry of JOBS_TABLE) {
     if (entry.schedule) {
       await boss.schedule(entry.name, entry.schedule, {}, SCHEDULE_TZ);
+    } else {
+      // Explicitly clear any schedule a queue may have carried in a
+      // previous deploy. Without this, a job that loses its `schedule`
+      // here (e.g. the prune/* and backfill/performer-*-ids queues now
+      // fanned out by the combined nightly sweeps) keeps firing on its
+      // old cron in prod — `boss.schedule` only ever adds, it never
+      // removes. `unschedule` on a never-scheduled queue is a harmless
+      // no-op.
+      await boss.unschedule(entry.name);
     }
   }
 

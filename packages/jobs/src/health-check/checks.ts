@@ -97,17 +97,10 @@ const SCHEDULED_EXPECTATIONS: readonly ScheduledExpectation[] = [
   { label: 'backfill-performer-images', queueName: 'backfill/performer-images' },
   { label: 'backfill-venue-photos', queueName: 'backfill/venue-photos' },
   { label: 'daily-digest', queueName: 'notifications/daily-digest' },
-  {
-    label: 'discover-ingest',
-    queueName: 'discover/ingest',
-    // Discover ingest is scheduled `0 6 * * 1` — Mondays only, so it
-    // appears in two consecutive Tuesday windows if we use 8d. That
-    // grace catches a single missed Monday (deploy past 6am, brief
-    // outage) without hiding a genuinely broken cron: two missed
-    // Mondays in a row still leaves the 8d window empty.
-    windowHours: 8 * 24,
-    expectedOnDay: (dow) => dow === 2,
-  },
+  // Discover ingest is now scheduled `0 5 * * *` — daily (was weekly,
+  // Mondays only). Treated like any other daily cron: a missing firing in
+  // the last 24h flags.
+  { label: 'discover-ingest', queueName: 'discover/ingest' },
 ];
 
 interface ScheduleLatestRow {
@@ -422,9 +415,12 @@ export async function checkDataFreshness(): Promise<CheckResult> {
     }
     const lastMs = last instanceof Date ? last.getTime() : new Date(last).getTime();
     const ageHours = (Date.now() - lastMs) / (1000 * 60 * 60);
-    // Discover ingest runs Monday only, so up to ~7d gap is normal.
+    // Discover ingest runs daily, so fresh announcements should land
+    // every day or two; a few quiet days (nothing new on TM) is still
+    // normal, so we don't flag until the gap is multi-day. (Was 8d/14d
+    // when discover was a weekly Monday-only cron.)
     const status: CheckStatus =
-      ageHours < 8 * 24 ? 'ok' : ageHours < 14 * 24 ? 'warn' : 'fail';
+      ageHours < 3 * 24 ? 'ok' : ageHours < 7 * 24 ? 'warn' : 'fail';
     return {
       name: 'data_freshness',
       status,
