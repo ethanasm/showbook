@@ -993,7 +993,7 @@ export default function DiscoverScreen(): React.JSX.Element {
           value={displayTab}
           onChange={handleTabChange}
           options={[
-            { value: 'digest', label: 'New for you' },
+            { value: 'digest', label: 'For You' },
             { value: 'venues', label: 'Venues' },
             { value: 'artists', label: 'Artists' },
             { value: 'regions', label: 'Regions' },

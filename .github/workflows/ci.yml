@@ -188,6 +188,15 @@ jobs:
           file: apps/web/Dockerfile
           target: prod
           push: true
+          # Push a single manifest per tag, not an OCI index with untagged
+          # provenance/SBOM attestation child manifests. Those children are
+          # untagged, so the GHCR prune (delete-only-untagged-versions: false)
+          # can delete one that a retained :<sha> index still references,
+          # leaving the kept image un-pullable. Nothing here consumes the
+          # attestations (no Cosign / SLSA verification), so drop them at the
+          # source.
+          provenance: false
+          sbom: false
           tags: |
             ghcr.io/${{ github.repository_owner }}/showbook-web:latest
             ghcr.io/${{ github.repository_owner }}/showbook-web:${{ github.sha }}

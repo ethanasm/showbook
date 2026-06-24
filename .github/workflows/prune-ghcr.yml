@@ -19,4 +19,13 @@ jobs:
           package-type: container
           min-versions-to-keep: 25
           delete-only-untagged-versions: false
-          ignore-versions: '^latest$'
+          # No ignore-versions guard for :latest. `ignore-versions` matches
+          # the regex against each version's *name*, which for a container
+          # package is the sha256 digest — never the tag. So '^latest$' would
+          # match nothing and protect nothing (an inert no-op). It isn't
+          # needed anyway: every main build re-points :latest at that build's
+          # freshly-pushed digest, so the digest :latest *currently* points at
+          # is always the most-recently-created version — comfortably inside
+          # the min-versions-to-keep=25 window. (A prune can still reap an
+          # older digest that :latest used to point at, but that's a stale
+          # :<sha>, not the live :latest.)
