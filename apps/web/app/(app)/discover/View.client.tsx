@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
@@ -100,6 +100,26 @@ function FeedSection({
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(new Set());
   const [regionContextMenu, setRegionContextMenu] = useState<{ x: number; y: number; regionId: string } | null>(null);
   const [sort, setSort] = useState<DiscoverSortConfig>(DISCOVER_DEFAULT_SORT);
+
+  // Reset the feed scroll position whenever the selected group (venue /
+  // artist / region) changes. Picking a new entity while scrolled to the
+  // bottom of the previous list should land at the top of the new list, not
+  // wherever the old scroll offset happened to be. On desktop `.discover-feed`
+  // is its own scroll container; on mobile-web it's `overflow: visible` and a
+  // page-level ancestor scrolls — reset whichever applies.
+  const feedRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = feedRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const oy = getComputedStyle(p).overflowY;
+      if (oy === "auto" || oy === "scroll") {
+        p.scrollTop = 0;
+        break;
+      }
+    }
+  }, [selectedGroupId]);
 
   const utils = trpc.useUtils();
 
@@ -484,7 +504,7 @@ function FeedSection({
       />
 
       {/* Feed */}
-      <div className="discover-feed">
+      <div className="discover-feed" ref={feedRef}>
         {isNearby && (regionGroups?.length ?? 0) > 0 && (
           <div
             className="discover-region-explainer"
