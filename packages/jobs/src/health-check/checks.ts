@@ -97,17 +97,10 @@ const SCHEDULED_EXPECTATIONS: readonly ScheduledExpectation[] = [
   { label: 'backfill-performer-images', queueName: 'backfill/performer-images' },
   { label: 'backfill-venue-photos', queueName: 'backfill/venue-photos' },
   { label: 'daily-digest', queueName: 'notifications/daily-digest' },
-  {
-    label: 'discover-ingest',
-    queueName: 'discover/ingest',
-    // Discover ingest is scheduled `0 6 * * 1` — Mondays only, so it
-    // appears in two consecutive Tuesday windows if we use 8d. That
-    // grace catches a single missed Monday (deploy past 6am, brief
-    // outage) without hiding a genuinely broken cron: two missed
-    // Mondays in a row still leaves the 8d window empty.
-    windowHours: 8 * 24,
-    expectedOnDay: (dow) => dow === 2,
-  },
+  // Discover ingest is now scheduled `0 5 * * *` — daily (was weekly,
+  // Mondays only). Treated like any other daily cron: a missing firing in
+  // the last 24h flags.
+  { label: 'discover-ingest', queueName: 'discover/ingest' },
 ];
 
 interface ScheduleLatestRow {
