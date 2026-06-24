@@ -415,9 +415,12 @@ export async function checkDataFreshness(): Promise<CheckResult> {
     }
     const lastMs = last instanceof Date ? last.getTime() : new Date(last).getTime();
     const ageHours = (Date.now() - lastMs) / (1000 * 60 * 60);
-    // Discover ingest runs Monday only, so up to ~7d gap is normal.
+    // Discover ingest runs daily, so fresh announcements should land
+    // every day or two; a few quiet days (nothing new on TM) is still
+    // normal, so we don't flag until the gap is multi-day. (Was 8d/14d
+    // when discover was a weekly Monday-only cron.)
     const status: CheckStatus =
-      ageHours < 8 * 24 ? 'ok' : ageHours < 14 * 24 ? 'warn' : 'fail';
+      ageHours < 3 * 24 ? 'ok' : ageHours < 7 * 24 ? 'warn' : 'fail';
     return {
       name: 'data_freshness',
       status,

@@ -262,6 +262,11 @@ const JOBS_TABLE: JobEntry[] = [
         let catalog: Awaited<ReturnType<typeof runPruneOrphanCatalog>> | null =
           null;
         let media: Awaited<ReturnType<typeof runPruneOrphanMedia>> | null = null;
+        // Isolated phases, but failures are re-thrown at the end so the
+        // job still lands in pg-boss `failed` state (preserving the
+        // `failed_jobs` health signal + retry). All prune phases are
+        // idempotent, so a retried full sweep is safe.
+        const phaseErrors: Error[] = [];
         try {
           past = await runPrunePastAnnouncements();
           log.info(
@@ -276,6 +281,7 @@ const JOBS_TABLE: JobEntry[] = [
             { err, event: 'prune.past_announcements.failed' },
             'Past announcements prune failed',
           );
+          phaseErrors.push(err instanceof Error ? err : new Error(String(err)));
         }
         try {
           catalog = await runPruneOrphanCatalog();
@@ -293,6 +299,7 @@ const JOBS_TABLE: JobEntry[] = [
             { err, event: 'prune.orphan_catalog.failed' },
             'Orphan catalog prune failed',
           );
+          phaseErrors.push(err instanceof Error ? err : new Error(String(err)));
         }
         try {
           media = await runPruneOrphanMedia();
@@ -310,6 +317,13 @@ const JOBS_TABLE: JobEntry[] = [
           log.error(
             { err, event: 'prune.orphan_media.failed' },
             'Orphan media prune failed',
+          );
+          phaseErrors.push(err instanceof Error ? err : new Error(String(err)));
+        }
+        if (phaseErrors.length > 0) {
+          throw new Error(
+            `prune/nightly: ${phaseErrors.length} phase(s) failed`,
+            { cause: phaseErrors[0] },
           );
         }
         return { past, catalog, media };
@@ -613,6 +627,15 @@ const JOBS_TABLE: JobEntry[] = [
         let wikidata:
           | Awaited<ReturnType<typeof runBackfillPerformerWikidataIds>>
           | null = null;
+        // Each leg is isolated so a run-wide throw in one (e.g. a Spotify
+        // auth_rejected) doesn't rob the others of their daily run. But we
+        // collect the failures and re-throw at the end so the job still
+        // lands in pg-boss `failed` state — that preserves the
+        // `job.failed` signal the `failed_jobs` health check keys on, and
+        // the retry the standalone jobs used to get. The legs are
+        // idempotent (they only fill NULL columns), so re-running the
+        // whole sweep on retry is a safe no-op for already-resolved rows.
+        const legErrors: Error[] = [];
         try {
           tm = await runBackfillPerformerTicketmasterIds();
           log.info(
@@ -631,6 +654,7 @@ const JOBS_TABLE: JobEntry[] = [
             { err, event: 'performer.ticketmaster_id.fatal' },
             'Performer Ticketmaster ID backfill failed',
           );
+          legErrors.push(err instanceof Error ? err : new Error(String(err)));
         }
         try {
           spotify = await runBackfillPerformerSpotifyIds();
@@ -650,6 +674,7 @@ const JOBS_TABLE: JobEntry[] = [
             { err, event: 'performer.spotify_id.fatal' },
             'Performer Spotify ID backfill failed',
           );
+          legErrors.push(err instanceof Error ? err : new Error(String(err)));
         }
         try {
           wikidata = await runBackfillPerformerWikidataIds();
@@ -668,6 +693,13 @@ const JOBS_TABLE: JobEntry[] = [
           log.error(
             { err, event: 'performer.wikidata_qid.fatal' },
             'Performer Wikidata QID backfill failed',
+          );
+          legErrors.push(err instanceof Error ? err : new Error(String(err)));
+        }
+        if (legErrors.length > 0) {
+          throw new Error(
+            `backfill/performer-ids: ${legErrors.length} leg(s) failed`,
+            { cause: legErrors[0] },
           );
         }
         return { tm, spotify, wikidata };

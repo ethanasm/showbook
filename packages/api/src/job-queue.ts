@@ -83,7 +83,7 @@ export async function enqueueIngestVenue(venueId: string): Promise<void> {
     await boss.send(JOB_NAMES.INGEST_VENUE, { venueId });
   } catch (err) {
     // Don't fail the user-facing follow mutation if the queue is unavailable
-    // — the weekly cron will catch up. Log loudly so we notice.
+    // — the daily discover cron will catch up. Log loudly so we notice.
     log.error({ err, event: 'job_queue.enqueue.failed', queue: JOB_NAMES.INGEST_VENUE, venueId }, 'enqueueIngestVenue failed');
   }
 }
