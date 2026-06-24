@@ -15,11 +15,17 @@ tags:
     clearKeychain: true
 
 # The signin CTA is below the fold on Pixel-6-sized AVDs — see
-# sign-in.yaml for context. Scroll into view before tapping.
+# sign-in.yaml for context. Scroll into view before tapping. Accept
+# partial visibility + let each scroll settle so a cold-launch where
+# the CTA lands under the gesture nav doesn't time out at the default
+# 100% visibility.
 - scrollUntilVisible:
     element:
       text: "Sign in with Google"
     direction: DOWN
+    visibilityPercentage: 60
+    waitToSettleTimeoutMs: 500
+    timeout: 30000
 
 - tapOn:
     text: "Sign in with Google"

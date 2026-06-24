@@ -20,10 +20,17 @@ tags:
     clearState: true
     clearKeychain: true
 
+# The CTA sits at the bottom of the sign-in ScrollView; accept partial
+# visibility + let each scroll settle so a cold-launch where it lands
+# under the gesture nav doesn't time out at the default 100%. See
+# sign-in.yaml for the full rationale.
 - scrollUntilVisible:
     element:
       text: "Sign in with Google"
     direction: DOWN
+    visibilityPercentage: 60
+    waitToSettleTimeoutMs: 500
+    timeout: 30000
 
 - tapOn:
     text: "Sign in with Google"
