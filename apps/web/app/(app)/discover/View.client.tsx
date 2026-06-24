@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
@@ -41,6 +41,7 @@ import "./discover.css";
 
 function FeedSection({
   items,
+  searchQuery,
   isLoading,
   emptyMessage,
   watchedIds,
@@ -62,6 +63,7 @@ function FeedSection({
   onSpotifyImported,
 }: {
   items: Announcement[] | undefined;
+  searchQuery: string;
   isLoading: boolean;
   emptyMessage: string;
   watchedIds: Set<string>;
@@ -100,6 +102,27 @@ function FeedSection({
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(new Set());
   const [regionContextMenu, setRegionContextMenu] = useState<{ x: number; y: number; regionId: string } | null>(null);
   const [sort, setSort] = useState<DiscoverSortConfig>(DISCOVER_DEFAULT_SORT);
+
+  // Reset the feed scroll position whenever the visible list changes
+  // wholesale — the selected group (venue / artist / region) or the pinned
+  // search query. Either one can shrink the list, so landing at the bottom of
+  // the previous scroll offset leaves the user parked past the new (shorter)
+  // list instead of at its top. On desktop `.discover-feed` is its own scroll
+  // container; on mobile-web it's `overflow: visible` and a page-level
+  // ancestor scrolls — reset whichever applies.
+  const feedRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = feedRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const oy = getComputedStyle(p).overflowY;
+      if (oy === "auto" || oy === "scroll") {
+        p.scrollTop = 0;
+        break;
+      }
+    }
+  }, [selectedGroupId, searchQuery]);
 
   const utils = trpc.useUtils();
 
@@ -484,7 +507,7 @@ function FeedSection({
       />
 
       {/* Feed */}
-      <div className="discover-feed">
+      <div className="discover-feed" ref={feedRef}>
         {isNearby && (regionGroups?.length ?? 0) > 0 && (
           <div
             className="discover-region-explainer"
@@ -1120,6 +1143,7 @@ export default function DiscoverView() {
       {activeTab === "Followed" && (
         <FeedSection
           items={followedItems}
+          searchQuery={searchQuery}
           isLoading={followedFeed.isLoading}
           emptyMessage={
             searchQuery.trim() !== ""
@@ -1143,6 +1167,7 @@ export default function DiscoverView() {
           <SpotifyFollowRail />
           <FeedSection
             items={artistItems}
+            searchQuery={searchQuery}
             isLoading={followedArtistsFeed.isLoading}
             emptyMessage={
               searchQuery.trim() !== ""
@@ -1165,6 +1190,7 @@ export default function DiscoverView() {
       {activeTab === "Near You" && (
         <FeedSection
           items={nearbyItems}
+          searchQuery={searchQuery}
           isLoading={nearbyFeed.isLoading}
           emptyMessage={
             searchQuery.trim() !== ""

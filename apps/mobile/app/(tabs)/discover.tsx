@@ -291,10 +291,18 @@ export default function DiscoverScreen(): React.JSX.Element {
     setSelectedRegionVenueId(null);
   }, [tab]);
 
+  // Scrollable feed body. When the visible list changes wholesale — a new
+  // tab, a different chip (venue / artist / region), the venue sub-filter,
+  // or the kind filter — reset both the render budget and the scroll
+  // position. Without the scroll reset, picking a new entity while scrolled
+  // to the bottom of the previous list leaves the user parked at the bottom
+  // of the new (shorter or equal) list instead of at its top.
+  const scrollRef = React.useRef<ScrollView>(null);
   React.useEffect(() => {
     setVisibleCount(PAGE_SIZE);
     setRegionVisibleCounts({});
-  }, [tab, selectedGroupId, selectedRegionVenueId, kindFilter]);
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [tab, selectedGroupId, selectedRegionVenueId, kindFilter, searchQuery]);
 
   // Clear the venue sub-filter whenever the user changes the region
   // selection above it; otherwise a stale venue id could leave the
@@ -1092,6 +1100,7 @@ export default function DiscoverScreen(): React.JSX.Element {
       )}
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={
           isLoading || isEmpty || showOfflineEmpty
             ? styles.scrollFlex
