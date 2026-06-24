@@ -41,6 +41,7 @@ import "./discover.css";
 
 function FeedSection({
   items,
+  searchQuery,
   isLoading,
   emptyMessage,
   watchedIds,
@@ -62,6 +63,7 @@ function FeedSection({
   onSpotifyImported,
 }: {
   items: Announcement[] | undefined;
+  searchQuery: string;
   isLoading: boolean;
   emptyMessage: string;
   watchedIds: Set<string>;
@@ -101,12 +103,13 @@ function FeedSection({
   const [regionContextMenu, setRegionContextMenu] = useState<{ x: number; y: number; regionId: string } | null>(null);
   const [sort, setSort] = useState<DiscoverSortConfig>(DISCOVER_DEFAULT_SORT);
 
-  // Reset the feed scroll position whenever the selected group (venue /
-  // artist / region) changes. Picking a new entity while scrolled to the
-  // bottom of the previous list should land at the top of the new list, not
-  // wherever the old scroll offset happened to be. On desktop `.discover-feed`
-  // is its own scroll container; on mobile-web it's `overflow: visible` and a
-  // page-level ancestor scrolls — reset whichever applies.
+  // Reset the feed scroll position whenever the visible list changes
+  // wholesale — the selected group (venue / artist / region) or the pinned
+  // search query. Either one can shrink the list, so landing at the bottom of
+  // the previous scroll offset leaves the user parked past the new (shorter)
+  // list instead of at its top. On desktop `.discover-feed` is its own scroll
+  // container; on mobile-web it's `overflow: visible` and a page-level
+  // ancestor scrolls — reset whichever applies.
   const feedRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = feedRef.current;
@@ -119,7 +122,7 @@ function FeedSection({
         break;
       }
     }
-  }, [selectedGroupId]);
+  }, [selectedGroupId, searchQuery]);
 
   const utils = trpc.useUtils();
 
@@ -1140,6 +1143,7 @@ export default function DiscoverView() {
       {activeTab === "Followed" && (
         <FeedSection
           items={followedItems}
+          searchQuery={searchQuery}
           isLoading={followedFeed.isLoading}
           emptyMessage={
             searchQuery.trim() !== ""
@@ -1163,6 +1167,7 @@ export default function DiscoverView() {
           <SpotifyFollowRail />
           <FeedSection
             items={artistItems}
+            searchQuery={searchQuery}
             isLoading={followedArtistsFeed.isLoading}
             emptyMessage={
               searchQuery.trim() !== ""
@@ -1185,6 +1190,7 @@ export default function DiscoverView() {
       {activeTab === "Near You" && (
         <FeedSection
           items={nearbyItems}
+          searchQuery={searchQuery}
           isLoading={nearbyFeed.isLoading}
           emptyMessage={
             searchQuery.trim() !== ""

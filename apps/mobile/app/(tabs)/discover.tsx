@@ -302,7 +302,7 @@ export default function DiscoverScreen(): React.JSX.Element {
     setVisibleCount(PAGE_SIZE);
     setRegionVisibleCounts({});
     scrollRef.current?.scrollTo({ y: 0, animated: false });
-  }, [tab, selectedGroupId, selectedRegionVenueId, kindFilter]);
+  }, [tab, selectedGroupId, selectedRegionVenueId, kindFilter, searchQuery]);
 
   // Clear the venue sub-filter whenever the user changes the region
   // selection above it; otherwise a stale venue id could leave the
