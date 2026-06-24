@@ -24,10 +24,20 @@ tags:
 # preview block + brand intro, so on Pixel-6-sized AVDs the CTA is
 # below the fold on first paint. Scroll to it before asserting /
 # tapping — Maestro's assertVisible / tapOn don't auto-scroll.
+#
+# The CTA is anchored at the very bottom of the ScrollView, so on some
+# cold CI launches it only ever settles partially in view (under the
+# gesture nav / safe-area inset) and never reaches the default 100%
+# visibility — scrollUntilVisible then flings past content-end and
+# times out (the intermittent rotating-display failure on 2026-06-23).
+# Accept partial visibility and let each scroll settle.
 - scrollUntilVisible:
     element:
       text: "Sign in with Google"
     direction: DOWN
+    visibilityPercentage: 60
+    waitToSettleTimeoutMs: 500
+    timeout: 30000
 
 - assertVisible:
     text: "Sign in with Google"
