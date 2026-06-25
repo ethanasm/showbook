@@ -245,6 +245,13 @@ fi
 #    existing marketplace or re-installing an installed plugin is a no-op that
 #    exits non-zero, so don't let `set -e` kill the hook over it. Best-effort:
 #    a network blip fetching the marketplace shouldn't fail the whole boot.
+#
+#    LOAD-BEARING: the trailing `|| log …` on each command is what keeps a
+#    failed `claude` call non-fatal under `set -euo pipefail`. With `pipefail`
+#    set, `claude … | sed …` reports claude's non-zero status even though
+#    `sed` succeeds, so without the `|| log` the pipeline would trip `set -e`
+#    and abort the entire session boot. Don't drop the `|| log` (or pipefail)
+#    in a refactor without replacing it with an equivalent failure swallow.
 if command -v claude >/dev/null 2>&1; then
   log "Adding superpowers marketplace and installing the plugin..."
   claude plugin marketplace add obra/superpowers-marketplace 2>&1 | sed 's/^/[session-start] /' || \
