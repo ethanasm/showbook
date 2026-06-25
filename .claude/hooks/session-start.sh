@@ -240,4 +240,19 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   echo 'export DATABASE_URL="postgresql://showbook:showbook_dev@localhost:5433/showbook"' >> "$CLAUDE_ENV_FILE"
 fi
 
+# 8. Install the Superpowers plugin so its skills are available this session.
+#    Adding the marketplace and installing are both idempotent — re-adding an
+#    existing marketplace or re-installing an installed plugin is a no-op that
+#    exits non-zero, so don't let `set -e` kill the hook over it. Best-effort:
+#    a network blip fetching the marketplace shouldn't fail the whole boot.
+if command -v claude >/dev/null 2>&1; then
+  log "Adding superpowers marketplace and installing the plugin..."
+  claude plugin marketplace add obra/superpowers-marketplace 2>&1 | sed 's/^/[session-start] /' || \
+    log "superpowers marketplace add skipped (already added or unreachable)."
+  claude plugin install superpowers@superpowers-marketplace 2>&1 | sed 's/^/[session-start] /' || \
+    log "superpowers install skipped (already installed or unavailable)."
+else
+  log "claude CLI not found; skipping superpowers plugin install."
+fi
+
 log "Session start hook complete."
