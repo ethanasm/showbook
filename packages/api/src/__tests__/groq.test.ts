@@ -605,13 +605,63 @@ describe('extractFestivalLineupFromImage', () => {
   });
 
   it('returns empty lineup on schema validation failure', async () => {
+    // A genuinely-invalid artist (name over the 120-char cap) still
+    // fails validation and is swallowed to an empty lineup. (Missing
+    // optional keys and off-vocabulary tiers no longer fail — see the
+    // normalization tests below.)
+    const json = JSON.stringify({
+      artists: [{ name: 'x'.repeat(200), tier: 'headliner' }],
+    });
     __test.setClient(
-      makeClient(async () => ({
-        choices: [{ message: { content: '{"wrong_field": true}' } }],
-      })),
+      makeClient(async () => ({ choices: [{ message: { content: json } }] })),
     );
     const result = await extractFestivalLineupFromImage('iVBORw0KGgo');
     assert.deepEqual(result.artists, []);
+  });
+
+  it('normalizes capitalized / off-vocabulary tiers from the vision model', async () => {
+    // qwen/qwen3.6-27b emits "Headliner" and labels like "Mainstage"
+    // rather than the lowercase "headliner"/"support" the prompt asks
+    // for. A case-sensitive enum used to reject these and collapse the
+    // whole (correctly-read) poster to an empty lineup.
+    const json = JSON.stringify({
+      festival_name: 'ODESZA: A Moment Apart',
+      start_date: null,
+      end_date: null,
+      venue_hint: 'Los Angeles State Historic Park',
+      artists: [
+        { name: 'ODESZA', tier: 'Headliner' },
+        { name: 'Big Wild', tier: 'Mainstage' },
+        { name: 'Evan Giia', tier: 'support' },
+      ],
+    });
+    __test.setClient(
+      makeClient(async () => ({ choices: [{ message: { content: json } }] })),
+    );
+    const result = await extractFestivalLineupFromImage('iVBORw0KGgo');
+    assert.equal(result.artists.length, 3);
+    assert.equal(result.artists[0]!.tier, 'headliner');
+    assert.equal(result.artists[1]!.tier, 'support');
+    assert.equal(result.artists[2]!.tier, 'support');
+  });
+
+  it('defaults missing optional meta fields to null instead of failing', async () => {
+    // The vision model intermittently omits start_date/end_date on
+    // single-date posters. `.nullable()` required the key to be present,
+    // so a dropped key tripped validation and emptied the lineup.
+    const json = JSON.stringify({
+      festival_name: 'ODESZA',
+      venue_hint: 'LA State Historic Park',
+      artists: [{ name: 'ODESZA' }],
+    });
+    __test.setClient(
+      makeClient(async () => ({ choices: [{ message: { content: json } }] })),
+    );
+    const result = await extractFestivalLineupFromImage('iVBORw0KGgo');
+    assert.equal(result.startDate, null);
+    assert.equal(result.endDate, null);
+    assert.equal(result.artists.length, 1);
+    assert.equal(result.artists[0]!.tier, 'support');
   });
 
   it('accepts a data: URL directly', async () => {

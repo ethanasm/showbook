@@ -64,15 +64,41 @@ const castResponseSchema = z.object({
   cast: z.array(castMemberSchema).default([]),
 });
 
+// Vision models disagree on how they spell tiers. Llama 4 Scout emitted
+// the lowercase `"headliner"` / `"support"` the prompt asks for; the
+// qwen/qwen3.6-27b migration (#619) emits capitalized `"Headliner"` and
+// off-vocabulary labels like `"Mainstage"`, none of which match a
+// case-sensitive enum. A single stray tier failed the whole lineup's
+// validation, and `safeExtractFestivalLineup` swallowed the resulting
+// LlmValidationError into an empty lineup — so a perfectly-read poster
+// surfaced as "no artists found". Normalize instead: only an explicit
+// "headliner" (any case/whitespace) is a headliner; everything else —
+// including a missing tier — is support.
+const tierSchema = z.preprocess(
+  (t) =>
+    typeof t === 'string' && t.trim().toLowerCase() === 'headliner'
+      ? 'headliner'
+      : 'support',
+  z.enum(['headliner', 'support']),
+);
 const lineupArtistSchema = z.object({
   name: z.string().min(1).max(120),
-  tier: z.enum(['headliner', 'support']).default('support'),
+  tier: tierSchema,
 });
+// `.nullable()` requires the key to be *present* (even if null), but the
+// same vision migration intermittently omits optional meta fields
+// entirely (Qwen drops start_date/end_date on single-date posters), which
+// also tripped validation and collapsed the lineup. Treat a missing key
+// and an explicit null identically.
+const optionalString = z
+  .string()
+  .nullish()
+  .transform((v) => v ?? null);
 const festivalLineupSchema = z.object({
-  festival_name: z.string().nullable(),
-  start_date: z.string().nullable(),
-  end_date: z.string().nullable(),
-  venue_hint: z.string().nullable(),
+  festival_name: optionalString,
+  start_date: optionalString,
+  end_date: optionalString,
+  venue_hint: optionalString,
   artists: z.array(lineupArtistSchema).max(200).default([]),
 });
 
