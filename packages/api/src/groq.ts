@@ -85,21 +85,41 @@ const lineupArtistSchema = z.object({
   name: z.string().min(1).max(120),
   tier: tierSchema,
 });
+// One malformed artist (empty/over-long/non-string name) shouldn't nuke a
+// correctly-read poster — that's the same total-collapse failure mode this
+// PR fixes, just scoped to a single row. Drop only the bad entries and
+// keep the rest. A non-array (or missing) `artists` degrades to empty
+// rather than throwing, and we cap at 200 by slicing instead of failing.
+const artistsSchema = z.preprocess(
+  (v) => (Array.isArray(v) ? v : []),
+  z
+    .array(z.unknown())
+    .transform((arr) =>
+      arr
+        .flatMap((a) => {
+          const parsed = lineupArtistSchema.safeParse(a);
+          return parsed.success ? [parsed.data] : [];
+        })
+        .slice(0, 200),
+    ),
+);
 // `.nullable()` requires the key to be *present* (even if null), but the
 // same vision migration intermittently omits optional meta fields
 // entirely (Qwen drops start_date/end_date on single-date posters), which
-// also tripped validation and collapsed the lineup. Treat a missing key
-// and an explicit null identically.
-const optionalString = z
-  .string()
-  .nullish()
-  .transform((v) => v ?? null);
+// also tripped validation and collapsed the lineup. These four are
+// best-effort metadata — never let their shape sink the lineup: coerce a
+// missing key, null, or stray number to a string-or-null and move on.
+const optionalString = z.preprocess((v) => {
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number') return String(v);
+  return null;
+}, z.string().nullable());
 const festivalLineupSchema = z.object({
   festival_name: optionalString,
   start_date: optionalString,
   end_date: optionalString,
   venue_hint: optionalString,
-  artists: z.array(lineupArtistSchema).max(200).default([]),
+  artists: artistsSchema,
 });
 
 // ---------------------------------------------------------------------------

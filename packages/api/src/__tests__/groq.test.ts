@@ -604,22 +604,41 @@ describe('extractFestivalLineupFromImage', () => {
     assert.deepEqual(result.artists, []);
   });
 
-  it('returns empty lineup on schema validation failure', async () => {
-    // A genuinely-invalid artist (name over the 120-char cap) still
-    // fails validation and is swallowed to an empty lineup. (Missing
-    // optional keys and off-vocabulary tiers no longer fail — see the
-    // normalization tests below.)
+  it('drops malformed artists but keeps the valid ones', async () => {
+    // One bad row (name over the 120-char cap, empty name, or a missing
+    // name) must not collapse a correctly-read poster — only the bad
+    // entries are dropped, the rest survive.
     const json = JSON.stringify({
-      artists: [{ name: 'x'.repeat(200), tier: 'headliner' }],
+      festival_name: 'ODESZA',
+      artists: [
+        { name: 'ODESZA', tier: 'headliner' },
+        { name: 'x'.repeat(200), tier: 'support' }, // over the 120 cap
+        { tier: 'support' }, // missing name
+        { name: 'Big Wild', tier: 'support' },
+      ],
     });
     __test.setClient(
       makeClient(async () => ({ choices: [{ message: { content: json } }] })),
     );
     const result = await extractFestivalLineupFromImage('iVBORw0KGgo');
-    assert.deepEqual(result.artists, []);
+    assert.equal(result.festivalName, 'ODESZA');
+    assert.deepEqual(
+      result.artists.map((a) => a.name),
+      ['ODESZA', 'Big Wild'],
+    );
   });
 
-  it('normalizes capitalized / off-vocabulary tiers from the vision model', async () => {
+  it('returns an empty lineup when artists is missing or not an array', async () => {
+    const json = JSON.stringify({ festival_name: 'X', artists: 'none' });
+    __test.setClient(
+      makeClient(async () => ({ choices: [{ message: { content: json } }] })),
+    );
+    const result = await extractFestivalLineupFromImage('iVBORw0KGgo');
+    assert.deepEqual(result.artists, []);
+    assert.equal(result.festivalName, 'X');
+  });
+
+  it('normalizes capitalized / off-vocabulary / whitespace tiers from the vision model', async () => {
     // qwen/qwen3.6-27b emits "Headliner" and labels like "Mainstage"
     // rather than the lowercase "headliner"/"support" the prompt asks
     // for. A case-sensitive enum used to reject these and collapse the
@@ -630,19 +649,37 @@ describe('extractFestivalLineupFromImage', () => {
       end_date: null,
       venue_hint: 'Los Angeles State Historic Park',
       artists: [
-        { name: 'ODESZA', tier: 'Headliner' },
-        { name: 'Big Wild', tier: 'Mainstage' },
+        { name: 'ODESZA', tier: ' Headliner ' }, // padded + capitalized
+        { name: 'Big Wild', tier: 'Mainstage' }, // off-vocabulary
         { name: 'Evan Giia', tier: 'support' },
+        { name: 'Hemra' }, // missing tier → support
       ],
     });
     __test.setClient(
       makeClient(async () => ({ choices: [{ message: { content: json } }] })),
     );
     const result = await extractFestivalLineupFromImage('iVBORw0KGgo');
-    assert.equal(result.artists.length, 3);
+    assert.equal(result.artists.length, 4);
     assert.equal(result.artists[0]!.tier, 'headliner');
     assert.equal(result.artists[1]!.tier, 'support');
     assert.equal(result.artists[2]!.tier, 'support');
+    assert.equal(result.artists[3]!.tier, 'support');
+  });
+
+  it('coerces a numeric date field instead of collapsing the lineup', async () => {
+    // Best-effort metadata must never sink the lineup: a stray number
+    // where a date string was expected is coerced, not rejected.
+    const json = JSON.stringify({
+      festival_name: 'ODESZA',
+      start_date: 2026,
+      artists: [{ name: 'ODESZA', tier: 'headliner' }],
+    });
+    __test.setClient(
+      makeClient(async () => ({ choices: [{ message: { content: json } }] })),
+    );
+    const result = await extractFestivalLineupFromImage('iVBORw0KGgo');
+    assert.equal(result.startDate, '2026');
+    assert.equal(result.artists.length, 1);
   });
 
   it('defaults missing optional meta fields to null instead of failing', async () => {
