@@ -7,11 +7,16 @@ import type { TMAttraction, TMEvent } from '@showbook/api';
  * production Axiom dashboards that filter on them. `msg` keeps the
  * original "Skipping TM event with no venue name" style log message so
  * the pino message-string column doesn't change either.
+ *
+ * `level` lets each predicate own the severity of its skip:
+ * `unknown_kind` is deliberate content filtering (info) whereas the
+ * venue-data reasons indicate TM data quality problems (warn).
  */
 export type SkipResult =
   | {
       skip: true;
       reason: 'missing_venue_name' | 'missing_venue_city' | 'unknown_kind';
+      level: 'info' | 'warn';
       msg: string;
       fields: Record<string, unknown>;
     }
@@ -30,6 +35,7 @@ export function hasValidVenueName(event: TMEvent): SkipResult {
     return {
       skip: true,
       reason: 'missing_venue_name',
+      level: 'warn',
       msg: 'Skipping TM event with no venue name',
       fields: { tmEventId: event.id, name: event.name, city: undefined },
     };
@@ -38,6 +44,7 @@ export function hasValidVenueName(event: TMEvent): SkipResult {
     return {
       skip: true,
       reason: 'missing_venue_name',
+      level: 'warn',
       msg: 'Skipping TM event with no venue name',
       fields: {
         tmEventId: event.id,
@@ -65,6 +72,7 @@ export function hasValidVenueCity(event: TMEvent): SkipResult {
     return {
       skip: true,
       reason: 'missing_venue_city',
+      level: 'warn',
       msg: 'Skipping TM event with no venue city',
       fields: {
         tmEventId: event.id,
@@ -88,6 +96,7 @@ export function hasValidKind(kind: string, event: TMEvent): SkipResult {
     return {
       skip: true,
       reason: 'unknown_kind',
+      level: 'info',
       msg: 'Skipping TM event with unknown kind',
       fields: { tmEventId: event.id, name: event.name },
     };

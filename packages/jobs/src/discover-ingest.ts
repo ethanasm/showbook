@@ -65,7 +65,13 @@ export function futureISO(months: number): string {
 }
 
 function emitSkip(check: SkipResult & { skip: true }): null {
-  log.warn({ event: 'tm.normalize.skipped', reason: check.reason, ...check.fields }, check.msg);
+  // Severity is owned by the predicate: `unknown_kind` is deliberate
+  // content filtering (info, ~3.9k/week in prod — not a fault signal);
+  // the venue-data reasons stay warn.
+  log[check.level](
+    { event: 'tm.normalize.skipped', reason: check.reason, ...check.fields },
+    check.msg,
+  );
   return null;
 }
 
