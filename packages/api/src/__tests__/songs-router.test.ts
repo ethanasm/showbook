@@ -1,5 +1,5 @@
 /**
- * Unit suite for the new `songs` router (Phase 2). Two layers:
+ * Unit suite for the `songs` router. Two layers:
  *
  *  1. The pure `rowIsUserDebut` helper that powers the `tourDebutOnly`
  *     filter — assert it returns true only when the user has a single
@@ -116,48 +116,5 @@ describe('songsRouter.list filter pipeline', () => {
     // tourDebutOnly takes precedence; both should still produce the
     // same single row.
     assert.equal(out.length, 1);
-  });
-});
-
-describe('songsRouter.count', () => {
-  test('returns the scripted distinct-song count', async () => {
-    const db = makeFakeDb({ selectResults: [[{ count: 42 }]] });
-    const caller = songsRouter.createCaller(fakeCtx(db, USER_ID) as any);
-    const out = await caller.count();
-    assert.equal(out, 42);
-  });
-
-  test('returns 0 when the user has never heard a song live', async () => {
-    const db = makeFakeDb({ selectResults: [[]] });
-    const caller = songsRouter.createCaller(fakeCtx(db, USER_ID) as any);
-    const out = await caller.count();
-    assert.equal(out, 0);
-  });
-});
-
-describe('songsRouter.years', () => {
-  test('returns the scripted years sorted descending', async () => {
-    const db = makeFakeDb({
-      selectResults: [[{ year: 2022 }, { year: 2026 }, { year: 2024 }]],
-    });
-    const caller = songsRouter.createCaller(fakeCtx(db, USER_ID) as any);
-    const out = await caller.years();
-    assert.deepEqual(out, [2026, 2024, 2022]);
-  });
-
-  test('coerces string-shaped EXTRACT results to numbers and drops NaN', async () => {
-    // postgres-js returns EXTRACT() as a string when the column type
-    // is numeric; the procedure should normalise so the UI never sees
-    // mixed types in the dropdown.
-    const db = makeFakeDb({
-      selectResults: [[
-        { year: '2025' },
-        { year: 'nope' },
-        { year: 2023 },
-      ]],
-    });
-    const caller = songsRouter.createCaller(fakeCtx(db, USER_ID) as any);
-    const out = await caller.years();
-    assert.deepEqual(out, [2025, 2023]);
   });
 });

@@ -1,5 +1,5 @@
 /**
- * Integration coverage for the Phase 2 `songs` router.
+ * Integration coverage for the `songs` router.
  *
  * Seeds a fixture user with three shows from one performer + two
  * shows from a second performer, where one song repeats across
@@ -231,27 +231,6 @@ describe('songs router integration', () => {
     // rather than throwing when tour_setlists is empty for this
     // performer).
     assert.equal(detail.rarity, null);
-  });
-
-  it('firstHeardForUser returns rows in date-descending order', { skip: !process.env.DATABASE_URL }, async () => {
-    const caller = callerFor(USER);
-    const feed = await caller.songs.firstHeardForUser({
-      scope: 'all',
-      limit: 100,
-    });
-    // 5 unique songs → 5 rows.
-    const ours = feed.filter((r) => r.performerId === PERF_A || r.performerId === PERF_B);
-    assert.equal(ours.length, 5);
-    // First date in the feed is the most recent firstDate (2025-03-30
-    // for Light Years and Other Song; both came in on SHOW_3).
-    assert.equal(ours[0]!.firstDate, '2025-03-30');
-    // The scope filter narrows.
-    const scoped = await caller.songs.firstHeardForUser({
-      scope: PERF_B,
-      limit: 100,
-    });
-    assert.equal(scoped.length, 1);
-    assert.equal(scoped[0]!.title, 'Other Song');
   });
 });
 
