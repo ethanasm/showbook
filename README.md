@@ -76,7 +76,7 @@ See [`apps/web/.env.example`](apps/web/.env.example) for the full template with
 defaults and inline notes. The required groups are:
 
 - **Auth** — `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. Self-hosters should also set `AUTH_ALLOWED_EMAILS` and/or `AUTH_ALLOWED_DOMAINS` (comma-separated) to gate sign-in. Both unset = open sign-up. Optionally set `ADMIN_EMAILS` (comma-separated) to grant access to the in-app Admin tab; closed by default.
-- **Data sources** — `TICKETMASTER_API_KEY`, `SETLISTFM_API_KEY`, `GROQ_API_KEY`, `GOOGLE_PLACES_API_KEY`
+- **Data sources** — `TICKETMASTER_API_KEY`, `SETLISTFM_API_KEY`, `GROQ_API_KEY`, `GOOGLE_PLACES_API_KEY`. Places usage is designed to stay inside Google's free per-SKU tiers — see the field-mask cost contract in `packages/api/src/google-places.ts` before adding callers.
 - **Media (Cloudflare R2)** — `R2_*` plus `MEDIA_*` quotas/limits
 - **Email (Resend)** — `RESEND_API_KEY`, `EMAIL_FROM` (unset → digest job logs and skips delivery)
 - **Legal (optional)** — `LEGAL_CONTACT_EMAIL`, `LEGAL_GOVERNING_LAW` set the contact address + governing law shown on the public `/privacy`, `/terms`, and `/account-deletion` pages; unset → a `@showbook.app` placeholder
@@ -179,7 +179,7 @@ The morning health check at 07:00 ET reports any cron that didn't fire (see
 | `enrichment/setlist-corpus-fill-refresh` | 04:45 | Daily | Refreshes setlist corpus for top-followed + upcoming-show performers; rebuilds song index. |
 | `discover/ingest` | 05:00 | Daily | Ticketmaster ingest (phases 1–4) + scrapers. Feeds the Discover tab and the digest's "new announcements". (Was weekly; now daily.) |
 | `backfill/performer-images` | 05:30 | Daily | Backfills performer photos. |
-| `backfill/venue-photos` | 05:45 | Daily | Backfills venue photos (Google Places). |
+| `backfill/venue-photos` | 05:45 | Daily | Backfills + refreshes venue photos (Google Places, photo-only field mask → free IDs-Only SKU). |
 | `backfill/performer-ids` | 06:00 | Daily | Combined performer external-ID sweep, in order: Ticketmaster → Spotify → Wikidata catalog IDs. |
 | `backfill/show-cover-images` | 06:15 | Daily | Backfills show cover images. |
 | `backfill/show-ticket-urls` | 06:45 | Daily | Fills `ticket_url` for future shows imported without a TM link. |

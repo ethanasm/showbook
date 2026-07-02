@@ -8,7 +8,7 @@ import { db, venues } from '@showbook/db';
 import { eq, isNotNull, isNull } from 'drizzle-orm';
 import {
   geocodeVenue,
-  getPlaceDetails,
+  getPlacePhotoName,
   isUniqueViolation,
 } from '@showbook/api';
 import { child, flushObservability } from '@showbook/observability';
@@ -125,9 +125,15 @@ export async function runBackfillVenuePhotos(): Promise<BackfillVenuePhotosSumma
 
   // Photo pass: every venue with a Place ID. We refresh even rows that
   // already have a photoUrl because Google rotates the per-photo resource
-  // name (~weekly) — stale names cause the venue-photo proxy to 502 and
-  // RemoteImage falls back to the initials placeholder. We only write
-  // when the resource name actually changes.
+  // name (~daily in practice) — stale names cause the venue-photo proxy to
+  // 502 and RemoteImage falls back to the initials placeholder. We only
+  // write when the resource name actually changes.
+  //
+  // This pass MUST stay on getPlacePhotoName (field mask `photos` only →
+  // Google's free "Essentials IDs Only" SKU). Using getPlaceDetails here
+  // bills every one of these nightly calls at the Pro SKU — full-corpus ×
+  // 30 nights blew past the 5k/month free tier and cost ~$10/day in
+  // 2026-06.
   const rows = await db
     .select({
       id: venues.id,
@@ -148,18 +154,18 @@ export async function runBackfillVenuePhotos(): Promise<BackfillVenuePhotosSumma
     if (index > 0) await sleep(WAIT_MS);
 
     try {
-      const details = await getPlaceDetails(venue.googlePlaceId);
-      if (!details?.photoUrl) {
+      const photoName = await getPlacePhotoName(venue.googlePlaceId);
+      if (!photoName) {
         missing++;
         log.info({ event: 'venue.photo.missing', venueId: venue.id, venueName: venue.name }, 'No photo on Place');
         continue;
       }
 
-      if (details.photoUrl === venue.photoUrl) continue;
+      if (photoName === venue.photoUrl) continue;
 
       await db
         .update(venues)
-        .set({ photoUrl: details.photoUrl })
+        .set({ photoUrl: photoName })
         .where(eq(venues.id, venue.id));
 
       if (venue.photoUrl == null) {

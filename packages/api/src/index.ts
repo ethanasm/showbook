@@ -72,7 +72,7 @@ export {
   type SongIndexRebuildResult,
   deriveRole,
 } from './song-index-rebuild';
-export { getPlacePhotoMediaUrl, getPlaceDetails } from './google-places';
+export { getPlacePhotoMediaUrl, getPlaceDetails, getPlacePhotoName } from './google-places';
 export {
   extractShowFromEmail,
   extractShowFromPdfText,
