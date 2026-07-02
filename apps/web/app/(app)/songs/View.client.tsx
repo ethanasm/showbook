@@ -436,6 +436,7 @@ export default function SongsView() {
             totalItems={filtered.length}
             itemLabel="songs"
             onPageChange={setCurrentPage}
+            maxWidth={listMaxWidth}
           />
         )}
       </div>

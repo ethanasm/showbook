@@ -219,6 +219,12 @@ export default function VenuesView() {
     ? "minmax(120px,2fr) minmax(80px,1fr) 70px 70px 32px 32px 32px"
     : "minmax(120px,2fr) minmax(60px,0.7fr) minmax(80px,1fr) 70px 70px 32px 32px 32px";
 
+  // Max content width for the list (matches the Songs page). On displays
+  // wider than this the list left-anchors to the page padding (sidebar
+  // already biases the content towards the right edge), keeping the
+  // inter-column whitespace reasonable.
+  const listMaxWidth = isMobile ? undefined : 1080;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* Header */}
@@ -276,7 +282,7 @@ export default function VenuesView() {
             />
           </div>
         ) : (
-          <div style={{ margin: "4px var(--page-pad-x) 0", background: "var(--surface)" }}>
+          <div style={{ margin: "4px var(--page-pad-x) 0", background: "var(--surface)", maxWidth: listMaxWidth }}>
             {/* Column headers */}
             <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 8 : 20, padding: isMobile ? "8px 12px" : "10px 20px", borderBottom: "1px solid var(--rule)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase" }}>
               <SortHeader<SortField> field="name" label="Name" sort={sort} onToggle={toggleSort} />
@@ -385,6 +391,7 @@ export default function VenuesView() {
             totalItems={filtered.length}
             itemLabel="venues"
             onPageChange={setCurrentPage}
+            maxWidth={listMaxWidth}
           />
         )}
       </div>
