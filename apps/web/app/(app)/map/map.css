@@ -135,15 +135,28 @@
 
 /* ── Filter bar ───────��─────────────────���───────────────────────────────��─ */
 
+/* Two fixed rows (viewing + layers / kinds + years) instead of one
+   wrapping strip: with a single flex-wrap row, switching layers changed
+   the year-button count (12 past years vs. 2 future ones) and the
+   Viewing text width, re-flowing every group into a different spot —
+   jarring. Rows keep each control in a permanent position; only the
+   trailing year group changes width. */
 .map-filterbar {
   padding: 14px 32px;
   background: var(--surface);
   border-bottom: 1px solid var(--rule);
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.map-filterbar__row {
+  display: flex;
   align-items: center;
   gap: 24px;
-  /* Wrap instead of crushing the Viewing label when the filter groups
-     outgrow the row (the layer control widened with the My shows mode). */
+  /* Still wrap within a row when it genuinely can't fit (narrow
+     viewports, long year lists) — the fixed groups stay put because
+     they lead their row. */
   flex-wrap: wrap;
   row-gap: 10px;
 }
@@ -153,6 +166,9 @@
   flex-direction: column;
   gap: 2px;
   flex-shrink: 0;
+  /* Reserve the width of the longest mode description ("Upcoming shows
+     you're going to") so the layer buttons don't shift when it changes. */
+  min-width: 230px;
 }
 
 .map-filterbar__viewing-label {
@@ -876,8 +892,11 @@
 
   .map-filterbar {
     padding: 10px 16px;
+    gap: 8px;
+  }
+
+  .map-filterbar__row {
     gap: 10px;
-    flex-wrap: wrap;
   }
 
   .map-filterbar .segmented-filter,
@@ -903,8 +922,19 @@
 
   .map-filterbar {
     padding: 10px 16px;
+    gap: 8px;
+  }
+
+  /* Each row scrolls sideways on its own so the two-row structure (and
+     each control's position) survives on phone widths. */
+  .map-filterbar__row {
+    flex-wrap: nowrap;
     gap: 12px;
     overflow-x: auto;
+  }
+
+  .map-filterbar__viewing {
+    min-width: 0;
   }
 
   .map-body {
