@@ -9,6 +9,7 @@ import {
   autocomplete,
   getPlaceDetails,
   getPlacePhotoMediaUrl,
+  getPlacePhotoName,
   pickBestPhotoName,
 } from '../google-places';
 
@@ -257,6 +258,73 @@ test('getPlaceDetails: handles fully empty body', async () => {
     googlePlaceId: 'place-4',
     photoUrl: null,
   });
+});
+
+// ── getPlacePhotoName ───────────────────────────────────────────────────
+
+test('getPlacePhotoName: returns null when API key is missing', async () => {
+  delete process.env.GOOGLE_PLACES_API_KEY;
+  const result = await getPlacePhotoName('place-1');
+  assert.equal(result, null);
+});
+
+test('getPlacePhotoName: returns null on non-OK response', async () => {
+  stubFetch(async () => new Response('not found', { status: 404 }));
+  const result = await getPlacePhotoName('place-1');
+  assert.equal(result, null);
+});
+
+test('getPlacePhotoName: requests ONLY the photos field (free IDs-Only SKU)', async () => {
+  // Cost regression guard: any extra field in this mask (e.g. displayName)
+  // re-prices every nightly refresh call at the Pro SKU. See google-places.ts.
+  let urlSeen = '';
+  let maskSeen = '';
+  stubFetch(async (url, init) => {
+    urlSeen = String(url);
+    const headers = init?.headers as Record<string, string>;
+    maskSeen = headers['X-Goog-FieldMask'];
+    assert.equal(headers['X-Goog-Api-Key'], 'test-key');
+    return jsonResponse({
+      photos: [{ name: 'places/abc/photos/hero', widthPx: 3000, heightPx: 2000 }],
+    });
+  });
+
+  const result = await getPlacePhotoName('place-fillmore');
+  assert.ok(urlSeen.includes('/places/place-fillmore'));
+  assert.equal(maskSeen, 'photos');
+  assert.equal(result, 'places/abc/photos/hero');
+});
+
+test('getPlacePhotoName: applies pickBestPhotoName hero selection', async () => {
+  stubFetch(async () =>
+    jsonResponse({
+      photos: [
+        { name: 'p/portrait', widthPx: 2000, heightPx: 3000 },
+        { name: 'p/hero', widthPx: 3200, heightPx: 2000 },
+      ],
+    }),
+  );
+  assert.equal(await getPlacePhotoName('place-2'), 'p/hero');
+});
+
+test('getPlacePhotoName: returns null when the place has no photos', async () => {
+  stubFetch(async () => jsonResponse({}));
+  assert.equal(await getPlacePhotoName('place-3'), null);
+});
+
+test('getPlacePhotoName: retries on a transient error then succeeds', async () => {
+  let calls = 0;
+  stubFetch(async () => {
+    calls++;
+    if (calls < 2) {
+      const err = new TypeError('fetch failed');
+      (err as { cause?: unknown }).cause = { code: 'ECONNRESET' };
+      throw err;
+    }
+    return jsonResponse({ photos: [{ name: 'p/recovered', widthPx: 3000, heightPx: 2000 }] });
+  });
+  assert.equal(await getPlacePhotoName('place-flaky'), 'p/recovered');
+  assert.equal(calls, 2);
 });
 
 // ── fetchWithRetry (transient network errors) ──────────────────────────

@@ -118,6 +118,12 @@ const PlaceDetailsResponseSchema = z
   })
   .passthrough();
 
+const PlacePhotosResponseSchema = z
+  .object({
+    photos: z.array(PhotoSchema).optional(),
+  })
+  .passthrough();
+
 export async function autocomplete(
   input: string,
   types?: string[],
@@ -226,6 +232,45 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
     googlePlaceId: placeId,
     photoUrl: pickBestPhotoName(data.photos),
   };
+}
+
+// Photo-name-only Place Details lookup for the nightly venue-photo refresh.
+//
+// COST CONTRACT — the field mask here is what keeps the refresh free. The
+// `photos` field belongs to Google's "Place Details Essentials (IDs Only)"
+// SKU, which is $0 at unlimited volume. The full getPlaceDetails() mask
+// above requests `displayName`, a Pro-SKU field, which bills the *entire*
+// call at Pro rates ($17/1k past 5k calls/month) — that's what turned the
+// full-corpus nightly refresh into ~$10/day in 2026-06. Only IDs-Only
+// fields (id, name, photos, attributions) may ever be added to this mask;
+// anything else silently re-prices every nightly call.
+export async function getPlacePhotoName(placeId: string): Promise<string | null> {
+  const API_KEY = getApiKey();
+  if (!API_KEY) return null;
+
+  const res = await fetchWithRetry(
+    `${BASE_URL}/places/${placeId}`,
+    {
+      headers: {
+        'X-Goog-Api-Key': API_KEY,
+        'X-Goog-FieldMask': 'photos',
+      },
+    },
+    'getPlacePhotoName',
+  );
+
+  if (!res.ok) return null;
+
+  const raw = await res.json();
+  const parsed = PlacePhotosResponseSchema.safeParse(raw);
+  if (!parsed.success) {
+    log.error(
+      { event: 'places.details.parse_failed', placeId, call: 'getPlacePhotoName', issues: parsed.error.issues.slice(0, 5) },
+      'place photos response did not match expected shape',
+    );
+    return null;
+  }
+  return pickBestPhotoName(parsed.data.photos);
 }
 
 // Iterate the top 5 Places photos and pick the first that looks like a hero:

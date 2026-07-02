@@ -61,6 +61,19 @@ delegates to `pr-screenshots` whenever the diff touches
 branch to see a UI change, and visual diffs in the PR body should be
 **before/after** rather than just "after".
 
+## Keep README.md current
+
+`README.md` is the operator-facing front door — env vars, the cron
+schedule table, port/stack layout, deployment checklist, external-API
+cost/quota notes. When a change touches anything essential that the
+README documents (new/renamed env var, cron queue added / rescheduled /
+repurposed, ports, a data source's billing or quota behaviour, deploy
+steps), update the README **in the same PR** — don't let it drift and
+rely on specs alone. Detail lives in `docs/specs/`; the README just has
+to stay truthful at a glance. A change that silently invalidates a
+README line (e.g. altering what an external API call costs) is
+incomplete until the README says so too.
+
 ## Working environment (Claude on the web)
 
 When you're running in the Claude Code web sandbox, this checkout is a **shallow clone** (`git rev-parse --is-shallow-repository` → `true`) of a single branch. As a result:
@@ -298,7 +311,7 @@ The stdout copy in the prod web container (`docker logs showbook-prod-web`) is a
 - `setlist.corpus_fill.{started,complete,failed,rate_limited}` — corpus-fill job lifecycle. `rate_limited` (added 2026-05-21) fires when `fetchArtistSetlists` throws `SetlistFmError(status=429)`; the job returns cleanly with `skipped: 'rate_limited'` instead of throwing, so pg-boss doesn't burn its retry budget against a sustained 429 event.
 - `venue_matcher.tm_lookup.failed`, `venue_matcher.geocode.failed`, `venue_matcher.geocode_update.failed` — `matchOrCreateVenue` external-call boundaries.
 - `geocode.google.failed`, `geocode.google.no_lat_lng`, `geocode.nominatim.http_error`, `geocode.nominatim.failed` — `geocodeVenue` provider boundaries; were silent until 2026-04-30.
-- `places.autocomplete.error`, `places.autocomplete.parse_failed`, `places.details.parse_failed`, `places.request.retry` — Google Places (New) client boundaries in `packages/api/src/google-places.ts`. `places.request.retry` (warn, added 2026-06-06) fires when `fetchWithRetry` retries a transient transport failure (`TypeError: fetch failed` / `ECONNRESET` / timeout / `UND_ERR_SOCKET`) before re-attempting; it carries `{call, code}` where `call` is `getPlaceDetails` | `autocomplete`. It exists because the `backfill-venue-photos` cron makes hundreds of sequential Place-details calls and Google resets a small fraction of keep-alive sockets mid-read — those used to surface as 3–19 `venue.photo.failed` errors/night (the only `error_volume` contributor). A retry on a fresh connection clears virtually all of them; a transient error that survives every attempt still propagates and logs `venue.photo.failed` at error level, so a real Google Places outage still trips the gauge.
+- `places.autocomplete.error`, `places.autocomplete.parse_failed`, `places.details.parse_failed`, `places.request.retry` — Google Places (New) client boundaries in `packages/api/src/google-places.ts`. `places.request.retry` (warn, added 2026-06-06) fires when `fetchWithRetry` retries a transient transport failure (`TypeError: fetch failed` / `ECONNRESET` / timeout / `UND_ERR_SOCKET`) before re-attempting; it carries `{call, code}` where `call` is `getPlaceDetails` | `getPlacePhotoName` | `autocomplete`. `getPlacePhotoName` (added 2026-07-02) is the photo-only Place-details variant (field mask `photos`, Google's free "Essentials IDs Only" SKU) that the nightly `backfill-venue-photos` refresh uses — the full `getPlaceDetails` mask includes `displayName`, a Pro-SKU field that billed the whole nightly full-corpus refresh at $17/1k past 5k calls/month (the 2026-06 ~$10/day Places bill); `places.details.parse_failed` from that path carries `call: 'getPlacePhotoName'`. `places.request.retry` exists because the `backfill-venue-photos` cron makes hundreds of sequential Place-details calls and Google resets a small fraction of keep-alive sockets mid-read — those used to surface as 3–19 `venue.photo.failed` errors/night (the only `error_volume` contributor). A retry on a fresh connection clears virtually all of them; a transient error that survives every attempt still propagates and logs `venue.photo.failed` at error level, so a real Google Places outage still trips the gauge.
 - `performer.match.created`, `performer.match.race_recovered` — `matchOrCreatePerformer` writes (added 2026-04-30 to track external-ID coverage).
 - `performer.image.{updated,no_match,failed,updated_image_only,done,fatal}` — `backfill-performer-images` job.
 - `venue.photo.{updated,missing,failed,done,fatal}` — `backfill-venue-photos` job.
