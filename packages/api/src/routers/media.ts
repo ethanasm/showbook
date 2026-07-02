@@ -469,7 +469,25 @@ export const mediaRouter = router({
       const variants = asset.variants ?? {};
       const checkedEntries = await Promise.all(
         Object.entries(variants).map(async ([name, variant]) => {
-          const head = await headMediaObject(variant.key);
+          let head;
+          try {
+            head = await headMediaObject(variant.key);
+          } catch (err) {
+            // Log with asset context before rethrowing — an R2 HEAD failure
+            // used to surface only as a generic `trpc.error` with no assetId.
+            // The asset stays 'pending'; the prune/orphan-media sweep picks
+            // it up after 24h if the client never retries successfully.
+            log.error(
+              {
+                err,
+                event: 'media.complete.head_failed',
+                assetId: asset.id,
+                variant: name,
+              },
+              'Failed to HEAD uploaded media object',
+            );
+            throw err;
+          }
           return [
             name,
             {
@@ -487,6 +505,17 @@ export const mediaRouter = router({
         // Mark failed FIRST so the DB is always consistent. R2 cleanup is
         // best-effort — if it fails we have an orphan we can sweep later,
         // but we must never leave the asset in 'pending' with bytes gone.
+        log.warn(
+          {
+            event: 'media.complete.failed',
+            assetId: asset.id,
+            userId,
+            reason: actualBytes <= 0 ? 'no_bytes' : 'oversize',
+            bytes: actualBytes,
+            reservedBytes: asset.bytes,
+          },
+          'Marking media asset failed on completeUpload',
+        );
         await ctx.db
           .update(mediaAssets)
           .set({ status: 'failed', updatedAt: new Date() })
@@ -518,6 +547,17 @@ export const mediaRouter = router({
         })
         .where(eq(mediaAssets.id, asset.id))
         .returning();
+
+      log.info(
+        {
+          event: 'media.complete.ready',
+          assetId: asset.id,
+          userId,
+          variantCount: checkedEntries.length,
+          bytes: actualBytes,
+        },
+        'Media asset marked ready',
+      );
 
       return toMediaDto({
         ...updated!,
@@ -722,8 +762,40 @@ export const mediaRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Media asset not found' });
       }
       const variants = asset.variants ?? {};
-      await Promise.all(Object.values(variants).map((variant) => deleteMediaObject(variant.key)));
+      // Blob deletes are best-effort per variant: settle all of them, log
+      // each failure, then drop the DB row regardless — the same pattern as
+      // the completeUpload cleanup and the prune/orphan-media job. A single
+      // R2 rejection must not strand a DB row pointing at half-deleted blobs.
+      const variantEntries = Object.values(variants);
+      const deleteResults = await Promise.allSettled(
+        variantEntries.map((variant) => deleteMediaObject(variant.key)),
+      );
+      let variantsFailed = 0;
+      for (const [i, r] of deleteResults.entries()) {
+        if (r.status === 'rejected') {
+          variantsFailed += 1;
+          log.warn(
+            {
+              err: r.reason,
+              event: 'media.delete.variant_failed',
+              assetId: asset.id,
+              key: variantEntries[i]!.key,
+            },
+            'Failed to delete media object variant',
+          );
+        }
+      }
       await ctx.db.delete(mediaAssets).where(eq(mediaAssets.id, asset.id));
+      log.info(
+        {
+          event: 'media.delete.done',
+          assetId: asset.id,
+          userId,
+          variantsDeleted: deleteResults.length - variantsFailed,
+          variantsFailed,
+        },
+        'Media asset deleted',
+      );
       return { success: true };
     }),
 });
