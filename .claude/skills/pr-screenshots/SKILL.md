@@ -190,6 +190,40 @@ shippable — fix the wait/seed/selector and re-capture before doing anything
 else. Posting a capture you didn't visually verify is the most common way
 this skill ships misleading review material.
 
+**Then critique each frame like a designer, not just a validator.**
+"Renders the right data without overflow or clipping" is the **floor**,
+not the bar. A frame can pass every correctness check above and still
+look bad — and if it looks bad, it's the diff's problem to fix, not
+something to paper over with a tighter crop or a caption. When you look
+at each PNG, ask the questions a designer would, and if the answer is
+"yes" to any, treat the frame as **not shippable** until the source
+changes (or you've flagged it to the user as a known trade-off):
+
+- **Dead space.** Is there a large empty band the layout isn't using —
+  especially at the **bottom of tall / mobile frames**, where a short
+  content column leaves half the viewport blank? Content that floats to
+  the top of an 844 px-tall screen with 400 px of nothing under it reads
+  as unfinished.
+- **Avoidable wrapping.** Is a label, chip, button, or heading wrapping
+  to a second line when it didn't need to? Often the fix is to drop the
+  text label and keep the icon, shorten the copy, or let the container
+  breathe — not to accept the wrap.
+- **Lopsided distribution.** Are rows, cards, or controls bunched to one
+  side (usually the left) leaving a wide unused gutter on the other? A
+  row that could spread across the available width but instead clusters
+  at 60% and trails dead width looks broken even when nothing overflowed.
+- **General polish.** Misaligned baselines, inconsistent gaps between
+  sibling elements, an icon optically off-center in its tap target,
+  text crowding an edge with no breathing room, a divider that stops
+  short of the content it separates. None of these trip a correctness
+  check; all of them read as sloppy.
+
+If a frame fails this critique, the right move is to fix the UI and
+re-capture, exactly as you would for a skeleton or an empty state — the
+screenshot is doing its job by surfacing the problem. Do not ship the
+frame and rely on the reviewer to notice; you are the first designer in
+the loop.
+
 Then run the pixel-diff below. Screenshots are a **quality gate**, not just
 decoration. After capture and before posting, you must verify the change is
 actually perceptible in the form a reviewer will see it. Two failures kill
@@ -372,6 +406,14 @@ the workflow finish and the body update arrive as webhook events.
   captures at `domcontentloaded`, before client tRPC queries resolve.
   Wait for the rendered content (a content selector + `networkidle`),
   and seed the data so the surface isn't empty.
+- **Treating "renders without overflow" as the bar.** That's the floor.
+  A frame that clears every correctness check can still have dead space
+  at the bottom of a tall/mobile screen, labels wrapping when dropping
+  the text to keep the icon would fix it, rows bunched to one side with
+  a dead gutter, or misaligned/crowded elements. Critique each frame
+  like a designer (step 5) and fix the UI before shipping — don't hide
+  a bad layout behind a tighter crop or a caption, and don't rely on the
+  reviewer to catch what you saw first.
 - **Letting a "before" run delete your "after".** Playwright wipes
   `test-results/` each run; copy the after PNG to a staging dir the
   instant it's captured, or you'll recover a stale/wrong file later.
