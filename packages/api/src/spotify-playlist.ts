@@ -128,6 +128,11 @@ export interface CreatePlaylistResult {
   requested: number;
   missing: string[];
   reused: boolean;
+  /** Track-resolution cache telemetry — only present on a fresh create.
+   *  Carried back so the router's `spotify.playlist.*_created` event (the
+   *  single catalogued success log) can include them. */
+  cacheHits?: number;
+  cacheMisses?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -542,16 +547,8 @@ async function createHypePlaylistInner(
     performerId: ctx.performerId,
   });
   if (existing) {
-    log.info(
-      {
-        event: 'spotify.hype_playlist.reused',
-        userId: input.userId,
-        showId: input.showId,
-        performerId: ctx.performerId,
-        playlistId: existing.playlistId,
-      },
-      'Returning existing hype playlist',
-    );
+    // The router logs the catalogued `spotify.playlist.hype_reused` event
+    // for this short-circuit — no duplicate success log here.
     return { ...existing, requested: existing.trackCount, missing: [], reused: true };
   }
 
@@ -650,16 +647,8 @@ async function createHeardPlaylistInner(
     performerId: ctx.performerId,
   });
   if (existing) {
-    log.info(
-      {
-        event: 'spotify.heard_playlist.reused',
-        userId: input.userId,
-        showId: input.showId,
-        performerId: ctx.performerId,
-        playlistId: existing.playlistId,
-      },
-      'Returning existing heard playlist',
-    );
+    // The router logs the catalogued `spotify.playlist.heard_reused` event
+    // for this short-circuit — no duplicate success log here.
     return { ...existing, requested: existing.trackCount, missing: [], reused: true };
   }
 
@@ -855,22 +844,9 @@ async function executePlaylistCreate(
     })
     .onConflictDoNothing();
 
-  log.info(
-    {
-      event: `spotify.${input.kind}_playlist.created`,
-      userId: input.userId,
-      showId: input.showId,
-      performerId: input.performerId,
-      playlistId: playlist.id,
-      trackCount: resolution.uris.length,
-      requested: resolution.requested,
-      missing: resolution.missing.length,
-      cacheHits: resolution.hits,
-      cacheMisses: resolution.misses,
-    },
-    'Spotify playlist created',
-  );
-
+  // Success is logged once, by the router's catalogued
+  // `spotify.playlist.{hype,heard}_created` event — the cache telemetry is
+  // returned on the result so that event can carry it.
   return {
     playlistId: playlist.id,
     spotifyUrl: playlist.spotifyUrl,
@@ -879,6 +855,8 @@ async function executePlaylistCreate(
     requested: resolution.requested,
     missing: resolution.missing,
     reused: false,
+    cacheHits: resolution.hits,
+    cacheMisses: resolution.misses,
   };
 }
 
