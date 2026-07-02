@@ -325,21 +325,31 @@
 
 .discover-col-headers {
   display: grid;
-  /* Headliner column is `minmax(0, 1fr)` so it can shrink with ellipsis
-     instead of forcing the row to overflow. Fixed columns sized for typical
-     content: dates ~"Aug 1 – Oct 29", kind chips up to "FESTIVAL", on-sale
-     dates ~"Sep 12, 2026", status badge "ANNOUNCED", actions 200 px to fit
-     the Watch + Calendar labels plus the icon-only Tix link (the leftmost
-     button used to overflow onto the Status badge when all three buttons
-     were labelled and the column was 180 px). 200 px is the largest size
-     that still keeps the 1fr headliner column ≥ 100 px at the 1280 px
-     viewport asserted by `tests/discover-kind-alignment.spec.ts`.
+  /* Headliner column is `minmax(0, 300px)`: the 0 min lets it shrink with
+     ellipsis instead of forcing the row to overflow, while the 300 px cap
+     (measured in the app font: "...And You Will Know Us by the Trail of
+     Dead" renders at 276 px, "The Phantom of the Opera (Touring)" at
+     228 px — so realistic performer / production names fit) stops it from
+     swallowing every spare pixel on wide viewports. Combined with
+     `justify-content: space-between`, any width beyond the capped tracks is
+     spread evenly into the five column gaps instead of pooling as one giant
+     blank run between the headliner and the On Sale column — which also
+     nudges the headliner right of the kind chip as the viewport grows.
+     Fixed columns sized for typical content: dates ~"Aug 1 – Oct 29", kind
+     chips up to "FESTIVAL", on-sale dates ~"Sep 12, 2026", status badge
+     "ANNOUNCED", actions 200 px to fit the Watch + Calendar labels plus the
+     icon-only Tix link (the leftmost button used to overflow onto the
+     Status badge when all three buttons were labelled and the column was
+     180 px). 200 px is the largest size that still keeps the headliner
+     column ≥ 100 px at the 1280 px viewport asserted by
+     `tests/discover-kind-alignment.spec.ts`.
      The actions column is a fixed width — not `auto` — so the header row
-     (which has an empty 6th cell) keeps the same 1fr column as the data
-     rows; otherwise the "ON SALE" / "STATUS" headers drift right of their
-     data. Original template (72/100/1fr/120/110/200) left only ~40 px for
-     the headliner at a 1280 px viewport, truncating "Bon Iver" to "Bon…". */
-  grid-template-columns: 72px 84px minmax(0, 1fr) 96px 88px 200px;
+     (which has an empty 6th cell) keeps the same columns as the data rows;
+     otherwise the "ON SALE" / "STATUS" headers drift right of their data.
+     Original template (72/100/1fr/120/110/200) left only ~40 px for the
+     headliner at a 1280 px viewport, truncating "Bon Iver" to "Bon…". */
+  grid-template-columns: 72px 84px minmax(0, 300px) 96px 88px 200px;
+  justify-content: space-between;
   column-gap: 16px;
   padding: 0 12px 10px;
   font-family: var(--font-geist-mono), monospace;
@@ -350,9 +360,13 @@
   border-bottom: 1px solid var(--rule);
 }
 
-/* Near You table has an extra Venue column between Kind and Headliner. */
+/* Near You table has an extra Venue column between Kind and Headliner.
+   The venue column gets a little growth headroom (100→160 px) on wide
+   viewports so names like "Brooklyn Paramount" aren't truncated when
+   there's spare width; the headliner shares the same 300 px cap as the
+   base template. */
 .discover-col-headers--region {
-  grid-template-columns: 72px 84px 100px minmax(0, 1fr) 88px 80px 200px;
+  grid-template-columns: 72px 84px minmax(100px, 160px) minmax(0, 300px) 88px 80px 200px;
 }
 
 /* ── Venue Group ─────────────────────────────────────── */
@@ -443,8 +457,10 @@
 .discover-row {
   display: grid;
   /* Keep this in lock-step with `.discover-col-headers`. See that block for
-     why the columns were re-sized. */
-  grid-template-columns: 72px 84px minmax(0, 1fr) 96px 88px 200px;
+     why the columns were re-sized and why spare width is distributed into
+     the gaps rather than the headliner track. */
+  grid-template-columns: 72px 84px minmax(0, 300px) 96px 88px 200px;
+  justify-content: space-between;
   column-gap: 16px;
   padding: 12px;
   align-items: center;
@@ -454,7 +470,7 @@
 
 /* Near You row layout includes a Venue cell. */
 .discover-row.discover-row--region {
-  grid-template-columns: 72px 84px 100px minmax(0, 1fr) 88px 80px 200px;
+  grid-template-columns: 72px 84px minmax(100px, 160px) minmax(0, 300px) 88px 80px 200px;
 }
 
 .discover-row__venue-cell {
@@ -795,6 +811,18 @@ a.discover-row__headliner-link:hover {
    The label is preserved as `aria-label` + `title`. */
 .discover-tix-btn--icon-only {
   padding: 5px 6px;
+}
+
+/* Invisible stand-in rendered when a row has no ticket URL. The actions
+   cell right-aligns with flex-end, so without it the Watch + Calendar
+   buttons on tix-less rows slid right into the space the Ticketmaster
+   button occupies on every other row, breaking the vertical button
+   alignment down the feed. Rendering the same markup hidden (rather than
+   a fixed-width spacer) keeps its width in lock-step with the real
+   button's padding/icon sizing. */
+.discover-tix-btn--placeholder {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* ── Footer ──────────────────────────────────────────── */
