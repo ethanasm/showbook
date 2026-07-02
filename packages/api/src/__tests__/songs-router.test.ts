@@ -1,13 +1,13 @@
 /**
  * Unit suite for the `songs` router. Two layers:
  *
- *  1. The pure `rowIsUserDebut` helper that powers the `tourDebutOnly`
- *     filter — assert it returns true only when the user has a single
- *     attended occurrence of the song. The query itself shells out to
- *     postgres, but this filter runs in JS afterwards.
+ *  1. The pure `rowIsUserDebut` helper that powers the `isUserDebut`
+ *     flag (the artist page's "🆕 Once" badge) — assert it returns
+ *     true only when the user has a single attended occurrence of the
+ *     song. The query itself shells out to postgres, but this flag is
+ *     computed in JS afterwards.
  *  2. The router-level `list` call against the fake-db, asserting the
- *     `firstHeardOnly` and `tourDebutOnly` post-filters narrow the
- *     scripted rows the way the UI expects.
+ *     grouped rows come back with the flag computed.
  */
 
 import { describe, test } from 'node:test';
@@ -42,7 +42,7 @@ describe('rowIsUserDebut', () => {
   });
 });
 
-describe('songsRouter.list filter pipeline', () => {
+describe('songsRouter.list', () => {
   const SONG_ONCE = fakeUuid('s', 'once');
   const SONG_TWICE = fakeUuid('s', 'twice');
   const PERF = fakeUuid('p', 'perf');
@@ -68,53 +68,13 @@ describe('songsRouter.list filter pipeline', () => {
     },
   ];
 
-  test('unfiltered list returns every grouped row with the `isUserDebut` flag computed', async () => {
+  test('returns every grouped row with the `isUserDebut` flag computed', async () => {
     const db = makeFakeDb({ selectResults: [SCRIPTED_ROWS] });
     const caller = songsRouter.createCaller(fakeCtx(db, USER_ID) as any);
-    const out = await caller.list({
-      firstHeardOnly: false,
-      tourDebutOnly: false,
-      limit: 200,
-    });
+    const out = await caller.list({ limit: 200 });
     assert.equal(out.length, 2);
     assert.equal(out[0]!.isUserDebut, true);
     assert.equal(out[1]!.isUserDebut, false);
   });
 
-  test('firstHeardOnly drops songs the user has heard more than once', async () => {
-    const db = makeFakeDb({ selectResults: [SCRIPTED_ROWS] });
-    const caller = songsRouter.createCaller(fakeCtx(db, USER_ID) as any);
-    const out = await caller.list({
-      firstHeardOnly: true,
-      tourDebutOnly: false,
-      limit: 200,
-    });
-    assert.equal(out.length, 1);
-    assert.equal(out[0]!.songId, SONG_ONCE);
-  });
-
-  test('tourDebutOnly is the same shape (timesHeard === 1 AND first === last)', async () => {
-    const db = makeFakeDb({ selectResults: [SCRIPTED_ROWS] });
-    const caller = songsRouter.createCaller(fakeCtx(db, USER_ID) as any);
-    const out = await caller.list({
-      firstHeardOnly: false,
-      tourDebutOnly: true,
-      limit: 200,
-    });
-    assert.equal(out.length, 1);
-    assert.equal(out[0]!.songId, SONG_ONCE);
-  });
-
-  test('tourDebutOnly + firstHeardOnly both narrow to the singleton row', async () => {
-    const db = makeFakeDb({ selectResults: [SCRIPTED_ROWS] });
-    const caller = songsRouter.createCaller(fakeCtx(db, USER_ID) as any);
-    const out = await caller.list({
-      firstHeardOnly: true,
-      tourDebutOnly: true,
-      limit: 200,
-    });
-    // tourDebutOnly takes precedence; both should still produce the
-    // same single row.
-    assert.equal(out.length, 1);
-  });
 });
