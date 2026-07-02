@@ -3,7 +3,7 @@
 import { trpc } from "@/lib/trpc";
 
 /**
- * Sidebar counts (Upcoming / Logbook / Artists / Venues / Songs) are powered
+ * Sidebar counts (Upcoming / Logbook / Artists / Venues) are powered
  * by dedicated count queries fetched once at the AppShell level. Mutations
  * that create or delete a show, change its state, or change the show's
  * performers, venue, or setlist must invalidate these so the badges stay in
@@ -17,6 +17,5 @@ export function useInvalidateSidebarCounts() {
       utils.shows.countsByMode.invalidate(),
       utils.performers.count.invalidate(),
       utils.venues.count.invalidate(),
-      utils.songs.count.invalidate(),
     ]);
 }
