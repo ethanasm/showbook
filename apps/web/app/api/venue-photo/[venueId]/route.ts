@@ -3,8 +3,8 @@ import { auth } from '@/auth';
 import { db, eq, venues } from '@showbook/db';
 import { child } from '@showbook/observability';
 import {
-  getPlaceDetails,
   getPlacePhotoMediaUrl,
+  getPlacePhotoName,
   getVenue,
   selectBestImage,
 } from '@showbook/api';
@@ -20,9 +20,12 @@ const log = child({ component: 'web.api.venue-photo' });
 // — can load venue photos through the same SSRF-guarded proxy the web uses.
 const AUTH_SECRET = process.env.AUTH_SECRET;
 
+// Photo-only lookup (field mask `photos` → Google's free "Essentials IDs
+// Only" SKU). This path fires on lazy-resolve for photo-less venues and on
+// stale-name recovery — the full getPlaceDetails() here would bill every
+// such request at the Pro SKU for fields we never read.
 async function lookupPhotoName(googlePlaceId: string): Promise<string | null> {
-  const details = await getPlaceDetails(googlePlaceId);
-  return details?.photoUrl ?? null;
+  return getPlacePhotoName(googlePlaceId);
 }
 
 async function lookupTmVenueImage(tmVenueId: string): Promise<string | null> {
