@@ -469,7 +469,7 @@ export const mediaRouter = router({
       const variants = asset.variants ?? {};
       const checkedEntries = await Promise.all(
         Object.entries(variants).map(async ([name, variant]) => {
-          let head;
+          let head: Awaited<ReturnType<typeof headMediaObject>>;
           try {
             head = await headMediaObject(variant.key);
           } catch (err) {
