@@ -20,7 +20,10 @@ interface LogCall {
   performerId?: string | null;
   playlistId?: string;
   trackCount?: number;
+  requested?: number;
   missingCount?: number;
+  cacheHits?: number;
+  cacheMisses?: number;
   durationMs?: number;
 }
 
@@ -45,7 +48,19 @@ interface MockCall {
 const HYPE_CALLS: MockCall[] = [];
 const HEARD_CALLS: MockCall[] = [];
 
-const HYPE_RESULT = {
+interface MockResult {
+  playlistId: string;
+  spotifyUrl: string;
+  trackCount: number;
+  durationMs: number;
+  requested: number;
+  missing: string[];
+  reused: boolean;
+  cacheHits?: number;
+  cacheMisses?: number;
+}
+
+const HYPE_RESULT: MockResult = {
   playlistId: 'pl_hype_abc',
   spotifyUrl: 'https://open.spotify.com/playlist/pl_hype_abc',
   trackCount: 12,
@@ -53,17 +68,36 @@ const HYPE_RESULT = {
   requested: 14,
   missing: ['Skipped Title', 'Another Skip'],
   reused: false,
+  // Cache telemetry returned by executePlaylistCreate on fresh creates —
+  // the router folds these into the *_created events (the helper's own
+  // `spotify.*_playlist.created` log was removed as a duplicate).
+  cacheHits: 9,
+  cacheMisses: 5,
 };
 
-const HEARD_RESULT = {
+const HEARD_RESULT: MockResult = {
   ...HYPE_RESULT,
   playlistId: 'pl_heard_abc',
   spotifyUrl: 'https://open.spotify.com/playlist/pl_heard_abc',
   reused: false,
 };
 
-const REUSED_HYPE = { ...HYPE_RESULT, reused: true, missing: [] };
-const REUSED_HEARD = { ...HEARD_RESULT, reused: true, missing: [] };
+// Reused rows come from the idempotency short-circuit, which has no
+// per-call resolution telemetry.
+const REUSED_HYPE: MockResult = {
+  ...HYPE_RESULT,
+  reused: true,
+  missing: [],
+  cacheHits: undefined,
+  cacheMisses: undefined,
+};
+const REUSED_HEARD: MockResult = {
+  ...HEARD_RESULT,
+  reused: true,
+  missing: [],
+  cacheHits: undefined,
+  cacheMisses: undefined,
+};
 
 let nextHype = HYPE_RESULT;
 let nextHeard = HEARD_RESULT;
@@ -120,6 +154,11 @@ describe('spotify router — playlist mutation events', () => {
     assert.equal(created.playlistId, 'pl_hype_abc');
     assert.equal(created.trackCount, 12);
     assert.equal(created.missingCount, 2);
+    // Resolution telemetry folded in from the helper's result (previously
+    // only carried by the removed `spotify.hype_playlist.created` log).
+    assert.equal(created.requested, 14);
+    assert.equal(created.cacheHits, 9);
+    assert.equal(created.cacheMisses, 5);
     assert.equal(typeof created.durationMs, 'number');
   });
 
@@ -158,6 +197,9 @@ describe('spotify router — playlist mutation events', () => {
     assert.equal(created.playlistId, 'pl_heard_abc');
     assert.equal(created.trackCount, 12);
     assert.equal(created.missingCount, 2);
+    assert.equal(created.requested, 14);
+    assert.equal(created.cacheHits, 9);
+    assert.equal(created.cacheMisses, 5);
   });
 
   it('emits spotify.playlist.heard_reused on the heard idempotency short-circuit', async () => {
