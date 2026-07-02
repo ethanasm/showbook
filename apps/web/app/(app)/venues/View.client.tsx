@@ -10,6 +10,7 @@ import { SortHeader, type SortConfig } from "@/components/SortHeader";
 import { useCompactMode } from "@/lib/useCompactMode";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { CenteredMessage, EmptyState, RemoteImage } from "@/components/design-system";
+import { LIST_MAX_WIDTH } from "@/lib/list-layout";
 
 type SortField = "name" | "state" | "city" | "past" | "future";
 
@@ -219,11 +220,7 @@ export default function VenuesView() {
     ? "minmax(120px,2fr) minmax(80px,1fr) 70px 70px 32px 32px 32px"
     : "minmax(120px,2fr) minmax(60px,0.7fr) minmax(80px,1fr) 70px 70px 32px 32px 32px";
 
-  // Max content width for the list (matches the Songs page). On displays
-  // wider than this the list left-anchors to the page padding (sidebar
-  // already biases the content towards the right edge), keeping the
-  // inter-column whitespace reasonable.
-  const listMaxWidth = isMobile ? undefined : 1080;
+  const listMaxWidth = isMobile ? undefined : LIST_MAX_WIDTH;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>

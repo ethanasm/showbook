@@ -17,6 +17,7 @@ import {
   type SortField,
 } from "@/lib/songs/filters";
 import { formatDateMedium } from "@showbook/shared";
+import { LIST_MAX_WIDTH } from "@/lib/list-layout";
 
 const PAGE_SIZE = 20;
 
@@ -152,10 +153,7 @@ export default function SongsView() {
     ? "minmax(0, 1fr) minmax(110px, 180px) 52px 92px 32px"
     : "minmax(0, 1fr) minmax(140px, 240px) 56px 96px 32px";
 
-  // Max content width for the list. On displays wider than this the
-  // list left-anchors to the page padding (sidebar already biases the
-  // content towards the right edge), keeping rows readable.
-  const listMaxWidth = isMobile ? undefined : 1080;
+  const listMaxWidth = isMobile ? undefined : LIST_MAX_WIDTH;
 
   const rowGap = isMobile ? 10 : 16;
   const rowPadX = isMobile ? 12 : 18;

@@ -11,6 +11,7 @@ import { SortHeader, type SortConfig } from "@/components/SortHeader";
 import { useCompactMode } from "@/lib/useCompactMode";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { EmptyState, RemoteImage, Tooltip } from "@/components/design-system";
+import { LIST_MAX_WIDTH } from "@/lib/list-layout";
 
 type SortField = "name" | "shows" | "firstSeen" | "lastSeen";
 type Scope = "all" | "inShows" | "seenLive" | "following";
@@ -286,11 +287,7 @@ export default function ArtistsView() {
     ? "minmax(140px,2fr) minmax(130px,1fr) minmax(96px,120px) 28px"
     : "minmax(180px,2.4fr) minmax(150px,1.2fr) minmax(106px,128px) minmax(106px,128px) 96px";
 
-  // Max content width for the list (matches the Songs page). On displays
-  // wider than this the list left-anchors to the page padding (sidebar
-  // already biases the content towards the right edge), keeping the
-  // inter-column whitespace reasonable.
-  const listMaxWidth = isMobile ? undefined : 1080;
+  const listMaxWidth = isMobile ? undefined : LIST_MAX_WIDTH;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
