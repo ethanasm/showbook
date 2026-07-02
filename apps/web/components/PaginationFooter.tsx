@@ -10,6 +10,11 @@ interface PaginationFooterProps {
   /** Used for the "X–Y of N <itemLabel>" string. Pluralized as-is. */
   itemLabel: string;
   onPageChange: (next: number) => void;
+  /**
+   * Cap the footer's width so it stays aligned with a maxWidth-capped
+   * list above it instead of stretching across the full page.
+   */
+  maxWidth?: number;
 }
 
 export function PaginationFooter({
@@ -19,6 +24,7 @@ export function PaginationFooter({
   totalItems,
   itemLabel,
   onPageChange,
+  maxWidth,
 }: PaginationFooterProps) {
   const atStart = currentPage === 0;
   const atEnd = currentPage >= totalPages - 1;
@@ -37,6 +43,7 @@ export function PaginationFooter({
         bottom: 0,
         zIndex: 5,
         margin: "auto var(--page-pad-x) 0",
+        maxWidth,
         background: "var(--surface)",
         borderTop: "1px solid var(--rule)",
         padding: "12px 20px",
