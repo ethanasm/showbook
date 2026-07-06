@@ -1,14 +1,18 @@
 /**
- * Songs router — read-only Phase 2 surface for the Songs index page,
- * per-song detail, and the artist-page "Songs you've heard live"
- * section. All procedures are user-scoped via `shows.user_id` so a
- * user only ever sees stats for their own attended history.
+ * Songs router — read-only surface for the per-song detail page
+ * (web + mobile, linked from setlist rows and predicted setlists)
+ * and the artist-page "Songs you've heard live" section. All
+ * procedures are user-scoped via `shows.user_id` so a user only ever
+ * sees stats for their own attended history.
  *
  * Data flow:
  *   `setlist_song_appearances` (built by song-index-rebuild)
- *     →  `songs.list`         — sortable / filterable list
- *     →  `songs.byId`         — heard-count + per-show timeline
- *     →  `songs.firstHeardForUser` — feed of "first times you heard"
+ *     →  `songs.list`  — per-performer frequency list (artist page)
+ *     →  `songs.byId`  — heard-count + per-show timeline
+ *
+ * (The standalone `/songs` index page this router originally served
+ * was removed in 2026-07; `list` stays because the artist page reads
+ * it with a `performerId` scope.)
  *
  * Rarity ("played at X of Y shows on this tour") is computed from
  * `tour_setlists` so it falls back to `null` when no corpus is
@@ -32,23 +36,13 @@ import { loadVenueNameOverrides } from '../venue-names';
 const songsListInput = z
   .object({
     performerId: z.string().uuid().optional(),
-    year: z.number().int().min(1900).max(2200).optional(),
-    firstHeardOnly: z.boolean().default(false),
-    tourDebutOnly: z.boolean().default(false),
     limit: z.number().int().min(1).max(500).default(200),
   })
-  .default({ firstHeardOnly: false, tourDebutOnly: false, limit: 200 });
+  .default({ limit: 200 });
 
 const songsByIdInput = z.object({
   songId: z.string().uuid(),
 });
-
-const firstHeardInput = z
-  .object({
-    scope: z.union([z.literal('all'), z.string().uuid()]).default('all'),
-    limit: z.number().int().min(1).max(200).default(100),
-  })
-  .default({ scope: 'all', limit: 100 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -62,14 +56,13 @@ interface SongListRow {
   lastHeard: string;
   /** True iff this user's earliest attended appearance of the song is
    *  the *only* attended appearance — a "tour debut you caught"
-   *  candidate in the original sense. We expose this flag so the
-   *  /songs page can offer a "tour debuts only" filter without needing
-   *  a second query. */
+   *  candidate in the original sense. Powers the "🆕 Once" badge on
+   *  the artist page's songs section. */
   isUserDebut: boolean;
 }
 
 /**
- * Pure helper for the `tourDebutOnly` filter. Returns true when the
+ * Pure helper for the `isUserDebut` flag. Returns true when the
  * row's first-heard date matches the row's last-heard date AND the
  * user has only heard it once — the operational definition of a
  * "tour debut you caught" given the SI-17 caveat (no global-corpus
@@ -83,58 +76,10 @@ function rowIsUserDebut(row: { timesHeard: number; firstHeard: string; lastHeard
 
 export const songsRouter = router({
   /**
-   * Distinct count of songs the user has heard live. Powers the
-   * sidebar badge so it matches the row count in `list` without
-   * forcing a full hydrate.
-   */
-  count: protectedProcedure.query(async ({ ctx }): Promise<number> => {
-    const userId = ctx.session.user.id;
-    const [row] = await ctx.db
-      .select({
-        count: sql<number>`count(distinct ${setlistSongAppearances.songId})::int`,
-      })
-      .from(setlistSongAppearances)
-      .innerJoin(shows, eq(shows.id, setlistSongAppearances.showId))
-      .where(eq(shows.userId, userId));
-    return row?.count ?? 0;
-  }),
-
-  /**
-   * Distinct years the user has heard a song in, descending. The
-   * Songs page year-filter dropdown reads this so the option set
-   * stays stable when the user picks a single year (the row-list
-   * query applies the year filter server-side, which would
-   * otherwise collapse the available-years set to just the active
-   * year).
-   */
-  years: protectedProcedure.query(async ({ ctx }): Promise<number[]> => {
-    const userId = ctx.session.user.id;
-    const rows = await ctx.db
-      .select({
-        year: sql<number>`EXTRACT(YEAR FROM ${setlistSongAppearances.performanceDate})::int`,
-      })
-      .from(setlistSongAppearances)
-      .innerJoin(shows, eq(shows.id, setlistSongAppearances.showId))
-      .where(eq(shows.userId, userId))
-      .groupBy(sql`EXTRACT(YEAR FROM ${setlistSongAppearances.performanceDate})`);
-    return rows
-      .map((r) => Number(r.year))
-      .filter((y) => Number.isFinite(y))
-      .sort((a, b) => b - a);
-  }),
-
-  /**
-   * List the songs the user has heard live. Default sort is times
-   * heard descending; ties break on title ascending so the list is
-   * stable across page transitions.
-   *
-   * Filters (all optional, AND-combined):
-   *   - `performerId` — scope to a single artist
-   *   - `year`        — only show appearances in this calendar year
-   *   - `firstHeardOnly` — only songs the user heard exactly once
-   *   - `tourDebutOnly` — alias for "only the user-scoped debuts"
-   *     (a song where the only attended date is the user's first AND
-   *     last; see `rowIsUserDebut` for the definition)
+   * List the songs the user has heard live, optionally scoped to a
+   * single artist via `performerId`. Default sort is times heard
+   * descending; ties break on title ascending so the list is stable
+   * across page transitions.
    */
   list: protectedProcedure
     .input(songsListInput)
@@ -143,11 +88,6 @@ export const songsRouter = router({
       const where: SQL[] = [eq(shows.userId, userId)];
       if (input.performerId) {
         where.push(eq(setlistSongAppearances.performerId, input.performerId));
-      }
-      if (input.year) {
-        where.push(
-          sql`EXTRACT(YEAR FROM ${setlistSongAppearances.performanceDate}) = ${input.year}`,
-        );
       }
       const rows = await ctx.db
         .select({
@@ -180,12 +120,6 @@ export const songsRouter = router({
         ...r,
         isUserDebut: rowIsUserDebut(r),
       }));
-      if (input.tourDebutOnly) {
-        return enriched.filter((r) => r.isUserDebut);
-      }
-      if (input.firstHeardOnly) {
-        return enriched.filter((r) => r.timesHeard === 1);
-      }
       return enriched;
     }),
 
@@ -340,81 +274,10 @@ export const songsRouter = router({
       };
     }),
 
-  /**
-   * "First time YOU heard this song live." Mirrors
-   * `setlistIntel.firstTimes` but with an optional `scope` so the
-   * artist page can ask for first-times scoped to one performer.
-   * Returns rows in attended-date descending order so the UI can
-   * render "newest first" by default.
-   */
-  firstHeardForUser: protectedProcedure
-    .input(firstHeardInput)
-    .query(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-      const scopeFilter =
-        input.scope === 'all'
-          ? sql``
-          : sql`AND first_appearances.performer_id = ${input.scope}`;
-      const result = await ctx.db.execute<{
-        song_id: string;
-        performer_id: string;
-        first_date: string;
-        show_id: string;
-        title: string;
-        performer_name: string;
-      }>(sql`
-        SELECT
-          first_appearances.song_id,
-          first_appearances.performer_id,
-          first_appearances.first_date,
-          first_appearances.show_id,
-          songs.title,
-          performers.name AS performer_name
-        FROM (
-          SELECT DISTINCT ON (a.song_id)
-            a.song_id,
-            a.performer_id,
-            a.performance_date AS first_date,
-            a.show_id
-          FROM setlist_song_appearances a
-          JOIN shows s ON s.id = a.show_id
-          WHERE s.user_id = ${userId}
-          ORDER BY a.song_id, a.performance_date ASC
-        ) first_appearances
-        JOIN songs ON songs.id = first_appearances.song_id
-        JOIN performers ON performers.id = first_appearances.performer_id
-        WHERE 1 = 1 ${scopeFilter}
-        ORDER BY first_appearances.first_date DESC
-        LIMIT ${input.limit}
-      `);
-      const rows = Array.isArray(result)
-        ? result
-        : (result as { rows?: unknown }).rows;
-      if (!Array.isArray(rows)) return [];
-      return rows.map((r) => {
-        const row = r as {
-          song_id: string;
-          performer_id: string;
-          first_date: string;
-          show_id: string;
-          title: string;
-          performer_name: string;
-        };
-        return {
-          songId: row.song_id,
-          performerId: row.performer_id,
-          firstDate: row.first_date,
-          showId: row.show_id,
-          title: row.title,
-          performerName: row.performer_name,
-        };
-      });
-    }),
 });
 
 export type SongsRouter = typeof songsRouter;
 
-// Exported for unit tests on the (firstHeardOnly | tourDebutOnly)
-// filter branches — the underlying query is the same; we want a pure
-// function we can assert against.
+// Exported for unit tests on the `isUserDebut` flag — the underlying
+// query is the same; we want a pure function we can assert against.
 export { rowIsUserDebut };
