@@ -7,7 +7,6 @@ import {
   Archive,
   BookOpen,
   CalendarClock,
-  Disc3,
   Map,
   MapPin,
   Music,
@@ -45,7 +44,6 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "map", label: "Map", icon: Map, section: "navigate" },
   { id: "venues", label: "Venues", icon: MapPin, section: "navigate" },
   { id: "artists", label: "Artists", icon: Music, section: "navigate" },
-  { id: "songs", label: "Songs", icon: Disc3, section: "navigate" },
   { id: "preferences", label: "Preferences", icon: Settings, section: "settings", small: true },
   { id: "admin", label: "Admin", icon: ShieldCheck, section: "settings", small: true, adminOnly: true },
 ];

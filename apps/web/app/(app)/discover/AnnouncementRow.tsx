@@ -204,7 +204,7 @@ export function AnnouncementRow({
           <CalendarPlus size={11} />
           Calendar
         </a>
-        {announcement.ticketUrl && (
+        {announcement.ticketUrl ? (
           <a
             href={announcement.ticketUrl}
             target="_blank"
@@ -216,6 +216,13 @@ export function AnnouncementRow({
           >
             <TicketmasterMark size={12} />
           </a>
+        ) : (
+          <span
+            aria-hidden="true"
+            className="discover-tix-btn discover-tix-btn--icon-only discover-tix-btn--placeholder"
+          >
+            <TicketmasterMark size={12} />
+          </span>
         )}
       </div>
     </div>

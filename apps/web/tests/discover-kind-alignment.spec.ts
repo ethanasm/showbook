@@ -45,6 +45,34 @@ test.describe('Discover kind alignment + headliner width', () => {
     expect(spread, `kind chip x-positions drifted by ${spread.toFixed(2)} px across rows`).toBeLessThan(1);
   });
 
+  test('desktop: Watch/Calendar buttons align across rows with and without ticket links', async ({ page, viewport }) => {
+    test.skip((viewport?.width ?? 0) < 900, 'desktop-only layout');
+    await page.goto('/discover');
+    await page.waitForLoadState('networkidle');
+    await page.locator('.discover-row').first().waitFor({ state: 'visible' });
+
+    // The actions cell right-aligns with flex-end, so rows without a
+    // ticketUrl used to slide Watch + Calendar right into the space the
+    // Ticketmaster button occupies on other rows. A hidden placeholder
+    // now reserves that slot. The seed mixes both states (Bon Iver and
+    // Alvvays have ticketUrls; Trevor Noah / Fleet Foxes / Hamilton
+    // don't), so assert every Calendar button shares one x-position.
+    const states = await page.$$eval('.discover-row', (rows) =>
+      rows.map((row) => ({
+        calendarLeft:
+          row.querySelector('[data-testid="add-to-calendar"]')?.getBoundingClientRect().left ?? null,
+        hasRealTix: !!row.querySelector('a.discover-tix-btn--icon-only'),
+        hasPlaceholder: !!row.querySelector('.discover-tix-btn--placeholder'),
+      })),
+    );
+    const lefts = states.map((s) => s.calendarLeft).filter((v): v is number => v !== null);
+    expect(lefts.length, 'expected the seeded discover feed to have rows').toBeGreaterThanOrEqual(2);
+    expect(states.some((s) => s.hasRealTix), 'seed should include a row with a ticket link').toBe(true);
+    expect(states.some((s) => s.hasPlaceholder), 'seed should include a row without a ticket link').toBe(true);
+    const spread = Math.max(...lefts) - Math.min(...lefts);
+    expect(spread, `Calendar button x-positions drifted by ${spread.toFixed(2)} px across rows`).toBeLessThan(1);
+  });
+
   test('desktop: headliner cell renders wide enough to show typical names without truncation', async ({ page, viewport }) => {
     test.skip((viewport?.width ?? 0) < 900, 'desktop-only layout');
     // Use a 1280 px viewport — narrower than the default desktop project

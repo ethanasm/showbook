@@ -1,5 +1,11 @@
 # Phase 2 — Songs page + per-song detail
 
+> **Status update (2026-07, PR #649).** The standalone `/songs` index
+> page and its sidebar tab were removed. The per-song detail page
+> (`/songs/[songId]`), the artist-page "Songs you've heard live"
+> section, and the underlying song index all remain. This document is
+> kept as the historical spec for the phase as shipped.
+
 > **Goal.** Surface the song-level data accumulated by Phase 1's
 > indexer. New `/songs` page (table view), per-song detail page,
 > "songs you've heard live" + tour-debut sections on artist pages.

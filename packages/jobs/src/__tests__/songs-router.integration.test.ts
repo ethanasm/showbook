@@ -1,5 +1,5 @@
 /**
- * Integration coverage for the Phase 2 `songs` router.
+ * Integration coverage for the `songs` router.
  *
  * Seeds a fixture user with three shows from one performer + two
  * shows from a second performer, where one song repeats across
@@ -147,11 +147,7 @@ describe('songs router integration', () => {
 
   it('lists every song the user heard, with timesHeard ordered DESC', { skip: !process.env.DATABASE_URL }, async () => {
     const caller = callerFor(USER);
-    const list = await caller.songs.list({
-      firstHeardOnly: false,
-      tourDebutOnly: false,
-      limit: 200,
-    });
+    const list = await caller.songs.list({ limit: 200 });
     // 4 distinct titles played by performer A + 1 by B = 5 rows.
     const myRows = list.filter((r) => r.performerId === PERF_A || r.performerId === PERF_B);
     assert.equal(myRows.length, 5);
@@ -176,44 +172,24 @@ describe('songs router integration', () => {
     const caller = callerFor(USER);
     const list = await caller.songs.list({
       performerId: PERF_B,
-      firstHeardOnly: false,
-      tourDebutOnly: false,
       limit: 200,
     });
     assert.equal(list.length, 1);
     assert.equal(list[0]!.title, 'Other Song');
   });
 
-  it('respects the year filter', { skip: !process.env.DATABASE_URL }, async () => {
+  it('flags songs heard exactly once as isUserDebut', { skip: !process.env.DATABASE_URL }, async () => {
     const caller = callerFor(USER);
-    const list = await caller.songs.list({
-      year: 2025,
-      firstHeardOnly: false,
-      tourDebutOnly: false,
-      limit: 200,
-    });
-    // Songs heard in 2025: Bloodbuzz (3rd play), Light Years, Other Song.
-    const titles = list.map((r) => r.title).sort();
-    assert.deepEqual(titles, ['Bloodbuzz Ohio', 'Light Years', 'Other Song']);
-  });
-
-  it('tourDebutOnly returns only songs heard exactly once', { skip: !process.env.DATABASE_URL }, async () => {
-    const caller = callerFor(USER);
-    const list = await caller.songs.list({
-      tourDebutOnly: true,
-      firstHeardOnly: false,
-      limit: 200,
-    });
-    const titles = list.map((r) => r.title).sort();
-    assert.deepEqual(titles, ['Fake Empire', 'Light Years', 'Mr November', 'Other Song']);
+    const list = await caller.songs.list({ limit: 200 });
+    const ours = list.filter((r) => r.performerId === PERF_A || r.performerId === PERF_B);
+    const debuts = ours.filter((r) => r.isUserDebut).map((r) => r.title).sort();
+    assert.deepEqual(debuts, ['Fake Empire', 'Light Years', 'Mr November', 'Other Song']);
   });
 
   it('byId returns the song header + the user-scoped timeline', { skip: !process.env.DATABASE_URL }, async () => {
     const caller = callerFor(USER);
     const list = await caller.songs.list({
       performerId: PERF_A,
-      firstHeardOnly: false,
-      tourDebutOnly: false,
       limit: 200,
     });
     const bloodbuzz = list.find((r) => r.title === 'Bloodbuzz Ohio')!;
@@ -231,27 +207,6 @@ describe('songs router integration', () => {
     // rather than throwing when tour_setlists is empty for this
     // performer).
     assert.equal(detail.rarity, null);
-  });
-
-  it('firstHeardForUser returns rows in date-descending order', { skip: !process.env.DATABASE_URL }, async () => {
-    const caller = callerFor(USER);
-    const feed = await caller.songs.firstHeardForUser({
-      scope: 'all',
-      limit: 100,
-    });
-    // 5 unique songs → 5 rows.
-    const ours = feed.filter((r) => r.performerId === PERF_A || r.performerId === PERF_B);
-    assert.equal(ours.length, 5);
-    // First date in the feed is the most recent firstDate (2025-03-30
-    // for Light Years and Other Song; both came in on SHOW_3).
-    assert.equal(ours[0]!.firstDate, '2025-03-30');
-    // The scope filter narrows.
-    const scoped = await caller.songs.firstHeardForUser({
-      scope: PERF_B,
-      limit: 100,
-    });
-    assert.equal(scoped.length, 1);
-    assert.equal(scoped[0]!.title, 'Other Song');
   });
 });
 
