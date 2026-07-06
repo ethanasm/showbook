@@ -54,9 +54,9 @@ test.describe('Discover kind alignment + headliner width', () => {
     // The actions cell right-aligns with flex-end, so rows without a
     // ticketUrl used to slide Watch + Calendar right into the space the
     // Ticketmaster button occupies on other rows. A hidden placeholder
-    // now reserves that slot. The seed mixes both states (Bon Iver has a
-    // ticketUrl; Trevor Noah / Fleet Foxes / Hamilton don't), so assert
-    // every Calendar button shares one x-position.
+    // now reserves that slot. The seed mixes both states (Bon Iver and
+    // Alvvays have ticketUrls; Trevor Noah / Fleet Foxes / Hamilton
+    // don't), so assert every Calendar button shares one x-position.
     const states = await page.$$eval('.discover-row', (rows) =>
       rows.map((row) => ({
         calendarLeft:

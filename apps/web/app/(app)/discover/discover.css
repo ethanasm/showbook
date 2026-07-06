@@ -1501,7 +1501,11 @@ a.discover-row__headliner-link:hover {
     /* Fixed kind column (col 2) keeps the chip at the same x-position on
        every row regardless of how long the headliner / venue text is in
        col 3. When col 2 was 1fr and col 3 was auto, a long venue name
-       squeezed col 2 narrower and dragged the centered kind chip left. */
+       squeezed col 2 narrower and dragged the centered kind chip left.
+       Reset the desktop `justify-content: space-between` — the 1fr track
+       absorbs all slack here so it'd be a no-op today, but keep the mobile
+       layout independent of the desktop distribution rule. */
+    justify-content: normal;
     grid-template-columns: 64px 84px minmax(0, 1fr);
     column-gap: 14px;
     padding: 12px 18px;
