@@ -10,7 +10,9 @@ import {
   uploadToR2,
 } from "@showbook/api";
 import { and, db, eq, mediaAssets } from "@showbook/db";
+import type { MediaVariant } from "@showbook/db";
 import { child } from "@showbook/observability";
+import { matchPendingVariant } from "@/lib/media-upload-auth";
 
 // Force the route onto the Node runtime + dynamic so Next.js doesn't try
 // to statically optimise it, and the `auth()` / AWS SDK calls run on a
@@ -49,25 +51,28 @@ async function resolveUserId(req: Request): Promise<string | null> {
 }
 
 /**
- * True if `key` is a variant key of a `pending` media asset owned by `userId`.
+ * Return the `pending`-asset variant that owns `key` for `userId`, or null.
  * `createUploadIntent` inserts the pending row (reserving quota) and only then
- * hands out the presigned URL for each variant key, so a matching pending asset
- * is proof the write was authorised and accounted for. Pending assets per user
- * are bounded (in-flight uploads, capped by the per-show count limits), so the
- * scan is small; matching the exact variant key in JS avoids a JSONB query.
+ * hands out the presigned URL for each variant key, so a matching pending
+ * variant is proof the write was authorised and accounted for — and its `bytes`
+ * is the size the quota reserved, the ceiling the PUT must respect. Pending
+ * assets per user are bounded (in-flight uploads, capped by the per-show count
+ * limits), so the scan is small; matching the exact key in JS avoids a JSONB
+ * query. The pure match lives in `@/lib/media-upload-auth` for unit coverage.
  */
-async function keyBelongsToPendingAsset(
+async function pendingVariantForKey(
   userId: string,
   key: string,
-): Promise<boolean> {
+): Promise<MediaVariant | null> {
   const rows = await db
     .select({ variants: mediaAssets.variants })
     .from(mediaAssets)
     .where(
       and(eq(mediaAssets.userId, userId), eq(mediaAssets.status, "pending")),
     );
-  return rows.some((row) =>
-    Object.values(row.variants ?? {}).some((variant) => variant?.key === key),
+  return matchPendingVariant(
+    rows.map((row) => row.variants),
+    key,
   );
 }
 
@@ -155,12 +160,12 @@ export async function PUT(request: NextRequest) {
   // The key must correspond to a variant of a `pending` asset owned by this
   // user — i.e. a slot that `media.createUploadIntent` reserved (which is where
   // the global/user/per-show byte quotas and per-show count caps are enforced).
-  // Without this, an authed user could PUT unlimited untracked blobs under
-  // their own `showbook/<id>/` prefix, bypassing every quota and leaving
-  // row-less blobs that the prune/orphan-media sweep (which only scans
-  // media_assets) can never reclaim.
-  const owned = await keyBelongsToPendingAsset(userId, key);
-  if (!owned) {
+  // Without this, an authed user could PUT untracked blobs under their own
+  // `showbook/<id>/` prefix, bypassing the count caps and leaving row-less blobs
+  // that the prune/orphan-media sweep (which only scans media_assets) can never
+  // reclaim.
+  const reservedVariant = await pendingVariantForKey(userId, key);
+  if (!reservedVariant) {
     log.warn(
       { event: "media.upload.no_pending_asset", key, userId, requestId },
       "Upload key does not match a pending asset for this user",
@@ -175,7 +180,13 @@ export async function PUT(request: NextRequest) {
     return plainResponse(415, `unsupported content type: ${contentType}`);
   }
 
-  const maxBytes = isVideo ? config.videoMaxBytes : config.photoMaxSourceBytes;
+  // Ceiling is the size the quota actually reserved for this variant — NOT just
+  // the absolute per-type max. Enforcing the per-type max alone left a byte-quota
+  // bypass: reserve N tiny pending assets (passing the byte quotas) then PUT up
+  // to the per-type max to each key. The reserved bytes was validated <= the
+  // per-type max at intent, so it is the tighter, authoritative bound.
+  const perTypeMax = isVideo ? config.videoMaxBytes : config.photoMaxSourceBytes;
+  const maxBytes = Math.min(perTypeMax, reservedVariant.bytes);
   const declaredLength = Number.parseInt(
     request.headers.get("content-length") ?? "",
     10,
