@@ -7,10 +7,9 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createPrivateKey,
-  createPublicKey,
   generateKeyPairSync,
   verify as cryptoVerify,
+  type KeyObject,
 } from 'node:crypto';
 import {
   AppleMusicError,
@@ -29,10 +28,9 @@ const ENV_KEYS = [
 ] as const;
 const origEnv: Record<string, string | undefined> = {};
 
-function generateP256Pem(): { privatePem: string; publicKey: ReturnType<typeof createPublicKey> } {
-  const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+function generateP256Pem(): { privatePem: string; publicKey: KeyObject } {
+  const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
   const privatePem = privateKey.export({ format: 'pem', type: 'pkcs8' }).toString();
-  const publicKey = createPublicKey(createPrivateKey(privatePem));
   return { privatePem, publicKey };
 }
 
