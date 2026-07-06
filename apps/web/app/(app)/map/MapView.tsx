@@ -335,81 +335,90 @@ function FilterBar({
   setKind: (k: string) => void;
   years: string[];
 }) {
+  // Two fixed rows so controls keep a stable home across mode switches:
+  // row 1 is the (fixed-width) Viewing label + layer control, row 2 anchors
+  // the constant-width kind group first and lets the year group — whose
+  // button count varies wildly per layer (12 past years vs. 2 future ones)
+  // — grow rightward without displacing anything else.
   return (
     <div className="map-filterbar">
-      <div className="map-filterbar__viewing">
-        <div className="map-filterbar__viewing-label">Viewing</div>
-        <div className="map-filterbar__viewing-text">
-          {MODE_DESCRIPTIONS[mode]}
+      <div className="map-filterbar__row">
+        <div className="map-filterbar__viewing">
+          <div className="map-filterbar__viewing-label">Viewing</div>
+          <div className="map-filterbar__viewing-text">
+            {MODE_DESCRIPTIONS[mode]}
+          </div>
+        </div>
+
+        <div className="map-filterbar__layers" role="group" aria-label="Show layer">
+          <div className="segmented-filter">
+            {LOGBOOK_MODES.map(({ m, label }) => (
+              <button
+                key={m}
+                className={`segmented-filter__btn ${
+                  m === mode ? "segmented-filter__btn--active" : ""
+                }`}
+                onClick={() => setMode(m)}
+                type="button"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="segmented-filter">
+            <button
+              className={`segmented-filter__btn ${
+                mode === "discoverable" ? "segmented-filter__btn--active" : ""
+              }`}
+              onClick={() => setMode("discoverable")}
+              type="button"
+            >
+              Discoverable
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="map-filterbar__layers" role="group" aria-label="Show layer">
-        <div className="segmented-filter">
-          {LOGBOOK_MODES.map(({ m, label }) => (
+      <div className="map-filterbar__row">
+        <div className="segmented-filter" role="group" aria-label="Kind">
+          {KINDS.map(({ k, label }) => {
+            const active = k === kind;
+            const KindIcon = k !== "all" ? KIND_ICONS[k] : null;
+            let activeClass = "";
+            if (active) {
+              activeClass =
+                k === "all"
+                  ? "segmented-filter__btn--active"
+                  : `segmented-filter__btn--active-${k}`;
+            }
+            return (
+              <button
+                key={k}
+                className={`segmented-filter__btn segmented-filter__btn--kind ${activeClass}`}
+                onClick={() => setKind(k)}
+                type="button"
+              >
+                {KindIcon && <KindIcon size={12} />}
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="segmented-filter" role="group" aria-label="Year">
+          {years.map((y) => (
             <button
-              key={m}
+              key={y}
               className={`segmented-filter__btn ${
-                m === mode ? "segmented-filter__btn--active" : ""
+                y === year ? "segmented-filter__btn--active" : ""
               }`}
-              onClick={() => setMode(m)}
+              onClick={() => setYear(y)}
               type="button"
             >
-              {label}
+              {y}
             </button>
           ))}
         </div>
-        <div className="segmented-filter">
-          <button
-            className={`segmented-filter__btn ${
-              mode === "discoverable" ? "segmented-filter__btn--active" : ""
-            }`}
-            onClick={() => setMode("discoverable")}
-            type="button"
-          >
-            Discoverable
-          </button>
-        </div>
-      </div>
-
-      <div className="segmented-filter">
-        {years.map((y) => (
-          <button
-            key={y}
-            className={`segmented-filter__btn ${
-              y === year ? "segmented-filter__btn--active" : ""
-            }`}
-            onClick={() => setYear(y)}
-            type="button"
-          >
-            {y}
-          </button>
-        ))}
-      </div>
-
-      <div className="segmented-filter">
-        {KINDS.map(({ k, label }) => {
-          const active = k === kind;
-          const KindIcon = k !== "all" ? KIND_ICONS[k] : null;
-          let activeClass = "";
-          if (active) {
-            activeClass =
-              k === "all"
-                ? "segmented-filter__btn--active"
-                : `segmented-filter__btn--active-${k}`;
-          }
-          return (
-            <button
-              key={k}
-              className={`segmented-filter__btn segmented-filter__btn--kind ${activeClass}`}
-              onClick={() => setKind(k)}
-              type="button"
-            >
-              {KindIcon && <KindIcon size={12} />}
-              {label}
-            </button>
-          );
-        })}
       </div>
     </div>
   );
