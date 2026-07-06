@@ -90,7 +90,8 @@ updates:
       # adopts Babel 8 (manual override + this ignore bump together).
       - dependency-name: "@babel/core"
       # `react-native` itself is the SDK host ABI. It is hard-pinned in the
-      # root package.json `pnpm.overrides` (to 0.85.3 by #593) AND every
+      # root package.json `pnpm.overrides` (introduced at 0.85.3 by #593;
+      # currently 0.86.0 for SDK 57) AND every
       # native module below compiles against its exact minor. A standalone
       # bump is the worst class of break: #589's expo-sdk group dragged
       # `react-native` to 0.86.0, which (a) deletes the

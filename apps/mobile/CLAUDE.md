@@ -1,6 +1,6 @@
 # Showbook Mobile (`apps/mobile`)
 
-Expo SDK 55 + Expo Router app. Read the
+Expo SDK 57 + Expo Router app. Read the
 [repo-root `CLAUDE.md`](../../CLAUDE.md) first for project-wide
 conventions; this file covers what's specific to the mobile app.
 
