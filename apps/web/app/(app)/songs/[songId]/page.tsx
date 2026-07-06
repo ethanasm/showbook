@@ -44,7 +44,7 @@ export default function SongDetailPage() {
           Couldn&apos;t load this song.{" "}
           <button
             type="button"
-            onClick={() => router.push("/songs")}
+            onClick={() => router.back()}
             style={{
               background: "none",
               border: "none",
@@ -54,7 +54,7 @@ export default function SongDetailPage() {
               fontSize: "inherit",
             }}
           >
-            back to songs →
+            go back →
           </button>
         </CenteredMessage>
       )}
@@ -79,17 +79,10 @@ export default function SongDetailPage() {
         }}
       >
         <Link
-          href="/songs"
+          href={`/artists/${song.performerId}`}
           style={{ color: "var(--muted)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
         >
-          <ChevronLeft size={12} /> songs
-        </Link>
-        <span style={{ color: "var(--faint)" }}>/</span>
-        <Link
-          href={`/artists/${song.performerId}`}
-          style={{ color: "var(--muted)", textDecoration: "none" }}
-        >
-          {song.performerName.toLowerCase()}
+          <ChevronLeft size={12} /> {song.performerName.toLowerCase()}
         </Link>
       </div>
 

@@ -145,12 +145,7 @@ export default function ArtistDetailPage() {
   // no rows so artists with no setlist data don't render an empty
   // chrome.
   const songsQuery = trpc.songs.list.useQuery(
-    {
-      performerId,
-      firstHeardOnly: false,
-      tourDebutOnly: false,
-      limit: 25,
-    },
+    { performerId, limit: 25 },
     { enabled: Boolean(performerId), staleTime: 60_000 },
   );
 
