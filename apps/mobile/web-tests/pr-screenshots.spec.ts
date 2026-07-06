@@ -592,6 +592,12 @@ test.describe('pr screenshots — mobile', () => {
           if (route.trpcStubs && proc in route.trpcStubs) {
             return route.trpcStubs[proc];
           }
+          if (proc === 'discover.watchedAnnouncementIds') {
+            // string[] on the real router; the map screen builds
+            // `new Set()` from it, and the feed-shaped fallback below
+            // crashes the /map route into the error boundary.
+            return [];
+          }
           if (proc.startsWith('discover.')) {
             return { items: [], hasRegions: false, nextCursor: null };
           }
