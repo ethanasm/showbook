@@ -9,6 +9,7 @@ import {
   storeLocalObject,
   uploadToR2,
 } from "@showbook/api";
+import { and, db, eq, mediaAssets } from "@showbook/db";
 import { child } from "@showbook/observability";
 
 // Force the route onto the Node runtime + dynamic so Next.js doesn't try
@@ -45,6 +46,29 @@ async function resolveUserId(req: Request): Promise<string | null> {
     log,
   });
   return session?.user?.id ?? null;
+}
+
+/**
+ * True if `key` is a variant key of a `pending` media asset owned by `userId`.
+ * `createUploadIntent` inserts the pending row (reserving quota) and only then
+ * hands out the presigned URL for each variant key, so a matching pending asset
+ * is proof the write was authorised and accounted for. Pending assets per user
+ * are bounded (in-flight uploads, capped by the per-show count limits), so the
+ * scan is small; matching the exact variant key in JS avoids a JSONB query.
+ */
+async function keyBelongsToPendingAsset(
+  userId: string,
+  key: string,
+): Promise<boolean> {
+  const rows = await db
+    .select({ variants: mediaAssets.variants })
+    .from(mediaAssets)
+    .where(
+      and(eq(mediaAssets.userId, userId), eq(mediaAssets.status, "pending")),
+    );
+  return rows.some((row) =>
+    Object.values(row.variants ?? {}).some((variant) => variant?.key === key),
+  );
 }
 
 /**
@@ -126,6 +150,22 @@ export async function PUT(request: NextRequest) {
 
   if (!key.startsWith(`showbook/${userId}/`)) {
     return plainResponse(403, "forbidden");
+  }
+
+  // The key must correspond to a variant of a `pending` asset owned by this
+  // user — i.e. a slot that `media.createUploadIntent` reserved (which is where
+  // the global/user/per-show byte quotas and per-show count caps are enforced).
+  // Without this, an authed user could PUT unlimited untracked blobs under
+  // their own `showbook/<id>/` prefix, bypassing every quota and leaving
+  // row-less blobs that the prune/orphan-media sweep (which only scans
+  // media_assets) can never reclaim.
+  const owned = await keyBelongsToPendingAsset(userId, key);
+  if (!owned) {
+    log.warn(
+      { event: "media.upload.no_pending_asset", key, userId, requestId },
+      "Upload key does not match a pending asset for this user",
+    );
+    return plainResponse(409, "no pending upload for this key");
   }
 
   const contentType = (request.headers.get("content-type") ?? "").toLowerCase();
