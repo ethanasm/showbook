@@ -378,9 +378,12 @@ export async function GET(request: Request) {
       const comedyCellarId = venueMap.get('The Comedy Cellar');
 
       await db.insert(announcements).values([
-        { venueId: msgId, kind: 'concert', headliner: 'Bon Iver', support: ['Big Thief'], showDate: '2026-08-15', runStartDate: '2026-08-15', runEndDate: '2026-08-15', performanceDates: ['2026-08-15'], onSaleStatus: 'on_sale', source: 'ticketmaster' },
+        // A mix of rows with and without ticketUrl so the feed exercises
+        // both action-column states (real Ticketmaster link vs. hidden
+        // placeholder keeping Watch/Calendar aligned).
+        { venueId: msgId, kind: 'concert', headliner: 'Bon Iver', support: ['Big Thief'], showDate: '2026-08-15', runStartDate: '2026-08-15', runEndDate: '2026-08-15', performanceDates: ['2026-08-15'], onSaleStatus: 'on_sale', source: 'ticketmaster', ticketUrl: 'https://www.ticketmaster.com/event/e2e-bon-iver' },
         { venueId: msgId, kind: 'comedy', headliner: 'Trevor Noah', showDate: '2026-09-01', runStartDate: '2026-09-01', runEndDate: '2026-09-01', performanceDates: ['2026-09-01'], onSaleStatus: 'announced', source: 'ticketmaster' },
-        { venueId: bsId, kind: 'concert', headliner: 'Alvvays', support: ['Men I Trust'], showDate: '2026-07-22', runStartDate: '2026-07-22', runEndDate: '2026-07-22', performanceDates: ['2026-07-22'], onSaleStatus: 'on_sale', source: 'ticketmaster' },
+        { venueId: bsId, kind: 'concert', headliner: 'Alvvays', support: ['Men I Trust'], showDate: '2026-07-22', runStartDate: '2026-07-22', runEndDate: '2026-07-22', performanceDates: ['2026-07-22'], onSaleStatus: 'on_sale', source: 'ticketmaster', ticketUrl: 'https://www.ticketmaster.com/event/e2e-alvvays' },
         { venueId: msgId, kind: 'concert', headliner: 'Fleet Foxes', showDate: '2026-08-30', runStartDate: '2026-08-30', runEndDate: '2026-08-30', performanceDates: ['2026-08-30'], onSaleStatus: 'sold_out', source: 'ticketmaster' },
         { venueId: msgId, kind: 'concert', headliner: 'Meghan Trainor', support: ['Icona Pop'], showDate: '2026-08-08', runStartDate: '2026-08-08', runEndDate: '2026-08-08', performanceDates: ['2026-08-08'], onSaleStatus: 'cancelled', source: 'ticketmaster' },
         { venueId: btId, kind: 'concert', headliner: 'Big Thief', support: ['Adrianne Lenker'], showDate: '2026-10-18', runStartDate: '2026-10-18', runEndDate: '2026-10-18', performanceDates: ['2026-10-18'], onSaleStatus: 'announced', source: 'ticketmaster' },
