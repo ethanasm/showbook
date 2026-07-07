@@ -5,7 +5,7 @@ Personal tracker for live shows — concerts, theatre, comedy, and festivals. Pr
 ## Tech Stack
 
 - **Web:** Next.js 15 (App Router) — see [`apps/web/CLAUDE.md`](apps/web/CLAUDE.md)
-- **Mobile:** Expo SDK 55 + Expo Router (React Native) — feature-complete; see [`apps/mobile/CLAUDE.md`](apps/mobile/CLAUDE.md) and [`docs/specs/mobile-roadmap.md`](docs/specs/mobile-roadmap.md)
+- **Mobile:** Expo SDK 57 + Expo Router (React Native) — feature-complete; see [`apps/mobile/CLAUDE.md`](apps/mobile/CLAUDE.md) and [`docs/specs/mobile-roadmap.md`](docs/specs/mobile-roadmap.md)
 - **Language:** TypeScript
 - **Database:** PostgreSQL + Drizzle ORM
 - **API:** tRPC

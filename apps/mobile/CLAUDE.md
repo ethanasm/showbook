@@ -1,6 +1,6 @@
 # Showbook Mobile (`apps/mobile`)
 
-Expo SDK 55 + Expo Router app. Read the
+Expo SDK 57 + Expo Router app. Read the
 [repo-root `CLAUDE.md`](../../CLAUDE.md) first for project-wide
 conventions; this file covers what's specific to the mobile app.
 
@@ -72,7 +72,7 @@ Set locally via shell or `.env.local`. Mobile-side vars are prefixed
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_IOS` | - | iOS sign-in |
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID` | - | Android sign-in |
 | `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_WEB` | - | Sign-in on every platform. `expo-auth-session/providers/google` uses the web client ID as the ID-token audience even on native iOS/Android, so this is required not just for web preview. |
-| `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` | - | The Map tab (`react-native-maps`). Not used on iOS (Apple Maps is the default provider); **required on Android** — a missing key crashes the app the moment the Map tab's MapView initialises (a key with mismatched package/SHA-1 restrictions renders a blank map instead). Read by `app.config.ts` at config-resolution time and threaded into the `react-native-maps` plugin's `androidGoogleMapsApiKey` prop — the only path Expo SDK 56 prebuild honours (`android.config.googleMaps.apiKey` is dead config; `lib/__tests__/maps-config.test.ts` pins this). Already in `eas.json` `preview.env` (inherited by `preview-store` / `e2e`); `production` has no inline `env` block so it needs an EAS env var — see [`docs/specs/mobile-deployment.md`](../../docs/specs/mobile-deployment.md). Native-baked: a key change needs a new binary, not an OTA update. |
+| `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` | - | The Map tab (`react-native-maps`). Not used on iOS (Apple Maps is the default provider); **required on Android** — a missing key crashes the app the moment the Map tab's MapView initialises (a key with mismatched package/SHA-1 restrictions renders a blank map instead). Read by `app.config.ts` at config-resolution time and threaded into the `react-native-maps` plugin's `androidGoogleMapsApiKey` prop — the only path Expo prebuild honours (verified on SDK 56, unchanged in 57; `android.config.googleMaps.apiKey` is dead config; `lib/__tests__/maps-config.test.ts` pins this). Already in `eas.json` `preview.env` (inherited by `preview-store` / `e2e`); `production` has no inline `env` block so it needs an EAS env var — see [`docs/specs/mobile-deployment.md`](../../docs/specs/mobile-deployment.md). Native-baked: a key change needs a new binary, not an OTA update. |
 | `EXPO_PUBLIC_E2E_MODE` | unset | Maestro Cloud only — bypasses Google OAuth and reads a pre-baked JWT from SecureStore. Production builds ship with this unset; the bypass is dead code there. |
 | `EXPO_PUBLIC_FORCE_OFFLINE` | unset | Set to `1` to pin `NetworkProvider` offline at module eval (skips the NetInfo subscription entirely). Used by the Playwright web harness + Maestro flows that need to exercise offline UX without flipping airplane mode. Production builds leave this unset. Runtime tests can also flip it via `__setForceOfflineForTest`. |
 

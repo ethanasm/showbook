@@ -96,6 +96,24 @@ jobs:
       # emulator (2 GB AVD) + Metro overran the WSL runner's memory
       # budget and Gradle got OOM-killed ~16 min into the build.
       GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=1 -Dorg.gradle.parallel=false -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m"'
+      # The box hosts a SECOND repo's self-hosted runner
+      # (vacation-price-tracker), whose e2e job runs its own emulator
+      # against the same default adb server. Pin every adb call (adb
+      # honours ANDROID_SERIAL) and launch our emulator on a fixed
+      # console port so its serial is deterministic — a concurrent
+      # sibling emulator then no longer breaks `adb wait-for-device`
+      # with "more than one device/emulator" (run 28836200584), and we
+      # never install/drive against the wrong device. Maestro gets the
+      # same serial via --device. Keep this port distinct from the
+      # sibling repo's (VPT uses the 5554 default).
+      ANDROID_EMULATOR_PORT: '5600'
+      ANDROID_SERIAL: emulator-5600
+      # Repo-unique Maestro debug dir (used literally as
+      # /tmp/showbook-maestro-debug in the steps below). Both repos'
+      # workflows used /tmp/maestro-debug, so a failure here published
+      # the OTHER app's screenshots whenever our capture steps were
+      # skipped (run 28836200584 posted trip-app screenshots on a
+      # showbook PR).
     steps:
       - uses: actions/checkout@v7
 
@@ -153,6 +171,36 @@ jobs:
           fi
           echo "Gradle cache dir:"
           du -sh "$HOME/.gradle/caches" 2>/dev/null || echo "  empty"
+          echo "::endgroup::"
+
+      # The runner is self-hosted and the box is shared with the
+      # vacation-price-tracker repo's runner, whose e2e jobs run their
+      # own emulator concurrently. A crashed or interrupted run of OURS
+      # can leave behind (a) a stale showbook emulator still registered
+      # with the shared adb server, and (b) a populated debug dir —
+      # when this run's capture steps are skipped, the failure-path
+      # publisher scoops stale files (run 28836200584 published the
+      # sibling app's screenshots on a showbook PR back when both repos
+      # shared /tmp/maestro-debug). Reset both. Everything here is
+      # scoped to OUR AVD name / OUR debug dir: never pkill bare
+      # "emulator"/"qemu", and never `adb kill-server` — the adb server
+      # (port 5037) is shared with the sibling runner's live jobs, and
+      # killing it mid-run sabotages them (all our adb calls are pinned
+      # to $ANDROID_SERIAL instead, so foreign devices can't confuse
+      # them).
+      - name: Reset stale runner state
+        shell: bash
+        run: |
+          set -uo pipefail
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          echo "::group::Stale-state reset"
+          pkill -f "emulator -avd ${ANDROID_AVD_NAME}" 2>/dev/null && echo "killed stale ${ANDROID_AVD_NAME} emulator" || true
+          pkill -f "qemu.*${ANDROID_AVD_NAME}" 2>/dev/null && echo "killed stale ${ANDROID_AVD_NAME} qemu" || true
+          sleep 2
+          rm -f "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd"/*.lock 2>/dev/null || true
+          rm -rf /tmp/showbook-maestro-debug /tmp/showbook-maestro-debug-flat
+          echo "devices registered with the shared adb server (foreign ones are fine — we pin $ANDROID_SERIAL):"
+          adb devices | tail -n +2 | awk 'NF' || echo "  none"
           echo "::endgroup::"
 
       - uses: pnpm/action-setup@v6
@@ -440,18 +488,25 @@ jobs:
         run: |
           set -euo pipefail
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
-          adb kill-server || true
+          # No `adb kill-server` here — the server is shared with the
+          # sibling repo's runner; killing it nukes their live e2e
+          # session. start-server is a no-op when it's already up.
           adb start-server
+          # -port: fixed console port so our serial is deterministic
+          #   ($ANDROID_SERIAL = emulator-$ANDROID_EMULATOR_PORT) and
+          #   every adb call in this job targets OUR device even when
+          #   the sibling repo's emulator is registered concurrently.
           # -no-snapshot-save: don't write back into the cached AVD
           # -accel auto: use KVM when available, fall through to TCG
           # -gpu swiftshader_indirect: software GL, only sane option headless
           nohup env ANDROID_AVD_HOME="$ANDROID_AVD_HOME" \
             emulator -avd "$ANDROID_AVD_NAME" \
+              -port "$ANDROID_EMULATOR_PORT" \
               -no-window -no-audio -no-boot-anim -no-snapshot-save \
               -accel auto \
               -gpu swiftshader_indirect \
             > /tmp/emulator.log 2>&1 &
-          echo "emulator pid: $!"
+          echo "emulator pid: $! (serial $ANDROID_SERIAL)"
 
       - name: Wait for emulator
         shell: bash
@@ -502,28 +557,28 @@ jobs:
         run: |
           set -uo pipefail
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
-          mkdir -p /tmp/maestro-debug
+          mkdir -p /tmp/showbook-maestro-debug
           # Cold-launch the app the same way Maestro will (clear data
           # + start MainActivity). `pm clear` is a no-op if the package
           # wasn't installed; the install step above guarantees it is.
           adb shell pm clear me.ethanasm.showbook || true
           adb shell am start -W -n me.ethanasm.showbook/.MainActivity || true
           sleep 8
-          adb exec-out screencap -p > /tmp/maestro-debug/cold-launch.png || true
+          adb exec-out screencap -p > /tmp/showbook-maestro-debug/cold-launch.png || true
           adb shell uiautomator dump /sdcard/cold-launch.xml >/dev/null 2>&1 || true
-          adb pull /sdcard/cold-launch.xml /tmp/maestro-debug/cold-launch.xml || true
+          adb pull /sdcard/cold-launch.xml /tmp/showbook-maestro-debug/cold-launch.xml || true
           echo "::group::Cold-launch UI hierarchy (text nodes only)"
-          if [ -f /tmp/maestro-debug/cold-launch.xml ]; then
+          if [ -f /tmp/showbook-maestro-debug/cold-launch.xml ]; then
             # Print every node with non-empty text= attr. Tells us
             # whether 'Sign in with Google' is actually rendered.
-            grep -oE 'text="[^"]*"' /tmp/maestro-debug/cold-launch.xml \
+            grep -oE 'text="[^"]*"' /tmp/showbook-maestro-debug/cold-launch.xml \
               | grep -v 'text=""' | sort -u | head -50 || true
           else
             echo "no UI dump captured"
           fi
           echo "::endgroup::"
           echo "::group::Cold-launch screenshot size"
-          ls -lh /tmp/maestro-debug/cold-launch.png 2>/dev/null || echo "no screenshot"
+          ls -lh /tmp/showbook-maestro-debug/cold-launch.png 2>/dev/null || echo "no screenshot"
           echo "::endgroup::"
           # Kill the app again so Maestro's first launchApp starts cleanly.
           adb shell am force-stop me.ethanasm.showbook || true
@@ -540,9 +595,9 @@ jobs:
           # Wipe only Maestro's own subdirectory so /tmp doesn't
           # accumulate screenshots across runs, but preserve the
           # cold-launch.png + cold-launch.xml that the previous step
-          # wrote into /tmp/maestro-debug/.
-          rm -rf /tmp/maestro-debug/.maestro
-          mkdir -p /tmp/maestro-debug
+          # wrote into /tmp/showbook-maestro-debug/.
+          rm -rf /tmp/showbook-maestro-debug/.maestro
+          mkdir -p /tmp/showbook-maestro-debug
           # Maestro's `launchApp: clearState: true` in flow YAML
           # translates to `pm clear`, but on this AOSP system-image
           # SecureStore values appear to survive that across flows in
@@ -557,7 +612,7 @@ jobs:
             adb shell pm clear me.ethanasm.showbook || true
             sleep 2
             echo "::endgroup::"
-            maestro test --debug-output /tmp/maestro-debug "$flow" || {
+            maestro --device "$ANDROID_SERIAL" test --debug-output /tmp/showbook-maestro-debug "$flow" || {
               status=$?
               echo "::warning::$(basename "$flow") failed with status $status"
               RC=$status
@@ -576,19 +631,19 @@ jobs:
         run: |
           set -u
           echo "::group::Maestro debug dir contents"
-          ls -la /tmp/maestro-debug/ 2>/dev/null || echo "no debug dir"
+          ls -la /tmp/showbook-maestro-debug/ 2>/dev/null || echo "no debug dir"
           echo "::endgroup::"
           # Look for any plain-text log or json summary Maestro left
           # behind and dump the last 200 lines into the run log.
           shopt -s nullglob
-          for f in /tmp/maestro-debug/**/*.txt /tmp/maestro-debug/**/*.json /tmp/maestro-debug/**/*.log /tmp/maestro-debug/*.txt /tmp/maestro-debug/*.json /tmp/maestro-debug/*.log; do
+          for f in /tmp/showbook-maestro-debug/**/*.txt /tmp/showbook-maestro-debug/**/*.json /tmp/showbook-maestro-debug/**/*.log /tmp/showbook-maestro-debug/*.txt /tmp/showbook-maestro-debug/*.json /tmp/showbook-maestro-debug/*.log; do
             echo "::group::$f"
             tail -200 "$f" 2>/dev/null || true
             echo "::endgroup::"
           done
           # List screenshots so we know which steps ran before the failure.
           echo "::group::Screenshots captured"
-          find /tmp/maestro-debug -name '*.png' -printf '%p\n' 2>/dev/null | sort || true
+          find /tmp/showbook-maestro-debug -name '*.png' -printf '%p\n' 2>/dev/null | sort || true
           echo "::endgroup::"
 
       - name: Upload Maestro debug artifacts
@@ -597,7 +652,7 @@ jobs:
         with:
           name: maestro-debug-${{ github.run_id }}
           path: |
-            /tmp/maestro-debug/**
+            /tmp/showbook-maestro-debug/**
             /tmp/emulator.log
           if-no-files-found: ignore
           retention-days: 7
@@ -660,8 +715,8 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
-          if [ ! -d /tmp/maestro-debug ]; then
-            echo "no /tmp/maestro-debug — nothing to publish"
+          if [ ! -d /tmp/showbook-maestro-debug ]; then
+            echo "no /tmp/showbook-maestro-debug — nothing to publish"
             exit 0
           fi
 
@@ -670,10 +725,10 @@ jobs:
           # `screenshot-<emoji>-<ts>-(flow).png`; collapse to
           # `maestro-<flow>-<n>.png` so the orphan-branch URL stays
           # clean.
-          FLAT=/tmp/maestro-debug-flat
+          FLAT=/tmp/showbook-maestro-debug-flat
           rm -rf "$FLAT"
           mkdir -p "$FLAT"
-          [ -f /tmp/maestro-debug/cold-launch.png ] && cp /tmp/maestro-debug/cold-launch.png "$FLAT/cold-launch.png"
+          [ -f /tmp/showbook-maestro-debug/cold-launch.png ] && cp /tmp/showbook-maestro-debug/cold-launch.png "$FLAT/cold-launch.png"
           n=1
           while IFS= read -r -d '' f; do
             base="$(basename "$f")"
@@ -681,7 +736,7 @@ jobs:
             [ -z "$flow" ] && flow="unknown"
             cp "$f" "$FLAT/maestro-${flow}-${n}.png"
             n=$((n + 1))
-          done < <(find /tmp/maestro-debug -name '*.png' -path '*tests*' -print0)
+          done < <(find /tmp/showbook-maestro-debug -name '*.png' -path '*tests*' -print0)
 
           echo "::group::Files staged for upload"
           ls -la "$FLAT"
@@ -740,8 +795,8 @@ jobs:
           # without opening an external file. Capped at 100 entries to
           # stay under the 64 KB comment limit.
           UI_TEXT=""
-          if [ -f /tmp/maestro-debug/cold-launch.xml ]; then
-            UI_TEXT=$(grep -oE 'text="[^"]*"' /tmp/maestro-debug/cold-launch.xml \
+          if [ -f /tmp/showbook-maestro-debug/cold-launch.xml ]; then
+            UI_TEXT=$(grep -oE 'text="[^"]*"' /tmp/showbook-maestro-debug/cold-launch.xml \
               | grep -v 'text=""' | sort -u | head -100 || true)
           fi
 
@@ -814,8 +869,10 @@ jobs:
         shell: bash
         run: |
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          # `adb emu kill` honours $ANDROID_SERIAL, so only OUR
+          # emulator's console gets the kill. No `adb kill-server` —
+          # shared with the sibling repo's runner (see the reset step).
           adb emu kill || true
-          adb kill-server || true
           # Wait for the emulator process to actually release its lock
           # files. `adb emu kill` sends SIGTERM and returns immediately,
           # but the qemu/emulator process keeps running for another

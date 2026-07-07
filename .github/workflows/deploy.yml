@@ -195,22 +195,44 @@ jobs:
       # same :latest image as prod. Refresh it here — while this job's
       # GHCR login is still valid and right after prod:up updated the
       # local :latest tag — so the e2e backend's API never drifts from
-      # prod's. Guarded on .env.e2e existing (skip silently before the
-      # operator has set the stack up) and non-fatal: a broken e2e
+      # prod's. The skip is silent ONLY on a host that has never set the
+      # stack up (no .env.e2e AND no e2e containers); if the stack exists
+      # but .env.e2e is gone, this fails the job — prod has already
+      # rolled by this point, so failing only surfaces the config rot.
+      # (A silent skip here once left the e2e web container running a
+      # 3-week-stale image while every deploy quietly passed it by.)
+      # A refresh that runs but fails stays a warning: a broken e2e
       # backend should fail the mobile-e2e workflow, not prod deploys.
       - name: Refresh e2e backend (if configured)
         working-directory: ${{ env.PROD_DIR }}
         run: |
           set -uo pipefail
           if [ ! -f .env.e2e ]; then
-            echo "No .env.e2e in $PROD_DIR — skipping e2e backend refresh"
+            if docker ps -a --format '{{.Names}}' | grep -q 'showbook-e2e-'; then
+              echo "::error::.env.e2e is missing from $PROD_DIR but the showbook-e2e stack exists — every deploy is silently skipping the e2e refresh. Recreate .env.e2e (POSTGRES_PASSWORD + AUTH_SECRET; see the infra/docker-compose.e2e.yml header) or tear the stack down."
+              exit 1
+            fi
+            echo "No .env.e2e in $PROD_DIR and no e2e stack — skipping e2e backend refresh"
             exit 0
           fi
-          if pnpm e2e:up && pnpm e2e:db:migrate; then
-            echo "e2e backend refreshed"
-          else
+          if ! (pnpm e2e:up && pnpm e2e:db:migrate); then
             echo "::warning::e2e backend refresh failed — mobile e2e may run against a stale backend"
+            exit 0
           fi
+          # Wait out the healthcheck start_period plus a few probes so a
+          # container that recreates cleanly but then crash-loops (bad
+          # env, failed boot validation) is caught here, not by the next
+          # Maestro run.
+          status=unknown
+          for _ in $(seq 1 24); do
+            status="$(docker inspect --format '{{.State.Health.Status}}' showbook-e2e-web 2>/dev/null || echo unknown)"
+            if [ "$status" = "healthy" ]; then
+              echo "e2e backend refreshed and healthy"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::warning::showbook-e2e-web is not healthy after refresh (status: $status) — mobile e2e will fail until it recovers"
 
       - name: Prune old images and build cache
         run: |
